@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
 import {
+  buildCodexChildEnv,
   buildCodexPrompt,
   buildModelRoutingEvidence,
   commitAndPushEvidence,
@@ -19,6 +20,7 @@ import {
   finishAttempt,
   recordPhaseComplete,
   resolveExecutionTimeout,
+  type ExecutionStateIdentity,
 } from './execution-checkpoint.js';
 import { ROOT } from './shared.js';
 
@@ -51,10 +53,10 @@ function commitTruthFile(repo: string, relativePath: string, content: string): s
   return spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8', stdio: 'pipe' }).stdout.trim();
 }
 
-function completeSuccessPhases(issueId: string, checkpointDir: string): void {
-  recordPhaseComplete(issueId, 'implement', 'implementation complete', { dir: checkpointDir });
-  recordPhaseComplete(issueId, 'verify', 'verification complete', { dir: checkpointDir });
-  recordPhaseComplete(issueId, 'closeout', 'closeout complete', { dir: checkpointDir });
+function completeSuccessPhases(issueId: string, checkpointDir: string, identity: ExecutionStateIdentity): void {
+  recordPhaseComplete(issueId, 'implement', 'implementation complete', { dir: checkpointDir, identity });
+  recordPhaseComplete(issueId, 'verify', 'verification complete', { dir: checkpointDir, identity });
+  recordPhaseComplete(issueId, 'closeout', 'closeout complete', { dir: checkpointDir, identity });
 }
 
 test('codex-exec module imports without error', async () => {
@@ -74,7 +76,7 @@ test('production truth path fails a zero-diff fresh claim and succeeds after rea
       timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
       dir: repo.checkpointDir,
     });
-    completeSuccessPhases(issueId, repo.checkpointDir);
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
 
     const noChange = evaluateExecutionTruth({
       issueId,
@@ -99,6 +101,48 @@ test('production truth path fails a zero-diff fresh claim and succeeds after rea
   }
 });
 
+test('execution truth rejects an epoch baseline that is not an ancestor of HEAD', () => {
+  const repo = initTruthRepo();
+  try {
+    const issueId = 'UTV2-1711';
+    const futureBaseline = commitTruthFile(repo.dir, 'scripts/future-baseline.ts', 'export const future = true;\n');
+    spawnSync('git', ['checkout', '--detach', repo.baseline], { cwd: repo.dir, stdio: 'pipe' });
+    const started = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: futureBaseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'codex-exec',
+      timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
+      dir: repo.checkpointDir,
+    });
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
+    const verdict = evaluateExecutionTruth({
+      issueId,
+      cwd: repo.dir,
+      checkpointDir: repo.checkpointDir,
+      stateIdentity: started.identity,
+    });
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.code, 'EXECUTION_BASELINE_NOT_ANCESTOR');
+    assert.match(verdict.message, /not an ancestor of HEAD/);
+  } finally {
+    fs.rmSync(repo.dir, { recursive: true, force: true });
+  }
+});
+
+test('Codex child environment carries the originating checkpoint identity', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1711-child-env-'));
+  try {
+    const env = buildCodexChildEnv(dir, { epoch_id: 'epoch-1', attempt: 2, minimum_revision: 7 });
+    assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
+    assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
+    assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('verification-only resume succeeds from cumulative epoch diff without overwriting the baseline', () => {
   const repo = initTruthRepo();
   try {
@@ -113,9 +157,12 @@ test('verification-only resume succeeds from cumulative epoch diff without overw
       timeoutPolicy,
       dir: repo.checkpointDir,
     });
-    recordPhaseComplete(issueId, 'implement', 'source implementation committed', { dir: repo.checkpointDir });
+    recordPhaseComplete(issueId, 'implement', 'source implementation committed', {
+      dir: repo.checkpointDir,
+      identity: first.identity,
+    });
     const implementedHead = commitTruthFile(repo.dir, 'scripts/resumed-source.ts', 'export const resumed = true;\n');
-    finishAttempt({ issueId, outcome: 'timed_out', reason: 'interrupted in verify', dir: repo.checkpointDir });
+    finishAttempt({ issueId, outcome: 'timed_out', reason: 'interrupted in verify', dir: repo.checkpointDir, identity: first.identity });
 
     const resumed = beginAttempt({
       kind: 'resume',
@@ -124,8 +171,8 @@ test('verification-only resume succeeds from cumulative epoch diff without overw
       timeoutPolicy,
       dir: repo.checkpointDir,
     });
-    recordPhaseComplete(issueId, 'verify', 'focused tests passed', { dir: repo.checkpointDir });
-    recordPhaseComplete(issueId, 'closeout', 'proof complete', { dir: repo.checkpointDir });
+    recordPhaseComplete(issueId, 'verify', 'focused tests passed', { dir: repo.checkpointDir, identity: resumed.identity });
+    recordPhaseComplete(issueId, 'closeout', 'proof complete', { dir: repo.checkpointDir, identity: resumed.identity });
     const verdict = evaluateExecutionTruth({
       issueId,
       cwd: repo.dir,
@@ -146,7 +193,7 @@ test('rework resets rejected truth: old source and proof-only edits fail, then a
   try {
     const issueId = 'UTV2-1711';
     const timeoutPolicy = resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' });
-    beginAttempt({
+    const initial = beginAttempt({
       kind: 'fresh',
       issueId,
       currentHeadSha: repo.baseline,
@@ -156,8 +203,8 @@ test('rework resets rejected truth: old source and proof-only edits fail, then a
       dir: repo.checkpointDir,
     });
     commitTruthFile(repo.dir, 'scripts/rejected-source.ts', 'export const rejected = true;\n');
-    completeSuccessPhases(issueId, repo.checkpointDir);
-    finishAttempt({ issueId, outcome: 'failed', reason: 'review rejected', dir: repo.checkpointDir });
+    completeSuccessPhases(issueId, repo.checkpointDir, initial.identity);
+    finishAttempt({ issueId, outcome: 'failed', reason: 'review rejected', dir: repo.checkpointDir, identity: initial.identity });
     const rejectedHead = spawnSync('git', ['rev-parse', 'HEAD'], {
       cwd: repo.dir,
       encoding: 'utf8',
@@ -174,7 +221,7 @@ test('rework resets rejected truth: old source and proof-only edits fail, then a
       timeoutPolicy,
       dir: repo.checkpointDir,
     });
-    completeSuccessPhases(issueId, repo.checkpointDir);
+    completeSuccessPhases(issueId, repo.checkpointDir, rework.identity);
     commitTruthFile(repo.dir, 'docs/proof-only.md', 'proof changed\n');
     const proofOnly = evaluateExecutionTruth({
       issueId,
@@ -241,7 +288,7 @@ test('corrupt primary with a valid matching sidecar recovers explicitly and foll
       timeoutPolicy: resolveExecutionTimeout({ tier: 'T2', reasoningEffort: 'high', phase: 'implement' }),
       dir: repo.checkpointDir,
     });
-    completeSuccessPhases(issueId, repo.checkpointDir);
+    completeSuccessPhases(issueId, repo.checkpointDir, started.identity);
     commitTruthFile(repo.dir, 'scripts/recovered.ts', 'export const recovered = true;\n');
     fs.writeFileSync(checkpointPath(issueId, repo.checkpointDir), '{corrupt primary', 'utf8');
     const verdict = evaluateExecutionTruth({

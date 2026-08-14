@@ -17,23 +17,26 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  checkpointMutationLockPath,
   checkpointRecoveryPath,
   checkpointPath,
   classifyCheckpointLiveness,
   clearCheckpoint,
-  failVisiblyAndRelease,
-  finishAttempt,
+  failVisiblyAndRelease as failVisiblyAndReleaseWithIdentity,
+  finishAttempt as finishAttemptWithIdentity,
   nextPhaseAfter,
   readCheckpoint,
   readCheckpointState,
-  recordFinding,
-  recordHeartbeat,
-  recordPendingActions,
-  recordPhaseComplete,
+  recordFinding as recordFindingWithIdentity,
+  recordHeartbeat as recordHeartbeatWithIdentity,
+  recordPendingActions as recordPendingActionsWithIdentity,
+  recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
   writeCheckpoint,
   type ExecutionPhase,
+  type ExecutionStateIdentity,
+  type FinishAttemptInput,
 } from './execution-checkpoint.js';
 
 function tmpDir(): string {
@@ -42,6 +45,57 @@ function tmpDir(): string {
 
 const T1_SOL_HIGH = { tier: 'T1' as const, reasoningEffort: 'high', phase: 'implement' as ExecutionPhase };
 const TEST_HEAD = '1'.repeat(40);
+const MISSING_IDENTITY: ExecutionStateIdentity = { epoch_id: 'missing-epoch', attempt: 1, minimum_revision: 1 };
+
+function activeIdentity(issueId: string, dir?: string): ExecutionStateIdentity {
+  const checkpoint = readCheckpoint(issueId, dir);
+  return checkpoint
+    ? { epoch_id: checkpoint.epoch.epoch_id, attempt: checkpoint.attempt, minimum_revision: checkpoint.state_revision }
+    : MISSING_IDENTITY;
+}
+
+type MutationOptions = { dir?: string; now?: Date; identity?: ExecutionStateIdentity };
+
+function recordHeartbeat(issueId: string, options: MutationOptions = {}) {
+  return recordHeartbeatWithIdentity(issueId, { ...options, identity: options.identity ?? activeIdentity(issueId, options.dir) });
+}
+
+function recordPhaseComplete(issueId: string, phase: ExecutionPhase, summary: string, options: MutationOptions = {}) {
+  return recordPhaseCompleteWithIdentity(issueId, phase, summary, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function recordFinding(
+  issueId: string,
+  finding: { phase: ExecutionPhase; summary: string; id?: string },
+  options: MutationOptions = {},
+) {
+  return recordFindingWithIdentity(issueId, finding, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function recordPendingActions(issueId: string, actions: string[], options: MutationOptions = {}) {
+  return recordPendingActionsWithIdentity(issueId, actions, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function finishAttempt(input: Omit<FinishAttemptInput, 'identity'> & { identity?: ExecutionStateIdentity }) {
+  return finishAttemptWithIdentity({ ...input, identity: input.identity ?? activeIdentity(input.issueId, input.dir) });
+}
+
+type FailInput = Parameters<typeof failVisiblyAndReleaseWithIdentity>[0];
+function failVisiblyAndRelease(input: Omit<FailInput, 'identity'> & { identity?: ExecutionStateIdentity }) {
+  return failVisiblyAndReleaseWithIdentity({
+    ...input,
+    identity: input.identity ?? activeIdentity(input.issueId, input.dir),
+  });
+}
 
 function beginNext(input: {
   issueId: string;
@@ -207,6 +261,42 @@ test('rework creates a new epoch at the rejected head and cannot inherit rejecte
     assert.equal(rework.checkpoint.prior_epochs[0]?.epoch.epoch_id, first.checkpoint.epoch.epoch_id);
     assert.equal(rework.checkpoint.findings[0]?.epoch_id, rework.checkpoint.epoch.epoch_id);
     assert.equal(rework.checkpoint.findings[0]?.source_epoch_id, first.checkpoint.epoch.epoch_id);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a delayed executor cannot stamp phase completion into a newer rework epoch', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const rejected = beginNext({ issueId, timeoutPolicy, dir, headSha: 'a'.repeat(40) });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'review rejected the epoch', dir, identity: rejected.identity });
+    const rework = beginAttempt({
+      kind: 'rework',
+      issueId,
+      rejectedHeadSha: 'b'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`,
+      findingsIdentity: 'review-round-2',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+
+    const stale = recordPhaseComplete(issueId, 'implement', 'late completion from rejected executor', {
+      dir,
+      identity: rejected.identity,
+    });
+    assert.equal(stale, null, 'an old epoch/attempt identity must be refused');
+    assert.deepEqual(readCheckpoint(issueId, dir)?.completed_phases, []);
+
+    const current = recordPhaseComplete(issueId, 'implement', 'current rework implementation', {
+      dir,
+      identity: rework.identity,
+    });
+    assert.equal(current?.completed_phases[0]?.epoch_id, rework.checkpoint.epoch.epoch_id);
+    assert.equal(current?.completed_phases[0]?.attempt, rework.checkpoint.attempt);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -440,6 +530,37 @@ test('clear refuses an active attempt and only removes closed primary plus sidec
     assert.equal(cleared.ok, true);
     assert.equal(cleared.removed.length, 2);
     assert.equal(readCheckpointState(issueId, dir).ok, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('clear and attempt start share one exclusive mutation lock', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const first = beginNext({ issueId, timeoutPolicy, dir });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'closed before race test', dir, identity: first.identity });
+
+    const lockPath = checkpointMutationLockPath(issueId, dir);
+    fs.writeFileSync(
+      lockPath,
+      `${JSON.stringify({ pid: process.pid, host: os.hostname() || 'unknown', token: 'held-by-test' })}\n`,
+      'utf8',
+    );
+    const blockedClear = clearCheckpoint(issueId, { dir });
+    assert.equal(blockedClear.code, 'execution_checkpoint_busy');
+    assert.throws(
+      () => beginAttempt({ kind: 'resume', issueId, attemptStartSha: TEST_HEAD, timeoutPolicy, dir }),
+      /EXECUTION_STATE_LOCKED/,
+    );
+    fs.rmSync(lockPath, { force: true });
+
+    const resumed = beginAttempt({ kind: 'resume', issueId, attemptStartSha: TEST_HEAD, timeoutPolicy, dir });
+    assert.equal(clearCheckpoint(issueId, { dir }).code, 'execution_checkpoint_active');
+    assert.equal(readCheckpoint(issueId, dir)?.epoch.epoch_id, resumed.checkpoint.epoch.epoch_id);
+    assert.equal(readCheckpoint(issueId, dir)?.attempt, resumed.checkpoint.attempt);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

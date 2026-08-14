@@ -74,6 +74,7 @@ interface CodexExecResult {
     | 'EVIDENCE_PERSISTENCE_FAILED'
     | 'EXECUTION_STATE_UNAVAILABLE'
     | 'EXECUTION_CORROBORATION_UNAVAILABLE'
+    | 'EXECUTION_BASELINE_NOT_ANCESTOR'
     | 'INCOMPLETE_PHASE_PROGRESSION'
     | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
     | 'REWORK_NO_SOURCE_CHANGE'
@@ -126,6 +127,7 @@ export interface ExecutionTruthVerdict {
     | 'SUCCESS'
     | 'EXECUTION_STATE_UNAVAILABLE'
     | 'EXECUTION_CORROBORATION_UNAVAILABLE'
+    | 'EXECUTION_BASELINE_NOT_ANCESTOR'
     | 'INCOMPLETE_PHASE_PROGRESSION'
     | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
     | 'REWORK_NO_SOURCE_CHANGE';
@@ -142,14 +144,44 @@ const NON_SOURCE_PREFIXES = ['docs/', '.ops/'];
 function changedFilesSince(
   cwd: string,
   baselineSha: string,
-): { ok: true; files: string[] } | { ok: false; error: string } {
+):
+  | { ok: true; files: string[] }
+  | {
+      ok: false;
+      code: 'EXECUTION_CORROBORATION_UNAVAILABLE' | 'EXECUTION_BASELINE_NOT_ANCESTOR';
+      error: string;
+    } {
+  const ancestry = spawnSync('git', ['merge-base', '--is-ancestor', baselineSha, 'HEAD'], {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  if (ancestry.status === 1) {
+    return {
+      ok: false,
+      code: 'EXECUTION_BASELINE_NOT_ANCESTOR',
+      error: `epoch baseline ${baselineSha} is not an ancestor of HEAD`,
+    };
+  }
+  if (ancestry.status !== 0) {
+    return {
+      ok: false,
+      code: 'EXECUTION_CORROBORATION_UNAVAILABLE',
+      error: ancestry.stderr || ancestry.stdout || `git merge-base exited ${ancestry.status}`,
+    };
+  }
+
   const diff = spawnSync('git', ['diff', '--name-only', baselineSha, 'HEAD'], {
     cwd,
     stdio: 'pipe',
     encoding: 'utf8',
   });
   if (diff.status !== 0) {
-    return { ok: false, error: diff.stderr || diff.stdout || `git diff exited ${diff.status}` };
+    return {
+      ok: false,
+      code: 'EXECUTION_CORROBORATION_UNAVAILABLE',
+      error: diff.stderr || diff.stdout || `git diff exited ${diff.status}`,
+    };
   }
   return {
     ok: true,
@@ -203,7 +235,7 @@ export function evaluateExecutionTruth(input: {
   if ('error' in diff) {
     return {
       ok: false,
-      code: 'EXECUTION_CORROBORATION_UNAVAILABLE',
+      code: diff.code,
       exit_code: 1,
       message: `unable to corroborate the current epoch against Git: ${diff.error}`,
       source_files_changed: 0,
@@ -430,7 +462,7 @@ export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string,
   return { ok: true, step: 'push', detail: 'committed and pushed' };
 }
 
-function buildCodexChildEnv(cwd: string): NodeJS.ProcessEnv {
+export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIdentity): NodeJS.ProcessEnv {
   const stateRoot = path.join(cwd, '.out', 'codex-pnpm-state');
   const dirs = {
     home: path.join(stateRoot, 'home'),
@@ -454,6 +486,9 @@ function buildCodexChildEnv(cwd: string): NodeJS.ProcessEnv {
     npm_config_cache: dirs.cache,
     npm_config_store_dir: dirs.store,
     npm_config_state_dir: dirs.state,
+    UNIT_TALK_EXECUTION_EPOCH_ID: stateIdentity.epoch_id,
+    UNIT_TALK_EXECUTION_ATTEMPT: String(stateIdentity.attempt),
+    UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(stateIdentity.minimum_revision),
   };
 }
 
@@ -809,7 +844,7 @@ async function main(): Promise<void> {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: buildCodexChildEnv(resolvedCwd),
+    env: buildCodexChildEnv(resolvedCwd, attemptStart.identity),
     timeout: timeoutPolicy.timeout_ms,
   });
 
@@ -880,7 +915,7 @@ async function main(): Promise<void> {
       : timedOut
         ? `attempt exceeded its bounded timeout of ${Math.round(timeoutPolicy.timeout_ms / 60_000)}m (${timeoutPolicy.policy_id})`
         : `codex exited with status ${child.status ?? 1}: ${child.error?.message ?? 'non-zero exit'}`;
-    const closed = failVisiblyAndRelease({ issueId, outcome, reason });
+    const closed = failVisiblyAndRelease({ issueId, outcome, reason, identity: attemptStart.identity });
 
     emitJson({
       ok: false,
@@ -917,6 +952,7 @@ async function main(): Promise<void> {
       issueId,
       outcome: 'failed',
       reason: `model-routing evidence failed to persist at ${persistence.step}: ${persistence.detail}`,
+      identity: attemptStart.identity,
     });
     emitJson({
       ok: false,
@@ -943,7 +979,12 @@ async function main(): Promise<void> {
 
   const truth = evaluateExecutionTruth({ issueId, cwd: resolvedCwd, stateIdentity: attemptStart.identity });
   if (!truth.ok) {
-    const closed = failVisiblyAndRelease({ issueId, outcome: 'failed', reason: truth.message });
+    const closed = failVisiblyAndRelease({
+      issueId,
+      outcome: 'failed',
+      reason: truth.message,
+      identity: attemptStart.identity,
+    });
     emitJson({
       ok: false,
       code: truth.code,
@@ -974,6 +1015,7 @@ async function main(): Promise<void> {
     issueId,
     outcome: 'completed',
     reason: 'codex exited 0 and evidence persisted',
+    identity: attemptStart.identity,
   });
 
   emitJson({

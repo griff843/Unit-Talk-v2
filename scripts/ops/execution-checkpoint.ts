@@ -252,6 +252,92 @@ export function checkpointRecoveryPath(issueId: string, dir: string = EXECUTION_
   return `${checkpointPath(issueId, dir)}.bak`;
 }
 
+export function checkpointMutationLockPath(issueId: string, dir: string = EXECUTION_CHECKPOINT_DIR): string {
+  return `${checkpointPath(issueId, dir)}.lock`;
+}
+
+class CheckpointMutationLockedError extends Error {
+  constructor(issueId: string) {
+    super(`EXECUTION_STATE_LOCKED: another checkpoint transition is active for ${issueId}`);
+    this.name = 'CheckpointMutationLockedError';
+  }
+}
+
+interface CheckpointMutationLockOwner {
+  pid: number;
+  host: string;
+  token: string;
+}
+
+function isLocalProcessAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+function readCheckpointLockOwner(lockPath: string): CheckpointMutationLockOwner | null {
+  try {
+    const value = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as Partial<CheckpointMutationLockOwner>;
+    return Number.isSafeInteger(value.pid) && typeof value.host === 'string' && typeof value.token === 'string'
+      ? (value as CheckpointMutationLockOwner)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Serialize checkpoint read-modify-write transitions. Clear and beginAttempt
+ * share this lock, so clear can never delete an attempt created between its
+ * active-state check and file removal.
+ */
+function withCheckpointMutationLock<T>(issueId: string, dir: string, action: () => T): T {
+  fs.mkdirSync(dir, { recursive: true });
+  const lockPath = checkpointMutationLockPath(issueId, dir);
+  const owner: CheckpointMutationLockOwner = {
+    pid: process.pid,
+    host: os.hostname() || 'unknown',
+    token: randomUUID(),
+  };
+
+  const acquire = (): number => {
+    try {
+      const fd = fs.openSync(lockPath, 'wx');
+      fs.writeFileSync(fd, `${JSON.stringify(owner)}\n`, 'utf8');
+      return fd;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      const existing = readCheckpointLockOwner(lockPath);
+      if (existing && existing.host === owner.host && !isLocalProcessAlive(existing.pid)) {
+        fs.rmSync(lockPath, { force: true });
+        try {
+          const fd = fs.openSync(lockPath, 'wx');
+          fs.writeFileSync(fd, `${JSON.stringify(owner)}\n`, 'utf8');
+          return fd;
+        } catch (retryError) {
+          if ((retryError as NodeJS.ErrnoException).code !== 'EEXIST') throw retryError;
+        }
+      }
+      throw new CheckpointMutationLockedError(issueId);
+    }
+  };
+
+  const fd = acquire();
+  try {
+    return action();
+  } finally {
+    fs.closeSync(fd);
+    const current = readCheckpointLockOwner(lockPath);
+    if (current?.token === owner.token) {
+      fs.rmSync(lockPath, { force: true });
+    }
+  }
+}
+
 function checkpointChecksum(checkpoint: ExecutionCheckpoint): string {
   const payload = {
     ...checkpoint,
@@ -653,9 +739,10 @@ function closeDanglingAttempts(
 
 export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
   const dir = input.dir ?? EXECUTION_CHECKPOINT_DIR;
-  const now = (input.now ?? new Date()).toISOString();
-  const existingState = readCheckpointState(input.issueId, dir);
-  const existing = existingState.checkpoint;
+  return withCheckpointMutationLock(input.issueId, dir, () => {
+    const now = (input.now ?? new Date()).toISOString();
+    const existingState = readCheckpointState(input.issueId, dir);
+    const existing = existingState.checkpoint;
 
   if (input.kind === 'fresh' && existing) {
     throw new Error(
@@ -774,40 +861,48 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     integrity: { algorithm: 'sha256', checksum: '' },
   });
 
-  const filePath = writeCheckpoint(checkpoint, dir);
-  return {
-    checkpoint,
-    resume,
-    identity: {
-      epoch_id: checkpoint.epoch.epoch_id,
-      attempt: checkpoint.attempt,
-      minimum_revision: checkpoint.state_revision,
-    },
-    path: filePath,
-  };
+    const filePath = writeCheckpoint(checkpoint, dir);
+    return {
+      checkpoint,
+      resume,
+      identity: {
+        epoch_id: checkpoint.epoch.epoch_id,
+        attempt: checkpoint.attempt,
+        minimum_revision: checkpoint.state_revision,
+      },
+      path: filePath,
+    };
+  });
 }
 
 function mutate(
   issueId: string,
   dir: string,
   now: Date,
+  expected: ExecutionStateIdentity | undefined,
   fn: (checkpoint: ExecutionCheckpoint, nowIso: string) => ExecutionCheckpoint,
 ): ExecutionCheckpoint | null {
-  const existing = readCheckpoint(issueId, dir);
-  if (!existing) {
-    return null;
-  }
-  const nowIso = now.toISOString();
-  const next = touch(fn(existing, nowIso), nowIso);
-  writeCheckpoint(next, dir);
-  return next;
+  return withCheckpointMutationLock(issueId, dir, () => {
+    const state = readCheckpointState(issueId, dir, expected);
+    if (!state.ok || !state.checkpoint) return null;
+    const nowIso = now.toISOString();
+    const next = touch(fn(state.checkpoint, nowIso), nowIso);
+    writeCheckpoint(next, dir);
+    return next;
+  });
+}
+
+interface ExecutorMutationOptions {
+  dir?: string;
+  now?: Date;
+  identity: ExecutionStateIdentity;
 }
 
 export function recordHeartbeat(
   issueId: string,
-  options: { dir?: string; now?: Date } = {},
+  options: ExecutorMutationOptions,
 ): ExecutionCheckpoint | null {
-  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint, nowIso) => ({
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), options.identity, (checkpoint, nowIso) => ({
     ...checkpoint,
     heartbeat_at: nowIso,
   }));
@@ -817,9 +912,9 @@ export function recordPhaseComplete(
   issueId: string,
   phase: ExecutionPhase,
   summary: string,
-  options: { dir?: string; now?: Date } = {},
+  options: ExecutorMutationOptions,
 ): ExecutionCheckpoint | null {
-  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint, nowIso) => {
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), options.identity, (checkpoint, nowIso) => {
     if (checkpoint.completed_phases.some((entry) => entry.phase === phase)) {
       return checkpoint;
     }
@@ -839,9 +934,9 @@ export function recordPhaseComplete(
 export function recordFinding(
   issueId: string,
   finding: { phase: ExecutionPhase; summary: string; id?: string },
-  options: { dir?: string; now?: Date } = {},
+  options: ExecutorMutationOptions,
 ): ExecutionCheckpoint | null {
-  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint, nowIso) => {
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), options.identity, (checkpoint, nowIso) => {
     const id = finding.id ?? `${finding.phase}-${checkpoint.findings.length + 1}`;
     if (checkpoint.findings.some((entry) => entry.id === id)) {
       return checkpoint;
@@ -868,9 +963,9 @@ export function recordFinding(
 export function recordPendingActions(
   issueId: string,
   actions: string[],
-  options: { dir?: string; now?: Date } = {},
+  options: ExecutorMutationOptions,
 ): ExecutionCheckpoint | null {
-  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint, nowIso) => ({
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), options.identity, (checkpoint, nowIso) => ({
     ...checkpoint,
     pending_actions: actions,
     heartbeat_at: nowIso,
@@ -879,7 +974,7 @@ export function recordPendingActions(
 
 export interface ClearCheckpointResult {
   ok: boolean;
-  code: 'execution_checkpoint_cleared' | 'execution_checkpoint_active';
+  code: 'execution_checkpoint_cleared' | 'execution_checkpoint_active' | 'execution_checkpoint_busy';
   removed: string[];
   reason: string;
 }
@@ -895,29 +990,41 @@ export function clearCheckpoint(
   options: { dir?: string } = {},
 ): ClearCheckpointResult {
   const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
-  const state = readCheckpointState(issueId, dir);
-  const openAttempt = state.checkpoint?.attempts.some((attempt) => attempt.ended_at === null) ?? false;
-  if (openAttempt) {
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const openAttempt = state.checkpoint?.attempts.some((attempt) => attempt.ended_at === null) ?? false;
+      if (openAttempt) {
+        return {
+          ok: false,
+          code: 'execution_checkpoint_active',
+          removed: [],
+          reason: `refused to clear active epoch ${state.checkpoint!.epoch.epoch_id} attempt ${state.checkpoint!.attempt}`,
+        };
+      }
+      const removed: string[] = [];
+      for (const candidate of [checkpointPath(issueId, dir), checkpointRecoveryPath(issueId, dir)]) {
+        if (fs.existsSync(candidate)) {
+          fs.rmSync(candidate, { force: true });
+          removed.push(candidate);
+        }
+      }
+      return {
+        ok: true,
+        code: 'execution_checkpoint_cleared',
+        removed,
+        reason: removed.length > 0 ? 'cleared closed execution state' : 'no execution state existed',
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof CheckpointMutationLockedError)) throw error;
     return {
       ok: false,
-      code: 'execution_checkpoint_active',
+      code: 'execution_checkpoint_busy',
       removed: [],
-      reason: `refused to clear active epoch ${state.checkpoint!.epoch.epoch_id} attempt ${state.checkpoint!.attempt}`,
+      reason: error.message,
     };
   }
-  const removed: string[] = [];
-  for (const candidate of [checkpointPath(issueId, dir), checkpointRecoveryPath(issueId, dir)]) {
-    if (fs.existsSync(candidate)) {
-      fs.rmSync(candidate, { force: true });
-      removed.push(candidate);
-    }
-  }
-  return {
-    ok: true,
-    code: 'execution_checkpoint_cleared',
-    removed,
-    reason: removed.length > 0 ? 'cleared closed execution state' : 'no execution state existed',
-  };
 }
 
 export function requestCancel(
@@ -925,7 +1032,7 @@ export function requestCancel(
   reason: string,
   options: { dir?: string; now?: Date } = {},
 ): ExecutionCheckpoint | null {
-  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), (checkpoint) => ({
+  return mutate(issueId, options.dir ?? EXECUTION_CHECKPOINT_DIR, options.now ?? new Date(), undefined, (checkpoint) => ({
     ...checkpoint,
     cancel_requested: true,
     cancel_reason: reason,
@@ -944,13 +1051,14 @@ export interface FinishAttemptInput {
   issueId: string;
   outcome: AttemptOutcome;
   reason: string;
+  identity: ExecutionStateIdentity;
   dir?: string;
   now?: Date;
   releasedResources?: string[];
 }
 
 export function finishAttempt(input: FinishAttemptInput): ExecutionCheckpoint | null {
-  return mutate(input.issueId, input.dir ?? EXECUTION_CHECKPOINT_DIR, input.now ?? new Date(), (checkpoint, nowIso) => {
+  return mutate(input.issueId, input.dir ?? EXECUTION_CHECKPOINT_DIR, input.now ?? new Date(), input.identity, (checkpoint, nowIso) => {
     const attempts = checkpoint.attempts.map((attempt) =>
       attempt.attempt === checkpoint.attempt && attempt.ended_at === null
         ? {
@@ -1044,6 +1152,7 @@ export function failVisiblyAndRelease(input: {
   issueId: string;
   outcome: Extract<AttemptOutcome, 'timed_out' | 'failed' | 'silent_no_heartbeat' | 'cancelled'>;
   reason: string;
+  identity: ExecutionStateIdentity;
   dir?: string;
   now?: Date;
   semaphoreDir?: string;
@@ -1060,6 +1169,7 @@ export function failVisiblyAndRelease(input: {
     issueId: input.issueId,
     outcome: input.outcome,
     reason: input.reason,
+    identity: input.identity,
     dir: input.dir,
     now: input.now,
     releasedResources: released.map((record) => `verify-slot-${record.slot}:${record.state}`),
@@ -1074,6 +1184,18 @@ function parsePhase(value: string | undefined): ExecutionPhase {
     return value as ExecutionPhase;
   }
   throw new Error(`--phase must be one of: ${EXECUTION_PHASES.join(', ')}`);
+}
+
+function requireMutationIdentity(flags: Map<string, string[]>): ExecutionStateIdentity {
+  const epochId = getFlag(flags, 'epoch-id') ?? process.env.UNIT_TALK_EXECUTION_EPOCH_ID;
+  const attempt = Number(getFlag(flags, 'attempt') ?? process.env.UNIT_TALK_EXECUTION_ATTEMPT);
+  const minimumRevision = Number(
+    getFlag(flags, 'minimum-revision') ?? process.env.UNIT_TALK_EXECUTION_MINIMUM_REVISION,
+  );
+  if (!epochId || !Number.isSafeInteger(attempt) || attempt <= 0 || !Number.isSafeInteger(minimumRevision) || minimumRevision <= 0) {
+    throw new Error('checkpoint mutation requires the originating --epoch-id, --attempt, and --minimum-revision identity');
+  }
+  return { epoch_id: epochId, attempt, minimum_revision: minimumRevision };
 }
 
 function runCli(): void {
@@ -1105,7 +1227,7 @@ function runCli(): void {
         return;
       }
       case 'heartbeat': {
-        const checkpoint = recordHeartbeat(issueId, { dir });
+        const checkpoint = recordHeartbeat(issueId, { dir, identity: requireMutationIdentity(flags) });
         emitJson({
           ok: Boolean(checkpoint),
           code: checkpoint ? 'execution_checkpoint_heartbeat' : 'execution_checkpoint_missing',
@@ -1120,7 +1242,7 @@ function runCli(): void {
           issueId,
           parsePhase(getFlag(flags, 'phase')),
           getFlag(flags, 'summary') ?? 'phase completed',
-          { dir },
+          { dir, identity: requireMutationIdentity(flags) },
         );
         emitJson({
           ok: Boolean(checkpoint),
@@ -1136,7 +1258,7 @@ function runCli(): void {
         const checkpoint = recordFinding(
           issueId,
           { phase: parsePhase(getFlag(flags, 'phase')), summary: getFlag(flags, 'summary') ?? '' },
-          { dir },
+          { dir, identity: requireMutationIdentity(flags) },
         );
         emitJson({
           ok: Boolean(checkpoint),
@@ -1148,7 +1270,10 @@ function runCli(): void {
         return;
       }
       case 'pending': {
-        const checkpoint = recordPendingActions(issueId, flags.get('action') ?? [], { dir });
+        const checkpoint = recordPendingActions(issueId, flags.get('action') ?? [], {
+          dir,
+          identity: requireMutationIdentity(flags),
+        });
         emitJson({
           ok: Boolean(checkpoint),
           code: checkpoint ? 'execution_checkpoint_pending' : 'execution_checkpoint_missing',
@@ -1183,7 +1308,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
         );
     }
   } catch (error) {
