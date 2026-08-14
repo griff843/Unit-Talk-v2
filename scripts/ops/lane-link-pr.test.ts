@@ -10,22 +10,40 @@ import {
   preflightTokenPathForBranch,
 } from './shared.js';
 import { recoverMissingPreflightToken } from './lane-link-pr.js';
+import {
+  buildLaneFinalizePlan,
+  resolveLaneFinalizeInput,
+  runLaneFinalizePlan,
+  type LaneFinalizeRunner,
+} from './lane-finalize.js';
 
-function runLaneLinkPr(args: string[]) {
+function runLaneLinkPr(args: string[], env: NodeJS.ProcessEnv = process.env) {
   return spawnSync(
     process.execPath,
-    [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/ops/lane-link-pr.ts', ...args],
+    [
+      path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+      'scripts/ops/lane-link-pr.ts',
+      ...args,
+    ],
     {
       cwd: ROOT,
       encoding: 'utf8',
       stdio: 'pipe',
+      env,
     },
   );
 }
 
 function withManifest(
   issueId: string,
-  status: 'started' | 'in_progress' | 'in_review' | 'merged' | 'done' | 'blocked' | 'reopened',
+  status:
+    | 'started'
+    | 'in_progress'
+    | 'in_review'
+    | 'merged'
+    | 'done'
+    | 'blocked'
+    | 'reopened',
   laneType: 'codex-cli' | 'claude' | 'codex-cloud' = 'codex-cli',
   mutate?: (manifest: Record<string, unknown>) => void,
 ): string {
@@ -39,7 +57,12 @@ function withManifest(
     issue_id: issueId,
     lane_type: laneType,
     tier: 'T2',
-    worktree_path: path.join(ROOT, '.out', 'worktrees', `codex__${issueId.toLowerCase()}-receive`),
+    worktree_path: path.join(
+      ROOT,
+      '.out',
+      'worktrees',
+      `codex__${issueId.toLowerCase()}-receive`,
+    ),
     branch: `codex/${issueId.toLowerCase()}-receive`,
     base_branch: 'main',
     commit_sha: null,
@@ -68,9 +91,18 @@ function withManifest(
 
 function cleanup(issueId: string): void {
   fs.rmSync(issueToManifestPath(issueId), { force: true });
-  fs.rmSync(path.join(ROOT, '.out', 'ops', 'preflight', `${issueId.toLowerCase()}-token.json`), {
-    force: true,
-  });
+  fs.rmSync(
+    path.join(
+      ROOT,
+      '.out',
+      'ops',
+      'preflight',
+      `${issueId.toLowerCase()}-token.json`,
+    ),
+    {
+      force: true,
+    },
+  );
 }
 
 function recoveryManifest(issueId: string): LaneManifest {
@@ -107,24 +139,31 @@ test('missing-token recovery re-proves ownership, PR binding, dependencies, and 
   fs.rmSync(tokenPath, { force: true });
   let writtenToken: Record<string, unknown> | undefined;
   try {
-    recoverMissingPreflightToken(manifest, manifest.branch, 'https://github.com/example/unit-talk/pull/130', {
-      cwd: ROOT,
-      currentBranch: () => manifest.branch,
-      currentHead: () => 'a'.repeat(40),
-      isClean: () => true,
-      dependenciesReady: () => true,
-      readPullRequest: () => ({
-        url: 'https://github.com/example/unit-talk/pull/130',
-        headRefName: manifest.branch,
-        headRefOid: 'a'.repeat(40),
-        baseRefName: 'main',
-        state: 'OPEN',
-      }),
-      activeManifests: () => [manifest],
-      now: () => new Date('2026-08-08T12:00:00.000Z'),
-      randomUUID: () => 'recovery-run-id',
-      writeToken: (_path, token) => { writtenToken = token as unknown as Record<string, unknown>; },
-    });
+    recoverMissingPreflightToken(
+      manifest,
+      manifest.branch,
+      'https://github.com/example/unit-talk/pull/130',
+      {
+        cwd: ROOT,
+        currentBranch: () => manifest.branch,
+        currentHead: () => 'a'.repeat(40),
+        isClean: () => true,
+        dependenciesReady: () => true,
+        readPullRequest: () => ({
+          url: 'https://github.com/example/unit-talk/pull/130',
+          headRefName: manifest.branch,
+          headRefOid: 'a'.repeat(40),
+          baseRefName: 'main',
+          state: 'OPEN',
+        }),
+        activeManifests: () => [manifest],
+        now: () => new Date('2026-08-08T12:00:00.000Z'),
+        randomUUID: () => 'recovery-run-id',
+        writeToken: (_path, token) => {
+          writtenToken = token as unknown as Record<string, unknown>;
+        },
+      },
+    );
     assert.strictEqual(writtenToken?.['head_sha'], 'a'.repeat(40));
     assert.strictEqual(writtenToken?.['status'], 'pass');
     assert.strictEqual(writtenToken?.['preflight_run_id'], 'recovery-run-id');
@@ -140,27 +179,28 @@ test('missing-token recovery fails closed on a foreign active scope collision', 
     file_scope_lock: [...manifest.file_scope_lock],
   };
   assert.throws(
-    () => recoverMissingPreflightToken(
-      manifest,
-      manifest.branch,
-      'https://github.com/example/unit-talk/pull/131',
-      {
-        cwd: ROOT,
-        currentBranch: () => manifest.branch,
-        currentHead: () => 'b'.repeat(40),
-        isClean: () => true,
-        dependenciesReady: () => true,
-        readPullRequest: () => ({
-          url: 'https://github.com/example/unit-talk/pull/131',
-          headRefName: manifest.branch,
-          headRefOid: 'b'.repeat(40),
-          baseRefName: 'main',
-          state: 'OPEN',
-        }),
-        activeManifests: () => [manifest, foreign],
-        writeToken: () => assert.fail('token must not be written'),
-      },
-    ),
+    () =>
+      recoverMissingPreflightToken(
+        manifest,
+        manifest.branch,
+        'https://github.com/example/unit-talk/pull/131',
+        {
+          cwd: ROOT,
+          currentBranch: () => manifest.branch,
+          currentHead: () => 'b'.repeat(40),
+          isClean: () => true,
+          dependenciesReady: () => true,
+          readPullRequest: () => ({
+            url: 'https://github.com/example/unit-talk/pull/131',
+            headRefName: manifest.branch,
+            headRefOid: 'b'.repeat(40),
+            baseRefName: 'main',
+            state: 'OPEN',
+          }),
+          activeManifests: () => [manifest, foreign],
+          writeToken: () => assert.fail('token must not be written'),
+        },
+      ),
     /scope overlaps active UTV2-99112/,
   );
 });
@@ -177,11 +217,19 @@ test('lane-link-pr transitions a codex-cli lane to in_review', () => {
       'https://github.com/example/unit-talk/pull/123',
     ]);
     assert.strictEqual(result.status, 0);
-    const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string; pr_url: string };
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      code: string;
+      status: string;
+      pr_url: string;
+    };
     assert.strictEqual(payload.ok, true);
     assert.strictEqual(payload.code, 'lane_linked');
     assert.strictEqual(payload.status, 'in_review');
-    assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/123');
+    assert.strictEqual(
+      payload.pr_url,
+      'https://github.com/example/unit-talk/pull/123',
+    );
   } finally {
     cleanup(issueId);
   }
@@ -220,11 +268,19 @@ test('lane-link-pr is idempotent when already in_review with the same PR URL', (
       'https://github.com/example/unit-talk/pull/125',
     ]);
     assert.strictEqual(result.status, 0);
-    const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string; pr_url: string };
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      code: string;
+      status: string;
+      pr_url: string;
+    };
     assert.strictEqual(payload.ok, true);
     assert.strictEqual(payload.code, 'lane_link_pr_noop');
     assert.strictEqual(payload.status, 'in_review');
-    assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/125');
+    assert.strictEqual(
+      payload.pr_url,
+      'https://github.com/example/unit-talk/pull/125',
+    );
   } finally {
     cleanup(issueId);
   }
@@ -268,7 +324,11 @@ test('lane-link-pr is a no-op for merged or done lanes when PR URL matches manif
         'https://github.com/example/unit-talk/pull/128',
       ]);
       assert.strictEqual(result.status, 0);
-      const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string };
+      const payload = JSON.parse(result.stdout) as {
+        ok: boolean;
+        code: string;
+        status: string;
+      };
       assert.strictEqual(payload.ok, true);
       assert.strictEqual(payload.code, 'lane_link_pr_noop');
       assert.strictEqual(payload.status, status);
@@ -316,21 +376,157 @@ test('lane-link-pr rejects invalid pr urls', () => {
   }
 });
 
-test('lane-link-pr rejects non-codex-cli lanes', () => {
+test('lane-link-pr binds a Claude lane and resolves its issue from the branch name', () => {
   const issueId = 'UTV2-99106';
   try {
-    withManifest(issueId, 'started', 'claude');
+    withManifest(issueId, 'started', 'claude', (manifest) => {
+      manifest['branch'] = `claude/${issueId.toLowerCase()}-receive`;
+    });
     const result = runLaneLinkPr([
-      issueId,
       '--branch',
-      `codex/${issueId.toLowerCase()}-receive`,
+      `claude/${issueId.toLowerCase()}-receive`,
       '--pr',
       'https://github.com/example/unit-talk/pull/127',
     ]);
-    assert.strictEqual(result.status, 1);
-    const payload = JSON.parse(result.stdout) as { code: string };
-    assert.strictEqual(payload.code, 'lane_type_mismatch');
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      code: string;
+      status: string;
+      pr_url: string;
+    };
+    assert.strictEqual(payload.ok, true);
+    assert.strictEqual(payload.code, 'lane_linked');
+    assert.strictEqual(payload.status, 'in_review');
+    assert.strictEqual(
+      payload.pr_url,
+      'https://github.com/example/unit-talk/pull/127',
+    );
   } finally {
     cleanup(issueId);
   }
+});
+
+test('PR binding feeds merge closeout without manual metadata repair', () => {
+  const issueId = 'UTV2-99113';
+  try {
+    const manifestPath = withManifest(
+      issueId,
+      'started',
+      'claude',
+      (manifest) => {
+        manifest['branch'] = `claude/${issueId.toLowerCase()}-lifecycle`;
+      },
+    );
+    const link = runLaneLinkPr([
+      '--branch',
+      `claude/${issueId.toLowerCase()}-lifecycle`,
+      '--pr',
+      'https://github.com/example/unit-talk/pull/132',
+    ]);
+    assert.strictEqual(link.status, 0, link.stderr || link.stdout);
+
+    const linkedManifest = JSON.parse(
+      fs.readFileSync(manifestPath, 'utf8'),
+    ) as LaneManifest;
+    const resolved = resolveLaneFinalizeInput({ manifest: linkedManifest });
+    assert.deepStrictEqual(resolved, { issueId, pr: '132' });
+
+    const result = runLaneFinalizePlan(
+      buildLaneFinalizePlan({ manifest: linkedManifest, pr: resolved.pr }),
+      {
+        runner: (() => ({
+          status: 0,
+          stdout: '',
+          stderr: '',
+        })) as LaneFinalizeRunner,
+      },
+    );
+    assert.strictEqual(result.ok, true);
+    assert.deepStrictEqual(
+      result.steps.map((step) => step.id),
+      [
+        'record_merge',
+        'apply_tier_label',
+        'generate_proof',
+        'close_lane',
+        'reconcile_current',
+      ],
+    );
+    assert.strictEqual(
+      result.steps.every((step) => step.status === 'passed'),
+      true,
+    );
+  } finally {
+    cleanup(issueId);
+  }
+});
+
+test('GitHub pull_request binding does not depend on an ephemeral preflight token', () => {
+  const issueId = 'UTV2-99114';
+  try {
+    withManifest(issueId, 'started', 'claude', (manifest) => {
+      manifest['branch'] = `claude/${issueId.toLowerCase()}-event-binding`;
+    });
+    fs.rmSync(
+      path.join(
+        ROOT,
+        '.out',
+        'ops',
+        'preflight',
+        `${issueId.toLowerCase()}-token.json`,
+      ),
+      {
+        force: true,
+      },
+    );
+
+    const result = runLaneLinkPr(
+      [
+        '--branch',
+        `claude/${issueId.toLowerCase()}-event-binding`,
+        '--pr',
+        'https://github.com/example/unit-talk/pull/133',
+        '--github-event',
+      ],
+      {
+        ...process.env,
+        GITHUB_ACTIONS: 'true',
+        GITHUB_EVENT_NAME: 'pull_request',
+      },
+    );
+    assert.strictEqual(result.status, 0, result.stderr || result.stdout);
+    const payload = JSON.parse(result.stdout) as {
+      ok: boolean;
+      code: string;
+      preflight_recovered: boolean;
+    };
+    assert.strictEqual(payload.ok, true);
+    assert.strictEqual(payload.code, 'lane_linked');
+    assert.strictEqual(payload.preflight_recovered, false);
+  } finally {
+    cleanup(issueId);
+  }
+});
+
+test('pull request workflow binds opened and reopened lane PRs automatically', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'),
+    'utf8',
+  );
+  assert.match(workflow, /types:\s*\[opened, reopened\]/);
+  assert.match(workflow, /id: lane/);
+  assert.match(
+    workflow,
+    /BRANCH: \$\{\{ github\.event\.pull_request\.head\.ref \}\}/,
+  );
+  assert.match(
+    workflow,
+    /PR_URL: \$\{\{ github\.event\.pull_request\.html_url \}\}/,
+  );
+  assert.match(
+    workflow,
+    /pnpm ops:lane-link-pr -- --branch "\$BRANCH" --pr "\$PR_URL" --github-event/,
+  );
+  assert.match(workflow, /git push origin "HEAD:\$BRANCH"/);
 });

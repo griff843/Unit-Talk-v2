@@ -1,0 +1,80 @@
+name: Lane PR Binding
+
+on:
+  pull_request:
+    types: [opened, reopened]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: lane-pr-binding-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  bind-lane-pr:
+    name: Bind PR to lane manifest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+    steps:
+      - name: Checkout lane branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          token: ${{ secrets.SYNC_BOT_TOKEN || github.token }}
+
+      - name: Resolve lane from branch
+        id: lane
+        run: |
+          issue_id=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
+          if [ -z "$issue_id" ]; then
+            echo "bind=false" >> "$GITHUB_OUTPUT"
+            echo "Branch $BRANCH is not a UTV2 lane; no manifest binding is required."
+            exit 0
+          fi
+          echo "bind=true" >> "$GITHUB_OUTPUT"
+          echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: steps.lane.outputs.bind == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        if: steps.lane.outputs.bind == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.lane.outputs.bind == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Bind PR URL from the lane branch
+        if: steps.lane.outputs.bind == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm ops:lane-link-pr -- --branch "$BRANCH" --pr "$PR_URL" --github-event
+
+      - name: Persist lifecycle binding
+        if: steps.lane.outputs.bind == 'true'
+        run: |
+          set -euo pipefail
+          issue_id="${{ steps.lane.outputs.issue_id }}"
+          manifest="docs/06_status/lanes/${issue_id}.json"
+          git add "$manifest"
+          if git diff --cached --quiet; then
+            echo "Lane manifest is already bound to $PR_URL."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(lanes): bind ${issue_id} to PR #${{ github.event.pull_request.number }}"
+          git push origin "HEAD:$BRANCH"
