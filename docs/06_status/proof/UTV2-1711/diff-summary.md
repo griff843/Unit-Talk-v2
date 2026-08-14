@@ -1,5 +1,7 @@
 # UTV2-1711 Diff Summary
 
+MERGE_SHA: 4b74008920a3bc52b22f14507d60ba0232d5d439
+
 Issue: UTV2-1711  
 Tier: T2  
 Branch: `codex/utv2-1711-execution-epoch-truth`  

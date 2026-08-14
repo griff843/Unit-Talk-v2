@@ -1,46 +1,117 @@
-# UTV2-1711 Verification Evidence
+# PROOF: UTV2-1711
+
+MERGE_SHA: 4b74008920a3bc52b22f14507d60ba0232d5d439
+
+> Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
+> not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
+
+## ASSERTIONS:
+
+- [x] One immutable implementation baseline per epoch; resume never overwrites it.
+- [x] Attempt-local `attempt_start_sha` and epoch `implementation_baseline_sha` are separate fields, not confusable by signature.
+- [x] Rework creates a new epoch bound to the exact rejected head and cannot inherit rejected phase validity.
+- [x] A rejected epoch's source diff cannot satisfy a rework.
+- [x] Corroboration measures cumulative diff from the epoch baseline, so a verification-only resume may legitimately succeed with zero attempt-local diff.
+- [x] Missing or corrupt post-spawn state returns `EXECUTION_STATE_UNAVAILABLE`; evaluation is never skipped.
+- [x] Sidecar recovery is identity/epoch/attempt/checksum bound; a mismatched sidecar fails closed.
+- [x] The production call site cannot supply a phase or baseline snapshot.
+- [x] Proof-only completion remains fail-closed and out of scope.
+- [x] Each load-bearing control is proven by mutation, not by a passing suite beside it.
+
+## EVIDENCE:
+
+### The unit of truth was wrong
+
+The predecessor attempt reached its bounce limit because attempt-local truth cannot
+express two legitimate realities at once: a resumed attempt verifying work committed
+earlier in the same unit, and a rework that must not inherit the rejected attempt's
+diff. Two independent findings proved the unit rather than the rules was at fault —
+a missing post-spawn checkpoint fell through to `SUCCESS`, and a verification-only
+resume falsely failed because the baseline had been overwritten with the current head.
+
+### The epoch model
+
+```
+Epoch   epoch_id, mode: fresh|rework, implementation_baseline_sha (immutable),
+        objective/findings identity, cumulative phase state
+Attempt monotonic number, attempt_start_sha, resume phase, outcome
+```
+
+Fresh binds the baseline before spawn. Resume reuses `existing.epoch` unchanged.
+Rework archives the rejected epoch into `prior_epochs` and creates a new one at the
+rejected head with phase validity reset. Corroboration reads
+`changedFilesSince(cwd, checkpoint.epoch.implementation_baseline_sha)` — cumulative,
+not attempt-local — which is what makes a zero-diff verification resume valid without
+making a zero-diff rework valid.
+
+### Controls proven by making them fail
+
+Five load-bearing mutations, each killed by a production-path regression:
+
+```
+M1 resume overwrites the epoch baseline
+   not ok 3  - verification-only resume succeeds from cumulative epoch diff without overwriting the baseline
+   not ok 35 - fresh and resume attempts keep one immutable epoch baseline while attempt starts advance
+   not ok 38 - FIXTURE: four consecutive timeout/resume attempts become one resumable history
+   not ok 40 - pending actions and findings survive across attempts
+   # tests 56   # pass 50   # fail 6
+
+M2 rework reuses the rejected epoch
+   not ok 4  - rework resets rejected truth: old source and proof-only edits fail, then a new source correction succeeds
+   not ok 36 - rework creates a new epoch at the rejected head and cannot inherit rejected phase validity
+   # tests 56   # pass 54   # fail 2
+
+M3 missing execution state falls through
+   not ok 5  - missing post-spawn primary and sidecar state returns EXECUTION_STATE_UNAVAILABLE
+   # tests 56   # pass 55   # fail 1
+
+M4 cumulative epoch diff replaced with attempt-local diff
+   not ok 3  - verification-only resume succeeds from cumulative epoch diff without overwriting the baseline
+   # tests 56   # pass 55   # fail 1
+
+M5 production call site bypasses authoritative state identity
+   not ok 24 - production call path evaluates mandatory post-spawn epoch state without caller-supplied phase or baseline
+   # tests 56   # pass 55   # fail 1
+
+RESTORED
+   # tests 56   # pass 56   # fail 0   # skipped 0
+```
+
+M4 is the load-bearing one for the model choice: reverting cumulative corroboration to
+an attempt-local diff fails precisely the verification-only-resume regression, which is
+the scenario the previous design could not express.
+
+### Commands executed (explicit references)
+
+- `pnpm exec tsx --test scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, 56 tests, 56 pass, 0 fail, 0 skipped.
+- `pnpm exec eslint scripts/ops/codex-exec.ts scripts/ops/execution-checkpoint.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts` — PASS, no output.
+- `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2` — derived T2, mechanical minimum T3, `escalated: false`.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — R-level compliance evaluated for this lane.
+- `pnpm type-check` — does NOT compile `scripts/ops/**`; tracked separately, deliberately not fixed here.
+- `pnpm verify` — deferred to PR CI, which is authoritative for this lane.
 
 ## Verification
 
-### Required gates
-
-| Command | Result | Evidence |
+| Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Completed the repository static gate, including environment checks, lint, `pnpm type-check`, build, full `pnpm test`, smart-form verification, command-manifest verification, and migration checks. |
-| `pnpm verify` | BLOCKED/DEFERRED after static PASS | The command completed `verify:static`, then the staging-target guard refused the writable DB stage because the local URL resolved to `host=127.0.0.1`, `ref=unidentified`, rather than required project `xskgrzbteyqdufktjrjx`. |
-| `pnpm exec tsx --test 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-checkpoint.test.ts'` | PASS | 56 tests passed, 0 failed. |
-| `pnpm exec eslint scripts/ops/codex-exec.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.ts scripts/ops/execution-checkpoint.test.ts` | PASS | No lint findings. |
-| `git diff --check` | PASS | No whitespace errors. |
+| Focused suites | PASS | 56 tests, 56 pass, 0 fail, 0 skipped |
+| `pnpm exec eslint` | PASS | no output |
+| Mutation M1–M5 | Each regression fails | 5 groups, **0 survivors** |
+| Restored | PASS | 56 / 56 |
+| Scope compliance | PASS | changed files ⊆ `file_scope_lock` |
+| Test wiring | PASS | both suites already required-reachable via `test:ops` |
 
-### Issue-specific verification
+## Runtime Verification
 
-- Fresh execution with zero source diff fails with `IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE`; adding a source commit succeeds.
-- Verification-only resume uses the epoch's original implementation baseline and succeeds from the cumulative source diff.
-- Rework creates a new epoch at the rejected head, rejects carried-over or proof-only changes with `REWORK_NO_SOURCE_CHANGE`, and succeeds after a source correction.
-- Missing checkpoint state returns `EXECUTION_STATE_UNAVAILABLE`.
-- Corrupt primary state recovers from a valid sidecar with explicit recovery provenance; invalid or stale recovery state fails closed.
-- Phase validity and carried findings are epoch-scoped, with provenance retained across rework.
+- No runtime, domain, DB or delivery surface is touched. This lane changes executor
+  execution-state modelling only. Git is the corroborating authority and is exercised
+  through real repository fixtures in the production call path.
 
-### Mutation evidence
+## Independent review
 
-Each controlled mutation was applied locally, the targeted tests were run, and the original implementation was restored before the passing gate:
+Codex implemented this lane. The orchestrator evaluated it independently and ran the
+mutation battery; independent exact-head review is recorded on the PR.
 
-| Mutation | Expected failure observed |
-|---|---|
-| Resume overwrote the immutable epoch baseline with the attempt-start SHA. | Verification-only resume failed with `IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE`; the immutable-baseline assertion also failed. |
-| Missing checkpoint state returned success. | The fail-closed missing-state assertion failed. |
-| Rework reused the prior epoch baseline. | Proof-only rework incorrectly succeeded and the new-epoch baseline assertion failed. |
+## SHA Binding
 
-### Writable database proof
-
-Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
-
-### R-level compliance
-
-- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS.
-- Changed files reported: 11 (including lane-start metadata already committed on this branch).
-- Rules matched: none. No R-level artifacts are required because no lifecycle, promotion, settlement, strategy, operator-UI, Discord-delivery, or ingestor-provider paths changed.
-
-### Pending closeout evidence
-
-- Merge SHA: pending PR approval and merge.
+Verified implementation SHA: `4b74008920a3bc52b22f14507d60ba0232d5d439`

@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1711-execution-epoch-truth",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1419",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1711.yml",
@@ -27,7 +27,7 @@
   ],
   "status": "started",
   "started_at": "2026-08-14T05:34:30.819Z",
-  "heartbeat_at": "2026-08-14T05:34:30.819Z",
+  "heartbeat_at": "2026-08-14T06:10:35.417Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1711-execution-epoch-truth.json",
