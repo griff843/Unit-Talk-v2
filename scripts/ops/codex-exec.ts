@@ -21,6 +21,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -50,9 +51,10 @@ import {
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
   finishAttempt,
-  readCheckpoint,
+  readCheckpointState,
   resolveExecutionTimeout,
   type ExecutionCheckpoint,
+  type ExecutionStateIdentity,
   type ResumePlan,
   type TimeoutPolicyDecision,
 } from './execution-checkpoint.js';
@@ -70,6 +72,11 @@ interface CodexExecResult {
     | 'EXECUTION_SILENT'
     | 'EXECUTION_CANCELLED'
     | 'EVIDENCE_PERSISTENCE_FAILED'
+    | 'EXECUTION_STATE_UNAVAILABLE'
+    | 'EXECUTION_CORROBORATION_UNAVAILABLE'
+    | 'INCOMPLETE_PHASE_PROGRESSION'
+    | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
+    | 'REWORK_NO_SOURCE_CHANGE'
     | 'DRY_RUN';
   issue_id: string;
   branch?: string;
@@ -84,6 +91,8 @@ interface CodexExecResult {
   legacy_compatibility_used?: boolean;
   codex_cli_version?: string | null;
   execution?: ExecutionSummary;
+  source_files_changed?: number;
+  checkpoint_provenance?: string;
 }
 
 /**
@@ -92,7 +101,11 @@ interface CodexExecResult {
  * was and where it came from, and whether the executor went silent.
  */
 export interface ExecutionSummary {
+  epoch_id: string;
+  epoch_mode: 'fresh' | 'rework';
+  implementation_baseline_sha: string;
   attempt: number;
+  attempt_start_sha: string;
   resumed: boolean;
   phase: string;
   resumed_from_phase: string;
@@ -107,6 +120,135 @@ export interface ExecutionSummary {
   released_resources?: string[];
 }
 
+export interface ExecutionTruthVerdict {
+  ok: boolean;
+  code:
+    | 'SUCCESS'
+    | 'EXECUTION_STATE_UNAVAILABLE'
+    | 'EXECUTION_CORROBORATION_UNAVAILABLE'
+    | 'INCOMPLETE_PHASE_PROGRESSION'
+    | 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE'
+    | 'REWORK_NO_SOURCE_CHANGE';
+  exit_code: 0 | 1;
+  message: string;
+  source_files_changed: number;
+  changed_files: string[];
+  checkpoint_provenance: 'primary' | 'sidecar' | 'none';
+}
+
+const REQUIRED_SUCCESS_PHASES = ['implement', 'verify', 'closeout'] as const;
+const NON_SOURCE_PREFIXES = ['docs/', '.ops/'];
+
+function changedFilesSince(
+  cwd: string,
+  baselineSha: string,
+): { ok: true; files: string[] } | { ok: false; error: string } {
+  const diff = spawnSync('git', ['diff', '--name-only', baselineSha, 'HEAD'], {
+    cwd,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  if (diff.status !== 0) {
+    return { ok: false, error: diff.stderr || diff.stdout || `git diff exited ${diff.status}` };
+  }
+  return {
+    ok: true,
+    files: diff.stdout
+      .split('\n')
+      .map((file) => file.trim())
+      .filter((file) => file.length > 0),
+  };
+}
+
+/**
+ * Read execution truth from persisted epoch state. The caller cannot provide a
+ * phase or a baseline: both come from the validated checkpoint, which makes an
+ * attempt-local SHA or stale phase impossible to substitute at this boundary.
+ */
+export function evaluateExecutionTruth(input: {
+  issueId: string;
+  cwd: string;
+  checkpointDir?: string;
+  stateIdentity: ExecutionStateIdentity;
+}): ExecutionTruthVerdict {
+  const state = readCheckpointState(input.issueId, input.checkpointDir, input.stateIdentity);
+  if (!state.ok || !state.checkpoint) {
+    return {
+      ok: false,
+      code: 'EXECUTION_STATE_UNAVAILABLE',
+      exit_code: 1,
+      message: `mandatory post-spawn execution state is unavailable: ${state.reason}`,
+      source_files_changed: 0,
+      changed_files: [],
+      checkpoint_provenance: 'none',
+    };
+  }
+
+  const checkpoint = state.checkpoint;
+  const completed = new Set(checkpoint.completed_phases.map((entry) => entry.phase));
+  const missing = REQUIRED_SUCCESS_PHASES.filter((phase) => !completed.has(phase));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      code: 'INCOMPLETE_PHASE_PROGRESSION',
+      exit_code: 1,
+      message: `current epoch ${checkpoint.epoch.epoch_id} is missing required phase(s): ${missing.join(', ')}`,
+      source_files_changed: 0,
+      changed_files: [],
+      checkpoint_provenance: state.provenance.source,
+    };
+  }
+
+  const diff = changedFilesSince(input.cwd, checkpoint.epoch.implementation_baseline_sha);
+  if ('error' in diff) {
+    return {
+      ok: false,
+      code: 'EXECUTION_CORROBORATION_UNAVAILABLE',
+      exit_code: 1,
+      message: `unable to corroborate the current epoch against Git: ${diff.error}`,
+      source_files_changed: 0,
+      changed_files: [],
+      checkpoint_provenance: state.provenance.source,
+    };
+  }
+  const sourceFiles = diff.files.filter(
+    (file) => !NON_SOURCE_PREFIXES.some((prefix) => file.startsWith(prefix)),
+  );
+  if (sourceFiles.length === 0) {
+    const rework = checkpoint.epoch.mode === 'rework';
+    return {
+      ok: false,
+      code: rework ? 'REWORK_NO_SOURCE_CHANGE' : 'IMPLEMENTATION_CLAIMED_WITHOUT_CHANGE',
+      exit_code: 1,
+      message: rework
+        ? `rework epoch ${checkpoint.epoch.epoch_id} changed zero source files from rejected head ${checkpoint.epoch.implementation_baseline_sha}`
+        : `fresh epoch ${checkpoint.epoch.epoch_id} claimed implementation but changed zero source files from ${checkpoint.epoch.implementation_baseline_sha}`,
+      source_files_changed: 0,
+      changed_files: diff.files,
+      checkpoint_provenance: state.provenance.source,
+    };
+  }
+
+  return {
+    ok: true,
+    code: 'SUCCESS',
+    exit_code: 0,
+    message: `current epoch has valid phase state and ${sourceFiles.length} corroborating source file change(s)`,
+    source_files_changed: sourceFiles.length,
+    changed_files: diff.files,
+    checkpoint_provenance: state.provenance.source,
+  };
+}
+
+function findingsIdentity(checkpoint: ExecutionCheckpoint): string {
+  const payload = checkpoint.findings.map((finding) => ({
+    id: finding.id,
+    phase: finding.phase,
+    summary: finding.summary,
+  }));
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
 function buildExecutionSummary(
   checkpoint: ExecutionCheckpoint,
   resume: ResumePlan,
@@ -114,7 +256,11 @@ function buildExecutionSummary(
   checkpointPathValue: string,
 ): ExecutionSummary {
   return {
+    epoch_id: checkpoint.epoch.epoch_id,
+    epoch_mode: checkpoint.epoch.mode,
+    implementation_baseline_sha: checkpoint.epoch.implementation_baseline_sha,
     attempt: checkpoint.attempt,
+    attempt_start_sha: checkpoint.attempts.at(-1)!.attempt_start_sha,
     resumed: resume.resumed,
     phase: checkpoint.phase,
     resumed_from_phase: resume.resume_from_phase,
@@ -375,6 +521,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   const issueId = getFlag(args.flags, 'issue');
   const dryRun = args.bools.has('dry-run');
+  const rework = args.bools.has('rework');
 
   if (!issueId) {
     emitJson({
@@ -462,24 +609,69 @@ async function main(): Promise<void> {
     );
   }
 
-  // UTV2-1594: resume before building the prompt. A prior attempt that timed
-  // out left a checkpoint behind; the resume brief turns that into "these
-  // phases are already settled, start at X" instead of a fresh investigation.
-  // The timeout for this attempt is derived from tier + reasoning effort + the
-  // phase we are actually resuming at -- never one fixed constant for every
-  // lane and every phase.
-  const existingCheckpoint = readCheckpoint(issueId);
-  const resumeBrief = buildResumeBrief(existingCheckpoint);
-  const resumePlan = buildResumePlan(existingCheckpoint);
+  // Resolve worktree CWD before planning the epoch so both a fresh baseline and
+  // a rework baseline bind the exact head that will be spawned.
+  const cwd = manifest.execution_location?.cwd ?? manifest.worktree_path ?? ROOT;
+  const resolvedCwd = path.isAbsolute(cwd) ? cwd : path.join(ROOT, cwd);
+  if (!fs.existsSync(resolvedCwd)) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `Worktree CWD does not exist: ${resolvedCwd}. Run pnpm ops:lane-start to set up the worktree.`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+
+  const existingState = readCheckpointState(issueId);
+  const existingCheckpoint = existingState.checkpoint;
+  if (rework && !existingCheckpoint) {
+    emitJson({
+      ok: false,
+      code: 'EXECUTION_STATE_UNAVAILABLE',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `cannot start a rework epoch without validated rejected-epoch state: ${existingState.reason}`,
+      checkpoint_provenance: 'none',
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
+
+  const resumePlan = rework
+    ? {
+        ...buildResumePlan(null),
+        carried_findings: existingCheckpoint!.findings,
+        pending_actions: existingCheckpoint!.pending_actions,
+      }
+    : buildResumePlan(existingCheckpoint);
   const timeoutPolicy = resolveExecutionTimeout({
     tier: manifest.tier,
     reasoningEffort: modelRouting.reasoning_effort,
     phase: resumePlan.resume_from_phase,
   });
 
-  // Build packet and prompt
+  const resumeBrief = rework
+    ? [
+        '## Execution checkpoint — REWORK EPOCH',
+        '',
+        'A new rework epoch will bind the current reviewed head as its immutable baseline.',
+        'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
+      ].join('\n')
+    : buildResumeBrief(existingCheckpoint);
   const packet = generateExecutionPacket(manifest);
   const prompt = buildCodexPrompt(packet, resumeBrief);
+  const plannedHead = currentHeadSha(resolvedCwd);
+  if (!plannedHead) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `Unable to resolve current Git head in ${resolvedCwd}`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
 
   if (dryRun) {
     emitJson({
@@ -487,7 +679,9 @@ async function main(): Promise<void> {
       code: 'DRY_RUN',
       issue_id: issueId,
       branch: manifest.branch,
-      message: `Dry run — would execute Codex in ${packet.cwd}`,
+      message:
+        `Dry run — would execute Codex in ${packet.cwd}` +
+        (rework ? ' and create a new rework epoch without mutating state during this preview' : ''),
       dry_run: true,
       model_profile: modelRouting.profile,
       model: modelRouting.model,
@@ -496,8 +690,13 @@ async function main(): Promise<void> {
       legacy_compatibility_used: routing.legacy_compatibility_used,
       codex_cli_version: health.version,
       execution: {
-        attempt: (existingCheckpoint?.attempt ?? 0) + 1,
-        resumed: resumePlan.resumed,
+        epoch_id: rework || !existingCheckpoint ? '(new epoch on execution)' : existingCheckpoint.epoch.epoch_id,
+        epoch_mode: rework ? 'rework' : (existingCheckpoint?.epoch.mode ?? 'fresh'),
+        implementation_baseline_sha:
+          rework || !existingCheckpoint ? plannedHead : existingCheckpoint.epoch.implementation_baseline_sha,
+        attempt: rework || !existingCheckpoint ? 1 : existingCheckpoint.attempt + 1,
+        attempt_start_sha: plannedHead,
+        resumed: !rework && resumePlan.resumed,
         phase: resumePlan.resume_from_phase,
         resumed_from_phase: resumePlan.resume_from_phase,
         skipped_phases: resumePlan.skipped_phases,
@@ -515,21 +714,6 @@ async function main(): Promise<void> {
     process.stdout.write('\n--- PROMPT PREVIEW ---\n');
     process.stdout.write(prompt.slice(0, 500) + '\n...(truncated)\n');
     process.exit(0);
-  }
-
-  // Resolve worktree CWD
-  const cwd = manifest.execution_location?.cwd ?? manifest.worktree_path ?? ROOT;
-  const resolvedCwd = path.isAbsolute(cwd) ? cwd : path.join(ROOT, cwd);
-
-  if (!fs.existsSync(resolvedCwd)) {
-    emitJson({
-      ok: false,
-      code: 'PRECONDITION_FAILED',
-      issue_id: issueId,
-      branch: manifest.branch,
-      message: `Worktree CWD does not exist: ${resolvedCwd}. Run pnpm ops:lane-start to set up the worktree.`,
-    } satisfies CodexExecResult);
-    process.exit(2);
   }
 
   // UTV2-1546: delegation kill switch, checked immediately before the actual
@@ -580,13 +764,30 @@ async function main(): Promise<void> {
   // Open the durable attempt immediately before the spawn, so a process that
   // dies mid-run still leaves an open attempt behind for the next dispatch to
   // find, classify and resume from.
-  const attemptStart = beginAttempt({
+  const commonAttempt = {
     issueId,
     branch: manifest.branch,
     worktree: resolvedCwd,
-    headSha: currentHeadSha(resolvedCwd),
     timeoutPolicy,
-  });
+  };
+  const attemptStart = rework
+    ? beginAttempt({
+        ...commonAttempt,
+        kind: 'rework',
+        rejectedHeadSha: plannedHead,
+        objectiveIdentity: `${issueId}:${manifest.branch}`,
+        findingsIdentity: findingsIdentity(existingCheckpoint!),
+        authority: 'codex-exec',
+      })
+    : existingCheckpoint
+      ? beginAttempt({ ...commonAttempt, kind: 'resume', attemptStartSha: plannedHead })
+      : beginAttempt({
+          ...commonAttempt,
+          kind: 'fresh',
+          currentHeadSha: plannedHead,
+          objectiveIdentity: `${issueId}:${manifest.branch}`,
+          authority: 'codex-exec',
+        });
   const executionSummary = buildExecutionSummary(
     attemptStart.checkpoint,
     attemptStart.resume,
@@ -618,7 +819,8 @@ async function main(): Promise<void> {
   // stopped reporting progress entirely is called what it is.
   const timedOut =
     (child.error as NodeJS.ErrnoException | undefined)?.code === 'ETIMEDOUT' || child.signal === 'SIGTERM';
-  const liveness = classifyCheckpointLiveness(readCheckpoint(issueId));
+  const postSpawnState = readCheckpointState(issueId, undefined, attemptStart.identity);
+  const liveness = classifyCheckpointLiveness(postSpawnState.checkpoint);
   const exitCode = child.status ?? 1;
   const evidence = buildModelRoutingEvidence({
     issueId,
@@ -639,6 +841,33 @@ async function main(): Promise<void> {
     evidenceRelativePath,
     `chore(proof): ${issueId} model-routing evidence`,
   );
+
+  if (!postSpawnState.ok || !postSpawnState.checkpoint) {
+    emitJson({
+      ok: false,
+      code: 'EXECUTION_STATE_UNAVAILABLE',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        `Codex returned, but mandatory post-spawn execution state is unavailable: ${postSpawnState.reason}. ` +
+        'Execution cannot fall through to success.',
+      codex_exit_code: child.status ?? 1,
+      checkpoint_provenance: 'none',
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
+      execution: {
+        ...executionSummary,
+        outcome: 'failed',
+        heartbeat_state: 'no_attempt',
+        released_resources: [],
+      },
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
 
   if (child.error || child.status !== 0) {
     // Silence is never success. A run that produced no heartbeat inside the
@@ -712,6 +941,35 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const truth = evaluateExecutionTruth({ issueId, cwd: resolvedCwd, stateIdentity: attemptStart.identity });
+  if (!truth.ok) {
+    const closed = failVisiblyAndRelease({ issueId, outcome: 'failed', reason: truth.message });
+    emitJson({
+      ok: false,
+      code: truth.code,
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: truth.message,
+      codex_exit_code: truth.exit_code,
+      source_files_changed: truth.source_files_changed,
+      checkpoint_provenance: truth.checkpoint_provenance,
+      model_profile: modelRouting.profile,
+      model: modelRouting.model,
+      reasoning_effort: modelRouting.reasoning_effort,
+      policy_version: modelRouting.policy_version,
+      legacy_compatibility_used: routing.legacy_compatibility_used,
+      codex_cli_version: health.version,
+      execution: {
+        ...executionSummary,
+        phase: closed.checkpoint?.phase ?? executionSummary.phase,
+        outcome: 'failed',
+        heartbeat_state: liveness.state,
+        released_resources: closed.released.map((record) => `verify-slot-${record.slot}:${record.state}`),
+      },
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
+
   const completed = finishAttempt({
     issueId,
     outcome: 'completed',
@@ -731,6 +989,8 @@ async function main(): Promise<void> {
     policy_version: modelRouting.policy_version,
     legacy_compatibility_used: routing.legacy_compatibility_used,
     codex_cli_version: health.version,
+    source_files_changed: truth.source_files_changed,
+    checkpoint_provenance: truth.checkpoint_provenance,
     execution: {
       ...executionSummary,
       phase: completed?.phase ?? executionSummary.phase,
