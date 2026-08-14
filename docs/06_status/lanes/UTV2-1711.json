@@ -7,9 +7,17 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1711-execution-epoch-truth",
   "branch": "codex/utv2-1711-execution-epoch-truth",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "358b1d278811e2208da2846d2759d754dfc189f1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1419",
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1711/diff-summary.md",
+    "docs/06_status/proof/UTV2-1711/model-routing.json",
+    "docs/06_status/proof/UTV2-1711/verification.md",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/execution-checkpoint.test.ts",
+    "scripts/ops/execution-checkpoint.ts"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1711.yml",
     "docs/06_status/proof/UTV2-1711/diff-summary.md",
@@ -25,14 +33,22 @@
     "docs/06_status/proof/UTV2-1711/verification.md",
     "docs/06_status/proof/UTV2-1711/model-routing.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-08-14T05:34:30.819Z",
-  "heartbeat_at": "2026-08-14T06:10:35.417Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-14T14:27:27.386Z",
+  "closed_at": "2026-08-14T14:27:27.386Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1711-execution-epoch-truth.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-14T14:27:24.835Z",
+      "verdict": "pass",
+      "merge_sha": "358b1d278811e2208da2846d2759d754dfc189f1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
