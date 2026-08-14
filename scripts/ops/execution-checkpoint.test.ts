@@ -17,20 +17,26 @@ import {
   beginAttempt,
   buildResumeBrief,
   buildResumePlan,
+  checkpointMutationLockPath,
+  checkpointRecoveryPath,
   checkpointPath,
   classifyCheckpointLiveness,
-  failVisiblyAndRelease,
-  finishAttempt,
+  clearCheckpoint,
+  failVisiblyAndRelease as failVisiblyAndReleaseWithIdentity,
+  finishAttempt as finishAttemptWithIdentity,
   nextPhaseAfter,
   readCheckpoint,
-  recordFinding,
-  recordHeartbeat,
-  recordPendingActions,
-  recordPhaseComplete,
+  readCheckpointState,
+  recordFinding as recordFindingWithIdentity,
+  recordHeartbeat as recordHeartbeatWithIdentity,
+  recordPendingActions as recordPendingActionsWithIdentity,
+  recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
   writeCheckpoint,
   type ExecutionPhase,
+  type ExecutionStateIdentity,
+  type FinishAttemptInput,
 } from './execution-checkpoint.js';
 
 function tmpDir(): string {
@@ -38,6 +44,82 @@ function tmpDir(): string {
 }
 
 const T1_SOL_HIGH = { tier: 'T1' as const, reasoningEffort: 'high', phase: 'implement' as ExecutionPhase };
+const TEST_HEAD = '1'.repeat(40);
+const MISSING_IDENTITY: ExecutionStateIdentity = { epoch_id: 'missing-epoch', attempt: 1, minimum_revision: 1 };
+
+function activeIdentity(issueId: string, dir?: string): ExecutionStateIdentity {
+  const checkpoint = readCheckpoint(issueId, dir);
+  return checkpoint
+    ? { epoch_id: checkpoint.epoch.epoch_id, attempt: checkpoint.attempt, minimum_revision: checkpoint.state_revision }
+    : MISSING_IDENTITY;
+}
+
+type MutationOptions = { dir?: string; now?: Date; identity?: ExecutionStateIdentity };
+
+function recordHeartbeat(issueId: string, options: MutationOptions = {}) {
+  return recordHeartbeatWithIdentity(issueId, { ...options, identity: options.identity ?? activeIdentity(issueId, options.dir) });
+}
+
+function recordPhaseComplete(issueId: string, phase: ExecutionPhase, summary: string, options: MutationOptions = {}) {
+  return recordPhaseCompleteWithIdentity(issueId, phase, summary, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function recordFinding(
+  issueId: string,
+  finding: { phase: ExecutionPhase; summary: string; id?: string },
+  options: MutationOptions = {},
+) {
+  return recordFindingWithIdentity(issueId, finding, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function recordPendingActions(issueId: string, actions: string[], options: MutationOptions = {}) {
+  return recordPendingActionsWithIdentity(issueId, actions, {
+    ...options,
+    identity: options.identity ?? activeIdentity(issueId, options.dir),
+  });
+}
+
+function finishAttempt(input: Omit<FinishAttemptInput, 'identity'> & { identity?: ExecutionStateIdentity }) {
+  return finishAttemptWithIdentity({ ...input, identity: input.identity ?? activeIdentity(input.issueId, input.dir) });
+}
+
+type FailInput = Parameters<typeof failVisiblyAndReleaseWithIdentity>[0];
+function failVisiblyAndRelease(input: Omit<FailInput, 'identity'> & { identity?: ExecutionStateIdentity }) {
+  return failVisiblyAndReleaseWithIdentity({
+    ...input,
+    identity: input.identity ?? activeIdentity(input.issueId, input.dir),
+  });
+}
+
+function beginNext(input: {
+  issueId: string;
+  timeoutPolicy: ReturnType<typeof resolveExecutionTimeout>;
+  dir: string;
+  branch?: string;
+  headSha?: string;
+}) {
+  const common = {
+    issueId: input.issueId,
+    timeoutPolicy: input.timeoutPolicy,
+    dir: input.dir,
+    branch: input.branch,
+  };
+  return readCheckpoint(input.issueId, input.dir)
+    ? beginAttempt({ ...common, kind: 'resume', attemptStartSha: input.headSha ?? TEST_HEAD })
+    : beginAttempt({
+        ...common,
+        kind: 'fresh',
+        currentHeadSha: input.headSha ?? TEST_HEAD,
+        objectiveIdentity: `issue:${input.issueId}`,
+        authority: 'test',
+      });
+}
 
 // ── timeout policy ──────────────────────────────────────────────────────────
 
@@ -109,6 +191,173 @@ test('a fresh lane resumes from the first phase with nothing carried', () => {
   assert.deepEqual(plan.carried_findings, []);
 });
 
+test('fresh and resume attempts keep one immutable epoch baseline while attempt starts advance', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const baseline = 'a'.repeat(40);
+    const resumedHead = 'b'.repeat(40);
+    const fresh = beginAttempt({
+      kind: 'fresh',
+      issueId,
+      currentHeadSha: baseline,
+      objectiveIdentity: `issue:${issueId}`,
+      authority: 'test',
+      timeoutPolicy,
+      dir,
+    });
+    recordPhaseComplete(issueId, 'orient', 'oriented', { dir });
+    recordPhaseComplete(issueId, 'plan', 'planned', { dir });
+    recordPhaseComplete(issueId, 'implement', 'source committed', { dir });
+    finishAttempt({ issueId, outcome: 'timed_out', reason: 'interrupted in verify', dir });
+
+    const resumed = beginAttempt({
+      kind: 'resume',
+      issueId,
+      attemptStartSha: resumedHead,
+      timeoutPolicy,
+      dir,
+    });
+    assert.equal(resumed.checkpoint.epoch.epoch_id, fresh.checkpoint.epoch.epoch_id);
+    assert.equal(resumed.checkpoint.epoch.implementation_baseline_sha, baseline);
+    assert.equal(resumed.checkpoint.attempts[0]?.attempt_start_sha, baseline);
+    assert.equal(resumed.checkpoint.attempts[1]?.attempt_start_sha, resumedHead);
+    assert.equal(resumed.resume.resume_from_phase, 'verify');
+    assert.deepEqual(resumed.resume.skipped_phases, ['orient', 'plan', 'implement']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('rework creates a new epoch at the rejected head and cannot inherit rejected phase validity', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const first = beginNext({ issueId, timeoutPolicy, dir, headSha: 'a'.repeat(40) });
+    recordFinding(issueId, { phase: 'verify', summary: 'review rejected the old implementation' }, { dir });
+    for (const phase of EXECUTION_PHASES) {
+      recordPhaseComplete(issueId, phase, `${phase} complete`, { dir });
+    }
+    finishAttempt({ issueId, outcome: 'failed', reason: 'rejected', dir });
+
+    const rework = beginAttempt({
+      kind: 'rework',
+      issueId,
+      rejectedHeadSha: 'b'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`,
+      findingsIdentity: 'review-round-1',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+    assert.notEqual(rework.checkpoint.epoch.epoch_id, first.checkpoint.epoch.epoch_id);
+    assert.equal(rework.checkpoint.epoch.mode, 'rework');
+    assert.equal(rework.checkpoint.epoch.implementation_baseline_sha, 'b'.repeat(40));
+    assert.equal(rework.checkpoint.attempt, 1);
+    assert.deepEqual(rework.checkpoint.completed_phases, []);
+    assert.equal(rework.checkpoint.prior_epochs.length, 1);
+    assert.equal(rework.checkpoint.prior_epochs[0]?.epoch.epoch_id, first.checkpoint.epoch.epoch_id);
+    assert.equal(rework.checkpoint.findings[0]?.epoch_id, rework.checkpoint.epoch.epoch_id);
+    assert.equal(rework.checkpoint.findings[0]?.source_epoch_id, first.checkpoint.epoch.epoch_id);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a delayed executor cannot stamp phase completion into a newer rework epoch', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const rejected = beginNext({ issueId, timeoutPolicy, dir, headSha: 'a'.repeat(40) });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'review rejected the epoch', dir, identity: rejected.identity });
+    const rework = beginAttempt({
+      kind: 'rework',
+      issueId,
+      rejectedHeadSha: 'b'.repeat(40),
+      objectiveIdentity: `issue:${issueId}`,
+      findingsIdentity: 'review-round-2',
+      authority: 'pm-review',
+      timeoutPolicy,
+      dir,
+    });
+
+    const stale = recordPhaseComplete(issueId, 'implement', 'late completion from rejected executor', {
+      dir,
+      identity: rejected.identity,
+    });
+    assert.equal(stale, null, 'an old epoch/attempt identity must be refused');
+    assert.deepEqual(readCheckpoint(issueId, dir)?.completed_phases, []);
+
+    const current = recordPhaseComplete(issueId, 'implement', 'current rework implementation', {
+      dir,
+      identity: rework.identity,
+    });
+    assert.equal(current?.completed_phases[0]?.epoch_id, rework.checkpoint.epoch.epoch_id);
+    assert.equal(current?.completed_phases[0]?.attempt, rework.checkpoint.attempt);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a delayed phase completion cannot mutate a closed originating attempt or leak into its resume', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const started = beginNext({ issueId, timeoutPolicy, dir });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'executor exited before its delayed write', dir });
+    const closedRevision = readCheckpoint(issueId, dir)?.state_revision;
+
+    const delayed = recordPhaseComplete(issueId, 'implement', 'background completion after close', {
+      dir,
+      identity: started.identity,
+    });
+    assert.equal(delayed, null, 'a closed attempt must reject executor mutations');
+
+    const rejected = readCheckpointState(issueId, dir, started.identity);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, 'execution_checkpoint_unavailable');
+    assert.match(rejected.reason, /attempt is not open and in progress/);
+
+    const persisted = readCheckpoint(issueId, dir);
+    assert.equal(persisted?.state_revision, closedRevision, 'a rejected delayed mutation must not write state');
+    assert.deepEqual(persisted?.completed_phases, []);
+
+    const resumed = beginNext({ issueId, timeoutPolicy, dir });
+    assert.deepEqual(resumed.resume.skipped_phases, [], 'resume must not inherit validity from the closed attempt');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('resume and rework fail closed when no validated epoch state exists', () => {
+  const dir = tmpDir();
+  try {
+    const common = { issueId: 'UTV2-1711', timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir };
+    assert.throws(
+      () => beginAttempt({ ...common, kind: 'resume', attemptStartSha: TEST_HEAD }),
+      /EXECUTION_STATE_UNAVAILABLE/,
+    );
+    assert.throws(
+      () =>
+        beginAttempt({
+          ...common,
+          kind: 'rework',
+          rejectedHeadSha: TEST_HEAD,
+          objectiveIdentity: 'issue:UTV2-1711',
+          findingsIdentity: 'review',
+          authority: 'test',
+        }),
+      /EXECUTION_STATE_UNAVAILABLE/,
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── the headline fixture ────────────────────────────────────────────────────
 
 test('FIXTURE: four consecutive timeout/resume attempts become one resumable history, not four replays', () => {
@@ -120,7 +369,7 @@ test('FIXTURE: four consecutive timeout/resume attempts become one resumable his
     const startPhases: ExecutionPhase[] = [];
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      const started = beginAttempt({ issueId, branch: 'codex/utv2-1590', timeoutPolicy, dir });
+      const started = beginNext({ issueId, branch: 'codex/utv2-1590', timeoutPolicy, dir });
       startPhases.push(started.checkpoint.phase);
 
       // Each attempt is told exactly what earlier attempts already settled.
@@ -186,7 +435,7 @@ test('a completed phase is not double-recorded if an attempt reports it twice', 
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     recordPhaseComplete(issueId, 'orient', 'first', { dir });
     const after = recordPhaseComplete(issueId, 'orient', 'again', { dir });
     assert.equal(after?.completed_phases.length, 1);
@@ -201,12 +450,12 @@ test('pending actions and findings survive across attempts', () => {
   try {
     const issueId = 'UTV2-1594';
     const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
-    beginAttempt({ issueId, timeoutPolicy, dir });
+    beginNext({ issueId, timeoutPolicy, dir });
     recordFinding(issueId, { phase: 'orient', summary: 'the outbox worker owns retries' }, { dir });
     recordPendingActions(issueId, ['wire the reaper into preflight', 'document the operator command'], { dir });
     finishAttempt({ issueId, outcome: 'timed_out', reason: 'bounded timeout', dir });
 
-    const second = beginAttempt({ issueId, timeoutPolicy, dir });
+    const second = beginNext({ issueId, timeoutPolicy, dir });
     assert.deepEqual(second.resume.pending_actions, [
       'wire the reaper into preflight',
       'document the operator command',
@@ -223,7 +472,7 @@ test('a corrupt checkpoint falls back to the last valid write instead of replayi
   try {
     const issueId = 'UTV2-1594';
     const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
-    beginAttempt({ issueId, timeoutPolicy, dir });
+    beginNext({ issueId, timeoutPolicy, dir });
     recordPhaseComplete(issueId, 'orient', 'orientation complete', { dir });
     recordFinding(issueId, { phase: 'orient', summary: 'durable conclusion' }, { dir });
 
@@ -234,6 +483,51 @@ test('a corrupt checkpoint falls back to the last valid write instead of replayi
     assert.ok(recovered, 'the previous good write must still be readable');
     assert.equal(recovered.schema_version, EXECUTION_CHECKPOINT_SCHEMA_VERSION);
     assert.ok(recovered.completed_phases.some((entry) => entry.phase === 'orient'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('sidecar recovery reports provenance and enforces the expected epoch and attempt identity', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const started = beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    recordPhaseComplete(issueId, 'orient', 'orientation complete', { dir });
+    fs.writeFileSync(checkpointPath(issueId, dir), '{corrupt primary', 'utf8');
+
+    const recovered = readCheckpointState(issueId, dir, started.identity);
+    assert.equal(recovered.ok, true);
+    assert.equal(recovered.code, 'execution_checkpoint_recovered');
+    assert.equal(recovered.provenance.source, 'sidecar');
+    assert.equal(recovered.provenance.epoch_id, started.identity.epoch_id);
+    assert.equal(recovered.provenance.attempt, started.identity.attempt);
+
+    const staleIdentity = { ...started.identity, epoch_id: 'another-epoch' };
+    const rejected = readCheckpointState(issueId, dir, staleIdentity);
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, 'execution_checkpoint_unavailable');
+    assert.match(rejected.reason, /does not match expected epoch\/attempt\/revision/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a sidecar with a corrupt checksum or another issue identity is never recovered', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    const sidecar = checkpointRecoveryPath(issueId, dir);
+    const parsed = JSON.parse(fs.readFileSync(sidecar, 'utf8')) as { issue_id: string };
+    parsed.issue_id = 'UTV2-9999';
+    fs.writeFileSync(sidecar, `${JSON.stringify(parsed)}\n`, 'utf8');
+    fs.writeFileSync(checkpointPath(issueId, dir), '{corrupt primary', 'utf8');
+
+    const state = readCheckpointState(issueId, dir);
+    assert.equal(state.ok, false);
+    assert.equal(state.checkpoint, null);
+    assert.match(state.reason, /invalid for the requested issue\/schema\/checksum\/epoch\/attempt\/revision/);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -250,13 +544,66 @@ test('an unreadable checkpoint with no backup is treated as absent, never as pro
   }
 });
 
+test('clear refuses an active attempt and only removes closed primary plus sidecar state', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    const refused = clearCheckpoint(issueId, { dir });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, 'execution_checkpoint_active');
+    assert.equal(refused.removed.length, 0);
+    assert.equal(fs.existsSync(checkpointPath(issueId, dir)), true);
+    assert.equal(fs.existsSync(checkpointRecoveryPath(issueId, dir)), true);
+
+    finishAttempt({ issueId, outcome: 'failed', reason: 'closed before clear', dir });
+    const cleared = clearCheckpoint(issueId, { dir });
+    assert.equal(cleared.ok, true);
+    assert.equal(cleared.removed.length, 2);
+    assert.equal(readCheckpointState(issueId, dir).ok, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('clear and attempt start share one exclusive mutation lock', () => {
+  const dir = tmpDir();
+  try {
+    const issueId = 'UTV2-1711';
+    const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
+    const first = beginNext({ issueId, timeoutPolicy, dir });
+    finishAttempt({ issueId, outcome: 'failed', reason: 'closed before race test', dir, identity: first.identity });
+
+    const lockPath = checkpointMutationLockPath(issueId, dir);
+    fs.writeFileSync(
+      lockPath,
+      `${JSON.stringify({ pid: process.pid, host: os.hostname() || 'unknown', token: 'held-by-test' })}\n`,
+      'utf8',
+    );
+    const blockedClear = clearCheckpoint(issueId, { dir });
+    assert.equal(blockedClear.code, 'execution_checkpoint_busy');
+    assert.throws(
+      () => beginAttempt({ kind: 'resume', issueId, attemptStartSha: TEST_HEAD, timeoutPolicy, dir }),
+      /EXECUTION_STATE_LOCKED/,
+    );
+    fs.rmSync(lockPath, { force: true });
+
+    const resumed = beginAttempt({ kind: 'resume', issueId, attemptStartSha: TEST_HEAD, timeoutPolicy, dir });
+    assert.equal(clearCheckpoint(issueId, { dir }).code, 'execution_checkpoint_active');
+    assert.equal(readCheckpoint(issueId, dir)?.epoch.epoch_id, resumed.checkpoint.epoch.epoch_id);
+    assert.equal(readCheckpoint(issueId, dir)?.attempt, resumed.checkpoint.attempt);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 // ── liveness / silence ──────────────────────────────────────────────────────
 
 test('a heartbeating attempt is active', () => {
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     const checkpoint = recordHeartbeat(issueId, { dir });
     const verdict = classifyCheckpointLiveness(checkpoint);
     assert.equal(verdict.state, 'active');
@@ -270,7 +617,7 @@ test('a silent attempt is reported as silent, never as progress', () => {
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    const started = beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    const started = beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     const verdict = classifyCheckpointLiveness(started.checkpoint, {
       now: new Date(Date.parse(started.checkpoint.heartbeat_at) + DEFAULT_SILENCE_WINDOW_MS + 1_000),
     });
@@ -286,7 +633,7 @@ test('a closed attempt is not mistaken for a silent one', () => {
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     const closed = finishAttempt({ issueId, outcome: 'completed', reason: 'done', dir });
     const verdict = classifyCheckpointLiveness(closed, { now: new Date(Date.now() + 24 * 60 * 60 * 1000) });
     assert.equal(verdict.state, 'closed');
@@ -300,7 +647,7 @@ test('an unreadable heartbeat counts as silence rather than as liveness', () => 
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    const started = beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    const started = beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     writeCheckpoint({ ...started.checkpoint, heartbeat_at: 'not-a-date' }, dir);
     const verdict = classifyCheckpointLiveness(readCheckpoint(issueId, dir));
     assert.equal(verdict.state, 'silent');
@@ -315,7 +662,7 @@ test('a silent attempt fails visibly and releases the resources it owned', () =>
   const semaphoreDir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
 
     const reapCalls: Array<{ dir?: string }> = [];
     const result = failVisiblyAndRelease({
@@ -358,7 +705,7 @@ test('a reaper that itself throws cannot swallow the failing outcome', () => {
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     const result = failVisiblyAndRelease({
       issueId,
       outcome: 'timed_out',
@@ -381,7 +728,7 @@ test('operator cancellation is recorded on the checkpoint with its reason', () =
   const dir = tmpDir();
   try {
     const issueId = 'UTV2-1594';
-    beginAttempt({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
+    beginNext({ issueId, timeoutPolicy: resolveExecutionTimeout(T1_SOL_HIGH), dir });
     const cancelled = requestCancel(issueId, 'PM pulled the lane', { dir });
     assert.equal(cancelled?.cancel_requested, true);
     assert.equal(cancelled?.cancel_reason, 'PM pulled the lane');
@@ -395,10 +742,10 @@ test('a new attempt clears a consumed cancellation flag rather than inheriting i
   try {
     const issueId = 'UTV2-1594';
     const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
-    beginAttempt({ issueId, timeoutPolicy, dir });
+    beginNext({ issueId, timeoutPolicy, dir });
     requestCancel(issueId, 'stop', { dir });
     finishAttempt({ issueId, outcome: 'cancelled', reason: 'operator cancellation', dir });
-    const next = beginAttempt({ issueId, timeoutPolicy, dir });
+    const next = beginNext({ issueId, timeoutPolicy, dir });
     assert.equal(next.checkpoint.cancel_requested, false);
     assert.equal(next.checkpoint.attempts.at(-2)?.outcome, 'cancelled');
   } finally {
@@ -427,10 +774,10 @@ test('an attempt left open by a killed runner is closed as silence when the next
     const issueId = 'UTV2-1594';
     const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
     // Attempt 1 opens and the runner is killed before it can call finishAttempt.
-    beginAttempt({ issueId, timeoutPolicy, dir });
+    beginNext({ issueId, timeoutPolicy, dir });
     recordPhaseComplete(issueId, 'orient', 'orientation complete', { dir });
 
-    const second = beginAttempt({ issueId, timeoutPolicy, dir });
+    const second = beginNext({ issueId, timeoutPolicy, dir });
     const first = second.checkpoint.attempts.find((a) => a.attempt === 1);
     assert.ok(first);
     assert.notEqual(first.ended_at, null, 'a dangling attempt must not stay open forever');
@@ -453,7 +800,7 @@ test('liveness describes the attempt in flight, not an older dangling one', () =
   try {
     const issueId = 'UTV2-1594';
     const timeoutPolicy = resolveExecutionTimeout(T1_SOL_HIGH);
-    const first = beginAttempt({ issueId, timeoutPolicy, dir });
+    const first = beginNext({ issueId, timeoutPolicy, dir });
 
     // Force a second open attempt alongside the first, the shape a killed
     // runner used to leave behind.
