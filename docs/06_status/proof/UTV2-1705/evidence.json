@@ -4,9 +4,9 @@
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-14T15:31:47Z",
+  "generated_at": "2026-08-14T16:08:00Z",
   "sha_binding": {
-    "verified_source_sha": "d7748d2ba0eaea94778b34e65cb96536a8aab8fc",
+    "verified_source_sha": "54412f88145385d8362362ea81977445263b543d",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -37,16 +37,16 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-        "aggregate_tests": 2183,
-        "pass": 2183,
+      "aggregate_tests": 2188,
+      "pass": 2188,
       "fail": 0,
       "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
       "status": "PASS",
-        "tests": 31,
-        "pass": 31,
+      "tests": 36,
+      "pass": 36,
       "fail": 0
     },
     "mutation_tests": [
@@ -107,6 +107,16 @@
       "criterion": "Each control is proven by mutation",
       "status": "PASS",
       "evidence": "Executor-gate and workflow-invocation mutations were both killed and restored."
+    },
+    {
+      "criterion": "Privileged PR automation executes only trusted base-ref code and validates PR base identity",
+      "status": "PASS",
+      "evidence": "Workflow regression requires base-SHA checkout, pull_request_target, ignored install scripts, explicit --base validation, and bounded branch-update retries; event tests reject missing and mismatched bases."
+    },
+    {
+      "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",
+      "status": "PASS",
+      "evidence": "Focused tests prove merge-mutex/journal exclusion, orphaned journal recovery, repeatable reconciliation, and a fresh pre-mutation label snapshot that retains a concurrently added non-tier label."
     },
     {
       "criterion": "Any named remedy is executed by a test",
