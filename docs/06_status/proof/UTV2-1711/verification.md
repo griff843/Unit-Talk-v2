@@ -1,6 +1,6 @@
 # PROOF: UTV2-1711
 
-MERGE_SHA: 54c171ae1859e2807b7af178afba3f295fe41e05
+MERGE_SHA: 358b1d278811e2208da2846d2759d754dfc189f1
 
 > Pre-merge this anchor carries the verified implementation SHA; the merge SHA does
 > not exist yet. `post-merge-lane-close.yml` rebinds it via `ops:proof-generate --merge-sha`.
