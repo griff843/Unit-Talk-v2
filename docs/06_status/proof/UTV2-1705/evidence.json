@@ -4,9 +4,9 @@
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-14T16:08:00Z",
+  "generated_at": "2026-08-14T16:44:47Z",
   "sha_binding": {
-    "verified_source_sha": "54412f88145385d8362362ea81977445263b543d",
+    "verified_source_sha": "88e8791189280b0fec5536500da98d7cd2c7699c",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -37,16 +37,16 @@
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "aggregate_tests": 2188,
-      "pass": 2188,
+      "aggregate_tests": 2191,
+      "pass": 2191,
       "fail": 0,
       "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
       "status": "PASS",
-      "tests": 36,
-      "pass": 36,
+      "tests": 39,
+      "pass": 39,
       "fail": 0
     },
     "mutation_tests": [
@@ -61,6 +61,30 @@
         "mutation": "removed ops:lane-link-pr workflow command",
         "result": "KILLED",
         "observed": "workflow-wiring regression failed; suite restored to green"
+      },
+      {
+        "control": "PR head-ref identity",
+        "mutation": "removed only the headRefName comparison",
+        "result": "KILLED",
+        "observed": "isolated wrong-ref recovery regression failed; suite restored to green"
+      },
+      {
+        "control": "protected default-branch privileged execution",
+        "mutation": "restored privileged checkout to pull_request.base.sha",
+        "result": "KILLED",
+        "observed": "workflow trust-boundary regression failed; suite restored to green"
+      },
+      {
+        "control": "atomic cross-lane merge-mutex acquisition",
+        "mutation": "bypassed the exclusive acquisition guard",
+        "result": "KILLED",
+        "observed": "two-issue acquisition regression failed; suite restored to green"
+      },
+      {
+        "control": "relation-specific Linear tier mutation",
+        "mutation": "skipped conflicting-tier removal",
+        "result": "KILLED",
+        "observed": "label-specific mutation regression failed; suite restored to green"
       }
     ]
   },
@@ -91,7 +115,7 @@
     {
       "criterion": "Opening a PR from a lane branch binds pr_url with no manual step",
       "status": "PASS",
-      "evidence": "PR opened/reopened workflow invokes the canonical binder using event branch and URL; missing-token event regression passes."
+      "evidence": "PR opened/reopened workflow invokes the canonical binder, while edited events revalidate the base; missing-token event regression passes."
     },
     {
       "criterion": "Lane creation through PR creation, merge, and closeout needs zero manual metadata repair",
@@ -106,17 +130,17 @@
     {
       "criterion": "Each control is proven by mutation",
       "status": "PASS",
-      "evidence": "Executor-gate and workflow-invocation mutations were both killed and restored."
+      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, and Linear relation mutations were killed and restored."
     },
     {
-      "criterion": "Privileged PR automation executes only trusted base-ref code and validates PR base identity",
+      "criterion": "Privileged PR automation executes only protected default-branch code and validates PR base identity",
       "status": "PASS",
-      "evidence": "Workflow regression requires base-SHA checkout, pull_request_target, ignored install scripts, explicit --base validation, and bounded branch-update retries; event tests reject missing and mismatched bases."
+      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject missing and mismatched bases."
     },
     {
       "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",
       "status": "PASS",
-      "evidence": "Focused tests prove merge-mutex/journal exclusion, orphaned journal recovery, repeatable reconciliation, and a fresh pre-mutation label snapshot that retains a concurrently added non-tier label."
+      "evidence": "Focused tests prove atomic cross-issue acquisition, merge-mutex/journal exclusion, refused-acquisition cleanup, orphaned journal recovery, repeatable reconciliation, and relation-specific tier writes that retain a concurrently added non-tier label."
     },
     {
       "criterion": "Any named remedy is executed by a test",
