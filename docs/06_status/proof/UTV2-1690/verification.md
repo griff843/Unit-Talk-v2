@@ -44,6 +44,6 @@ The required PR T1 Proof Gate supplies those credentials and runs the writable s
 
 ### Scope and R-level disposition
 
-The implementation changes only `scripts/ops/**` terminal coordination tooling and tests. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` passed with 15 changed files and no matching rules, so no R-level artifacts are required. No Tier C source path, application runtime, migration, contract, generated database type, or production row is touched.
+The implementation changes only `scripts/ops/**` terminal coordination tooling and tests. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` passed with 14 changed files and no matching rules, so no R-level artifacts are required. No Tier C source path, application runtime, migration, contract, generated database type, or production row is touched.
 
 `pnpm verify` was run after the complete proof bundle was committed. Its static half passed and its live-DB half produced the governed staging deferral recorded above.
