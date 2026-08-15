@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import ts from 'typescript';
 
 // UTV2-1222: Normalize short vs full SHA comparison. The GitHub API returns the
 // full 40-char SHA while lane manifests may store the abbreviated 8-char form.
@@ -1003,26 +1002,6 @@ export async function runTruthCheck(
 
     const prRef = parsePullRequestUrl(prUrl);
     const pullRequest = await fetchGitHubPullRequest(prRef.owner, prRef.repo, prRef.number, githubToken);
-    let runtimeDataApplicability: RuntimeDataApplicability | undefined;
-    if (tier === 'T1') {
-      try {
-        const repositoryChangedFiles = await fetchGitHubPullRequestFiles(
-          prRef.owner,
-          prRef.repo,
-          prRef.number,
-          githubToken,
-        );
-        runtimeDataApplicability = classifyRuntimeDataApplicability(repositoryChangedFiles);
-      } catch (error) {
-        runtimeDataApplicability = {
-          status: 'indeterminate',
-          reason:
-            'authoritative PR changed-file lookup failed; runtime-data applicability cannot be proven: ' +
-            (error instanceof Error ? error.message : String(error)),
-          classifiedFiles: [],
-        };
-      }
-    }
     if (!pullRequest.merged || !pullRequest.merge_commit_sha) {
       addCheck('G1', 'fail', 'pull request is not merged');
     } else {
@@ -1227,13 +1206,7 @@ export async function runTruthCheck(
         }
       }
 
-      addUnsupportedRuntimeChecks(
-        addCheck,
-        options.noRuntime ?? false,
-        tier,
-        evidence,
-        runtimeDataApplicability,
-      );
+      addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence);
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
       for (const check of evaluateT2ProofEvidence({
@@ -1445,7 +1418,6 @@ export function addUnsupportedRuntimeChecks(
   noRuntime: boolean,
   tier: LaneTier,
   evidence: { bundle: EvidenceBundleV1 } | null,
-  applicability?: RuntimeDataApplicability,
 ): void {
   if (tier !== 'T1') {
     addCheck('R1', 'skip', 'runtime checks skipped for non-T1 tier');
@@ -1461,42 +1433,26 @@ export function addUnsupportedRuntimeChecks(
     return;
   }
 
-  const classification = applicability ?? {
-    status: 'required' as const,
-    reason: 'runtime-data applicability was not supplied; preserving the T1 runtime-proof requirement',
-    classifiedFiles: [],
-  };
-  const classificationDetail = formatRuntimeDataApplicability(classification);
-
-  if (classification.status === 'not_applicable') {
-    addCheck('R1', 'skip', `not_applicable: ${classificationDetail}`);
-    addCheck('R2', 'skip', `not_applicable: ${classificationDetail}`);
-  } else if (classification.status === 'indeterminate') {
-    addCheck('R1', 'fail', `runtime applicability unresolved: ${classificationDetail}`);
-    addCheck('R2', 'fail', `runtime applicability unresolved: ${classificationDetail}`);
-  } else if (!evidence) {
-    addCheck('R1', 'fail', `evidence bundle required for R1 runtime query check; ${classificationDetail}`);
-    addCheck('R2', 'fail', `evidence bundle required for R2 monitored-table check; ${classificationDetail}`);
-  } else {
-    const rp = evidence.bundle.runtime_proof;
-    const queries = Array.isArray(rp?.queries) ? rp.queries : [];
-    if (queries.length > 0) {
-      addCheck('R1', 'pass', `runtime_proof.queries has ${queries.length} entr${queries.length === 1 ? 'y' : 'ies'}; ${classificationDetail}`);
-    } else {
-      addCheck('R1', 'fail', `runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence; ${classificationDetail}`);
-    }
-
-    const rowCounts = Array.isArray(rp?.row_counts) ? rp.row_counts : [];
-    if (rowCounts.length > 0) {
-      addCheck('R2', 'pass', `runtime_proof.row_counts has ${rowCounts.length} entr${rowCounts.length === 1 ? 'y' : 'ies'}; ${classificationDetail}`);
-    } else {
-      addCheck('R2', 'fail', `runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db; ${classificationDetail}`);
-    }
-  }
-
   if (!evidence) {
+    addCheck('R1', 'fail', 'evidence bundle required for R1 runtime query check');
+    addCheck('R2', 'fail', 'evidence bundle required for R2 monitored-table check');
     addCheck('R3', 'fail', 'evidence bundle required for R3 verifier-identity check');
     return;
+  }
+
+  const rp = evidence.bundle.runtime_proof;
+  const queries = Array.isArray(rp?.queries) ? rp.queries : [];
+  if (queries.length > 0) {
+    addCheck('R1', 'pass', `runtime_proof.queries has ${queries.length} entr${queries.length === 1 ? 'y' : 'ies'}`);
+  } else {
+    addCheck('R1', 'fail', 'runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence');
+  }
+
+  const rowCounts = Array.isArray(rp?.row_counts) ? rp.row_counts : [];
+  if (rowCounts.length > 0) {
+    addCheck('R2', 'pass', `runtime_proof.row_counts has ${rowCounts.length} entr${rowCounts.length === 1 ? 'y' : 'ies'}`);
+  } else {
+    addCheck('R2', 'fail', 'runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db');
   }
 
   const verifierIdentity = evidence.bundle.verifier?.identity?.trim();
@@ -1505,246 +1461,6 @@ export function addUnsupportedRuntimeChecks(
   } else {
     addCheck('R3', 'fail', 'evidence bundle verifier.identity must be set for T1 phase-boundary-guard');
   }
-}
-
-export type RuntimeDataFileClassification = 'control_plane' | 'runtime_data' | 'ambiguous';
-
-export interface RuntimeDataApplicability {
-  status: 'not_applicable' | 'required' | 'indeterminate';
-  reason: string;
-  classifiedFiles: Array<{ path: string; classification: RuntimeDataFileClassification }>;
-}
-
-const CONTROL_PLANE_ONLY_PATHS = [
-  /^\.agents\//u,
-  /^\.claude\//u,
-  /^\.github\//u,
-  /^\.ops\//u,
-  /^docs\//u,
-];
-const RUNTIME_DATA_PATHS = [/^apps\//u, /^packages\//u, /^supabase\//u];
-
-// `scripts/ci/**` and `scripts/ops/**` cannot be classified by path alone: dozens
-// of files there construct or import a real database client (a live settlement
-// repair script writes `settlement_records`, the staging seeder writes fixtures).
-// Treating the directory prefix as proof of "no database surface" would let such
-// a change waive R1/R2 — the exact guarantee this rule exists to provide. These
-// paths are therefore classified by what the file actually reaches.
-const CONTENT_CLASSIFIED_PATHS = [/^scripts\/(?:ci|ops)\//u];
-
-/**
- * Module specifiers that mean "this file reaches a database client".
- *
- * Matched against specifiers extracted from the TypeScript AST, never against
- * raw text: a comment or string literal naming a client is prose, not use of one.
- */
-const DB_MODULE_SPECIFIERS = ['@supabase/supabase-js', '@unit-talk/db', 'pg', 'postgres'];
-
-function isDatabaseModuleSpecifier(specifier: string): boolean {
-  return DB_MODULE_SPECIFIERS.some(
-    (candidate) => specifier === candidate || specifier.startsWith(`${candidate}/`),
-  );
-}
-
-/**
- * Every module specifier a file depends on, taken from the AST.
- *
- * Covers the syntaxes a `from '...'` text scan misses entirely: side-effect
- * imports (`import './x.js'`), re-exports, `require()`, `import x = require()`,
- * and dynamic `import()`. Each of those was a live fail-open bypass when this
- * ran on text. Returns null when the file cannot be parsed, so the caller fails
- * closed rather than treating an unparseable file as clean.
- */
-function moduleSpecifiersOf(filePath: string, source: string): string[] | null {
-  let sourceFile: ts.SourceFile;
-  try {
-    sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
-  } catch {
-    return null;
-  }
-  // The parser recovers from syntax errors rather than throwing, and a
-  // recovered tree can silently drop the very import we are looking for. A file
-  // that does not parse cleanly cannot be proven database-free.
-  const parseDiagnostics = (sourceFile as { parseDiagnostics?: readonly ts.Diagnostic[] })
-    .parseDiagnostics;
-  if (parseDiagnostics && parseDiagnostics.length > 0) return null;
-  const specifiers: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      specifiers.push(node.moduleSpecifier.text);
-    } else if (
-      ts.isImportEqualsDeclaration(node) &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      ts.isStringLiteral(node.moduleReference.expression)
-    ) {
-      specifiers.push(node.moduleReference.expression.text);
-    } else if (ts.isCallExpression(node)) {
-      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
-      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      const [firstArgument] = node.arguments;
-      if ((isRequire || isDynamicImport) && firstArgument && ts.isStringLiteral(firstArgument)) {
-        specifiers.push(firstArgument.text);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  ts.forEachChild(sourceFile, visit);
-  return specifiers;
-}
-
-export interface RuntimeDataSourceReader {
-  (filePath: string): string | null;
-}
-
-function defaultSourceReader(repoRoot: string): RuntimeDataSourceReader {
-  return (filePath) => {
-    try {
-      return fs.readFileSync(path.join(repoRoot, filePath), 'utf8');
-    } catch {
-      return null;
-    }
-  };
-}
-
-function resolveLocalImport(fromFile: string, specifier: string): string[] {
-  const base = path.posix.join(path.posix.dirname(fromFile), specifier);
-  // Source imports are written with a `.js` extension that resolves to `.ts`.
-  const withoutExt = base.replace(/\.(?:js|mjs|cjs|ts|mts|cts)$/u, '');
-  return [
-    // The specifier as written resolves a real `.cjs`/`.mjs` sibling, which a
-    // `require()` of a compiled helper points at directly.
-    base,
-    `${withoutExt}.ts`,
-    `${withoutExt}.tsx`,
-    `${withoutExt}.mts`,
-    `${withoutExt}.cts`,
-    `${withoutExt}.js`,
-    `${withoutExt}.mjs`,
-    `${withoutExt}.cjs`,
-    `${withoutExt}/index.ts`,
-    `${withoutExt}/index.js`,
-  ];
-}
-
-/**
- * How far local imports are followed when deciding whether a changed file
- * reaches a database client.
- *
- * One hop, deliberately. Depth 0 catches a file that constructs or imports a
- * client itself; depth 1 catches a file whose work is done by a local helper
- * that does. Following further stops measuring "does this change touch data"
- * and starts measuring import-graph reachability: `lane-close.ts` reaches the
- * shared db package only at three hops, through proof-harvest tooling it never
- * invokes, and every lifecycle module would be swept in with it.
- *
- * The bound is a real limit, not a proof: a database reach that is two or more
- * hops away is classified control-plane. Across `scripts/{ci,ops}` that is 7
- * files (50 flagged at one hop, 57 at full closure), all of them proof-tooling
- * chains at the time of writing.
- */
-const DB_REACH_MAX_IMPORT_HOPS = 1;
-
-/**
- * Whether `filePath` reaches a database client within the hop bound.
- * Returns `null` when it cannot be determined — the caller must fail closed.
- */
-function reachesDatabaseClient(
-  filePath: string,
-  readSource: RuntimeDataSourceReader,
-  seen: Set<string>,
-  depth = 0,
-): boolean | null {
-  if (seen.has(filePath)) return false;
-  seen.add(filePath);
-
-  const source = readSource(filePath);
-  // A path we cannot read (deleted, renamed, or absent from this checkout)
-  // cannot be proven database-free.
-  if (source === null) return null;
-
-  const specifiers = moduleSpecifiersOf(filePath, source);
-  // An unparseable file cannot be proven database-free either.
-  if (specifiers === null) return null;
-
-  if (specifiers.some(isDatabaseModuleSpecifier)) return true;
-  if (depth >= DB_REACH_MAX_IMPORT_HOPS) return false;
-
-  for (const specifier of specifiers) {
-    if (!specifier.startsWith('.')) continue;
-    const candidates = resolveLocalImport(filePath, specifier);
-    const resolved = candidates.find((candidate) => readSource(candidate) !== null);
-    // An unresolvable local import is a hole in the closure, not a clean file.
-    if (!resolved) return null;
-    const reached = reachesDatabaseClient(resolved, readSource, seen, depth + 1);
-    if (reached === null) return null;
-    if (reached) return true;
-  }
-
-  return false;
-}
-
-function classifyRuntimeDataFile(
-  filePath: string,
-  readSource: RuntimeDataSourceReader,
-): RuntimeDataFileClassification {
-  if (RUNTIME_DATA_PATHS.some((pattern) => pattern.test(filePath))) return 'runtime_data';
-  if (CONTROL_PLANE_ONLY_PATHS.some((pattern) => pattern.test(filePath))) return 'control_plane';
-  if (CONTENT_CLASSIFIED_PATHS.some((pattern) => pattern.test(filePath))) {
-    const reaches = reachesDatabaseClient(filePath, readSource, new Set());
-    if (reaches === null) return 'ambiguous';
-    return reaches ? 'runtime_data' : 'control_plane';
-  }
-  return 'ambiguous';
-}
-
-export function classifyRuntimeDataApplicability(
-  changedFiles: readonly string[] | null | undefined,
-  options: { repoRoot?: string; readSource?: RuntimeDataSourceReader } = {},
-): RuntimeDataApplicability {
-  if (!changedFiles || changedFiles.length === 0) {
-    return {
-      status: 'indeterminate',
-      reason: 'authoritative PR changed-file list is missing or empty',
-      classifiedFiles: [],
-    };
-  }
-
-  const readSource = options.readSource ?? defaultSourceReader(options.repoRoot ?? ROOT);
-  const classifiedFiles = [...new Set(changedFiles)]
-    .sort()
-    .map((filePath) => ({
-      path: filePath,
-      classification: classifyRuntimeDataFile(filePath, readSource),
-    }));
-  const runtimeFiles = classifiedFiles.filter((entry) => entry.classification === 'runtime_data');
-  const ambiguousFiles = classifiedFiles.filter((entry) => entry.classification === 'ambiguous');
-  if (runtimeFiles.length > 0) {
-    return {
-      status: 'required',
-      reason: `repository diff contains ${runtimeFiles.length} database/runtime-data surface file(s)`,
-      classifiedFiles,
-    };
-  }
-  if (ambiguousFiles.length > 0) {
-    return {
-      status: 'indeterminate',
-      reason: `repository diff contains ${ambiguousFiles.length} file(s) outside the proven control-plane allowlist`,
-      classifiedFiles,
-    };
-  }
-  return {
-    status: 'not_applicable',
-    reason: 'repository diff contains only proven control-plane, workflow, and proof paths',
-    classifiedFiles,
-  };
-}
-
-function formatRuntimeDataApplicability(classification: RuntimeDataApplicability): string {
-  return `${classification.reason}; classified_files=${JSON.stringify(classification.classifiedFiles)}`;
 }
 
 function determineExitCode(
@@ -2003,25 +1719,6 @@ export async function fetchGitHubPullRequest(
   });
 }
 
-export async function fetchGitHubPullRequestFiles(
-  owner: string,
-  repo: string,
-  number: number,
-  token: string,
-  fetchPage: JsonPageFetcher = fetchJson,
-): Promise<string[]> {
-  const files = await fetchAllPages<Array<{ filename?: string }>>(
-    (page) =>
-      `https://api.github.com/repos/${owner}/${repo}/pulls/${number}/files?per_page=100&page=${page}`,
-    (payload) => payload,
-    fetchPage,
-    { headers: githubHeaders(token) },
-  ) as Array<{ filename?: string }>;
-  return files
-    .map((entry) => entry.filename?.trim())
-    .filter((entry): entry is string => Boolean(entry));
-}
-
 interface GitHubIssueComment {
   body?: string;
   user?: { login?: string; type?: string } | null;
@@ -2179,7 +1876,7 @@ export async function fetchRequiredChecks(
   return normalizeRequiredChecks(response);
 }
 
-export type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
+type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
 type RequiredCheckInput = string | RequiredCheckIdentity;
 
 function normalizeRequiredCheckInput(check: RequiredCheckInput): RequiredCheckIdentity {

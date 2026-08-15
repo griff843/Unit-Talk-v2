@@ -13,7 +13,11 @@
     "sha_type": "implementation_sha",
     "merge_sha": null,
     "pr_number": null,
-    "bound_at": null
+    "bound_at": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
   },
   "verifier": {
     "identity": "codex-cli/utv2-1690-terminal-release",
@@ -63,12 +67,12 @@
     }
   },
   "runtime_proof": {
-    "applicable": true,
+    "applicable": false,
     "kind": "filesystem-coordination-runtime",
-    "status": "PASS_LOCAL_BEHAVIORAL_AND_PENDING_CI_STAGING_DB",
+    "status": "NOT_APPLICABLE_PM_RECORDED_EXCEPTION",
     "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
-    "tests": 333,
-    "pass": 333,
+    "tests": 324,
+    "pass": 324,
     "fail": 0,
     "receipts": [
       {
@@ -86,7 +90,33 @@
     "queries": [],
     "row_counts": [],
     "ci_staging_requirement": "The PR T1 Proof Gate must run pnpm test:db through the staging-ci GitHub environment with CI_SUPABASE_* credentials and project xskgrzbteyqdufktjrjx.",
-    "local_run_note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    "local_run_note": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "exception": {
+      "type": "one_time_pm_reviewed_r1_r2_exception",
+      "authority": "PM decision recorded on PR #1423",
+      "condition": "granted only if the final diff is manually confirmed to touch no database or runtime-data surface",
+      "basis": "manual review of every changed file in the final diff",
+      "method": "each changed TypeScript file checked for construction or import of a database client, directly and one import hop out; remaining files are workflow, lane-config, and proof documents",
+      "classified_changed_files": [
+        ".github/workflows/lane-pr-binding.yml",
+        ".ops/sync/UTV2-1690.yml",
+        "docs/06_status/lanes/UTV2-1690.json",
+        "docs/06_status/proof/UTV2-1690/diff-summary.md",
+        "docs/06_status/proof/UTV2-1690/evidence.json",
+        "docs/06_status/proof/UTV2-1690/model-routing.json",
+        "docs/06_status/proof/UTV2-1690/verification.md",
+        "scripts/ops/lane-close.test.ts",
+        "scripts/ops/lane-close.ts",
+        "scripts/ops/lane-finalize.test.ts",
+        "scripts/ops/lane-finalize.ts",
+        "scripts/ops/lease-registry.test.ts",
+        "scripts/ops/lease-registry.ts",
+        "scripts/ops/truth-check-lib.test.ts",
+        "scripts/ops/truth-check-lib.ts"
+      ],
+      "result": "no changed file constructs or imports a database client",
+      "scope": "this lane only; it establishes no rule and no reusable waiver"
+    }
   },
   "acceptance_criteria_mapping": [
     {
@@ -126,15 +156,12 @@
     }
   ],
   "known_limitations": [
-    "The local checkout is not authorized for writable staging DB verification; PR CI must supply the isolated staging receipt.",
-    "The invariant is enforced at the done transition. A merged lane remains eligible to hold its lease until lane-close performs the terminal transition.",
-    ".github/workflows/lane-pr-binding.yml has no mechanical test coverage; its no-op branches are verified by inspection only.",
-    "Database reachability is followed one import hop; a reach of two or more hops is classified control-plane. Full closure was measured and rejected as unusable.",
-    "Classification is by module specifier read from the TypeScript AST, not by data-flow: a file handed an already-constructed client, or reaching a database via a package not named in the specifier list, is classified control-plane."
+    "The R1/R2 runtime-evidence applicability rule is descoped from this lane by PM decision; R1/R2 behaviour is unchanged from main.",
+    ".github/workflows/lane-pr-binding.yml has no mechanical test coverage; both of its no-op branches are verified by inspection only."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
-    "runtime_proof_status": "PASS_LOCAL_BEHAVIORAL_AND_PENDING_CI_STAGING_DB",
+    "runtime_proof_status": "NOT_APPLICABLE_PM_RECORDED_EXCEPTION",
     "ready_for_pm_review": true
   }
 }

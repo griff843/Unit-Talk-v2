@@ -3184,6 +3184,90 @@ test('UTV2-1690: the trusted --pr repair path still accepts a matching base', ()
   assert.strictEqual(validation.ok, true, validation.code);
 });
 
+test('UTV2-1690: merge_sha finalization is authoritative — a merged PR with no merge SHA is refused', () => {
+  // A lane may only bind a merge SHA that GitHub actually reports. A merged PR
+  // whose mergeSha is absent must never be bound, because the manifest would
+  // then carry a merge binding that no commit backs.
+  for (const mergeSha of [null, undefined, ''] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    let reachabilityCalled = false;
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { mergeSha: mergeSha as string | null }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'missing_merge_sha');
+    assert.strictEqual(reachabilityCalled, false, 'a null merge SHA must be refused before reachability');
+  }
+});
+
+test('UTV2-1690: terminal cleanup replay preserves the tracked sync record', () => {
+  // `.ops/sync/<issue>.yml` is tracked. Deleting it during a replay that runs
+  // from the control checkout leaves a staged-looking deletion that
+  // reconciliation never restores.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-sync-'));
+    const syncPath = path.join(repoRoot, '.ops', 'sync', `${manifest.issue_id}.yml`);
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    fs.writeFileSync(syncPath, 'version: 1\n');
+
+    const result = completeIdempotentReclose(manifest, {
+      repoRoot,
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    assert.strictEqual(fs.existsSync(syncPath), true, 'tracked sync record must survive replay');
+    assert.strictEqual(result.sync_removed, false);
+  });
+});
+
+test('UTV2-1690: terminal cleanup replay does not release a caller-held merge lock', () => {
+  // The replay runs inside the finalize mutex. Releasing it here frees the
+  // parent's serialization slot and lets the next step run unserialized.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1423',
+        cwd: process.cwd(),
+        reason: 'ops:lane-finalize',
+        owner: { user: 'test', host: 'unit-test', pid: 4242, session_id: 'finalize-parent' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    completeIdempotentReclose(manifest, {
+      repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-lock-')),
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    const held = readMergeLock(mergeLockPath);
+    assert.strictEqual(held.ok ? held.lock.status : 'released', 'held',
+      'the caller-acquired merge lock must still be held after replay');
+  });
+});
+
 test('UTV2-1613: PR inference refuses an ambiguous or identity-mismatched candidate set', () => {
   const branch = 'claude/utv2-1553-release-merged-lane-lock';
   const base = {

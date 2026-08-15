@@ -243,7 +243,11 @@ export function buildLaneFinalizePlan(input: {
     steps.push({
       id: 'release_terminal_artifacts',
       command: 'pnpm',
-      args: ['ops:lane-close', issueId],
+      // `--terminal-cleanup-only` because this step runs INSIDE the finalize
+      // mutex and from the control checkout: a plain re-close would release the
+      // mutex this plan still holds, leaving `reconcile_current` unserialized,
+      // and would delete the tracked `.ops/sync/<issue>.yml` record.
+      args: ['ops:lane-close', issueId, '--terminal-cleanup-only'],
       required: true,
     });
     steps.push({

@@ -187,7 +187,7 @@ test('already closed lane reconciles and replays terminal artifact release', () 
     plan.steps.map((step) => step.id),
     ['release_terminal_artifacts', 'reconcile_current'],
   );
-  assert.deepEqual(plan.steps[0]?.args, ['ops:lane-close', 'UTV2-1073']);
+  assert.deepEqual(plan.steps[0]?.args, ['ops:lane-close', 'UTV2-1073', '--terminal-cleanup-only']);
 });
 
 test('merge sha is threaded into generate_proof args when provided', () => {
@@ -521,7 +521,7 @@ test('current-state reconciliation is always rerun even when the journal recorde
 
   assert.equal(result.ok, true);
   assert.deepEqual(calls, [
-    'pnpm ops:lane-close UTV2-1073',
+    'pnpm ops:lane-close UTV2-1073 --terminal-cleanup-only',
     'pnpm ops:orchestration-reconcile --current --json',
   ]);
   assert.equal(result.steps[0]?.id, 'release_terminal_artifacts');

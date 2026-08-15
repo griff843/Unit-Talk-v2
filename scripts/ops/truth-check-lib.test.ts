@@ -6,10 +6,8 @@ import path from 'node:path';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
-  classifyRuntimeDataApplicability,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
-  evaluateTerminalLeaseInvariant,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
   evaluateScopeDiff,
@@ -17,7 +15,6 @@ import {
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
   fetchGitHubPullRequestComments,
-  fetchGitHubPullRequestFiles,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -29,6 +26,7 @@ import {
   type GitHubCheckRun,
   evaluateCloseEligibilityPreflight,
   finalizeWithManifest,
+  evaluateTerminalLeaseInvariant,
 } from './truth-check-lib.js';
 import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
@@ -48,12 +46,6 @@ function resolveExitCode(
   return 0;
 }
 
-test('truth-check verdict mapping preserves reopen semantics for G5', () => {
-  assert.strictEqual(resolveExitCode('done', ['G5']), 4);
-  assert.strictEqual(resolveExitCode('merged', ['G4']), 1);
-  assert.strictEqual(resolveExitCode('merged', []), 0);
-});
-
 function terminalLease(status: DispatchLease['status']): DispatchLease {
   return {
     schema_version: 1,
@@ -69,30 +61,10 @@ function terminalLease(status: DispatchLease['status']): DispatchLease {
   };
 }
 
-test('M8 fails when a done manifest still holds its control-checkout lease', () => {
-  const check = evaluateTerminalLeaseInvariant(
-    { issue_id: 'UTV2-1690', status: 'done' },
-    [terminalLease('active')],
-  );
-  assert.strictEqual(check.status, 'fail');
-  assert.match(check.detail, /ops:lane-finalize/);
-});
-
-test('M8 passes only after terminal lease cleanup, while merged closeout remains eligible', () => {
-  assert.strictEqual(
-    evaluateTerminalLeaseInvariant(
-      { issue_id: 'UTV2-1690', status: 'done' },
-      [terminalLease('released')],
-    ).status,
-    'pass',
-  );
-  assert.strictEqual(
-    evaluateTerminalLeaseInvariant(
-      { issue_id: 'UTV2-1690', status: 'merged' },
-      [terminalLease('active')],
-    ).status,
-    'pass',
-  );
+test('truth-check verdict mapping preserves reopen semantics for G5', () => {
+  assert.strictEqual(resolveExitCode('done', ['G5']), 4);
+  assert.strictEqual(resolveExitCode('merged', ['G4']), 1);
+  assert.strictEqual(resolveExitCode('merged', []), 0);
 });
 
 function scopeDiffCheck(
@@ -769,276 +741,6 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
       ['R3', 'fail'],
     ],
   );
-});
-
-test('UTV2-1690: repository-derived control-plane scope makes only R1/R2 not applicable', () => {
-  const applicability = classifyRuntimeDataApplicability([
-    'scripts/ops/lane-close.ts',
-    '.github/workflows/lane-pr-binding.yml',
-    'docs/06_status/proof/UTV2-1690/verification.md',
-  ]);
-  assert.strictEqual(applicability.status, 'not_applicable');
-  assert.deepStrictEqual(
-    applicability.classifiedFiles.map((entry) => entry.classification),
-    ['control_plane', 'control_plane', 'control_plane'],
-  );
-
-  const checks: CheckResult[] = [];
-  addUnsupportedRuntimeChecks(
-    (id, status, detail) => checks.push({ id, status, detail }),
-    false,
-    'T1',
-    { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
-    applicability,
-  );
-
-  assert.deepStrictEqual(
-    checks.map((check) => [check.id, check.status]),
-    [
-      ['R1', 'skip'],
-      ['R2', 'skip'],
-      ['R3', 'pass'],
-    ],
-  );
-  assert.match(checks[0]?.detail ?? '', /not_applicable/);
-  assert.match(checks[0]?.detail ?? '', /scripts\/ops\/lane-close\.ts/);
-});
-
-test('UTV2-1690: mixed repository scope keeps R1/R2 fail-closed and records every classified file', () => {
-  const applicability = classifyRuntimeDataApplicability([
-    'scripts/ops/truth-check-lib.ts',
-    'apps/api/src/submission-service.ts',
-  ]);
-  assert.strictEqual(applicability.status, 'required');
-  assert.deepStrictEqual(applicability.classifiedFiles, [
-    { path: 'apps/api/src/submission-service.ts', classification: 'runtime_data' },
-    { path: 'scripts/ops/truth-check-lib.ts', classification: 'control_plane' },
-  ]);
-
-  const checks: CheckResult[] = [];
-  addUnsupportedRuntimeChecks(
-    (id, status, detail) => checks.push({ id, status, detail }),
-    false,
-    'T1',
-    {
-      bundle: {
-        schema_version: 1,
-        verifier: { identity: 'independent-verifier' },
-        runtime_proof: { queries: [], row_counts: [] },
-      },
-    },
-    applicability,
-  );
-  assert.deepStrictEqual(
-    checks.map((check) => [check.id, check.status]),
-    [
-      ['R1', 'fail'],
-      ['R2', 'fail'],
-      ['R3', 'pass'],
-    ],
-  );
-  assert.match(checks[0]?.detail ?? '', /apps\/api\/src\/submission-service\.ts/);
-});
-
-test('UTV2-1690: missing or ambiguous repository scope cannot self-declare runtime proof inapplicable', () => {
-  assert.strictEqual(classifyRuntimeDataApplicability([]).status, 'indeterminate');
-  const ambiguous = classifyRuntimeDataApplicability(['package.json']);
-  assert.strictEqual(ambiguous.status, 'indeterminate');
-  assert.deepStrictEqual(ambiguous.classifiedFiles, [
-    { path: 'package.json', classification: 'ambiguous' },
-  ]);
-
-  // Producing `indeterminate` is not enough — the done-gate must refuse on it.
-  for (const unresolved of [classifyRuntimeDataApplicability([]), ambiguous]) {
-    const checks: CheckResult[] = [];
-    addUnsupportedRuntimeChecks(
-      (id, status, detail) => checks.push({ id, status, detail }),
-      false,
-      'T1',
-      { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
-      unresolved,
-    );
-    assert.deepStrictEqual(
-      checks.map((check) => [check.id, check.status]),
-      [
-        ['R1', 'fail'],
-        ['R2', 'fail'],
-        ['R3', 'pass'],
-      ],
-    );
-    assert.match(checks[0]?.detail ?? '', /unresolved/);
-  }
-});
-
-test('UTV2-1690: a scripts/ path that reaches a database client is not control-plane', () => {
-  // A directory prefix cannot prove absence of a database surface: real files
-  // under scripts/ops construct privileged clients and write live tables.
-  const sources: Record<string, string> = {
-    'scripts/ops/repair-rows.ts': "import { createClient } from '@supabase/supabase-js';\n",
-    'scripts/ops/lane-tool.ts': "import { helper } from './db-helper.js';\n",
-    'scripts/ops/db-helper.ts': "import { createClient } from '@supabase/supabase-js';\n",
-    'scripts/ops/pure-tool.ts': "import { readFileSync } from 'node:fs';\n",
-  };
-  const readSource = (p: string) => sources[p] ?? null;
-
-  // Direct construction.
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/repair-rows.ts'], { readSource }).status,
-    'required',
-  );
-  // One hop through a local helper that constructs one.
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/lane-tool.ts'], { readSource }).status,
-    'required',
-  );
-  // A genuinely database-free script keeps the waiver.
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/pure-tool.ts'], { readSource }).status,
-    'not_applicable',
-  );
-});
-
-test('UTV2-1690: a scripts/ path that cannot be read fails closed', () => {
-  const applicability = classifyRuntimeDataApplicability(['scripts/ops/deleted.ts'], {
-    readSource: () => null,
-  });
-  assert.strictEqual(applicability.status, 'indeterminate');
-  assert.deepStrictEqual(applicability.classifiedFiles, [
-    { path: 'scripts/ops/deleted.ts', classification: 'ambiguous' },
-  ]);
-});
-
-test('UTV2-1690: an unresolvable local import is a hole in the closure, not a clean file', () => {
-  // If a helper cannot be resolved we cannot see whether it reaches a database,
-  // so the importing file cannot be proven database-free.
-  const sources: Record<string, string> = {
-    'scripts/ops/lane-tool.ts': "import { helper } from './missing-helper.js';\n",
-  };
-  const applicability = classifyRuntimeDataApplicability(['scripts/ops/lane-tool.ts'], {
-    readSource: (p) => sources[p] ?? null,
-  });
-  assert.strictEqual(applicability.status, 'indeterminate');
-  assert.deepStrictEqual(applicability.classifiedFiles, [
-    { path: 'scripts/ops/lane-tool.ts', classification: 'ambiguous' },
-  ]);
-});
-
-test('UTV2-1690: every import syntax that reaches a database is followed', () => {
-  // A `from '...'` text scan misses all of these. Each was a live fail-open
-  // bypass: the file reaches a client, but the traversal never looked.
-  const writer = "import { createClient } from '@supabase/supabase-js';\n";
-  const bypasses: Record<string, string> = {
-    'side-effect import': "import './writer.js';\n",
-    're-export': "export * from './writer.js';\n",
-    'require': "const w = require('./writer.js');\n",
-    'import-equals require': "import w = require('./writer.js');\n",
-    'dynamic import': "async function f(){ return await import('./writer.js'); }\n",
-  };
-  for (const [label, source] of Object.entries(bypasses)) {
-    const sources: Record<string, string> = {
-      'scripts/ops/entry.ts': source,
-      'scripts/ops/writer.ts': writer,
-    };
-    assert.strictEqual(
-      classifyRuntimeDataApplicability(['scripts/ops/entry.ts'], {
-        readSource: (p) => sources[p] ?? null,
-      }).status,
-      'required',
-      `${label} must be followed`,
-    );
-  }
-});
-
-test('UTV2-1690: a database client named inside a string or comment is not use of one', () => {
-  // Text scanning had to strip comments to avoid flagging prose, and the
-  // stripper could then delete real code between a `/*` inside a string and a
-  // later genuine comment — hiding an actual client construction. Parsing
-  // removes both failure modes: comments and string contents are simply not
-  // module specifiers.
-  const sources: Record<string, string> = {
-    'scripts/ops/trap.ts': [
-      "// glob example: '/*'",
-      "import { createClient } from '@supabase/supabase-js';",
-      "export function run(){ createClient('x','y').from('settlement_records').insert({}); }",
-      '/* a real comment later */',
-    ].join('\n'),
-  };
-  // The construction is real code, so it must still be found.
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/trap.ts'], {
-      readSource: (p) => sources[p] ?? null,
-    }).status,
-    'required',
-  );
-});
-
-test('UTV2-1690: an unparseable file fails closed', () => {
-  const applicability = classifyRuntimeDataApplicability(['scripts/ops/broken.ts'], {
-    readSource: () => 'export function ( { unbalanced <<<>>>  ',
-  });
-  assert.notStrictEqual(applicability.status, 'not_applicable');
-});
-
-test('UTV2-1690: prose about a database client is not use of one', () => {
-  // This file must name the specifiers it searches for, and docs describe the
-  // boundary. A text scan flags itself and every file that merely documents
-  // the database boundary.
-  const sources: Record<string, string> = {
-    'scripts/ops/documented.ts': [
-      '// This lane never touches @unit-talk/db or calls createClient(.',
-      '/* Historically this imported @supabase/supabase-js. It no longer does. */',
-      "import { readFileSync } from 'node:fs';",
-    ].join('\n'),
-  };
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/documented.ts'], {
-      readSource: (p) => sources[p] ?? null,
-    }).status,
-    'not_applicable',
-  );
-
-  // The real file is the regression that found this.
-  assert.strictEqual(
-    classifyRuntimeDataApplicability(['scripts/ops/truth-check-lib.ts']).status,
-    'not_applicable',
-  );
-});
-
-test('UTV2-1690: omitted applicability preserves the T1 runtime-proof requirement', () => {
-  // An absent classification must never read as "not applicable" — a caller that
-  // forgets to classify must not silently waive R1/R2.
-  const checks: CheckResult[] = [];
-  addUnsupportedRuntimeChecks(
-    (id, status, detail) => checks.push({ id, status, detail }),
-    false,
-    'T1',
-    { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
-    undefined,
-  );
-  assert.deepStrictEqual(
-    checks.map((check) => [check.id, check.status]),
-    [
-      ['R1', 'fail'],
-      ['R2', 'fail'],
-      ['R3', 'pass'],
-    ],
-  );
-});
-
-test('UTV2-1690: authoritative PR file lookup paginates before applicability classification', async () => {
-  const requested: string[] = [];
-  const firstPage = Array.from({ length: 100 }, (_, index) => ({
-    filename: `scripts/ops/control-${index}.ts`,
-  }));
-  const fetchPage = async <T>(url: string): Promise<T> => {
-    requested.push(url);
-    return (url.endsWith('page=1') ? firstPage : [{ filename: 'apps/api/src/runtime.ts' }]) as T;
-  };
-
-  const files = await fetchGitHubPullRequestFiles('griff843', 'Unit-Talk-v2', 1690, 'token', fetchPage);
-  assert.strictEqual(files.length, 101);
-  assert.ok(requested.some((url) => url.includes('page=2')));
-  assert.strictEqual(classifyRuntimeDataApplicability(files).status, 'required');
 });
 
 function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
@@ -2285,5 +1987,31 @@ test('UTV2-1691 P2-1: the --json branch stamps the markers independently of the 
     source,
     /emitJson\(\{[\s\S]*dry_run:\s*bools\.has\('dry-run'\)[\s\S]*certifies:\s*!bools\.has\('dry-run'\)/,
     'the --json branch must stamp dry_run and certifies itself',
+  );
+});
+
+test('M8 fails when a done manifest still holds its control-checkout lease', () => {
+  const check = evaluateTerminalLeaseInvariant(
+    { issue_id: 'UTV2-1690', status: 'done' },
+    [terminalLease('active')],
+  );
+  assert.strictEqual(check.status, 'fail');
+  assert.match(check.detail, /ops:lane-finalize/);
+});
+
+test('M8 passes only after terminal lease cleanup, while merged closeout remains eligible', () => {
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'done' },
+      [terminalLease('released')],
+    ).status,
+    'pass',
+  );
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'merged' },
+      [terminalLease('active')],
+    ).status,
+    'pass',
   );
 });

@@ -8,7 +8,9 @@ Pre-merge this anchor identifies the verified implementation commit. Post-merge 
 
 ## Summary
 
-UTV2-1690 closes terminal lifecycle gaps across coordination release, repair admission, runtime-evidence applicability, and PR binding. Terminal transitions release canonical control-checkout leases transactionally; repair refuses invalidated or wrong-base PR inference; R1/R2 applicability comes from the authoritative PR file list; and issue-bearing branches that are not the registered lane branch leave the binding workflow green as a clean no-op.
+UTV2-1690 closes terminal lifecycle gaps across coordination release, merge-SHA finalization, repair admission, finalize serialization, and PR binding. Terminal transitions release canonical control-checkout leases transactionally; a merged PR with no merge SHA is refused before it can be bound; repair refuses invalidated or wrong-base PRs on both the inferred and the trusted `--pr` path; the already-closed finalize replay no longer surrenders the mutex it runs inside nor deletes a tracked sync record; and issue-bearing branches that are not the registered lane branch leave the binding workflow green as a clean no-op.
+
+**Scope change (PM decision, recorded on PR #1423).** The R1/R2 runtime-evidence applicability classifier is descoped from this lane and removed in full — code, tests, mutations, and proof claims. Three independent reviews rejected three successive implementations (a directory-prefix allowlist, a text scan, and an AST walk), each sound against the threat it was built for and fail-open against one it was not. Static classification of "does this change touch a database surface" is a design problem in its own right and now belongs to a post-zero-touch reliability lane. It does not block bounded autonomy. R1/R2 behaviour in this lane is therefore identical to `main`: unchanged, not newly waived.
 
 ## ASSERTIONS:
 
@@ -16,15 +18,14 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 - [x] Terminal manifest persistence cannot synchronously fail while leaving the canonical lease released; exact prior bytes are restored.
 - [x] Successful closeout cannot persist a done manifest while retaining an active or stale-reclaim-required lease.
 - [x] Repeated cleanup does not rewrite surrendered leases or append synthetic history.
-- [x] An already-done finalize replay releases terminal artifacts before reconciliation.
+- [x] An already-done finalize replay releases terminal artifacts before reconciliation, without surrendering the mutex the plan holds and without deleting the tracked `.ops/sync/<issue>.yml` record.
+- [x] A merged PR reporting no merge SHA is refused before reachability, on the trusted `--pr` path: a manifest never binds a merge that no commit backs.
+- [x] The trusted `--pr` repair path refuses a wrong or unresolved PR base, and still accepts a matching one.
 - [x] M8 reports a done lane that still holds control-checkout scope and names the executable repair path.
 - [x] `--repair-merged` returns named `pr_base_mismatch` without inference when the manifest carries `pr-base-mismatch`, and refuses an inferred PR whose base is wrong or unresolved.
-- [x] R1/R2 can be `not_applicable` only when GitHub's paginated PR file list classifies every changed path as control-plane; mixed, missing, and ambiguous scope fail closed.
-- [x] Lane PR binding exits 0 without mutation when a branch names an issue but does not match that issue manifest's registered lane branch.
-- [x] Every load-bearing control is mutation-proven: 14 of 14 mutations that disable or fail-open a control are killed by a production-path regression.
+- [x] Lane PR binding exits 0 without mutation when a branch names an issue but does not match that issue manifest's registered lane branch, and also when no lane manifest exists for that issue at all.
+- [x] Every load-bearing control is mutation-proven: 20 of 20 mutations that disable or fail-open a shipped control are killed by a production-path regression.
 - [x] The trusted `--pr` repair path refuses a wrong or unresolved PR base, and still accepts a matching one.
-- [x] A `scripts/**` path is classified control-plane only when it neither constructs nor imports a database client, directly or one hop through a local helper; unreadable files and unresolvable local imports fail closed.
-- [x] Prose naming a database client is not use of one, and no import syntax that reaches a database is skipped: side-effect imports, re-exports, `require()`, `import x = require()`, and dynamic `import()` are all followed. A file that does not parse cleanly fails closed.
 - [x] Lane PR binding no-ops when a branch names an issue that has no lane manifest at all, not only when the manifest names a different branch.
 
 ## EVIDENCE:
@@ -34,13 +35,10 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 - Finalize regressions prove a hosted close followed by local finalize releases terminal artifacts before reconciliation, even with a completed journal.
 - Truth-check regressions prove M8 fails `done + active`, passes `done + released`, and keeps pre-terminal `merged` eligible for the close transition.
 - Repair regressions prove the base-mismatch blocker stops before inference and wrong/unresolved inferred bases stop before reachability or mutation.
-- Applicability regressions prove paginated repository file discovery, the control-plane-only R1/R2 skip, and mixed/ambiguous fail-closed behavior while preserving T1 tier semantics.
-- An independent review of the reviewed head rejected four controls that were present but did not do what they claimed, all four since corrected: (1) the runtime-data allowlist classified every `scripts/{ci,ops}` file as control-plane, so a T1 change to a live settlement-repair script that writes `settlement_records` would have skipped R1/R2 entirely; (2) `validateTrustedPostMergeRepair` never compared the candidate PR's base to `manifest.base_branch`, so the explicit `--pr` path could bind a wrong-base merge; (3) the finalize plan is built before the merge mutex is acquired; (4) the binding workflow no-opped only when a manifest named a different branch, and still hard-failed when no manifest existed at all.
+- Independent review rejected an earlier head on four controls; the three that remain in scope are corrected here: the trusted `--pr` path never compared the candidate PR's base to `manifest.base_branch`; the finalize plan is built before the mutex is acquired; and the binding workflow hard-failed when a branch named an issue with no manifest at all. The fourth was the applicability classifier, now descoped.
 - A second independent review rejected the first correction of the classifier and reproduced four fail-open bypasses against it: side-effect imports (`import './x.js'`), `require()`, dynamic `import()`, and a comment-stripper that erased real code between a `/*` inside a string literal and a later genuine block comment, hiding an actual client construction. The `require()` shape is present in this repository today at `scripts/ops/pre-merge-authorization.ts:63`. All four were reproduced before being accepted.
-- The classifier was rewritten to read module specifiers from the TypeScript AST. This closes all four bypasses at once and removes the comment-stripping hack entirely: comments and string contents are simply not module specifiers. Re-exports and `import x = require()` are covered by the same traversal. A file whose parse produces diagnostics fails closed, because a recovered tree can silently drop the import being searched for.
-- Across all 244 files under `scripts/{ci,ops}`: 200 classify control-plane, 44 database-reaching, 0 indeterminate. This lane's own four changed sources classify control-plane; `fix-settlement-utv2-665.ts`, which writes `settlement_records`, classifies database-reaching.
-- A second mutation battery of 6 mutations covering the earlier corrections killed 5 immediately; the survivor (an unresolvable local import treated as clean) was a genuine fail-open and now has a regression. A third battery of 9 mutations against the AST classifier killed all 9. 23 of 23 mutations across the three batteries are killed.
-- A mutation battery of 8 mutations was run against the load-bearing controls. Six were killed on the first pass. Two survived and were genuine assertion gaps in fail-closed behavior that was implemented correctly but never asserted: (a) a genuine non-idempotent lease-release failure could be downgraded from a throw to a warning, letting a lane close while still holding capacity; (b) `indeterminate` runtime-data applicability was produced correctly by the classifier but nothing asserted the done-gate refuses on it, so it could be downgraded from `fail` to `skip` at the consumption layer. Both regressions were added, plus coverage proving omitted applicability defaults to `required`. All 8 mutations are now killed.
+- A later review found two P1 defects in the already-closed finalize replay, both fixed and mutation-proven here: the replay released the control-checkout mutex its own caller was holding, leaving the following reconciliation step unserialized; and it deleted the tracked `.ops/sync/<issue>.yml` record, leaving the control checkout dirty with a deletion that reconciliation never restores.
+- Mutation batteries were run against every shipped control. 20 of 20 mutations that disable or fail-open a control are killed by a production-path regression, including both P1 fixes and the merge-SHA refusal.
 - A workflow regression keeps the registered-branch comparison before `bind=true` and preserves the trusted `--branch`/`--base` identity checks.
 
 ## Verification
@@ -49,18 +47,17 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 |---|---|---|
 | `pnpm verify:static` | PASS | DB-client boundary, sync/alignment, environment, lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command verification completed with exit 0. |
 | `pnpm verify` | EXPECTED DEFERRED AFTER STATIC PASS | The complete static gate passed again; `test:live-db` then reached `pnpm test:db` and the staging-isolation guard refused the local `host=127.0.0.1 ref=unidentified` target before DB access. PR CI owns the required staging execution. |
-| `pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'` | PASS | 333 tests passed, 0 failed, 0 skipped. |
+| `pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'` | PASS | 324 tests passed, 0 failed, 0 skipped. |
 | `pnpm type-check` | PASS | Completed as part of `pnpm verify:static` with exit 0. |
 | `pnpm test` | PASS | Root aggregate completed as part of `pnpm verify:static` with exit 0. |
 | `pnpm test:db` | BLOCKED / DEFERRED | The staging-isolation guard refused the local target before creating a DB client: observed `host=127.0.0.1 ref=unidentified`; the packet-mandated disposition is recorded below. |
 | Filesystem runtime proof | PASS | Transaction ordering, byte-exact rollback, durable commit, idempotent replay, control-root identity, and the terminal M8 invariant execute against temporary real files rather than mocks. |
-| Repository-derived R1/R2 applicability | PASS | GitHub PR-file pagination feeds a deterministic classifier; control-plane-only scope records `not_applicable` with the classified list, while mixed, missing, or ambiguous scope remains fail-closed. |
 
 Focused TAP summary:
 
 ```text
-# tests 333
-# pass 333
+# tests 324
+# pass 324
 # fail 0
 # skipped 0
 ```
@@ -69,11 +66,18 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 The required PR T1 Proof Gate supplies those credentials and runs the writable smoke suite against the isolated staging project. No environment file was copied or modified locally.
 
+### R1/R2 disposition — one-time PM-recorded exception
+
+R1/R2 are dispositioned by an explicit one-time exception recorded by the PM on PR #1423, not by any rule this lane ships and not by executor self-declaration.
+
+The exception was conditioned on manual confirmation that the final diff touches no database or runtime-data surface. That confirmation was performed against every changed file: eight TypeScript sources, each checked for construction or import of a database client directly and one import hop out, all clean; the remaining seven files are a GitHub workflow, a lane sync record, a lane manifest, and four proof documents. No changed file constructs or imports a database client.
+
+This disposition applies to this lane alone. It establishes no rule and no reusable waiver, and the general applicability question moves to a post-zero-touch reliability lane.
+
 ### Known limitations
 
-- Database reachability is followed one import hop. Depth 0 catches a file that constructs or imports a client itself; depth 1 catches a file whose work is done by a local helper that does. A reach of two or more hops is classified control-plane. Following the full closure was measured and rejected: `lane-close.ts` reaches the shared db package only at three hops, through proof-harvest tooling it never invokes, so full closure sweeps in every lifecycle module and makes the R1/R2 waiver unusable rather than more accurate.
-- Module specifiers are read from the TypeScript AST, not from source text. An earlier text-scanning implementation was rejected in review with four reproduced fail-open bypasses; see the review record below. The governed `scripts/ci/privileged-db-client-inventory.json` remains the authoritative record of client construction sites, and is a narrower set (it tracks direct construction only).
-- Classification is by module specifier, not by data-flow. A file handed an already-constructed client as a parameter, or reaching a database through a package not named in the specifier list, is classified control-plane.
+- The R1/R2 runtime-evidence applicability rule is not in this lane. R1/R2 behaviour is unchanged from `main`; this lane neither widens nor narrows the existing waiver.
+
 - `.github/workflows/lane-pr-binding.yml` has no mechanical test coverage; both of its no-op branches are verified by inspection only. This is unchanged by this lane and is recorded rather than claimed as proven.
 
 ### Scope and R-level disposition

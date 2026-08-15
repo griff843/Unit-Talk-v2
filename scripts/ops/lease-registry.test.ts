@@ -365,6 +365,9 @@ test('stale report marks expired active leases and emits visible lease details',
     const report = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:00:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
     const staleLease = readAllLeases(registryDir)[0];
 
@@ -403,10 +406,16 @@ test('stale report is idempotent and does not include released leases', () => {
     const first = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:00:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
     const second = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:05:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
 
     assert.strictEqual(first.stale_count, 1);

@@ -390,6 +390,13 @@ export function releaseCloseoutLocks(
     leaseRegistryDir?: string;
     mergeLockPath?: string;
     leaseAlreadyReleased?: boolean;
+    /**
+     * Set when a CALLER already holds the control-checkout merge mutex and this
+     * cleanup runs inside it. Releasing the mutex here would free the parent's
+     * serialization slot mid-transaction and let another lane mutate
+     * coordination state concurrently.
+     */
+    preserveMergeLock?: boolean;
   } = {},
 ): { warnings: string[] } {
   const warnings: string[] = [];
@@ -405,6 +412,11 @@ export function releaseCloseoutLocks(
     if (!lease.ok) {
       warnings.push(`dispatch lease already released or missing: ${lease.message}`);
     }
+  }
+
+  if (options.preserveMergeLock) {
+    warnings.push('merge lock preserved: released by the caller that acquired it');
+    return { warnings };
   }
 
   const mergeLock = releaseMergeLock({
@@ -1812,7 +1824,21 @@ export function completeIdempotentReclose(
   manifest: LaneManifest,
   options: {
     repoRoot?: string;
-    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    releaseLocks?: (
+      issue: string,
+      branch: string,
+      locksOptions?: { preserveMergeLock?: boolean },
+    ) => { warnings: string[] };
+    /**
+     * Terminal-cleanup replay: reclaim only the gitignored lease/lock
+     * coordination state that a hosted closeout could not reach.
+     *
+     * `.ops/sync/<issue>.yml` is TRACKED. Deleting it here leaves the control
+     * checkout dirty with a staged-looking deletion that reconciliation never
+     * restores, which then disrupts the serialized merge operations this replay
+     * runs alongside. The mutex is left to whichever caller acquired it.
+     */
+    terminalCleanupOnly?: boolean;
   } = {},
 ): SuccessfulLaneCloseResult {
   const syncPath = path.join(
@@ -1821,12 +1847,16 @@ export function completeIdempotentReclose(
     'sync',
     `${manifest.issue_id}.yml`,
   );
-  const syncRemoved = fs.existsSync(syncPath);
-  fs.rmSync(syncPath, { force: true });
+  let syncRemoved = false;
+  if (!options.terminalCleanupOnly) {
+    syncRemoved = fs.existsSync(syncPath);
+    fs.rmSync(syncPath, { force: true });
+  }
 
   const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
     manifest.issue_id,
     manifest.branch,
+    { preserveMergeLock: options.terminalCleanupOnly ?? false },
   );
 
   return {
@@ -1916,7 +1946,9 @@ async function main(): Promise<void> {
     // Idempotent no-op BEFORE any lock is taken, so a re-close cannot create
     // the residue it would then trip over on the next attempt.
     if (manifest.status === 'done' && !repairMerged && !explicitPr) {
-      const cleanup = completeIdempotentReclose(manifest);
+      const cleanup = completeIdempotentReclose(manifest, {
+        terminalCleanupOnly: bools.has('terminal-cleanup-only'),
+      });
       emitJson({
         ok: true,
         code: 'lane_closed' as CloseoutFailureCode,
