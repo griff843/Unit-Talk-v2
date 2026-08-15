@@ -22,6 +22,7 @@ UTV2-1690 closes the terminal-release gap between linked lane worktrees and the 
 | Check | Result | Evidence |
 |---|---|---|
 | `pnpm verify:static` | PASS | DB-client boundary, sync/alignment, environment, lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command verification completed with exit 0. |
+| `pnpm verify` | EXPECTED DEFERRED AFTER STATIC PASS | The complete static gate passed again; `test:live-db` then reached `pnpm test:db` and the staging-isolation guard refused the local `host=127.0.0.1 ref=unidentified` target before DB access. PR CI owns the required staging execution. |
 | `pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'` | PASS | 314 tests passed, 0 failed, 0 skipped. |
 | `pnpm type-check` | PASS | Completed as part of `pnpm verify:static` with exit 0. |
 | `pnpm test` | PASS | Root aggregate completed as part of `pnpm verify:static` with exit 0. |
@@ -45,4 +46,4 @@ The required PR T1 Proof Gate supplies those credentials and runs the writable s
 
 The implementation changes only `scripts/ops/**` terminal coordination tooling and tests. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` passed with 15 changed files and no matching rules, so no R-level artifacts are required. No Tier C source path, application runtime, migration, contract, generated database type, or production row is touched.
 
-`pnpm verify` is the final pre-PR gate and is run after the complete proof bundle is committed.
+`pnpm verify` was run after the complete proof bundle was committed. Its static half passed and its live-DB half produced the governed staging deferral recorded above.

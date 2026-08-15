@@ -46,6 +46,12 @@
       "fail": 0,
       "detail": "DB-client boundary, sync/alignment, environment, lint, type-check, build, root tests, Smart Form verification, and command verification completed with exit 0."
     },
+    "verify_full": {
+      "command": "pnpm verify",
+      "status": "EXPECTED_DEFERRED_AFTER_STATIC_PASS",
+      "fail": 0,
+      "detail": "The complete static gate passed again. test:live-db then reached pnpm test:db and the staging-isolation guard refused host=127.0.0.1 ref=unidentified before DB access; PR CI owns the required staging execution."
+    },
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
       "status": "PASS",
