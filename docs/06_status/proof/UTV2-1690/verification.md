@@ -10,7 +10,16 @@ Pre-merge this anchor identifies the verified implementation commit. Post-merge 
 
 UTV2-1690 closes the terminal-release gap between linked lane worktrees and the control checkout. A successful terminal transition now releases the canonical control-checkout lease transactionally, cleanup replay is idempotent, and truth-check refuses a done lane that still holds scope.
 
-## Evidence
+## ASSERTIONS:
+
+- [x] Linked worktrees resolve lease and merge-mutex coordination state from the control checkout.
+- [x] Terminal manifest persistence cannot synchronously fail while leaving the canonical lease released; exact prior bytes are restored.
+- [x] Successful closeout cannot persist a done manifest while retaining an active or stale-reclaim-required lease.
+- [x] Repeated cleanup does not rewrite surrendered leases or append synthetic history.
+- [x] An already-done finalize replay releases terminal artifacts before reconciliation.
+- [x] M8 reports a done lane that still holds control-checkout scope and names the executable repair path.
+
+## EVIDENCE:
 
 - Control-root regressions resolve the common Git directory from both the control checkout and a linked-worktree shape.
 - Filesystem runtime regressions prove the lease is released before terminal manifest persistence, a manifest-write failure restores the exact prior bytes, a successful write leaves the release durable, and replay adds no history.
