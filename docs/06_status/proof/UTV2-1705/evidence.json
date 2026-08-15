@@ -6,13 +6,14 @@
   "status": "ci_staging_proof_pending",
   "generated_at": "2026-08-14T23:10:56Z",
   "sha_binding": {
-    "verified_source_sha": "b5cce5476c502c7542ce70a7db1874f3da50582b",
+    "verified_source_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "implementation_sha",
-    "merge_sha": null,
-    "pr_number": null
+    "sha_type": "merge_sha",
+    "merge_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "pr_number": null,
+    "bound_at": "2026-08-15T09:05:29.615Z"
   },
   "verifier": {
     "identity": "codex-cli/utv2-1705-lifecycle-pr-binding",
