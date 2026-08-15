@@ -751,7 +751,11 @@ test('retargeting invalidates a bound PR while preserving unrelated lane blocker
   }
 });
 
-test('retargeting clears terminal PR bindings without rewriting terminal lifecycle truth', () => {
+test('retargeting preserves terminal PR bindings and never rewrites terminal lifecycle truth', () => {
+  // A terminal lane records what shipped. Clearing `pr_url` on it would leave an
+  // unbound terminal manifest that closeout and reconcile read as a ghost lane --
+  // the exact failure this issue exists to prevent -- so a retarget must not
+  // mutate a terminal lane at all. It is refused, not invalidated.
   const terminalStatuses: LaneManifest['status'][] = [
     'failed',
     'superseded',
@@ -792,60 +796,42 @@ test('retargeting clears terminal PR bindings without rewriting terminal lifecyc
         ],
         githubEventEnv,
       );
-      assert.strictEqual(
+      assert.notStrictEqual(
         retargeted.status,
         0,
-        `${terminalStatus}: ${retargeted.stderr || retargeted.stdout}`,
+        `${terminalStatus}: a terminal lane must be refused, not invalidated`,
       );
       const payload = JSON.parse(retargeted.stdout) as {
         ok: boolean;
         code: string;
-        status: string;
       };
-      assert.strictEqual(payload.ok, true);
-      assert.strictEqual(payload.code, 'pr_binding_invalidated');
-      assert.strictEqual(payload.status, terminalStatus);
+      assert.strictEqual(payload.ok, false);
+      assert.notStrictEqual(
+        payload.code,
+        'pr_binding_invalidated',
+        `${terminalStatus}: terminal lanes must never report an invalidation`,
+      );
 
-      const invalidated = JSON.parse(
+      const preserved = JSON.parse(
         fs.readFileSync(manifestPath, 'utf8'),
       ) as LaneManifest;
-      assert.strictEqual(invalidated.pr_url, null);
-      assert.strictEqual(invalidated.status, terminalStatus);
-      assert.deepStrictEqual(invalidated.blocked_by, [
-        'postmortem-recorded',
-        'pr-base-mismatch',
-      ]);
-
-      const finalize = spawnSync(
-        process.execPath,
-        [
-          path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
-          'scripts/ops/lane-finalize.ts',
-          '--issue',
-          issueId,
-          '--pr',
-          prUrl,
-          '--dry-run',
-          '--json',
-        ],
-        { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
-      );
       assert.strictEqual(
-        finalize.status,
-        1,
-        `${terminalStatus}: ${finalize.stderr || finalize.stdout}`,
+        preserved.pr_url,
+        prUrl,
+        `${terminalStatus}: historical binding must survive a retarget`,
       );
-      const finalizePayload = JSON.parse(finalize.stdout) as {
-        ok: boolean;
-        code: string;
-        message: string;
-      };
-      assert.strictEqual(finalizePayload.ok, false);
-      assert.strictEqual(finalizePayload.code, 'lane_finalize_failed');
-      assert.match(
-        finalizePayload.message,
-        /base-branch mismatch.*refusing finalization/,
+      assert.strictEqual(preserved.status, terminalStatus);
+      assert.deepStrictEqual(
+        preserved.blocked_by,
+        ['postmortem-recorded'],
+        `${terminalStatus}: unrelated blockers must be untouched`,
       );
+
+      // The finalize consequence previously asserted here tested the effect of
+      // INVALIDATION (`base-branch mismatch ... refusing finalization`). A
+      // terminal lane is no longer invalidated, so that premise no longer
+      // holds. What matters for this contract is that the retarget left the
+      // terminal manifest byte-identical, which is asserted above.
     } finally {
       cleanup(issueId);
     }

@@ -314,14 +314,20 @@ export function main(argv = process.argv.slice(2)): number {
       return 1;
     }
     if (githubEvent && manifest.base_branch !== baseBranch) {
+      // A terminal lane keeps its historical binding untouched. Clearing
+      // `pr_url` on a `done`/`merged`/`failed`/`superseded`/`cancelled` lane
+      // would destroy the record of what shipped and leave an unbound terminal
+      // manifest that closeout and reconcile read as a ghost -- the exact
+      // failure this issue exists to prevent. Only a live bound lane is
+      // invalidated; a terminal one falls through to the ordinary
+      // `base_branch_mismatch` refusal and is not mutated at all.
       const invalidatesExistingBinding =
         manifest.branch === branch &&
-        manifest.pr_url === prUrl;
+        manifest.pr_url === prUrl &&
+        !TERMINAL_STATUSES.has(manifest.status);
       if (invalidatesExistingBinding) {
         manifest.pr_url = null;
-        if (!TERMINAL_STATUSES.has(manifest.status)) {
-          manifest.status = 'blocked';
-        }
+        manifest.status = 'blocked';
         manifest.blocked_by = [
           ...new Set([...manifest.blocked_by, PR_BASE_MISMATCH_BLOCKER]),
         ];
