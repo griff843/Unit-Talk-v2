@@ -221,6 +221,12 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'discord-bot',
   },
   {
+    name: 'delivery_kill_switch',
+    purpose:
+      'Holds the per-target live delivery kill switch read by the worker before dequeue. A missing row or read error is treated as killed.',
+    owner: 'worker',
+  },
+  {
     name: 'settlement_records',
     purpose: 'Stores authoritative grading outcomes for picks.',
     owner: 'api',
