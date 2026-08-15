@@ -7,9 +7,23 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1690-terminal-release",
   "branch": "codex/utv2-1690-terminal-release",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1423",
-  "files_changed": [],
+  "files_changed": [
+    ".github/workflows/lane-pr-binding.yml",
+    "docs/06_status/proof/UTV2-1690/diff-summary.md",
+    "docs/06_status/proof/UTV2-1690/evidence.json",
+    "docs/06_status/proof/UTV2-1690/model-routing.json",
+    "docs/06_status/proof/UTV2-1690/verification.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/lane-finalize.test.ts",
+    "scripts/ops/lane-finalize.ts",
+    "scripts/ops/lease-registry.test.ts",
+    "scripts/ops/lease-registry.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/lane-pr-binding.yml",
     ".ops/sync/UTV2-1690.yml",
@@ -29,14 +43,22 @@
     "docs/06_status/proof/UTV2-1690/evidence.json",
     "docs/06_status/proof/UTV2-1690/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-15T13:49:58.805Z",
-  "heartbeat_at": "2026-08-15T14:18:18.425Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-15T18:16:46.712Z",
+  "closed_at": "2026-08-15T18:16:46.712Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1690-terminal-release.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-15T18:16:44.676Z",
+      "verdict": "pass",
+      "merge_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
