@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1690",
-  "title": "Release terminal lane coordination artifacts atomically",
+  "title": "Close terminal lane lifecycle and repair-admission gaps",
   "tier": "T1",
   "status": "ci_staging_proof_pending",
-  "generated_at": "2026-08-15T14:11:01Z",
+  "generated_at": "2026-08-15T14:45:00Z",
   "sha_binding": {
-    "verified_source_sha": "261a88dacb6cf123d654fd974576ab1d4cd54a2e",
+    "verified_source_sha": "6d9f06a4d243b1257e89144b7c73537ab87c5585",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -25,7 +25,8 @@
       "scripts/ops/lane-close.ts",
       "scripts/ops/lane-finalize.ts",
       "scripts/ops/lease-registry.ts",
-      "scripts/ops/truth-check-lib.ts"
+      "scripts/ops/truth-check-lib.ts",
+      ".github/workflows/lane-pr-binding.yml"
     ],
     "test_paths": [
       "scripts/ops/lane-close.test.ts",
@@ -34,7 +35,7 @@
       "scripts/ops/truth-check-lib.test.ts"
     ],
     "runtime_change": false,
-    "workflow_change": false,
+    "workflow_change": true,
     "database_change": false,
     "domain_change": false,
     "approval_policy_change": false
@@ -55,8 +56,8 @@
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
       "status": "PASS",
-      "tests": 314,
-      "pass": 314,
+      "tests": 322,
+      "pass": 322,
       "fail": 0,
       "skipped": 0
     }
@@ -66,8 +67,8 @@
     "kind": "filesystem-coordination-runtime",
     "status": "PASS_LOCAL_BEHAVIORAL_AND_PENDING_CI_STAGING_DB",
     "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
-    "tests": 314,
-    "pass": 314,
+    "tests": 322,
+    "pass": 322,
     "fail": 0,
     "receipts": [
       {
@@ -107,6 +108,21 @@
       "criterion": "Truth surfaces refuse a done lane that still holds scope.",
       "status": "PASS",
       "evidence": "M8 fails done plus active or stale-reclaim-required and passes done plus released or missing."
+    },
+    {
+      "criterion": "Wrong-base repair cannot silently restore an invalidated PR binding.",
+      "status": "PASS",
+      "evidence": "Repair returns named pr_base_mismatch before inference for the blocker and before reachability for wrong or unresolved inferred bases."
+    },
+    {
+      "criterion": "R1/R2 applicability cannot be executor self-declared.",
+      "status": "PASS",
+      "evidence": "The production truth-check path paginates GitHub PR files and records the classified repository list; only all-control-plane scope is not_applicable, while mixed, missing, and ambiguous scope fails closed."
+    },
+    {
+      "criterion": "Non-lane PR branches do not receive a false red lane-binding check.",
+      "status": "PASS",
+      "evidence": "The workflow compares the manifest branch before bind=true and exits 0 with bind=false on mismatch while retaining trusted branch/base validation for registered lanes."
     }
   ],
   "known_limitations": [
