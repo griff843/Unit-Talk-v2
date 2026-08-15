@@ -173,7 +173,7 @@ test('lane finalize stops at the first required failed command', () => {
   );
 });
 
-test('already closed lane only reconciles current state', () => {
+test('already closed lane reconciles and replays terminal artifact release', () => {
   const plan = buildLaneFinalizePlan({
     manifest: manifest({
       status: 'done',
@@ -185,8 +185,9 @@ test('already closed lane only reconciles current state', () => {
   assert.equal(plan.already_closed, true);
   assert.deepEqual(
     plan.steps.map((step) => step.id),
-    ['reconcile_current'],
+    ['release_terminal_artifacts', 'reconcile_current'],
   );
+  assert.deepEqual(plan.steps[0]?.args, ['ops:lane-close', 'UTV2-1073', '--terminal-cleanup-only']);
 });
 
 test('merge sha is threaded into generate_proof args when provided', () => {
@@ -509,19 +510,24 @@ test('current-state reconciliation is always rerun even when the journal recorde
     }),
     pr: '456',
   });
-  let calls = 0;
+  const calls: string[] = [];
   const result = runLaneFinalizePlan(plan, {
-    completedStepIds: ['reconcile_current'],
-    runner: (() => {
-      calls += 1;
+    completedStepIds: ['reconcile_current', 'release_terminal_artifacts'],
+    runner: ((command, args) => {
+      calls.push(`${command} ${args.join(' ')}`);
       return { status: 0, stdout: '', stderr: '' };
     }) as LaneFinalizeRunner,
   });
 
   assert.equal(result.ok, true);
-  assert.equal(calls, 1);
-  assert.equal(result.steps[0]?.id, 'reconcile_current');
+  assert.deepEqual(calls, [
+    'pnpm ops:lane-close UTV2-1073 --terminal-cleanup-only',
+    'pnpm ops:orchestration-reconcile --current --json',
+  ]);
+  assert.equal(result.steps[0]?.id, 'release_terminal_artifacts');
   assert.equal(result.steps[0]?.status, 'passed');
+  assert.equal(result.steps[1]?.id, 'reconcile_current');
+  assert.equal(result.steps[1]?.status, 'passed');
 });
 
 test('lane finalize serializes journal mutation under the merge mutex', () => {

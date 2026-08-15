@@ -39,16 +39,41 @@ import {
   truthHistoryEntryForMeasuredReceipt,
   unexecutedTruthCheckReceipt,
 } from './lane-close-repair-packet.js';
-import { readAllLeases, reserveLease } from './lease-registry.js';
+import {
+  beginTerminalLeaseRelease,
+  readAllLeases,
+  reserveLease,
+} from './lease-registry.js';
 import { ModelRoutingRebindError } from './proof-generate.js';
 import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
 import {
   MANIFEST_DIR,
+  ROOT,
   readManifest,
   writeManifest,
   type LaneManifest,
   type TruthCheckResult,
 } from './shared.js';
+
+test('UTV2-1690: lane PR binding cleanly ignores an issue-bearing branch owned by another lane', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'), 'utf8');
+  const resolveStart = workflow.indexOf('- name: Resolve lane from branch');
+  const setupStart = workflow.indexOf('- name: Setup pnpm');
+  assert.ok(resolveStart >= 0 && setupStart > resolveStart, 'resolve step must precede dependency setup');
+  const resolveStep = workflow.slice(resolveStart, setupStart);
+  const mismatchStart = resolveStep.indexOf('if [ "$manifest_branch" != "$BRANCH" ]; then');
+  const bindTrue = resolveStep.indexOf('echo "bind=true"');
+  assert.ok(mismatchStart >= 0, 'registered manifest branch must be compared with the PR head');
+  assert.ok(bindTrue > mismatchStart, 'branch mismatch must be decided before enabling binding');
+  const mismatchBlock = resolveStep.slice(mismatchStart, bindTrue);
+  assert.match(mismatchBlock, /echo "bind=false"/);
+  assert.match(mismatchBlock, /not its registered lane branch/);
+  assert.match(mismatchBlock, /exit 0/);
+  assert.doesNotMatch(mismatchBlock, /exit 1/);
+
+  assert.match(workflow, /if: steps\.lane\.outputs\.bind == 'true'[\s\S]*lane-link-pr\.ts/);
+  assert.match(workflow, /--branch "\$BRANCH"[\s\S]*--base "\$BASE_BRANCH"/);
+});
 
 function createTruthCheckResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
   return {
@@ -109,6 +134,7 @@ function createTrustedRepairPr(
     merged: true,
     mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
     headRefName: manifest.branch,
+    baseRefName: manifest.base_branch,
     title: `feat(ops): ${manifest.issue_id} implementation`,
     files: [
       `docs/06_status/lanes/${manifest.issue_id}.json`,
@@ -362,6 +388,24 @@ test('lane close releases dispatch lease and merge lock after successful closeou
     const releasedLock = readMergeLock(mergeLockPath);
     assert.strictEqual(releasedLease?.status, 'released');
     assert.strictEqual(releasedLock.ok ? releasedLock.lock.status : '', 'released');
+  });
+});
+
+test('UTV2-1690: a genuine lease-release failure is raised, not downgraded to a warning', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const issueId = 'UTV2-1002';
+    const branch = 'codex/utv2-1002-terminal-release';
+    // A corrupt lease is NOT the idempotent "already released" case: it must
+    // surface, or a lane closes while still holding capacity.
+    fs.mkdirSync(leaseRegistryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(leaseRegistryDir, `${issueId}.json`),
+      JSON.stringify({ issue_id: issueId, status: 'active' }),
+    );
+    assert.throws(
+      () => releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath }),
+      /Failed to release dispatch lease/,
+    );
   });
 });
 
@@ -1616,6 +1660,7 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'pr_not_found',
   'wrong_repository',
   'issue_identity_mismatch',
+  'pr_base_mismatch',
   'conflicting_pr_binding',
   'repair_pr_substitution',
   'missing_implementation_artifacts',
@@ -2297,6 +2342,11 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
         transitionLinear: async () => {
           cleanupCalls.push('linear');
         },
+        beginLeaseRelease: () => ({
+          warnings: [],
+          commit: () => undefined,
+          rollback: () => undefined,
+        }),
         releaseLocks: (issueId, branch) => {
           cleanupCalls.push(`locks:${issueId}:${branch}`);
           return { warnings: [] };
@@ -2516,6 +2566,97 @@ test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact me
 //
 // Five regressions, each corresponding to a failure measured on the live
 // system rather than imagined from the code.
+
+test('UTV2-1690: terminal manifest persistence cannot outrun lease release', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-release-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    const completion = await completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            assert.strictEqual(
+              readAllLeases(leaseRegistryDir)[0]?.status,
+              'released',
+              'lease must be released before status=done can be persisted',
+            );
+            return { ...manifest, status: 'done', closed_at: '2026-08-15T12:01:00.000Z' };
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      );
+    assert.strictEqual(completion.manifest.status, 'done');
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'released');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1690: failed terminal manifest persistence restores the active lease', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-rollback-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    await assert.rejects(
+      completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            throw new Error('manifest write failed');
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      ),
+      /manifest write failed/,
+    );
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'active');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
 
 test('UTV2-1613 R1: a normal successful close releases the dispatch lease', () => {
   withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
@@ -2897,6 +3038,7 @@ test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is nul
           merged: true,
           mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
           headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+          baseRefName: 'main',
           title: 'fix(lanes): UTV2-1553 release merged-lane lock from active accounting',
         };
       },
@@ -2923,6 +3065,206 @@ test('UTV2-1613: a null pr_url with no inferable merged PR is refused, never gue
     assert.strictEqual(repair.ok, false);
     assert.strictEqual(repair.code, 'infra_error');
     assert.match(repair.remediation, /must not be guessed/);
+  });
+});
+
+test('UTV2-1690: repair refuses to replace a binding invalidated by a PR base mismatch', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    let inferenceCalled = false;
+    const manifest = createManifest({
+      status: 'started',
+      commit_sha: null,
+      pr_url: null,
+      blocked_by: ['pr-base-mismatch'],
+      preflight_token: tokenPath,
+    });
+
+    const repair = repairMergedLaneManifest(manifest, {
+      repoRoot,
+      artifactRoot,
+      inferMergedPrForBranch: () => {
+        inferenceCalled = true;
+        throw new Error('base-mismatch blocker must stop before PR inference');
+      },
+    });
+
+    assert.strictEqual(repair.ok, false);
+    assert.strictEqual(repair.code, 'pr_base_mismatch');
+    assert.strictEqual(repair.outcome, 'blocked');
+    assert.strictEqual(inferenceCalled, false);
+    assert.strictEqual(repair.manifest, manifest);
+    assert.match(repair.remediation, /pr-base-mismatch/);
+  });
+});
+
+test('UTV2-1690: repair refuses an inferred PR whose base is wrong or unresolved', () => {
+  for (const baseRefName of ['release', null] as const) {
+    withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+      const manifest = createManifest({
+        status: 'started',
+        commit_sha: null,
+        pr_url: null,
+        base_branch: 'main',
+        preflight_token: tokenPath,
+      });
+      let reachabilityCalled = false;
+      const repair = repairMergedLaneManifest(manifest, {
+        repoRoot,
+        artifactRoot,
+        inferMergedPrForBranch: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1705',
+          number: 1705,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
+          headRefName: manifest.branch,
+          baseRefName,
+          title: `fix(ops): ${manifest.issue_id} wrong-base repair regression`,
+        }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      });
+
+      assert.strictEqual(repair.ok, false);
+      assert.strictEqual(repair.code, 'pr_base_mismatch');
+      assert.strictEqual(reachabilityCalled, false, 'base identity must fail before merge reachability');
+      assert.strictEqual(repair.manifest, manifest);
+      assert.match(repair.remediation, /manifest\.base_branch is main/);
+    });
+  }
+});
+
+test('UTV2-1690: the trusted --pr repair path refuses a wrong or unresolved PR base', () => {
+  // The blocked_by marker only records what a PREVIOUS lane-link-pr run saw. It
+  // says nothing about the base of the PR being bound here, so the explicit
+  // --pr path needs its own check or it binds a wrong-base merge.
+  for (const baseRefName of ['release', null] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { baseRefName }),
+        isMergeReachable: () => true,
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'pr_base_mismatch');
+  }
+});
+
+test('UTV2-1690: the trusted --pr repair path still accepts a matching base', () => {
+  const manifest = createManifest({
+    status: 'merged',
+    pr_url: null,
+    base_branch: 'main',
+    blocked_by: [],
+    commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  });
+  const validation = validateTrustedPostMergeRepair(
+    manifest,
+    'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    {
+      repairMerged: true,
+      trustedPostMerge: true,
+      fetchPr: () => createTrustedRepairPr(manifest, { baseRefName: 'main' }),
+      isMergeReachable: () => true,
+    },
+  );
+  assert.strictEqual(validation.ok, true, validation.code);
+});
+
+test('UTV2-1690: merge_sha finalization is authoritative — a merged PR with no merge SHA is refused', () => {
+  // A lane may only bind a merge SHA that GitHub actually reports. A merged PR
+  // whose mergeSha is absent must never be bound, because the manifest would
+  // then carry a merge binding that no commit backs.
+  for (const mergeSha of [null, undefined, ''] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    let reachabilityCalled = false;
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { mergeSha: mergeSha as string | null }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'missing_merge_sha');
+    assert.strictEqual(reachabilityCalled, false, 'a null merge SHA must be refused before reachability');
+  }
+});
+
+test('UTV2-1690: terminal cleanup replay preserves the tracked sync record', () => {
+  // `.ops/sync/<issue>.yml` is tracked. Deleting it during a replay that runs
+  // from the control checkout leaves a staged-looking deletion that
+  // reconciliation never restores.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-sync-'));
+    const syncPath = path.join(repoRoot, '.ops', 'sync', `${manifest.issue_id}.yml`);
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    fs.writeFileSync(syncPath, 'version: 1\n');
+
+    const result = completeIdempotentReclose(manifest, {
+      repoRoot,
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    assert.strictEqual(fs.existsSync(syncPath), true, 'tracked sync record must survive replay');
+    assert.strictEqual(result.sync_removed, false);
+  });
+});
+
+test('UTV2-1690: terminal cleanup replay does not release a caller-held merge lock', () => {
+  // The replay runs inside the finalize mutex. Releasing it here frees the
+  // parent's serialization slot and lets the next step run unserialized.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1423',
+        cwd: process.cwd(),
+        reason: 'ops:lane-finalize',
+        owner: { user: 'test', host: 'unit-test', pid: 4242, session_id: 'finalize-parent' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    completeIdempotentReclose(manifest, {
+      repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-lock-')),
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    const held = readMergeLock(mergeLockPath);
+    assert.strictEqual(held.ok ? held.lock.status : 'released', 'held',
+      'the caller-acquired merge lock must still be held after replay');
   });
 });
 
@@ -3034,6 +3376,7 @@ test('UTV2-1613: repair refuses an inferred PR whose merge SHA is not reachable 
         merged: true,
         mergeSha: 'not-actually-reachable-sha',
         headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+        baseRefName: 'main',
         title: 'fix(lanes): UTV2-1553 release merged-lane lock',
       }),
       isMergeReachable: () => false,
