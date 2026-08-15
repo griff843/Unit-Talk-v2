@@ -126,22 +126,27 @@
     ]
   },
   "runtime_proof": {
-    "command": "pnpm test:db",
-    "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
-    "required_project": "xskgrzbteyqdufktjrjx",
-    "local_guard_observation": "REFUSED before DB execution: host=127.0.0.1 ref=unidentified",
-    "packet_disposition": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
-    "queries": [],
-    "row_counts": [],
-    "linear_integration": {
-      "first_result": "linear_tier_label_applied",
-      "first_changed": true,
-      "verified_labels": [
-        "tier:T1"
-      ],
-      "replay_result": "linear_tier_label_already_applied",
-      "replay_changed": false
-    }
+    "applicable": false,
+    "disposition": "not_applicable",
+    "authority": "PM exception, recorded 2026-08-15. No sanctioned applicability path existed at recovery time.",
+    "reason": "Repository-derived changed-file classification of merge commit 5a11ec9c47eef426c58d994a64f107f9dd4a9292 proves this lane touched no database or runtime-data surface. R1 (runtime_proof.queries) and R2 (runtime_proof.row_counts) demand live-DB evidence that does not exist for this change. Fabricating queries or row counts was explicitly refused.",
+    "classified_changed_files": [
+      ".github/workflows/lane-pr-binding.yml",
+      ".ops/sync/UTV2-1705.yml",
+      "docs/06_status/lanes/UTV2-1705.json",
+      "docs/06_status/proof/UTV2-1705/diff-summary.md",
+      "docs/06_status/proof/UTV2-1705/evidence.json",
+      "docs/06_status/proof/UTV2-1705/model-routing.json",
+      "docs/06_status/proof/UTV2-1705/verification.md",
+      "scripts/ops/lane-finalize.test.ts",
+      "scripts/ops/lane-finalize.ts",
+      "scripts/ops/lane-link-pr.test.ts",
+      "scripts/ops/lane-link-pr.ts"
+    ],
+    "database_or_runtime_data_files": [],
+    "classification_basis": "git diff --name-only 70e722fb..5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "merge_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "followup": "A durable rule (R1/R2 not_applicable only when repository-derived classification proves no DB/runtime-data surface, executor cannot self-declare) is authorised for UTV2-1690."
   },
   "acceptance_criteria_mapping": [
     {
