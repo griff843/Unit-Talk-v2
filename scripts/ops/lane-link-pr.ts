@@ -7,12 +7,13 @@ import {
   type LaneManifest,
   type PreflightToken,
   ROOT,
+  TERMINAL_STATUSES,
   activeManifestOverlap,
   currentHeadSha,
   emitJson,
   getFlag,
   git,
-  isCodexLane,
+  issueIdFromBranchName,
   issueToManifestPath,
   parseArgs,
   preflightTokenPathForBranch,
@@ -28,6 +29,7 @@ import {
 } from './shared.js';
 
 const PR_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
+export const PR_BASE_MISMATCH_BLOCKER = 'pr-base-mismatch';
 
 type LaneLinkResult = {
   ok: boolean;
@@ -63,14 +65,45 @@ type RecoveryDeps = {
   writeToken?: (tokenPath: string, token: PreflightToken) => void;
 };
 
+function isMissingPreflightTokenError(entry: string): boolean {
+  return entry.includes('preflight_token file does not exist:');
+}
+
+function writeBoundManifest(
+  manifest: LaneManifest,
+  allowMissingPreflightToken: boolean,
+): void {
+  if (!allowMissingPreflightToken) {
+    writeManifest(manifest);
+    return;
+  }
+
+  const manifestPath = issueToManifestPath(manifest.issue_id);
+  const errors = validateManifest(manifest, manifestPath).filter(
+    (entry) => !isMissingPreflightTokenError(entry),
+  );
+  if (errors.length > 0) {
+    throw new Error(errors.join('\n'));
+  }
+  writeJsonFile(manifestPath, manifest);
+}
+
 function readPullRequestBinding(prUrl: string): PullRequestBinding {
   const result = spawnSync(
     'gh',
-    ['pr', 'view', prUrl, '--json', 'url,headRefName,headRefOid,baseRefName,state'],
+    [
+      'pr',
+      'view',
+      prUrl,
+      '--json',
+      'url,headRefName,headRefOid,baseRefName,state',
+    ],
     { cwd: ROOT, encoding: 'utf8', stdio: 'pipe' },
   );
   if (result.status !== 0) {
-    throw new Error(`Unable to validate PR binding: ${(result.stderr || result.stdout || '').trim()}`);
+    throw new Error(
+      `Unable to validate PR binding: ${(result.stderr || result.stdout || '').trim()}`,
+    );
   }
   return JSON.parse(result.stdout) as PullRequestBinding;
 }
@@ -87,54 +120,79 @@ export function recoverMissingPreflightToken(
   deps: RecoveryDeps = {},
 ): void {
   const cwd = path.resolve(deps.cwd ?? process.cwd());
-  const expectedCwd = path.resolve(manifest.execution_location?.cwd ?? manifest.worktree_path);
+  const expectedCwd = path.resolve(
+    manifest.execution_location?.cwd ?? manifest.worktree_path,
+  );
   if (cwd !== expectedCwd) {
-    throw new Error(`Lane recovery cwd ${cwd} does not match owned worktree ${expectedCwd}`);
+    throw new Error(
+      `Lane recovery cwd ${cwd} does not match owned worktree ${expectedCwd}`,
+    );
   }
-  if (manifest.branch !== branch || !isCodexLane(manifest)) {
-    throw new Error('Lane recovery requires the manifest-owned Codex branch');
+  if (manifest.branch !== branch) {
+    throw new Error('Lane recovery requires the manifest-owned branch');
   }
   if (!['started', 'in_progress', 'reopened'].includes(manifest.status)) {
-    throw new Error(`Lane recovery is not allowed from status ${manifest.status}`);
+    throw new Error(
+      `Lane recovery is not allowed from status ${manifest.status}`,
+    );
   }
   if (manifest.blocked_by.length > 0) {
-    throw new Error(`Lane recovery is blocked by unresolved dependencies: ${manifest.blocked_by.join(', ')}`);
+    throw new Error(
+      `Lane recovery is blocked by unresolved dependencies: ${manifest.blocked_by.join(', ')}`,
+    );
   }
 
   const expectedTokenPath = preflightTokenPathForBranch(branch);
   const expectedTokenRelative = relativeToRoot(expectedTokenPath);
-  const declaredToken = validatePreflightTokenPathValue(manifest.preflight_token);
+  const declaredToken = validatePreflightTokenPathValue(
+    manifest.preflight_token,
+  );
   if (declaredToken !== expectedTokenRelative) {
     throw new Error(
       `Lane recovery token path ${declaredToken} does not match canonical path ${expectedTokenRelative}`,
     );
   }
   if (fs.existsSync(expectedTokenPath)) {
-    throw new Error(`Lane recovery requires a missing token: ${expectedTokenRelative}`);
+    throw new Error(
+      `Lane recovery requires a missing token: ${expectedTokenRelative}`,
+    );
   }
 
-  const currentBranch = deps.currentBranch ?? (() => {
-    const result = git(['branch', '--show-current'], cwd);
-    if (!result.ok || !result.stdout) throw new Error('Unable to determine current branch');
-    return result.stdout;
-  });
+  const currentBranch =
+    deps.currentBranch ??
+    (() => {
+      const result = git(['branch', '--show-current'], cwd);
+      if (!result.ok || !result.stdout)
+        throw new Error('Unable to determine current branch');
+      return result.stdout;
+    });
   if (currentBranch() !== branch) {
     throw new Error(`Current branch does not match lane branch ${branch}`);
   }
 
   const headSha = (deps.currentHead ?? (() => currentHeadSha(cwd)))();
-  const clean = deps.isClean ?? (() => {
-    const result = git(['status', '--porcelain=v1', '--untracked-files=no'], cwd);
-    if (!result.ok) throw new Error(`Unable to inspect working tree: ${result.stderr}`);
-    return result.stdout.length === 0;
-  });
+  const clean =
+    deps.isClean ??
+    (() => {
+      const result = git(
+        ['status', '--porcelain=v1', '--untracked-files=no'],
+        cwd,
+      );
+      if (!result.ok)
+        throw new Error(`Unable to inspect working tree: ${result.stderr}`);
+      return result.stdout.length === 0;
+    });
   if (!clean()) throw new Error('Lane recovery requires a clean working tree');
 
-  const dependenciesReady = deps.dependenciesReady ?? (() =>
-    fs.existsSync(path.join(cwd, 'pnpm-lock.yaml')) && fs.existsSync(path.join(cwd, 'node_modules'))
-  );
+  const dependenciesReady =
+    deps.dependenciesReady ??
+    (() =>
+      fs.existsSync(path.join(cwd, 'pnpm-lock.yaml')) &&
+      fs.existsSync(path.join(cwd, 'node_modules')));
   if (!dependenciesReady()) {
-    throw new Error('Lane recovery requires pnpm-lock.yaml and node_modules in the owned worktree');
+    throw new Error(
+      'Lane recovery requires pnpm-lock.yaml and node_modules in the owned worktree',
+    );
   }
 
   const pullRequest = (deps.readPullRequest ?? readPullRequestBinding)(prUrl);
@@ -145,13 +203,20 @@ export function recoverMissingPreflightToken(
     pullRequest.headRefName !== branch ||
     pullRequest.headRefOid !== headSha
   ) {
-    throw new Error('PR binding does not match the open lane branch, base, and current HEAD');
+    throw new Error(
+      'PR binding does not match the open lane branch, base, and current HEAD',
+    );
   }
 
-  const activeManifests = (deps.activeManifests ?? (() =>
-    resolveActiveLaneManifests().lanes.map((lane) => lane.manifest)
-  ))();
-  const overlap = activeManifestOverlap(manifest.issue_id, manifest.file_scope_lock, activeManifests);
+  const activeManifests = (
+    deps.activeManifests ??
+    (() => resolveActiveLaneManifests().lanes.map((lane) => lane.manifest))
+  )();
+  const overlap = activeManifestOverlap(
+    manifest.issue_id,
+    manifest.file_scope_lock,
+    activeManifests,
+  );
   if (overlap) {
     throw new Error(
       `Lane recovery scope overlaps active ${overlap.issue_id}: ${overlap.overlapping_files.join(', ')}`,
@@ -159,7 +224,9 @@ export function recoverMissingPreflightToken(
   }
 
   const now = (deps.now ?? (() => new Date()))();
-  const expiresAt = new Date(now.getTime() + (manifest.tier === 'T1' ? 15 : 30) * 60_000);
+  const expiresAt = new Date(
+    now.getTime() + (manifest.tier === 'T1' ? 15 : 30) * 60_000,
+  );
   const token: PreflightToken = {
     schema_version: 1,
     branch,
@@ -183,10 +250,16 @@ export function recoverMissingPreflightToken(
 }
 
 export function main(argv = process.argv.slice(2)): number {
-  const { positionals, flags } = parseArgs(argv);
-  const issueIdRaw = positionals[0] ?? '';
+  const { positionals, flags, bools } = parseArgs(argv);
   const branch = getFlag(flags, 'branch') ?? '';
+  const baseBranch = getFlag(flags, 'base') ?? '';
   const prUrl = getFlag(flags, 'pr') ?? '';
+  const issueIdRaw =
+    positionals[0] ??
+    getFlag(flags, 'issue') ??
+    issueIdFromBranchName(branch) ??
+    '';
+  const githubEvent = bools.has('github-event');
 
   try {
     const issueId = requireIssueId(issueIdRaw);
@@ -208,25 +281,106 @@ export function main(argv = process.argv.slice(2)): number {
       } satisfies LaneLinkResult);
       return 1;
     }
+    if (
+      githubEvent &&
+      (process.env['GITHUB_ACTIONS'] !== 'true' ||
+        !['pull_request', 'pull_request_target'].includes(
+          process.env['GITHUB_EVENT_NAME'] ?? '',
+        ))
+    ) {
+      emitJson({
+        ok: false,
+        code: 'github_event_context_required',
+        message:
+          '--github-event is restricted to a GitHub Actions pull_request or pull_request_target run',
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+      } satisfies LaneLinkResult);
+      return 1;
+    }
 
     let preflightRecovered = false;
     let manifest = readManifest(issueId);
-    const manifestErrors = validateManifest(manifest, issueToManifestPath(issueId));
-    const missingTokenErrors = manifestErrors.filter((entry) =>
-      entry.includes('preflight_token file does not exist:')
+    if (githubEvent && !baseBranch) {
+      emitJson({
+        ok: false,
+        code: 'base_branch_required',
+        message: '--github-event requires the pull request base via --base',
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+      } satisfies LaneLinkResult);
+      return 1;
+    }
+    if (githubEvent && manifest.base_branch !== baseBranch) {
+      // A terminal lane keeps its historical binding untouched. Clearing
+      // `pr_url` on a `done`/`merged`/`failed`/`superseded`/`cancelled` lane
+      // would destroy the record of what shipped and leave an unbound terminal
+      // manifest that closeout and reconcile read as a ghost -- the exact
+      // failure this issue exists to prevent. Only a live bound lane is
+      // invalidated; a terminal one falls through to the ordinary
+      // `base_branch_mismatch` refusal and is not mutated at all.
+      const invalidatesExistingBinding =
+        manifest.branch === branch &&
+        manifest.pr_url === prUrl &&
+        !TERMINAL_STATUSES.has(manifest.status);
+      if (invalidatesExistingBinding) {
+        manifest.pr_url = null;
+        manifest.status = 'blocked';
+        manifest.blocked_by = [
+          ...new Set([...manifest.blocked_by, PR_BASE_MISMATCH_BLOCKER]),
+        ];
+        manifest.heartbeat_at = new Date().toISOString();
+        writeBoundManifest(manifest, true);
+        emitJson({
+          ok: true,
+          code: 'pr_binding_invalidated',
+          message: `Invalidated ${issueId} PR binding because pull request base ${baseBranch} no longer matches manifest base ${manifest.base_branch}`,
+          issue_id: issueId,
+          branch,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        } satisfies LaneLinkResult);
+        return 0;
+      }
+      emitJson({
+        ok: false,
+        code: 'base_branch_mismatch',
+        message: `Manifest base ${manifest.base_branch} does not match pull request base ${baseBranch}`,
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+      } satisfies LaneLinkResult);
+      return 1;
+    }
+    const manifestErrors = validateManifest(
+      manifest,
+      issueToManifestPath(issueId),
+    );
+    const missingTokenErrors = manifestErrors.filter(
+      isMissingPreflightTokenError,
     );
     if (missingTokenErrors.length > 0) {
       const nonMissingTokenErrors = manifestErrors.filter(
-        (entry) => !entry.includes('preflight_token file does not exist:'),
+        (entry) => !isMissingPreflightTokenError(entry),
       );
       if (nonMissingTokenErrors.length > 0) {
-        throw new Error(`Manifest validation failed: ${nonMissingTokenErrors.join('; ')}`);
+        throw new Error(
+          `Manifest validation failed: ${nonMissingTokenErrors.join('; ')}`,
+        );
       }
-      recoverMissingPreflightToken(manifest, branch, prUrl);
-      manifest = readManifest(issueId);
-      preflightRecovered = true;
+      if (!githubEvent) {
+        recoverMissingPreflightToken(manifest, branch, prUrl);
+        manifest = readManifest(issueId);
+        preflightRecovered = true;
+      }
     } else if (manifestErrors.length > 0) {
-      throw new Error(`Manifest validation failed: ${manifestErrors.join('; ')}`);
+      throw new Error(
+        `Manifest validation failed: ${manifestErrors.join('; ')}`,
+      );
     }
     const manifestPath = relativeToRoot(`docs/06_status/lanes/${issueId}.json`);
 
@@ -235,17 +389,6 @@ export function main(argv = process.argv.slice(2)): number {
         ok: false,
         code: 'branch_mismatch',
         message: `Manifest branch ${manifest.branch} does not match requested branch ${branch}`,
-        issue_id: issueId,
-        branch,
-        manifest_path: manifestPath,
-      } satisfies LaneLinkResult);
-      return 1;
-    }
-    if (!isCodexLane(manifest)) {
-      emitJson({
-        ok: false,
-        code: 'lane_type_mismatch',
-        message: `Manifest executor must be a Codex executor, found executor=${manifest.executor ?? 'missing'} lane_type=${manifest.lane_type}`,
         issue_id: issueId,
         branch,
         manifest_path: manifestPath,
@@ -339,7 +482,7 @@ export function main(argv = process.argv.slice(2)): number {
     manifest.status = 'in_review';
     manifest.pr_url = prUrl;
     manifest.heartbeat_at = new Date().toISOString();
-    writeManifest(manifest);
+    writeBoundManifest(manifest, githubEvent);
 
     emitJson({
       ok: true,
@@ -376,6 +519,9 @@ export function main(argv = process.argv.slice(2)): number {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   process.exitCode = main();
 }

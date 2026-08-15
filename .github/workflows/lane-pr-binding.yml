@@ -1,0 +1,116 @@
+name: Lane PR Binding
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: lane-pr-binding-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  bind-lane-pr:
+    name: Bind PR to lane manifest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    env:
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+      BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+      PR_URL: ${{ github.event.pull_request.html_url }}
+    steps:
+      - name: Checkout trusted default-branch binding implementation
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          path: trusted
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Checkout lane data without executing it
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: lane
+          ref: ${{ github.event.pull_request.head.sha }}
+          token: ${{ secrets.SYNC_BOT_TOKEN || github.token }}
+
+      - name: Resolve lane from branch
+        id: lane
+        run: |
+          issue_id=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]' || true)
+          if [ -z "$issue_id" ]; then
+            echo "bind=false" >> "$GITHUB_OUTPUT"
+            echo "Branch $BRANCH is not a UTV2 lane; no manifest binding is required."
+            exit 0
+          fi
+          echo "bind=true" >> "$GITHUB_OUTPUT"
+          echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        if: steps.lane.outputs.bind == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        if: steps.lane.outputs.bind == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: trusted/pnpm-lock.yaml
+
+      - name: Install trusted dependencies without lifecycle scripts
+        if: steps.lane.outputs.bind == 'true'
+        working-directory: trusted
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Bind PR URL using trusted default-branch code
+        if: steps.lane.outputs.bind == 'true'
+        working-directory: lane
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          node "$GITHUB_WORKSPACE/trusted/node_modules/tsx/dist/cli.mjs"
+          "$GITHUB_WORKSPACE/trusted/scripts/ops/lane-link-pr.ts"
+          --branch "$BRANCH"
+          --base "$BASE_BRANCH"
+          --pr "$PR_URL"
+          --github-event
+
+      - name: Persist lifecycle binding with bounded branch-update retries
+        if: steps.lane.outputs.bind == 'true'
+        working-directory: lane
+        run: |
+          set -euo pipefail
+          issue_id="${{ steps.lane.outputs.issue_id }}"
+          manifest="docs/06_status/lanes/${issue_id}.json"
+          git add "$manifest"
+          if git diff --cached --quiet; then
+            echo "Lane manifest is already bound to $PR_URL."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(lanes): bind ${issue_id} to PR #${{ github.event.pull_request.number }}"
+
+          for attempt in 1 2 3; do
+            if git push origin "HEAD:$BRANCH"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Binding push failed after $attempt attempts; lane remains visibly unbound."
+              exit 1
+            fi
+            echo "Lane branch advanced during binding; rebasing trusted binding commit (attempt $attempt)."
+            git fetch origin "$BRANCH"
+            if ! git rebase "origin/$BRANCH"; then
+              git rebase --abort || true
+              echo "Binding commit conflicts with the updated lane branch; refusing to overwrite it."
+              exit 1
+            fi
+          done
