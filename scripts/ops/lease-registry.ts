@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
   type LaneExecutionLocation,
@@ -142,7 +143,45 @@ const VALID_STATUSES = new Set<LeaseStatus>([
   'released',
 ]);
 
-export const LEASE_REGISTRY_DIR = path.join(ROOT, '.ops', 'leases');
+/**
+ * Coordination state belongs to the control checkout, not to whichever linked
+ * worktree happens to execute an ops command.
+ *
+ * `lane-start` runs from the control checkout and therefore reserves the lease
+ * there. Before UTV2-1690, `lane-close` imported a registry path derived from
+ * its own worktree root, so it released a shadow/nonexistent lease while the
+ * real control-checkout lease remained active. Git's common directory is the
+ * stable identity shared by every linked worktree, and its parent is the
+ * control checkout for this non-bare repository.
+ */
+export function resolveControlCheckoutRoot(
+  repoRoot = ROOT,
+  commonGitDir?: string,
+): string {
+  const rawCommonDir = commonGitDir ?? execFileSync(
+    'git',
+    ['-C', repoRoot, 'rev-parse', '--git-common-dir'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  ).trim();
+  const absoluteCommonDir = path.isAbsolute(rawCommonDir)
+    ? path.normalize(rawCommonDir)
+    : path.resolve(repoRoot, rawCommonDir);
+  if (path.basename(absoluteCommonDir) !== '.git') {
+    throw new Error(
+      `Unable to resolve control checkout from git common directory: ${absoluteCommonDir}`,
+    );
+  }
+  return path.dirname(absoluteCommonDir);
+}
+
+export const CONTROL_CHECKOUT_ROOT = resolveControlCheckoutRoot();
+export const LEASE_REGISTRY_DIR = path.join(CONTROL_CHECKOUT_ROOT, '.ops', 'leases');
+
+export interface TerminalLeaseReleaseTransaction {
+  warnings: string[];
+  commit: () => void;
+  rollback: () => void;
+}
 
 export interface ActiveLeaseCheckInput {
   issue_id: string;
@@ -559,6 +598,19 @@ export function releaseLease(
     };
   }
 
+  // A cleanup replay must be a true no-op. Rewriting an already surrendered
+  // lease appended an unbounded series of synthetic release records and made
+  // it impossible to distinguish the actual release from later retries.
+  if (lease.status === 'released' || lease.status === 'reclaimed') {
+    return {
+      ok: true,
+      code: 'lease_released',
+      lease,
+      lease_path: relativePathOrAbsolute(leasePath),
+      stale_leases: [],
+    };
+  }
+
   const released: DispatchLease = {
     ...lease,
     status: 'released',
@@ -585,6 +637,55 @@ export function releaseLease(
     lease: released,
     lease_path: relativePathOrAbsolute(leasePath),
     stale_leases: [],
+  };
+}
+
+function isMissingLeaseResult(result: LeaseReserveResult): boolean {
+  return !result.ok &&
+    result.code === 'lease_invalid_existing' &&
+    result.message.startsWith('Lease not found:');
+}
+
+/**
+ * Releases the lane lease before a terminal manifest is persisted, while
+ * retaining an exact rollback snapshot until the manifest write succeeds.
+ *
+ * Ordering is deliberate: a crash may leave a live manifest with a released
+ * lease (safe and retryable), but it must never leave a terminal manifest with
+ * an active lease. Synchronous write failures restore the byte-for-byte prior
+ * lease so the two local persistence surfaces behave transactionally.
+ */
+export function beginTerminalLeaseRelease(
+  input: LeaseReleaseInput,
+  options: { registryDir?: string; now?: Date } = {},
+): TerminalLeaseReleaseTransaction {
+  const registryDir = options.registryDir ?? LEASE_REGISTRY_DIR;
+  const issueId = requireIssueId(input.issue_id);
+  const leasePath = leasePathForIssue(issueId, registryDir);
+  const before = fs.existsSync(leasePath) ? fs.readFileSync(leasePath) : null;
+  const result = releaseLease(input, options);
+  if (!result.ok && !isMissingLeaseResult(result)) {
+    throw new Error(`Failed to release dispatch lease: ${result.code} ${result.message}`);
+  }
+
+  let active = true;
+  return {
+    warnings: result.ok ? [] : [`dispatch lease already released or missing: ${result.message}`],
+    commit: () => {
+      active = false;
+    },
+    rollback: () => {
+      if (!active) return;
+      if (before === null) {
+        fs.rmSync(leasePath, { force: true });
+      } else {
+        ensureDir(path.dirname(leasePath));
+        const temporary = `${leasePath}.${process.pid}.${Date.now()}.rollback.tmp`;
+        fs.writeFileSync(temporary, before);
+        fs.renameSync(temporary, leasePath);
+      }
+      active = false;
+    },
   };
 }
 

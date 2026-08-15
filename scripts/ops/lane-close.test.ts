@@ -39,7 +39,11 @@ import {
   truthHistoryEntryForMeasuredReceipt,
   unexecutedTruthCheckReceipt,
 } from './lane-close-repair-packet.js';
-import { readAllLeases, reserveLease } from './lease-registry.js';
+import {
+  beginTerminalLeaseRelease,
+  readAllLeases,
+  reserveLease,
+} from './lease-registry.js';
 import { ModelRoutingRebindError } from './proof-generate.js';
 import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
 import {
@@ -2297,6 +2301,11 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
         transitionLinear: async () => {
           cleanupCalls.push('linear');
         },
+        beginLeaseRelease: () => ({
+          warnings: [],
+          commit: () => undefined,
+          rollback: () => undefined,
+        }),
         releaseLocks: (issueId, branch) => {
           cleanupCalls.push(`locks:${issueId}:${branch}`);
           return { warnings: [] };
@@ -2516,6 +2525,97 @@ test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact me
 //
 // Five regressions, each corresponding to a failure measured on the live
 // system rather than imagined from the code.
+
+test('UTV2-1690: terminal manifest persistence cannot outrun lease release', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-release-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    const completion = await completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            assert.strictEqual(
+              readAllLeases(leaseRegistryDir)[0]?.status,
+              'released',
+              'lease must be released before status=done can be persisted',
+            );
+            return { ...manifest, status: 'done', closed_at: '2026-08-15T12:01:00.000Z' };
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      );
+    assert.strictEqual(completion.manifest.status, 'done');
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'released');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1690: failed terminal manifest persistence restores the active lease', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-rollback-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    await assert.rejects(
+      completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            throw new Error('manifest write failed');
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      ),
+      /manifest write failed/,
+    );
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'active');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
 
 test('UTV2-1613 R1: a normal successful close releases the dispatch lease', () => {
   withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {

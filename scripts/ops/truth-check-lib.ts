@@ -80,6 +80,7 @@ import {
 // pre-merge guard already implements the correct `/**`-and-prefix semantics, so
 // reuse that single definition here rather than adding a third independent one.
 import { matchesLockPattern } from '../ci/file-scope-guard.js';
+import { readAllLeases, type DispatchLease } from './lease-registry.js';
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -221,6 +222,38 @@ export interface CloseoutTruthGateInput {
   runtime_proof_required?: boolean;
   transition_age_ms?: number;
   allowed_transition_ms?: number;
+}
+
+export function evaluateTerminalLeaseInvariant(
+  manifest: Pick<LaneManifest, 'issue_id' | 'status'>,
+  leases: readonly DispatchLease[],
+): CheckResult {
+  if (manifest.status !== 'done') {
+    return {
+      id: 'M8',
+      status: 'pass',
+      detail: `terminal lease release is enforced at the done transition; current status is ${manifest.status}`,
+    };
+  }
+  const lease = leases.find(
+    (candidate) => candidate.issue_id.toUpperCase() === manifest.issue_id.toUpperCase(),
+  );
+  if (lease && (lease.status === 'active' || lease.status === 'stale_reclaim_required')) {
+    return {
+      id: 'M8',
+      status: 'fail',
+      detail:
+        `terminal manifest ${manifest.issue_id} still holds a ${lease.status} control-checkout lease ` +
+        `for ${lease.file_scope_lock.length} path(s); run ops:lane-finalize to replay terminal cleanup`,
+    };
+  }
+  return {
+    id: 'M8',
+    status: 'pass',
+    detail: lease
+      ? `terminal manifest lease is ${lease.status}`
+      : 'terminal manifest has no control-checkout lease',
+  };
 }
 
 export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckResult[] {
@@ -863,6 +896,9 @@ export async function runTruthCheck(
     } else {
       addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
     }
+
+    const terminalLease = evaluateTerminalLeaseInvariant(manifest, readAllLeases());
+    addCheck(terminalLease.id, terminalLease.status, terminalLease.detail);
 
     const linearToken =
       env.LINEAR_API_TOKEN?.trim() ||

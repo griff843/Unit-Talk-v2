@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   type DispatchLease,
   type LeaseOwner,
+  beginTerminalLeaseRelease,
   buildLeaseStaleReport,
   heartbeatLease,
   leaseReportExitCode,
@@ -13,6 +14,7 @@ import {
   readAllLeases,
   reclaimLease,
   releaseLease,
+  resolveControlCheckoutRoot,
   reserveLease,
   validateActiveLeaseForLane,
   writeLeaseAtomic,
@@ -530,6 +532,64 @@ test('release marks an active lease released without requiring stale reclaim', (
     assert.strictEqual(result.code, 'lease_released');
     assert.strictEqual(result.ok ? result.lease.status : '', 'released');
     assert.match(result.ok ? result.lease.reclaim_history?.[0]?.reason ?? '' : '', /^released:/);
+  });
+});
+
+test('linked worktrees resolve the lease registry through the control checkout git directory', () => {
+  assert.strictEqual(
+    resolveControlCheckoutRoot(
+      '/repo/.out/worktrees/codex__utv2-1690-terminal-release',
+      '/repo/.git',
+    ),
+    '/repo',
+  );
+  assert.strictEqual(resolveControlCheckoutRoot('/repo', '.git'), '/repo');
+});
+
+test('terminal lease release rolls back exactly when the manifest transition fails', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1690', ['scripts/ops/lane-close.ts']);
+    const leasePath = leasePathForIssue('UTV2-1690', registryDir);
+    const before = fs.readFileSync(leasePath);
+
+    const transition = beginTerminalLeaseRelease(
+      {
+        issue_id: 'UTV2-1690',
+        actor: 'ops:lane-close',
+        reason: 'terminal manifest transition',
+      },
+      { registryDir, now: new Date('2026-08-15T14:00:00.000Z') },
+    );
+    assert.strictEqual(readAllLeases(registryDir)[0]?.status, 'released');
+
+    transition.rollback();
+    assert.deepStrictEqual(fs.readFileSync(leasePath), before);
+    assert.strictEqual(readAllLeases(registryDir)[0]?.status, 'active');
+  });
+});
+
+test('terminal lease release commit is durable and cleanup replay adds no synthetic history', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1690', ['scripts/ops/lane-close.ts']);
+    const transition = beginTerminalLeaseRelease(
+      {
+        issue_id: 'UTV2-1690',
+        actor: 'ops:lane-close',
+        reason: 'terminal manifest transition',
+      },
+      { registryDir, now: new Date('2026-08-15T14:00:00.000Z') },
+    );
+    transition.commit();
+    transition.rollback();
+
+    const first = readAllLeases(registryDir)[0];
+    assert.strictEqual(first?.status, 'released');
+    assert.strictEqual(first?.reclaim_history?.length, 1);
+    releaseLease(
+      { issue_id: 'UTV2-1690', actor: 'ops:lane-close', reason: 'cleanup replay' },
+      { registryDir, now: new Date('2026-08-15T14:01:00.000Z') },
+    );
+    assert.strictEqual(readAllLeases(registryDir)[0]?.reclaim_history?.length, 1);
   });
 });
 

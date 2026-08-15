@@ -8,6 +8,7 @@ import {
   checkCommitReachableFromMain,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
+  evaluateTerminalLeaseInvariant,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
   evaluateScopeDiff,
@@ -27,6 +28,7 @@ import {
   evaluateCloseEligibilityPreflight,
   finalizeWithManifest,
 } from './truth-check-lib.js';
+import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import { getRepoRoot } from './shared.js';
 import type { CheckResult, LaneManifest, TruthCheckResult } from './shared.js';
@@ -48,6 +50,47 @@ test('truth-check verdict mapping preserves reopen semantics for G5', () => {
   assert.strictEqual(resolveExitCode('done', ['G5']), 4);
   assert.strictEqual(resolveExitCode('merged', ['G4']), 1);
   assert.strictEqual(resolveExitCode('merged', []), 0);
+});
+
+function terminalLease(status: DispatchLease['status']): DispatchLease {
+  return {
+    schema_version: 1,
+    issue_id: 'UTV2-1690',
+    branch: 'codex/utv2-1690-terminal-release',
+    executor: 'codex-cli',
+    cwd: '/repo/.out/worktrees/codex__utv2-1690-terminal-release',
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    heartbeat_at: '2026-08-15T12:00:00.000Z',
+    expires_at: '2026-08-15T16:00:00.000Z',
+    owner: { user: 'u', host: 'h', pid: 1, session_id: 's' },
+    status,
+  };
+}
+
+test('M8 fails when a done manifest still holds its control-checkout lease', () => {
+  const check = evaluateTerminalLeaseInvariant(
+    { issue_id: 'UTV2-1690', status: 'done' },
+    [terminalLease('active')],
+  );
+  assert.strictEqual(check.status, 'fail');
+  assert.match(check.detail, /ops:lane-finalize/);
+});
+
+test('M8 passes only after terminal lease cleanup, while merged closeout remains eligible', () => {
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'done' },
+      [terminalLease('released')],
+    ).status,
+    'pass',
+  );
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'merged' },
+      [terminalLease('active')],
+    ).status,
+    'pass',
+  );
 });
 
 function scopeDiffCheck(

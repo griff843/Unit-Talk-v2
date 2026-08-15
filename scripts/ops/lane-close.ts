@@ -32,7 +32,14 @@ import {
   requireMergeLockHeld,
   type MergeLockResult,
 } from './merge-mutex.js';
-import { leasePathForIssue, releaseLease } from './lease-registry.js';
+import {
+  beginTerminalLeaseRelease,
+  CONTROL_CHECKOUT_ROOT,
+  LEASE_REGISTRY_DIR,
+  leasePathForIssue,
+  releaseLease,
+  type TerminalLeaseReleaseTransaction,
+} from './lease-registry.js';
 import {
   assertCanonicalRunner,
   buildRepairPacket,
@@ -367,28 +374,38 @@ export function finalizeLaneCloseManifest(
   return manifest;
 }
 
+function controlMergeLockPath(): string {
+  return path.join(CONTROL_CHECKOUT_ROOT, '.ops', path.basename(MERGE_LOCK_PATH));
+}
+
 export function releaseCloseoutLocks(
   issueId: string,
   branch: string,
-  options: { leaseRegistryDir?: string; mergeLockPath?: string } = {},
+  options: {
+    leaseRegistryDir?: string;
+    mergeLockPath?: string;
+    leaseAlreadyReleased?: boolean;
+  } = {},
 ): { warnings: string[] } {
   const warnings: string[] = [];
-  const lease = releaseLease({
-    issue_id: issueId,
-    actor: 'ops:lane-close',
-    reason: 'lane closed successfully',
-  }, { registryDir: options.leaseRegistryDir });
-  if (!lease.ok && !isIdempotentLeaseReleaseFailure(lease)) {
-    throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
-  }
-  if (!lease.ok) {
-    warnings.push(`dispatch lease already released or missing: ${lease.message}`);
+  if (!options.leaseAlreadyReleased) {
+    const lease = releaseLease({
+      issue_id: issueId,
+      actor: 'ops:lane-close',
+      reason: 'lane closed successfully',
+    }, { registryDir: options.leaseRegistryDir });
+    if (!lease.ok && !isIdempotentLeaseReleaseFailure(lease)) {
+      throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
+    }
+    if (!lease.ok) {
+      warnings.push(`dispatch lease already released or missing: ${lease.message}`);
+    }
   }
 
   const mergeLock = releaseMergeLock({
     issue_id: issueId,
     branch,
-  }, { lockPath: options.mergeLockPath });
+  }, { lockPath: options.mergeLockPath ?? controlMergeLockPath() });
   // `merge_lock_owner_mismatch` means the live lock belongs to a DIFFERENT
   // lane. There is nothing of ours to release, and releasing it anyway would
   // steal another lane's serialization slot -- so it is neither an error nor
@@ -1269,13 +1286,14 @@ export function ensureCloseoutMergeLock(
     cwd?: string;
   } = {},
 ): CloseoutMergeLockResult {
+  const mergeLockPath = options.mergeLockPath ?? controlMergeLockPath();
   const held = requireMergeLockHeld(
     {
       issue_id: manifest.issue_id,
       branch: manifest.branch,
       reason: 'ops:lane-close',
     },
-    { lockPath: options.mergeLockPath, now: options.now },
+    { lockPath: mergeLockPath, now: options.now },
   );
   if (held.ok || !options.acquireLock) {
     return held;
@@ -1295,7 +1313,7 @@ export function ensureCloseoutMergeLock(
   // retry loop never converges.
   if (isReapableOwnOrphanedLock(held.lock, manifest)) {
     const reclaimed = reclaimMergeLock(lockInput, {
-      lockPath: options.mergeLockPath,
+      lockPath: mergeLockPath,
       now: options.now,
     });
     if (reclaimed.ok) {
@@ -1313,7 +1331,7 @@ export function ensureCloseoutMergeLock(
   }
 
   return acquireMergeLock(lockInput, {
-    lockPath: options.mergeLockPath,
+    lockPath: mergeLockPath,
     now: options.now,
   });
 }
@@ -1335,7 +1353,7 @@ export function releaseSelfAcquiredMergeLock(
   try {
     releaseMergeLock(
       { issue_id: manifest.issue_id, branch: manifest.branch },
-      { lockPath: options.mergeLockPath },
+      { lockPath: options.mergeLockPath ?? controlMergeLockPath() },
     );
   } catch {
     // Intentionally swallowed: see doc comment.
@@ -1368,13 +1386,18 @@ export function createRepairRollbackTransaction(
   issueId: string,
   repoRoot = process.cwd(),
 ): RepairRollbackTransaction {
+  const usesActiveCheckout = path.resolve(repoRoot) === path.resolve(process.cwd());
+  const coordinationRoot = usesActiveCheckout ? CONTROL_CHECKOUT_ROOT : repoRoot;
+  const leaseRegistryDir = usesActiveCheckout
+    ? LEASE_REGISTRY_DIR
+    : path.join(coordinationRoot, '.ops', 'leases');
   const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
   const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
   const fileSnapshots: FileSnapshot[] = [
     snapshotFile(manifestPath),
     snapshotFile(path.join(repoRoot, '.ops', 'sync', `${issueId}.yml`)),
-    snapshotFile(leasePathForIssue(issueId, path.join(repoRoot, '.ops', 'leases'))),
-    snapshotFile(path.join(repoRoot, '.ops', path.basename(MERGE_LOCK_PATH))),
+    snapshotFile(leasePathForIssue(issueId, leaseRegistryDir)),
+    snapshotFile(path.join(coordinationRoot, '.ops', path.basename(MERGE_LOCK_PATH))),
   ];
   const proofFiles = snapshotDirectory(proofDir);
   let active = true;
@@ -1616,14 +1639,32 @@ export async function completeSuccessfulLaneClose(
      * ISSUE, not merely the lane. Absent means the issue stays open.
      */
     completionIntent?: boolean;
+    beginLeaseRelease?: (issue: string) => TerminalLeaseReleaseTransaction;
     releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
     cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
   } = {},
 ): Promise<SuccessfulLaneCloseResult> {
-  const manifest = (options.finalizeManifest ?? finalizeLaneCloseManifest)(
-    issueId,
-    authorizedTruthCheck,
-  );
+  // Release the control-checkout lease first and retain its exact rollback
+  // snapshot until the terminal manifest write succeeds. This ordering makes
+  // the forbidden state (terminal manifest + active lease) unreachable through
+  // any synchronous failure in the transition.
+  const leaseTransition = (options.beginLeaseRelease ?? ((issue) =>
+    beginTerminalLeaseRelease({
+      issue_id: issue,
+      actor: 'ops:lane-close',
+      reason: 'lane reached terminal status',
+    })))(issueId);
+  let manifest: LaneManifest;
+  try {
+    manifest = (options.finalizeManifest ?? finalizeLaneCloseManifest)(
+      issueId,
+      authorizedTruthCheck,
+    );
+    leaseTransition.commit();
+  } catch (error) {
+    leaseTransition.rollback();
+    throw error;
+  }
   // UTV2-1619 capability 17: lane completion is not issue completion. The
   // transition happens only when all five conditions hold; otherwise the lane
   // closes and the issue is deliberately left open, with the reasons recorded.
@@ -1649,10 +1690,11 @@ export async function completeSuccessfulLaneClose(
     fs.rmSync(syncPath, { force: true });
   }
 
-  const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
-    issueId,
-    manifestBeforeClose.branch,
-  );
+  const closeoutLocks = options.releaseLocks
+    ? options.releaseLocks(issueId, manifestBeforeClose.branch)
+    : releaseCloseoutLocks(issueId, manifestBeforeClose.branch, {
+        leaseAlreadyReleased: true,
+      });
 
   // Worktree removal is deliberately last: every earlier fallible local
   // mutation can be restored by RepairRollbackTransaction. Once a clean,
@@ -1663,9 +1705,11 @@ export async function completeSuccessfulLaneClose(
 
   return {
     manifest,
-    warnings: closeoutLocks.warnings,
+    warnings: [...leaseTransition.warnings, ...closeoutLocks.warnings],
     sync_removed: syncRemoved,
     worktree_cleanup: worktreeCleanup,
+    issue_completed: completionEligibility.eligible,
+    issue_completion: completionEligibility,
   };
 }
 
@@ -1758,6 +1802,17 @@ export function completeIdempotentReclose(
     warnings: closeoutLocks.warnings,
     sync_removed: syncRemoved,
     worktree_cleanup: 'not_requested',
+    issue_completed: false,
+    issue_completion: {
+      eligible: false,
+      satisfied: [],
+      unsatisfied: [
+        {
+          condition: 'completion_intent',
+          reason: 'idempotent terminal cleanup never completes an issue',
+        },
+      ],
+    },
   };
 }
 
@@ -1935,6 +1990,17 @@ async function main(): Promise<void> {
           warnings: [],
           sync_removed: false,
           worktree_cleanup: 'not_requested',
+          issue_completed: false,
+          issue_completion: {
+            eligible: false,
+            satisfied: [],
+            unsatisfied: [
+              {
+                condition: 'completion_intent',
+                reason: 'already-closed repair made no issue completion claim',
+              },
+            ],
+          },
         };
         if (validatedPr) {
           cleanup = completeAlreadyClosedLaneCleanup(manifest);

@@ -26,6 +26,7 @@ import {
   type MergeLockOwner,
 } from './merge-mutex.js';
 import { PR_BASE_MISMATCH_BLOCKER } from './lane-link-pr.js';
+import { CONTROL_CHECKOUT_ROOT } from './lease-registry.js';
 
 export interface LaneFinalizeStep {
   id:
@@ -35,6 +36,7 @@ export interface LaneFinalizeStep {
     | 'generate_proof'
     | 'generate_t2_proof_bundle'
     | 'close_lane'
+    | 'release_terminal_artifacts'
     | 'reconcile_current';
   command: string;
   args: string[];
@@ -233,6 +235,17 @@ export function buildLaneFinalizePlan(input: {
       required: true,
     });
   } else {
+    // A hosted post-merge close can persist the terminal manifest, but it
+    // cannot reach the developer machine's control-checkout lease. Local
+    // finalize must therefore replay the idempotent terminal cleanup even when
+    // GitHub already reports this lane as done. Cleanup precedes reconciliation
+    // so the reconciler observes the converged four-population state.
+    steps.push({
+      id: 'release_terminal_artifacts',
+      command: 'pnpm',
+      args: ['ops:lane-close', issueId],
+      required: true,
+    });
     steps.push({
       id: 'reconcile_current',
       command: 'pnpm',
@@ -406,7 +419,9 @@ export function runLaneFinalizePlan(
   }
 
   for (const step of plan.steps) {
-    const alwaysRun = step.id === 'reconcile_current';
+    const alwaysRun =
+      step.id === 'reconcile_current' ||
+      step.id === 'release_terminal_artifacts';
     if (previouslyCompleted.has(step.id) && !alwaysRun) {
       steps.push({
         ...step,
@@ -815,7 +830,11 @@ export function withLaneFinalizeMergeLock<T>(
     throw new Error(`Unable to acquire lane finalize journal for ${plan.issue_id}.`);
   }
 
-  const mergeLockPath = options.mergeLockPath ?? MERGE_LOCK_PATH;
+  const mergeLockPath = options.mergeLockPath ?? path.join(
+    CONTROL_CHECKOUT_ROOT,
+    '.ops',
+    path.basename(MERGE_LOCK_PATH),
+  );
   let releaseAcquisitionGuard: (() => void) | undefined;
   let lock: ReturnType<typeof acquireMergeLock>;
   try {
