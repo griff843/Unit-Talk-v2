@@ -390,6 +390,24 @@ test('lane close releases dispatch lease and merge lock after successful closeou
   });
 });
 
+test('UTV2-1690: a genuine lease-release failure is raised, not downgraded to a warning', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const issueId = 'UTV2-1002';
+    const branch = 'codex/utv2-1002-terminal-release';
+    // A corrupt lease is NOT the idempotent "already released" case: it must
+    // surface, or a lane closes while still holding capacity.
+    fs.mkdirSync(leaseRegistryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(leaseRegistryDir, `${issueId}.json`),
+      JSON.stringify({ issue_id: issueId, status: 'active' }),
+    );
+    assert.throws(
+      () => releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath }),
+      /Failed to release dispatch lease/,
+    );
+  });
+});
+
 test('lane close release is idempotent when closeout locks are already released', () => {
   withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
     const issueId = 'UTV2-1001';

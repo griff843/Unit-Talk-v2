@@ -847,6 +847,48 @@ test('UTV2-1690: missing or ambiguous repository scope cannot self-declare runti
   assert.deepStrictEqual(ambiguous.classifiedFiles, [
     { path: 'package.json', classification: 'ambiguous' },
   ]);
+
+  // Producing `indeterminate` is not enough — the done-gate must refuse on it.
+  for (const unresolved of [classifyRuntimeDataApplicability([]), ambiguous]) {
+    const checks: CheckResult[] = [];
+    addUnsupportedRuntimeChecks(
+      (id, status, detail) => checks.push({ id, status, detail }),
+      false,
+      'T1',
+      { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
+      unresolved,
+    );
+    assert.deepStrictEqual(
+      checks.map((check) => [check.id, check.status]),
+      [
+        ['R1', 'fail'],
+        ['R2', 'fail'],
+        ['R3', 'pass'],
+      ],
+    );
+    assert.match(checks[0]?.detail ?? '', /unresolved/);
+  }
+});
+
+test('UTV2-1690: omitted applicability preserves the T1 runtime-proof requirement', () => {
+  // An absent classification must never read as "not applicable" — a caller that
+  // forgets to classify must not silently waive R1/R2.
+  const checks: CheckResult[] = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
+    undefined,
+  );
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'fail'],
+      ['R2', 'fail'],
+      ['R3', 'pass'],
+    ],
+  );
 });
 
 test('UTV2-1690: authoritative PR file lookup paginates before applicability classification', async () => {
