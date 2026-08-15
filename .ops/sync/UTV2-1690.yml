@@ -7,4 +7,8 @@ entities:
     - UTV2-1690
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-1690/diff-summary.md
+    - docs/06_status/proof/UTV2-1690/evidence.json
+    - docs/06_status/proof/UTV2-1690/model-routing.json
+    - docs/06_status/proof/UTV2-1690/verification.md
