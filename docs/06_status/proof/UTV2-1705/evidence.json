@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1705",
   "title": "Bind lane PR URLs automatically across executors",
   "tier": "T1",
-  "status": "ci_staging_proof_pending",
+  "status": "closed_with_recorded_exception",
   "generated_at": "2026-08-14T23:10:56Z",
   "sha_binding": {
     "verified_source_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
@@ -161,8 +161,8 @@
     },
     {
       "criterion": "Lane creation through PR creation, merge, and closeout needs zero manual metadata repair",
-      "status": "PASS",
-      "evidence": "Lifecycle regression and live dry-run read the bound manifest, resolve lane-finalize input without an explicit PR argument, and plan every closeout step. Linear tier truth was applied and verified live."
+      "status": "FAILED_EXCEPTED",
+      "evidence": "Counter-evidenced by this lane. Automated closeout run 31876087851 failed (P3, C4, R1, R2) and required an audited manual recovery: merge SHA bound by hand, model-routing.json repaired, and R1/R2 recorded as a PM exception. The automatic path has not yet completed successfully for a merged lane, so this criterion is recorded FAILED and excepted rather than PASS. It may only be marked PASS once a lane completes creation, PR, merge and closeout with zero manual metadata repair."
     },
     {
       "criterion": "Second bind is idempotent and conflicting bind fails closed",
@@ -196,12 +196,14 @@
     }
   ],
   "known_limitations": [
-    "Writable DB proof is pending the governed staging-ci job because local target identity is not the required staging project.",
-    "The PR-open workflow intentionally skips non-UTV2 branches and external-fork heads; it fails closed on malformed or conflicting lane manifests."
+    "The PR-open workflow intentionally skips non-UTV2 branches and external-fork heads; it fails closed on malformed or conflicting lane manifests.",
+    "Runtime proof is recorded not_applicable under a PM exception: repository-derived changed-file classification of merge 5a11ec9c proves this lane touched no database or runtime-data surface. No staging job remains required for this lane. DB queries and row counts were not fabricated.",
+    "This lane closed via audited manual recovery, not zero-touch automation. The closeout automation defect it exposed is scoped to the closeout slice."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
     "runtime_proof_status": "PENDING_CI_STAGING",
     "ready_for_pm_review": true
-  }
+  },
+  "runtime_proof_status": "NOT_APPLICABLE_RECORDED_EXCEPTION"
 }
