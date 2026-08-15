@@ -21,6 +21,11 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 - [x] `--repair-merged` returns named `pr_base_mismatch` without inference when the manifest carries `pr-base-mismatch`, and refuses an inferred PR whose base is wrong or unresolved.
 - [x] R1/R2 can be `not_applicable` only when GitHub's paginated PR file list classifies every changed path as control-plane; mixed, missing, and ambiguous scope fail closed.
 - [x] Lane PR binding exits 0 without mutation when a branch names an issue but does not match that issue manifest's registered lane branch.
+- [x] Every load-bearing control is mutation-proven: 14 of 14 mutations that disable or fail-open a control are killed by a production-path regression.
+- [x] The trusted `--pr` repair path refuses a wrong or unresolved PR base, and still accepts a matching one.
+- [x] A `scripts/**` path is classified control-plane only when it neither constructs nor imports a database client, directly or one hop through a local helper; unreadable files and unresolvable local imports fail closed.
+- [x] Prose naming a database client is not use of one: comments are stripped before marker matching.
+- [x] Lane PR binding no-ops when a branch names an issue that has no lane manifest at all, not only when the manifest names a different branch.
 
 ## EVIDENCE:
 
@@ -30,6 +35,9 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 - Truth-check regressions prove M8 fails `done + active`, passes `done + released`, and keeps pre-terminal `merged` eligible for the close transition.
 - Repair regressions prove the base-mismatch blocker stops before inference and wrong/unresolved inferred bases stop before reachability or mutation.
 - Applicability regressions prove paginated repository file discovery, the control-plane-only R1/R2 skip, and mixed/ambiguous fail-closed behavior while preserving T1 tier semantics.
+- An independent review of the reviewed head rejected four controls that were present but did not do what they claimed, all four since corrected: (1) the runtime-data allowlist classified every `scripts/{ci,ops}` file as control-plane, so a T1 change to a live settlement-repair script that writes `settlement_records` would have skipped R1/R2 entirely; (2) `validateTrustedPostMergeRepair` never compared the candidate PR's base to `manifest.base_branch`, so the explicit `--pr` path could bind a wrong-base merge; (3) the finalize plan is built before the merge mutex is acquired; (4) the binding workflow no-opped only when a manifest named a different branch, and still hard-failed when no manifest existed at all.
+- A second mutation battery of 6 mutations covering the corrections killed 5 immediately; the survivor (an unresolvable local import treated as clean) was a genuine fail-open and now has a regression. 14 of 14 mutations across both batteries are killed.
+- A mutation battery of 8 mutations was run against the load-bearing controls. Six were killed on the first pass. Two survived and were genuine assertion gaps in fail-closed behavior that was implemented correctly but never asserted: (a) a genuine non-idempotent lease-release failure could be downgraded from a throw to a warning, letting a lane close while still holding capacity; (b) `indeterminate` runtime-data applicability was produced correctly by the classifier but nothing asserted the done-gate refuses on it, so it could be downgraded from `fail` to `skip` at the consumption layer. Both regressions were added, plus coverage proving omitted applicability defaults to `required`. All 8 mutations are now killed.
 - A workflow regression keeps the registered-branch comparison before `bind=true` and preserves the trusted `--branch`/`--base` identity checks.
 
 ## Verification
@@ -38,7 +46,7 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 |---|---|---|
 | `pnpm verify:static` | PASS | DB-client boundary, sync/alignment, environment, lint, `pnpm type-check`, build, `pnpm test`, Smart Form verification, and command verification completed with exit 0. |
 | `pnpm verify` | EXPECTED DEFERRED AFTER STATIC PASS | The complete static gate passed again; `test:live-db` then reached `pnpm test:db` and the staging-isolation guard refused the local `host=127.0.0.1 ref=unidentified` target before DB access. PR CI owns the required staging execution. |
-| `pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'` | PASS | 322 tests passed, 0 failed, 0 skipped. |
+| `pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'` | PASS | 330 tests passed, 0 failed, 0 skipped. |
 | `pnpm type-check` | PASS | Completed as part of `pnpm verify:static` with exit 0. |
 | `pnpm test` | PASS | Root aggregate completed as part of `pnpm verify:static` with exit 0. |
 | `pnpm test:db` | BLOCKED / DEFERRED | The staging-isolation guard refused the local target before creating a DB client: observed `host=127.0.0.1 ref=unidentified`; the packet-mandated disposition is recorded below. |
@@ -48,8 +56,8 @@ UTV2-1690 closes terminal lifecycle gaps across coordination release, repair adm
 Focused TAP summary:
 
 ```text
-# tests 322
-# pass 322
+# tests 330
+# pass 330
 # fail 0
 # skipped 0
 ```
@@ -57,6 +65,12 @@ Focused TAP summary:
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
 The required PR T1 Proof Gate supplies those credentials and runs the writable smoke suite against the isolated staging project. No environment file was copied or modified locally.
+
+### Known limitations
+
+- Database reachability is followed one import hop. Depth 0 catches a file that constructs or imports a client itself; depth 1 catches a file whose work is done by a local helper that does. A reach of two or more hops is classified control-plane. Across `scripts/{ci,ops}` that is 7 files (50 flagged at one hop, 57 at full closure), all proof-tooling chains at the time of writing. Following the full closure was measured and rejected: it sweeps in every lifecycle module via proof-harvest tooling it never invokes, which would make the R1/R2 waiver unusable rather than more accurate.
+- Marker matching is textual over comment-stripped source, not AST-derived. The governed `scripts/ci/privileged-db-client-inventory.json` remains the authoritative AST-based record of client construction sites.
+- `.github/workflows/lane-pr-binding.yml` has no mechanical test coverage; both of its no-op branches are verified by inspection only. This is unchanged by this lane and is recorded rather than claimed as proven.
 
 ### Scope and R-level disposition
 

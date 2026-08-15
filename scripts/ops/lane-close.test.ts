@@ -134,6 +134,7 @@ function createTrustedRepairPr(
     merged: true,
     mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
     headRefName: manifest.branch,
+    baseRefName: manifest.base_branch,
     title: `feat(ops): ${manifest.issue_id} implementation`,
     files: [
       `docs/06_status/lanes/${manifest.issue_id}.json`,
@@ -3134,6 +3135,53 @@ test('UTV2-1690: repair refuses an inferred PR whose base is wrong or unresolved
       assert.match(repair.remediation, /manifest\.base_branch is main/);
     });
   }
+});
+
+test('UTV2-1690: the trusted --pr repair path refuses a wrong or unresolved PR base', () => {
+  // The blocked_by marker only records what a PREVIOUS lane-link-pr run saw. It
+  // says nothing about the base of the PR being bound here, so the explicit
+  // --pr path needs its own check or it binds a wrong-base merge.
+  for (const baseRefName of ['release', null] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { baseRefName }),
+        isMergeReachable: () => true,
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'pr_base_mismatch');
+  }
+});
+
+test('UTV2-1690: the trusted --pr repair path still accepts a matching base', () => {
+  const manifest = createManifest({
+    status: 'merged',
+    pr_url: null,
+    base_branch: 'main',
+    blocked_by: [],
+    commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  });
+  const validation = validateTrustedPostMergeRepair(
+    manifest,
+    'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    {
+      repairMerged: true,
+      trustedPostMerge: true,
+      fetchPr: () => createTrustedRepairPr(manifest, { baseRefName: 'main' }),
+      isMergeReachable: () => true,
+    },
+  );
+  assert.strictEqual(validation.ok, true, validation.code);
 });
 
 test('UTV2-1613: PR inference refuses an ambiguous or identity-mismatched candidate set', () => {

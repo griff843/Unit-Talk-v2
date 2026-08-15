@@ -573,6 +573,15 @@ export function validateTrustedPostMergeRepair(
     return blocked('issue_identity_mismatch', pr);
   }
 
+  // The inferred-PR path refuses a base-branch mismatch before it binds. This
+  // path must refuse it too: `blocked_by` only carries a marker left by a
+  // PREVIOUS lane-link-pr run, so it says nothing about the base of the
+  // candidate PR being bound here. Without this, an explicit --pr can bind a
+  // manifest to a PR merged against the wrong base.
+  if (pr.baseRefName !== manifest.base_branch) {
+    return blocked('pr_base_mismatch', pr);
+  }
+
   const files = pr.files ?? [];
   const manifestPath = `docs/06_status/lanes/${manifest.issue_id}.json`;
   if (!files.includes(manifestPath)) {

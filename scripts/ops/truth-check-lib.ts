@@ -1520,18 +1520,133 @@ const CONTROL_PLANE_ONLY_PATHS = [
   /^\.github\//u,
   /^\.ops\//u,
   /^docs\//u,
-  /^scripts\/(?:ci|ops)\//u,
 ];
 const RUNTIME_DATA_PATHS = [/^apps\//u, /^packages\//u, /^supabase\//u];
 
-function classifyRuntimeDataFile(filePath: string): RuntimeDataFileClassification {
+// `scripts/ci/**` and `scripts/ops/**` cannot be classified by path alone: dozens
+// of files there construct or import a real database client (a live settlement
+// repair script writes `settlement_records`, the staging seeder writes fixtures).
+// Treating the directory prefix as proof of "no database surface" would let such
+// a change waive R1/R2 — the exact guarantee this rule exists to provide. These
+// paths are therefore classified by what the file actually reaches.
+const CONTENT_CLASSIFIED_PATHS = [/^scripts\/(?:ci|ops)\//u];
+
+const DB_CLIENT_MARKERS = [
+  /@supabase\/supabase-js/u,
+  /@unit-talk\/db/u,
+  /\bcreateClient\s*\(/u,
+  /\bfrom\s+['"]pg['"]/u,
+  /\bfrom\s+['"]postgres['"]/u,
+];
+
+const LOCAL_IMPORT_PATTERN = /\bfrom\s+['"](\.[^'"]*)['"]/gu;
+
+const BLOCK_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
+const LINE_COMMENT_PATTERN = /(^|[^:'"`\\])\/\/[^\n]*/gu;
+
+/**
+ * Comments are stripped before marker matching so that prose about a database
+ * client is not mistaken for use of one. Without this, this very file — which
+ * must name the markers it searches for — classifies itself as database-reaching,
+ * and so does any file that merely documents the boundary.
+ */
+function stripComments(source: string): string {
+  return source.replace(BLOCK_COMMENT_PATTERN, ' ').replace(LINE_COMMENT_PATTERN, '$1');
+}
+
+export interface RuntimeDataSourceReader {
+  (filePath: string): string | null;
+}
+
+function defaultSourceReader(repoRoot: string): RuntimeDataSourceReader {
+  return (filePath) => {
+    try {
+      return fs.readFileSync(path.join(repoRoot, filePath), 'utf8');
+    } catch {
+      return null;
+    }
+  };
+}
+
+function resolveLocalImport(fromFile: string, specifier: string): string[] {
+  const base = path.posix.join(path.posix.dirname(fromFile), specifier);
+  // Source imports are written with a `.js` extension that resolves to `.ts`.
+  const withoutExt = base.replace(/\.(?:js|ts)$/u, '');
+  return [`${withoutExt}.ts`, `${withoutExt}.tsx`, `${withoutExt}/index.ts`];
+}
+
+/**
+ * How far local imports are followed when deciding whether a changed file
+ * reaches a database client.
+ *
+ * One hop, deliberately. Depth 0 catches a file that constructs or imports a
+ * client itself; depth 1 catches a file whose work is done by a local helper
+ * that does. Following further stops measuring "does this change touch data"
+ * and starts measuring import-graph reachability: `lane-close.ts` reaches the
+ * shared db package only at three hops, through proof-harvest tooling it never
+ * invokes, and every lifecycle module would be swept in with it.
+ *
+ * The bound is a real limit, not a proof: a database reach that is two or more
+ * hops away is classified control-plane. Across `scripts/{ci,ops}` that is 7
+ * files (50 flagged at one hop, 57 at full closure), all of them proof-tooling
+ * chains at the time of writing.
+ */
+const DB_REACH_MAX_IMPORT_HOPS = 1;
+
+/**
+ * Whether `filePath` reaches a database client within the hop bound.
+ * Returns `null` when it cannot be determined — the caller must fail closed.
+ */
+function reachesDatabaseClient(
+  filePath: string,
+  readSource: RuntimeDataSourceReader,
+  seen: Set<string>,
+  depth = 0,
+): boolean | null {
+  if (seen.has(filePath)) return false;
+  seen.add(filePath);
+
+  const rawSource = readSource(filePath);
+  // A path we cannot read (deleted, renamed, or absent from this checkout)
+  // cannot be proven database-free.
+  if (rawSource === null) return null;
+  const source = stripComments(rawSource);
+
+  if (DB_CLIENT_MARKERS.some((pattern) => pattern.test(source))) return true;
+  if (depth >= DB_REACH_MAX_IMPORT_HOPS) return false;
+
+  for (const match of source.matchAll(LOCAL_IMPORT_PATTERN)) {
+    const specifier = match[1];
+    if (!specifier) continue;
+    const candidates = resolveLocalImport(filePath, specifier);
+    const resolved = candidates.find((candidate) => readSource(candidate) !== null);
+    // An unresolvable local import is a hole in the closure, not a clean file.
+    if (!resolved) return null;
+    const reached = reachesDatabaseClient(resolved, readSource, seen, depth + 1);
+    if (reached === null) return null;
+    if (reached) return true;
+  }
+
+  return false;
+}
+
+function classifyRuntimeDataFile(
+  filePath: string,
+  readSource: RuntimeDataSourceReader,
+): RuntimeDataFileClassification {
   if (RUNTIME_DATA_PATHS.some((pattern) => pattern.test(filePath))) return 'runtime_data';
   if (CONTROL_PLANE_ONLY_PATHS.some((pattern) => pattern.test(filePath))) return 'control_plane';
+  if (CONTENT_CLASSIFIED_PATHS.some((pattern) => pattern.test(filePath))) {
+    const reaches = reachesDatabaseClient(filePath, readSource, new Set());
+    if (reaches === null) return 'ambiguous';
+    return reaches ? 'runtime_data' : 'control_plane';
+  }
   return 'ambiguous';
 }
 
 export function classifyRuntimeDataApplicability(
   changedFiles: readonly string[] | null | undefined,
+  options: { repoRoot?: string; readSource?: RuntimeDataSourceReader } = {},
 ): RuntimeDataApplicability {
   if (!changedFiles || changedFiles.length === 0) {
     return {
@@ -1541,9 +1656,13 @@ export function classifyRuntimeDataApplicability(
     };
   }
 
+  const readSource = options.readSource ?? defaultSourceReader(options.repoRoot ?? ROOT);
   const classifiedFiles = [...new Set(changedFiles)]
     .sort()
-    .map((filePath) => ({ path: filePath, classification: classifyRuntimeDataFile(filePath) }));
+    .map((filePath) => ({
+      path: filePath,
+      classification: classifyRuntimeDataFile(filePath, readSource),
+    }));
   const runtimeFiles = classifiedFiles.filter((entry) => entry.classification === 'runtime_data');
   const ambiguousFiles = classifiedFiles.filter((entry) => entry.classification === 'ambiguous');
   if (runtimeFiles.length > 0) {

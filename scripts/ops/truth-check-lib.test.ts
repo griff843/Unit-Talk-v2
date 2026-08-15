@@ -870,6 +870,84 @@ test('UTV2-1690: missing or ambiguous repository scope cannot self-declare runti
   }
 });
 
+test('UTV2-1690: a scripts/ path that reaches a database client is not control-plane', () => {
+  // A directory prefix cannot prove absence of a database surface: real files
+  // under scripts/ops construct privileged clients and write live tables.
+  const sources: Record<string, string> = {
+    'scripts/ops/repair-rows.ts': "import { createClient } from '@supabase/supabase-js';\n",
+    'scripts/ops/lane-tool.ts': "import { helper } from './db-helper.js';\n",
+    'scripts/ops/db-helper.ts': "import { createClient } from '@supabase/supabase-js';\n",
+    'scripts/ops/pure-tool.ts': "import { readFileSync } from 'node:fs';\n",
+  };
+  const readSource = (p: string) => sources[p] ?? null;
+
+  // Direct construction.
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/repair-rows.ts'], { readSource }).status,
+    'required',
+  );
+  // One hop through a local helper that constructs one.
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/lane-tool.ts'], { readSource }).status,
+    'required',
+  );
+  // A genuinely database-free script keeps the waiver.
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/pure-tool.ts'], { readSource }).status,
+    'not_applicable',
+  );
+});
+
+test('UTV2-1690: a scripts/ path that cannot be read fails closed', () => {
+  const applicability = classifyRuntimeDataApplicability(['scripts/ops/deleted.ts'], {
+    readSource: () => null,
+  });
+  assert.strictEqual(applicability.status, 'indeterminate');
+  assert.deepStrictEqual(applicability.classifiedFiles, [
+    { path: 'scripts/ops/deleted.ts', classification: 'ambiguous' },
+  ]);
+});
+
+test('UTV2-1690: an unresolvable local import is a hole in the closure, not a clean file', () => {
+  // If a helper cannot be resolved we cannot see whether it reaches a database,
+  // so the importing file cannot be proven database-free.
+  const sources: Record<string, string> = {
+    'scripts/ops/lane-tool.ts': "import { helper } from './missing-helper.js';\n",
+  };
+  const applicability = classifyRuntimeDataApplicability(['scripts/ops/lane-tool.ts'], {
+    readSource: (p) => sources[p] ?? null,
+  });
+  assert.strictEqual(applicability.status, 'indeterminate');
+  assert.deepStrictEqual(applicability.classifiedFiles, [
+    { path: 'scripts/ops/lane-tool.ts', classification: 'ambiguous' },
+  ]);
+});
+
+test('UTV2-1690: prose about a database client is not use of one', () => {
+  // This file must name the markers it searches for, and docs describe the
+  // boundary. Without comment stripping the classifier flags itself and every
+  // file that merely documents the database boundary.
+  const sources: Record<string, string> = {
+    'scripts/ops/documented.ts': [
+      '// This lane never touches @unit-talk/db or calls createClient(.',
+      '/* Historically this imported @supabase/supabase-js. It no longer does. */',
+      "import { readFileSync } from 'node:fs';",
+    ].join('\n'),
+  };
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/documented.ts'], {
+      readSource: (p) => sources[p] ?? null,
+    }).status,
+    'not_applicable',
+  );
+
+  // The real file is the regression that found this.
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/truth-check-lib.ts']).status,
+    'not_applicable',
+  );
+});
+
 test('UTV2-1690: omitted applicability preserves the T1 runtime-proof requirement', () => {
   // An absent classification must never read as "not applicable" — a caller that
   // forgets to classify must not silently waive R1/R2.

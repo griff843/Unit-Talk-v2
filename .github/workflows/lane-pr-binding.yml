@@ -48,6 +48,12 @@ jobs:
             exit 0
           fi
           manifest="$GITHUB_WORKSPACE/lane/docs/06_status/lanes/${issue_id}.json"
+          if [ ! -f "$manifest" ]; then
+            echo "bind=false" >> "$GITHUB_OUTPUT"
+            echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
+            echo "::notice title=lane-pr-binding::Branch $BRANCH names $issue_id but no lane manifest exists for it; no manifest binding is required."
+            exit 0
+          fi
           if [ -f "$manifest" ]; then
             manifest_branch=$(jq -er '.branch | select(type == "string" and length > 0)' "$manifest")
             if [ "$manifest_branch" != "$BRANCH" ]; then
