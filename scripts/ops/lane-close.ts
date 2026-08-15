@@ -54,6 +54,7 @@ import {
   type MergeBindingInference,
   isCanonicalRunner,
 } from './lane-close-repair-packet.js';
+import { PR_BASE_MISMATCH_BLOCKER } from './lane-link-pr.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -79,6 +80,7 @@ export type CloseoutFailureCode =
   | 'pr_not_found'        // supplied PR does not exist or could not be resolved
   | 'wrong_repository'    // supplied/resolved PR is outside griff843/Unit-Talk-v2
   | 'issue_identity_mismatch' // PR branch/title does not identify the requested lane
+  | 'pr_base_mismatch' // PR base branch disagrees with the lane manifest
   | 'conflicting_pr_binding' // manifest already points at a different PR
   | 'repair_pr_substitution' // candidate PR never contained this issue's lane manifest
   | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
@@ -97,6 +99,7 @@ export interface RepairMergedPrInfo {
   merged: boolean;
   mergeSha: string | null;
   headRefName?: string | null;
+  baseRefName?: string | null;
   title?: string | null;
   files?: string[];
 }
@@ -199,6 +202,8 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'The supplied pull request must belong to exactly griff843/Unit-Talk-v2.';
     case 'issue_identity_mismatch':
       return 'The supplied pull request branch and title do not match this issue lane.';
+    case 'pr_base_mismatch':
+      return 'The pull request base branch does not match manifest.base_branch, or the lane carries the pr-base-mismatch blocker. Repair refused; restore the intended base and re-establish the governed PR binding.';
     case 'conflicting_pr_binding':
       return 'The manifest already records a different authoritative pull request.';
     case 'repair_pr_substitution':
@@ -647,6 +652,14 @@ export function repairMergedLaneManifest(
     };
   }
 
+  if (manifest.blocked_by.includes(PR_BASE_MISMATCH_BLOCKER)) {
+    return repairBlocked(
+      manifest,
+      'pr_base_mismatch',
+      `Manifest blocked_by contains ${PR_BASE_MISMATCH_BLOCKER}; --repair-merged must not replace a binding invalidated by a PR base-branch mismatch.`,
+    );
+  }
+
   // UTV2-1613 (ghost lanes): a manifest can be stranded in an ACTIVE status
   // with pr_url still null while its implementation PR merged days ago -- the
   // lane never got far enough to record the binding. UTV2-1553 is exactly
@@ -676,6 +689,14 @@ export function repairMergedLaneManifest(
         'infra_error',
         `Manifest has no pr_url, and no merged pull request was found whose head ref is "${manifest.branch}". ` +
           'Repair refused; the merge binding cannot be inferred and must not be guessed.',
+      );
+    }
+    if (inferredPr.baseRefName !== manifest.base_branch) {
+      return repairBlocked(
+        manifest,
+        'pr_base_mismatch',
+        `Inferred PR ${inferredPr.url} targets base ${inferredPr.baseRefName ?? '(unresolved)'}, ` +
+          `but manifest.base_branch is ${manifest.base_branch}. Repair refused.`,
       );
     }
     // Defense in depth on top of selectInferredMergedPr's identity check:
@@ -908,7 +929,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
         '--limit',
         '20',
         '--json',
-        'url,number,state,mergedAt,mergeCommit,headRefName,title',
+        'url,number,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -923,6 +944,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
     headRefName?: string | null;
+    baseRefName?: string | null;
     title?: string | null;
   }>;
   try {
@@ -941,6 +963,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
       merged: state === 'merged' || Boolean(entry.mergedAt),
       mergeSha: entry.mergeCommit?.oid ?? null,
       headRefName: entry.headRefName ?? null,
+      baseRefName: entry.baseRefName ?? null,
       title: entry.title ?? null,
     };
   });
@@ -2329,7 +2352,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
       '--repo',
       TRUSTED_POST_MERGE_REPOSITORY,
       '--json',
-      'url,state,mergedAt,mergeCommit,headRefName,title',
+      'url,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
     ],
     {
       encoding: 'utf8',
@@ -2358,6 +2381,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
     headRefName?: string | null;
+    baseRefName?: string | null;
     title?: string | null;
   };
   const state = parsed.state?.toLowerCase() ?? null;
@@ -2369,6 +2393,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     merged: state === 'merged' || Boolean(parsed.mergedAt),
     mergeSha: parsed.mergeCommit?.oid ?? null,
     headRefName: parsed.headRefName ?? null,
+    baseRefName: parsed.baseRefName ?? null,
     title: parsed.title ?? null,
     ...(includeFiles
       ? { files: filesStdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean) }

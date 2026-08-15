@@ -6,6 +6,7 @@ import path from 'node:path';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
+  classifyRuntimeDataApplicability,
   classifyRuntimeProofGap,
   evaluateCloseoutTruthGate,
   evaluateTerminalLeaseInvariant,
@@ -16,6 +17,7 @@ import {
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
   fetchGitHubPullRequestComments,
+  fetchGitHubPullRequestFiles,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -767,6 +769,100 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
       ['R3', 'fail'],
     ],
   );
+});
+
+test('UTV2-1690: repository-derived control-plane scope makes only R1/R2 not applicable', () => {
+  const applicability = classifyRuntimeDataApplicability([
+    'scripts/ops/lane-close.ts',
+    '.github/workflows/lane-pr-binding.yml',
+    'docs/06_status/proof/UTV2-1690/verification.md',
+  ]);
+  assert.strictEqual(applicability.status, 'not_applicable');
+  assert.deepStrictEqual(
+    applicability.classifiedFiles.map((entry) => entry.classification),
+    ['control_plane', 'control_plane', 'control_plane'],
+  );
+
+  const checks: CheckResult[] = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: { schema_version: 1, verifier: { identity: 'independent-verifier' } } },
+    applicability,
+  );
+
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'skip'],
+      ['R2', 'skip'],
+      ['R3', 'pass'],
+    ],
+  );
+  assert.match(checks[0]?.detail ?? '', /not_applicable/);
+  assert.match(checks[0]?.detail ?? '', /scripts\/ops\/lane-close\.ts/);
+});
+
+test('UTV2-1690: mixed repository scope keeps R1/R2 fail-closed and records every classified file', () => {
+  const applicability = classifyRuntimeDataApplicability([
+    'scripts/ops/truth-check-lib.ts',
+    'apps/api/src/submission-service.ts',
+  ]);
+  assert.strictEqual(applicability.status, 'required');
+  assert.deepStrictEqual(applicability.classifiedFiles, [
+    { path: 'apps/api/src/submission-service.ts', classification: 'runtime_data' },
+    { path: 'scripts/ops/truth-check-lib.ts', classification: 'control_plane' },
+  ]);
+
+  const checks: CheckResult[] = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    {
+      bundle: {
+        schema_version: 1,
+        verifier: { identity: 'independent-verifier' },
+        runtime_proof: { queries: [], row_counts: [] },
+      },
+    },
+    applicability,
+  );
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'fail'],
+      ['R2', 'fail'],
+      ['R3', 'pass'],
+    ],
+  );
+  assert.match(checks[0]?.detail ?? '', /apps\/api\/src\/submission-service\.ts/);
+});
+
+test('UTV2-1690: missing or ambiguous repository scope cannot self-declare runtime proof inapplicable', () => {
+  assert.strictEqual(classifyRuntimeDataApplicability([]).status, 'indeterminate');
+  const ambiguous = classifyRuntimeDataApplicability(['package.json']);
+  assert.strictEqual(ambiguous.status, 'indeterminate');
+  assert.deepStrictEqual(ambiguous.classifiedFiles, [
+    { path: 'package.json', classification: 'ambiguous' },
+  ]);
+});
+
+test('UTV2-1690: authoritative PR file lookup paginates before applicability classification', async () => {
+  const requested: string[] = [];
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({
+    filename: `scripts/ops/control-${index}.ts`,
+  }));
+  const fetchPage = async <T>(url: string): Promise<T> => {
+    requested.push(url);
+    return (url.endsWith('page=1') ? firstPage : [{ filename: 'apps/api/src/runtime.ts' }]) as T;
+  };
+
+  const files = await fetchGitHubPullRequestFiles('griff843', 'Unit-Talk-v2', 1690, 'token', fetchPage);
+  assert.strictEqual(files.length, 101);
+  assert.ok(requested.some((url) => url.includes('page=2')));
+  assert.strictEqual(classifyRuntimeDataApplicability(files).status, 'required');
 });
 
 function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {

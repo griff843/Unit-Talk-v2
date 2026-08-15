@@ -48,11 +48,32 @@ import { ModelRoutingRebindError } from './proof-generate.js';
 import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
 import {
   MANIFEST_DIR,
+  ROOT,
   readManifest,
   writeManifest,
   type LaneManifest,
   type TruthCheckResult,
 } from './shared.js';
+
+test('UTV2-1690: lane PR binding cleanly ignores an issue-bearing branch owned by another lane', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'), 'utf8');
+  const resolveStart = workflow.indexOf('- name: Resolve lane from branch');
+  const setupStart = workflow.indexOf('- name: Setup pnpm');
+  assert.ok(resolveStart >= 0 && setupStart > resolveStart, 'resolve step must precede dependency setup');
+  const resolveStep = workflow.slice(resolveStart, setupStart);
+  const mismatchStart = resolveStep.indexOf('if [ "$manifest_branch" != "$BRANCH" ]; then');
+  const bindTrue = resolveStep.indexOf('echo "bind=true"');
+  assert.ok(mismatchStart >= 0, 'registered manifest branch must be compared with the PR head');
+  assert.ok(bindTrue > mismatchStart, 'branch mismatch must be decided before enabling binding');
+  const mismatchBlock = resolveStep.slice(mismatchStart, bindTrue);
+  assert.match(mismatchBlock, /echo "bind=false"/);
+  assert.match(mismatchBlock, /not its registered lane branch/);
+  assert.match(mismatchBlock, /exit 0/);
+  assert.doesNotMatch(mismatchBlock, /exit 1/);
+
+  assert.match(workflow, /if: steps\.lane\.outputs\.bind == 'true'[\s\S]*lane-link-pr\.ts/);
+  assert.match(workflow, /--branch "\$BRANCH"[\s\S]*--base "\$BASE_BRANCH"/);
+});
 
 function createTruthCheckResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
   return {
@@ -1620,6 +1641,7 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'pr_not_found',
   'wrong_repository',
   'issue_identity_mismatch',
+  'pr_base_mismatch',
   'conflicting_pr_binding',
   'repair_pr_substitution',
   'missing_implementation_artifacts',
@@ -2997,6 +3019,7 @@ test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is nul
           merged: true,
           mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
           headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+          baseRefName: 'main',
           title: 'fix(lanes): UTV2-1553 release merged-lane lock from active accounting',
         };
       },
@@ -3024,6 +3047,75 @@ test('UTV2-1613: a null pr_url with no inferable merged PR is refused, never gue
     assert.strictEqual(repair.code, 'infra_error');
     assert.match(repair.remediation, /must not be guessed/);
   });
+});
+
+test('UTV2-1690: repair refuses to replace a binding invalidated by a PR base mismatch', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    let inferenceCalled = false;
+    const manifest = createManifest({
+      status: 'started',
+      commit_sha: null,
+      pr_url: null,
+      blocked_by: ['pr-base-mismatch'],
+      preflight_token: tokenPath,
+    });
+
+    const repair = repairMergedLaneManifest(manifest, {
+      repoRoot,
+      artifactRoot,
+      inferMergedPrForBranch: () => {
+        inferenceCalled = true;
+        throw new Error('base-mismatch blocker must stop before PR inference');
+      },
+    });
+
+    assert.strictEqual(repair.ok, false);
+    assert.strictEqual(repair.code, 'pr_base_mismatch');
+    assert.strictEqual(repair.outcome, 'blocked');
+    assert.strictEqual(inferenceCalled, false);
+    assert.strictEqual(repair.manifest, manifest);
+    assert.match(repair.remediation, /pr-base-mismatch/);
+  });
+});
+
+test('UTV2-1690: repair refuses an inferred PR whose base is wrong or unresolved', () => {
+  for (const baseRefName of ['release', null] as const) {
+    withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+      const manifest = createManifest({
+        status: 'started',
+        commit_sha: null,
+        pr_url: null,
+        base_branch: 'main',
+        preflight_token: tokenPath,
+      });
+      let reachabilityCalled = false;
+      const repair = repairMergedLaneManifest(manifest, {
+        repoRoot,
+        artifactRoot,
+        inferMergedPrForBranch: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1705',
+          number: 1705,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
+          headRefName: manifest.branch,
+          baseRefName,
+          title: `fix(ops): ${manifest.issue_id} wrong-base repair regression`,
+        }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      });
+
+      assert.strictEqual(repair.ok, false);
+      assert.strictEqual(repair.code, 'pr_base_mismatch');
+      assert.strictEqual(reachabilityCalled, false, 'base identity must fail before merge reachability');
+      assert.strictEqual(repair.manifest, manifest);
+      assert.match(repair.remediation, /manifest\.base_branch is main/);
+    });
+  }
 });
 
 test('UTV2-1613: PR inference refuses an ambiguous or identity-mismatched candidate set', () => {
@@ -3134,6 +3226,7 @@ test('UTV2-1613: repair refuses an inferred PR whose merge SHA is not reachable 
         merged: true,
         mergeSha: 'not-actually-reachable-sha',
         headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+        baseRefName: 'main',
         title: 'fix(lanes): UTV2-1553 release merged-lane lock',
       }),
       isMergeReachable: () => false,

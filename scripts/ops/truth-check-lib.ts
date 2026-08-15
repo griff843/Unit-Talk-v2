@@ -1002,6 +1002,26 @@ export async function runTruthCheck(
 
     const prRef = parsePullRequestUrl(prUrl);
     const pullRequest = await fetchGitHubPullRequest(prRef.owner, prRef.repo, prRef.number, githubToken);
+    let runtimeDataApplicability: RuntimeDataApplicability | undefined;
+    if (tier === 'T1') {
+      try {
+        const repositoryChangedFiles = await fetchGitHubPullRequestFiles(
+          prRef.owner,
+          prRef.repo,
+          prRef.number,
+          githubToken,
+        );
+        runtimeDataApplicability = classifyRuntimeDataApplicability(repositoryChangedFiles);
+      } catch (error) {
+        runtimeDataApplicability = {
+          status: 'indeterminate',
+          reason:
+            'authoritative PR changed-file lookup failed; runtime-data applicability cannot be proven: ' +
+            (error instanceof Error ? error.message : String(error)),
+          classifiedFiles: [],
+        };
+      }
+    }
     if (!pullRequest.merged || !pullRequest.merge_commit_sha) {
       addCheck('G1', 'fail', 'pull request is not merged');
     } else {
@@ -1206,7 +1226,13 @@ export async function runTruthCheck(
         }
       }
 
-      addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence);
+      addUnsupportedRuntimeChecks(
+        addCheck,
+        options.noRuntime ?? false,
+        tier,
+        evidence,
+        runtimeDataApplicability,
+      );
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
       for (const check of evaluateT2ProofEvidence({
@@ -1418,6 +1444,7 @@ export function addUnsupportedRuntimeChecks(
   noRuntime: boolean,
   tier: LaneTier,
   evidence: { bundle: EvidenceBundleV1 } | null,
+  applicability?: RuntimeDataApplicability,
 ): void {
   if (tier !== 'T1') {
     addCheck('R1', 'skip', 'runtime checks skipped for non-T1 tier');
@@ -1433,26 +1460,42 @@ export function addUnsupportedRuntimeChecks(
     return;
   }
 
+  const classification = applicability ?? {
+    status: 'required' as const,
+    reason: 'runtime-data applicability was not supplied; preserving the T1 runtime-proof requirement',
+    classifiedFiles: [],
+  };
+  const classificationDetail = formatRuntimeDataApplicability(classification);
+
+  if (classification.status === 'not_applicable') {
+    addCheck('R1', 'skip', `not_applicable: ${classificationDetail}`);
+    addCheck('R2', 'skip', `not_applicable: ${classificationDetail}`);
+  } else if (classification.status === 'indeterminate') {
+    addCheck('R1', 'fail', `runtime applicability unresolved: ${classificationDetail}`);
+    addCheck('R2', 'fail', `runtime applicability unresolved: ${classificationDetail}`);
+  } else if (!evidence) {
+    addCheck('R1', 'fail', `evidence bundle required for R1 runtime query check; ${classificationDetail}`);
+    addCheck('R2', 'fail', `evidence bundle required for R2 monitored-table check; ${classificationDetail}`);
+  } else {
+    const rp = evidence.bundle.runtime_proof;
+    const queries = Array.isArray(rp?.queries) ? rp.queries : [];
+    if (queries.length > 0) {
+      addCheck('R1', 'pass', `runtime_proof.queries has ${queries.length} entr${queries.length === 1 ? 'y' : 'ies'}; ${classificationDetail}`);
+    } else {
+      addCheck('R1', 'fail', `runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence; ${classificationDetail}`);
+    }
+
+    const rowCounts = Array.isArray(rp?.row_counts) ? rp.row_counts : [];
+    if (rowCounts.length > 0) {
+      addCheck('R2', 'pass', `runtime_proof.row_counts has ${rowCounts.length} entr${rowCounts.length === 1 ? 'y' : 'ies'}; ${classificationDetail}`);
+    } else {
+      addCheck('R2', 'fail', `runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db; ${classificationDetail}`);
+    }
+  }
+
   if (!evidence) {
-    addCheck('R1', 'fail', 'evidence bundle required for R1 runtime query check');
-    addCheck('R2', 'fail', 'evidence bundle required for R2 monitored-table check');
     addCheck('R3', 'fail', 'evidence bundle required for R3 verifier-identity check');
     return;
-  }
-
-  const rp = evidence.bundle.runtime_proof;
-  const queries = Array.isArray(rp?.queries) ? rp.queries : [];
-  if (queries.length > 0) {
-    addCheck('R1', 'pass', `runtime_proof.queries has ${queries.length} entr${queries.length === 1 ? 'y' : 'ies'}`);
-  } else {
-    addCheck('R1', 'fail', 'runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence');
-  }
-
-  const rowCounts = Array.isArray(rp?.row_counts) ? rp.row_counts : [];
-  if (rowCounts.length > 0) {
-    addCheck('R2', 'pass', `runtime_proof.row_counts has ${rowCounts.length} entr${rowCounts.length === 1 ? 'y' : 'ies'}`);
-  } else {
-    addCheck('R2', 'fail', 'runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db');
   }
 
   const verifierIdentity = evidence.bundle.verifier?.identity?.trim();
@@ -1461,6 +1504,71 @@ export function addUnsupportedRuntimeChecks(
   } else {
     addCheck('R3', 'fail', 'evidence bundle verifier.identity must be set for T1 phase-boundary-guard');
   }
+}
+
+export type RuntimeDataFileClassification = 'control_plane' | 'runtime_data' | 'ambiguous';
+
+export interface RuntimeDataApplicability {
+  status: 'not_applicable' | 'required' | 'indeterminate';
+  reason: string;
+  classifiedFiles: Array<{ path: string; classification: RuntimeDataFileClassification }>;
+}
+
+const CONTROL_PLANE_ONLY_PATHS = [
+  /^\.agents\//u,
+  /^\.claude\//u,
+  /^\.github\//u,
+  /^\.ops\//u,
+  /^docs\//u,
+  /^scripts\/(?:ci|ops)\//u,
+];
+const RUNTIME_DATA_PATHS = [/^apps\//u, /^packages\//u, /^supabase\//u];
+
+function classifyRuntimeDataFile(filePath: string): RuntimeDataFileClassification {
+  if (RUNTIME_DATA_PATHS.some((pattern) => pattern.test(filePath))) return 'runtime_data';
+  if (CONTROL_PLANE_ONLY_PATHS.some((pattern) => pattern.test(filePath))) return 'control_plane';
+  return 'ambiguous';
+}
+
+export function classifyRuntimeDataApplicability(
+  changedFiles: readonly string[] | null | undefined,
+): RuntimeDataApplicability {
+  if (!changedFiles || changedFiles.length === 0) {
+    return {
+      status: 'indeterminate',
+      reason: 'authoritative PR changed-file list is missing or empty',
+      classifiedFiles: [],
+    };
+  }
+
+  const classifiedFiles = [...new Set(changedFiles)]
+    .sort()
+    .map((filePath) => ({ path: filePath, classification: classifyRuntimeDataFile(filePath) }));
+  const runtimeFiles = classifiedFiles.filter((entry) => entry.classification === 'runtime_data');
+  const ambiguousFiles = classifiedFiles.filter((entry) => entry.classification === 'ambiguous');
+  if (runtimeFiles.length > 0) {
+    return {
+      status: 'required',
+      reason: `repository diff contains ${runtimeFiles.length} database/runtime-data surface file(s)`,
+      classifiedFiles,
+    };
+  }
+  if (ambiguousFiles.length > 0) {
+    return {
+      status: 'indeterminate',
+      reason: `repository diff contains ${ambiguousFiles.length} file(s) outside the proven control-plane allowlist`,
+      classifiedFiles,
+    };
+  }
+  return {
+    status: 'not_applicable',
+    reason: 'repository diff contains only proven control-plane, workflow, and proof paths',
+    classifiedFiles,
+  };
+}
+
+function formatRuntimeDataApplicability(classification: RuntimeDataApplicability): string {
+  return `${classification.reason}; classified_files=${JSON.stringify(classification.classifiedFiles)}`;
 }
 
 function determineExitCode(
@@ -1719,6 +1827,25 @@ export async function fetchGitHubPullRequest(
   });
 }
 
+export async function fetchGitHubPullRequestFiles(
+  owner: string,
+  repo: string,
+  number: number,
+  token: string,
+  fetchPage: JsonPageFetcher = fetchJson,
+): Promise<string[]> {
+  const files = await fetchAllPages<Array<{ filename?: string }>>(
+    (page) =>
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${number}/files?per_page=100&page=${page}`,
+    (payload) => payload,
+    fetchPage,
+    { headers: githubHeaders(token) },
+  ) as Array<{ filename?: string }>;
+  return files
+    .map((entry) => entry.filename?.trim())
+    .filter((entry): entry is string => Boolean(entry));
+}
+
 interface GitHubIssueComment {
   body?: string;
   user?: { login?: string; type?: string } | null;
@@ -1876,7 +2003,7 @@ export async function fetchRequiredChecks(
   return normalizeRequiredChecks(response);
 }
 
-type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
+export type JsonPageFetcher = <T>(url: string, init: RequestInit) => Promise<T>;
 type RequiredCheckInput = string | RequiredCheckIdentity;
 
 function normalizeRequiredCheckInput(check: RequiredCheckInput): RequiredCheckIdentity {
