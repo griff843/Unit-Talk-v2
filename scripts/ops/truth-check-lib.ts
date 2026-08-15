@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import ts from 'typescript';
 
 // UTV2-1222: Normalize short vs full SHA comparison. The GitHub API returns the
 // full 40-char SHA while lane manifests may store the abbreviated 8-char form.
@@ -1531,27 +1532,68 @@ const RUNTIME_DATA_PATHS = [/^apps\//u, /^packages\//u, /^supabase\//u];
 // paths are therefore classified by what the file actually reaches.
 const CONTENT_CLASSIFIED_PATHS = [/^scripts\/(?:ci|ops)\//u];
 
-const DB_CLIENT_MARKERS = [
-  /@supabase\/supabase-js/u,
-  /@unit-talk\/db/u,
-  /\bcreateClient\s*\(/u,
-  /\bfrom\s+['"]pg['"]/u,
-  /\bfrom\s+['"]postgres['"]/u,
-];
+/**
+ * Module specifiers that mean "this file reaches a database client".
+ *
+ * Matched against specifiers extracted from the TypeScript AST, never against
+ * raw text: a comment or string literal naming a client is prose, not use of one.
+ */
+const DB_MODULE_SPECIFIERS = ['@supabase/supabase-js', '@unit-talk/db', 'pg', 'postgres'];
 
-const LOCAL_IMPORT_PATTERN = /\bfrom\s+['"](\.[^'"]*)['"]/gu;
-
-const BLOCK_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
-const LINE_COMMENT_PATTERN = /(^|[^:'"`\\])\/\/[^\n]*/gu;
+function isDatabaseModuleSpecifier(specifier: string): boolean {
+  return DB_MODULE_SPECIFIERS.some(
+    (candidate) => specifier === candidate || specifier.startsWith(`${candidate}/`),
+  );
+}
 
 /**
- * Comments are stripped before marker matching so that prose about a database
- * client is not mistaken for use of one. Without this, this very file — which
- * must name the markers it searches for — classifies itself as database-reaching,
- * and so does any file that merely documents the boundary.
+ * Every module specifier a file depends on, taken from the AST.
+ *
+ * Covers the syntaxes a `from '...'` text scan misses entirely: side-effect
+ * imports (`import './x.js'`), re-exports, `require()`, `import x = require()`,
+ * and dynamic `import()`. Each of those was a live fail-open bypass when this
+ * ran on text. Returns null when the file cannot be parsed, so the caller fails
+ * closed rather than treating an unparseable file as clean.
  */
-function stripComments(source: string): string {
-  return source.replace(BLOCK_COMMENT_PATTERN, ' ').replace(LINE_COMMENT_PATTERN, '$1');
+function moduleSpecifiersOf(filePath: string, source: string): string[] | null {
+  let sourceFile: ts.SourceFile;
+  try {
+    sourceFile = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true);
+  } catch {
+    return null;
+  }
+  // The parser recovers from syntax errors rather than throwing, and a
+  // recovered tree can silently drop the very import we are looking for. A file
+  // that does not parse cleanly cannot be proven database-free.
+  const parseDiagnostics = (sourceFile as { parseDiagnostics?: readonly ts.Diagnostic[] })
+    .parseDiagnostics;
+  if (parseDiagnostics && parseDiagnostics.length > 0) return null;
+  const specifiers: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      ts.isStringLiteral(node.moduleReference.expression)
+    ) {
+      specifiers.push(node.moduleReference.expression.text);
+    } else if (ts.isCallExpression(node)) {
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      const isDynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      const [firstArgument] = node.arguments;
+      if ((isRequire || isDynamicImport) && firstArgument && ts.isStringLiteral(firstArgument)) {
+        specifiers.push(firstArgument.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return specifiers;
 }
 
 export interface RuntimeDataSourceReader {
@@ -1571,8 +1613,21 @@ function defaultSourceReader(repoRoot: string): RuntimeDataSourceReader {
 function resolveLocalImport(fromFile: string, specifier: string): string[] {
   const base = path.posix.join(path.posix.dirname(fromFile), specifier);
   // Source imports are written with a `.js` extension that resolves to `.ts`.
-  const withoutExt = base.replace(/\.(?:js|ts)$/u, '');
-  return [`${withoutExt}.ts`, `${withoutExt}.tsx`, `${withoutExt}/index.ts`];
+  const withoutExt = base.replace(/\.(?:js|mjs|cjs|ts|mts|cts)$/u, '');
+  return [
+    // The specifier as written resolves a real `.cjs`/`.mjs` sibling, which a
+    // `require()` of a compiled helper points at directly.
+    base,
+    `${withoutExt}.ts`,
+    `${withoutExt}.tsx`,
+    `${withoutExt}.mts`,
+    `${withoutExt}.cts`,
+    `${withoutExt}.js`,
+    `${withoutExt}.mjs`,
+    `${withoutExt}.cjs`,
+    `${withoutExt}/index.ts`,
+    `${withoutExt}/index.js`,
+  ];
 }
 
 /**
@@ -1606,18 +1661,20 @@ function reachesDatabaseClient(
   if (seen.has(filePath)) return false;
   seen.add(filePath);
 
-  const rawSource = readSource(filePath);
+  const source = readSource(filePath);
   // A path we cannot read (deleted, renamed, or absent from this checkout)
   // cannot be proven database-free.
-  if (rawSource === null) return null;
-  const source = stripComments(rawSource);
+  if (source === null) return null;
 
-  if (DB_CLIENT_MARKERS.some((pattern) => pattern.test(source))) return true;
+  const specifiers = moduleSpecifiersOf(filePath, source);
+  // An unparseable file cannot be proven database-free either.
+  if (specifiers === null) return null;
+
+  if (specifiers.some(isDatabaseModuleSpecifier)) return true;
   if (depth >= DB_REACH_MAX_IMPORT_HOPS) return false;
 
-  for (const match of source.matchAll(LOCAL_IMPORT_PATTERN)) {
-    const specifier = match[1];
-    if (!specifier) continue;
+  for (const specifier of specifiers) {
+    if (!specifier.startsWith('.')) continue;
     const candidates = resolveLocalImport(filePath, specifier);
     const resolved = candidates.find((candidate) => readSource(candidate) !== null);
     // An unresolvable local import is a hole in the closure, not a clean file.

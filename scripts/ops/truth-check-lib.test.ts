@@ -923,10 +923,66 @@ test('UTV2-1690: an unresolvable local import is a hole in the closure, not a cl
   ]);
 });
 
+test('UTV2-1690: every import syntax that reaches a database is followed', () => {
+  // A `from '...'` text scan misses all of these. Each was a live fail-open
+  // bypass: the file reaches a client, but the traversal never looked.
+  const writer = "import { createClient } from '@supabase/supabase-js';\n";
+  const bypasses: Record<string, string> = {
+    'side-effect import': "import './writer.js';\n",
+    're-export': "export * from './writer.js';\n",
+    'require': "const w = require('./writer.js');\n",
+    'import-equals require': "import w = require('./writer.js');\n",
+    'dynamic import': "async function f(){ return await import('./writer.js'); }\n",
+  };
+  for (const [label, source] of Object.entries(bypasses)) {
+    const sources: Record<string, string> = {
+      'scripts/ops/entry.ts': source,
+      'scripts/ops/writer.ts': writer,
+    };
+    assert.strictEqual(
+      classifyRuntimeDataApplicability(['scripts/ops/entry.ts'], {
+        readSource: (p) => sources[p] ?? null,
+      }).status,
+      'required',
+      `${label} must be followed`,
+    );
+  }
+});
+
+test('UTV2-1690: a database client named inside a string or comment is not use of one', () => {
+  // Text scanning had to strip comments to avoid flagging prose, and the
+  // stripper could then delete real code between a `/*` inside a string and a
+  // later genuine comment — hiding an actual client construction. Parsing
+  // removes both failure modes: comments and string contents are simply not
+  // module specifiers.
+  const sources: Record<string, string> = {
+    'scripts/ops/trap.ts': [
+      "// glob example: '/*'",
+      "import { createClient } from '@supabase/supabase-js';",
+      "export function run(){ createClient('x','y').from('settlement_records').insert({}); }",
+      '/* a real comment later */',
+    ].join('\n'),
+  };
+  // The construction is real code, so it must still be found.
+  assert.strictEqual(
+    classifyRuntimeDataApplicability(['scripts/ops/trap.ts'], {
+      readSource: (p) => sources[p] ?? null,
+    }).status,
+    'required',
+  );
+});
+
+test('UTV2-1690: an unparseable file fails closed', () => {
+  const applicability = classifyRuntimeDataApplicability(['scripts/ops/broken.ts'], {
+    readSource: () => 'export function ( { unbalanced <<<>>>  ',
+  });
+  assert.notStrictEqual(applicability.status, 'not_applicable');
+});
+
 test('UTV2-1690: prose about a database client is not use of one', () => {
-  // This file must name the markers it searches for, and docs describe the
-  // boundary. Without comment stripping the classifier flags itself and every
-  // file that merely documents the database boundary.
+  // This file must name the specifiers it searches for, and docs describe the
+  // boundary. A text scan flags itself and every file that merely documents
+  // the database boundary.
   const sources: Record<string, string> = {
     'scripts/ops/documented.ts': [
       '// This lane never touches @unit-talk/db or calls createClient(.',

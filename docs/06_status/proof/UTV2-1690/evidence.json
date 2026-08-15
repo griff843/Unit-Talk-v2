@@ -67,8 +67,8 @@
     "kind": "filesystem-coordination-runtime",
     "status": "PASS_LOCAL_BEHAVIORAL_AND_PENDING_CI_STAGING_DB",
     "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
-    "tests": 330,
-    "pass": 330,
+    "tests": 333,
+    "pass": 333,
     "fail": 0,
     "receipts": [
       {
@@ -128,9 +128,9 @@
   "known_limitations": [
     "The local checkout is not authorized for writable staging DB verification; PR CI must supply the isolated staging receipt.",
     "The invariant is enforced at the done transition. A merged lane remains eligible to hold its lease until lane-close performs the terminal transition.",
-    "Database reachability for scripts/** classification is followed one import hop; a reach of two or more hops is classified control-plane (7 files across scripts/{ci,ops}, all proof-tooling chains).",
-    "Marker matching is textual over comment-stripped source, not AST-derived.",
-    ".github/workflows/lane-pr-binding.yml has no mechanical test coverage; its no-op branches are verified by inspection only."
+    ".github/workflows/lane-pr-binding.yml has no mechanical test coverage; its no-op branches are verified by inspection only.",
+    "Database reachability is followed one import hop; a reach of two or more hops is classified control-plane. Full closure was measured and rejected as unusable.",
+    "Classification is by module specifier read from the TypeScript AST, not by data-flow: a file handed an already-constructed client, or reaching a database via a package not named in the specifier list, is classified control-plane."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
