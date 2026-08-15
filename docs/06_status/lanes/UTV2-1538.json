@@ -8,15 +8,15 @@
   "branch": "claude/utv2-1538-delivery-kill-switch-catalog",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1424",
   "files_changed": [],
   "file_scope_lock": [
     "packages/db/src/schema.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-15T23:19:43.732Z",
-  "heartbeat_at": "2026-08-15T23:19:43.732Z",
+  "heartbeat_at": "2026-08-15T23:26:19.111Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1538-delivery-kill-switch-catalog.json",
