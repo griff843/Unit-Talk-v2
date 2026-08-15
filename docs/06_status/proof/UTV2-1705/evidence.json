@@ -202,8 +202,7 @@
   ],
   "sign_off": {
     "static_proof_status": "PASS",
-    "runtime_proof_status": "PENDING_CI_STAGING",
+    "runtime_proof_status": "NOT_APPLICABLE_RECORDED_EXCEPTION",
     "ready_for_pm_review": true
-  },
-  "runtime_proof_status": "NOT_APPLICABLE_RECORDED_EXCEPTION"
+  }
 }
