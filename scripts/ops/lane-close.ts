@@ -13,6 +13,7 @@ import {
   validatePreflightTokenPathValue,
   writeManifest,
   type TruthCheckResult,
+  SUCCESS_TERMINAL_STATUSES,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
 import {
@@ -31,7 +32,14 @@ import {
   requireMergeLockHeld,
   type MergeLockResult,
 } from './merge-mutex.js';
-import { leasePathForIssue, releaseLease } from './lease-registry.js';
+import {
+  beginTerminalLeaseRelease,
+  CONTROL_CHECKOUT_ROOT,
+  LEASE_REGISTRY_DIR,
+  leasePathForIssue,
+  releaseLease,
+  type TerminalLeaseReleaseTransaction,
+} from './lease-registry.js';
 import {
   assertCanonicalRunner,
   buildRepairPacket,
@@ -44,7 +52,9 @@ import {
   type LaneCloseRepairPacket,
   type MeasuredTruthCheckReceipt,
   type MergeBindingInference,
+  isCanonicalRunner,
 } from './lane-close-repair-packet.js';
+import { PR_BASE_MISMATCH_BLOCKER } from './lane-link-pr.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -70,6 +80,7 @@ export type CloseoutFailureCode =
   | 'pr_not_found'        // supplied PR does not exist or could not be resolved
   | 'wrong_repository'    // supplied/resolved PR is outside griff843/Unit-Talk-v2
   | 'issue_identity_mismatch' // PR branch/title does not identify the requested lane
+  | 'pr_base_mismatch' // PR base branch disagrees with the lane manifest
   | 'conflicting_pr_binding' // manifest already points at a different PR
   | 'repair_pr_substitution' // candidate PR never contained this issue's lane manifest
   | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
@@ -88,6 +99,7 @@ export interface RepairMergedPrInfo {
   merged: boolean;
   mergeSha: string | null;
   headRefName?: string | null;
+  baseRefName?: string | null;
   title?: string | null;
   files?: string[];
 }
@@ -190,6 +202,8 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'The supplied pull request must belong to exactly griff843/Unit-Talk-v2.';
     case 'issue_identity_mismatch':
       return 'The supplied pull request branch and title do not match this issue lane.';
+    case 'pr_base_mismatch':
+      return 'The pull request base branch does not match manifest.base_branch, or the lane carries the pr-base-mismatch blocker. Repair refused; restore the intended base and re-establish the governed PR binding.';
     case 'conflicting_pr_binding':
       return 'The manifest already records a different authoritative pull request.';
     case 'repair_pr_substitution':
@@ -365,28 +379,50 @@ export function finalizeLaneCloseManifest(
   return manifest;
 }
 
+function controlMergeLockPath(): string {
+  return path.join(CONTROL_CHECKOUT_ROOT, '.ops', path.basename(MERGE_LOCK_PATH));
+}
+
 export function releaseCloseoutLocks(
   issueId: string,
   branch: string,
-  options: { leaseRegistryDir?: string; mergeLockPath?: string } = {},
+  options: {
+    leaseRegistryDir?: string;
+    mergeLockPath?: string;
+    leaseAlreadyReleased?: boolean;
+    /**
+     * Set when a CALLER already holds the control-checkout merge mutex and this
+     * cleanup runs inside it. Releasing the mutex here would free the parent's
+     * serialization slot mid-transaction and let another lane mutate
+     * coordination state concurrently.
+     */
+    preserveMergeLock?: boolean;
+  } = {},
 ): { warnings: string[] } {
   const warnings: string[] = [];
-  const lease = releaseLease({
-    issue_id: issueId,
-    actor: 'ops:lane-close',
-    reason: 'lane closed successfully',
-  }, { registryDir: options.leaseRegistryDir });
-  if (!lease.ok && !isIdempotentLeaseReleaseFailure(lease)) {
-    throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
+  if (!options.leaseAlreadyReleased) {
+    const lease = releaseLease({
+      issue_id: issueId,
+      actor: 'ops:lane-close',
+      reason: 'lane closed successfully',
+    }, { registryDir: options.leaseRegistryDir });
+    if (!lease.ok && !isIdempotentLeaseReleaseFailure(lease)) {
+      throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
+    }
+    if (!lease.ok) {
+      warnings.push(`dispatch lease already released or missing: ${lease.message}`);
+    }
   }
-  if (!lease.ok) {
-    warnings.push(`dispatch lease already released or missing: ${lease.message}`);
+
+  if (options.preserveMergeLock) {
+    warnings.push('merge lock preserved: released by the caller that acquired it');
+    return { warnings };
   }
 
   const mergeLock = releaseMergeLock({
     issue_id: issueId,
     branch,
-  }, { lockPath: options.mergeLockPath });
+  }, { lockPath: options.mergeLockPath ?? controlMergeLockPath() });
   // `merge_lock_owner_mismatch` means the live lock belongs to a DIFFERENT
   // lane. There is nothing of ours to release, and releasing it anyway would
   // steal another lane's serialization slot -- so it is neither an error nor
@@ -549,6 +585,15 @@ export function validateTrustedPostMergeRepair(
     return blocked('issue_identity_mismatch', pr);
   }
 
+  // The inferred-PR path refuses a base-branch mismatch before it binds. This
+  // path must refuse it too: `blocked_by` only carries a marker left by a
+  // PREVIOUS lane-link-pr run, so it says nothing about the base of the
+  // candidate PR being bound here. Without this, an explicit --pr can bind a
+  // manifest to a PR merged against the wrong base.
+  if (pr.baseRefName !== manifest.base_branch) {
+    return blocked('pr_base_mismatch', pr);
+  }
+
   const files = pr.files ?? [];
   const manifestPath = `docs/06_status/lanes/${manifest.issue_id}.json`;
   if (!files.includes(manifestPath)) {
@@ -628,6 +673,14 @@ export function repairMergedLaneManifest(
     };
   }
 
+  if (manifest.blocked_by.includes(PR_BASE_MISMATCH_BLOCKER)) {
+    return repairBlocked(
+      manifest,
+      'pr_base_mismatch',
+      `Manifest blocked_by contains ${PR_BASE_MISMATCH_BLOCKER}; --repair-merged must not replace a binding invalidated by a PR base-branch mismatch.`,
+    );
+  }
+
   // UTV2-1613 (ghost lanes): a manifest can be stranded in an ACTIVE status
   // with pr_url still null while its implementation PR merged days ago -- the
   // lane never got far enough to record the binding. UTV2-1553 is exactly
@@ -657,6 +710,14 @@ export function repairMergedLaneManifest(
         'infra_error',
         `Manifest has no pr_url, and no merged pull request was found whose head ref is "${manifest.branch}". ` +
           'Repair refused; the merge binding cannot be inferred and must not be guessed.',
+      );
+    }
+    if (inferredPr.baseRefName !== manifest.base_branch) {
+      return repairBlocked(
+        manifest,
+        'pr_base_mismatch',
+        `Inferred PR ${inferredPr.url} targets base ${inferredPr.baseRefName ?? '(unresolved)'}, ` +
+          `but manifest.base_branch is ${manifest.base_branch}. Repair refused.`,
       );
     }
     // Defense in depth on top of selectInferredMergedPr's identity check:
@@ -889,7 +950,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
         '--limit',
         '20',
         '--json',
-        'url,number,state,mergedAt,mergeCommit,headRefName,title',
+        'url,number,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -904,6 +965,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
     headRefName?: string | null;
+    baseRefName?: string | null;
     title?: string | null;
   }>;
   try {
@@ -922,6 +984,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
       merged: state === 'merged' || Boolean(entry.mergedAt),
       mergeSha: entry.mergeCommit?.oid ?? null,
       headRefName: entry.headRefName ?? null,
+      baseRefName: entry.baseRefName ?? null,
       title: entry.title ?? null,
     };
   });
@@ -1267,13 +1330,14 @@ export function ensureCloseoutMergeLock(
     cwd?: string;
   } = {},
 ): CloseoutMergeLockResult {
+  const mergeLockPath = options.mergeLockPath ?? controlMergeLockPath();
   const held = requireMergeLockHeld(
     {
       issue_id: manifest.issue_id,
       branch: manifest.branch,
       reason: 'ops:lane-close',
     },
-    { lockPath: options.mergeLockPath, now: options.now },
+    { lockPath: mergeLockPath, now: options.now },
   );
   if (held.ok || !options.acquireLock) {
     return held;
@@ -1293,7 +1357,7 @@ export function ensureCloseoutMergeLock(
   // retry loop never converges.
   if (isReapableOwnOrphanedLock(held.lock, manifest)) {
     const reclaimed = reclaimMergeLock(lockInput, {
-      lockPath: options.mergeLockPath,
+      lockPath: mergeLockPath,
       now: options.now,
     });
     if (reclaimed.ok) {
@@ -1311,7 +1375,7 @@ export function ensureCloseoutMergeLock(
   }
 
   return acquireMergeLock(lockInput, {
-    lockPath: options.mergeLockPath,
+    lockPath: mergeLockPath,
     now: options.now,
   });
 }
@@ -1333,7 +1397,7 @@ export function releaseSelfAcquiredMergeLock(
   try {
     releaseMergeLock(
       { issue_id: manifest.issue_id, branch: manifest.branch },
-      { lockPath: options.mergeLockPath },
+      { lockPath: options.mergeLockPath ?? controlMergeLockPath() },
     );
   } catch {
     // Intentionally swallowed: see doc comment.
@@ -1366,13 +1430,18 @@ export function createRepairRollbackTransaction(
   issueId: string,
   repoRoot = process.cwd(),
 ): RepairRollbackTransaction {
+  const usesActiveCheckout = path.resolve(repoRoot) === path.resolve(process.cwd());
+  const coordinationRoot = usesActiveCheckout ? CONTROL_CHECKOUT_ROOT : repoRoot;
+  const leaseRegistryDir = usesActiveCheckout
+    ? LEASE_REGISTRY_DIR
+    : path.join(coordinationRoot, '.ops', 'leases');
   const manifestPath = path.join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
   const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
   const fileSnapshots: FileSnapshot[] = [
     snapshotFile(manifestPath),
     snapshotFile(path.join(repoRoot, '.ops', 'sync', `${issueId}.yml`)),
-    snapshotFile(leasePathForIssue(issueId, path.join(repoRoot, '.ops', 'leases'))),
-    snapshotFile(path.join(repoRoot, '.ops', path.basename(MERGE_LOCK_PATH))),
+    snapshotFile(leasePathForIssue(issueId, leaseRegistryDir)),
+    snapshotFile(path.join(coordinationRoot, '.ops', path.basename(MERGE_LOCK_PATH))),
   ];
   const proofFiles = snapshotDirectory(proofDir);
   let active = true;
@@ -1404,6 +1473,13 @@ export interface SuccessfulLaneCloseResult {
   warnings: string[];
   sync_removed: boolean;
   worktree_cleanup: LaneWorktreeCleanup;
+  /**
+   * UTV2-1619 capability 17: whether the ISSUE was completed, and if not, why.
+   * Surfaced so a lane closing without completing its issue is visibly a
+   * deliberate outcome rather than a silent omission.
+   */
+  issue_completed: boolean;
+  issue_completion: IssueCompletionEligibility;
 }
 
 /**
@@ -1443,7 +1519,149 @@ export function completeAlreadyClosedLaneCleanup(
     warnings: closeoutLocks.warnings,
     sync_removed: syncRemoved,
     worktree_cleanup: worktreeCleanup,
+    // UTV2-1619 capability 17: this path replays residual cleanup for a lane
+    // that was ALREADY closed. It completes nothing and must never be read as a
+    // statement about the issue.
+    issue_completed: false,
+    issue_completion: {
+      eligible: false,
+      satisfied: [],
+      unsatisfied: [
+        {
+          condition: 'completion_intent',
+          reason:
+            'cleanup replay for an already-closed lane never completes an issue; it releases ' +
+            'coordination state only',
+        },
+      ],
+    },
   };
+}
+
+/**
+ * Truth-gated lifecycle completion (UTV2-1619 capability 17).
+ *
+ * WHY THIS EXISTS. Closing a lane and completing an issue were the same act, so
+ * an issue was declared complete whenever any of its lanes closed. That produced
+ * three distinct false-`Done` reproductions in a single day, and they fail in
+ * different ways on purpose -- a design that fixes only the first two is
+ * incomplete:
+ *
+ *   1. Closeout FAILED and the issue was marked Done anyway. `post-merge-lane-close`
+ *      exited non-zero while `Linear Auto-Close`, triggered by the same merge,
+ *      succeeded. No receipt existed.
+ *   2. NO LANE existed at all. A governance bootstrap PR merged for an issue with
+ *      no manifest; completion was asserted with no evidence available, and none
+ *      could have been.
+ *   3. The lane closed TRUTHFULLY -- valid receipt, `runner: ops:lane-close`,
+ *      bound to the merge SHA -- on a multi-increment issue with three
+ *      capabilities still outstanding.
+ *
+ * The third is the one that matters for design: a receipt-only gate PERMITS it,
+ * because the receipt is real and honest. Evidence was never the missing piece.
+ * The missing piece is that lane completion and issue completion are different
+ * facts, and only the first was ever represented.
+ *
+ * Fail-closed direction: absence of an explicit completion intent means "the
+ * issue is not complete". A lane that says nothing about its issue closes the
+ * lane and leaves the issue open.
+ */
+export type IssueCompletionCondition =
+  | 'evidence_truth'
+  | 'authority_truth'
+  | 'scope_truth'
+  | 'state_truth'
+  | 'completion_intent';
+
+export interface IssueCompletionEligibility {
+  eligible: boolean;
+  satisfied: IssueCompletionCondition[];
+  unsatisfied: { condition: IssueCompletionCondition; reason: string }[];
+}
+
+/**
+ * Decide whether closing this lane may also complete its ISSUE.
+ *
+ * All five conditions must hold. Each is checked independently and every failure
+ * is reported, rather than short-circuiting on the first -- an operator who has
+ * to fix these one CI cycle at a time is the failure mode the truth-check M2
+ * short-circuit already demonstrated.
+ */
+export function evaluateIssueCompletionEligibility(input: {
+  manifest: LaneManifest;
+  truthCheck: TruthCheckResult;
+  /**
+   * Explicit operator declaration that this lane completes the issue. Absent or
+   * false leaves the issue open. This is deliberately an explicit act rather
+   * than an inference from lane state: inferring it from a terminal lane is
+   * precisely reproduction 3.
+   */
+  completionIntent?: boolean;
+}): IssueCompletionEligibility {
+  const satisfied: IssueCompletionCondition[] = [];
+  const unsatisfied: { condition: IssueCompletionCondition; reason: string }[] = [];
+  const record = (condition: IssueCompletionCondition, ok: boolean, reason: string): void => {
+    if (ok) satisfied.push(condition);
+    else unsatisfied.push({ condition, reason });
+  };
+
+  // 1. Evidence truth -- a passing receipt from a canonical runner. A merge
+  //    event is never evidence of completion (reproductions 1 and 2).
+  const verdictPass = input.truthCheck.verdict === 'pass';
+  const runnerCanonical = isCanonicalRunner(input.truthCheck.runner ?? 'manual');
+  record(
+    'evidence_truth',
+    verdictPass && runnerCanonical,
+    !verdictPass
+      ? `truth-check verdict is "${input.truthCheck.verdict}", not "pass"`
+      : `truth-check runner "${String(input.truthCheck.runner)}" is not a canonical runner`,
+  );
+
+  // 2. Authority truth -- the receipt is bound to the merge SHA the manifest
+  //    records. A receipt for a different commit proves nothing about this one.
+  const receiptSha = (input.truthCheck.merge_sha ?? '').trim();
+  const manifestSha = (input.manifest.commit_sha ?? '').trim();
+  record(
+    'authority_truth',
+    receiptSha.length > 0 && manifestSha.length > 0 && receiptSha === manifestSha,
+    receiptSha.length === 0 || manifestSha.length === 0
+      ? 'truth-check merge_sha or manifest.commit_sha is missing'
+      : `truth-check merge_sha ${receiptSha} does not match manifest.commit_sha ${manifestSha}`,
+  );
+
+  // 3. Scope truth -- the lane actually delivered, and delivered inside what it
+  //    declared. An empty files_changed cannot substantiate a completion claim.
+  const filesChanged = input.manifest.files_changed ?? [];
+  const lock = input.manifest.file_scope_lock ?? [];
+  const outsideLock = filesChanged.filter(
+    (file) => !lock.some((entry) => file === entry || file.startsWith(`${entry}/`)),
+  );
+  record(
+    'scope_truth',
+    filesChanged.length > 0 && outsideLock.length === 0,
+    filesChanged.length === 0
+      ? 'manifest.files_changed is empty; the lane delivered nothing to substantiate completion'
+      : `files delivered outside the declared scope lock: ${outsideLock.join(', ')}`,
+  );
+
+  // 4. State truth -- the lane reached a terminal state that ASSERTS success.
+  //    `failed`, `superseded` and `cancelled` are terminal but assert no
+  //    completion, and must never complete an issue.
+  const statusAssertsSuccess = SUCCESS_TERMINAL_STATUSES.has(input.manifest.status);
+  record(
+    'state_truth',
+    statusAssertsSuccess,
+    `manifest status "${input.manifest.status}" does not assert successful completion`,
+  );
+
+  // 5. Completion intent -- declared, never inferred.
+  record(
+    'completion_intent',
+    input.completionIntent === true,
+    'no explicit final-completion intent was declared for this issue; the lane closes and the issue stays open',
+  );
+
+  return { eligible: unsatisfied.length === 0, satisfied, unsatisfied };
 }
 
 /**
@@ -1460,15 +1678,48 @@ export async function completeSuccessfulLaneClose(
     repoRoot?: string;
     finalizeManifest?: (issue: string, result: TruthCheckResult) => LaneManifest;
     transitionLinear?: (issue: string) => Promise<void>;
+    /**
+     * UTV2-1619 capability 17: explicit declaration that this lane completes the
+     * ISSUE, not merely the lane. Absent means the issue stays open.
+     */
+    completionIntent?: boolean;
+    beginLeaseRelease?: (issue: string) => TerminalLeaseReleaseTransaction;
     releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
     cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
   } = {},
 ): Promise<SuccessfulLaneCloseResult> {
-  const manifest = (options.finalizeManifest ?? finalizeLaneCloseManifest)(
-    issueId,
-    authorizedTruthCheck,
-  );
-  await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+  // Release the control-checkout lease first and retain its exact rollback
+  // snapshot until the terminal manifest write succeeds. This ordering makes
+  // the forbidden state (terminal manifest + active lease) unreachable through
+  // any synchronous failure in the transition.
+  const leaseTransition = (options.beginLeaseRelease ?? ((issue) =>
+    beginTerminalLeaseRelease({
+      issue_id: issue,
+      actor: 'ops:lane-close',
+      reason: 'lane reached terminal status',
+    })))(issueId);
+  let manifest: LaneManifest;
+  try {
+    manifest = (options.finalizeManifest ?? finalizeLaneCloseManifest)(
+      issueId,
+      authorizedTruthCheck,
+    );
+    leaseTransition.commit();
+  } catch (error) {
+    leaseTransition.rollback();
+    throw error;
+  }
+  // UTV2-1619 capability 17: lane completion is not issue completion. The
+  // transition happens only when all five conditions hold; otherwise the lane
+  // closes and the issue is deliberately left open, with the reasons recorded.
+  const completionEligibility = evaluateIssueCompletionEligibility({
+    manifest,
+    truthCheck: authorizedTruthCheck,
+    completionIntent: options.completionIntent,
+  });
+  if (completionEligibility.eligible) {
+    await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+  }
 
   let syncRemoved = false;
   let worktreeCleanup: LaneWorktreeCleanup = 'not_requested';
@@ -1483,10 +1734,11 @@ export async function completeSuccessfulLaneClose(
     fs.rmSync(syncPath, { force: true });
   }
 
-  const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
-    issueId,
-    manifestBeforeClose.branch,
-  );
+  const closeoutLocks = options.releaseLocks
+    ? options.releaseLocks(issueId, manifestBeforeClose.branch)
+    : releaseCloseoutLocks(issueId, manifestBeforeClose.branch, {
+        leaseAlreadyReleased: true,
+      });
 
   // Worktree removal is deliberately last: every earlier fallible local
   // mutation can be restored by RepairRollbackTransaction. Once a clean,
@@ -1497,9 +1749,11 @@ export async function completeSuccessfulLaneClose(
 
   return {
     manifest,
-    warnings: closeoutLocks.warnings,
+    warnings: [...leaseTransition.warnings, ...closeoutLocks.warnings],
     sync_removed: syncRemoved,
     worktree_cleanup: worktreeCleanup,
+    issue_completed: completionEligibility.eligible,
+    issue_completion: completionEligibility,
   };
 }
 
@@ -1570,7 +1824,21 @@ export function completeIdempotentReclose(
   manifest: LaneManifest,
   options: {
     repoRoot?: string;
-    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    releaseLocks?: (
+      issue: string,
+      branch: string,
+      locksOptions?: { preserveMergeLock?: boolean },
+    ) => { warnings: string[] };
+    /**
+     * Terminal-cleanup replay: reclaim only the gitignored lease/lock
+     * coordination state that a hosted closeout could not reach.
+     *
+     * `.ops/sync/<issue>.yml` is TRACKED. Deleting it here leaves the control
+     * checkout dirty with a staged-looking deletion that reconciliation never
+     * restores, which then disrupts the serialized merge operations this replay
+     * runs alongside. The mutex is left to whichever caller acquired it.
+     */
+    terminalCleanupOnly?: boolean;
   } = {},
 ): SuccessfulLaneCloseResult {
   const syncPath = path.join(
@@ -1579,12 +1847,16 @@ export function completeIdempotentReclose(
     'sync',
     `${manifest.issue_id}.yml`,
   );
-  const syncRemoved = fs.existsSync(syncPath);
-  fs.rmSync(syncPath, { force: true });
+  let syncRemoved = false;
+  if (!options.terminalCleanupOnly) {
+    syncRemoved = fs.existsSync(syncPath);
+    fs.rmSync(syncPath, { force: true });
+  }
 
   const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
     manifest.issue_id,
     manifest.branch,
+    { preserveMergeLock: options.terminalCleanupOnly ?? false },
   );
 
   return {
@@ -1592,6 +1864,17 @@ export function completeIdempotentReclose(
     warnings: closeoutLocks.warnings,
     sync_removed: syncRemoved,
     worktree_cleanup: 'not_requested',
+    issue_completed: false,
+    issue_completion: {
+      eligible: false,
+      satisfied: [],
+      unsatisfied: [
+        {
+          condition: 'completion_intent',
+          reason: 'idempotent terminal cleanup never completes an issue',
+        },
+      ],
+    },
   };
 }
 
@@ -1663,7 +1946,9 @@ async function main(): Promise<void> {
     // Idempotent no-op BEFORE any lock is taken, so a re-close cannot create
     // the residue it would then trip over on the next attempt.
     if (manifest.status === 'done' && !repairMerged && !explicitPr) {
-      const cleanup = completeIdempotentReclose(manifest);
+      const cleanup = completeIdempotentReclose(manifest, {
+        terminalCleanupOnly: bools.has('terminal-cleanup-only'),
+      });
       emitJson({
         ok: true,
         code: 'lane_closed' as CloseoutFailureCode,
@@ -1769,6 +2054,17 @@ async function main(): Promise<void> {
           warnings: [],
           sync_removed: false,
           worktree_cleanup: 'not_requested',
+          issue_completed: false,
+          issue_completion: {
+            eligible: false,
+            satisfied: [],
+            unsatisfied: [
+              {
+                condition: 'completion_intent',
+                reason: 'already-closed repair made no issue completion claim',
+              },
+            ],
+          },
         };
         if (validatedPr) {
           cleanup = completeAlreadyClosedLaneCleanup(manifest);
@@ -2097,7 +2393,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
       '--repo',
       TRUSTED_POST_MERGE_REPOSITORY,
       '--json',
-      'url,state,mergedAt,mergeCommit,headRefName,title',
+      'url,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
     ],
     {
       encoding: 'utf8',
@@ -2126,6 +2422,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
     headRefName?: string | null;
+    baseRefName?: string | null;
     title?: string | null;
   };
   const state = parsed.state?.toLowerCase() ?? null;
@@ -2137,6 +2434,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     merged: state === 'merged' || Boolean(parsed.mergedAt),
     mergeSha: parsed.mergeCommit?.oid ?? null,
     headRefName: parsed.headRefName ?? null,
+    baseRefName: parsed.baseRefName ?? null,
     title: parsed.title ?? null,
     ...(includeFiles
       ? { files: filesStdout.split(/\r?\n/u).map((entry) => entry.trim()).filter(Boolean) }

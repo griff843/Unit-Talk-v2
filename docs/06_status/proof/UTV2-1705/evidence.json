@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1705",
+  "title": "Bind lane PR URLs automatically across executors",
+  "tier": "T1",
+  "status": "closed_with_recorded_exception",
+  "generated_at": "2026-08-14T23:10:56Z",
+  "sha_binding": {
+    "verified_source_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "merge_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "pr_number": null,
+    "bound_at": "2026-08-15T09:05:29.615Z"
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1705-lifecycle-pr-binding",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; T1 approval and independent PM verdict remain external merge-gate requirements."
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/lane-pr-binding.yml",
+      "scripts/ops/lane-finalize.ts",
+      "scripts/ops/lane-finalize.test.ts",
+      "scripts/ops/lane-link-pr.ts",
+      "scripts/ops/lane-link-pr.test.ts"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "database_change": false,
+    "domain_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "aggregate_tests": 2195,
+      "pass": 2195,
+      "fail": 0,
+      "detail": "Environment, lint, type-check, build, root tests, Smart Form verification, and command checks completed with exit 0."
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-finalize.test.ts scripts/ops/lane-link-pr.test.ts",
+      "status": "PASS",
+      "tests": 46,
+      "pass": 46,
+      "fail": 0
+    },
+    "mutation_tests": [
+      {
+        "control": "executor-neutral binding",
+        "mutation": "restored isCodexLane gate",
+        "result": "KILLED",
+        "observed": "3 targeted Claude/event/closeout regressions failed; suite restored to green"
+      },
+      {
+        "control": "automatic PR-open invocation",
+        "mutation": "removed ops:lane-link-pr workflow command",
+        "result": "KILLED",
+        "observed": "workflow-wiring regression failed; suite restored to green"
+      },
+      {
+        "control": "PR head-ref identity",
+        "mutation": "removed only the headRefName comparison",
+        "result": "KILLED",
+        "observed": "isolated wrong-ref recovery regression failed; suite restored to green"
+      },
+      {
+        "control": "protected default-branch privileged execution",
+        "mutation": "restored privileged checkout to pull_request.base.sha",
+        "result": "KILLED",
+        "observed": "workflow trust-boundary regression failed; suite restored to green"
+      },
+      {
+        "control": "atomic cross-lane merge-mutex acquisition",
+        "mutation": "bypassed the exclusive acquisition guard",
+        "result": "KILLED",
+        "observed": "two-issue acquisition regression failed; suite restored to green"
+      },
+      {
+        "control": "relation-specific Linear tier mutation",
+        "mutation": "skipped conflicting-tier removal",
+        "result": "KILLED",
+        "observed": "label-specific mutation regression failed; suite restored to green"
+      },
+      {
+        "control": "retargeted PR binding invalidation",
+        "mutation": "disabled the pr-base-mismatch finalize guard",
+        "result": "KILLED",
+        "observed": "production-path retarget regression failed and exposed a successful seven-step wrong-base closeout plan; guard restored and regression green"
+      },
+      {
+        "control": "status-independent retarget invalidation",
+        "mutation": "restored the status === 'in_review' restriction",
+        "result": "KILLED",
+        "observed": "exactly the blocked-lane production-path regression failed; predicate correction restored and focused suite green at 46/46"
+      },
+      {
+        "control": "terminal lifecycle preservation during invalidation",
+        "mutation": "restored unconditional status = 'blocked' assignment",
+        "result": "KILLED",
+        "observed": "terminal production-path regression rewrote failed to blocked; TERMINAL_STATUSES guard restored and all five terminal outcomes remained unchanged"
+      },
+      {
+        "control": "status-independent mismatch finalization refusal",
+        "mutation": "restricted the mismatch guard to status === 'blocked'",
+        "result": "KILLED",
+        "observed": "failed-lane regression returned a successful seven-step finalize dry-run; blocker-based guard restored and regression green"
+      },
+      {
+        "control": "canonical-main PR base validation",
+        "mutation": "disabled the live GitHub base comparison before finalization",
+        "result": "KILLED",
+        "observed": "direct guard and actual CLI-path wrong-base regressions both failed; comparison restored and suite green"
+      },
+      {
+        "control": "reopened-lane finalize generation",
+        "mutation": "reused a completed journal after reopen generation changed",
+        "result": "KILLED",
+        "observed": "reopen regression inherited all seven stale completed steps instead of an empty journal; generation guard restored and suite green"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "disposition": "not_applicable",
+    "authority": "PM exception, recorded 2026-08-15. No sanctioned applicability path existed at recovery time.",
+    "reason": "Repository-derived changed-file classification of merge commit 5a11ec9c47eef426c58d994a64f107f9dd4a9292 proves this lane touched no database or runtime-data surface. R1 (runtime_proof.queries) and R2 (runtime_proof.row_counts) demand live-DB evidence that does not exist for this change. Fabricating queries or row counts was explicitly refused.",
+    "classified_changed_files": [
+      ".github/workflows/lane-pr-binding.yml",
+      ".ops/sync/UTV2-1705.yml",
+      "docs/06_status/lanes/UTV2-1705.json",
+      "docs/06_status/proof/UTV2-1705/diff-summary.md",
+      "docs/06_status/proof/UTV2-1705/evidence.json",
+      "docs/06_status/proof/UTV2-1705/model-routing.json",
+      "docs/06_status/proof/UTV2-1705/verification.md",
+      "scripts/ops/lane-finalize.test.ts",
+      "scripts/ops/lane-finalize.ts",
+      "scripts/ops/lane-link-pr.test.ts",
+      "scripts/ops/lane-link-pr.ts"
+    ],
+    "database_or_runtime_data_files": [],
+    "classification_basis": "git diff --name-only 70e722fb..5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "merge_sha": "5a11ec9c47eef426c58d994a64f107f9dd4a9292",
+    "followup": "A durable rule (R1/R2 not_applicable only when repository-derived classification proves no DB/runtime-data surface, executor cannot self-declare) is authorised for UTV2-1690."
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "ops:lane-link-pr succeeds on a Claude lane",
+      "status": "PASS",
+      "evidence": "Claude-lane regression passes and fails when the executor gate is restored."
+    },
+    {
+      "criterion": "Opening a PR from a lane branch binds pr_url with no manual step",
+      "status": "PASS",
+      "evidence": "PR opened/reopened workflow invokes the canonical binder, while edited events revalidate the base; missing-token event regression passes."
+    },
+    {
+      "criterion": "Lane creation through PR creation, merge, and closeout needs zero manual metadata repair",
+      "status": "FAILED_EXCEPTED",
+      "evidence": "Counter-evidenced by this lane. Automated closeout run 31876087851 failed (P3, C4, R1, R2) and required an audited manual recovery: merge SHA bound by hand, model-routing.json repaired, and R1/R2 recorded as a PM exception. The automatic path has not yet completed successfully for a merged lane, so this criterion is recorded FAILED and excepted rather than PASS. It may only be marked PASS once a lane completes creation, PR, merge and closeout with zero manual metadata repair."
+    },
+    {
+      "criterion": "Second bind is idempotent and conflicting bind fails closed",
+      "status": "PASS",
+      "evidence": "Existing same-URL and pr_url_mismatch regressions remain green."
+    },
+    {
+      "criterion": "Each control is proven by mutation",
+      "status": "PASS",
+      "evidence": "Executor, workflow invocation, head-ref identity, default-branch trust, atomic acquisition, Linear relation, retargeted-binding, blocked-lane invalidation, terminal-state preservation, status-independent finalize refusal, canonical-base, and reopen-generation mutations were killed and restored."
+    },
+    {
+      "criterion": "Privileged PR automation executes only protected default-branch code and validates PR base identity",
+      "status": "PASS",
+      "evidence": "Workflow regression requires default-branch checkout, pull_request_target, ignored install scripts, explicit --base validation, edited-event revalidation, and bounded branch-update retries; event tests reject unbound mismatched bases and invalidate an exact existing binding after retargeting even when the lane is already blocked."
+    },
+    {
+      "criterion": "A PR retargeted away from manifest.base_branch cannot record or finalize a wrong-base merge",
+      "status": "PASS",
+      "evidence": "Production-path regressions prove both defenses: the edited event clears pr_url regardless of current lane status, preserves unrelated blockers and every terminal lifecycle outcome, and canonical-main lane-finalize independently queries GitHub and refuses a merged PR whose current base is release-candidate even when the manifest has no blocker. All load-bearing mutations are killed."
+    },
+    {
+      "criterion": "Finalize retries are serialized and preserve concurrent Linear labels",
+      "status": "PASS",
+      "evidence": "Focused tests prove atomic cross-issue acquisition, merge-mutex/journal exclusion, refused-acquisition cleanup, orphaned journal recovery, reopen-generation invalidation of completed steps, repeatable reconciliation, and relation-specific tier writes that retain a concurrently added non-tier label."
+    },
+    {
+      "criterion": "Any named remedy is executed by a test",
+      "status": "PASS",
+      "evidence": "The workflow event path, Linear label writer/verifier, positional parser, merge-truth inference, and partial-finalize resume journal are directly executed by regression coverage."
+    }
+  ],
+  "known_limitations": [
+    "The PR-open workflow intentionally skips non-UTV2 branches and external-fork heads; it fails closed on malformed or conflicting lane manifests.",
+    "Runtime proof is recorded not_applicable under a PM exception: repository-derived changed-file classification of merge 5a11ec9c proves this lane touched no database or runtime-data surface. No staging job remains required for this lane. DB queries and row counts were not fabricated.",
+    "This lane closed via audited manual recovery, not zero-touch automation. The closeout automation defect it exposed is scoped to the closeout slice."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "NOT_APPLICABLE_RECORDED_EXCEPTION",
+    "ready_for_pm_review": true
+  }
+}

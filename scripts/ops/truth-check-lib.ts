@@ -13,12 +13,47 @@ function shaMatches(a: string | null | undefined, b: string | null | undefined):
 }
 
 // UTV2-1590: WORKFLOW_SPEC defines Ready to Close as a canonical closeout
-// state. L3 accepts exactly the three closeout states below and fails closed
-// for every execution, backlog, blocked, cancelled, or unknown state.
+// state. These three names are the canonical closeout states and are always
+// permitted regardless of the state type reported by Linear.
 const L3_PERMITTED_LINEAR_STATES = new Set(['Ready to Close', 'In PM Review', 'Done']);
 
-export function isLinearStatePermittedForL3(stateName: string | null | undefined): boolean {
-  return L3_PERMITTED_LINEAR_STATES.has(stateName ?? '');
+// UTV2-1689 (UTV2-1619 capability 17): L3 must gate on the *lane's* readiness,
+// not on the parent issue's workflow state. The original UTV2-1590 rule was a
+// flat name allowlist, which conflated lane completion with issue completion:
+// on a multi-increment issue an honest active state ("In Claude", "In Codex",
+// "Blocked Internal") blocked its own merged increment from truth-closing, and
+// the only escape was to push the issue toward a terminal state -- exactly the
+// conflation capability 17 exists to remove.
+//
+// We gate on Linear's state *type* rather than its name because names are
+// workspace-configurable and drift (a renamed "In Claude" would silently start
+// failing a name allowlist), while the type is a Linear-defined enum.
+//
+//   started   -> work is actively in flight. An increment of it may close.
+//   completed -> the issue is already finished. Closing an increment is fine.
+//
+// Every other type stays fail-closed, preserving UTV2-1590's intent:
+//   backlog / unstarted / triage -> the lane cannot have legitimately merged
+//     against an issue that never started; this signals manifest/issue drift.
+//   canceled / duplicate -> the work was abandoned or superseded; closing a
+//     lane against it would record completion of work nobody wants.
+//   unknown / missing -> fail closed, per invariant 10.
+//
+// This deliberately does NOT make issue-level completion easier. Whether the
+// *issue* may be marked Done remains gated separately by capability 17's five
+// conditions; L3 only decides whether a *lane* may produce a truth receipt.
+const L3_PERMITTED_LINEAR_STATE_TYPES = new Set(['started', 'completed']);
+
+export function isLinearStatePermittedForL3(
+  stateName: string | null | undefined,
+  stateType?: string | null | undefined,
+): boolean {
+  if (L3_PERMITTED_LINEAR_STATES.has(stateName ?? '')) return true;
+  // Only consult the type when Linear actually reported one. An absent type
+  // must not widen the gate -- it falls through to the name allowlist above.
+  const normalizedType = (stateType ?? '').trim().toLowerCase();
+  if (!normalizedType) return false;
+  return L3_PERMITTED_LINEAR_STATE_TYPES.has(normalizedType);
 }
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -45,6 +80,7 @@ import {
 // pre-merge guard already implements the correct `/**`-and-prefix semantics, so
 // reuse that single definition here rather than adding a third independent one.
 import { matchesLockPattern } from '../ci/file-scope-guard.js';
+import { readAllLeases, type DispatchLease } from './lease-registry.js';
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -54,13 +90,32 @@ interface RunTruthCheckOptions {
   noRuntime?: boolean;
   explain?: boolean;
   runner?: 'ops:lane-close' | 'ops:reconcile' | 'manual';
+  /**
+   * UTV2-1691 — evaluate without persisting anything.
+   *
+   * The gate answers "would this lane close, and why not?" by running the full
+   * evaluation and then writing the outcome back into the manifest. That write
+   * makes the question unaskable: diagnosing a lane appends a
+   * `truth_check_history` entry, bumps `heartbeat_at`, and on exit code 4 sets
+   * `status: 'reopened'` and rewrites `reopen_history`. Triaging a population of
+   * merged-but-unclosed lanes therefore mutates the exact population being
+   * triaged, and can reopen lanes that were merely unclosed.
+   *
+   * `dryRun` gates ONLY the persistence step. Every check, the verdict, the exit
+   * code and the returned result are produced by the same code in both modes --
+   * there is no second evaluation path to drift from the live one.
+   *
+   * This is a diagnosis, never a certification: a dry run cannot close a lane and
+   * records nothing. `--explain` is presentation-only and is NOT a safe mode.
+   */
+  dryRun?: boolean;
 }
 
 interface LinearIssueRecord {
   id: string;
   identifier: string;
   title: string;
-  state?: { name: string } | null;
+  state?: { name: string; type?: string | null } | null;
   labels?: { nodes: Array<{ name: string }> } | null;
   attachments?: { nodes: Array<{ title?: string | null; url?: string | null }> } | null;
   project?: { id: string; name: string } | null;
@@ -169,6 +224,38 @@ export interface CloseoutTruthGateInput {
   allowed_transition_ms?: number;
 }
 
+export function evaluateTerminalLeaseInvariant(
+  manifest: Pick<LaneManifest, 'issue_id' | 'status'>,
+  leases: readonly DispatchLease[],
+): CheckResult {
+  if (manifest.status !== 'done') {
+    return {
+      id: 'M8',
+      status: 'pass',
+      detail: `terminal lease release is enforced at the done transition; current status is ${manifest.status}`,
+    };
+  }
+  const lease = leases.find(
+    (candidate) => candidate.issue_id.toUpperCase() === manifest.issue_id.toUpperCase(),
+  );
+  if (lease && (lease.status === 'active' || lease.status === 'stale_reclaim_required')) {
+    return {
+      id: 'M8',
+      status: 'fail',
+      detail:
+        `terminal manifest ${manifest.issue_id} still holds a ${lease.status} control-checkout lease ` +
+        `for ${lease.file_scope_lock.length} path(s); run ops:lane-finalize to replay terminal cleanup`,
+    };
+  }
+  return {
+    id: 'M8',
+    status: 'pass',
+    detail: lease
+      ? `terminal manifest lease is ${lease.status}`
+      : 'terminal manifest has no control-checkout lease',
+  };
+}
+
 export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckResult[] {
   const checks: CheckResult[] = [];
   const fail = (id: string, detail: string): void => checks.push({ id, status: 'fail', detail });
@@ -271,6 +358,314 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
  * Matching now delegates to `matchesLockPattern`, the same helper the pre-merge
  * guard uses, so there is one definition of scope semantics rather than two.
  */
+/**
+ * Close-eligibility preflight (UTV2-1619).
+ *
+ * WHY THIS EXISTS. Five lanes merged green and were then discovered incapable of
+ * producing a truth receipt, each requiring a repair PR after the fact:
+ *
+ *   UTV2-1661  manifest missing `model_routing` -> truth-check exits infra_error
+ *              at M2, masking every later failure; proof MERGE_SHA unreachable
+ *              from main; proof missing pnpm test / pnpm verify / r-level-check.
+ *   UTV2-1634  same shape.
+ *   UTV2-1649  model-routing sidecar missing `override_used` -> the fatal
+ *              sidecar_manifest_routing_mismatch; diff-summary carried no
+ *              merge-SHA anchor so proof-generate refused to rebind it; proof
+ *              missing pnpm verify and r-level-check.
+ *   UTV2-1619  proof missing pnpm verify and r-level-check (capability 17 lane).
+ *
+ * Every one of those defects was present in the packet BEFORE the merge and was
+ * knowable from the PR head alone. The code that rejected them post-merge is
+ * ordinary library code that could have run pre-merge and did not.
+ *
+ * DESIGN: this is a decision module shared by the merge and close paths, not a
+ * second implementation. It calls `evaluateT2ProofEvidence` -- the very function
+ * the close gate uses for P11-P14 -- so the two can never disagree about what a
+ * conformant proof packet is. Re-deriving those rules here would recreate the
+ * duplicated-authority drift class this program keeps finding.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO: pre-merge there is no merge SHA, so merge
+ * reachability (G3), CI results on the merge commit, and the receipt itself are
+ * genuinely unknowable. Those are reported as `not_knowable_pre_merge` rather
+ * than passed or failed. Reporting an unknowable check as `pass` would make the
+ * preflight assert something it cannot see, which is the failure mode the whole
+ * issue exists to eliminate.
+ */
+export type CloseEligibilityCategory = 'evidence' | 'manifest' | 'close' | 'lifecycle';
+
+export type CloseEligibilityStatus = 'pass' | 'fail' | 'not_knowable_pre_merge';
+
+export interface CloseEligibilityFinding {
+  id: string;
+  category: CloseEligibilityCategory;
+  status: CloseEligibilityStatus;
+  detail: string;
+  /** The historical lane whose failure this check exists to prevent, when applicable. */
+  regression_source?: string;
+}
+
+export interface CloseEligibilityPreflightInput {
+  manifest: Pick<
+    LaneManifest,
+    'issue_id' | 'tier' | 'schema_version' | 'created_by' | 'expected_proof_paths' | 'pr_url'
+  > & { model_routing?: unknown };
+  /** Proof artifacts as they exist at the PR head. */
+  proof_artifacts: CloseoutProofArtifact[];
+}
+
+export interface CloseEligibilityPreflightResult {
+  /** False when any check FAILED. `not_knowable_pre_merge` never blocks. */
+  eligible: boolean;
+  findings: CloseEligibilityFinding[];
+  blocking: CloseEligibilityFinding[];
+}
+
+/** Executors whose manifests require a model_routing block at schema_version 2. */
+function requiresModelRouting(manifest: { schema_version?: unknown; created_by?: unknown }): boolean {
+  return Number(manifest.schema_version) >= 2 && String(manifest.created_by ?? '') !== 'claude';
+}
+
+/**
+ * Can `ops:proof-generate` bind this artifact to a merge SHA later?
+ *
+ * UTV2-1649: `diff-summary.md` carried no anchor, so proof-generate refused with
+ * `unbindable_proof_artifact` rather than silently overwriting authored proof.
+ * The refusal was correct; the packet was not bindable and nothing said so
+ * before the merge.
+ */
+export function hasBindableShaAnchor(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .some(
+      (line) =>
+        /^\s*MERGE_SHA:/i.test(line) ||
+        /^\s*Merge SHA:/i.test(line) ||
+        /\|\s*Commit SHA\(s\)\s*\|/i.test(line),
+    );
+}
+
+/**
+ * Is a model-routing sidecar structurally conformant?
+ *
+ * UTV2-1649: `override_used` was absent. `proof-generate` requires it to be a
+ * boolean so a sidecar cannot misrepresent who authorized an execution, and 22
+ * of the 23 sidecars on main already carried it -- the rule was near-universally
+ * satisfied and still unenforced at the boundary.
+ */
+export function evaluateModelRoutingSidecar(content: string): { ok: boolean; detail: string } {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    return { ok: false, detail: 'model-routing sidecar is not valid JSON' };
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return { ok: false, detail: 'model-routing sidecar is not a JSON object' };
+  }
+  const record = parsed as Record<string, unknown>;
+  if (typeof record.override_used !== 'boolean') {
+    return {
+      ok: false,
+      detail:
+        'model-routing sidecar must carry a boolean override_used; without it proof-generate ' +
+        'fails closed with sidecar_manifest_routing_mismatch after the merge',
+    };
+  }
+  for (const field of ['issue_id', 'model', 'reasoning_effort'] as const) {
+    if (typeof record[field] !== 'string' || String(record[field]).trim() === '') {
+      return { ok: false, detail: `model-routing sidecar is missing required field "${field}"` };
+    }
+  }
+  return { ok: true, detail: 'model-routing sidecar carries override_used and execution provenance' };
+}
+
+export function evaluateCloseEligibilityPreflight(
+  input: CloseEligibilityPreflightInput,
+): CloseEligibilityPreflightResult {
+  const findings: CloseEligibilityFinding[] = [];
+  const add = (
+    id: string,
+    category: CloseEligibilityCategory,
+    status: CloseEligibilityStatus,
+    detail: string,
+    regression_source?: string,
+  ): void => {
+    findings.push({ id, category, status, detail, ...(regression_source ? { regression_source } : {}) });
+  };
+
+  const artifacts = input.proof_artifacts ?? [];
+  const byPath = new Map(artifacts.map((a) => [a.path, a]));
+  const combined = artifacts.map((a) => a.content).join('\n');
+
+  // ── 1. Evidence readiness ────────────────────────────────────────────────
+  const expected = input.manifest.expected_proof_paths ?? [];
+  const missing = expected.filter((p) => !byPath.has(p));
+  add(
+    'CEP-E1',
+    'evidence',
+    missing.length === 0 && expected.length > 0 ? 'pass' : 'fail',
+    expected.length === 0
+      ? 'manifest declares no expected_proof_paths'
+      : missing.length === 0
+        ? 'every declared proof artifact is present at the PR head'
+        : `declared proof artifacts missing at the PR head: ${missing.join(', ')}`,
+  );
+
+  // Emptiness is only meaningful for artifacts the manifest actually DECLARES.
+  // Scanning every file under the proof directory also catches structural
+  // placeholders -- a `.gitkeep` exists precisely to be empty, and failing a
+  // lane for it reports a defect where there is none. CEP-E1 above already
+  // scopes to `expected_proof_paths`; this check is scoped the same way so the
+  // two agree on what a proof artifact is.
+  //
+  // This does not weaken the gate: a declared artifact that is empty still
+  // fails, which is the case that actually matters. It narrows the input set to
+  // the declared one rather than relaxing the rule applied to it.
+  const expectedSet = new Set(expected);
+  const empty = artifacts
+    .filter((a) => expectedSet.has(a.path) && a.content.trim() === '')
+    .map((a) => a.path);
+  add(
+    'CEP-E2',
+    'evidence',
+    empty.length === 0 ? 'pass' : 'fail',
+    empty.length === 0
+      ? 'no declared proof artifact is empty'
+      : `empty proof artifacts: ${empty.join(', ')}`,
+  );
+
+  // Required sections, checked on the verification document specifically.
+  const verification = artifacts.find((a) => /verification\.md$/i.test(a.path));
+  if (verification) {
+    const required = ['# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'];
+    const absent = required.filter((token) => !verification.content.includes(token));
+    add(
+      'CEP-E3',
+      'evidence',
+      absent.length === 0 ? 'pass' : 'fail',
+      absent.length === 0
+        ? 'verification document carries every required section'
+        : `verification document missing required sections: ${absent.join(', ')}`,
+      'UTV2-1661',
+    );
+  } else {
+    add('CEP-E3', 'evidence', 'fail', 'no verification document found among proof artifacts', 'UTV2-1661');
+  }
+
+  // Required command references -- REUSES the close gate's own P11-P14 rules.
+  for (const check of evaluateT2ProofEvidence({
+    proofPaths: artifacts.map((a) => a.path),
+    proofContents: combined,
+  })) {
+    add(
+      `CEP-E4/${check.id}`,
+      'evidence',
+      check.status === 'pass' ? 'pass' : 'fail',
+      check.detail,
+      check.id === 'P13' || check.id === 'P14' ? 'UTV2-1619' : 'UTV2-1661',
+    );
+  }
+
+  // SHA binding possible.
+  const unbindable = artifacts
+    .filter((a) => /\.(md)$/i.test(a.path))
+    .filter((a) => !hasBindableShaAnchor(a.content))
+    .map((a) => a.path);
+  add(
+    'CEP-E5',
+    'evidence',
+    unbindable.length === 0 ? 'pass' : 'fail',
+    unbindable.length === 0
+      ? 'every markdown proof artifact carries a rebindable merge-SHA anchor'
+      : `proof artifacts cannot be SHA-bound after merge (no MERGE_SHA anchor): ${unbindable.join(', ')}`,
+    'UTV2-1649',
+  );
+
+  const sidecar = artifacts.find((a) => /model-routing\.json$/i.test(a.path));
+  if (sidecar) {
+    const verdict = evaluateModelRoutingSidecar(sidecar.content);
+    add('CEP-E6', 'evidence', verdict.ok ? 'pass' : 'fail', verdict.detail, 'UTV2-1649');
+  }
+
+  // ── 2. Manifest readiness ────────────────────────────────────────────────
+  const tierOk = /^T[123]$/.test(String(input.manifest.tier ?? ''));
+  add(
+    'CEP-M1',
+    'manifest',
+    tierOk ? 'pass' : 'fail',
+    tierOk ? `tier resolves to ${input.manifest.tier}` : `tier "${input.manifest.tier}" is not resolvable`,
+  );
+
+  const needsRouting = requiresModelRouting(input.manifest);
+  const hasRouting = typeof input.manifest.model_routing === 'object' && input.manifest.model_routing !== null;
+  add(
+    'CEP-M2',
+    'manifest',
+    !needsRouting || hasRouting ? 'pass' : 'fail',
+    !needsRouting
+      ? 'model_routing not required for this executor/schema combination'
+      : hasRouting
+        ? 'manifest carries the required model_routing block'
+        : 'manifest is missing model_routing, which makes ops:truth-check exit infra_error at M2 ' +
+          'and mask every later check',
+    'UTV2-1661',
+  );
+
+  let prOk = false;
+  try {
+    prOk = Boolean(input.manifest.pr_url) && Boolean(parsePullRequestUrl(String(input.manifest.pr_url)));
+  } catch {
+    prOk = false;
+  }
+  add(
+    'CEP-M3',
+    'manifest',
+    prOk ? 'pass' : 'fail',
+    prOk ? 'manifest.pr_url is present and parseable' : 'manifest.pr_url is missing or unparseable',
+  );
+
+  // ── 3. Close readiness ───────────────────────────────────────────────────
+  const evidenceBlocking = findings.filter((f) => f.category === 'evidence' && f.status === 'fail');
+  const manifestBlocking = findings.filter((f) => f.category === 'manifest' && f.status === 'fail');
+  add(
+    'CEP-C1',
+    'close',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0 ? 'pass' : 'fail',
+    evidenceBlocking.length === 0 && manifestBlocking.length === 0
+      ? 'no pre-merge-knowable condition would prevent ops:lane-close from producing a receipt'
+      : `ops:lane-close would fail after merge on: ${[...evidenceBlocking, ...manifestBlocking].map((f) => f.id).join(', ')}`,
+  );
+
+  add(
+    'CEP-C2',
+    'close',
+    'not_knowable_pre_merge',
+    'merge-SHA reachability, CI results on the merge commit, and the receipt itself cannot be ' +
+      'evaluated before the merge exists; they remain the close gate\'s responsibility',
+  );
+
+  // ── 4. Lifecycle readiness ───────────────────────────────────────────────
+  add(
+    'CEP-L1',
+    'lifecycle',
+    'pass',
+    'lane completion and issue completion are separate decisions: ops:lane-close completes a lane ' +
+      'and completes an issue only under the five-condition gate, which requires an explicit ' +
+      'completion intent that a lane closing cannot supply for itself',
+  );
+
+  add(
+    'CEP-L2',
+    'lifecycle',
+    'not_knowable_pre_merge',
+    'whether an automatic Done path exists OUTSIDE this repository cannot be determined from lane ' +
+      'data; external mutation authorities are inventoried and governed separately',
+  );
+
+  const blocking = findings.filter((f) => f.status === 'fail');
+  return { eligible: blocking.length === 0, findings, blocking };
+}
+
 export function evaluateScopeDiff(
   filesChanged: string[],
   fileScopeLock: string[],
@@ -383,6 +778,9 @@ export async function runTruthCheck(
   const failures = new Set<string>();
   const reopenReasons = new Set<string>();
   const explain = options.explain ?? false;
+  // UTV2-1691: gates persistence only. Read once here so every exit path below
+  // carries the same value; see RunTruthCheckOptions.dryRun.
+  const dryRun = options.dryRun ?? false;
   let manifest: LaneManifest | null = null;
   let tier: LaneTier = options.tierOverride ?? 'T3';
   let mergeSha: string | null = null;
@@ -499,6 +897,9 @@ export async function runTruthCheck(
       addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
     }
 
+    const terminalLease = evaluateTerminalLeaseInvariant(manifest, readAllLeases());
+    addCheck(terminalLease.id, terminalLease.status, terminalLease.detail);
+
     const linearToken =
       env.LINEAR_API_TOKEN?.trim() ||
       process.env.LINEAR_API_KEY?.trim() ||
@@ -508,6 +909,7 @@ export async function runTruthCheck(
       addCheck('L1', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY is required');
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -540,10 +942,16 @@ export async function runTruthCheck(
     }
 
     const stateName = linearIssue.state?.name ?? '';
-    if (!isLinearStatePermittedForL3(stateName)) {
-      addCheck('L3', 'fail', `Linear state ${stateName || 'Unknown'} is not Ready to Close, In PM Review, or Done`);
+    const stateType = linearIssue.state?.type ?? '';
+    if (!isLinearStatePermittedForL3(stateName, stateType)) {
+      addCheck(
+        'L3',
+        'fail',
+        `Linear state ${stateName || 'Unknown'} (type ${stateType || 'unknown'}) is not an active or closeout state; ` +
+          'a lane may only close against an issue that is in flight or already complete',
+      );
     } else {
-      addCheck('L3', 'pass', `Linear state ${stateName} is permitted`);
+      addCheck('L3', 'pass', `Linear state ${stateName} (type ${stateType || 'unknown'}) is permitted`);
     }
 
     const attachmentUrls = (linearIssue.attachments?.nodes ?? [])
@@ -560,6 +968,7 @@ export async function runTruthCheck(
       addCheck('G1', 'fail', 'GITHUB_TOKEN is required');
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -576,6 +985,7 @@ export async function runTruthCheck(
     if (!prUrl) {
       return finalizeWithManifest({
         manifest,
+        dryRun,
         issueId,
         tier,
         checkedAt,
@@ -970,6 +1380,7 @@ export async function runTruthCheck(
     const verdict = determineVerdict(exitCode);
     return finalizeWithManifest({
       manifest,
+      dryRun,
       issueId,
       tier,
       checkedAt,
@@ -986,6 +1397,7 @@ export async function runTruthCheck(
     addCheck('INFRA', 'fail', error instanceof Error ? error.message : String(error));
     return finalizeWithManifest({
       manifest,
+      dryRun,
       issueId,
       tier,
       checkedAt,
@@ -1130,7 +1542,15 @@ function finalizeResult(input: {
   };
 }
 
-function finalizeWithManifest(input: {
+/**
+ * UTV2-1691 — exported so the dry-run guarantee can be asserted directly.
+ *
+ * `writeManifestFn` is injectable for the same reason: a test can prove the
+ * persistence step was never *invoked* under `dryRun`, which is a stronger
+ * statement than comparing a file before and after (a no-op write would pass a
+ * checksum comparison; a never-called writer cannot).
+ */
+export function finalizeWithManifest(input: {
   manifest: LaneManifest | null;
   issueId: string;
   tier: LaneTier;
@@ -1143,6 +1563,10 @@ function finalizeWithManifest(input: {
   verdict: Verdict;
   exitCode: 0 | 1 | 2 | 3 | 4;
   runner: TruthCheckHistoryEntry['runner'];
+  /** UTV2-1691: when true, evaluate and return identically but persist nothing. */
+  dryRun?: boolean;
+  /** UTV2-1691: injectable persistence, for asserting it is never called on a dry run. */
+  writeManifestFn?: (manifest: LaneManifest) => void;
 }): TruthCheckResult {
   const result = finalizeResult({
     issueId: input.issueId,
@@ -1156,6 +1580,15 @@ function finalizeWithManifest(input: {
     failures: input.failures,
     reopenReasons: input.reopenReasons,
   });
+
+  // UTV2-1691 (review finding P2-1): stamp the machine-readable markers BEFORE
+  // any return path. `--json` is the automation interface, so a dry run must be
+  // distinguishable there and not only in the human-readable output. Without
+  // this, a passing dry run is byte-identical to a certifying live run -- same
+  // verdict, same exit code 0 -- and downstream tooling can record it as a real
+  // gate pass. Stamped here rather than at the CLI so library callers get it too.
+  result.dry_run = input.dryRun === true;
+  result.certifies = input.dryRun !== true;
 
   if (!input.manifest || input.exitCode === 2 || input.exitCode === 3) {
     return result;
@@ -1196,7 +1629,23 @@ function finalizeWithManifest(input: {
     ];
   }
 
-  writeManifest(updated);
+  // UTV2-1691 — the ONLY persistence in the entire evaluation path.
+  //
+  // An exhaustive write audit of runTruthCheck confirmed this is the sole
+  // mutation of any kind: no other filesystem write exists in this module, the
+  // single Linear call is a GraphQL *query* (POST is transport, not a mutation),
+  // all five GitHub endpoints are GET, there is no spawnSync/execSync anywhere,
+  // and the one `git()` use is `git show -s`. Gating this line is therefore
+  // sufficient for a dry run to write nothing, mutate no Linear state, and
+  // mutate no GitHub state.
+  //
+  // Note what is NOT gated: `updated` above and `result` from finalizeResult are
+  // built identically in both modes, so the returned verdict, checks, failures
+  // and exit code cannot diverge between dry and live. That equivalence is
+  // asserted mechanically in truth-check-lib.test.ts, not assumed here.
+  if (!input.dryRun) {
+    (input.writeManifestFn ?? writeManifest)(updated);
+  }
   return result;
 }
 
@@ -1217,7 +1666,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
             id
             identifier
             title
-            state { name }
+            state { name type }
             labels(first: 20) { nodes { name } }
             attachments(first: 20) { nodes { title url } }
             project { id name }

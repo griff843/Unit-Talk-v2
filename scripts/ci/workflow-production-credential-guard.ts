@@ -122,23 +122,6 @@ export const READ_ONLY_EXEMPTIONS: CredentialExemption[] = [
     privilegeReduction:
       'A read-only Postgres login role on the production project, supplied as its own pooler URL secret in place of SUPABASE_DB_POOLER_URL. It must hold pg_read_all_data: the snapshot query reads information_schema.columns, which is privilege-filtered per column, so a login role with no grants would report every table as having zero columns and the parity check would read as catastrophic (and entirely false) drift rather than failing. The role needs no write, DDL, CREATEROLE or superuser capability — the reads are pg_class/pg_constraint/pg_indexes/pg_policies/pg_trigger/pg_extension plus information_schema. Provisioning requires CREATE ROLE on production and is an orchestrator action.',
   },
-  {
-    workflow: 'shadow-parity-required.yml',
-    job: 'shadow-parity',
-    secrets: ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY'],
-    executesPullRequestCode: true,
-    pinnedBy: [
-      'scripts/shadow-scoring-runner.ts',
-      'scripts/ci/assert-unmodified-vs-base.ts',
-      'packages/config/src',
-      'package.json',
-      'pnpm-lock.yaml',
-    ],
-    reason:
-      'Runs scripts/shadow-scoring-runner.ts with --dry-run, which counts production state without writing. Its purpose is parity against PRODUCTION data, so staging would make the check meaningless. The runner asserts picksCreated/shadowModeFalseSet/distributionEnqueued/promotionWidened are all 0 and exits non-zero otherwise. That is a property of files the PR supplies, so the job is gated on assert-unmodified-vs-base.ts for the runner\'s ENTIRE dry-run runtime closure. UTV2-1629 found the earlier pin incomplete: it named the runner alone while the runner statically imported apps/api/src/server.js, which transitively loads most of apps/api and packages/domain — the exact paths in this workflow\'s trigger filter, so a PR editing packages/domain ran its own code against production at import time. Those imports are now dynamic and taken only on the non-dry-run path, and the pin covers @unit-talk/config (which resolves to .ts source) and the dependency manifests that `pnpm install` executes lifecycle scripts from.',
-    privilegeReduction:
-      'A read-only credential is NOT a drop-in here. Verified against production 2026-07-30: all 121 public tables have RLS enabled, and pick_candidates and market_universe carry ZERO policies — RLS-on with no policy denies every non-bypassrls role. Swapping in the anon/publishable key would return count 0 for exactly the tables the parity check counts, and the workflow classifies candidatesScanned=0 as a WARNING, so the check would go silently vacuous rather than fail. Real reduction therefore needs a dedicated Postgres role with pg_read_all_data reached over a direct connection (replacing the PostgREST client), or a PostgREST JWT minted for such a role. Both require CREATE ROLE on production and are orchestrator actions. Adding anon SELECT policies to production is NOT an acceptable alternative — it would expose pick data publicly.',
-  },
 ];
 
 export interface CredentialExposure {

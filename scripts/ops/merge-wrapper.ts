@@ -89,7 +89,18 @@ export type MergeWrapperResult =
         | 'merge_wrapper_invalid_input'
         | 'merge_wrapper_stash_failed'
         | 'merge_wrapper_stash_pop_conflict'
-        | 'merge_wrapper_authorization_failed';
+        | 'merge_wrapper_authorization_failed'
+        // UTV2-1678: `main-sync` used to silently re-invoke itself as
+        // `git-rebase-main` when ff-only failed. A caller asking to *sync* got a
+        // *history rewrite* -- which moves the head SHA and thereby invalidates
+        // every head-pinned governance artifact (pm-verdict, t1-approved
+        // evidence, executor-result), and on UTV2-1584 additionally deleted a
+        // proof bundle that existed on no other ref. The verb is now the
+        // caller's explicit choice and this code is how main-sync says so.
+        | 'merge_wrapper_diverged_requires_explicit_sync'
+        // UTV2-1678: a sync completed but dropped a governance artifact from the
+        // working tree. Reported after the tree has been restored.
+        | 'merge_wrapper_sync_dropped_protected_paths';
       issue_id?: string;
       operation?: MergeWrapperOperation;
       command?: string[];

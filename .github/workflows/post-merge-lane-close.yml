@@ -172,7 +172,7 @@ jobs:
           fi
 
       - name: Setup pnpm
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true'
         uses: pnpm/action-setup@v4
         with:
           version: 10.29.3
@@ -188,8 +188,85 @@ jobs:
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve merge SHA
+        # UTV2-1567: github.sha is only correct for the push trigger, where it
+        # genuinely is the new merge commit. For a workflow_dispatch replay
+        # (e.g. re-closing an already-merged ghost lane), github.sha resolves
+        # to whatever commit is checked out at dispatch time -- today's main
+        # HEAD -- not the historical merge SHA of the target issue's actual
+        # PR. This step resolves the real merge SHA from the manifest's own
+        # pr_url via the GitHub API. Falls back to github.sha if the PR lookup
+        # fails for any reason (e.g. missing/malformed pr_url) so a
+        # push-triggered close is never blocked by this step.
+        #
+        # HONEST PARTIAL -- READ BEFORE TRUSTING THIS STEP (PM decision
+        # 2026-08-04, tracked as UTV2-1673). This step's workflow_dispatch
+        # branch is currently UNREACHABLE in effect. Its only consumer is the
+        # proof-binding step below, which UTV2-1589 restricted to
+        # `github.event_name == 'push'` for a documented safety reason.
+        #
+        # NOTE: do not write that step's full name anywhere above its own
+        # `- name:` line -- not even inside a comment, and not even to quote
+        # it as an example. UTV2-1589's regression tests in
+        # scripts/ops/lane-close.test.ts locate that step with a bare
+        # `workflow.indexOf(<its full name>)` first-occurrence scan, so any
+        # earlier occurrence silently retargets them at the wrong step and
+        # they assert against this step's `if:` instead. Three of them failed
+        # exactly that way while this comment was being written -- and then
+        # again on the first attempt to fix it, because the fix quoted the
+        # offending string verbatim while explaining the hazard.
+        #
+        # (See the binding step's own comment: an early bind on a replay
+        # trusts manifest.pr_url from disk, without the GitHub-backed
+        # validation `ops:lane-close --repair-merged` performs immediately
+        # afterward, and can permanently deadlock model-routing.json's
+        # immutable closeout_binding). On `push`, this step returns
+        # github.sha -- i.e. behavior is unchanged from before UTV2-1567.
+        #
+        # Both are preserved deliberately: this lane does NOT deliver
+        # correct workflow_dispatch replay binding, and must not be read as
+        # having done so. Widening the gate to
+        # `push' || 'workflow_dispatch'` is the WRONG fix and is explicitly
+        # out of scope here. UTV2-1673 owns the real fix: make replay
+        # binding safe (PR identity validation + merge-SHA ownership and
+        # reachability + separate authorization for immutable artifacts),
+        # then allow it. Until UTV2-1673 lands, correct replay binding comes
+        # from `ops:lane-close --repair-merged`, which resolves the SHA from
+        # GitHub's authoritative pr.mergeSha on every trigger.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        id: resolve_sha
+        env:
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          pr_url=$(jq -r '.pr_url // empty' "$MANIFEST_PATH")
+          pr_number=$(echo "$pr_url" | grep -oE '[0-9]+$' || true)
+          if [ -z "$pr_number" ]; then
+            echo "::error title=post-merge-lane-close::Cannot resolve authoritative merge SHA: manifest.pr_url is missing or invalid ($pr_url)."
+            exit 1
+          fi
+          merge_sha=$(gh pr view "$pr_number" --json mergeCommit -q '.mergeCommit.oid // empty')
+          if ! echo "$merge_sha" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error title=post-merge-lane-close::PR #$pr_number has no validated merge SHA."
+            exit 1
+          fi
+          # On a push, the event identity and the PR's authoritative merge
+          # identity must describe the same merge. Never substitute github.sha
+          # for a missing mergeCommit: absence or divergence is terminal.
+          if [ "$EVENT_NAME" = "push" ] && [ "$merge_sha" != "$PUSH_SHA" ]; then
+            echo "::error title=post-merge-lane-close::Resolved PR merge SHA ($merge_sha) diverges from push SHA ($PUSH_SHA). Refusing cross-merge closeout."
+            exit 1
+          fi
+          echo "::notice title=post-merge-lane-close::Resolved authoritative merge SHA $merge_sha from PR #$pr_number."
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+
       - name: Bind proof artifacts to merge SHA
-        # UTV2-1589: restricted to `push` events, PLUS a runtime guard inside
+        # UTV2-1684: trigger-independent. The validated merge SHA resolved
+        # from the lane's authoritative PR controls binding on both push and
+        # workflow_dispatch closeouts.
         # the script below. ops:proof-generate never binds model-routing.json
         # by default (bindModelRouting defaults to false -- see
         # ProofGenerateOptions in scripts/ops/proof-generate.ts), so this
@@ -235,17 +312,22 @@ jobs:
         # never bound here at all; only evidence.json/verification.md (which
         # are never immutable, and are unconditionally corrected again by
         # that same next step) are.
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && github.event_name == 'push'
+        # Lifecycle decision (UTV2-1684): proof binding belongs only to a
+        # closeable lane flow (option A). Non-closeable lifecycle states remain
+        # authoritative no-ops and must not acquire proof/persistence side
+        # effects merely because a merged PR identity can be resolved.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.resolve_sha.outputs.merge_sha != ''
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
-          MERGE_SHA: ${{ github.sha }}
+          MERGE_SHA: ${{ steps.resolve_sha.outputs.merge_sha }}
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           existing_commit_sha=$(jq -r '.commit_sha // empty' "$MANIFEST_PATH")
           if [ -n "$existing_commit_sha" ] && [ "$existing_commit_sha" != "$MERGE_SHA" ]; then
-            echo "::notice title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) already differs from this push's SHA ($MERGE_SHA) -- this push is a manifest/proof repair commit, not $ISSUE_ID's own implementation merge. Skipping early proof-generate bind; ops:lane-close --repair-merged will bind evidence/verification/model-routing using the authoritative SHA and PR it resolves itself."
+            echo "::error title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) does not match authoritative PR merge SHA ($MERGE_SHA). Refusing mismatched proof binding."
+            exit 1
           else
             # Regenerate proof files with the verified merge SHA so the inline
             # "Merge SHA:" field is correct, not just appended at the end.
@@ -254,10 +336,40 @@ jobs:
             # binds it when explicitly passed --bind-model-routing, which
             # this invocation deliberately never does -- it is bound only by
             # the validated ops:lane-close --repair-merged step below.
-            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json \
-              && echo "::notice title=post-merge-lane-close::Proof artifacts (evidence/verification only) regenerated with merge SHA for $ISSUE_ID." \
-              || echo "::warning title=post-merge-lane-close::proof-generate failed for $ISSUE_ID — falling back to manifest SHA."
+            pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json
+            echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with authoritative merge SHA for $ISSUE_ID."
           fi
+
+      - name: Persist proof binding before downstream closeout gates
+        # Persist only the proof produced by the closeable flow above. This
+        # preserves the status gate as lifecycle authority.
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.resolve_sha.outputs.merge_sha != ''
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "docs/06_status/proof/$ISSUE_ID/"
+          if git diff --cached --quiet; then
+            echo "::notice title=post-merge-lane-close::Proof binding already persisted."
+            exit 0
+          fi
+          git commit -m "chore(proof): bind $ISSUE_ID to authoritative merge SHA [skip ci]"
+          pushed=false
+          for attempt in 1 2 3; do
+            if git push; then
+              pushed=true
+              break
+            fi
+            echo "::warning title=post-merge-lane-close::Proof-binding push attempt $attempt rejected because main advanced. Rebasing and retrying."
+            git pull --rebase origin main
+          done
+          if [ "$pushed" != "true" ]; then
+            echo "::error title=post-merge-lane-close::Proof binding could not be persisted after 3 attempts."
+            exit 1
+          fi
+          echo "::notice title=post-merge-lane-close::Proof binding persisted before truth-check and lane-close gates."
 
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'

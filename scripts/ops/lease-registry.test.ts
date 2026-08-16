@@ -6,15 +6,19 @@ import path from 'node:path';
 import {
   type DispatchLease,
   type LeaseOwner,
+  beginTerminalLeaseRelease,
   buildLeaseStaleReport,
   heartbeatLease,
+  leaseReportExitCode,
   leasePathForIssue,
   readAllLeases,
   reclaimLease,
   releaseLease,
+  resolveControlCheckoutRoot,
   reserveLease,
   validateActiveLeaseForLane,
   writeLeaseAtomic,
+  findLeasesHeldByTerminalLanes,
 } from './lease-registry.js';
 import { buildStaleLaneAlertMessage } from './stale-lane-alerter.js';
 
@@ -361,6 +365,9 @@ test('stale report marks expired active leases and emits visible lease details',
     const report = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:00:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
     const staleLease = readAllLeases(registryDir)[0];
 
@@ -399,16 +406,67 @@ test('stale report is idempotent and does not include released leases', () => {
     const first = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:00:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
     const second = buildLeaseStaleReport(
       registryDir,
       new Date('2026-05-18T12:05:00.000Z'),
+      // Explicit lane-status map: the default reads the live manifest
+      // directory, which other suites mutate concurrently.
+      new Map(),
     );
 
     assert.strictEqual(first.stale_count, 1);
     assert.deepStrictEqual(first.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
     assert.strictEqual(second.stale_count, 1);
     assert.deepStrictEqual(second.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
+  });
+});
+
+test('lease report exposes a fresh active lease held by a terminal lane separately from stale leases', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9105', ['scripts/ops/shared.ts'], '2026-05-18T16:00:00.000Z');
+
+    const report = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map([['UTV2-9105', 'done']]),
+    );
+
+    assert.equal(report.stale_count, 0);
+    assert.equal(report.orphaned_count, 1);
+    assert.equal(report.orphaned_leases[0]?.issue_id, 'UTV2-9105');
+    assert.equal(report.orphaned_leases[0]?.lane_status, 'done');
+    assert.equal(leaseReportExitCode(report.orphaned_count), 1);
+    assert.equal(leaseReportExitCode(report.stale_count), 0);
+  });
+});
+
+// This is the case every real leak has been in, and the one the first
+// implementation missed: by the time anyone runs the report, the leaked lease
+// has also outlived its TTL. `markExpiredActiveLeases` rewrites such a lease to
+// `stale_reclaim_required` on disk, and orphan classification only considers
+// `active` leases -- so classifying after marking silently drops it to a plain
+// `[STALE]` row with exit 0. Every one of the five observed leaks (UTV2-1634,
+// 1682, 1680, 1689, 1694) is long past TTL, so a report that only catches
+// within-TTL orphans would have reported zero of them.
+test('lease report reports an EXPIRED lease held by a terminal lane as orphaned, not merely stale', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9106', ['scripts/ops/shared.ts'], '2026-05-18T11:00:00.000Z');
+
+    const report = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map([['UTV2-9106', 'done']]),
+    );
+
+    assert.equal(report.orphaned_count, 1, 'an expired lease on a terminal lane is still an orphan');
+    assert.equal(report.orphaned_leases[0]?.issue_id, 'UTV2-9106');
+    assert.equal(report.orphaned_leases[0]?.lane_status, 'done');
+    assert.equal(leaseReportExitCode(report.orphaned_count), 1, 'orphans must drive a non-zero exit');
+    assert.equal(report.stale_count, 1, 'it is also stale, and both counts report it independently');
   });
 });
 
@@ -486,6 +544,64 @@ test('release marks an active lease released without requiring stale reclaim', (
   });
 });
 
+test('linked worktrees resolve the lease registry through the control checkout git directory', () => {
+  assert.strictEqual(
+    resolveControlCheckoutRoot(
+      '/repo/.out/worktrees/codex__utv2-1690-terminal-release',
+      '/repo/.git',
+    ),
+    '/repo',
+  );
+  assert.strictEqual(resolveControlCheckoutRoot('/repo', '.git'), '/repo');
+});
+
+test('terminal lease release rolls back exactly when the manifest transition fails', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1690', ['scripts/ops/lane-close.ts']);
+    const leasePath = leasePathForIssue('UTV2-1690', registryDir);
+    const before = fs.readFileSync(leasePath);
+
+    const transition = beginTerminalLeaseRelease(
+      {
+        issue_id: 'UTV2-1690',
+        actor: 'ops:lane-close',
+        reason: 'terminal manifest transition',
+      },
+      { registryDir, now: new Date('2026-08-15T14:00:00.000Z') },
+    );
+    assert.strictEqual(readAllLeases(registryDir)[0]?.status, 'released');
+
+    transition.rollback();
+    assert.deepStrictEqual(fs.readFileSync(leasePath), before);
+    assert.strictEqual(readAllLeases(registryDir)[0]?.status, 'active');
+  });
+});
+
+test('terminal lease release commit is durable and cleanup replay adds no synthetic history', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1690', ['scripts/ops/lane-close.ts']);
+    const transition = beginTerminalLeaseRelease(
+      {
+        issue_id: 'UTV2-1690',
+        actor: 'ops:lane-close',
+        reason: 'terminal manifest transition',
+      },
+      { registryDir, now: new Date('2026-08-15T14:00:00.000Z') },
+    );
+    transition.commit();
+    transition.rollback();
+
+    const first = readAllLeases(registryDir)[0];
+    assert.strictEqual(first?.status, 'released');
+    assert.strictEqual(first?.reclaim_history?.length, 1);
+    releaseLease(
+      { issue_id: 'UTV2-1690', actor: 'ops:lane-close', reason: 'cleanup replay' },
+      { registryDir, now: new Date('2026-08-15T14:01:00.000Z') },
+    );
+    assert.strictEqual(readAllLeases(registryDir)[0]?.reclaim_history?.length, 1);
+  });
+});
+
 test('active lease validation fails closed on missing lease and cwd drift', () => {
   withTempRegistry((registryDir) => {
     const missing = validateActiveLeaseForLane(
@@ -551,4 +667,132 @@ test('stale lane alert message exposes stale locks and infra skips visibly', () 
   assert.match(message, /lease_stale_reclaim_required/);
   assert.match(message, /explicit reclaim required/);
   assert.match(message, /1 check\(s\) skipped/);
+});
+
+// ── UTV2-1619 capability 13: resource release must be lifecycle-driven ───────
+// Regression fixture for the measured defect: UTV2-1634 truth-closed at
+// 2026-08-04T20:03:44Z and its lease was still `active` seventeen hours later,
+// holding the exact files the next lane needed. Release was bound to TTL expiry
+// rather than to the lane's recorded terminal transition.
+
+test('ORPH-1: a lease held by a done lane is reported', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1634', ['scripts/ops/shared.ts', 'scripts/ops/concurrency-rules.ts']);
+    const findings = findLeasesHeldByTerminalLanes(
+      new Map([['UTV2-1634', 'done']]),
+      registryDir,
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0]?.issue_id, 'UTV2-1634');
+    assert.equal(findings[0]?.lane_status, 'done');
+    assert.equal(findings[0]?.lane_completed, true);
+    assert.deepEqual(findings[0]?.held_scope, [
+      'scripts/ops/concurrency-rules.ts',
+      'scripts/ops/shared.ts',
+    ]);
+  });
+});
+
+test('ORPH-2: every terminal state is reported, and failure is distinguished from completion', () => {
+  for (const [status, completed] of [
+    ['done', true],
+    ['merged', true],
+    ['failed', false],
+    ['superseded', false],
+    ['cancelled', false],
+  ] as const) {
+    withTempRegistry((registryDir) => {
+      reserve(registryDir, 'UTV2-9100', ['scripts/ops/shared.ts']);
+      const findings = findLeasesHeldByTerminalLanes(
+        new Map([['UTV2-9100', status]]),
+        registryDir,
+      );
+      assert.equal(findings.length, 1, `terminal state "${status}" must be reported`);
+      assert.equal(
+        findings[0]?.lane_completed,
+        completed,
+        `"${status}" must report lane_completed=${completed}`,
+      );
+    });
+  }
+});
+
+test('ORPH-3: a lease held by a live lane is not reported', () => {
+  for (const status of ['started', 'in_progress', 'in_review', 'blocked', 'parked', 'reopened'] as const) {
+    withTempRegistry((registryDir) => {
+      reserve(registryDir, 'UTV2-9101', ['scripts/ops/shared.ts']);
+      assert.deepEqual(
+        findLeasesHeldByTerminalLanes(new Map([['UTV2-9101', status]]), registryDir),
+        [],
+        `"${status}" is not terminal and must not be reclaimed`,
+      );
+    });
+  }
+});
+
+test('ORPH-4: an unknown lane state is skipped, never assumed terminal', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9102', ['scripts/ops/shared.ts']);
+    // Empty map = the lane's manifest could not be read. Reclaiming on absence
+    // would destroy a live lane's lease whenever manifest lookup failed.
+    assert.deepEqual(findLeasesHeldByTerminalLanes(new Map(), registryDir), []);
+  });
+});
+
+test('ORPH-5: an already-released lease is not re-reported', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9103', ['scripts/ops/shared.ts']);
+    releaseLease(
+      { issue_id: 'UTV2-9103', actor: 'griff843', reason: 'lane closed' },
+      { registryDir },
+    );
+    assert.deepEqual(
+      findLeasesHeldByTerminalLanes(new Map([['UTV2-9103', 'done']]), registryDir),
+      [],
+    );
+  });
+});
+
+test('ORPH-6: issue id matching is case-insensitive', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9104', ['scripts/ops/shared.ts']);
+    assert.equal(
+      findLeasesHeldByTerminalLanes(new Map([['utv2-9104'.toUpperCase(), 'failed']]), registryDir).length,
+      1,
+    );
+  });
+});
+
+// Found by independent review of the ordering fix. Gating orphan detection on
+// `active` alone made a lease permanently invisible the moment ANY earlier
+// report run flipped it to `stale_reclaim_required` -- so a lease that lapsed
+// its TTL before its lane reached a terminal state could never be reported,
+// no matter how many times the report ran afterwards. The within-run ordering
+// fix does not cover this, because the flip happened in a previous process.
+test('a lease already marked stale in an earlier run is still reported as orphaned once its lane goes terminal', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-9107', ['scripts/ops/shared.ts'], '2026-05-18T11:00:00.000Z');
+
+    // Run 1: lane state unknown, so no orphan -- but the expired lease is
+    // marked `stale_reclaim_required` and that marking is persisted to disk.
+    const firstRun = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+      new Map(),
+    );
+    assert.equal(firstRun.orphaned_count, 0, 'unknown lane state must never be assumed terminal');
+
+    // Run 2: the lane has since reached a terminal state. The lease still holds
+    // its file scope, so it is still an orphan.
+    const secondRun = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T13:00:00.000Z'),
+      new Map([['UTV2-9107', 'failed']]),
+    );
+
+    assert.equal(secondRun.orphaned_count, 1, 'a previously-marked stale lease is still an orphan');
+    assert.equal(secondRun.orphaned_leases[0]?.issue_id, 'UTV2-9107');
+    assert.equal(secondRun.orphaned_leases[0]?.lease_status, 'stale_reclaim_required');
+    assert.equal(leaseReportExitCode(secondRun.orphaned_count), 1);
+  });
 });

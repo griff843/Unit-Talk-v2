@@ -28,6 +28,7 @@ import {
   completeIdempotentReclose,
   releaseSelfAcquiredMergeLock,
   selectInferredMergedPr,
+  evaluateIssueCompletionEligibility,
 } from './lane-close.js';
 import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
 import {
@@ -38,16 +39,41 @@ import {
   truthHistoryEntryForMeasuredReceipt,
   unexecutedTruthCheckReceipt,
 } from './lane-close-repair-packet.js';
-import { readAllLeases, reserveLease } from './lease-registry.js';
+import {
+  beginTerminalLeaseRelease,
+  readAllLeases,
+  reserveLease,
+} from './lease-registry.js';
 import { ModelRoutingRebindError } from './proof-generate.js';
 import { evaluateCloseoutTruthGate } from './truth-check-lib.js';
 import {
   MANIFEST_DIR,
+  ROOT,
   readManifest,
   writeManifest,
   type LaneManifest,
   type TruthCheckResult,
 } from './shared.js';
+
+test('UTV2-1690: lane PR binding cleanly ignores an issue-bearing branch owned by another lane', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'lane-pr-binding.yml'), 'utf8');
+  const resolveStart = workflow.indexOf('- name: Resolve lane from branch');
+  const setupStart = workflow.indexOf('- name: Setup pnpm');
+  assert.ok(resolveStart >= 0 && setupStart > resolveStart, 'resolve step must precede dependency setup');
+  const resolveStep = workflow.slice(resolveStart, setupStart);
+  const mismatchStart = resolveStep.indexOf('if [ "$manifest_branch" != "$BRANCH" ]; then');
+  const bindTrue = resolveStep.indexOf('echo "bind=true"');
+  assert.ok(mismatchStart >= 0, 'registered manifest branch must be compared with the PR head');
+  assert.ok(bindTrue > mismatchStart, 'branch mismatch must be decided before enabling binding');
+  const mismatchBlock = resolveStep.slice(mismatchStart, bindTrue);
+  assert.match(mismatchBlock, /echo "bind=false"/);
+  assert.match(mismatchBlock, /not its registered lane branch/);
+  assert.match(mismatchBlock, /exit 0/);
+  assert.doesNotMatch(mismatchBlock, /exit 1/);
+
+  assert.match(workflow, /if: steps\.lane\.outputs\.bind == 'true'[\s\S]*lane-link-pr\.ts/);
+  assert.match(workflow, /--branch "\$BRANCH"[\s\S]*--base "\$BASE_BRANCH"/);
+});
 
 function createTruthCheckResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
   return {
@@ -108,6 +134,7 @@ function createTrustedRepairPr(
     merged: true,
     mergeSha: '97527b791fc37acce41f4f46fd88699dce054b66',
     headRefName: manifest.branch,
+    baseRefName: manifest.base_branch,
     title: `feat(ops): ${manifest.issue_id} implementation`,
     files: [
       `docs/06_status/lanes/${manifest.issue_id}.json`,
@@ -361,6 +388,24 @@ test('lane close releases dispatch lease and merge lock after successful closeou
     const releasedLock = readMergeLock(mergeLockPath);
     assert.strictEqual(releasedLease?.status, 'released');
     assert.strictEqual(releasedLock.ok ? releasedLock.lock.status : '', 'released');
+  });
+});
+
+test('UTV2-1690: a genuine lease-release failure is raised, not downgraded to a warning', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const issueId = 'UTV2-1002';
+    const branch = 'codex/utv2-1002-terminal-release';
+    // A corrupt lease is NOT the idempotent "already released" case: it must
+    // surface, or a lane closes while still holding capacity.
+    fs.mkdirSync(leaseRegistryDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(leaseRegistryDir, `${issueId}.json`),
+      JSON.stringify({ issue_id: issueId, status: 'active' }),
+    );
+    assert.throws(
+      () => releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath }),
+      /Failed to release dispatch lease/,
+    );
   });
 });
 
@@ -1615,6 +1660,7 @@ const allFailureCodes: CloseoutFailureCode[] = [
   'pr_not_found',
   'wrong_repository',
   'issue_identity_mismatch',
+  'pr_base_mismatch',
   'conflicting_pr_binding',
   'repair_pr_substitution',
   'missing_implementation_artifacts',
@@ -2296,6 +2342,11 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
         transitionLinear: async () => {
           cleanupCalls.push('linear');
         },
+        beginLeaseRelease: () => ({
+          warnings: [],
+          commit: () => undefined,
+          rollback: () => undefined,
+        }),
         releaseLocks: (issueId, branch) => {
           cleanupCalls.push(`locks:${issueId}:${branch}`);
           return { warnings: [] };
@@ -2338,7 +2389,10 @@ test('UTV2-1586 #13 successful repair reaches done with terminal fields and clea
     assert.strictEqual(fs.existsSync(syncPath), false);
     assert.strictEqual(completion.worktree_cleanup, 'removed');
     assert.deepStrictEqual(cleanupCalls, [
-      'linear',
+      // UTV2-1619 capability 17: 'linear' is deliberately absent. This lane
+      // closes successfully, but no explicit final-completion intent was
+      // declared, so the ISSUE is left open. Lane completion is not issue
+      // completion.
       `locks:${manifest.issue_id}:${manifest.branch}`,
       'worktree',
     ]);
@@ -2414,7 +2468,7 @@ test('UTV2-1590 done push remains skipped while explicit workflow dispatch reach
   assert.match(statusStep, /echo "closeable=false" >> "\$GITHUB_OUTPUT"/u);
 });
 
-test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts to merge SHA" step', () => {
+test('UTV2-1684 workflow_dispatch binds proof from resolved merge SHA authority', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2423,16 +2477,11 @@ test('UTV2-1589 workflow_dispatch never runs the ordinary "Bind proof artifacts 
   assert.notStrictEqual(bindStepIndex, -1);
   const bindStepIfLine = workflow.slice(bindStepIndex).match(/^ {8}if: (.+)$/mu);
   assert.ok(bindStepIfLine, 'expected an `if:` condition immediately following the step name');
-  assert.match(
-    bindStepIfLine[1],
-    /&& github\.event_name == 'push'$/u,
-    'this step must be push-only -- on workflow_dispatch, github.sha is not the historical lane\'s ' +
-      'authoritative merge SHA, and binding model-routing.json to it here (before the next step\'s ' +
-      '--repair-merged resolves the real SHA) would permanently deadlock the repair via binding_conflict',
-  );
+  assert.match(bindStepIfLine[1], /steps\.resolve_sha\.outputs\.merge_sha != ''/u);
+  assert.doesNotMatch(bindStepIfLine[1], /github\.event_name/u);
 });
 
-test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed manifest-only repair PR merges via push', () => {
+test('UTV2-1684 "Bind proof artifacts to merge SHA" fails closed on a mismatched receipt', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2442,18 +2491,12 @@ test('UTV2-1589 "Bind proof artifacts to merge SHA" also skips when a governed m
   const nextStepIndex = workflow.indexOf('\n      - name:', bindStepIndex + 1);
   const stepBody = workflow.slice(bindStepIndex, nextStepIndex === -1 ? undefined : nextStepIndex);
 
-  // A manifest-only repair PR (buildRepairRequiredViaPrPacket's recommended
-  // path for a lane whose pr_url is already set, e.g. UTV2-1586) merges via
-  // an ordinary push whose own github.sha is NOT that lane's original
-  // implementation merge SHA either -- github.event_name == 'push' alone
-  // does not distinguish this from a lane's own first-time closeout push.
-  // The step must additionally compare the checked-out manifest's own
-  // commit_sha against this push's SHA and skip the bind when they disagree.
+  // A pre-existing receipt is accepted only when it agrees with the
+  // authoritative merge SHA resolved from manifest.pr_url.
   assert.match(stepBody, /jq -r '\.commit_sha \/\/ empty' "\$MANIFEST_PATH"/u);
   assert.match(stepBody, /if \[ -n "\$existing_commit_sha" \] && \[ "\$existing_commit_sha" != "\$MERGE_SHA" \]/u);
-  assert.match(stepBody, /Skipping early proof-generate bind/u);
-  // The actual pnpm ops:proof-generate call must live inside the negative
-  // (else) branch of that guard, not run unconditionally alongside it.
+  assert.match(stepBody, /does not match authoritative PR merge SHA/u);
+  assert.match(stepBody, /exit 1/u);
   const guardIndex = stepBody.indexOf('existing_commit_sha" != "$MERGE_SHA"');
   const proofGenerateIndex = stepBody.indexOf('pnpm ops:proof-generate');
   assert.ok(guardIndex !== -1 && proofGenerateIndex > guardIndex);
@@ -2523,6 +2566,97 @@ test('UTV2-1586 #17 real UTV2-1585 PR #1305 fixture validates and binds exact me
 //
 // Five regressions, each corresponding to a failure measured on the live
 // system rather than imagined from the code.
+
+test('UTV2-1690: terminal manifest persistence cannot outrun lease release', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-release-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    const completion = await completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            assert.strictEqual(
+              readAllLeases(leaseRegistryDir)[0]?.status,
+              'released',
+              'lease must be released before status=done can be persisted',
+            );
+            return { ...manifest, status: 'done', closed_at: '2026-08-15T12:01:00.000Z' };
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      );
+    assert.strictEqual(completion.manifest.status, 'done');
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'released');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1690: failed terminal manifest persistence restores the active lease', async () => {
+  const leaseRegistryDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-terminal-rollback-'));
+  const manifest = createManifest({ status: 'merged' });
+  try {
+    reserveLease(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: { user: 'u', host: 'unit-test', pid: 4242, session_id: 's' },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    await assert.rejects(
+      completeSuccessfulLaneClose(
+        manifest.issue_id,
+        manifest,
+        createTruthCheckResult(),
+        {
+          beginLeaseRelease: (issue) => beginTerminalLeaseRelease(
+            {
+              issue_id: issue,
+              actor: 'ops:lane-close',
+              reason: 'terminal manifest transition',
+            },
+            { registryDir: leaseRegistryDir },
+          ),
+          finalizeManifest: () => {
+            throw new Error('manifest write failed');
+          },
+          releaseLocks: () => ({ warnings: [] }),
+        },
+      ),
+      /manifest write failed/,
+    );
+    assert.strictEqual(readAllLeases(leaseRegistryDir)[0]?.status, 'active');
+  } finally {
+    fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
+  }
+});
 
 test('UTV2-1613 R1: a normal successful close releases the dispatch lease', () => {
   withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
@@ -2904,6 +3038,7 @@ test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is nul
           merged: true,
           mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
           headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+          baseRefName: 'main',
           title: 'fix(lanes): UTV2-1553 release merged-lane lock from active accounting',
         };
       },
@@ -2930,6 +3065,206 @@ test('UTV2-1613: a null pr_url with no inferable merged PR is refused, never gue
     assert.strictEqual(repair.ok, false);
     assert.strictEqual(repair.code, 'infra_error');
     assert.match(repair.remediation, /must not be guessed/);
+  });
+});
+
+test('UTV2-1690: repair refuses to replace a binding invalidated by a PR base mismatch', () => {
+  withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+    let inferenceCalled = false;
+    const manifest = createManifest({
+      status: 'started',
+      commit_sha: null,
+      pr_url: null,
+      blocked_by: ['pr-base-mismatch'],
+      preflight_token: tokenPath,
+    });
+
+    const repair = repairMergedLaneManifest(manifest, {
+      repoRoot,
+      artifactRoot,
+      inferMergedPrForBranch: () => {
+        inferenceCalled = true;
+        throw new Error('base-mismatch blocker must stop before PR inference');
+      },
+    });
+
+    assert.strictEqual(repair.ok, false);
+    assert.strictEqual(repair.code, 'pr_base_mismatch');
+    assert.strictEqual(repair.outcome, 'blocked');
+    assert.strictEqual(inferenceCalled, false);
+    assert.strictEqual(repair.manifest, manifest);
+    assert.match(repair.remediation, /pr-base-mismatch/);
+  });
+});
+
+test('UTV2-1690: repair refuses an inferred PR whose base is wrong or unresolved', () => {
+  for (const baseRefName of ['release', null] as const) {
+    withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
+      const manifest = createManifest({
+        status: 'started',
+        commit_sha: null,
+        pr_url: null,
+        base_branch: 'main',
+        preflight_token: tokenPath,
+      });
+      let reachabilityCalled = false;
+      const repair = repairMergedLaneManifest(manifest, {
+        repoRoot,
+        artifactRoot,
+        inferMergedPrForBranch: () => ({
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1705',
+          number: 1705,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: '965872d378caa3e88ef4987f8bbb0bab0214856e',
+          headRefName: manifest.branch,
+          baseRefName,
+          title: `fix(ops): ${manifest.issue_id} wrong-base repair regression`,
+        }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      });
+
+      assert.strictEqual(repair.ok, false);
+      assert.strictEqual(repair.code, 'pr_base_mismatch');
+      assert.strictEqual(reachabilityCalled, false, 'base identity must fail before merge reachability');
+      assert.strictEqual(repair.manifest, manifest);
+      assert.match(repair.remediation, /manifest\.base_branch is main/);
+    });
+  }
+});
+
+test('UTV2-1690: the trusted --pr repair path refuses a wrong or unresolved PR base', () => {
+  // The blocked_by marker only records what a PREVIOUS lane-link-pr run saw. It
+  // says nothing about the base of the PR being bound here, so the explicit
+  // --pr path needs its own check or it binds a wrong-base merge.
+  for (const baseRefName of ['release', null] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { baseRefName }),
+        isMergeReachable: () => true,
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'pr_base_mismatch');
+  }
+});
+
+test('UTV2-1690: the trusted --pr repair path still accepts a matching base', () => {
+  const manifest = createManifest({
+    status: 'merged',
+    pr_url: null,
+    base_branch: 'main',
+    blocked_by: [],
+    commit_sha: '97527b791fc37acce41f4f46fd88699dce054b66',
+  });
+  const validation = validateTrustedPostMergeRepair(
+    manifest,
+    'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+    {
+      repairMerged: true,
+      trustedPostMerge: true,
+      fetchPr: () => createTrustedRepairPr(manifest, { baseRefName: 'main' }),
+      isMergeReachable: () => true,
+    },
+  );
+  assert.strictEqual(validation.ok, true, validation.code);
+});
+
+test('UTV2-1690: merge_sha finalization is authoritative — a merged PR with no merge SHA is refused', () => {
+  // A lane may only bind a merge SHA that GitHub actually reports. A merged PR
+  // whose mergeSha is absent must never be bound, because the manifest would
+  // then carry a merge binding that no commit backs.
+  for (const mergeSha of [null, undefined, ''] as const) {
+    const manifest = createManifest({
+      status: 'merged',
+      pr_url: null,
+      base_branch: 'main',
+      blocked_by: [],
+    });
+    let reachabilityCalled = false;
+    const validation = validateTrustedPostMergeRepair(
+      manifest,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1305',
+      {
+        repairMerged: true,
+        trustedPostMerge: true,
+        fetchPr: () => createTrustedRepairPr(manifest, { mergeSha: mergeSha as string | null }),
+        isMergeReachable: () => {
+          reachabilityCalled = true;
+          return true;
+        },
+      },
+    );
+    assert.strictEqual(validation.ok, false);
+    assert.strictEqual(validation.code, 'missing_merge_sha');
+    assert.strictEqual(reachabilityCalled, false, 'a null merge SHA must be refused before reachability');
+  }
+});
+
+test('UTV2-1690: terminal cleanup replay preserves the tracked sync record', () => {
+  // `.ops/sync/<issue>.yml` is tracked. Deleting it during a replay that runs
+  // from the control checkout leaves a staged-looking deletion that
+  // reconciliation never restores.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-sync-'));
+    const syncPath = path.join(repoRoot, '.ops', 'sync', `${manifest.issue_id}.yml`);
+    fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+    fs.writeFileSync(syncPath, 'version: 1\n');
+
+    const result = completeIdempotentReclose(manifest, {
+      repoRoot,
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    assert.strictEqual(fs.existsSync(syncPath), true, 'tracked sync record must survive replay');
+    assert.strictEqual(result.sync_removed, false);
+  });
+});
+
+test('UTV2-1690: terminal cleanup replay does not release a caller-held merge lock', () => {
+  // The replay runs inside the finalize mutex. Releasing it here frees the
+  // parent's serialization slot and lets the next step run unserialized.
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const manifest = createManifest({ status: 'done', closed_at: '2026-08-15T12:00:00.000Z' });
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1423',
+        cwd: process.cwd(),
+        reason: 'ops:lane-finalize',
+        owner: { user: 'test', host: 'unit-test', pid: 4242, session_id: 'finalize-parent' },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-08-15T12:00:00.000Z') },
+    );
+
+    completeIdempotentReclose(manifest, {
+      repoRoot: fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1690-lock-')),
+      terminalCleanupOnly: true,
+      releaseLocks: (issue, branch, opts) =>
+        releaseCloseoutLocks(issue, branch, { leaseRegistryDir, mergeLockPath, ...opts }),
+    });
+
+    const held = readMergeLock(mergeLockPath);
+    assert.strictEqual(held.ok ? held.lock.status : 'released', 'held',
+      'the caller-acquired merge lock must still be held after replay');
   });
 });
 
@@ -3041,6 +3376,7 @@ test('UTV2-1613: repair refuses an inferred PR whose merge SHA is not reachable 
         merged: true,
         mergeSha: 'not-actually-reachable-sha',
         headRefName: 'claude/utv2-1553-release-merged-lane-lock',
+        baseRefName: 'main',
         title: 'fix(lanes): UTV2-1553 release merged-lane lock',
       }),
       isMergeReachable: () => false,
@@ -3093,4 +3429,142 @@ test('UTV2-1613: manifestForFailedRepairClose is a no-op when the receipt never 
 
   assert.deepStrictEqual(persisted, repairedManifest);
   assert.deepStrictEqual(persisted.truth_check_history, []);
+});
+
+// ── UTV2-1619 capability 17: truth-gated lifecycle completion ────────────────
+// Acceptance is stated as three preventions, and they are deliberately
+// different in kind. A design that stops only the first two is incomplete:
+//   1. closeout FAILED  -> Done            (no receipt at all)
+//   2. bootstrap/no lane -> Done           (no lane, so no receipt possible)
+//   3. completed LANE   -> multi-increment issue Done   (valid receipt!)
+// The third is the one a receipt-only gate lets through, because its receipt is
+// real and honest. It is why the gate needs five conditions rather than one.
+
+function completionManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
+  return {
+    issue_id: 'UTV2-9500',
+    status: 'done',
+    commit_sha: 'a'.repeat(40),
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    files_changed: ['scripts/ops/lane-close.ts'],
+    ...overrides,
+  } as unknown as LaneManifest;
+}
+
+function completionReceipt(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
+  return {
+    verdict: 'pass',
+    merge_sha: 'a'.repeat(40),
+    runner: 'ops:lane-close',
+    checked_at: '2026-08-05T00:00:00.000Z',
+    failures: [],
+    ...overrides,
+  } as unknown as TruthCheckResult;
+}
+
+test('TGC-1: all five conditions satisfied -> the issue may be completed', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, true, JSON.stringify(result.unsatisfied));
+  assert.strictEqual(result.satisfied.length, 5);
+});
+
+test('TGC-2: PREVENTION 1 -- a failing closeout can never complete an issue', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt({ verdict: 'fail' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'evidence_truth'));
+});
+
+test('TGC-3: PREVENTION 2 -- no lane means no receipt, so no completion', () => {
+  // The bootstrap case: no manifest existed, so there is no commit_sha, no
+  // delivered scope, and no receipt bound to anything.
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ commit_sha: null, files_changed: [] } as never),
+    truthCheck: completionReceipt({ merge_sha: '' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  const failed = result.unsatisfied.map((u) => u.condition);
+  assert.ok(failed.includes('authority_truth'));
+  assert.ok(failed.includes('scope_truth'));
+});
+
+test('TGC-4: PREVENTION 3 -- a truthfully completed lane does NOT complete a multi-increment issue', () => {
+  // Every evidence condition holds: passing receipt, canonical runner, bound to
+  // the merge SHA, scope delivered, terminal success state. Only the explicit
+  // completion intent is absent -- which is exactly the observed reproduction.
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt(),
+    // completionIntent deliberately omitted
+  });
+  assert.strictEqual(result.eligible, false, 'a valid receipt alone must not complete an issue');
+  assert.deepStrictEqual(
+    result.unsatisfied.map((u) => u.condition),
+    ['completion_intent'],
+    'evidence, authority, scope and state all hold; only intent is missing',
+  );
+  assert.strictEqual(result.satisfied.length, 4);
+});
+
+test('TGC-5: a receipt bound to a different commit cannot complete the issue', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ commit_sha: 'b'.repeat(40) } as never),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'authority_truth'));
+});
+
+test('TGC-6: a non-canonical runner is not evidence', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest(),
+    truthCheck: completionReceipt({ runner: 'some-script' } as never),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'evidence_truth'));
+});
+
+test('TGC-7: terminal states that assert no success cannot complete an issue', () => {
+  for (const status of ['failed', 'superseded', 'cancelled'] as const) {
+    const result = evaluateIssueCompletionEligibility({
+      manifest: completionManifest({ status } as never),
+      truthCheck: completionReceipt(),
+      completionIntent: true,
+    });
+    assert.strictEqual(result.eligible, false, `"${status}" must never complete an issue`);
+    assert.ok(result.unsatisfied.some((u) => u.condition === 'state_truth'));
+  }
+});
+
+test('TGC-8: delivering outside the declared scope lock fails scope truth', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({
+      files_changed: ['scripts/ops/lane-close.ts', 'apps/worker/src/index.ts'],
+    } as never),
+    truthCheck: completionReceipt(),
+    completionIntent: true,
+  });
+  assert.strictEqual(result.eligible, false);
+  assert.ok(result.unsatisfied.some((u) => u.condition === 'scope_truth'));
+});
+
+test('TGC-9: every failing condition is reported, not just the first', () => {
+  const result = evaluateIssueCompletionEligibility({
+    manifest: completionManifest({ status: 'failed', commit_sha: null, files_changed: [] } as never),
+    truthCheck: completionReceipt({ verdict: 'fail', merge_sha: '' } as never),
+  });
+  assert.strictEqual(result.eligible, false);
+  // Fixing these one CI cycle at a time is the failure mode the truth-check M2
+  // short-circuit already demonstrated.
+  assert.strictEqual(result.unsatisfied.length, 5);
 });

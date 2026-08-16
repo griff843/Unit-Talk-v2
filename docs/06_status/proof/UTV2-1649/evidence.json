@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1649",
+  "captured_at": "2026-08-01T22:15:00Z",
+  "repository_head": "64ac40ab0593f67fe848fa61d8a006f09d6e6a8e",
+  "scope": {
+    "wave_first": "UTV2-1590",
+    "wave_last": "UTV2-1648",
+    "wave_issue_count": 59,
+    "project_before_count": 36,
+    "project_after_count": 63
+  },
+  "project_before_status": {
+    "Ready for Claude": 6,
+    "Done": 11,
+    "Ready for Codex": 2,
+    "Backlog": 6,
+    "In Codex": 1,
+    "Blocked Internal": 6,
+    "In Claude": 2,
+    "implementing": 1,
+    "Blocked External": 1
+  },
+  "project_after_status": {
+    "Ready for Claude": 8,
+    "In PM Review": 1,
+    "In Codex": 2,
+    "Blocked Internal": 10,
+    "Backlog": 18,
+    "Done": 18,
+    "In Claude": 3,
+    "Ready for Codex": 1,
+    "implementing": 1,
+    "Blocked External": 1
+  },
+  "project_before_milestone_membership": {
+    "P0": 14,
+    "P1": 3,
+    "P2": 2,
+    "P3": 8,
+    "P4": 2,
+    "P5": 1,
+    "none": 6
+  },
+  "project_after_milestone_membership": {
+    "P0": 14,
+    "P1": 11,
+    "P2": 8,
+    "P3": 19,
+    "P4": 9,
+    "P5": 1,
+    "none": 1
+  },
+  "project_after_milestone_progress_percent": {
+    "P0": 26.79,
+    "P1": 61.36,
+    "P2": 28.13,
+    "P3": 44.74,
+    "P4": 11.11,
+    "P5": 0
+  },
+  "evidence_order": [
+    "current-main lane manifest",
+    "GitHub PR and merge SHA",
+    "current-main proof and truth-check",
+    "read-only runtime/deploy evidence when applicable",
+    "Linear state/history"
+  ],
+  "github_open_exceptions": [1364, 1344, 1320, 1318, 1315],
+  "guardrails": {
+    "production_mutation": false,
+    "deployment": false,
+    "secret_change": false,
+    "queue_or_database_mutation": false,
+    "branch_protection_change": false,
+    "branch_deletion": false,
+    "worktree_deletion_or_move": false,
+    "p0_declared_complete": false
+  }
+}

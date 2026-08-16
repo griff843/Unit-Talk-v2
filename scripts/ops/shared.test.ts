@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   createManifest,
   defaultProofPaths,
@@ -590,4 +593,569 @@ test('mergeVerifierIdentity degrades to a bare object when there is no prior ver
 test('mergeVerifierIdentity treats non-object existing values (string/array) as absent, not as content to spread', () => {
   assert.deepStrictEqual(mergeVerifierIdentity('not-an-object', 'claude/x'), { identity: 'claude/x' });
   assert.deepStrictEqual(mergeVerifierIdentity(['a', 'b'], 'claude/x'), { identity: 'claude/x' });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634: authoritative active-lane discovery.
+//
+// readAllManifests() reads only the local working tree, but an active lane's
+// manifest lives on its own PR branch until it merges. That made the governor
+// fail OPEN -- an empty board and a full board were indistinguishable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  ActiveLaneDiscoveryError,
+  activeManifestOverlap,
+  classifyLaneCapacity,
+  issueIdFromBranchName,
+  readAllManifestPaths,
+  readAllManifests,
+  readManifestAtRef,
+  resolveActiveLaneManifests,
+  type LaneManifest,
+  type LaneManifestLocation,
+  type OpenPullRequestRef,
+} from './shared.js';
+
+function laneManifest(overrides: Partial<LaneManifest> & { issue_id: string }): LaneManifest {
+  return {
+    schema_version: 2,
+    lane_type: 'governance',
+    executor: 'claude',
+    tier: 'T2',
+    worktree_path: `/tmp/${overrides.issue_id}`,
+    branch: `claude/${overrides.issue_id.toLowerCase()}-slug`,
+    base_branch: 'main',
+    commit_sha: null,
+    pr_url: null,
+    files_changed: [],
+    file_scope_lock: [],
+    expected_proof_paths: [],
+    status: 'in_progress',
+    started_at: '2026-07-31T00:00:00.000Z',
+    heartbeat_at: '2026-07-31T00:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: 'dispatch-auto',
+    created_by: 'claude',
+    truth_check_history: [],
+    reopen_history: [],
+    ...overrides,
+  } as LaneManifest;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1682: parked lanes are visible-but-uncounted, independent of location.
+// Their file-scope locks remain an orthogonal conflict constraint.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('UTV2-1682: local manifest discovery recursively includes the parked directory', () => {
+  const manifestDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1682-manifests-'));
+  try {
+    const parkedDir = path.join(manifestDir, 'parked');
+    fs.mkdirSync(parkedDir);
+    fs.writeFileSync(
+      path.join(manifestDir, 'UTV2-16820.json'),
+      JSON.stringify(laneManifest({ issue_id: 'UTV2-16820', status: 'in_progress' })),
+    );
+    fs.writeFileSync(
+      path.join(parkedDir, 'UTV2-16821.json'),
+      JSON.stringify(laneManifest({ issue_id: 'UTV2-16821', status: 'parked' })),
+    );
+
+    assert.deepStrictEqual(
+      readAllManifestPaths(manifestDir).map((filePath) => path.relative(manifestDir, filePath)),
+      ['parked/UTV2-16821.json', 'UTV2-16820.json'],
+    );
+    assert.deepStrictEqual(
+      readAllManifests(manifestDir).map((manifest) => manifest.issue_id).sort(),
+      ['UTV2-16820', 'UTV2-16821'],
+    );
+  } finally {
+    fs.rmSync(manifestDir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1682: PR-head lookup falls back from the root path to the parked path', () => {
+  const lookedUpPaths: string[] = [];
+  const parked = laneManifest({ issue_id: 'UTV2-16822', status: 'parked' });
+  const lookup = readManifestAtRef('UTV2-16822', 'codex/utv2-16822-parked', {
+    readManifestAtPath: (_issueId, _ref, manifestPath) => {
+      lookedUpPaths.push(manifestPath);
+      return manifestPath.includes('/parked/') ? parked : null;
+    },
+  });
+
+  assert.deepStrictEqual(lookedUpPaths, [
+    'docs/06_status/lanes/UTV2-16822.json',
+    'docs/06_status/lanes/parked/UTV2-16822.json',
+  ]);
+  assert.strictEqual(lookup?.manifest, parked);
+  assert.strictEqual(lookup?.location, 'lanes_parked');
+});
+
+test('UTV2-1682: unreadable parked fallback cannot degrade into absence', () => {
+  const lookedUpPaths: string[] = [];
+  assert.throws(
+    () =>
+      readManifestAtRef('UTV2-16823', 'codex/utv2-16823-parked', {
+        readManifestAtPath: (_issueId, _ref, manifestPath) => {
+          lookedUpPaths.push(manifestPath);
+          if (!manifestPath.includes('/parked/')) return null;
+          throw new Error('HTTP 500 reading parked population');
+        },
+      }),
+    /HTTP 500 reading parked population/,
+  );
+  assert.strictEqual(lookedUpPaths.length, 2, 'an unknown parked read must throw, never return null');
+});
+
+function discoverParkedAt(location: LaneManifestLocation) {
+  const parked = laneManifest({
+    issue_id: 'UTV2-16824',
+    status: 'parked',
+    file_scope_lock: ['scripts/ops/shared.ts'],
+  });
+  return resolveActiveLaneManifests({
+    listOpenPullRequests: () => [],
+    readLocalManifestEntries: () => [{ manifest: parked, location }],
+  });
+}
+
+test('UTV2-1682: a parked lane is visible-but-uncounted in either manifest location', () => {
+  const root = discoverParkedAt('lanes_root');
+  const relocated = discoverParkedAt('lanes_parked');
+
+  for (const discovery of [root, relocated]) {
+    assert.deepStrictEqual(discovery.manifests.map((manifest) => manifest.issue_id), ['UTV2-16824']);
+    assert.strictEqual(discovery.lanes[0]?.source, 'local_worktree');
+    assert.deepStrictEqual(discovery.lanes[0]?.capacity, {
+      lifecycleStatus: 'parked',
+      sourcePopulation: 'canonical_active_lane_union',
+      classification: 'visible_uncounted',
+      countsAgainst: { executor: false, total: false, laneType: false },
+    });
+  }
+
+  assert.strictEqual(root.lanes[0]?.manifestLocation, 'lanes_root');
+  assert.strictEqual(relocated.lanes[0]?.manifestLocation, 'lanes_parked');
+  assert.deepStrictEqual(
+    root.lanes[0]?.capacity,
+    relocated.lanes[0]?.capacity,
+    'relocation must not alter capacity arithmetic',
+  );
+  assert.deepStrictEqual(classifyLaneCapacity('parked'), root.lanes[0]?.capacity);
+});
+
+test('UTV2-1682: a parked PR-head manifest reports its lifecycle, source population, and location', () => {
+  const parked = laneManifest({ issue_id: 'UTV2-16825', status: 'parked' });
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 16825, headRefName: 'codex/utv2-16825-parked' },
+    ],
+    readManifestAtRef: () => ({ manifest: parked, location: 'lanes_parked' }),
+  });
+
+  assert.strictEqual(discovery.lanes[0]?.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]?.manifestLocation, 'lanes_parked');
+  assert.strictEqual(discovery.lanes[0]?.capacity.lifecycleStatus, 'parked');
+  assert.strictEqual(
+    discovery.lanes[0]?.capacity.sourcePopulation,
+    'canonical_active_lane_union',
+  );
+  assert.strictEqual(discovery.lanes[0]?.capacity.classification, 'visible_uncounted');
+});
+
+test('UTV2-1682: parking or relocating a manifest never releases its file-scope lock', () => {
+  for (const location of ['lanes_root', 'lanes_parked'] as const) {
+    const discovery = discoverParkedAt(location);
+    assert.deepStrictEqual(
+      activeManifestOverlap('UTV2-99999', ['scripts/ops/shared.ts'], discovery.manifests),
+      { issue_id: 'UTV2-16824', overlapping_files: ['scripts/ops/shared.ts'] },
+    );
+  }
+});
+
+test('UTV2-1682 fail-closed: an unreadable local population is not an empty board', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        listOpenPullRequests: () => [],
+        readLocalManifestEntries: () => {
+          throw new Error('EACCES: parked directory unreadable');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.strictEqual(error.code, 'active_lane_discovery_failed');
+      assert.match(error.message, /unreadable local board as an empty one/);
+      return true;
+    },
+  );
+});
+
+test('UTV2-1634 issueIdFromBranchName extracts the canonical id from lane branches', () => {
+  assert.strictEqual(issueIdFromBranchName('claude/utv2-1634-lane-discovery'), 'UTV2-1634');
+  assert.strictEqual(issueIdFromBranchName('codex/utv2-1604-parked-mode'), 'UTV2-1604');
+  assert.strictEqual(issueIdFromBranchName('griffadavi/uni-100-thing'), 'UNI-100');
+  assert.strictEqual(issueIdFromBranchName('main'), null);
+  assert.strictEqual(issueIdFromBranchName('dependabot/npm_and_yarn/foo-1.2.3'), null);
+});
+
+test('UTV2-1634: a lane whose manifest exists ONLY on its PR branch is counted as active', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: (): OpenPullRequestRef[] => [
+      { number: 1319, headRefName: 'codex/utv2-1604-parked-mode-scheduler-policy' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'UTV2-1604'
+        ? laneManifest({ issue_id: 'UTV2-1604', lane_type: 'runtime', status: 'in_review' })
+        : null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['UTV2-1604']);
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+  assert.strictEqual(discovery.lanes[0]!.prNumber, 1319);
+});
+
+test('UTV2-1634 exact reported case: a runtime lane visible only on a PR branch is discoverable, so a migration lane-start can be refused', () => {
+  const discovery = resolveActiveLaneManifests({
+    // The UTV2-1399 worktree could see none of this locally -- that was the bug.
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 1319, headRefName: 'codex/utv2-1604-parked-mode-scheduler-policy' },
+    ],
+    readManifestAtRef: () =>
+      laneManifest({ issue_id: 'UTV2-1604', lane_type: 'runtime', status: 'in_review' }),
+  });
+
+  const runtimeLanes = discovery.manifests.filter((m) => m.lane_type === 'runtime');
+  assert.strictEqual(
+    runtimeLanes.length,
+    1,
+    'the active runtime lane must be visible so ["migration","runtime"] can be detected as forbidden',
+  );
+});
+
+test('UTV2-1634: executor cap is enforceable when N-1 manifests are unmerged', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [laneManifest({ issue_id: 'UTV2-1000' })],
+    listOpenPullRequests: () => [
+      { number: 1, headRefName: 'claude/utv2-1001-a' },
+      { number: 2, headRefName: 'claude/utv2-1002-b' },
+      { number: 3, headRefName: 'claude/utv2-1003-c' },
+    ],
+    readManifestAtRef: (issueId) => laneManifest({ issue_id: issueId }),
+  });
+
+  assert.deepStrictEqual(
+    discovery.manifests.map((m) => m.issue_id),
+    ['UTV2-1000', 'UTV2-1001', 'UTV2-1002', 'UTV2-1003'],
+    'all four lanes must count toward the executor cap, not just the one on disk',
+  );
+});
+
+test('UTV2-1634 fail-closed: enumeration failure throws rather than reporting an empty board', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: () => {
+          throw new Error('gh: network unreachable');
+        },
+      }),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.strictEqual(error.code, 'active_lane_discovery_failed');
+      return true;
+    },
+    'an unknown board must never be silently treated as an empty one',
+  );
+});
+
+test('UTV2-1634: merged lanes still release their locks even with an open PR', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [laneManifest({ issue_id: 'UTV2-1500', status: 'in_progress' })],
+    listOpenPullRequests: () => [{ number: 9, headRefName: 'claude/utv2-1500-thing' }],
+    // Head says the lane has since merged -- authoritative over the stale local copy.
+    readManifestAtRef: () => laneManifest({ issue_id: 'UTV2-1500', status: 'merged' }),
+  });
+
+  assert.deepStrictEqual(discovery.manifests, [], 'a merged lane must not keep holding locks');
+});
+
+test('UTV2-1634: the PR-head manifest wins over a stale local copy of the same lane', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [
+      laneManifest({ issue_id: 'UTV2-1600', lane_type: 'hygiene', status: 'started' }),
+    ],
+    listOpenPullRequests: () => [{ number: 7, headRefName: 'claude/utv2-1600-thing' }],
+    readManifestAtRef: () =>
+      laneManifest({ issue_id: 'UTV2-1600', lane_type: 'migration', status: 'in_review' }),
+  });
+
+  assert.strictEqual(discovery.manifests.length, 1);
+  assert.strictEqual(discovery.manifests[0]!.lane_type, 'migration');
+  assert.strictEqual(discovery.lanes[0]!.source, 'open_pr_head');
+});
+
+test('UTV2-1634: non-lane PRs are skipped diagnostically, not treated as discovery failures', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 42, headRefName: 'dependabot/npm_and_yarn/lodash-4.17.21' },
+    ],
+    readManifestAtRef: () => null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests, []);
+  assert.strictEqual(discovery.skippedPullRequests.length, 1);
+  assert.strictEqual(discovery.skippedPullRequests[0]!.number, 42);
+});
+
+test('UTV2-1634: a PR whose head has no manifest for its id contributes nothing and does not throw', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [{ number: 5, headRefName: 'claude/utv2-9999-no-manifest' }],
+    readManifestAtRef: () => null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests, []);
+  assert.deepStrictEqual(discovery.skippedPullRequests, []);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634 correction round: a manifest lookup may be treated as ABSENT only
+// on a confirmed 404. Auth loss, rate limiting, network failure, 5xx, malformed
+// base64/JSON and any other lookup failure are UNKNOWN lane state and must
+// refuse admission -- treating unknown as absent is the same fail-open this
+// lane exists to remove, just one level down.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { isConfirmedManifestNotFound, OPEN_PR_LISTING_LIMIT } from './shared.js';
+
+test('UTV2-1634: only a confirmed 404 counts as manifest-absent', () => {
+  assert.strictEqual(isConfirmedManifestNotFound('gh: Not Found (HTTP 404)', 1), true);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404: Not Found', 1), true);
+
+  // Auth, rate limit, server and transport failures are never absence.
+  assert.strictEqual(isConfirmedManifestNotFound('gh: Bad credentials (HTTP 401)', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 403: rate limit exceeded', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 429 too many requests', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 502 Bad Gateway', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('could not resolve host: api.github.com', 1), false);
+  assert.strictEqual(isConfirmedManifestNotFound('connection reset by peer', 1), false);
+  // A 404 string alongside an auth failure is ambiguous -- refuse.
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404 Not Found; HTTP 401 Bad credentials', 1), false);
+  // Non-1 exit codes are not the documented gh 404 shape.
+  assert.strictEqual(isConfirmedManifestNotFound('HTTP 404 Not Found', 127), false);
+  assert.strictEqual(isConfirmedManifestNotFound('', null), false);
+});
+
+test('UTV2-1634: a confirmed 404 skips exactly one PR and leaves the rest of the board intact', () => {
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [],
+    listOpenPullRequests: () => [
+      { number: 1, headRefName: 'claude/utv2-2001-has-manifest' },
+      { number: 2, headRefName: 'claude/utv2-2002-no-manifest' },
+    ],
+    readManifestAtRef: (issueId) =>
+      issueId === 'UTV2-2001' ? laneManifest({ issue_id: 'UTV2-2001' }) : null,
+  });
+
+  assert.deepStrictEqual(discovery.manifests.map((m) => m.issue_id), ['UTV2-2001']);
+});
+
+for (const failure of [
+  'HTTP 401: Bad credentials',
+  'HTTP 403: rate limit exceeded',
+  'could not resolve host: api.github.com',
+  'HTTP 500 Internal Server Error',
+  'Unexpected token < in JSON at position 0',
+]) {
+  test(`UTV2-1634 fail-closed: manifest lookup failure "${failure}" refuses admission`, () => {
+    assert.throws(
+      () =>
+        resolveActiveLaneManifests({
+          readLocalManifests: () => [],
+          listOpenPullRequests: () => [{ number: 1, headRefName: 'claude/utv2-2100-thing' }],
+          readManifestAtRef: () => {
+            throw new Error(failure);
+          },
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof ActiveLaneDiscoveryError);
+        assert.strictEqual(error.code, 'active_lane_discovery_failed');
+        return true;
+      },
+      'an unreadable manifest must never be treated as an absent one',
+    );
+  });
+}
+
+test('UTV2-1634: a lookup failure does not get masked by other lanes resolving fine', () => {
+  assert.throws(
+    () =>
+      resolveActiveLaneManifests({
+        readLocalManifests: () => [],
+        listOpenPullRequests: () => [
+          { number: 1, headRefName: 'claude/utv2-2201-ok' },
+          { number: 2, headRefName: 'claude/utv2-2202-broken' },
+        ],
+        readManifestAtRef: (issueId) => {
+          if (issueId === 'UTV2-2201') return laneManifest({ issue_id: 'UTV2-2201' });
+          throw new Error('HTTP 401: Bad credentials');
+        },
+      }),
+    ActiveLaneDiscoveryError,
+  );
+});
+
+test('UTV2-1634: the open-PR listing limit is a truncation detector, not a page size', () => {
+  assert.ok(
+    OPEN_PR_LISTING_LIMIT >= 200,
+    'the cap must be well above any plausible real open-PR count so it only trips on genuine truncation risk',
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1634 reliability round: bounded retry for transient discovery failures.
+//
+// Active-lane discovery makes N+1 sequential GitHub calls for N open PRs and
+// originally aborted admission on the FIRST transient error of any one of them,
+// so the abort probability compounded with board size. Measured 2026-08-11 with
+// 15 open PRs: `ops:lane-start` aborted on 5 of 6 consecutive attempts while a
+// single `gh api` call succeeded 8/8.
+//
+// Retry must not weaken anything: a transient error still never counts as an
+// absence, and once the attempt budget is exhausted the original error is
+// rethrown so the caller's fail-closed path is unchanged.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { isRetryableDiscoveryFailure, withDiscoveryRetry } from './shared.js';
+
+function ghError(stderr: string, status = 1): Error & { stderr: string; status: number } {
+  return Object.assign(new Error(stderr), { stderr, status });
+}
+
+test('UTV2-1634 retry: a transient failure followed by success returns the value', () => {
+  let calls = 0;
+  const slept: number[] = [];
+  const value = withDiscoveryRetry(
+    () => {
+      calls += 1;
+      if (calls < 3) throw ghError('dial tcp 140.82.114.5:443: i/o timeout');
+      return 'manifest-body';
+    },
+    (error) => {
+      const e = error as { stderr: string; status: number };
+      return isRetryableDiscoveryFailure(e.stderr, e.status);
+    },
+    { attempts: 4, baseDelayMs: 10, sleep: (ms) => slept.push(ms) },
+  );
+
+  assert.strictEqual(value, 'manifest-body');
+  assert.strictEqual(calls, 3, 'should have retried until it succeeded');
+  assert.deepStrictEqual(slept, [10, 20], 'exponential backoff between attempts only');
+});
+
+test('UTV2-1634 retry: backoff doubles and is capped', () => {
+  const slept: number[] = [];
+  assert.throws(() =>
+    withDiscoveryRetry(
+      () => {
+        throw ghError('i/o timeout');
+      },
+      () => true,
+      { attempts: 6, baseDelayMs: 500, maxDelayMs: 4000, sleep: (ms) => slept.push(ms) },
+    ),
+  );
+  // 5 sleeps for 6 attempts; doubling 500→8000 but clamped at 4000.
+  assert.deepStrictEqual(slept, [500, 1000, 2000, 4000, 4000]);
+});
+
+test('UTV2-1634 retry: a permanent transient failure still fails closed with the original error', () => {
+  let calls = 0;
+  const original = ghError('dial tcp 140.82.114.5:443: i/o timeout');
+
+  assert.throws(
+    () =>
+      withDiscoveryRetry(
+        () => {
+          calls += 1;
+          throw original;
+        },
+        (error) => {
+          const e = error as { stderr: string; status: number };
+          return isRetryableDiscoveryFailure(e.stderr, e.status);
+        },
+        { attempts: 3, baseDelayMs: 1, sleep: () => {} },
+      ),
+    // The LAST error is rethrown unchanged, so the caller's fail-closed
+    // ActiveLaneDiscoveryError wrapping and message are preserved verbatim.
+    (thrown: unknown) => thrown === original,
+  );
+  assert.strictEqual(calls, 3, 'should have exhausted exactly the attempt budget');
+});
+
+test('UTV2-1634 retry: normal discovery is unchanged — one call, no sleeping', () => {
+  let calls = 0;
+  const slept: number[] = [];
+  const value = withDiscoveryRetry(
+    () => {
+      calls += 1;
+      return 'ok';
+    },
+    () => true,
+    { attempts: 4, baseDelayMs: 10, sleep: (ms) => slept.push(ms) },
+  );
+
+  assert.strictEqual(value, 'ok');
+  assert.strictEqual(calls, 1, 'a succeeding call must not be repeated');
+  assert.deepStrictEqual(slept, [], 'no backoff on the happy path');
+});
+
+test('UTV2-1634 retry: a non-retryable failure is rethrown immediately without retrying', () => {
+  // Permanent auth failures resolve to the same answer every time; burning the
+  // attempt budget on them only delays the inevitable.
+  for (const stderr of ['gh: Bad credentials (HTTP 401)', 'HTTP 403: permission denied']) {
+    let calls = 0;
+    assert.throws(() =>
+      withDiscoveryRetry(
+        () => {
+          calls += 1;
+          throw ghError(stderr);
+        },
+        (error) => {
+          const e = error as { stderr: string; status: number };
+          return isRetryableDiscoveryFailure(e.stderr, e.status);
+        },
+        { attempts: 4, baseDelayMs: 1, sleep: () => {} },
+      ),
+    );
+    assert.strictEqual(calls, 1, `${stderr} must not be retried`);
+  }
+});
+
+test('UTV2-1634 retry: a confirmed 404 is a definitive answer, never retried', () => {
+  // 404 means "this PR has no manifest" -- a real result. It is handled by the
+  // caller as absence-for-this-PR; retrying it would be pure waste and would
+  // multiply latency across every non-lane PR on the board.
+  assert.strictEqual(isRetryableDiscoveryFailure('gh: Not Found (HTTP 404)', 1), false);
+  assert.strictEqual(isRetryableDiscoveryFailure('HTTP 404: Not Found', 1), false);
+});
+
+test('UTV2-1634 retry: transport and server faults are retryable, and unknown errors default to retryable', () => {
+  for (const stderr of [
+    'dial tcp 140.82.114.5:443: i/o timeout',
+    'could not resolve host: api.github.com',
+    'connection reset by peer',
+    'HTTP 502 Bad Gateway',
+    'HTTP 429 too many requests',
+    'something nobody has seen before',
+  ]) {
+    assert.strictEqual(isRetryableDiscoveryFailure(stderr, 1), true, `${stderr} should be retryable`);
+  }
 });

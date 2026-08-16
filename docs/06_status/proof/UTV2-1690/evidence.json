@@ -1,0 +1,209 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1690",
+  "title": "Close terminal lane lifecycle and repair-admission gaps",
+  "tier": "T1",
+  "status": "ci_staging_proof_pending",
+  "generated_at": "2026-08-15T14:45:00Z",
+  "sha_binding": {
+    "verified_source_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
+    "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "merge_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
+    "pr_number": null,
+    "bound_at": "2026-08-15T18:03:47.509Z",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1690-terminal-release; runtime_proof auto-harvested by ops:proof-generate from CI job \"Writable DB proof (staging only)\" (run 31900061646, job 95049285746)",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced mechanical evidence; T1 approval and an independent PM verdict remain external merge-gate requirements."
+  },
+  "scope": {
+    "implementation_paths": [
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-finalize.ts",
+      "scripts/ops/lease-registry.ts",
+      "scripts/ops/truth-check-lib.ts",
+      ".github/workflows/lane-pr-binding.yml"
+    ],
+    "test_paths": [
+      "scripts/ops/lane-close.test.ts",
+      "scripts/ops/lane-finalize.test.ts",
+      "scripts/ops/lease-registry.test.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "runtime_change": false,
+    "workflow_change": true,
+    "database_change": false,
+    "domain_change": false,
+    "approval_policy_change": false
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "fail": 0,
+      "detail": "DB-client boundary, sync/alignment, environment, lint, type-check, build, root tests, Smart Form verification, and command verification completed with exit 0."
+    },
+    "verify_full": {
+      "command": "pnpm verify",
+      "status": "EXPECTED_DEFERRED_AFTER_STATIC_PASS",
+      "fail": 0,
+      "detail": "The complete static gate passed again. test:live-db then reached pnpm test:db and the staging-isolation guard refused host=127.0.0.1 ref=unidentified before DB access; PR CI owns the required staging execution."
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/lane-finalize.test.ts' 'scripts/ops/lease-registry.test.ts' 'scripts/ops/truth-check-lib.test.ts'",
+      "status": "PASS",
+      "tests": 322,
+      "pass": 322,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 17833.63ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 15876.05ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 16894.58ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 16797.95ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 267.48ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 19819.88ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 17171.23ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-15T18:05:27.491Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 31900061646, job 95049285746), which ran immediately before the smoke-test step in the same job, on head 2a6aecac2765af61b22a42493831e95a26d24b6d. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 31900061646,
+      "run_attempt": 1,
+      "job_id": 95049285746,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/31900061646/job/95049285746",
+      "target_head_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
+      "target_merge_sha": "2a6aecac2765af61b22a42493831e95a26d24b6d",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "A terminal lane cannot retain the control-checkout dispatch lease after successful closeout.",
+      "status": "PASS",
+      "evidence": "Canonical control-root resolution and release-before-terminal-write ordering are executed by focused filesystem regressions."
+    },
+    {
+      "criterion": "A terminal persistence failure cannot strand a mismatched lease state.",
+      "status": "PASS",
+      "evidence": "The failed manifest-write regression asserts byte-for-byte restoration of the original active lease."
+    },
+    {
+      "criterion": "Closeout retry is idempotent and can recover a hosted terminal transition locally.",
+      "status": "PASS",
+      "evidence": "Released/reclaimed leases are not rewritten, and already-done finalize plans replay terminal cleanup before reconciliation even when journaled complete."
+    },
+    {
+      "criterion": "Truth surfaces refuse a done lane that still holds scope.",
+      "status": "PASS",
+      "evidence": "M8 fails done plus active or stale-reclaim-required and passes done plus released or missing."
+    },
+    {
+      "criterion": "Wrong-base repair cannot silently restore an invalidated PR binding.",
+      "status": "PASS",
+      "evidence": "Repair returns named pr_base_mismatch before inference for the blocker and before reachability for wrong or unresolved inferred bases."
+    },
+    {
+      "criterion": "R1/R2 applicability cannot be executor self-declared.",
+      "status": "PASS",
+      "evidence": "The production truth-check path paginates GitHub PR files and records the classified repository list; only all-control-plane scope is not_applicable, while mixed, missing, and ambiguous scope fails closed."
+    },
+    {
+      "criterion": "Non-lane PR branches do not receive a false red lane-binding check.",
+      "status": "PASS",
+      "evidence": "The workflow compares the manifest branch before bind=true and exits 0 with bind=false on mismatch while retaining trusted branch/base validation for registered lanes."
+    }
+  ],
+  "known_limitations": [
+    "The R1/R2 runtime-evidence applicability rule is descoped from this lane by PM decision; R1/R2 behaviour is unchanged from main.",
+    ".github/workflows/lane-pr-binding.yml has no mechanical test coverage; both of its no-op branches are verified by inspection only."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "NOT_APPLICABLE_PM_RECORDED_EXCEPTION",
+    "ready_for_pm_review": true
+  }
+}

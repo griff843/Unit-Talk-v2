@@ -57,6 +57,41 @@ const GHOST_ELIGIBLE_STATUSES = new Set(
   [...ACTIVE_LOCK_STATUSES].filter((status) => status !== 'reopened'),
 );
 
+/**
+ * The set of manifests a reconcile run may consider — and therefore the only
+ * manifests it may ever mutate.
+ *
+ * UTV2-1619: this was an inline two-value denylist (`status !== 'done' &&
+ * status !== 'merged'`), which is not the inverse of "active". Every other
+ * terminal status — `failed`, `superseded`, `cancelled`, and the 28 legacy
+ * `closed` manifests that predate the status enum — fell through it and was
+ * swept as active. Measured 2026-08-09 against the live tree: 14 lanes
+ * terminal for ~3 months would have been rewritten to `blocked` on the first
+ * successful apply. `blocked` is a member of both `TOTAL_CAPACITY_STATUSES`
+ * and `TYPE_CAPACITY_STATUSES`, so that run would have manufactured 14 live
+ * capacity consumers out of dead history and pushed the board past its cap of
+ * 10 without a single new lane being admitted.
+ *
+ * Reading the canonical allowlist instead makes an unrecognised status
+ * (`closed`, or anything a future writer invents) fail CLOSED: not active,
+ * therefore never mutated. A denylist fails open on exactly the values nobody
+ * thought to enumerate — which is how this defect survived.
+ *
+ * This selects candidates only. Whether a candidate is actually stale,
+ * stranded, orphaned or a ghost stays entirely with `reconcileManifest`; this
+ * function deliberately encodes no lifecycle policy of its own.
+ */
+export function selectReconcilableManifests(
+  manifests: LaneManifest[],
+  issueFilter: ReadonlySet<string> = new Set(),
+): LaneManifest[] {
+  return manifests.filter(
+    (manifest) =>
+      ACTIVE_LOCK_STATUSES.has(manifest.status) &&
+      (issueFilter.size === 0 || issueFilter.has(manifest.issue_id.toUpperCase())),
+  );
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type ReconcileVerdict = 'stale' | 'stranded' | 'orphaned' | 'ghost_merged' | 'clean';
@@ -366,12 +401,7 @@ export function main(argv = process.argv.slice(2)): void {
   const issueFilter = new Set(
     (parsed.flags.get('issue') ?? []).map((value) => value.trim().toUpperCase()).filter(Boolean),
   );
-  const activeManifests = allManifests.filter(
-    (m) =>
-      m.status !== 'done' &&
-      m.status !== 'merged' &&
-      (issueFilter.size === 0 || issueFilter.has(m.issue_id.toUpperCase())),
-  );
+  const activeManifests = selectReconcilableManifests(allManifests, issueFilter);
 
   const entries: ReconcileEntry[] = [];
   let mutations = 0;

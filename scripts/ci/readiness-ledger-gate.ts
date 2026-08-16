@@ -59,6 +59,16 @@ export interface GateResult {
   age_hours: number | null;
   summary: string;
   details: string[];
+  /** Stable blocking identities used to distinguish inherited debt from a worsened head. */
+  blocking_findings: string[];
+}
+
+export interface RegressionResult {
+  conclusion: 'success' | 'neutral' | 'failure';
+  passed: boolean;
+  summary: string;
+  base: GateResult;
+  head: GateResult;
 }
 
 const OBSERVER_FAILURE_CODES: ReadonlySet<GateCode> = new Set<GateCode>([
@@ -139,6 +149,7 @@ export function evaluateLedger(
       age_hours: null,
       summary: `generated_at "${ledger.generated_at}" is not a readable timestamp`,
       details,
+      blocking_findings: [],
     };
   }
 
@@ -153,6 +164,7 @@ export function evaluateLedger(
         'the recorded verdict describes the past, not production now. Refresh it with `pnpm ops:readiness-refresh` ' +
         '(or re-run readiness-refresh.yml) before reading anything into the verdict.',
       details,
+      blocking_findings: [],
     };
   }
 
@@ -177,6 +189,7 @@ export function evaluateLedger(
         `${staleDimensions.map((dimension) => `${dimension.id}@${dimension.observed_at ?? 'never'}`).join(', ')}. ` +
         'OBSERVER failure — the generator did not measure everything it published.',
       details,
+      blocking_findings: staleDimensions.map((dimension) => `stale:${dimension.id}`),
     };
   }
 
@@ -199,6 +212,10 @@ export function evaluateLedger(
           ? [`also unreadable: ${unreadable.map((dimension) => dimension.id).join(', ')}`]
           : []),
       ],
+      blocking_findings: [
+        ...failing.map((dimension) => `fail:${dimension.id}`),
+        ...unreadable.map((dimension) => `unknown:${dimension.id}`),
+      ].sort(),
     };
   }
 
@@ -212,6 +229,7 @@ export function evaluateLedger(
         `Production state is UNKNOWN, not proven good: blocking dimension(s) could not be read — ` +
         `${unreadable.map((dimension) => dimension.id).join(', ')}. An unreadable dimension is never scored as passing.`,
       details: [...details, ...unreadable.map((d) => `${d.id}: ${d.unreadable_reason ?? d.evidence}`)],
+      blocking_findings: unreadable.map((dimension) => `unknown:${dimension.id}`).sort(),
     };
   }
 
@@ -228,6 +246,7 @@ export function evaluateLedger(
         'All blocking dimensions pass on current evidence. Non-blocking gaps: ' +
         `${nonBlockingGaps.map((dimension) => `${dimension.id}(${dimension.status})`).join(', ') || 'none recorded'}.`,
       details,
+      blocking_findings: [],
     };
   }
 
@@ -238,6 +257,7 @@ export function evaluateLedger(
     age_hours: age,
     summary: `Every dimension passes on evidence ${age}h old.`,
     details,
+    blocking_findings: [],
   };
 }
 
@@ -250,6 +270,7 @@ export function evaluateLedgerFile(filePath: string, now: Date, policy: { hardSt
       age_hours: null,
       summary: `${path.relative(REPO_ROOT, filePath)} does not exist — there is no readiness ledger to gate on.`,
       details: [],
+      blocking_findings: [],
     };
   }
   const parsed = parseLedger(fs.readFileSync(filePath, 'utf8'));
@@ -261,9 +282,54 @@ export function evaluateLedgerFile(filePath: string, now: Date, policy: { hardSt
       age_hours: null,
       summary: `${path.relative(REPO_ROOT, filePath)} is not a usable readiness ledger: ${parsed.errors.join('; ')}`,
       details: parsed.errors,
+      blocking_findings: parsed.errors.map((error) => `invalid:${error}`).sort(),
     };
   }
   return evaluateLedger(parsed.ledger, now, policy);
+}
+
+/**
+ * Classifies PR readiness independently from absolute operational readiness.
+ *
+ * A PR may inherit a RED/unknown ledger from main without causing that debt.
+ * The PR check stays diagnostic in that case (`neutral`). A newly failing or
+ * differently failing head is a PR-caused regression and remains fail-closed.
+ * Scheduled/deployment callers continue to use evaluateLedgerFile directly,
+ * so this comparison cannot soften absolute readiness enforcement.
+ */
+export function evaluateReadinessRegression(base: GateResult, head: GateResult): RegressionResult {
+  if (head.passed) {
+    return {
+      conclusion: 'success',
+      passed: true,
+      summary: `PR readiness passes (${head.code}).`,
+      base,
+      head,
+    };
+  }
+
+  const sameBlockingFindings =
+    base.blocking_findings.length === head.blocking_findings.length &&
+    base.blocking_findings.every((finding, index) => finding === head.blocking_findings[index]);
+  if (!base.passed && base.code === head.code && sameBlockingFindings) {
+    return {
+      conclusion: 'neutral',
+      passed: true,
+      summary:
+        `PR inherits repository readiness debt (${head.code}) from base; ` +
+        'the PR did not introduce a new readiness classification.',
+      base,
+      head,
+    };
+  }
+
+  return {
+    conclusion: 'failure',
+    passed: false,
+    summary: `PR readiness regressed from ${base.code} to ${head.code}.`,
+    base,
+    head,
+  };
 }
 
 // ── Persistence assertion ────────────────────────────────────────────────────
@@ -369,6 +435,30 @@ export function main(argv = process.argv.slice(2)): number {
   const mode = argValue(argv, '--mode') ?? 'gate';
   const file = path.resolve(REPO_ROOT, argValue(argv, '--file') ?? 'docs/06_status/readiness/readiness-score.json');
   const jsonMode = argv.includes('--json');
+
+  if (mode === 'regression') {
+    const basePath = argValue(argv, '--base');
+    if (!basePath) {
+      console.error('::error title=readiness regression input missing::--base <ledger-path> is required');
+      return 1;
+    }
+    const now = new Date();
+    const result = evaluateReadinessRegression(
+      evaluateLedgerFile(path.resolve(REPO_ROOT, basePath), now),
+      evaluateLedgerFile(file, now),
+    );
+    if (jsonMode) console.log(JSON.stringify(result, null, 2));
+    if (result.conclusion === 'failure') {
+      console.error(`::error title=readiness regression::${result.summary}`);
+      return 1;
+    }
+    if (result.conclusion === 'neutral') {
+      console.log(`::notice title=repository readiness debt::${result.summary}`);
+    } else {
+      console.log(`[readiness-regression] ${result.summary}`);
+    }
+    return 0;
+  }
 
   if (mode === 'persistence') {
     const previousPath = argValue(argv, '--previous');
