@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1611",
+  "title": "Board pick writer must not bypass governance brake into validated",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "status": "ready_for_pm_review",
+  "generated_at": "2026-08-16T15:20:40Z",
+  "sha_binding": {
+    "verified_source_sha": "63133bc28d76fccb97afc51ae55b0d3070472ebc",
+    "base_sha": "4707c0ce78d338b49d926c9b31a1ebbf9d7f8883",
+    "verified_source_note": "Implementation commit containing the shared automated write boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": null,
+    "sha_type": "implementation_sha",
+    "bound_at": null
+  },
+  "verifier": {
+    "identity": "codex-cli/utv2-1611-automated-write-boundary",
+    "role": "implementation-lane",
+    "independence_note": "Executor-produced static and in-memory runtime evidence. Writable database verification remains delegated to the staging-ci GitHub environment and this bundle does not claim PM approval or production certification."
+  },
+  "scope": {
+    "runtime_change": true,
+    "database_change": false,
+    "migration_change": false,
+    "production_mutation_by_lane": false,
+    "implementation_paths": [
+      "apps/api/src/automated-write-boundary.test.ts",
+      "apps/api/src/automated-write-boundary.ts",
+      "apps/api/src/board-pick-writer.test.ts",
+      "apps/api/src/board-pick-writer.ts",
+      "apps/api/src/candidate-pick-scanner.test.ts",
+      "apps/api/src/candidate-pick-scanner.ts",
+      "apps/api/src/submission-service.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1611/evidence.json",
+      "docs/06_status/proof/UTV2-1611/model-routing.json"
+    ],
+    "does_not_claim": [
+      "No Supabase project was mutated by this lane.",
+      "No production API or scanner process was started.",
+      "No scanner enablement flag was changed.",
+      "No stranded awaiting_approval row was read or mutated for remediation.",
+      "No T1 PM approval, merge authorization, or production readiness verdict is claimed."
+    ]
+  },
+  "implemented_boundary": {
+    "classification": "board-construction or system-pick-scanner source with metadata.systemGenerated=true",
+    "shared_enforcement_point": "apps/api/src/submission-service.ts calls prepareAutomatedSubmission before idempotency lookup and persistence",
+    "initial_lifecycle_state": "awaiting_approval",
+    "atomicity": "The requested initial lifecycle state is supplied to createCanonicalPickFromSubmission and persisted with the pick and birth lifecycle event; no validated-to-awaiting transition is used.",
+    "approval_dimension_note": "approval_status remains separate from picks.status; lifecycle awaiting_approval is the operator-review gate.",
+    "freshness_posture": "market-universe identity, provider market key, snapshot timestamp, provider key, and current freshness are required before any automated submission write.",
+    "provenance": "metadata.automatedWriteBoundary records producer, source, source snapshot time and age, transition actor, transition reason, and required state; the birth lifecycle event uses the same actor role and reason.",
+    "human_path_preserved": "Non-system-generated submissions, including operator board-construction submissions, retain the existing validated initial state.",
+    "readiness_signal": "detectAutomatedDirectToValidatedWrite identifies the forbidden automated validated state and submission idempotency checks fail closed when it is observed."
+  },
+  "static_proof": {
+    "pnpm_verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "exit_code": 0,
+      "includes": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "excludes": [
+        "test:db",
+        "test:t1-proof:live"
+      ]
+    },
+    "focused_issue_tests": {
+      "command": "pnpm exec tsx --test 'apps/api/src/automated-write-boundary.test.ts' 'apps/api/src/board-pick-writer.test.ts' 'apps/api/src/candidate-pick-scanner.test.ts'",
+      "status": "PASS",
+      "tests": 37,
+      "pass": 37,
+      "fail": 0,
+      "skipped": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "rules_matched": [
+        "lifecycle-fsm"
+      ],
+      "required": [
+        "R1",
+        "R2",
+        "R3",
+        "R4"
+      ],
+      "artifact_resolution": {
+        "r2-determinism": "artifacts/r2-determinism-utv2-845.json (existing repository artifact matched by the configured glob)",
+        "r3-shadow-report": "artifacts/shadow-report-utv2-845.json (existing repository artifact matched by the configured glob)",
+        "r4-fault-report": "missing and reported advisory because R4 is PM-gated"
+      }
+    }
+  },
+  "runtime_proof": {
+    "environment": "Local in-memory repository execution in the isolated lane worktree; no API process, scheduler, or database connection was started.",
+    "mechanism": "Focused node:test integration coverage executes the real submission service with InMemory repositories plus board/scanner producer loops.",
+    "observations": [
+      "Automated board submissions are born awaiting_approval with boundary and lifecycle provenance.",
+      "Automated scanner submissions are born awaiting_approval; the existing governance-brake call observes already_gated and remains idempotent.",
+      "Missing or stale source evidence stops both producer loops before submission persistence.",
+      "Schedule flags control whether producers execute but cannot turn an automated pick into validated or approved lifecycle state.",
+      "Manual submissions remain validated.",
+      "The readiness detector reports a system-generated board/scanner pick observed in validated."
+    ],
+    "pnpm_test_db": {
+      "command": "pnpm test:db",
+      "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+      "executed_locally": false,
+      "reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "required_target_project_ref": "xskgrzbteyqdufktjrjx",
+      "authoritative_source": "staging-ci GitHub environment receipt on the exact PR head",
+      "production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "production_targeted": false
+    },
+    "credential_transport": {
+      "method": "none",
+      "env_files_copied": false,
+      "production_credentials_used": false
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Every automated board/scanner pick enters awaiting_approval without a transient validated state.",
+      "status": "PASS_STATIC_AND_IN_MEMORY",
+      "evidence": "Shared submission boundary selects awaiting_approval as the initial state and focused submission/producer tests assert the persisted pick and birth lifecycle event."
+    },
+    {
+      "criterion": "Scheduler and enablement flags decide execution only and cannot approve an automated write.",
+      "status": "PASS",
+      "evidence": "Board writer tests exercise enabled and override execution paths and assert awaiting_approval; submission-service enforcement is independent of scheduler flags."
+    },
+    {
+      "criterion": "Missing or stale evidence fails before write.",
+      "status": "PASS",
+      "evidence": "Boundary tests reject missing/stale evidence, while board/scanner tests verify missing re-reads and stale snapshots produce no submission."
+    },
+    {
+      "criterion": "Record producer provenance, transition actor, and reason.",
+      "status": "PASS",
+      "evidence": "automatedWriteBoundary metadata and the birth lifecycle event record the producer-derived actor and explicit operator-approval reason."
+    },
+    {
+      "criterion": "Readiness can mechanically detect any direct automated validated write.",
+      "status": "PASS",
+      "evidence": "detectAutomatedDirectToValidatedWrite and assertNoAutomatedDirectToValidatedWrite have positive and negative coverage and guard idempotent legacy observations."
+    },
+    {
+      "criterion": "Human/manual submission behavior remains unchanged.",
+      "status": "PASS",
+      "evidence": "Classification requires systemGenerated=true and a focused test confirms a manual board-construction submission remains validated."
+    },
+    {
+      "criterion": "Writable Postgres proof exercises the exact change through the real pipeline.",
+      "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+      "evidence": "The local target identity is unparseable; the required staging project xskgrzbteyqdufktjrjx must supply the authoritative exact-head receipt through staging-ci."
+    }
+  ],
+  "known_limitations": [
+    "The implementation lane cannot claim live Postgres behavior until staging-ci produces an exact-head receipt for xskgrzbteyqdufktjrjx.",
+    "Readiness detection is exposed as a shared helper and enforced during idempotent submission lookup; deployment of a broader operator query is outside this issue's allowed scope.",
+    "Implementation readiness is not production readiness."
+  ],
+  "verdict": "PASS_IMPLEMENTATION_WITH_DB_PROOF_DEFERRED"
+}
