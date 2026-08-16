@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1713-linear-auto-close-cancellation",
   "branch": "claude/utv2-1713-linear-auto-close-cancellation",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e337226de55adbbafc52389c946bb84e289b51fe",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1425",
-  "files_changed": [],
+  "files_changed": [
+    ".github/workflows/linear-auto-close.yml",
+    "docs/06_status/proof/UTV2-1713/diff-summary.md",
+    "docs/06_status/proof/UTV2-1713/verification.md",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows/linear-auto-close.yml",
     "scripts/ops/workflow-hardening.test.ts"
@@ -18,14 +23,22 @@
     "docs/06_status/proof/UTV2-1713/diff-summary.md",
     "docs/06_status/proof/UTV2-1713/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-16T11:02:59.313Z",
-  "heartbeat_at": "2026-08-16T11:42:21.998Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-16T12:23:27.525Z",
+  "closed_at": "2026-08-16T12:23:27.525Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1713-linear-auto-close-cancellation.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-16T12:23:25.499Z",
+      "verdict": "pass",
+      "merge_sha": "e337226de55adbbafc52389c946bb84e289b51fe",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
