@@ -15,7 +15,7 @@
   "closeout_binding": {
     "sha_type": "pending_merge_sha",
     "merge_sha": null,
-    "pr_url": null,
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1427",
     "bound_at": null
   }
 }

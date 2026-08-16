@@ -37,8 +37,10 @@
       "apps/api/src/submission-service.ts"
     ],
     "proof_paths": [
+      "docs/06_status/proof/UTV2-1611/diff-summary.md",
       "docs/06_status/proof/UTV2-1611/evidence.json",
-      "docs/06_status/proof/UTV2-1611/model-routing.json"
+      "docs/06_status/proof/UTV2-1611/model-routing.json",
+      "docs/06_status/proof/UTV2-1611/verification.md"
     ],
     "does_not_claim": [
       "No Supabase project was mutated by this lane.",
