@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
+  createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
   transitionPickLifecycle,
   type RepositoryBundle,
@@ -25,16 +26,53 @@ const skipReason = hasSupabaseSmokeEnvironment()
   : 'SUPABASE_SERVICE_ROLE_KEY not configured - skipping live DB proof';
 
 let repositories: RepositoryBundle;
+let supabase: ReturnType<typeof createDatabaseClientFromConnection>;
 
 before(() => {
   if (skipReason) return;
   const env = loadEnvironment();
-  repositories = createDatabaseRepositoryBundle(createServiceRoleDatabaseConnectionConfig(env));
+  const connection = createServiceRoleDatabaseConnectionConfig(env);
+  repositories = createDatabaseRepositoryBundle(connection);
+  supabase = createDatabaseClientFromConnection(connection);
 });
+
+async function upsertCanonicalPlayerFixture(input: {
+  id: string;
+  displayName: string;
+  fixtureId: string;
+  proofIssue: string;
+}) {
+  const { error } = await supabase.from('players').upsert({
+    id: input.id,
+    display_name: input.displayName,
+    active: true,
+    metadata: {
+      proofFixtureId: input.fixtureId,
+      proofIssue: input.proofIssue,
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  if (error) {
+    throw new Error(`Failed to upsert canonical player fixture: ${error.message}`);
+  }
+}
 
 test('UTV2 runtime truth proof: smart-form playerId persists canonical participant linkage in live DB', { skip: skipReason }, async () => {
   const fixtureId = `utv2-303-player-link-${randomUUID()}`;
   const fixtureSuffix = fixtureId.slice(-8);
+  const eventName = `UTV2 Proof Event ${fixtureSuffix}`;
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `${fixtureId}-event`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {
+      proofFixtureId: fixtureId,
+      proofIssue: 'UTV2-614',
+    },
+  });
   const participant = await repositories.participants.upsertByExternalId({
     externalId: fixtureId,
     displayName: `UTV2 Proof Player ${fixtureSuffix}`,
@@ -46,6 +84,12 @@ test('UTV2 runtime truth proof: smart-form playerId persists canonical participa
       proofIssue: 'UTV2-614',
     },
   });
+  await upsertCanonicalPlayerFixture({
+    id: participant.id,
+    displayName: participant.display_name,
+    fixtureId,
+    proofIssue: 'UTV2-614',
+  });
 
   const created = await processSubmission(
     {
@@ -55,8 +99,9 @@ test('UTV2 runtime truth proof: smart-form playerId persists canonical participa
       selection: `${participant.display_name} Over 27.5`,
       line: 27.5,
       odds: -110,
-      eventName: `UTV2 Proof Event ${fixtureSuffix}`,
+      eventName,
       metadata: {
+        eventId: event.id,
         playerId: participant.id,
         proofFixtureId: fixtureId,
         proofIssue: 'UTV2-614',
@@ -81,6 +126,18 @@ test('UTV2 runtime truth proof: smart-form playerId persists canonical participa
 test('UTV2 runtime truth proof: settlement persists explicit CLV diagnostics in live DB', { skip: skipReason }, async () => {
   const fixtureId = `utv2-303-clv-${randomUUID()}`;
   const fixtureSuffix = fixtureId.slice(-8);
+  const eventName = `UTV2 Proof Event ${fixtureSuffix}`;
+  const event = await repositories.events.upsertByExternalId({
+    externalId: `${fixtureId}-event`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {
+      proofFixtureId: fixtureId,
+      proofIssue: 'UTV2-618',
+    },
+  });
   const participant = await repositories.participants.upsertByExternalId({
     externalId: fixtureId,
     displayName: `UTV2 CLV Proof Player ${fixtureSuffix}`,
@@ -92,6 +149,12 @@ test('UTV2 runtime truth proof: settlement persists explicit CLV diagnostics in 
       proofIssue: 'UTV2-618',
     },
   });
+  await upsertCanonicalPlayerFixture({
+    id: participant.id,
+    displayName: participant.display_name,
+    fixtureId,
+    proofIssue: 'UTV2-618',
+  });
 
   const created = await processSubmission(
     {
@@ -101,8 +164,9 @@ test('UTV2 runtime truth proof: settlement persists explicit CLV diagnostics in 
       selection: `${participant.display_name} Over 24.5`,
       line: 24.5,
       odds: -110,
-      eventName: `UTV2 Proof Event ${fixtureSuffix}`,
+      eventName,
       metadata: {
+        eventId: event.id,
         playerId: participant.id,
         proofFixtureId: fixtureId,
         proofIssue: 'UTV2-618',

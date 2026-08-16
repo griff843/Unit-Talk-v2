@@ -20,7 +20,10 @@ function readWorkflow(name: string): string {
 
 function readWorkflowYaml(name: string): WorkflowDocument {
   const parsed = parseYaml(readWorkflow(name)) as unknown;
-  assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), `${name} must parse as a YAML object`);
+  assert.ok(
+    parsed && typeof parsed === 'object' && !Array.isArray(parsed),
+    `${name} must parse as a YAML object`,
+  );
   return parsed as WorkflowDocument;
 }
 
@@ -28,16 +31,30 @@ function readClaudeCommand(name: string): string {
   return fs.readFileSync(path.join(ROOT, '.claude', 'commands', name), 'utf8');
 }
 
+function readRootPackageJson(): { scripts?: Record<string, string> } {
+  return JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'),
+  ) as {
+    scripts?: Record<string, string>;
+  };
+}
+
 function objectField(input: WorkflowDocument, key: string): WorkflowDocument {
   const value = input[key];
-  assert.ok(value && typeof value === 'object' && !Array.isArray(value), `${key} must be an object`);
+  assert.ok(
+    value && typeof value === 'object' && !Array.isArray(value),
+    `${key} must be an object`,
+  );
   return value as WorkflowDocument;
 }
 
 function stringArrayField(input: WorkflowDocument, key: string): string[] {
   const value = input[key];
   assert.ok(Array.isArray(value), `${key} must be an array`);
-  assert.ok(value.every((item) => typeof item === 'string'), `${key} must contain only strings`);
+  assert.ok(
+    value.every((item) => typeof item === 'string'),
+    `${key} must contain only strings`,
+  );
   return value as string[];
 }
 
@@ -71,7 +88,11 @@ test('migration linter flags destructive audit_log statements with file and stat
   );
   assert.deepStrictEqual(
     findings.map((finding: { file: string }) => finding.file),
-    ['future_bad_migration.sql', 'future_bad_migration.sql', 'future_bad_migration.sql'],
+    [
+      'future_bad_migration.sql',
+      'future_bad_migration.sql',
+      'future_bad_migration.sql',
+    ],
   );
   assert.match(findings[0].statement, /DELETE FROM public\.audit_log/i);
   assert.match(findings[1].statement, /UPDATE audit_log/i);
@@ -83,7 +104,7 @@ test('migration linter allows audit_log inserts and immutability triggers', asyn
 
   const findings = lintMigrationContent(
     [
-      'insert into public.audit_log (id, entity_type) values (gen_random_uuid(), \'pick\');',
+      "insert into public.audit_log (id, entity_type) values (gen_random_uuid(), 'pick');",
       'create trigger audit_log_immutable',
       '  before update or delete on public.audit_log',
       '  for each row execute function public.prevent_audit_log_mutation();',
@@ -97,21 +118,43 @@ test('migration linter allows audit_log inserts and immutability triggers', asyn
 test('clean-scripts only keeps untracked files under scripts', () => {
   assert.deepStrictEqual(
     normalizeUntrackedScriptFiles(
-      ['scripts/proof-a.ts', 'apps/api/src/scripts/proof-b.ts', 'scripts/nested/tool.ts', '../scripts/nope.ts'].join('\n'),
+      [
+        'scripts/proof-a.ts',
+        'apps/api/src/scripts/proof-b.ts',
+        'scripts/nested/tool.ts',
+        '../scripts/nope.ts',
+      ].join('\n'),
     ),
     ['scripts/nested/tool.ts', 'scripts/proof-a.ts'],
   );
 });
 
+test('verify gate executes the T1 proof test script', () => {
+  const pkg = readRootPackageJson();
+  const verify = pkg.scripts?.['verify'] ?? '';
+
+  assert.match(verify, /\bpnpm test:t1-proof\b/);
+  assert.match(
+    pkg.scripts?.['test:t1-proof'] ?? '',
+    /t1-proof-utv2-1108-authority-matrix\.test\.ts/,
+  );
+  assert.match(
+    pkg.scripts?.['test:t1-proof'] ?? '',
+    /t1-proof-utv2-1183-terminal-rollback-states\.test\.ts/,
+  );
+});
+
 test('branch discipline extracts unique issue IDs case-insensitively', () => {
-  assert.deepStrictEqual(extractIssueIds('fix UTV2-123 and utv2-123, refs UTV2-124'), [
-    'UTV2-123',
-    'UTV2-124',
-  ]);
+  assert.deepStrictEqual(
+    extractIssueIds('fix UTV2-123 and utv2-123, refs UTV2-124'),
+    ['UTV2-123', 'UTV2-124'],
+  );
 });
 
 test('branch discipline fails on multiple issue IDs', () => {
-  const result = evaluateIssueReferences('PR title UTV2-123\nBody mentions UTV2-124');
+  const result = evaluateIssueReferences(
+    'PR title UTV2-123\nBody mentions UTV2-124',
+  );
   assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'multiple_issue_references');
   assert.match(result.errors.join('\n'), /UTV2-123, UTV2-124/);
@@ -193,7 +236,10 @@ test('branch discipline ignores marked proof sections and TAP lines', () => {
     'No overlapping files.',
   ].join('\n');
 
-  assert.doesNotMatch(normalizeProofOutputForIssueBinding(body), /UTV2-866|UTV2-901/);
+  assert.doesNotMatch(
+    normalizeProofOutputForIssueBinding(body),
+    /UTV2-866|UTV2-901/,
+  );
 
   const result = evaluateBranchDiscipline({
     title: 'fix(ops): UTV2-1172 branch discipline proof handling',
@@ -220,22 +266,39 @@ test('branch discipline still fails mismatched prose issue references', () => {
 });
 
 test('session start state cache writes only to ignored local output', () => {
-  const hook = fs.readFileSync(path.join(ROOT, '.claude', 'hooks', 'session-start.sh'), 'utf8');
+  const hook = fs.readFileSync(
+    path.join(ROOT, '.claude', 'hooks', 'session-start.sh'),
+    'utf8',
+  );
 
   assert.match(hook, /SESSION_STATE_DIR="\$ROOT\/\.out\/ops\/session-state"/);
   assert.match(hook, /STAMP_FILE="\$SESSION_STATE_DIR\/\.state-stamp"/);
   assert.match(hook, /STATE_FILE="\$SESSION_STATE_DIR\/SYSTEM_STATE\.md"/);
   assert.doesNotMatch(hook, /STAMP_FILE="\$ROOT\/\.claude\/\.state-stamp"/);
-  assert.doesNotMatch(hook, /STATE_FILE="\$ROOT\/docs\/06_status\/SYSTEM_STATE\.md"/);
-  assert.match(fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8'), /^\.out\/$/m);
+  assert.doesNotMatch(
+    hook,
+    /STATE_FILE="\$ROOT\/docs\/06_status\/SYSTEM_STATE\.md"/,
+  );
+  assert.match(
+    fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8'),
+    /^\.out\/$/m,
+  );
 });
 
 test('governance lane authority covers Claude hook orchestration files', () => {
-  const manifest = parseYaml(fs.readFileSync(path.join(ROOT, '.lane', 'lanes', 'governance.yml'), 'utf8')) as {
+  const manifest = parseYaml(
+    fs.readFileSync(
+      path.join(ROOT, '.lane', 'lanes', 'governance.yml'),
+      'utf8',
+    ),
+  ) as {
     allowed_path_globs?: unknown;
   };
 
-  assert.ok(Array.isArray(manifest.allowed_path_globs), 'governance allowed_path_globs must be an array');
+  assert.ok(
+    Array.isArray(manifest.allowed_path_globs),
+    'governance allowed_path_globs must be an array',
+  );
   assert.ok(
     manifest.allowed_path_globs.includes('.claude/hooks/**'),
     'governance lane must allow Claude hook orchestration changes',
@@ -243,10 +306,18 @@ test('governance lane authority covers Claude hook orchestration files', () => {
 });
 
 test('required PR check workflows do not create stale merge-gate contexts on opened events', () => {
-  const mergeGate = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'merge-gate.yml'), 'utf8');
-  const mergeGatePullRequestBlock = mergeGate.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+  const mergeGate = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'merge-gate.yml'),
+    'utf8',
+  );
+  const mergeGatePullRequestBlock = mergeGate.match(
+    /pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/,
+  );
 
-  assert.ok(mergeGatePullRequestBlock, 'merge-gate.yml must declare explicit pull_request types');
+  assert.ok(
+    mergeGatePullRequestBlock,
+    'merge-gate.yml must declare explicit pull_request types',
+  );
   assert.doesNotMatch(
     mergeGatePullRequestBlock[1] ?? '',
     /(^|,\s*)opened(\s*,|$)/,
@@ -255,10 +326,18 @@ test('required PR check workflows do not create stale merge-gate contexts on ope
 });
 
 test('tier label sync runs on opened so PM does not manually apply GitHub tier labels', () => {
-  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'tier-label-check.yml'), 'utf8');
-  const pullRequestBlock = workflow.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github', 'workflows', 'tier-label-check.yml'),
+    'utf8',
+  );
+  const pullRequestBlock = workflow.match(
+    /pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/,
+  );
 
-  assert.ok(pullRequestBlock, 'tier-label-check.yml must declare explicit pull_request types');
+  assert.ok(
+    pullRequestBlock,
+    'tier-label-check.yml must declare explicit pull_request types',
+  );
   assert.match(
     pullRequestBlock[1] ?? '',
     /(^|,\s*)opened(\s*,|$)/,
@@ -279,23 +358,45 @@ test('merge gate is structurally wired for PM verdict comments without opened PR
     'unlabeled',
     'ready_for_review',
   ]);
-  assert.deepStrictEqual(stringArrayField(issueComment, 'types'), ['created', 'edited']);
-  assert.match(gateIf, /PM_VERDICT:/, 'merge gate must respond to PM verdict comments');
+  assert.deepStrictEqual(stringArrayField(issueComment, 'types'), [
+    'created',
+    'edited',
+  ]);
+  assert.match(
+    gateIf,
+    /PM_VERDICT:/,
+    'merge gate must respond to PM verdict comments',
+  );
 });
 
 test('required pull-request gates are wired to executable blocking jobs', () => {
   const requiredGateJobs = [
     ['executor-result-validator.yml', 'validate', 'Executor Result Validation'],
     ['file-scope-lock-check.yml', 'check', 'File scope lock'],
-    ['r-level-compliance-check.yml', 'r-level-compliance-check', 'R-Level Compliance Check'],
-    ['return-review-packet.yml', 'return-review-packet', 'Return review packet'],
+    [
+      'r-level-compliance-check.yml',
+      'r-level-compliance-check',
+      'R-Level Compliance Check',
+    ],
+    [
+      'return-review-packet.yml',
+      'return-review-packet',
+      'Return review packet',
+    ],
     ['proof-auditor-gate.yml', 'proof-auditor-gate', 'Proof Auditor Gate'],
-    ['runtime-verifier-gate.yml', 'runtime-verifier-gate', 'Runtime Verifier Gate'],
+    [
+      'runtime-verifier-gate.yml',
+      'runtime-verifier-gate',
+      'Runtime Verifier Gate',
+    ],
   ] as const;
 
   for (const [workflowName, jobId, jobName] of requiredGateJobs) {
     const workflow = readWorkflowYaml(workflowName);
-    const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
+    const pullRequest = objectField(
+      objectField(workflow, 'on'),
+      'pull_request',
+    );
     const jobs = objectField(workflow, 'jobs');
     const job = objectField(jobs, jobId);
 
@@ -303,8 +404,15 @@ test('required pull-request gates are wired to executable blocking jobs', () => 
       stringArrayField(pullRequest, 'types').includes('synchronize'),
       `${workflowName} must rerun on synchronize`,
     );
-    assert.strictEqual(job.name, jobName, `${workflowName} must expose the required check name`);
-    assert.ok(Array.isArray(job.steps), `${workflowName} job ${jobId} must have executable steps`);
+    assert.strictEqual(
+      job.name,
+      jobName,
+      `${workflowName} must expose the required check name`,
+    );
+    assert.ok(
+      Array.isArray(job.steps),
+      `${workflowName} job ${jobId} must have executable steps`,
+    );
   }
 });
 
@@ -324,13 +432,31 @@ test('codex return review extracts issue IDs without sed delimiter traps', () =>
 });
 
 test('proof and runtime gates watch proof, lane, and ops control-plane paths', () => {
-  const proofPaths = stringArrayField(workflowEvent('proof-auditor-gate.yml', 'pull_request'), 'paths');
-  const runtimePaths = stringArrayField(workflowEvent('runtime-verifier-gate.yml', 'pull_request'), 'paths');
+  const proofPaths = stringArrayField(
+    workflowEvent('proof-auditor-gate.yml', 'pull_request'),
+    'paths',
+  );
+  const runtimePaths = stringArrayField(
+    workflowEvent('runtime-verifier-gate.yml', 'pull_request'),
+    'paths',
+  );
 
-  assert.ok(proofPaths.includes('docs/06_status/proof/**'), 'proof auditor must watch proof directories');
-  assert.ok(runtimePaths.includes('docs/06_status/proof/**'), 'runtime verifier must watch proof directories');
-  assert.ok(runtimePaths.includes('docs/06_status/lanes/**'), 'runtime verifier must watch lane manifests');
-  assert.ok(runtimePaths.includes('scripts/ops/**'), 'runtime verifier must watch ops control-plane changes');
+  assert.ok(
+    proofPaths.includes('docs/06_status/proof/**'),
+    'proof auditor must watch proof directories',
+  );
+  assert.ok(
+    runtimePaths.includes('docs/06_status/proof/**'),
+    'runtime verifier must watch proof directories',
+  );
+  assert.ok(
+    runtimePaths.includes('docs/06_status/lanes/**'),
+    'runtime verifier must watch lane manifests',
+  );
+  assert.ok(
+    runtimePaths.includes('scripts/ops/**'),
+    'runtime verifier must watch ops control-plane changes',
+  );
 });
 
 test('CI avoids duplicate verify jobs for codex PR branches', () => {
@@ -341,7 +467,10 @@ test('CI avoids duplicate verify jobs for codex PR branches', () => {
   const concurrency = objectField(workflow, 'concurrency');
 
   assert.deepStrictEqual(branches, ['main']);
-  assert.ok(on.pull_request !== undefined, 'CI must still run for pull requests');
+  assert.ok(
+    on.pull_request !== undefined,
+    'CI must still run for pull requests',
+  );
   assert.match(stringField(concurrency, 'group'), /pull_request\.number/);
   assert.strictEqual(concurrency['cancel-in-progress'], true);
 });
@@ -349,8 +478,14 @@ test('CI avoids duplicate verify jobs for codex PR branches', () => {
 test('loop-dispatch requires live governor commands before every cycle', () => {
   const command = readClaudeCommand('loop-dispatch.md');
 
-  const phase0 = command.slice(command.indexOf('## Phase 0:'), command.indexOf('## Phase 1:'));
-  const cycleStart = command.slice(command.indexOf('### Cycle start'), command.indexOf('### After each cycle'));
+  const phase0 = command.slice(
+    command.indexOf('## Phase 0:'),
+    command.indexOf('## Phase 1:'),
+  );
+  const cycleStart = command.slice(
+    command.indexOf('### Cycle start'),
+    command.indexOf('### After each cycle'),
+  );
 
   for (const required of [
     'pnpm ops:merge-risk',
@@ -358,8 +493,14 @@ test('loop-dispatch requires live governor commands before every cycle', () => {
     'pnpm ops:lane-maximizer',
     'pnpm ops:orchestration-reconcile --current --json',
   ]) {
-    assert.match(phase0, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    assert.match(cycleStart, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(
+      phase0,
+      new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    );
+    assert.match(
+      cycleStart,
+      new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    );
   }
 
   assert.match(command, /hard fail or block/i);
@@ -369,22 +510,40 @@ test('loop-dispatch requires live governor commands before every cycle', () => {
 
 test('loop-dispatch bookends cycles with reconciliation and repair command reporting', () => {
   const command = readClaudeCommand('loop-dispatch.md');
-  const cycleEnd = command.slice(command.indexOf('### Cycle-end reconciliation'), command.indexOf('### Cycle limit'));
+  const cycleEnd = command.slice(
+    command.indexOf('### Cycle-end reconciliation'),
+    command.indexOf('### Cycle limit'),
+  );
 
   assert.match(cycleEnd, /pnpm ops:orchestration-reconcile --current --json/);
-  assert.match(cycleEnd, /Repair command: \{first repair_plan action command \| none available\}/);
-  assert.match(command, /Start and end every cycle with `ops:orchestration-reconcile --current --json`/);
+  assert.match(
+    cycleEnd,
+    /Repair command: \{first repair_plan action command \| none available\}/,
+  );
+  assert.match(
+    command,
+    /Start and end every cycle with `ops:orchestration-reconcile --current --json`/,
+  );
 });
 
 test('loop-dispatch summary exposes live executor state and recommendations', () => {
   const command = readClaudeCommand('loop-dispatch.md');
-  const summary = command.slice(command.indexOf('LOOP-DISPATCH — SESSION COMPLETE'), command.indexOf('## --dry-run behavior'));
+  const summary = command.slice(
+    command.indexOf('LOOP-DISPATCH — SESSION COMPLETE'),
+    command.indexOf('## --dry-run behavior'),
+  );
 
-  assert.match(summary, /Active lanes:\s+Claude \{N\}, Codex \{N\}, Unknown \{N\}/);
+  assert.match(
+    summary,
+    /Active lanes:\s+Claude \{N\}, Codex \{N\}, Unknown \{N\}/,
+  );
   assert.match(summary, /Available slots:\s+Claude \{N\}, Codex \{N\}/);
   assert.match(summary, /Blocked lanes:\s+\{issue IDs or none\}/);
   assert.match(summary, /CI\/PM waiting:\s+\{PR numbers and reason or none\}/);
-  assert.match(summary, /Recommendations:\s+\{execution-state and lane-maximizer next recommendations\}/);
+  assert.match(
+    summary,
+    /Recommendations:\s+\{execution-state and lane-maximizer next recommendations\}/,
+  );
 });
 
 test('loop-dispatch delegates executor limits to concurrency config', () => {
@@ -407,10 +566,18 @@ test('dispatch surfaces share live governor and reconciliation gates', () => {
       'pnpm ops:lane-maximizer',
       'pnpm ops:orchestration-reconcile --current --json',
     ]) {
-      assert.match(command, new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `${name} missing ${required}`);
+      assert.match(
+        command,
+        new RegExp(required.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+        `${name} missing ${required}`,
+      );
     }
 
-    assert.match(command, /Repair command: \{first repair_plan action command \| none available\}/, `${name} must surface one repair command`);
+    assert.match(
+      command,
+      /Repair command: \{first repair_plan action command \| none available\}/,
+      `${name} must surface one repair command`,
+    );
   }
 });
 
@@ -418,8 +585,16 @@ test('dispatch surfaces delegate lane counts and forbidden combinations to confi
   for (const name of ['dispatch.md', 'dispatch-board.md']) {
     const command = readClaudeCommand(name);
 
-    assert.match(command, /docs\/governance\/CONCURRENCY_CONFIG\.json/, `${name} must cite concurrency config`);
-    assert.match(command, /forbidden-combination|forbidden combination/i, `${name} must preserve forbidden-combination handling`);
+    assert.match(
+      command,
+      /docs\/governance\/CONCURRENCY_CONFIG\.json/,
+      `${name} must cite concurrency config`,
+    );
+    assert.match(
+      command,
+      /forbidden-combination|forbidden combination/i,
+      `${name} must preserve forbidden-combination handling`,
+    );
     assert.doesNotMatch(command, /max 2 Claude/i);
     assert.doesNotMatch(command, /max 4 Codex/i);
     assert.doesNotMatch(command, /up to 2 Claude/i);

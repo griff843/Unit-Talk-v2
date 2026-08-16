@@ -94,6 +94,7 @@ test('POST /api/qa/seed-pick returns 501 when QA seed is disabled', async () => 
       {
         UNIT_TALK_QA_SEED_ENABLED: 'false',
         NODE_ENV: 'development',
+        UNIT_TALK_APP_ENV: 'test',
         DISCORD_QA_CHANNEL_MAP: mapPath,
       },
       async () => {
@@ -119,6 +120,7 @@ test('POST /api/qa/seed-pick returns 403 in production', async () => {
       {
         UNIT_TALK_QA_SEED_ENABLED: 'true',
         NODE_ENV: 'development',
+        UNIT_TALK_APP_ENV: 'test',
         DISCORD_QA_CHANNEL_MAP: mapPath,
       },
       async () => {
@@ -146,6 +148,7 @@ test('POST /api/qa/seed-pick returns the seed response shape and enqueues sandbo
       {
         UNIT_TALK_QA_SEED_ENABLED: 'true',
         NODE_ENV: 'development',
+        UNIT_TALK_APP_ENV: 'test',
         DISCORD_QA_CHANNEL_MAP: mapPath,
       },
       async () => {
@@ -185,6 +188,7 @@ test('GET /api/qa/pick-status/:id returns the pick and outbox status shape', asy
       {
         UNIT_TALK_QA_SEED_ENABLED: 'true',
         NODE_ENV: 'development',
+        UNIT_TALK_APP_ENV: 'test',
         DISCORD_QA_CHANNEL_MAP: mapPath,
       },
       async () => {

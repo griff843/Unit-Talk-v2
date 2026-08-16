@@ -12,7 +12,10 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { createErrorTracker, createMetricsCollector } from '@unit-talk/observability';
+import {
+  createErrorTracker,
+  createMetricsCollector,
+} from '@unit-talk/observability';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
@@ -21,7 +24,9 @@ import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createTestServer(overrides: Parameters<typeof createApiServer>[0] = {}) {
+function createTestServer(
+  overrides: Parameters<typeof createApiServer>[0] = {},
+) {
   return createApiServer({
     runtime: createApiRuntimeDependencies({
       repositories: createInMemoryRepositoryBundle(),
@@ -86,6 +91,7 @@ test('POST /api/submissions with valid body returns 201 and pick id', async () =
           source: 'api',
           market: 'NBA points',
           selection: 'Player Over 22.5',
+          stakeUnits: 1,
         }),
       },
     );
@@ -195,7 +201,10 @@ test('POST /api/submissions with oversized body returns 413', async () => {
         }),
       },
     );
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 413);
     assert.equal(body.ok, false);
@@ -313,7 +322,10 @@ test('POST /api/picks/:id/settle with empty body returns 400', async () => {
       },
     );
 
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 400);
     assert.equal(body.ok, false);

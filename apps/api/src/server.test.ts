@@ -28,6 +28,34 @@ const RATE_LIMIT_TEST_CONFIG: ApiSubmissionRateLimit = {
   store: 'memory',
 };
 
+async function withTargetRegistryDefaults<T>(run: () => Promise<T>): Promise<T> {
+  const envKeys = [
+    'UNIT_TALK_APP_ENV',
+    'UNIT_TALK_DISTRIBUTION_TARGETS',
+    'UNIT_TALK_ENABLED_TARGETS',
+    'UNIT_TALK_ROLLOUT_CONFIG',
+  ] as const;
+  const previous = new Map(envKeys.map((key) => [key, process.env[key]]));
+
+  process.env.UNIT_TALK_APP_ENV = 'test';
+  delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  delete process.env.UNIT_TALK_ENABLED_TARGETS;
+  delete process.env.UNIT_TALK_ROLLOUT_CONFIG;
+
+  try {
+    return await run();
+  } finally {
+    for (const key of envKeys) {
+      const originalValue = previous.get(key);
+      if (originalValue === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalValue;
+      }
+    }
+  }
+}
+
 test('rate limit store increments a shared counter and resets after window expiry', () => {
   const store = new InMemoryApiRateLimitStore();
 
@@ -1495,7 +1523,7 @@ test('POST /api/picks/:id/requeue returns 422 when pick is not qualified', async
   }
 });
 
-test('POST /api/picks/:id/requeue returns 409 when pick is already queued in outbox', async () => {
+test('POST /api/picks/:id/requeue returns 409 when pick is already queued in outbox', async () => withTargetRegistryDefaults(async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
   await enqueueDistributionWithRunTracking(
@@ -1530,7 +1558,7 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already queued in out
   } finally {
     server.close();
   }
-});
+}));
 
 test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', async () => {
   const repositories = createInMemoryRepositoryBundle();
@@ -1580,7 +1608,7 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', as
   }
 });
 
-test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => {
+test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => withTargetRegistryDefaults(async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
   const runtime = createApiRuntimeDependencies({ repositories });
@@ -1624,7 +1652,7 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
   } finally {
     server.close();
   }
-});
+}));
 
 test('POST /api/recap/post returns ok true and posts a recap embed when settled picks exist', async () => {
   const repositories = createInMemoryRepositoryBundle();
@@ -2202,7 +2230,7 @@ test('GET /api/picks/:id/trace returns 404 for unknown pick', async () => {
   }
 });
 
-test('GET /api/picks/:id/routing-preview returns live promotion and outbox routing state', async () => {
+test('GET /api/picks/:id/routing-preview returns live promotion and outbox routing state', async () => withTargetRegistryDefaults(async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
   await enqueueDistributionWithRunTracking(
@@ -2257,7 +2285,7 @@ test('GET /api/picks/:id/routing-preview returns live promotion and outbox routi
   } finally {
     server.close();
   }
-});
+}));
 
 test('GET /api/picks/:id/promotion-preview dry-runs the promotion engine', async () => {
   const repositories = createInMemoryRepositoryBundle();

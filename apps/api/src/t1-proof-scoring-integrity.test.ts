@@ -67,6 +67,34 @@ function pct(count: number, total: number): number {
   return Math.round((count / total) * 10000) / 100
 }
 
+type PickScoringCohortRow = {
+  id: string
+  source?: string | null
+  selection?: string | null
+  metadata?: unknown
+}
+
+function isProofFixturePick(pick: PickScoringCohortRow | undefined): boolean {
+  if (!pick) return false
+
+  const metadata = asRecord(pick.metadata)
+  const eventName = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : ''
+  const submittedBy =
+    typeof metadata['submittedBy'] === 'string' ? metadata['submittedBy'].toLowerCase() : ''
+  const selection = pick.selection ?? ''
+
+  return Boolean(
+    pick.source === 't1-proof' ||
+      metadata['proof_fixture_id'] ||
+      metadata['proofFixtureId'] ||
+      metadata['proof_issue'] ||
+      metadata['proofIssue'] ||
+      eventName.toLowerCase().startsWith('utv2-') ||
+      selection.startsWith('UTV2-') ||
+      submittedBy === 'codex',
+  )
+}
+
 // ── Test 1: scoring integrity metrics meet pass gates ─────────────────────
 
 test(
@@ -88,19 +116,36 @@ test(
       .limit(2000)
 
     assert.ok(!pphError, `pick_promotion_history query failed: ${String(pphError?.message)}`)
-    const rows = pphRows ?? []
-    assert.ok(rows.length > 0, 'Expected at least 1 PPH row in last 30 days')
+    const rawRows = pphRows ?? []
+    assert.ok(rawRows.length > 0, 'Expected at least 1 PPH row in last 30 days')
 
     // Query picks with promotion data
     const { data: pickRows, error: pickError } = await supabase
       .from('picks')
-      .select('id, promotion_status, promotion_target, promotion_score, metadata, source, created_at')
+      .select('id, promotion_status, promotion_target, promotion_score, metadata, source, selection, created_at')
       .gte('created_at', cutoff)
       .not('promotion_status', 'is', null)
       .limit(2000)
 
     assert.ok(!pickError, `picks query failed: ${String(pickError?.message)}`)
-    const picks = pickRows ?? []
+    const pphPickIds = Array.from(
+      new Set(rawRows.map((row) => row.pick_id).filter((pickId): pickId is string => Boolean(pickId))),
+    )
+    const { data: pphPickRows, error: pphPickError } = pphPickIds.length > 0
+      ? await supabase
+          .from('picks')
+          .select('id, metadata, source, selection')
+          .in('id', pphPickIds)
+      : { data: [], error: null }
+
+    assert.ok(!pphPickError, `PPH pick cohort query failed: ${String(pphPickError?.message)}`)
+
+    const pphPickById = new Map(
+      (pphPickRows ?? []).map((pick) => [pick.id, pick as PickScoringCohortRow]),
+    )
+    const rows = rawRows.filter((row) => !isProofFixturePick(pphPickById.get(row.pick_id)))
+    const picks = (pickRows ?? []).filter((pick) => !isProofFixturePick(pick))
+    assert.ok(rows.length > 0, 'Expected at least 1 non-proof PPH row in last 30 days')
 
     // ── C1: Confidence-proxy rate <= 10% ────────────────────────────────────
     let confidenceProxyCount = 0

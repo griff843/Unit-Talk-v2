@@ -26,9 +26,36 @@ import {
 import { recordPickSettlement } from './settlement-service.js';
 import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
 
+async function withUnitTalkAppEnv<T>(value: string, run: () => Promise<T>): Promise<T> {
+  const envKeys = [
+    'UNIT_TALK_APP_ENV',
+    'UNIT_TALK_DISTRIBUTION_TARGETS',
+    'UNIT_TALK_ENABLED_TARGETS',
+    'UNIT_TALK_ROLLOUT_CONFIG',
+  ] as const;
+  const previous = new Map(envKeys.map((key) => [key, process.env[key]]));
+  process.env.UNIT_TALK_APP_ENV = value;
+  delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+  delete process.env.UNIT_TALK_ENABLED_TARGETS;
+  delete process.env.UNIT_TALK_ROLLOUT_CONFIG;
+  try {
+    return await run();
+  } finally {
+    for (const key of envKeys) {
+      const originalValue = previous.get(key);
+      if (originalValue === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalValue;
+      }
+    }
+  }
+}
+
 // ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
 
 test('handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued:true', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await handleSubmitPick(
     {
@@ -76,6 +103,7 @@ test('handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued
   // Pick must be in 'queued' state in the DB.
   const stored = await repositories.picks.findPickById(data.pickId);
   assert.equal(stored?.status, 'queued');
+  });
 });
 
 test('handleSubmitPick does not enqueue a not-eligible pick and returns outboxEnqueued:false', async () => {
@@ -174,6 +202,7 @@ test('handleSubmitPick model-driven pick in routing shadow mode persists without
 });
 
 test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await handleSubmitPick(
     {
@@ -211,6 +240,7 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
   );
   assert.ok(claimed.outboxRecord);
   assert.equal(claimed.outboxRecord?.target, 'discord:best-bets');
+  });
 });
 
 test('handleSubmitPick in local env keeps promotion target but enqueues to discord:canary', async () => {
@@ -262,6 +292,7 @@ test('handleSubmitPick in local env keeps promotion target but enqueues to disco
 });
 
 test('handleSubmitPick smart-form pick below promotion threshold still enqueues to best-bets', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await handleSubmitPick(
     {
@@ -301,6 +332,7 @@ test('handleSubmitPick smart-form pick below promotion threshold still enqueues 
   );
   assert.ok(claimed.outboxRecord);
   assert.equal(claimed.outboxRecord?.pick_id, data.pickId);
+  });
 });
 
 test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets', async () => {
@@ -1232,6 +1264,7 @@ test('non-qualified picks are blocked from best-bets enqueue during tracked runt
 });
 
 test('qualified picks are allowed to route to best-bets', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   // edge=78 < 85 → trader-insights suppressed; bb qualifies → promotion_target = 'best-bets'.
   const result = await processSubmission(
@@ -1269,9 +1302,11 @@ test('qualified picks are allowed to route to best-bets', async () => {
   assert.equal(stored?.promotion_status, 'qualified');
   assert.equal(stored?.promotion_target, 'best-bets');
   assert.equal(tracked.target, 'discord:best-bets');
+  });
 });
 
 test('force-promote override persists and allows best-bets routing', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -1320,6 +1355,7 @@ test('force-promote override persists and allows best-bets routing', async () =>
   );
 
   assert.equal(tracked.target, 'discord:best-bets');
+  });
 });
 
 test('suppression override persists and blocks best-bets routing', async () => {
@@ -1376,6 +1412,7 @@ test('suppression override persists and blocks best-bets routing', async () => {
 });
 
 test('qualified picks are allowed to route to trader-insights', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -1413,6 +1450,7 @@ test('qualified picks are allowed to route to trader-insights', async () => {
   assert.equal(stored?.promotion_target, 'trader-insights');
   assert.equal(stored?.promotion_version, 'trader-insights-v2');
   assert.equal(tracked.target, 'discord:trader-insights');
+  });
 });
 
 test('trader-insights blocks picks below minimum score', async () => {
@@ -1548,6 +1586,7 @@ test('trader-insights blocks picks below trust threshold', async () => {
 });
 
 test('best-bets qualified pick does not automatically qualify for trader-insights', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -1594,9 +1633,11 @@ test('best-bets qualified pick does not automatically qualify for trader-insight
       ),
     /Trader Insights routing is blocked/,
   );
+  });
 });
 
 test('force-promote override persists and allows trader-insights routing', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -1645,6 +1686,7 @@ test('force-promote override persists and allows trader-insights routing', async
   );
 
   assert.equal(tracked.target, 'discord:trader-insights');
+  });
 });
 
 test('generic suppression override persists and blocks trader-insights routing', async () => {
@@ -2023,6 +2065,7 @@ test('duplicate suppression blocks repeated best-bets thesis', async () => {
 
 // A8: dual-qualifying pick routes exclusively to trader-insights
 test('dual-qualifying pick routes exclusively to trader-insights and is blocked from best-bets', async () => {
+  await withUnitTalkAppEnv('production', async () => {
   const repositories = createInMemoryRepositoryBundle();
   // Scores clear both trader-insights (edge ≥ 85, trust ≥ 85, overall ≥ 80) and
   // best-bets (overall ≥ 70) thresholds. Priority order: exclusive-insights wins.
@@ -2079,6 +2122,7 @@ test('dual-qualifying pick routes exclusively to trader-insights and is blocked 
       ),
     /Best Bets routing is blocked/,
   );
+  });
 });
 
 test('exclusive-insights qualifies at its minimum threshold', () => {
