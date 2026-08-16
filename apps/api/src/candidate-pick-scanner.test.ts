@@ -12,6 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { registerAutomatedWriteBoundaryTests } from './automated-write-boundary.test.js';
 import {
   runCandidatePickScan,
   resolveGovernanceBrakeAction,
@@ -22,6 +23,8 @@ import {
   createInMemoryRepositoryBundle,
 } from '@unit-talk/db';
 import type { MarketUniverseRow, PickCandidateRow } from '@unit-talk/db';
+
+registerAutomatedWriteBoundaryTests(test);
 
 // ---------------------------------------------------------------------------
 // Helpers — mirror pattern from candidate-scoring-service.test.ts
@@ -53,7 +56,9 @@ function seedCandidateRows(
   }
 }
 
-function makeUniverseRow(overrides: Partial<MarketUniverseRow> = {}): MarketUniverseRow {
+function makeUniverseRow(
+  overrides: Partial<MarketUniverseRow> = {},
+): MarketUniverseRow {
   return {
     id: 'universe-test-1',
     sport_key: 'nba',
@@ -86,7 +91,9 @@ function makeUniverseRow(overrides: Partial<MarketUniverseRow> = {}): MarketUniv
   };
 }
 
-function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidateRow {
+function makeCandidate(
+  overrides: Partial<PickCandidateRow> = {},
+): PickCandidateRow {
   return {
     id: 'candidate-test-1',
     universe_id: 'universe-test-1',
@@ -172,7 +179,10 @@ test('candidate-pick-scanner: happy path — qualified+scored candidate becomes 
   const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
 
   const universe = makeUniverseRow();
-  const candidate = makeCandidate({ id: 'cand-happy', universe_id: universe.id });
+  const candidate = makeCandidate({
+    id: 'cand-happy',
+    universe_id: universe.id,
+  });
 
   seedUniverseRows(muRepo, [universe]);
   seedCandidateRows(pcRepo, [candidate]);
@@ -197,20 +207,38 @@ test('candidate-pick-scanner: happy path — qualified+scored candidate becomes 
   const qualified = await repos.pickCandidates.findByStatus('qualified');
   const linked = qualified[0];
   assert.ok(linked !== undefined, 'must have a qualified candidate in DB');
-  assert.ok(linked.pick_id !== null, 'pick_id must be linked after successful scan');
-  assert.equal(linked.shadow_mode, false, 'shadow_mode must be cleared when pick_id is set');
+  assert.ok(
+    linked.pick_id !== null,
+    'pick_id must be linked after successful scan',
+  );
+  assert.equal(
+    linked.shadow_mode,
+    false,
+    'shadow_mode must be cleared when pick_id is set',
+  );
 
   // Created pick must be in awaiting_approval (governance brake)
   const pickId = linked.pick_id;
   assert.ok(pickId !== null, 'pick_id must not be null');
   const pick = await repos.picks.findPickById(pickId);
   assert.ok(pick, 'pick record must exist in DB');
-  assert.equal(pick!.status, 'awaiting_approval', 'governance brake must set status to awaiting_approval');
-  assert.equal(pick!.source, 'system-pick-scanner', 'pick source must be system-pick-scanner');
+  assert.equal(
+    pick!.status,
+    'awaiting_approval',
+    'governance brake must set status to awaiting_approval',
+  );
+  assert.equal(
+    pick!.source,
+    'system-pick-scanner',
+    'pick source must be system-pick-scanner',
+  );
   const metadata = pick!.metadata as Record<string, unknown>;
   assert.equal(metadata['scoredCandidateId'], candidate.id);
   assert.equal(metadata['marketUniverseId'], universe.id);
-  const boundary = metadata['automatedWriteBoundary'] as Record<string, unknown>;
+  const boundary = metadata['automatedWriteBoundary'] as Record<
+    string,
+    unknown
+  >;
   assert.equal(boundary['requiredState'], 'awaiting_approval');
   assert.equal(boundary['transitionActor'], 'system:candidate-pick-scanner');
 });
@@ -333,7 +361,11 @@ test('candidate-pick-scanner: no-op when no scored candidates exist', async () =
     providerOffers: repos.providerOffers,
   });
 
-  assert.equal(result.scanned, 0, 'unscored candidates must not be counted as scanned');
+  assert.equal(
+    result.scanned,
+    0,
+    'unscored candidates must not be counted as scanned',
+  );
   assert.equal(result.submitted, 0);
 });
 
@@ -347,8 +379,14 @@ test('AC-4: candidate scanner skips stale universe at scan time and increments s
   const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
 
   // Universe is stale at scan time
-  const universe = makeUniverseRow({ id: 'universe-stale-ac4', is_stale: true });
-  const candidate = makeCandidate({ id: 'cand-stale-ac4', universe_id: 'universe-stale-ac4' });
+  const universe = makeUniverseRow({
+    id: 'universe-stale-ac4',
+    is_stale: true,
+  });
+  const candidate = makeCandidate({
+    id: 'cand-stale-ac4',
+    universe_id: 'universe-stale-ac4',
+  });
 
   seedUniverseRows(muRepo, [universe]);
   seedCandidateRows(pcRepo, [candidate]);
@@ -365,7 +403,11 @@ test('AC-4: candidate scanner skips stale universe at scan time and increments s
   });
 
   assert.equal(result.scanned, 1, 'AC-4: one candidate scanned');
-  assert.equal(result.submitted, 0, 'AC-4: processSubmission must NOT be called for stale universe');
+  assert.equal(
+    result.submitted,
+    0,
+    'AC-4: processSubmission must NOT be called for stale universe',
+  );
   assert.equal(result.skipped, 1, 'AC-4: skipped must be incremented');
   assert.equal(result.errors, 0, 'AC-4: no errors');
 });
@@ -376,7 +418,10 @@ test('AC-5: candidate provenance updated with stale_at_scan_time: true on skip',
   const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
 
   // Universe is stale at scan time
-  const universe = makeUniverseRow({ id: 'universe-stale-ac5', is_stale: true });
+  const universe = makeUniverseRow({
+    id: 'universe-stale-ac5',
+    is_stale: true,
+  });
   const candidate = makeCandidate({
     id: 'cand-stale-ac5',
     universe_id: 'universe-stale-ac5',
@@ -398,14 +443,28 @@ test('AC-5: candidate provenance updated with stale_at_scan_time: true on skip',
   });
 
   // After the scan, the candidate's provenance should have stale_at_scan_time: true
-  const updatedCandidates = await repos.pickCandidates.findByStatus('qualified');
-  const updatedCandidate = updatedCandidates.find((c) => c.id === 'cand-stale-ac5');
+  const updatedCandidates =
+    await repos.pickCandidates.findByStatus('qualified');
+  const updatedCandidate = updatedCandidates.find(
+    (c) => c.id === 'cand-stale-ac5',
+  );
   assert.ok(updatedCandidate !== undefined, 'AC-5: candidate must still exist');
   const prov = updatedCandidate!.provenance as Record<string, unknown> | null;
   assert.ok(prov !== null, 'AC-5: provenance must not be null');
-  assert.equal(prov!['stale_at_scan_time'], true, 'AC-5: stale_at_scan_time must be true');
-  assert.equal(prov!['stale_reason'], 'stale_at_scan_time', 'AC-5: stale_reason must be set');
-  assert.ok(typeof prov!['stale_checked_at'] === 'string', 'AC-5: stale_checked_at must be set');
+  assert.equal(
+    prov!['stale_at_scan_time'],
+    true,
+    'AC-5: stale_at_scan_time must be true',
+  );
+  assert.equal(
+    prov!['stale_reason'],
+    'stale_at_scan_time',
+    'AC-5: stale_reason must be set',
+  );
+  assert.ok(
+    typeof prov!['stale_checked_at'] === 'string',
+    'AC-5: stale_checked_at must be set',
+  );
 });
 
 test('candidate-pick-scanner: skips non-O/U markets that grading cannot settle', async () => {
@@ -448,7 +507,11 @@ test('candidate-pick-scanner: skips non-O/U markets that grading cannot settle',
 
   const qualified = await repos.pickCandidates.findByStatus('qualified');
   const unlinked = qualified.find((row) => row.id === candidate.id);
-  assert.equal(unlinked?.pick_id, null, 'unsupported candidate must not link to a pick');
+  assert.equal(
+    unlinked?.pick_id,
+    null,
+    'unsupported candidate must not link to a pick',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -460,7 +523,10 @@ test('resolveGovernanceBrakeAction: validated picks brake to awaiting_approval',
 });
 
 test('resolveGovernanceBrakeAction: already-gated picks are idempotent (no re-transition)', () => {
-  assert.equal(resolveGovernanceBrakeAction('awaiting_approval'), 'already_gated');
+  assert.equal(
+    resolveGovernanceBrakeAction('awaiting_approval'),
+    'already_gated',
+  );
 });
 
 test('resolveGovernanceBrakeAction: a pick advanced past the gate fails closed (void)', () => {
@@ -477,7 +543,10 @@ test('resolveGovernanceBrakeAction: terminal picks are skipped (never voided -> 
 
 test('candidate-pick-scanner: promoted pick carries a canonical stake_units > 0 and stays gated (UTV2-1285)', async () => {
   const universe = makeUniverseRow({ id: 'uni-stake' });
-  const candidate = makeCandidate({ id: 'cand-stake', universe_id: universe.id });
+  const candidate = makeCandidate({
+    id: 'cand-stake',
+    universe_id: universe.id,
+  });
 
   const pick = await scanSingleCandidatePick(universe, candidate);
 
@@ -527,34 +596,64 @@ test('candidate-pick-scanner: null stake_units on idempotency collision — skip
   assert.equal(firstResult.submitted, 1, 'first scan must create the pick');
 
   // Find the created pick and the linked candidate
-  const qualifiedAfterFirst = await repos.pickCandidates.findByStatus('qualified');
-  const linkedCandidate = qualifiedAfterFirst.find((c) => c.id === 'cand-null-stake-utv2-1367');
+  const qualifiedAfterFirst =
+    await repos.pickCandidates.findByStatus('qualified');
+  const linkedCandidate = qualifiedAfterFirst.find(
+    (c) => c.id === 'cand-null-stake-utv2-1367',
+  );
   assert.ok(linkedCandidate?.pick_id, 'pick_id must be set after first scan');
   const pickId = linkedCandidate.pick_id!;
 
   // Simulate legacy data: null-out stake_units on the existing pick
   // (mirrors picks created before picks_stake_units_canonical_check was added)
-  const internalPicks = repos.picks as unknown as { picks: Map<string, Record<string, unknown>> };
+  const internalPicks = repos.picks as unknown as {
+    picks: Map<string, Record<string, unknown>>;
+  };
   const existingPick = internalPicks.picks.get(pickId)!;
   internalPicks.picks.set(pickId, { ...existingPick, stake_units: null });
 
   // Reset candidate's pick_id to null so the scanner re-processes it
   // (mirrors unlinked candidates whose previous brake attempt rolled back)
-  const internalCandidates = pcRepo as unknown as { rows: Map<string, PickCandidateRow> };
-  const existingCandidate = internalCandidates.rows.get('universe-null-stake-utv2-1367')!;
-  internalCandidates.rows.set('universe-null-stake-utv2-1367', { ...existingCandidate, pick_id: null });
+  const internalCandidates = pcRepo as unknown as {
+    rows: Map<string, PickCandidateRow>;
+  };
+  const existingCandidate = internalCandidates.rows.get(
+    'universe-null-stake-utv2-1367',
+  )!;
+  internalCandidates.rows.set('universe-null-stake-utv2-1367', {
+    ...existingCandidate,
+    pick_id: null,
+  });
 
   // Second scan: idempotency collision returns the null-stake-units pick
   const secondResult = await runCandidatePickScan(scanDeps);
 
   assert.equal(secondResult.scanned, 1, 'one candidate scanned');
-  assert.equal(secondResult.submitted, 0, 'must not count as submitted (existing null pick)');
-  assert.equal(secondResult.skipped, 1, 'must increment skipped for null stake_units guard');
+  assert.equal(
+    secondResult.submitted,
+    0,
+    'must not count as submitted (existing null pick)',
+  );
+  assert.equal(
+    secondResult.skipped,
+    1,
+    'must increment skipped for null stake_units guard',
+  );
   assert.equal(secondResult.errors, 0, 'no errors');
 
   // pick_id must be linked so the candidate is not retried on the next 60-second scan
-  const qualifiedAfterSecond = await repos.pickCandidates.findByStatus('qualified');
-  const candidateAfterSecond = qualifiedAfterSecond.find((c) => c.id === 'cand-null-stake-utv2-1367');
-  assert.ok(candidateAfterSecond?.pick_id, 'pick_id must be linked after null stake_units guard to stop retry loop');
-  assert.equal(candidateAfterSecond?.pick_id, pickId, 'pick_id must reference the original legacy pick');
+  const qualifiedAfterSecond =
+    await repos.pickCandidates.findByStatus('qualified');
+  const candidateAfterSecond = qualifiedAfterSecond.find(
+    (c) => c.id === 'cand-null-stake-utv2-1367',
+  );
+  assert.ok(
+    candidateAfterSecond?.pick_id,
+    'pick_id must be linked after null stake_units guard to stop retry loop',
+  );
+  assert.equal(
+    candidateAfterSecond?.pick_id,
+    pickId,
+    'pick_id must reference the original legacy pick',
+  );
 });
