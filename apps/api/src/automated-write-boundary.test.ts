@@ -56,29 +56,22 @@ register('automated write boundary materializes a board pick directly into await
   assert.equal(typeof boundary['sourceSnapshotAgeMs'], 'number');
 });
 
-register('automated source without its system marker is still governed, not rejected', async () => {
-  // A `system-marker-required` source that omits the marker is still automated.
-  // It must be braked into `awaiting_approval`, NOT rejected: the ratified T1
-  // proof `t1-proof-awaiting-approval.test.ts` drives exactly this shape for
-  // system-pick-scanner, alert-agent, and model-driven, and a hard rejection
-  // would drop the submission instead of governing it.
-  const repositories = createInMemoryRepositoryBundle();
+register('a source-only automated submission is left to the Phase 7A source brake', async () => {
+  // Minimal source-only fixtures carry no producer identity and no market
+  // evidence. They are governed by GOVERNANCE_BRAKE_SOURCES in
+  // distribution-service.ts, not by this boundary, and
+  // t1-proof-awaiting-approval.test.ts asserts that path end to end. This
+  // boundary must not claim them, or that ratified proof breaks.
   const payload = automatedBoardPayload({
-    selection: 'Missing Marker Must Still Be Governed',
-    metadata: {
-      marketUniverseId: 'universe-missing-marker',
-      providerKey: 'sgo',
-      providerMarketKey: 'points-all-game-ou',
-      snapshot_at: new Date().toISOString(),
-      sportKey: 'nba',
-    },
+    source: 'system-pick-scanner' as PickSource,
+    selection: 'Source Only Belongs To The Phase 7A Brake',
+    metadata: { proof_fixture_id: 'boundary-source-only' },
   });
 
-  assert.equal(isAutomatedProducerSubmission(payload), true);
-
-  const result = await processSubmission(payload, repositories);
-  assert.equal(result.pick.lifecycleState, 'awaiting_approval');
-  assert.equal(result.pickRecord.status, 'awaiting_approval');
+  assert.equal(isAutomatedProducerSubmission(payload), false);
+  const decision = prepareAutomatedSubmission(payload);
+  assert.equal(decision.automated, false);
+  assert.equal(decision.initialLifecycleState, undefined);
 });
 
 register('automated write boundary preserves the human/manual validated path', async () => {

@@ -80,14 +80,28 @@ export class AutomatedWriteBoundaryError extends Error {
 }
 
 /**
- * System-generated submissions always require the boundary. Sources classified
- * as `system-marker-required` also enter the boundary when the marker is
- * missing, where they are rejected instead of being mistaken for human input.
- * Adding a valid source cannot compile until it is deliberately classified.
+ * This boundary governs genuine automated PRODUCTIONS, identified by the
+ * `systemGenerated` marker that every automated producer stamps. Such a
+ * submission materializes directly into `awaiting_approval` in one atomic
+ * write, so it is never externally actionable as `validated`.
+ *
+ * It is deliberately NOT the only governance layer. The Phase 7A brake in
+ * `distribution-service.ts` (`GOVERNANCE_BRAKE_SOURCES`) separately governs
+ * autonomous SOURCES -- system-pick-scanner, alert-agent, model-driven -- by
+ * source alone and needs no marker. `t1-proof-awaiting-approval.test.ts`
+ * exercises that path with minimal source-only fixtures, which is why this
+ * boundary must not claim them: they carry no producer identity or market
+ * evidence and are governed by the other mechanism.
+ *
+ * `board-construction` is the gap this lane closes. It was excluded from
+ * GOVERNANCE_BRAKE_SOURCES as "operator-triggered", but the board writer is
+ * scheduled and autonomous, so its picks reached `validated` ungoverned.
+ *
+ * Adding a valid source cannot compile until it is deliberately classified in
+ * AUTOMATED_WRITE_BOUNDARY_POLICY below.
  */
 export function isAutomatedProducerSubmission(payload: SubmissionPayload): boolean {
-  if (payload.metadata?.['systemGenerated'] === true) return true;
-  return readBoundaryPolicy(payload.source) === 'system-marker-required';
+  return payload.metadata?.['systemGenerated'] === true;
 }
 
 /**
