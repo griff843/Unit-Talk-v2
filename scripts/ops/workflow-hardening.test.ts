@@ -1821,3 +1821,31 @@ test('UTV2-1684 supplemental shape: proof side effects are closeable-only and pe
     assert.match(String(utv21684PostMergeStep(name).if), /steps\.status\.outputs\.closeable == 'true'/u);
   }
 });
+
+test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () => {
+  // `cancel-in-progress: false` protects a RUNNING job, but GitHub keeps at
+  // most one PENDING run per concurrency group, so a run queued behind the
+  // mutex is cancelled when a newer run enters that group -- with no retry and
+  // no replacement run. Observed on UTV2-1690's closeout: run 31900689921 on
+  // 52b4878b was cancelled while queued, the manifest reached `done`, and the
+  // Linear issue stayed open until a human moved it.
+  const closeout = objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'concurrency');
+  const linear = objectField(readWorkflowYaml('linear-auto-close.yml'), 'concurrency');
+
+  assert.strictEqual(
+    String(closeout.group),
+    'merge-closeout-mutex',
+    'the closeout writer keeps the shared mutex: it commits to main and must stay serialized',
+  );
+
+  assert.notStrictEqual(
+    String(linear.group),
+    String(closeout.group),
+    'linear-auto-close must not share the closeout mutex; a queued run there is cancelled outright',
+  );
+  assert.match(
+    String(linear.group),
+    /\$\{\{\s*github\.sha\s*\}\}/u,
+    'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
+  );
+});
