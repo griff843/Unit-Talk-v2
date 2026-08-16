@@ -7,9 +7,10 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-08-16T15:20:40Z",
   "sha_binding": {
-    "verified_source_sha": "f6078bdee0e3a6d9f6732fb6d17e5631928a2110",
-    "base_sha": "4707c0ce78d338b49d926c9b31a1ebbf9d7f8883",
+    "verified_source_sha": "66c4cfd165e920caeb4368201362f5a5512f66f3",
+    "base_sha": "88c9a59e60df29659a45d143ac5ff60c0d042f78",
     "verified_source_note": "Implementation commit containing the shared automated write boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
+    "rebase_note": "The branch rebased cleanly from 4707c0ce onto 88c9a59e after local verification because origin/main advanced before publication; 66c4cfd1 is the rewritten exact implementation-and-test source commit.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null,
