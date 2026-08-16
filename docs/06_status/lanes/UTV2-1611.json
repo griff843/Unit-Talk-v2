@@ -28,9 +28,9 @@
     "docs/06_status/proof/UTV2-1611/model-routing.json",
     "docs/06_status/proof/UTV2-1611/verification.md"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-08-16T15:05:38.333Z",
-  "heartbeat_at": "2026-08-16T15:34:34.112Z",
+  "heartbeat_at": "2026-08-16T23:11:48.562Z",
   "closed_at": null,
   "blocked_by": [
     "PM-AUTHORIZED SCOPE ADDITION 2026-08-16: one live staging proof file, apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts, added under the existing accepted T1-proof path. Authorized to satisfy acceptance criterion 8 (live proof of zero unauthorized direct-to-validated writes) after the Proof Coverage Guard correctly refused a runtime-path change carrying no live-DB proof. Explicitly narrow: one file, no lane restart, no broader expansion.",
