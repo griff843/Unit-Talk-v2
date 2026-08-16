@@ -1,8 +1,10 @@
 # PROOF: UTV2-1713
 
-MERGE_SHA: N/A
+MERGE_SHA: a1b84ee1685b2dd7cd20936aa587b0e4a9dbd383
 
-Pre-merge this anchor is `N/A`. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
+Verified implementation SHA: `a1b84ee1685b2dd7cd20936aa587b0e4a9dbd383`
+
+Pre-merge this anchor identifies the verified implementation commit. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
 ## Summary
 
@@ -19,7 +21,9 @@ This lane moves `linear-auto-close` to a per-commit concurrency group. It never 
 
 ## EVIDENCE:
 
-- Confirmed reproduction: Linear Auto-Close run `31900689921` on merge commit `52b4878b` (UTV2-1690 closeout) was **cancelled** while queued behind `post-merge-lane-close`. No replacement run exists for that SHA. The lane manifest reached `status: done` with a passing truth-check bound to merge SHA `2a6aecac`, and its lease and merge lock were released, while the Linear issue stayed `In Codex` until a human moved it.
+- Eviction mechanism confirmed from run history: Linear Auto-Close run `31900689921` on commit `52b4878b` recorded `conclusion: cancelled` with **zero jobs ever created**, i.e. it was evicted from the concurrency group before execution rather than cancelled mid-run. A `post-merge-lane-close` run for an earlier commit was still executing in the same group when a newer `post-merge-lane-close` entrant arrived; the newer entrant survived and the older-pending Linear Auto-Close entrant was evicted. This matches GitHub's documented one-pending-run-per-group semantics.
+- **Correction, established by independent review.** That run is evidence of the eviction mechanism only. It is **not** an instance of a lost Linear transition, and this lane does not claim it is. Replaying the workflow's own extraction function against `52b4878b`'s message returns no issue IDs — `chore(lanes): close UTV2-1690 …` carries no recognized close-intent marker, since `close` is not one of `closes|fixes|resolves` and there is no `Linear-Close:` trailer. The successful run on the authoritative merge SHA `2a6aecac` (run `31900061680`) logged `decision=no_close reason=no_close_intent`, confirming the same. The reason that lane's Linear issue stayed open is therefore a **different, still-open defect** — lane-closeout automation never emits a commit message carrying a recognized close-intent marker, and the `completion_block` additionally requires the manifest `commit_sha` to equal the pushed SHA, which is structurally unreachable when closeout spans multiple commits. That defect is filed separately and is not addressed here.
+- This lane therefore hardens a **latent** failure: an eviction that would silently drop a Linear transition for any push that *did* carry a valid marker.
 - Scope boundary confirmed by measurement, not assumption: `ci.yml` uses `cancel-in-progress: true` on a per-PR group and **self-heals**. On PR #1424, run `31914709490` was cancelled with a failing `verify` on `e4cc594b`, and the authoritative replacement run `31914728317` produced a successful `verify` on `c8feb6e3`. The required context converged with no manual rerun, so `ci.yml` is explicitly **not** changed by this lane.
 - A regression in `scripts/ops/workflow-hardening.test.ts` asserts the closeout writer keeps the shared mutex, that `linear-auto-close` does not share it, and that its group interpolates `github.sha`.
 
@@ -55,5 +59,6 @@ The change is confined to one workflow's concurrency declaration and one regress
 
 ### Known limitations
 
-- This prevents the cancellation. It does not add a reconciliation sweep for lanes whose Linear issue was *already* left open by a historical cancellation; those remain to be reconciled separately.
+- This prevents the eviction. It does not fix the reason lane closeouts currently fail to close their Linear issue at all — no recognized close-intent marker is emitted, and the `commit_sha`-equals-pushed-SHA gate is unreachable across multi-commit closeouts. That is filed separately and is the higher-impact defect.
+- No reconciliation sweep is added for lanes whose Linear issue is already open.
 - The assertion is static: it verifies the concurrency declaration, not GitHub's runtime scheduling behaviour, which cannot be exercised from a unit test.

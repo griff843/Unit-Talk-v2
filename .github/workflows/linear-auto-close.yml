@@ -58,10 +58,14 @@ on:
 # cancelled outright when a newer run enters the same group. There is no retry
 # and no replacement run, so the Linear transition is skipped silently.
 #
-# Observed on UTV2-1690's closeout: run 31900689921 on merge commit 52b4878b
-# was cancelled while queued behind post-merge-lane-close. The lane manifest
-# reached `done` with a passing truth-check and released its lease, while the
-# Linear issue stayed `In Codex` until a human moved it.
+# Observed: run 31900689921 on commit 52b4878b was evicted while queued behind
+# post-merge-lane-close -- it recorded `conclusion: cancelled` with zero jobs
+# ever created, i.e. it died before execution rather than mid-run.
+#
+# That run would not have closed anything even had it executed: its commit
+# message carried no recognized close-intent marker. It is cited here as
+# evidence of the eviction mechanism only, NOT as an instance of a Linear
+# transition being lost. This guards a latent failure, not an observed one.
 #
 # This workflow only reads the head commit message and updates Linear -- it
 # never writes to the repository -- so it does not need to serialize against
