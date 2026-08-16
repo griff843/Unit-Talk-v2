@@ -18,7 +18,9 @@
     "apps/api/src/candidate-pick-scanner.test.ts",
     "apps/api/src/candidate-pick-scanner.ts",
     "apps/api/src/submission-service.ts",
-    "apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts"
+    "apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1611/diff-summary.md",
@@ -31,7 +33,8 @@
   "heartbeat_at": "2026-08-16T15:34:34.112Z",
   "closed_at": null,
   "blocked_by": [
-    "PM-AUTHORIZED SCOPE ADDITION 2026-08-16: one live staging proof file, apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts, added under the existing accepted T1-proof path. Authorized to satisfy acceptance criterion 8 (live proof of zero unauthorized direct-to-validated writes) after the Proof Coverage Guard correctly refused a runtime-path change carrying no live-DB proof. Explicitly narrow: one file, no lane restart, no broader expansion."
+    "PM-AUTHORIZED SCOPE ADDITION 2026-08-16: one live staging proof file, apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts, added under the existing accepted T1-proof path. Authorized to satisfy acceptance criterion 8 (live proof of zero unauthorized direct-to-validated writes) after the Proof Coverage Guard correctly refused a runtime-path change carrying no live-DB proof. Explicitly narrow: one file, no lane restart, no broader expansion.",
+    "PM-AUTHORIZED SCOPE EXTENSION 2026-08-16 (second): docs/05_operations/db-writer-classification.json and package.json, added solely to make the already-authorized live staging proof executable. The proof file alone never ran: verify fails closed on an unclassified credentialed DB test, and test:t1-proof:live is a hardcoded enumeration with no glob discovery, so an unlisted proof is silently skipped. Strictly bounded: one classification entry, one appended test command, no other change to either file. No file ownership conflict existed at the time of the change."
   ],
   "preflight_token": ".out/ops/preflight/codex/utv2-1611-automated-write-boundary.json",
   "created_by": "codex-cli",

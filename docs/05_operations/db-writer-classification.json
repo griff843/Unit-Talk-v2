@@ -32,6 +32,13 @@
       "execution": ["pnpm test:t1-proof:live"]
     },
     {
+      "path": "apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts",
+      "owner": "api",
+      "execution": [
+        "pnpm test:t1-proof:live"
+      ]
+    },
+    {
       "path": "apps/api/src/t1-proof-awaiting-approval-review.test.ts",
       "owner": "api",
       "execution": ["pnpm test:t1-proof:live"]

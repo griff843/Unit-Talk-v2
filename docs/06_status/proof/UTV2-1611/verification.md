@@ -107,6 +107,16 @@ Merge SHA: N/A — post-merge closeout responsibility
 
 It exists because the Proof Coverage Guard correctly refused a change to sensitive runtime paths that carried no corresponding live-DB proof, and because acceptance criterion 8 requires live proof of zero unauthorized direct-to-validated writes. The proof drives the real `board-construction` submission path through `submitPickController` against staging and asserts the persisted row starts in `awaiting_approval`, that the birth lifecycle event agrees and never names `validated` in either direction, and that no direct-to-validated board write exists for the run. Fixtures are namespaced with a per-run UUID under `utv2-1611-boundary-*` and are voided in `after()` so none is left actionable.
 
+### Second scope extension: making the proof executable
+
+`docs/05_operations/db-writer-classification.json` and `package.json` were added under a second explicit PM authorization, solely so the already-authorized proof file actually runs.
+
+The proof file alone was inert, and this was measured rather than assumed. On head `e2aa0bcb` the only appearance of `t1-proof-utv2-1611-board-write-boundary.test.ts` anywhere in the staging DB-proof run was the failure `unclassified credentialed DB test`. It did not execute. Two registrations are required: `verify` fails closed on any unclassified credentialed DB test, and `test:t1-proof:live` is a hardcoded enumeration of test files with no glob discovery, so an unlisted proof is silently skipped.
+
+Both edits are strictly bounded: one entry appended to `credentialed_tests` (+7 lines, no reformatting of the surrounding file) and one test command appended to `test:t1-proof:live` (+1/-1 line). No other classification entry and no other package script was touched. No active lane held either file at the time of the change.
+
+Recorded as reliability debt, not fixed here: `test:t1-proof:live` enumerates proof files by hand, so a new T1 proof is silently skipped until someone remembers to list it. Redesigning test discovery is out of scope for this P0.
+
 ### Two governance layers, and which one this lane changes
 
 The Phase 7A brake in `distribution-service.ts` (`GOVERNANCE_BRAKE_SOURCES`) governs autonomous SOURCES — `system-pick-scanner`, `alert-agent`, `model-driven` — by source alone, with no marker, transitioning after creation. `t1-proof-awaiting-approval.test.ts` exercises that path with minimal source-only fixtures and is unchanged by this lane.
