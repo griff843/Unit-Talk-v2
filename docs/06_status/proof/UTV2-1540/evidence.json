@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1540",
+  "title": "Live Schema Parity ledger repair for the two Command Center tables",
+  "tier": "T1",
+  "status": "draft_pending_evidence",
+  "generated_at": "2026-08-16T23:59:00.000Z",
+  "sha_binding": {
+    "verified_source_sha": "709d1c9c037a56ec681801461c7493790887c3e5",
+    "verified_source_note": "Branch head after pr-update-branch refresh. Post-merge closeout rebinds to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "implementation_sha",
+    "merge_sha": null,
+    "pr_number": 1378,
+    "bound_at": null
+  },
+  "verifier": {
+    "identity": "pending-independent-verifier"
+  },
+  "scope": {
+    "files": [
+      "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql",
+      "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
+      "packages/db/src/database.types.ts",
+      "docs/06_status/proof/UTV2-1540/evidence.json",
+      "docs/06_status/proof/UTV2-1540/verification.md"
+    ],
+    "relations": [
+      "public.command_center_game_threads",
+      "public.command_center_delivery_mappings"
+    ]
+  },
+  "static_proof": {
+    "idempotent_by_construction": true,
+    "note": "Every statement is IF NOT EXISTS, so scratch replay and re-run are no-ops. Verified by reading the migration, not by execution.",
+    "rls_preserved": "Enabled on both tables with zero policies, matching production. Replaying without it would yield a schema strictly more permissive than production."
+  },
+  "runtime_proof": {
+    "applicable": true,
+    "status": "PENDING_NOT_EXECUTED",
+    "queries": [],
+    "row_counts": [],
+    "note": "No runtime evidence has been collected. Nothing in this bundle may be read as a passing runtime result."
+  },
+  "pending_evidence": [
+    {
+      "id": "types-regeneration",
+      "target": "production-read-only",
+      "command": "pnpm supabase:types",
+      "status": "PENDING",
+      "blocked_by": "no production read-only schema-introspection credential"
+    },
+    {
+      "id": "live-schema-parity",
+      "target": "production-read-only",
+      "command": "pnpm exec tsx scripts/ci/schema-drift-gate.ts",
+      "status": "PENDING",
+      "blocked_by": "no production read-only schema-introspection credential"
+    },
+    {
+      "id": "shadow-schema-comparison",
+      "target": "production-read-only",
+      "command": "pnpm exec tsx scripts/ops/compare-databases.ts",
+      "status": "PENDING",
+      "blocked_by": "no production read-only schema-introspection credential"
+    },
+    {
+      "id": "scratch-replay",
+      "target": "disposable-scratch-db",
+      "status": "PENDING",
+      "blocked_by": "scratch database not yet provisioned"
+    },
+    {
+      "id": "rollback-verification",
+      "target": "disposable-scratch-db",
+      "status": "PENDING",
+      "blocked_by": "scratch database not yet provisioned"
+    },
+    {
+      "id": "reapply-convergence",
+      "target": "disposable-scratch-db",
+      "status": "PENDING",
+      "blocked_by": "scratch database not yet provisioned"
+    },
+    {
+      "id": "writable-db-verification",
+      "target": "staging",
+      "command": "pnpm test:db",
+      "status": "PENDING"
+    },
+    {
+      "id": "verify",
+      "target": "ci",
+      "command": "pnpm verify",
+      "status": "PENDING"
+    },
+    {
+      "id": "independent-review",
+      "target": "exact-head",
+      "status": "PENDING"
+    }
+  ],
+  "prohibited_actions": [
+    {
+      "action": "supabase migration repair --status applied 20260803230000",
+      "status": "PROHIBITED",
+      "requires": "Griff's explicit approval",
+      "performed": false
+    }
+  ],
+  "known_limitations": [
+    "Every runtime assertion is unexecuted and marked PENDING. This bundle is not proof of anything runtime.",
+    "This machine is under deliberate credential containment (SUPABASE_PROJECT_REF=containmentlocal0000, empty SUPABASE_ACCESS_TOKEN); production introspection is unavailable locally.",
+    "Staging is not an acceptable substitute for production schema truth here, because the defect is precisely that production carries objects staging does not.",
+    "information_schema filters rows by privilege, so a CONNECT-only role would silently see fewer objects and report false drift."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS_BY_CONSTRUCTION_ONLY",
+    "runtime_proof_status": "PENDING_NOT_EXECUTED",
+    "ready_for_pm_review": false
+  }
+}

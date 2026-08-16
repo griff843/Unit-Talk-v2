@@ -20,13 +20,13 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1540/evidence.json"
   ],
-  "status": "parked",
+  "status": "started",
   "started_at": "2026-08-03T21:47:04.127Z",
-  "heartbeat_at": "2026-08-08T22:04:46.708Z",
+  "heartbeat_at": "2026-08-16T23:13:53.939Z",
   "closed_at": null,
   "blocked_by": [
     "Linear state is operator-dependent since 2026-08-04: ledger repair step 4 requires 'supabase migration repair --status applied' against production, which only an operator can perform. PR #1378 is a draft. Manifest asserted started, i.e. active executor work that is not occurring.",
-    "PARKED 2026-08-16 by audited PM-authorized manual lifecycle intervention. Reason: lane is operator-dependent and its heartbeat is ~183 hours stale (last 2026-08-08T22:04:46Z). Parked to release the migration/runtime forbidden combination that was blocking production P0 UTV2-1611 (board pick writer must not bypass the governance brake). State at park: PR #1378 open as a DRAFT (+257/-0), branch and worktree at 3c58bfb9fa637196b91fa044b4b02e0c96db0a56, lease already released, zero uncommitted and zero unpushed changes. Recovery point preserved as annotated tag recovery/utv2-1540-parked-2026-08-16. RESTART CONDITION: an operator must run 'supabase migration repair --status applied' against production (ledger repair step 4); then transition parked -> started and resume. NOT done, NOT merged, NOT delivered \u2014 no work is claimed complete."
+    "PARKED 2026-08-16 by audited PM-authorized manual lifecycle intervention. Reason: lane is operator-dependent and its heartbeat is ~183 hours stale (last 2026-08-08T22:04:46Z). Parked to release the migration/runtime forbidden combination that was blocking production P0 UTV2-1611 (board pick writer must not bypass the governance brake). State at park: PR #1378 open as a DRAFT (+257/-0), branch and worktree at 3c58bfb9fa637196b91fa044b4b02e0c96db0a56, lease already released, zero uncommitted and zero unpushed changes. Recovery point preserved as annotated tag recovery/utv2-1540-parked-2026-08-16. RESTART CONDITION: an operator must run 'supabase migration repair --status applied' against production (ledger repair step 4); then transition parked -> started and resume. NOT done, NOT merged, NOT delivered — no work is claimed complete."
   ],
   "preflight_token": ".out/ops/preflight/claude/utv2-1540-live-schema-parity-ledger-repair.json",
   "created_by": "claude",
