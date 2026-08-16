@@ -100,3 +100,21 @@ file scope. That correction likewise requires an explicit scope expansion.
 
 Head SHA: 6b2c76747a368a45e42b9788cc665a852e525fca
 Merge SHA: N/A — post-merge closeout responsibility
+
+### PM-authorized scope addition
+
+`apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts` was added to `file_scope_lock` under explicit PM authorization on 2026-08-16, under the existing accepted T1-proof path. One file; no lane restart; no broader expansion.
+
+It exists because the Proof Coverage Guard correctly refused a change to sensitive runtime paths that carried no corresponding live-DB proof, and because acceptance criterion 8 requires live proof of zero unauthorized direct-to-validated writes. The proof drives the real `board-construction` submission path through `submitPickController` against staging and asserts the persisted row starts in `awaiting_approval`, that the birth lifecycle event agrees and never names `validated` in either direction, and that no direct-to-validated board write exists for the run. Fixtures are namespaced with a per-run UUID under `utv2-1611-boundary-*` and are voided in `after()` so none is left actionable.
+
+### Two governance layers, and which one this lane changes
+
+The Phase 7A brake in `distribution-service.ts` (`GOVERNANCE_BRAKE_SOURCES`) governs autonomous SOURCES — `system-pick-scanner`, `alert-agent`, `model-driven` — by source alone, with no marker, transitioning after creation. `t1-proof-awaiting-approval.test.ts` exercises that path with minimal source-only fixtures and is unchanged by this lane.
+
+This lane adds a distinct boundary governing automated PRODUCTIONS, keyed on the `systemGenerated` marker every automated producer stamps, materializing them into `awaiting_approval` in the same atomic write as the pick and its birth lifecycle event. `board-construction` was deliberately excluded from `GOVERNANCE_BRAKE_SOURCES` as "operator-triggered" (comment at `distribution-service.ts:79-84`, PM correction 2026-04-10); the board writer later became scheduled and autonomous, so its picks reached `validated` ungoverned. That is the defect closed here.
+
+### Known limitations
+
+- **`GOVERNANCE_BRAKE_SOURCES` has no exhaustiveness constraint.** It is a plain `ReadonlySet<PickSource>`, so a newly added autonomous source omitted from it is ungoverned by the source brake. Resolved mechanically as latent rather than live: measured on this head through the production path, a marker-stamped `board-construction` submission persists as `awaiting_approval` even though `board-construction` is absent from that set, so omission can no longer persist a `validated` pick for a marker-stamped producer. The residual exposure is a source-only automated submission from an unlisted source. Filed separately as UTV2-1716; not addressed here.
+- **Shadow Parity Check is unavailable.** It fails with "No mechanically read-only production credential is provisioned." Recorded as infrastructure debt per PM decision; no credential was provisioned or fabricated for this lane. It is not one of the four required merge contexts.
+- The boundary keys on the `systemGenerated` marker. A source-only automated submission is governed by the Phase 7A source brake instead, which is why this boundary deliberately does not claim those fixtures.

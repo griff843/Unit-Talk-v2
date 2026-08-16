@@ -17,7 +17,8 @@
     "apps/api/src/board-pick-writer.ts",
     "apps/api/src/candidate-pick-scanner.test.ts",
     "apps/api/src/candidate-pick-scanner.ts",
-    "apps/api/src/submission-service.ts"
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1611/diff-summary.md",
@@ -29,7 +30,9 @@
   "started_at": "2026-08-16T15:05:38.333Z",
   "heartbeat_at": "2026-08-16T15:34:34.112Z",
   "closed_at": null,
-  "blocked_by": [],
+  "blocked_by": [
+    "PM-AUTHORIZED SCOPE ADDITION 2026-08-16: one live staging proof file, apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts, added under the existing accepted T1-proof path. Authorized to satisfy acceptance criterion 8 (live proof of zero unauthorized direct-to-validated writes) after the Proof Coverage Guard correctly refused a runtime-path change carrying no live-DB proof. Explicitly narrow: one file, no lane restart, no broader expansion."
+  ],
   "preflight_token": ".out/ops/preflight/codex/utv2-1611-automated-write-boundary.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
