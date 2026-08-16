@@ -31,7 +31,6 @@ const AUTOMATED_WRITE_BOUNDARY_POLICY = {
 
 export type AutomatedWriteBoundaryFailureCode =
   | 'MISSING_AUTOMATED_PRODUCER'
-  | 'MISSING_SYSTEM_GENERATED_MARKER'
   | 'MISSING_MARKET_UNIVERSE_ID'
   | 'MISSING_PROVIDER_MARKET_KEY'
   | 'MISSING_PRICE_SNAPSHOT_AT'
@@ -105,16 +104,16 @@ export function prepareAutomatedSubmission(
     return { automated: false, payload };
   }
 
+  // A `system-marker-required` source that omits the marker is still automated
+  // and still governed: it flows through this boundary and materializes into
+  // `awaiting_approval` like any other automated submission. It is deliberately
+  // NOT rejected. `t1-proof-awaiting-approval.test.ts` exercises exactly this
+  // shape -- source-only brake cases for system-pick-scanner, alert-agent, and
+  // model-driven -- and rejecting it would convert a ratified governed path
+  // into a hard failure that drops the submission. The architecture condition
+  // is that such a pick can never be externally actionable as `validated`;
+  // braking satisfies that without losing data.
   const metadata = payload.metadata ?? {};
-  if (
-    readBoundaryPolicy(payload.source) === 'system-marker-required' &&
-    metadata['systemGenerated'] !== true
-  ) {
-    throw new AutomatedWriteBoundaryError(
-      'MISSING_SYSTEM_GENERATED_MARKER',
-      `${String(payload.source)} requires metadata.systemGenerated=true`,
-    );
-  }
 
   const producer = readNonEmptyString(payload.submittedBy);
   if (producer === null) {

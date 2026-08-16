@@ -56,10 +56,15 @@ register('automated write boundary materializes a board pick directly into await
   assert.equal(typeof boundary['sourceSnapshotAgeMs'], 'number');
 });
 
-register('automated source without its required system marker fails closed before persistence', async () => {
+register('automated source without its system marker is still governed, not rejected', async () => {
+  // A `system-marker-required` source that omits the marker is still automated.
+  // It must be braked into `awaiting_approval`, NOT rejected: the ratified T1
+  // proof `t1-proof-awaiting-approval.test.ts` drives exactly this shape for
+  // system-pick-scanner, alert-agent, and model-driven, and a hard rejection
+  // would drop the submission instead of governing it.
   const repositories = createInMemoryRepositoryBundle();
   const payload = automatedBoardPayload({
-    selection: 'Missing Marker Must Not Materialize',
+    selection: 'Missing Marker Must Still Be Governed',
     metadata: {
       marketUniverseId: 'universe-missing-marker',
       providerKey: 'sgo',
@@ -70,12 +75,10 @@ register('automated source without its required system marker fails closed befor
   });
 
   assert.equal(isAutomatedProducerSubmission(payload), true);
-  await assert.rejects(
-    () => processSubmission(payload, repositories),
-    (error: unknown) =>
-      error instanceof AutomatedWriteBoundaryError &&
-      error.code === 'MISSING_SYSTEM_GENERATED_MARKER',
-  );
+
+  const result = await processSubmission(payload, repositories);
+  assert.equal(result.pick.lifecycleState, 'awaiting_approval');
+  assert.equal(result.pickRecord.status, 'awaiting_approval');
 });
 
 register('automated write boundary preserves the human/manual validated path', async () => {
