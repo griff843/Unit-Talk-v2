@@ -29,7 +29,7 @@
  *     minimizes it to a single-row operation rather than a full-batch exposure.
  */
 
-import { applyDevig, americanToImplied } from '@unit-talk/domain';
+import { applyDevig, americanToImplied, evaluateProviderDataFreshness } from '@unit-talk/domain';
 import type {
   ISyndicateBoardRepository,
   IPickCandidateRepository,
@@ -165,8 +165,8 @@ export class BoardPickWriter {
         continue;
       }
 
-      const universe = universeMap.get(candidate.universe_id);
-      if (!universe) {
+      const cachedUniverse = universeMap.get(candidate.universe_id);
+      if (!cachedUniverse) {
         options.logger?.warn?.(
           JSON.stringify({
             service: 'board-pick-writer',
@@ -174,6 +174,24 @@ export class BoardPickWriter {
             universeId: candidate.universe_id,
             candidateId: candidate.id,
             boardRunId,
+          }),
+        );
+        skipped++;
+        continue;
+      }
+
+      // Re-read immediately before submission. Scheduling flags only start the
+      // producer; they never authorize a stale cached board row to be written.
+      const [universe] = await this.repos.marketUniverse.findByIds([cachedUniverse.id]);
+      if (!universe || universe.is_stale) {
+        options.logger?.warn?.(
+          JSON.stringify({
+            service: 'board-pick-writer',
+            event: 'candidate_skipped',
+            universeId: cachedUniverse.id,
+            candidateId: candidate.id,
+            boardRunId,
+            reason: universe ? 'stale_at_write_time' : 'market_evidence_missing_at_write_time',
           }),
         );
         skipped++;
@@ -229,6 +247,28 @@ export class BoardPickWriter {
       const selection = buildBoardSelectionLabel(participant?.display_name ?? null, side, line);
       const eventStartTime = readEventStartTime(event);
       const normalizedSport = event?.sport_id ?? normalizeSportKey(universe.sport_key);
+      const freshnessInfo = evaluateProviderDataFreshness({
+        snapshotAt: universe.last_offer_snapshot_at,
+        eventStartsAt: eventStartTime,
+        sportKey: universe.sport_key,
+        marketKey: universe.canonical_market_key,
+      });
+      if (freshnessInfo.staleAtScanTime) {
+        options.logger?.warn?.(
+          JSON.stringify({
+            service: 'board-pick-writer',
+            event: 'candidate_skipped',
+            universeId: universe.id,
+            candidateId: candidate.id,
+            boardRunId,
+            reason: freshnessInfo.staleReason,
+            snapshotAt: universe.last_offer_snapshot_at,
+            snapshotAgeMs: freshnessInfo.snapshotAgeMs,
+          }),
+        );
+        skipped++;
+        continue;
+      }
 
       const payload = {
         source: 'board-construction' as const,
@@ -276,6 +316,10 @@ export class BoardPickWriter {
           stakeUnitsSource: 'system_default_flat_1u',
           governedBoardWrite: true,
           actor,
+          snapshot_at: universe.last_offer_snapshot_at,
+          snapshot_age_ms: freshnessInfo.snapshotAgeMs,
+          proximity_tier: freshnessInfo.proximityTier,
+          data_freshness: 'fresh' as const,
         },
       };
 

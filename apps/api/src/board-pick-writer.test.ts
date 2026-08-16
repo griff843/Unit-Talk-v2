@@ -175,6 +175,11 @@ test('writes pick for a board candidate and links pick_id', async () => {
   const pick = await repos.picks.findPickById(pickId);
   assert.ok(pick, 'pick should exist');
   assert.equal(pick.source, 'board-construction');
+  assert.equal(
+    pick.status,
+    'awaiting_approval',
+    'automated board pick must never be persisted directly to validated',
+  );
   const meta = pick.metadata as Record<string, unknown>;
   assert.equal(meta['boardRunId'], boardRunId);
   assert.equal(meta['boardRank'], 1);
@@ -182,6 +187,11 @@ test('writes pick for a board candidate and links pick_id', async () => {
   assert.equal(meta['scoredCandidateId'], candidateId);
   assert.equal(typeof meta['marketUniverseId'], 'string');
   assert.equal(meta['governedBoardWrite'], true);
+  assert.equal(meta['data_freshness'], 'fresh');
+  const boundary = meta['automatedWriteBoundary'] as Record<string, unknown>;
+  assert.equal(boundary['requiredState'], 'awaiting_approval');
+  assert.equal(boundary['transitionActor'], 'system:board-construction');
+  assert.match(String(boundary['transitionReason']), /requires operator approval/);
 
   const [candidate] = await repos.pickCandidates.findByStatus('qualified');
   assert.equal(candidate!.pick_id, pickId, 'pick_id should be linked on candidate');
@@ -237,6 +247,38 @@ test('skips candidate with invalid odds', async () => {
   const result = await runBoardPickWriter(repos);
   assert.equal(result.written, 0);
   assert.equal(result.skipped, 1);
+});
+
+test('stale board snapshot fails closed before any pick write', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+  const candidateId = await seedBoardCandidate(repos, boardRunId, 1, {
+    last_offer_snapshot_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  });
+
+  const result = await runBoardPickWriter(repos);
+
+  assert.equal(result.written, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.pickIds, []);
+  const candidates = await repos.pickCandidates.findByStatus('qualified');
+  assert.equal(candidates.find((row) => row.id === candidateId)?.pick_id, null);
+});
+
+test('missing board market snapshot fails closed before any pick write', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+  await seedBoardCandidate(repos, boardRunId, 1, {
+    last_offer_snapshot_at: '',
+  });
+
+  const result = await runBoardPickWriter(repos);
+
+  assert.equal(result.written, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.pickIds, []);
 });
 
 test('source attribution is board-construction on every written pick', async () => {
@@ -571,4 +613,19 @@ test('scheduler enablement can be forced on independently of the broader syndica
     }),
     true,
   );
+});
+
+test('scheduler flags grant execution only and cannot release an automated board pick', async () => {
+  const flags = {
+    SYNDICATE_MACHINE_ENABLED: 'true',
+    BOARD_PICK_WRITER_ENABLED: 'true',
+  };
+  assert.equal(shouldScheduleBoardPickWriter(flags), true);
+
+  const repos = createInMemoryRepositoryBundle();
+  await seedBoardCandidate(repos, crypto.randomUUID(), 1);
+  const result = await runBoardPickWriter(repos);
+  const pick = await repos.picks.findPickById(result.pickIds[0]!);
+
+  assert.equal(pick?.status, 'awaiting_approval');
 });
