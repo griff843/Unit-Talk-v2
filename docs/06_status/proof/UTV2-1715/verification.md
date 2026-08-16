@@ -30,6 +30,7 @@ This lane adds that single glob to `delivery-ui`, which already governs the othe
 
 | Check | Result | Evidence |
 |---|---|---|
+| `pnpm verify` | PASS | Full gate green in CI on the PR head (lint, `pnpm type-check`, build, `pnpm test`). Locally the live-DB half is refused by the staging-isolation guard, which CI owns. |
 | `pnpm exec tsx --test scripts/lane-contract.test.ts` | PASS | 11 tests passed, 0 failed, 0 skipped. |
 | `pnpm type-check` | PASS | Completed with exit 0. |
 | `pnpm test` | PASS | Root aggregate completed with exit 0. |
