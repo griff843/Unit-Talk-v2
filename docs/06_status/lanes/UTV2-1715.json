@@ -7,9 +7,14 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1715-lane-admission-apps-web",
   "branch": "claude/utv2-1715-lane-admission-apps-web",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "5e90329f23dd641697022c0bf8c9466c316776a1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1426",
-  "files_changed": [],
+  "files_changed": [
+    ".lane/lanes/delivery-ui.yml",
+    "docs/06_status/proof/UTV2-1715/diff-summary.md",
+    "docs/06_status/proof/UTV2-1715/verification.md",
+    "scripts/lane-contract.test.ts"
+  ],
   "file_scope_lock": [
     ".lane/lanes/delivery-ui.yml",
     "scripts/lane-contract.test.ts"
@@ -18,14 +23,22 @@
     "docs/06_status/proof/UTV2-1715/diff-summary.md",
     "docs/06_status/proof/UTV2-1715/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-16T13:09:36.411Z",
-  "heartbeat_at": "2026-08-16T13:12:21.643Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-16T15:27:02.217Z",
+  "closed_at": "2026-08-16T15:27:02.217Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1715-lane-admission-apps-web.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-16T15:26:59.910Z",
+      "verdict": "pass",
+      "merge_sha": "5e90329f23dd641697022c0bf8c9466c316776a1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
