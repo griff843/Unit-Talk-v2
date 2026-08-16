@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import type { SubmissionPayload } from '@unit-talk/contracts';
+import type { PickSource, SubmissionPayload } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import {
   AutomatedWriteBoundaryError,
   detectAutomatedDirectToValidatedWrite,
+  isAutomatedProducerSubmission,
   prepareAutomatedSubmission,
 } from './automated-write-boundary.js';
 import { processSubmission } from './submission-service.js';
@@ -75,6 +76,36 @@ register('automated write boundary preserves the human/manual validated path', a
   assert.equal(result.lifecycleEvent.toState, 'validated');
 });
 
+register('synthetic future system producer cannot bypass the governed boundary', async () => {
+  const futureSource = 'syndicate-machine-v2' as PickSource;
+  const payload = automatedBoardPayload({
+    source: futureSource,
+    submittedBy: 'system:syndicate-machine-v2',
+    selection: 'Synthetic Future Producer Over 24.5',
+    metadata: {
+      systemGenerated: true,
+      marketUniverseId: 'universe-future-producer',
+      providerKey: 'sgo',
+      providerMarketKey: 'points-all-game-ou',
+      snapshot_at: new Date().toISOString(),
+      sportKey: 'nba',
+    },
+  });
+
+  assert.equal(isAutomatedProducerSubmission(payload), true);
+
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(payload, repositories);
+
+  assert.equal(result.pick.lifecycleState, 'awaiting_approval');
+  assert.equal(result.pickRecord.status, 'awaiting_approval');
+  assert.equal(result.lifecycleEvent.toState, 'awaiting_approval');
+  const metadata = result.pickRecord.metadata as Record<string, unknown>;
+  const boundary = metadata['automatedWriteBoundary'] as Record<string, unknown>;
+  assert.equal(boundary['source'], futureSource);
+  assert.equal(boundary['requiredState'], 'awaiting_approval');
+});
+
 register('automated write boundary rejects missing market evidence before persistence', () => {
   const payload = automatedBoardPayload({
     metadata: {
@@ -128,6 +159,20 @@ register('readiness detects an automated direct-to-validated write', () => {
       metadata: {},
     }),
     null,
+  );
+
+  const futureSource = 'syndicate-machine-v2' as PickSource;
+  assert.deepEqual(
+    detectAutomatedDirectToValidatedWrite({
+      source: futureSource,
+      status: 'validated',
+      metadata: { systemGenerated: true },
+    }),
+    {
+      code: 'AUTOMATED_DIRECT_TO_VALIDATED',
+      source: futureSource,
+      status: 'validated',
+    },
   );
 });
 }

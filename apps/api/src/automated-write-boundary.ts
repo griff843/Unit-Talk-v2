@@ -1,10 +1,34 @@
 import type { PickLifecycleState, PickSource, SubmissionPayload, WriterRole } from '@unit-talk/contracts';
 import { evaluateEdgePriceFreshness } from '@unit-talk/domain';
 
-const AUTOMATED_PRODUCER_SOURCES: ReadonlySet<PickSource> = new Set<PickSource>([
-  'board-construction',
-  'system-pick-scanner',
-]);
+type AutomatedWriteBoundaryPolicy =
+  | 'boundary-required'
+  | 'system-marker-required'
+  | 'governed-elsewhere';
+
+/**
+ * Every current PickSource must make an explicit write-boundary decision. The
+ * `satisfies Record<PickSource, ...>` makes adding a valid source a compile
+ * error until its policy is chosen. Runtime values outside PickSource are
+ * rejected by the submission parser; direct typed callers can still opt into
+ * the boundary with `systemGenerated: true`.
+ *
+ * `governed-elsewhere` does not mean human. Existing alert/model sources keep
+ * their Phase 7A governance path; this boundary owns automated board/scanner
+ * materialization. A `systemGenerated` marker always opts into this stricter
+ * boundary regardless of the source's current policy.
+ */
+const AUTOMATED_WRITE_BOUNDARY_POLICY = {
+  'smart-form': 'governed-elsewhere',
+  feed: 'governed-elsewhere',
+  system: 'governed-elsewhere',
+  'alert-agent': 'governed-elsewhere',
+  'model-driven': 'governed-elsewhere',
+  api: 'governed-elsewhere',
+  'discord-bot': 'governed-elsewhere',
+  'system-pick-scanner': 'system-marker-required',
+  'board-construction': 'system-marker-required',
+} as const satisfies Record<PickSource, AutomatedWriteBoundaryPolicy>;
 
 export type AutomatedWriteBoundaryFailureCode =
   | 'MISSING_AUTOMATED_PRODUCER'
@@ -18,7 +42,7 @@ export type AutomatedWriteBoundaryFailureCode =
 export interface AutomatedWriteBoundaryMetadata {
   schemaVersion: 1;
   producer: string;
-  source: 'board-construction' | 'system-pick-scanner';
+  source: string;
   sourceSnapshotAt: string;
   sourceSnapshotAgeMs: number;
   transitionActor: string;
@@ -42,7 +66,7 @@ export interface AutomatedPickWriteObservation {
 
 export interface AutomatedWriteBoundaryViolation {
   code: 'AUTOMATED_DIRECT_TO_VALIDATED';
-  source: 'board-construction' | 'system-pick-scanner';
+  source: string;
   status: string;
 }
 
@@ -57,15 +81,14 @@ export class AutomatedWriteBoundaryError extends Error {
 }
 
 /**
- * A source name alone is not enough to classify a submission as automated.
- * `board-construction` can also be used by an authenticated operator surface,
- * while the board writer and candidate scanner both stamp `systemGenerated`.
+ * System-generated submissions always require the boundary. The board and
+ * scanner writers both stamp `systemGenerated`; source-only fixtures remain
+ * available for non-runtime lifecycle tests.
+ * Adding a valid source cannot compile until it is deliberately classified.
  */
 export function isAutomatedProducerSubmission(payload: SubmissionPayload): boolean {
-  return (
-    AUTOMATED_PRODUCER_SOURCES.has(payload.source) &&
-    payload.metadata?.['systemGenerated'] === true
-  );
+  if (payload.metadata?.['systemGenerated'] === true) return true;
+  return readBoundaryPolicy(payload.source) === 'boundary-required';
 }
 
 /**
@@ -126,7 +149,7 @@ export function prepareAutomatedSubmission(
     throw new AutomatedWriteBoundaryError(code, freshness.reason);
   }
 
-  const source = payload.source as 'board-construction' | 'system-pick-scanner';
+  const source = String(payload.source);
   const transitionReason =
     `automated write boundary: ${source} produced by ${producer} requires operator approval`;
   const boundaryMetadata: AutomatedWriteBoundaryMetadata = {
@@ -165,15 +188,15 @@ export function detectAutomatedDirectToValidatedWrite(
   observation: AutomatedPickWriteObservation,
 ): AutomatedWriteBoundaryViolation | null {
   const automated =
-    AUTOMATED_PRODUCER_SOURCES.has(observation.source) &&
-    observation.metadata?.['systemGenerated'] === true;
+    observation.metadata?.['systemGenerated'] === true ||
+    readBoundaryPolicy(observation.source) === 'boundary-required';
   if (!automated || observation.status !== 'validated') {
     return null;
   }
 
   return {
     code: 'AUTOMATED_DIRECT_TO_VALIDATED',
-    source: observation.source as 'board-construction' | 'system-pick-scanner',
+    source: String(observation.source),
     status: observation.status,
   };
 }
@@ -188,6 +211,13 @@ export function assertNoAutomatedDirectToValidatedWrite(
       `${violation.source} pick was observed in ${violation.status}`,
     );
   }
+}
+
+function readBoundaryPolicy(source: PickSource): AutomatedWriteBoundaryPolicy | undefined {
+  const policyByRuntimeSource = AUTOMATED_WRITE_BOUNDARY_POLICY as Readonly<
+    Partial<Record<string, AutomatedWriteBoundaryPolicy>>
+  >;
+  return policyByRuntimeSource[source];
 }
 
 function readNonEmptyString(value: unknown): string | null {
