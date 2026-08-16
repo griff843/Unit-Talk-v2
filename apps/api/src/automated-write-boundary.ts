@@ -2,7 +2,6 @@ import type { PickLifecycleState, PickSource, SubmissionPayload, WriterRole } fr
 import { evaluateEdgePriceFreshness } from '@unit-talk/domain';
 
 type AutomatedWriteBoundaryPolicy =
-  | 'boundary-required'
   | 'system-marker-required'
   | 'governed-elsewhere';
 
@@ -32,6 +31,7 @@ const AUTOMATED_WRITE_BOUNDARY_POLICY = {
 
 export type AutomatedWriteBoundaryFailureCode =
   | 'MISSING_AUTOMATED_PRODUCER'
+  | 'MISSING_SYSTEM_GENERATED_MARKER'
   | 'MISSING_MARKET_UNIVERSE_ID'
   | 'MISSING_PROVIDER_MARKET_KEY'
   | 'MISSING_PRICE_SNAPSHOT_AT'
@@ -81,14 +81,14 @@ export class AutomatedWriteBoundaryError extends Error {
 }
 
 /**
- * System-generated submissions always require the boundary. The board and
- * scanner writers both stamp `systemGenerated`; source-only fixtures remain
- * available for non-runtime lifecycle tests.
+ * System-generated submissions always require the boundary. Sources classified
+ * as `system-marker-required` also enter the boundary when the marker is
+ * missing, where they are rejected instead of being mistaken for human input.
  * Adding a valid source cannot compile until it is deliberately classified.
  */
 export function isAutomatedProducerSubmission(payload: SubmissionPayload): boolean {
   if (payload.metadata?.['systemGenerated'] === true) return true;
-  return readBoundaryPolicy(payload.source) === 'boundary-required';
+  return readBoundaryPolicy(payload.source) === 'system-marker-required';
 }
 
 /**
@@ -106,6 +106,16 @@ export function prepareAutomatedSubmission(
   }
 
   const metadata = payload.metadata ?? {};
+  if (
+    readBoundaryPolicy(payload.source) === 'system-marker-required' &&
+    metadata['systemGenerated'] !== true
+  ) {
+    throw new AutomatedWriteBoundaryError(
+      'MISSING_SYSTEM_GENERATED_MARKER',
+      `${String(payload.source)} requires metadata.systemGenerated=true`,
+    );
+  }
+
   const producer = readNonEmptyString(payload.submittedBy);
   if (producer === null) {
     throw new AutomatedWriteBoundaryError(
@@ -189,7 +199,7 @@ export function detectAutomatedDirectToValidatedWrite(
 ): AutomatedWriteBoundaryViolation | null {
   const automated =
     observation.metadata?.['systemGenerated'] === true ||
-    readBoundaryPolicy(observation.source) === 'boundary-required';
+    readBoundaryPolicy(observation.source) === 'system-marker-required';
   if (!automated || observation.status !== 'validated') {
     return null;
   }

@@ -56,6 +56,28 @@ register('automated write boundary materializes a board pick directly into await
   assert.equal(typeof boundary['sourceSnapshotAgeMs'], 'number');
 });
 
+register('automated source without its required system marker fails closed before persistence', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const payload = automatedBoardPayload({
+    selection: 'Missing Marker Must Not Materialize',
+    metadata: {
+      marketUniverseId: 'universe-missing-marker',
+      providerKey: 'sgo',
+      providerMarketKey: 'points-all-game-ou',
+      snapshot_at: new Date().toISOString(),
+      sportKey: 'nba',
+    },
+  });
+
+  assert.equal(isAutomatedProducerSubmission(payload), true);
+  await assert.rejects(
+    () => processSubmission(payload, repositories),
+    (error: unknown) =>
+      error instanceof AutomatedWriteBoundaryError &&
+      error.code === 'MISSING_SYSTEM_GENERATED_MARKER',
+  );
+});
+
 register('automated write boundary preserves the human/manual validated path', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
