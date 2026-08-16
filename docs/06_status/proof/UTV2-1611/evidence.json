@@ -7,7 +7,7 @@
   "status": "ready_for_pm_review",
   "generated_at": "2026-08-16T15:20:40Z",
   "sha_binding": {
-    "verified_source_sha": "63133bc28d76fccb97afc51ae55b0d3070472ebc",
+    "verified_source_sha": "f6078bdee0e3a6d9f6732fb6d17e5631928a2110",
     "base_sha": "4707c0ce78d338b49d926c9b31a1ebbf9d7f8883",
     "verified_source_note": "Implementation commit containing the shared automated write boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
     "evidence_commit_sha": "set-by-ci",
@@ -84,8 +84,8 @@
     "focused_issue_tests": {
       "command": "pnpm exec tsx --test 'apps/api/src/automated-write-boundary.test.ts' 'apps/api/src/board-pick-writer.test.ts' 'apps/api/src/candidate-pick-scanner.test.ts'",
       "status": "PASS",
-      "tests": 37,
-      "pass": 37,
+      "tests": 38,
+      "pass": 38,
       "fail": 0,
       "skipped": 0
     },

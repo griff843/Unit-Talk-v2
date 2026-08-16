@@ -10,7 +10,7 @@
   "override_used": false,
   "override_authorized_by": null,
   "codex_exit_code": 0,
-  "verified_source_sha": "63133bc28d76fccb97afc51ae55b0d3070472ebc",
+  "verified_source_sha": "f6078bdee0e3a6d9f6732fb6d17e5631928a2110",
   "generated_at": "2026-08-16T15:20:40Z",
   "closeout_binding": {
     "sha_type": "pending_merge_sha",
