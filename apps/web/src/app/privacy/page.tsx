@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <>
-      <PageHeader title="Privacy Policy" />
+      <PageHeader eyebrow="Legal — draft" title="Privacy Policy" />
       <section className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">
         <LegalDisclaimer>
           This privacy policy is a working draft. It describes intended practices but has not yet

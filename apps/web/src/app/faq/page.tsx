@@ -111,6 +111,7 @@ export default function FAQPage() {
   return (
     <>
       <PageHeader
+        eyebrow="FAQ"
         title="Frequently asked questions"
         lead="Straight answers about what Unit Talk is — and what it is not."
       />

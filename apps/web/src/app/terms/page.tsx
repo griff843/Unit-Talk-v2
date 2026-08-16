@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <>
-      <PageHeader title="Terms of Service" />
+      <PageHeader eyebrow="Legal — draft" title="Terms of Service" />
       <section className="mx-auto max-w-3xl px-4 pb-20 sm:px-6">
         <LegalDisclaimer>
           These terms are a working draft. They describe the intended operating principles of Unit

@@ -13,7 +13,7 @@ export function PublicHeader() {
         <Link href="/" className="flex items-center gap-2" aria-label="Unit Talk home">
           <span
             aria-hidden="true"
-            className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--ut-accent)] text-sm font-bold text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--ut-accent)] text-sm font-bold text-[#04110e]"
           >
             UT
           </span>
@@ -22,7 +22,11 @@ export function PublicHeader() {
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Main">
           {NAV_LINKS.map((link) => (
-            <Link key={link.href} href={link.href} className="ut-link text-sm font-medium">
+            <Link
+              key={link.href}
+              href={link.href}
+              className="ut-link relative text-sm font-medium after:absolute after:-bottom-1 after:left-0 after:h-px after:w-0 after:bg-[var(--ut-accent)] after:transition-all after:duration-200 hover:after:w-full"
+            >
               {link.label}
             </Link>
           ))}

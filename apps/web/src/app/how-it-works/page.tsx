@@ -77,6 +77,7 @@ export default function HowItWorksPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Process"
         title="How Unit Talk works"
         lead="From joining to your first structured alert — here is the full walkthrough."
       />
@@ -85,7 +86,7 @@ export default function HowItWorksPage() {
         <ol className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {STEPS.map((step, i) => (
             <li key={step.title} className="ut-surface p-6">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ut-accent)] text-sm font-bold text-white">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ut-accent)] text-sm font-bold text-[#04110e]">
                 {i + 1}
               </span>
               <h2 className="mt-4 text-base font-semibold">{step.title}</h2>

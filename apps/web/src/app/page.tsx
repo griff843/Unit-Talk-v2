@@ -28,10 +28,11 @@ const TRUST_ITEMS = [
   'Responsible betting first',
 ];
 
-const WHY_CARDS = [
+const SIGNAL_STACK = [
   {
     title: 'Signal over noise',
     body: 'Every pick is delivered in a structured format with the reasoning and market context attached — not a firehose of untracked calls.',
+    featured: true,
   },
   {
     title: 'Built around execution',
@@ -47,7 +48,7 @@ const WHY_CARDS = [
   },
 ];
 
-const PRODUCT_PREVIEW = [
+const MEMBERSHIP_ROWS = [
   { title: 'VIP picks', body: 'Structured expert capper picks delivered to VIP members.' },
   { title: 'VIP+ premium access', body: 'Deeper access, earlier alerts, and expanded analysis.' },
   { title: 'Best Bets', body: 'Highlighted selections that stand out from the daily slate.' },
@@ -58,11 +59,17 @@ const PRODUCT_PREVIEW = [
   { title: 'Future Syndicate tier', body: 'A top tier of picks intelligence, coming after launch.' },
 ];
 
-const HOW_STEPS = [
-  { step: '1', title: 'Join Unit Talk', body: 'Create your membership and pick a starting point.' },
-  { step: '2', title: 'Connect to Discord', body: 'Link your Discord account to unlock your channels.' },
-  { step: '3', title: 'Choose your access level', body: 'Free, VIP, or VIP+ — upgrade whenever you want.' },
-  { step: '4', title: 'Receive structured alerts and analysis', body: 'Picks, context, and updates arrive in your member channels.' },
+const PROCESS_RAIL = [
+  { step: '01', title: 'Market context forms', body: 'Price, line movement, and situational notes are gathered before a pick is ever published.' },
+  { step: '02', title: 'A structured pick is produced', body: 'The selection, the market, and the reasoning are packaged together — never a bare tip.' },
+  { step: '03', title: 'A member alert goes out', body: 'The pick reaches your Discord channel with the context attached, ready to evaluate on your terms.' },
+  { step: '04', title: 'Outcomes are tracked', body: 'Every published pick is logged internally, feeding the transparency layer as it rolls out.' },
+];
+
+const DISCIPLINE_POINTS = [
+  { title: 'No outcome promises', body: 'Unit Talk never claims to guarantee wins. Sports betting carries real risk, every time.' },
+  { title: 'Context before conviction', body: 'A pick without market context is just noise. Reasoning is attached, not implied.' },
+  { title: 'Pace over pressure', body: 'The product is built for members who want a process, not a chase.' },
 ];
 
 const FAQ_TEASER = [
@@ -85,7 +92,10 @@ const FAQ_TEASER = [
 
 function HeroIllustration() {
   return (
-    <div aria-label="Illustration of the member experience" className="ut-surface w-full max-w-md p-4 shadow-2xl shadow-black/40">
+    <div
+      aria-label="Preview mock of the member Discord experience — sample content, not real picks or performance data"
+      className="ut-surface ut-glow-border w-full max-w-md p-4 shadow-2xl shadow-black/40"
+    >
       <div className="flex items-center justify-between border-b border-[var(--ut-border-subtle)] pb-3">
         <div className="flex items-center gap-2">
           <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full bg-[var(--ut-success)]" />
@@ -93,13 +103,20 @@ function HeroIllustration() {
         </div>
         <div className="flex gap-1.5">
           <span className="ut-badge">VIP</span>
-          <span className="ut-badge border-[var(--ut-accent)] text-[var(--ut-accent)]">VIP+</span>
+          <span className="ut-badge-gold">VIP+</span>
         </div>
       </div>
 
+      <p className="ut-text-muted mt-3 text-[10px] font-semibold uppercase tracking-[0.15em]">
+        Preview / demo content — not a live feed
+      </p>
+
       <div className="mt-3 space-y-3">
         <div className="ut-surface-elevated p-3">
-          <p className="text-xs font-semibold text-[var(--ut-accent)]">VIP Pick Alert</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-semibold text-[var(--ut-accent)]">VIP Pick Alert</p>
+            <span className="ut-badge text-[10px]">Sample</span>
+          </div>
           <p className="mt-1 text-sm font-medium">New structured pick posted</p>
           <p className="ut-text-muted mt-1 text-xs">Sport · Market · Price context · Reasoning attached</p>
         </div>
@@ -111,8 +128,8 @@ function HeroIllustration() {
           </p>
         </div>
 
-        <div className="ut-surface-elevated p-3">
-          <p className="text-xs font-semibold text-[var(--ut-success)]">Best Bet Preview</p>
+        <div className="ut-surface-elevated ut-gold-border p-3">
+          <p className="text-xs font-semibold text-[var(--ut-gold)]">Best Bet Preview</p>
           <p className="ut-text-secondary mt-1 text-xs">
             Today&apos;s highlighted selection for VIP+ members.
           </p>
@@ -127,7 +144,9 @@ function HeroIllustration() {
       <p className="ut-text-muted mt-3 border-t border-[var(--ut-border-subtle)] pt-3 text-[10px] leading-relaxed">
         Bet responsibly. Only wager what you can afford to lose.
       </p>
-      <p className="ut-text-muted mt-1 text-[10px] italic">Illustration of the member experience</p>
+      <p className="ut-text-muted mt-1 text-[10px] italic">
+        Illustration of the member experience — sample content only, no real performance is implied.
+      </p>
     </div>
   );
 }
@@ -138,7 +157,8 @@ export default function HomePage() {
       {/* Hero */}
       <section className="mx-auto flex max-w-6xl flex-col items-center gap-12 px-4 pb-16 pt-16 sm:px-6 lg:flex-row lg:items-center lg:pt-24">
         <div className="max-w-xl text-center lg:text-left">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <p className="ut-eyebrow justify-center lg:justify-start">Private intelligence desk</p>
+          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
             Betting intelligence built for serious action.
           </h1>
           <p className="ut-text-secondary mt-5 text-lg leading-relaxed">
@@ -151,6 +171,9 @@ export default function HomePage() {
               See How It Works
             </CTAButton>
           </div>
+          <p className="ut-text-muted mt-5 text-xs leading-relaxed">
+            Not a sportsbook — no wagers placed or accepted. Sports betting involves risk.
+          </p>
         </div>
         <div className="flex w-full justify-center lg:justify-end">
           <HeroIllustration />
@@ -168,16 +191,25 @@ export default function HomePage() {
         </ul>
       </section>
 
-      {/* Why Unit Talk */}
+      {/* The signal stack — asymmetric bento, not a uniform grid */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <SectionHeader
-          eyebrow="Why Unit Talk"
+          eyebrow="The signal stack"
           title="A disciplined product, not a hype machine"
           lead="Unit Talk is built for bettors who want structure, context, and accountability."
         />
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {WHY_CARDS.map((card) => (
-            <div key={card.title} className="ut-surface p-6">
+        <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          <div className="ut-surface ut-glow-border ut-card-hover flex flex-col justify-between p-8 lg:col-span-2 lg:row-span-2">
+            <div>
+              <p className="ut-eyebrow">{SIGNAL_STACK[0].title}</p>
+              <p className="ut-text-secondary mt-4 max-w-md text-base leading-relaxed">{SIGNAL_STACK[0].body}</p>
+            </div>
+            <div className="mt-8 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-[var(--ut-text-muted)]">
+              Every pick, structured the same way
+            </div>
+          </div>
+          {SIGNAL_STACK.slice(1).map((card) => (
+            <div key={card.title} className="ut-surface ut-card-hover p-6">
               <h3 className="text-base font-semibold">{card.title}</h3>
               <p className="ut-text-secondary mt-3 text-sm leading-relaxed">{card.body}</p>
             </div>
@@ -185,87 +217,109 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Product preview */}
+      {/* Inside the membership */}
       <section className="border-y border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <SectionHeader
-            eyebrow="What's inside"
-            title="The member experience"
-            lead="Everything is delivered through a premium Discord built around clarity and process."
-          />
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {PRODUCT_PREVIEW.map((item) => (
-              <div key={item.title} className="ut-surface-elevated p-5">
-                <h3 className="text-sm font-semibold">{item.title}</h3>
-                <p className="ut-text-secondary mt-2 text-sm leading-relaxed">{item.body}</p>
+          <div className="grid gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:items-start">
+            <div>
+              <SectionHeader
+                align="left"
+                eyebrow="What's inside"
+                title="The member experience"
+                lead="Everything is delivered through a premium Discord built around clarity and process."
+              />
+              <div className="mt-10 grid gap-4 sm:grid-cols-2">
+                {MEMBERSHIP_ROWS.map((item) => (
+                  <div key={item.title} className="border-l-2 border-[var(--ut-border-strong)] pl-4">
+                    <h3 className="text-sm font-semibold">{item.title}</h3>
+                    <p className="ut-text-secondary mt-1 text-sm leading-relaxed">{item.body}</p>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+            <div className="flex justify-center lg:justify-end">
+              <HeroIllustration />
+            </div>
           </div>
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Process rail: market context -> member alert */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-        <SectionHeader eyebrow="How it works" title="Up and running in four steps" />
-        <ol className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {HOW_STEPS.map((item) => (
-            <li key={item.step} className="ut-surface p-6">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ut-accent)] text-sm font-bold text-white">
-                {item.step}
-              </span>
-              <h3 className="mt-4 text-base font-semibold">{item.title}</h3>
+        <SectionHeader eyebrow="How it works" title="From market context to member alert" />
+        <ol className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+          {PROCESS_RAIL.map((item) => (
+            <li key={item.step} className="ut-divider-node relative pt-6">
+              <span className="text-3xl font-bold text-[var(--ut-border-strong)]">{item.step}</span>
+              <h3 className="mt-3 text-base font-semibold">{item.title}</h3>
               <p className="ut-text-secondary mt-2 text-sm leading-relaxed">{item.body}</p>
             </li>
           ))}
         </ol>
-        <div className="mt-10 text-center">
+        <div className="mt-12 text-center">
           <CTAButton href="/how-it-works" variant="secondary">
             See the full walkthrough
           </CTAButton>
         </div>
       </section>
 
-      {/* Pricing preview */}
+      {/* Built for discipline, not hype */}
       <section className="border-y border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
         <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
-          <SectionHeader
-            eyebrow="Access levels"
-            title="Choose how deep you want to go"
-            lead="Start free, upgrade when you're ready. Syndicate arrives after launch."
-          />
-          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            {TIERS.map((tier) => (
-              <PlanCard key={tier.id} tier={tier} />
+          <SectionHeader eyebrow="Built for discipline, not hype" title="Sharper decisions, not louder promises" />
+          <div className="mt-12 grid gap-6 sm:grid-cols-3">
+            {DISCIPLINE_POINTS.map((point) => (
+              <div key={point.title} className="border-t-2 border-[var(--ut-accent)] pt-4">
+                <h3 className="text-sm font-semibold">{point.title}</h3>
+                <p className="ut-text-secondary mt-2 text-sm leading-relaxed">{point.body}</p>
+              </div>
             ))}
-          </div>
-          <div className="mt-10 text-center">
-            <CTAButton href="/pricing">Compare all tiers</CTAButton>
           </div>
         </div>
       </section>
 
-      {/* Results / transparency preview */}
+      {/* Pricing preview — VIP+ visually elevated as the premium tier */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <SectionHeader
-          eyebrow="Results & transparency"
-          title="Accountability is part of the product"
-          lead="Unit Talk will not publish performance claims unless the underlying data is tracked, reviewed, and approved for public release."
+          eyebrow="Access levels"
+          title="Choose how deep you want to go"
+          lead="Start free, upgrade when you're ready. Syndicate is application-only after launch."
         />
-        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <ComingSoonCard title="Pick Archive" description="A reviewable archive of published picks and their recorded details." />
-          <ComingSoonCard title="Verified Results" description="Outcomes published only after internal tracking and review." />
-          <ComingSoonCard title="Methodology Report" description="How picks are produced, tracked, and evaluated." />
-          <ComingSoonCard title="Transparency Dashboard" description="A public view into what Unit Talk tracks and releases." />
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {TIERS.map((tier) => (
+            <PlanCard key={tier.id} tier={tier} />
+          ))}
         </div>
         <div className="mt-10 text-center">
-          <Link href="/results" className="ut-link text-sm font-medium">
-            Read the full transparency commitment →
-          </Link>
+          <CTAButton href="/pricing">Compare all tiers</CTAButton>
+        </div>
+      </section>
+
+      {/* Transparency before claims */}
+      <section className="border-y border-[var(--ut-border-subtle)] bg-[var(--ut-bg-surface)]">
+        <div className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
+          <SectionHeader
+            eyebrow="Transparency before claims"
+            tone="gold"
+            title="Accountability is part of the product"
+            lead="Unit Talk will not publish performance claims unless the underlying data is tracked, reviewed, and approved for public release."
+          />
+          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <ComingSoonCard title="Pick Archive" description="A reviewable archive of published picks and their recorded details." />
+            <ComingSoonCard title="Verified for Release" description="Outcomes published only after internal tracking and review clear the bar." />
+            <ComingSoonCard title="Methodology Report" description="How picks are produced, tracked, and evaluated." />
+            <ComingSoonCard title="Transparency Dashboard" description="A public view into what Unit Talk tracks and releases." />
+          </div>
+          <div className="mt-10 text-center">
+            <Link href="/results" className="ut-link text-sm font-medium">
+              Read the full transparency commitment →
+            </Link>
+          </div>
         </div>
       </section>
 
       {/* Responsible betting banner */}
-      <section className="mx-auto max-w-6xl px-4 pb-20 sm:px-6">
+      <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6">
         <ResponsiblePlayBanner />
       </section>
 

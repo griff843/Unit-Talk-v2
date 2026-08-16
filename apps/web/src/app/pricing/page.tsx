@@ -65,6 +65,7 @@ export default function PricingPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Membership"
         title="Membership tiers"
         lead="Start free, upgrade when you're ready. Every tier is built around the same principle: structured information and a transparent process."
       />

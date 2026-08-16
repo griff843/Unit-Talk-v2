@@ -51,6 +51,7 @@ export default function ResponsiblePlayPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Our commitment"
         title="Responsible play"
         lead="Unit Talk is built for people who treat betting as disciplined entertainment. This commitment applies to every member, every tier, every day."
       />

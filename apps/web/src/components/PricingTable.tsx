@@ -22,12 +22,18 @@ export function PricingTable() {
       <table className="w-full min-w-[640px] text-left text-sm">
         <caption className="sr-only">Feature comparison across Unit Talk tiers</caption>
         <thead>
-          <tr className="border-b border-[var(--ut-border-subtle)]">
+          <tr className="border-b border-[var(--ut-border-strong)]">
             <th scope="col" className="px-4 py-3 font-semibold">
               Feature
             </th>
             {TIERS.map((tier) => (
-              <th scope="col" key={tier.id} className="px-4 py-3 font-semibold">
+              <th
+                scope="col"
+                key={tier.id}
+                className={`px-4 py-3 font-semibold ${
+                  tier.id === 'vip-plus' ? 'text-[var(--ut-gold)]' : tier.id === 'vip' ? 'text-[var(--ut-accent)]' : ''
+                }`}
+              >
                 {tier.name}
               </th>
             ))}

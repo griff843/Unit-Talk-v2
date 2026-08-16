@@ -19,6 +19,7 @@ export default function ContactPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Support"
         title="Contact Unit Talk"
         lead="Support lives where the product lives — in Discord."
       />
