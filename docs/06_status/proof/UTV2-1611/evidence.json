@@ -4,13 +4,13 @@
   "title": "Board pick writer must not bypass governance brake into validated",
   "tier": "T1",
   "lane_type": "runtime",
-  "status": "ready_for_pm_review",
-  "generated_at": "2026-08-16T15:20:40Z",
+  "status": "blocked_scope_expansion_required",
+  "generated_at": "2026-08-16T16:27:02Z",
   "sha_binding": {
-    "verified_source_sha": "66c4cfd165e920caeb4368201362f5a5512f66f3",
+    "verified_source_sha": "6b2c76747a368a45e42b9788cc665a852e525fca",
     "base_sha": "88c9a59e60df29659a45d143ac5ff60c0d042f78",
-    "verified_source_note": "Implementation commit containing the shared automated write boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
-    "rebase_note": "The branch rebased cleanly from 4707c0ce onto 88c9a59e after local verification because origin/main advanced before publication; 66c4cfd1 is the rewritten exact implementation-and-test source commit.",
+    "verified_source_note": "Rework implementation commit containing the exhaustive automated-producer policy, marker-universal future-producer boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
+    "rework_note": "The rejected epoch identified a source allowlist that could fail open for a future producer. This epoch binds the compile-time exhaustive policy and synthetic future-producer regression at 6b2c7674.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null,
@@ -51,7 +51,7 @@
     ]
   },
   "implemented_boundary": {
-    "classification": "board-construction or system-pick-scanner source with metadata.systemGenerated=true",
+    "classification": "metadata.systemGenerated=true universally enters the boundary; every current PickSource is also exhaustively classified as boundary-required, system-marker-required, or governed-elsewhere",
     "shared_enforcement_point": "apps/api/src/submission-service.ts calls prepareAutomatedSubmission before idempotency lookup and persistence",
     "initial_lifecycle_state": "awaiting_approval",
     "atomicity": "The requested initial lifecycle state is supplied to createCanonicalPickFromSubmission and persisted with the pick and birth lifecycle event; no validated-to-awaiting transition is used.",
@@ -87,8 +87,8 @@
     "focused_issue_tests": {
       "command": "pnpm exec tsx --test 'apps/api/src/automated-write-boundary.test.ts' 'apps/api/src/board-pick-writer.test.ts' 'apps/api/src/candidate-pick-scanner.test.ts'",
       "status": "PASS",
-      "tests": 38,
-      "pass": 38,
+      "tests": 39,
+      "pass": 39,
       "fail": 0,
       "skipped": 0
     },
@@ -132,6 +132,7 @@
     "observations": [
       "Automated board submissions are born awaiting_approval with boundary and lifecycle provenance.",
       "Automated scanner submissions are born awaiting_approval; the existing governance-brake call observes already_gated and remains idempotent.",
+      "A synthetic future producer carrying metadata.systemGenerated=true is classified without source allowlist membership and is born awaiting_approval with provenance.",
       "Missing or stale source evidence stops both producer loops before submission persistence.",
       "Schedule flags control whether producers execute but cannot turn an automated pick into validated or approved lifecycle state.",
       "Manual submissions remain validated.",
@@ -140,8 +141,10 @@
     "pnpm_test_db": {
       "command": "pnpm test:db",
       "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
+      "command_attempted_locally": true,
       "executed_locally": false,
       "reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "observed_local_guard": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx; refused before writable tests because target identity could not be resolved from the local URL.",
       "required_target_project_ref": "xskgrzbteyqdufktjrjx",
       "authoritative_source": "staging-ci GitHub environment receipt on the exact PR head",
       "production_project_ref": "zfzdnfwdarxucxtaojxm",
@@ -177,12 +180,12 @@
     {
       "criterion": "Readiness can mechanically detect any direct automated validated write.",
       "status": "PASS",
-      "evidence": "detectAutomatedDirectToValidatedWrite and assertNoAutomatedDirectToValidatedWrite have positive and negative coverage and guard idempotent legacy observations."
+      "evidence": "detectAutomatedDirectToValidatedWrite and assertNoAutomatedDirectToValidatedWrite have positive and negative coverage, guard idempotent legacy observations, and detect a synthetic future producer marked systemGenerated."
     },
     {
       "criterion": "Human/manual submission behavior remains unchanged.",
       "status": "PASS",
-      "evidence": "Classification requires systemGenerated=true and a focused test confirms a manual board-construction submission remains validated."
+      "evidence": "A focused test confirms a manual board-construction submission without the system marker remains validated."
     },
     {
       "criterion": "Writable Postgres proof exercises the exact change through the real pipeline.",
@@ -192,8 +195,10 @@
   ],
   "known_limitations": [
     "The implementation lane cannot claim live Postgres behavior until staging-ci produces an exact-head receipt for xskgrzbteyqdufktjrjx.",
+    "Proof Coverage Guard requires a live-DB proof test path, but no accepted T1 proof path is included in this lane's allowed file scope; scope must be expanded before the required proof case can be added.",
+    "Return Review Packet requires package-script wiring for the new automated-write-boundary.test.ts file, but package.json is outside this lane's allowed file scope; its suite is currently registered through candidate-pick-scanner.test.ts and passes in pnpm verify:static, while the mechanical wiring gate still fails.",
     "Readiness detection is exposed as a shared helper and enforced during idempotent submission lookup; deployment of a broader operator query is outside this issue's allowed scope.",
     "Implementation readiness is not production readiness."
   ],
-  "verdict": "PASS_IMPLEMENTATION_WITH_DB_PROOF_DEFERRED"
+  "verdict": "BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED"
 }
