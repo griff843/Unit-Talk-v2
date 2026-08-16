@@ -12,6 +12,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { registerAutomatedWriteBoundaryTests } from './automated-write-boundary.test.js';
 import {
   runCandidatePickScan,
   resolveGovernanceBrakeAction,
@@ -22,6 +23,8 @@ import {
   createInMemoryRepositoryBundle,
 } from '@unit-talk/db';
 import type { MarketUniverseRow, PickCandidateRow } from '@unit-talk/db';
+
+registerAutomatedWriteBoundaryTests(test);
 
 // ---------------------------------------------------------------------------
 // Helpers — mirror pattern from candidate-scoring-service.test.ts

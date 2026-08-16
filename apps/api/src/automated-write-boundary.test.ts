@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import {
@@ -8,6 +7,11 @@ import {
   prepareAutomatedSubmission,
 } from './automated-write-boundary.js';
 import { processSubmission } from './submission-service.js';
+
+type RegisterTest = (
+  name: string,
+  testFunction: () => void | Promise<void>,
+) => void;
 
 function automatedBoardPayload(overrides: Partial<SubmissionPayload> = {}): SubmissionPayload {
   return {
@@ -31,7 +35,8 @@ function automatedBoardPayload(overrides: Partial<SubmissionPayload> = {}): Subm
   };
 }
 
-test('automated write boundary materializes a board pick directly into awaiting_approval', async () => {
+export function registerAutomatedWriteBoundaryTests(register: RegisterTest): void {
+register('automated write boundary materializes a board pick directly into awaiting_approval', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(automatedBoardPayload(), repositories);
 
@@ -50,7 +55,7 @@ test('automated write boundary materializes a board pick directly into awaiting_
   assert.equal(typeof boundary['sourceSnapshotAgeMs'], 'number');
 });
 
-test('automated write boundary preserves the human/manual validated path', async () => {
+register('automated write boundary preserves the human/manual validated path', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -70,7 +75,7 @@ test('automated write boundary preserves the human/manual validated path', async
   assert.equal(result.lifecycleEvent.toState, 'validated');
 });
 
-test('automated write boundary rejects missing market evidence before persistence', () => {
+register('automated write boundary rejects missing market evidence before persistence', () => {
   const payload = automatedBoardPayload({
     metadata: {
       systemGenerated: true,
@@ -88,7 +93,7 @@ test('automated write boundary rejects missing market evidence before persistenc
   );
 });
 
-test('automated write boundary rejects a stale source snapshot before persistence', () => {
+register('automated write boundary rejects a stale source snapshot before persistence', () => {
   const payload = automatedBoardPayload({
     metadata: {
       ...(automatedBoardPayload().metadata ?? {}),
@@ -103,7 +108,7 @@ test('automated write boundary rejects a stale source snapshot before persistenc
   );
 });
 
-test('readiness detects an automated direct-to-validated write', () => {
+register('readiness detects an automated direct-to-validated write', () => {
   assert.deepEqual(
     detectAutomatedDirectToValidatedWrite({
       source: 'board-construction',
@@ -125,3 +130,4 @@ test('readiness detects an automated direct-to-validated write', () => {
     null,
   );
 });
+}
