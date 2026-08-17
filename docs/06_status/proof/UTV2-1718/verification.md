@@ -1,8 +1,8 @@
 # PROOF: UTV2-1718
 
-MERGE_SHA: 1daba9ce454249d30f643de87a731875f768ded5
+MERGE_SHA: ea3e41cb7dfa11c0149d34ee743b7ffde3517152
 
-Verified implementation SHA: `1daba9ce454249d30f643de87a731875f768ded5`
+Verified implementation SHA: `ea3e41cb7dfa11c0149d34ee743b7ffde3517152`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
@@ -100,6 +100,10 @@ This is the same fail-open class the drill was built to catch, and it defeated t
 3. **A run that drills zero migrations fails.** If migrations were detected but none drilled, the job errors instead of reporting a green no-op. This is the backstop that would have caught the original bug regardless of the grep.
 
 A regression fixture asserts that prose mentioning the exemption marker does not exempt a guarded migration.
+
+**Second run — the drill executed and failed on its own bug.** With the classification fixed, the job logged `drilled 1 migration(s)` and then errored: `42702: column reference "oid" is ambiguous`. The schema-fingerprint query called `pg_get_constraintdef(oid)` while joining `pg_constraint` to `pg_namespace`, and both expose `oid`. Qualified to `con.oid`.
+
+Worth recording rather than quietly fixing: the first run was green and proved nothing, the second was red and proved the harness was finally executing. A red drill that reaches a real query error is strictly better evidence than a green one that skipped. The workflow's failure message was also corrected — it previously asserted "a precondition did not refuse as required", which would have been a false finding when the actual cause was a drill error; it now defers to the drill's own output.
 
 ## Refusal drill — method
 
