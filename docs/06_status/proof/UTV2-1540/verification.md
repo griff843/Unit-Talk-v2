@@ -41,6 +41,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 |---|---|---|
 | `pnpm ops:merge-wrapper pr-update-branch` | PASS | Branch refreshed to current `main`; 143 behind → 0. No manual rebase. |
 | Migration idempotency by construction | PASS | Every statement `IF NOT EXISTS`; verified by reading the migration. |
+| `scripts/ci/r-level-check.ts` | PASS | R-level check run against this change; no additional required artifacts triggered. |
 | `pnpm supabase:types` | PASS | Generated from the local scratch replay at `127.0.0.1:54322`; 4608 lines written; all eight required entries asserted. |
 | Live Schema Parity | **PENDING** | Requires production read-only introspection. Not executed. |
 | Shadow parity / schema comparison | **PENDING** | Requires production read-only introspection. Not executed. |

@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1540-live-schema-parity-ledger-repair",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1378",
   "files_changed": [],
   "file_scope_lock": [
     "db/migrations-rollback/**",
@@ -22,7 +22,7 @@
   ],
   "status": "started",
   "started_at": "2026-08-03T21:47:04.127Z",
-  "heartbeat_at": "2026-08-16T23:13:53.939Z",
+  "heartbeat_at": "2026-08-17T01:22:57.390Z",
   "closed_at": null,
   "blocked_by": [
     "Linear state is operator-dependent since 2026-08-04: ledger repair step 4 requires 'supabase migration repair --status applied' against production, which only an operator can perform. PR #1378 is a draft. Manifest asserted started, i.e. active executor work that is not occurring.",
