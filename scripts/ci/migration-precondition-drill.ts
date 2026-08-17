@@ -193,13 +193,16 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
       });
     }
 
+    // Says "attempt", not "refused attempt". When the guard fails to fire, the
+    // attempt SUCCEEDS as a silent no-op, and calling that a refusal would be the
+    // same mislabelled-control defect this drill exists to catch.
     cases.push({
       name: `no DDL ran when ${relation} pre-exists`,
       status: afterAttempt === seeded ? 'pass' : 'fail',
       detail:
         afterAttempt === seeded
-          ? 'schema fingerprint identical before and after the refused attempt'
-          : 'SCHEMA CHANGED during a refused attempt — the guard did not run before DDL',
+          ? 'schema fingerprint identical before and after the attempt'
+          : 'SCHEMA CHANGED during the attempt — DDL ran before the guard',
     });
 
     const teardown = psql(dsn, ['-c', `DROP TABLE ${relation}`]);
