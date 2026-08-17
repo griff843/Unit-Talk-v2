@@ -1,8 +1,8 @@
 # PROOF: UTV2-1718
 
-MERGE_SHA: c847141ee77ce69e2bac16ca1731cc2d8f82b74a
+MERGE_SHA: 64c486154858f7a89d61bdf4eb45277d42be0c3e
 
-Verified implementation SHA: `c847141ee77ce69e2bac16ca1731cc2d8f82b74a`
+Verified implementation SHA: `64c486154858f7a89d61bdf4eb45277d42be0c3e`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
@@ -104,6 +104,37 @@ A regression fixture asserts that prose mentioning the exemption marker does not
 **Second run — the drill executed and failed on its own bug.** With the classification fixed, the job logged `drilled 1 migration(s)` and then errored: `42702: column reference "oid" is ambiguous`. The schema-fingerprint query called `pg_get_constraintdef(oid)` while joining `pg_constraint` to `pg_namespace`, and both expose `oid`. Qualified to `con.oid`.
 
 Worth recording rather than quietly fixing: the first run was green and proved nothing, the second was red and proved the harness was finally executing. A red drill that reaches a real query error is strictly better evidence than a green one that skipped. The workflow's failure message was also corrected — it previously asserted "a precondition did not refuse as required", which would have been a false finding when the actual cause was a drill error; it now defers to the drill's own output.
+
+## What the drill actually caught — the guard never worked as designed
+
+This is the finding that justifies the lane. On its first fully-executing run the drill reported, for **each** relation independently:
+
+```
+[FAIL] refuses when public.command_center_game_threads pre-exists —
+       SQLSTATE 22P02, expected 42P07.
+       psql reported: ERROR:  22P02: malformed array literal: "public.command_center_game_threads"
+```
+
+The precondition built its list of offending relations with:
+
+```sql
+existing := existing || 'public.command_center_game_threads';
+```
+
+With an untyped literal, Postgres resolves `text[] || 'foo'` to **array-to-array** concatenation rather than element append, so it tries to parse the relation name as an array literal and raises `22P02` — **before ever reaching the `RAISE`**.
+
+So the guard as written at the predecessor head `fda0a266`:
+
+- never raised `42P07`;
+- never emitted the message naming the operator authorization boundary;
+- never emitted the `HINT` telling the operator to use `supabase migration repair --status applied` instead;
+- refused **only because it crashed on its own first statement**.
+
+It was fail-closed by accident. An operator who tripped it would have seen `malformed array literal` and no indication of what boundary they had hit or what to do instead. Every review of this migration — including a PM verdict and an independent exact-head review that both accepted the precondition's design — read this code and could not see it. Only execution surfaced it.
+
+Fixed with `array_append(existing, ...)`, which is unambiguous.
+
+Note what the same run *did* establish, and what it did not: refusal genuinely occurred and **no DDL ran** — the schema fingerprint was byte-identical before and after every refused attempt, and the migration still applied in full on an empty schema. The safety property held; the declared contract for *how* it refuses did not.
 
 ## Refusal drill — method
 
