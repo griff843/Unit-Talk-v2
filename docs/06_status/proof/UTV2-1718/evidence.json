@@ -6,7 +6,7 @@
   "status": "evidence_incomplete",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "ea3e41cb7dfa11c0149d34ee743b7ffde3517152",
+    "verified_source_sha": "c847141ee77ce69e2bac16ca1731cc2d8f82b74a",
     "verified_source_note": "Implementation commit on this branch: carried predecessor blobs, the precondition marker, the refusal drill script, and its workflow job registration. Commits after this must be proof-path only, which proof-binding-validator enforces mechanically. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force a re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
