@@ -1,8 +1,8 @@
 # PROOF: UTV2-1718
 
-MERGE_SHA: 64c486154858f7a89d61bdf4eb45277d42be0c3e
+MERGE_SHA: dc7f04accd7d31d737fb714dfbfbdb3c4b26ae80
 
-Verified implementation SHA: `64c486154858f7a89d61bdf4eb45277d42be0c3e`
+Verified implementation SHA: `dc7f04accd7d31d737fb714dfbfbdb3c4b26ae80`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
