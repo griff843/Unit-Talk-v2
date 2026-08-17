@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
@@ -743,17 +744,29 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
   );
 });
 
+const CURRENT_REPO_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], {
+  cwd: getRepoRoot(),
+  encoding: 'utf8',
+}).trim();
+
+const MERGED_PR_ATTESTATION = {
+  merge_sha: CURRENT_REPO_HEAD,
+  head_sha: CURRENT_REPO_HEAD,
+  pr_number: 1428,
+  source: 'github-api' as const,
+};
+
 function schemaV2MigrationBundle(): EvidenceBundleV1 {
   return {
     schema_version: 2,
     sha_binding: {
-      verified_source_sha: 'a'.repeat(40),
+      verified_source_sha: CURRENT_REPO_HEAD,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
     },
     static_proof: { type_check: { status: 'PASS' } },
     runtime_proof: {
-      head: 'a'.repeat(40),
+      head: CURRENT_REPO_HEAD,
       precondition_drill: {
         result: 'PASS',
         run: 31999981947,
@@ -770,7 +783,7 @@ function schemaV2MigrationBundle(): EvidenceBundleV1 {
 const EXTERNAL_VERIFIER = {
   source: 'github-required-check' as const,
   producer: 'github-app:15368:verify',
-  verified_sha: 'a'.repeat(40),
+  verified_sha: CURRENT_REPO_HEAD,
   details_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/31999981913',
 };
 
@@ -781,7 +794,12 @@ test('schema-v2 migration T1 passes R1/R2 without fabricated queries or row_coun
     false,
     'T1',
     { bundle: schemaV2MigrationBundle() },
-    { laneType: 'migration', verifierProvenance: EXTERNAL_VERIFIER },
+    {
+      laneType: 'migration',
+      verifierProvenance: EXTERNAL_VERIFIER,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+    },
   );
 
   assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [
@@ -819,7 +837,12 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
     false,
     'T1',
     { bundle: schemaV2MigrationBundle() },
-    { laneType: 'migration', verifierProvenance: null },
+    {
+      laneType: 'migration',
+      verifierProvenance: null,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+    },
   );
   assert.equal(checks.find((check) => check.id === 'R3')?.status, 'fail');
   assert.match(checks.find((check) => check.id === 'R3')?.detail ?? '', /external exact-head/);
@@ -833,6 +856,8 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
     {
       laneType: 'migration',
       verifierProvenance: { ...EXTERNAL_VERIFIER, verified_sha: 'b'.repeat(40) },
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
     },
   );
   assert.equal(staleChecks.find((check) => check.id === 'R3')?.status, 'fail');
@@ -1723,7 +1748,12 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
     false,
     'T1',
     { bundle: schemaV2MigrationBundle() },
-    { laneType: 'migration', verifierProvenance: EXTERNAL_VERIFIER },
+    {
+      laneType: 'migration',
+      verifierProvenance: EXTERNAL_VERIFIER,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+    },
   );
   assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
 });

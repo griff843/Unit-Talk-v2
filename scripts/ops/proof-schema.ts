@@ -112,6 +112,7 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'migration_receipt_not_ancestor'
     | 'migration_receipt_non_proof_delta'
     | 'migration_receipt_ancestry_unverified'
+    | 'migration_receipt_merge_attestation_mismatch'
     | 'migration_refusal_drill_missing'
     | 'migration_empty_scratch_missing'
     | 'migration_roundtrip_missing'
@@ -122,6 +123,13 @@ export interface EvidenceContractFailure extends ValidationFailure {
 
 export type EvidenceValidationGate = 'pre-merge' | 'post-merge-read';
 
+export interface MergedPrAttestation {
+  merge_sha: string;
+  head_sha: string;
+  pr_number: number;
+  source: 'github-api';
+}
+
 export interface EvidenceContractContext {
   /** Explicit caller boundary: authoring gates reject v1; historical readers may accept it. */
   gate: EvidenceValidationGate;
@@ -130,6 +138,8 @@ export interface EvidenceContractContext {
   tier?: string | null;
   /** Required to mechanically verify a post-merge migration receipt rebind. */
   repoRoot?: string | null;
+  /** Rank-1 GitHub merge record supplied by the caller; the contract never fetches it. */
+  mergedPrAttestation?: MergedPrAttestation | null;
 }
 
 export interface EvidenceContractResult {
@@ -185,7 +195,23 @@ type MigrationReceiptBindingResult =
   | { status: 'pass' }
   | { status: 'not-ancestor' }
   | { status: 'non-proof-delta'; paths: string[] }
+  | { status: 'attestation-mismatch'; detail: string }
   | { status: 'unverified'; detail: string };
+
+function verifyCommitAvailable(
+  sha: string,
+  label: string,
+  repoRoot: string,
+): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
+  const result = spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot, encoding: 'utf8' });
+  if (!result.error && result.status === 0) return null;
+  return {
+    status: 'unverified',
+    detail: `${label} commit ${sha} is not available: ${
+      result.error?.message || String(result.stderr ?? '').trim() || 'git cat-file did not complete'
+    }`,
+  };
+}
 
 function verifyProofOnlyMigrationAncestry(
   receiptHead: string,
@@ -237,6 +263,88 @@ function verifyProofOnlyMigrationAncestry(
     (filePath) => !filePath.startsWith(proofPrefix) && !exactBookkeepingPaths.has(filePath),
   );
   return nonProof.length > 0 ? { status: 'non-proof-delta', paths: nonProof } : { status: 'pass' };
+}
+
+function verifyPostMergeMigrationReceiptBinding(
+  receiptHead: string,
+  verifiedSourceSha: string,
+  issueId: string,
+  context: EvidenceContractContext,
+): MigrationReceiptBindingResult {
+  if (!context.repoRoot) {
+    return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
+  }
+
+  const attestation = context.mergedPrAttestation;
+  if (
+    !attestation ||
+    attestation.source !== 'github-api' ||
+    !SHA_RE.test(attestation.merge_sha) ||
+    !SHA_RE.test(attestation.head_sha) ||
+    !Number.isSafeInteger(attestation.pr_number) ||
+    attestation.pr_number <= 0
+  ) {
+    return {
+      status: 'unverified',
+      detail: 'post-merge migration receipt binding requires a complete GitHub merged-PR attestation',
+    };
+  }
+
+  if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+    return {
+      status: 'attestation-mismatch',
+      detail: 'sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA',
+    };
+  }
+
+  for (const [sha, label] of [
+    [receiptHead, 'migration receipt head'],
+    [attestation.head_sha, 'GitHub-recorded PR head'],
+    [attestation.merge_sha, 'GitHub-recorded merge'],
+  ] as const) {
+    const unavailable = verifyCommitAvailable(sha, label, context.repoRoot);
+    if (unavailable) return unavailable;
+  }
+
+  if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
+    return { status: 'pass' };
+  }
+
+  // A squash merge disconnects the PR-head history from the merge commit.
+  // Validate both real branch-side ancestry and the direct non-squash path;
+  // either path may establish a proof-only rebind, but neither may bypass the
+  // authoritative GitHub merge/head attestation above.
+  const branchSide = verifyProofOnlyMigrationAncestry(
+    receiptHead,
+    attestation.head_sha,
+    issueId,
+    context.repoRoot,
+  );
+  const direct = verifyProofOnlyMigrationAncestry(
+    receiptHead,
+    verifiedSourceSha,
+    issueId,
+    context.repoRoot,
+  );
+  if (branchSide.status === 'pass' || direct.status === 'pass') return { status: 'pass' };
+
+  const unverified = [branchSide, direct].find(
+    (result): result is Extract<MigrationReceiptBindingResult, { status: 'unverified' }> =>
+      result.status === 'unverified',
+  );
+  if (unverified) return unverified;
+
+  const nonProofPaths = [...new Set(
+    [branchSide, direct]
+      .filter(
+        (result): result is Extract<MigrationReceiptBindingResult, { status: 'non-proof-delta' }> =>
+          result.status === 'non-proof-delta',
+      )
+      .flatMap((result) => result.paths),
+  )];
+  if (nonProofPaths.length > 0) return { status: 'non-proof-delta', paths: nonProofPaths };
+
+  return { status: 'not-ancestor' };
 }
 
 function validateV2Binding(
@@ -334,31 +442,37 @@ function validateProfileEvidence(
       SHA_RE.test(binding['verified_source_sha'])
       ? binding['verified_source_sha']
       : null;
-    if (verifiedSourceSha && receiptHead !== verifiedSourceSha) {
-      if (context.gate === 'pre-merge') {
+    if (verifiedSourceSha) {
+      if (context.gate === 'pre-merge' && receiptHead !== verifiedSourceSha) {
         failures.push({
           code: 'migration_receipt_head_mismatch',
           field: 'runtime_proof.head',
           message: 'pre-merge migration receipt head must equal sha_binding.verified_source_sha',
         });
-      } else {
-        const ancestry = verifyProofOnlyMigrationAncestry(
+      } else if (context.gate === 'post-merge-read') {
+        const ancestry = verifyPostMergeMigrationReceiptBinding(
           receiptHead,
           verifiedSourceSha,
           String(bundle['issue_id'] ?? ''),
-          context.repoRoot,
+          context,
         );
         if (ancestry.status === 'not-ancestor') {
           failures.push({
             code: 'migration_receipt_not_ancestor',
             field: 'runtime_proof.head',
-            message: 'migration receipt head is not an ancestor of sha_binding.verified_source_sha',
+            message: 'migration receipt head is not connected by a proof-only path to the attested PR head or merge SHA',
           });
         } else if (ancestry.status === 'non-proof-delta') {
           failures.push({
             code: 'migration_receipt_non_proof_delta',
             field: 'runtime_proof.head',
             message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
+          });
+        } else if (ancestry.status === 'attestation-mismatch') {
+          failures.push({
+            code: 'migration_receipt_merge_attestation_mismatch',
+            field: 'sha_binding.verified_source_sha',
+            message: ancestry.detail,
           });
         } else if (ancestry.status === 'unverified') {
           failures.push({

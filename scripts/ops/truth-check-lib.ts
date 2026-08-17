@@ -83,8 +83,11 @@ import { matchesLockPattern } from '../ci/file-scope-guard.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
 import {
   validateEvidenceBundleContract,
+  type MergedPrAttestation,
   type EvidenceContractResult,
 } from './proof-schema.js';
+
+const FULL_SHA_RE = /^[0-9a-f]{40}$/i;
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -235,6 +238,7 @@ export interface CloseoutTruthGateInput {
   pr_merged: boolean;
   pr_merge_sha: string | null;
   pr_head_sha?: string | null;
+  mergedPrAttestation?: MergedPrAttestation | null;
   proof_artifacts: CloseoutProofArtifact[];
   merge_timestamp_ms?: number | null;
   runtime_proof_required?: boolean;
@@ -341,6 +345,7 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
         laneType: input.manifest.lane_type,
         tier: input.manifest.tier,
         repoRoot: ROOT,
+        mergedPrAttestation: input.mergedPrAttestation,
       });
       return contract.schemaVersion === 1
         ? hasRuntimeReferences(parsed.runtime_proof)
@@ -1054,6 +1059,19 @@ export async function runTruthCheck(
 
     const prRef = parsePullRequestUrl(prUrl);
     const pullRequest = await fetchGitHubPullRequest(prRef.owner, prRef.repo, prRef.number, githubToken);
+    const mergedPrAttestation: MergedPrAttestation | null =
+      pullRequest.merged &&
+      typeof pullRequest.merge_commit_sha === 'string' &&
+      FULL_SHA_RE.test(pullRequest.merge_commit_sha) &&
+      typeof pullRequest.head?.sha === 'string' &&
+      FULL_SHA_RE.test(pullRequest.head.sha)
+        ? {
+            merge_sha: pullRequest.merge_commit_sha,
+            head_sha: pullRequest.head.sha,
+            pr_number: prRef.number,
+            source: 'github-api',
+          }
+        : null;
     if (!pullRequest.merged || !pullRequest.merge_commit_sha) {
       addCheck('G1', 'fail', 'pull request is not merged');
     } else {
@@ -1211,6 +1229,7 @@ export async function runTruthCheck(
       pr_merged: pullRequest.merged,
       pr_merge_sha: pullRequest.merge_commit_sha,
       pr_head_sha: pullRequest.head?.sha,
+      mergedPrAttestation,
       proof_artifacts: proofFiles.map((proofPath) => ({
         path: relativeToRoot(proofPath),
         content: safeRead(proofPath),
@@ -1241,6 +1260,7 @@ export async function runTruthCheck(
             laneType: manifest.lane_type,
             tier,
             repoRoot: ROOT,
+            mergedPrAttestation,
           });
           if (evidenceContract.valid) {
             addCheck(
@@ -1313,6 +1333,8 @@ export async function runTruthCheck(
       addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence, {
         laneType: manifest.lane_type,
         verifierProvenance,
+        mergedPrAttestation,
+        repoRoot: ROOT,
       });
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
@@ -1528,6 +1550,8 @@ export function addUnsupportedRuntimeChecks(
   context: {
     laneType?: string | null;
     verifierProvenance?: ExternalVerifierProvenance | null;
+    mergedPrAttestation?: MergedPrAttestation | null;
+    repoRoot?: string | null;
   } = {},
 ): void {
   if (tier !== 'T1') {
@@ -1555,7 +1579,8 @@ export function addUnsupportedRuntimeChecks(
     gate: 'post-merge-read',
     laneType: context.laneType,
     tier,
-    repoRoot: ROOT,
+    repoRoot: context.repoRoot,
+    mergedPrAttestation: context.mergedPrAttestation,
   });
 
   if (contract.schemaVersion === 2) {

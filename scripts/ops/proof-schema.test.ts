@@ -283,6 +283,7 @@ function createReceiptBindingRepo(): {
   receiptHead: string;
   proofOnlyHead: string;
   nonProofHead: string;
+  squashMergeSha: string;
   unrelatedHead: string;
 } {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-binding-'));
@@ -313,6 +314,13 @@ function createReceiptBindingRepo(): {
   git('commit', '-m', 'non-proof delta');
   const nonProofHead = git('rev-parse', 'HEAD');
 
+  const squashMergeSha = git(
+    'commit-tree',
+    git('rev-parse', `${proofOnlyHead}^{tree}`),
+    '-m',
+    'squash merge',
+  );
+
   git('switch', '--orphan', 'unrelated');
   write('unrelated.txt', 'unrelated history\n');
   git('add', '.');
@@ -320,7 +328,7 @@ function createReceiptBindingRepo(): {
   const unrelatedHead = git('rev-parse', 'HEAD');
   git('switch', 'main');
 
-  return { repoRoot, receiptHead, proofOnlyHead, nonProofHead, unrelatedHead };
+  return { repoRoot, receiptHead, proofOnlyHead, nonProofHead, squashMergeSha, unrelatedHead };
 }
 
 function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
@@ -328,6 +336,15 @@ function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
   evidence.sha_binding.verified_source_sha = verifiedSourceSha;
   evidence.runtime_proof.head = receiptHead;
   return evidence;
+}
+
+function mergedPrAttestation(mergeSha: string, headSha: string) {
+  return {
+    merge_sha: mergeSha,
+    head_sha: headSha,
+    pr_number: 1428,
+    source: 'github-api' as const,
+  };
 }
 
 test('migration receipt binding is exact pre-merge and fail-closed on mismatch', () => {
@@ -352,30 +369,113 @@ test('post-merge migration receipt binding accepts only proof-only Git ancestry'
   try {
     const proofOnly = validateEvidenceBundleContract(
       migrationEvidenceAt(repo.receiptHead, repo.proofOnlyHead),
-      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.proofOnlyHead, repo.proofOnlyHead),
+      },
     );
     assert.equal(proofOnly.valid, true, JSON.stringify(proofOnly.failures));
 
     const stale = validateEvidenceBundleContract(
       migrationEvidenceAt(repo.receiptHead, repo.nonProofHead),
-      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.nonProofHead, repo.nonProofHead),
+      },
     );
     assert.equal(stale.valid, false);
     assert.ok(stale.failures.some((failure) => failure.code === 'migration_receipt_non_proof_delta'));
 
     const unrelated = validateEvidenceBundleContract(
       migrationEvidenceAt(repo.unrelatedHead, repo.proofOnlyHead),
-      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.proofOnlyHead, repo.proofOnlyHead),
+      },
     );
     assert.equal(unrelated.valid, false);
     assert.ok(unrelated.failures.some((failure) => failure.code === 'migration_receipt_not_ancestor'));
 
     const noGitContext = validateEvidenceBundleContract(
       migrationEvidenceAt(repo.receiptHead, repo.proofOnlyHead),
-      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1' },
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        mergedPrAttestation: mergedPrAttestation(repo.proofOnlyHead, repo.proofOnlyHead),
+      },
     );
     assert.equal(noGitContext.valid, false);
     assert.ok(noGitContext.failures.some((failure) => failure.code === 'migration_receipt_ancestry_unverified'));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('post-merge migration receipt binding is squash-aware and attestation-bound', () => {
+  const repo = createReceiptBindingRepo();
+  try {
+    const squashShaped = migrationEvidenceAt(repo.receiptHead, repo.squashMergeSha);
+    const attestation = mergedPrAttestation(repo.squashMergeSha, repo.receiptHead);
+    const accepted = validateEvidenceBundleContract(
+      squashShaped,
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: attestation,
+      },
+    );
+    assert.equal(accepted.valid, true, JSON.stringify(accepted.failures));
+
+    const missingAttestation = validateEvidenceBundleContract(
+      squashShaped,
+      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+    );
+    assert.equal(missingAttestation.valid, false);
+    assert.ok(missingAttestation.failures.some(
+      (failure) => failure.code === 'migration_receipt_ancestry_unverified',
+    ));
+
+    const unrelatedReceipt = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.unrelatedHead, repo.squashMergeSha),
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.squashMergeSha, repo.proofOnlyHead),
+      },
+    );
+    assert.equal(unrelatedReceipt.valid, false);
+    assert.ok(unrelatedReceipt.failures.some(
+      (failure) => failure.code === 'migration_receipt_not_ancestor',
+    ));
+
+    const wrongMergeAttestation = validateEvidenceBundleContract(
+      squashShaped,
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.proofOnlyHead, repo.receiptHead),
+      },
+    );
+    assert.equal(wrongMergeAttestation.valid, false);
+    assert.ok(wrongMergeAttestation.failures.some(
+      (failure) => failure.code === 'migration_receipt_merge_attestation_mismatch',
+    ));
   } finally {
     fs.rmSync(repo.repoRoot, { recursive: true, force: true });
   }
