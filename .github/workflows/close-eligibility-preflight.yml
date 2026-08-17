@@ -49,7 +49,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify shared proof contract regressions
-        run: pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts
+        run: pnpm exec tsx --test scripts/ops/proof-schema.test.ts
 
       - name: Evaluate close eligibility
         env:
