@@ -3,10 +3,10 @@
  *
  * ## Why this exists
  *
- * UTV2-1540's ledger-repair migration captured live DDL for two Command Center
- * tables. It was written with `CREATE ... IF NOT EXISTS` so a scratch replay would
- * converge. That made an accidental production run SILENT — indistinguishable from
- * success — which is precisely the failure mode that matters: executing the
+ * The predecessor lane's ledger-repair migration captured live DDL for two Command
+ * Center tables. It was written with `CREATE ... IF NOT EXISTS` so a scratch replay
+ * would converge. That made an accidental production run SILENT — indistinguishable
+ * from success — which is precisely the failure mode that matters: executing the
  * migration on production bypasses the operator authorization boundary that
  * `supabase migration repair --status applied` exists to enforce.
  *
@@ -16,7 +16,7 @@
  *
  * ## The convention
  *
- * A migration opts in by declaring, anywhere in the file:
+ * A migration opts in by declaring, on its own comment line:
  *
  *     -- FAIL-CLOSED-PRECONDITION: public.foo, public.bar
  *
@@ -35,16 +35,55 @@
  * not "both". Seeding both at once would let a guard that only checks the first
  * relation pass.
  *
+ * ## Why psql rather than a driver
+ *
+ * This deliberately shells out to `psql` instead of constructing a database client.
+ * A direct client construction would be a new privileged-client site requiring
+ * registration in `scripts/ci/privileged-db-client-inventory.json`. A throwaway CI
+ * drill has no business joining that inventory, and `psql` is already installed by
+ * the job. `-v VERBOSITY=verbose` makes psql print the SQLSTATE, which is the whole
+ * assertion.
+ *
  * Runs against an ephemeral scratch Postgres. It never holds a production
  * credential and must never be wired to one.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-import postgres from 'postgres';
 
-const PRECONDITION_MARKER = /^--\s*FAIL-CLOSED-PRECONDITION:\s*(.+)$/im;
+/** Anchored: prose that merely mentions the marker must not count as declaring it. */
+const PRECONDITION_MARKER = /^[ \t]*--[ \t]*FAIL-CLOSED-PRECONDITION:[ \t]*(.+)$/im;
 
 /** SQLSTATE the precondition is required to raise. `42P07` is duplicate_table. */
 export const REQUIRED_SQLSTATE = '42P07';
+
+/** psql prints `ERROR:  42P07: message` under VERBOSITY=verbose. */
+const SQLSTATE_PATTERN = /^(?:psql:[^\n]*?)?ERROR:\s+([0-9A-Z]{5}):/m;
+
+const SCHEMA_FINGERPRINT_QUERY = `
+  SELECT 'relation' AS kind, n.nspname || '.' || c.relname AS ident, c.relkind::text AS extra
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relkind IN ('r', 'i', 'v', 'm', 'S', 'p')
+  UNION ALL
+  SELECT 'column', n.nspname || '.' || c.relname || '.' || a.attname, format_type(a.atttypid, a.atttypmod)
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid = a.attrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped
+  UNION ALL
+  SELECT 'constraint', n.nspname || '.' || conname, pg_get_constraintdef(oid)
+    FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
+   WHERE n.nspname = 'public'
+  UNION ALL
+  SELECT 'trigger', c.relname || '.' || t.tgname, ''
+    FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND NOT t.tgisinternal
+  UNION ALL
+  SELECT 'rls', n.nspname || '.' || c.relname, c.relrowsecurity::text
+    FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+   WHERE n.nspname = 'public' AND c.relkind = 'r'
+   ORDER BY 1, 2, 3
+`;
 
 export interface DrillCase {
   readonly name: string;
@@ -54,8 +93,7 @@ export interface DrillCase {
 
 /**
  * Relations a migration declares its precondition guards. Returns an empty array
- * when the migration does not opt in, which is not an error — most migrations
- * legitimately have no precondition.
+ * when the migration does not opt in; the caller decides whether that is fatal.
  */
 export function parseDeclaredRelations(sqlText: string): string[] {
   const match = PRECONDITION_MARKER.exec(sqlText);
@@ -66,64 +104,32 @@ export function parseDeclaredRelations(sqlText: string): string[] {
     .filter((r) => r.length > 0);
 }
 
-/**
- * A fingerprint of every schema object the migration could possibly create.
- *
- * Comparing this before and after a refusal is the actual evidence that no DDL
- * ran. Checking only "did the other table appear" would miss a partial apply that
- * created an index or a trigger before hitting the guard.
- */
-async function snapshotSchema(sql: postgres.Sql): Promise<string> {
-  const rows = await sql`
-    SELECT 'relation' AS kind, n.nspname || '.' || c.relname AS ident, c.relkind::text AS extra
-      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND c.relkind IN ('r', 'i', 'v', 'm', 'S', 'p')
-    UNION ALL
-    SELECT 'column', n.nspname || '.' || c.relname || '.' || a.attname, format_type(a.atttypid, a.atttypmod)
-      FROM pg_attribute a
-      JOIN pg_class c ON c.oid = a.attrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped
-    UNION ALL
-    SELECT 'constraint', n.nspname || '.' || conname, pg_get_constraintdef(oid)
-      FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
-     WHERE n.nspname = 'public'
-    UNION ALL
-    SELECT 'trigger', c.relname || '.' || t.tgname, ''
-      FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
-      JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND NOT t.tgisinternal
-    UNION ALL
-    SELECT 'rls', n.nspname || '.' || c.relname, c.relrowsecurity::text
-      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
-     WHERE n.nspname = 'public' AND c.relkind = 'r'
-     ORDER BY 1, 2, 3
-  `;
-  return rows.map((r) => `${r.kind}|${r.ident}|${r.extra}`).join('\n');
+/** Extracts the SQLSTATE psql reported, or null if none is present. */
+export function extractSqlstate(psqlOutput: string): string | null {
+  return SQLSTATE_PATTERN.exec(psqlOutput)?.[1] ?? null;
 }
 
-/**
- * Executes the migration exactly as a deploy would — simple protocol, whole file,
- * no wrapping transaction that could mask partial application.
- *
- * Returns the SQLSTATE on failure, or null on success.
- */
-async function runMigration(sql: postgres.Sql, sqlText: string): Promise<string | null> {
+function psql(dsn: string, args: string[]): { ok: boolean; stdout: string; stderr: string } {
   try {
-    await sql.unsafe(sqlText).simple();
-    return null;
+    const stdout = execFileSync(
+      'psql',
+      [dsn, '-v', 'ON_ERROR_STOP=1', '-v', 'VERBOSITY=verbose', '-X', '-q', ...args],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    return { ok: true, stdout, stderr: '' };
   } catch (err) {
-    const code = (err as { code?: string }).code;
-    // A guard that raises the wrong SQLSTATE still fails the drill below; we
-    // surface whatever it actually raised rather than normalising it away.
-    return code ?? 'UNKNOWN';
+    const e = err as { stdout?: string; stderr?: string };
+    return { ok: false, stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
   }
 }
 
-export async function runDrill(
-  connectionString: string,
-  migrationPath: string,
-): Promise<DrillCase[]> {
+function snapshotSchema(dsn: string): string {
+  const result = psql(dsn, ['-At', '-F', '|', '-c', SCHEMA_FINGERPRINT_QUERY]);
+  if (!result.ok) throw new Error(`schema fingerprint query failed: ${result.stderr}`);
+  return result.stdout.trim();
+}
+
+export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
   const sqlText = readFileSync(migrationPath, 'utf8');
   const relations = parseDeclaredRelations(sqlText);
   const cases: DrillCase[] = [];
@@ -134,102 +140,98 @@ export async function runDrill(
         name: 'declaration',
         status: 'fail',
         detail:
-          `${migrationPath} has no "-- FAIL-CLOSED-PRECONDITION:" declaration. ` +
-          'This drill was invoked for it, so the declaration is missing or malformed.',
+          `${migrationPath} has no "-- FAIL-CLOSED-PRECONDITION:" declaration on its own ` +
+          'comment line. This drill was invoked for it, so the declaration is missing or malformed.',
       },
     ];
   }
 
-  const sql = postgres(connectionString, { max: 1, onnotice: () => {} });
+  const baseline = snapshotSchema(dsn);
 
-  try {
-    const baseline = await snapshotSchema(sql);
+  // --- Refusal, once per declared relation, independently. -------------------
+  for (const relation of relations) {
+    const seed = psql(dsn, ['-c', `CREATE TABLE ${relation} (id uuid PRIMARY KEY)`]);
+    if (!seed.ok) throw new Error(`could not seed decoy ${relation}: ${seed.stderr}`);
+    const seeded = snapshotSchema(dsn);
 
-    // --- Refusal, once per declared relation, independently. -----------------
-    for (const relation of relations) {
-      await sql.unsafe(`CREATE TABLE ${relation} (id uuid PRIMARY KEY)`).simple();
-      const seeded = await snapshotSchema(sql);
+    const attempt = psql(dsn, ['-f', migrationPath]);
+    const sqlstate = attempt.ok ? null : extractSqlstate(attempt.stderr);
+    const afterAttempt = snapshotSchema(dsn);
 
-      const sqlstate = await runMigration(sql, sqlText);
-      const afterAttempt = await snapshotSchema(sql);
-
-      if (sqlstate === null) {
-        cases.push({
-          name: `refuses when ${relation} pre-exists`,
-          status: 'fail',
-          detail: 'migration APPLIED despite the relation already existing — the guard did not fire',
-        });
-      } else if (sqlstate !== REQUIRED_SQLSTATE) {
-        cases.push({
-          name: `refuses when ${relation} pre-exists`,
-          status: 'fail',
-          detail: `migration failed with SQLSTATE ${sqlstate}, expected ${REQUIRED_SQLSTATE}`,
-        });
-      } else {
-        cases.push({
-          name: `refuses when ${relation} pre-exists`,
-          status: 'pass',
-          detail: `raised SQLSTATE ${REQUIRED_SQLSTATE}`,
-        });
-      }
-
+    if (attempt.ok) {
       cases.push({
-        name: `no DDL ran when ${relation} pre-exists`,
-        status: afterAttempt === seeded ? 'pass' : 'fail',
-        detail:
-          afterAttempt === seeded
-            ? 'schema byte-identical before and after the refused attempt'
-            : 'SCHEMA CHANGED during a refused attempt — the guard did not run before DDL',
-      });
-
-      await sql.unsafe(`DROP TABLE ${relation}`).simple();
-      const restored = await snapshotSchema(sql);
-      cases.push({
-        name: `scratch restored after ${relation} case`,
-        status: restored === baseline ? 'pass' : 'fail',
-        detail: restored === baseline ? 'back to baseline' : 'decoy teardown left residue',
-      });
-    }
-
-    // --- The guard must not simply always refuse. ----------------------------
-    const cleanState = await runMigration(sql, sqlText);
-    if (cleanState !== null) {
-      cases.push({
-        name: 'applies on an empty scratch schema',
+        name: `refuses when ${relation} pre-exists`,
         status: 'fail',
-        detail: `migration failed with SQLSTATE ${cleanState} when no target relation existed`,
+        detail: 'migration APPLIED despite the relation already existing — the guard did not fire',
+      });
+    } else if (sqlstate !== REQUIRED_SQLSTATE) {
+      cases.push({
+        name: `refuses when ${relation} pre-exists`,
+        status: 'fail',
+        detail: `migration failed with SQLSTATE ${sqlstate ?? 'unknown'}, expected ${REQUIRED_SQLSTATE}`,
       });
     } else {
-      const present = await Promise.all(
-        relations.map(async (relation) => {
-          const [row] = await sql`SELECT to_regclass(${relation}) IS NOT NULL AS ok`;
-          return { relation, ok: Boolean(row?.ok) };
-        }),
-      );
-      const missing = present.filter((p) => !p.ok).map((p) => p.relation);
       cases.push({
-        name: 'applies on an empty scratch schema',
-        status: missing.length === 0 ? 'pass' : 'fail',
-        detail:
-          missing.length === 0
-            ? `created all declared relations: ${relations.join(', ')}`
-            : `applied but did not create: ${missing.join(', ')}`,
+        name: `refuses when ${relation} pre-exists`,
+        status: 'pass',
+        detail: `raised SQLSTATE ${REQUIRED_SQLSTATE}`,
       });
     }
 
-    return cases;
-  } finally {
-    await sql.end({ timeout: 5 });
+    cases.push({
+      name: `no DDL ran when ${relation} pre-exists`,
+      status: afterAttempt === seeded ? 'pass' : 'fail',
+      detail:
+        afterAttempt === seeded
+          ? 'schema fingerprint identical before and after the refused attempt'
+          : 'SCHEMA CHANGED during a refused attempt — the guard did not run before DDL',
+    });
+
+    const teardown = psql(dsn, ['-c', `DROP TABLE ${relation}`]);
+    if (!teardown.ok) throw new Error(`could not drop decoy ${relation}: ${teardown.stderr}`);
+    const restored = snapshotSchema(dsn);
+    cases.push({
+      name: `scratch restored after ${relation} case`,
+      status: restored === baseline ? 'pass' : 'fail',
+      detail: restored === baseline ? 'back to baseline' : 'decoy teardown left residue',
+    });
   }
+
+  // --- The guard must not simply always refuse. ------------------------------
+  const clean = psql(dsn, ['-f', migrationPath]);
+  if (!clean.ok) {
+    cases.push({
+      name: 'applies on an empty scratch schema',
+      status: 'fail',
+      detail:
+        `migration failed with SQLSTATE ${extractSqlstate(clean.stderr) ?? 'unknown'} ` +
+        'when no target relation existed',
+    });
+  } else {
+    const missing = relations.filter((relation) => {
+      const check = psql(dsn, ['-At', '-c', `SELECT to_regclass('${relation}') IS NOT NULL`]);
+      return check.stdout.trim() !== 't';
+    });
+    cases.push({
+      name: 'applies on an empty scratch schema',
+      status: missing.length === 0 ? 'pass' : 'fail',
+      detail:
+        missing.length === 0
+          ? `created all declared relations: ${relations.join(', ')}`
+          : `applied but did not create: ${missing.join(', ')}`,
+    });
+  }
+
+  return cases;
 }
 
-async function main(): Promise<number> {
+function main(): number {
   const args = process.argv.slice(2);
   const json = args.includes('--json');
   const migrationPath = args.find((a) => a.endsWith('.sql'));
-  const connectionString = process.env['POSTGRES_URL'];
+  const dsn = process.env['POSTGRES_URL'];
 
-  if (!migrationPath || !connectionString) {
+  if (!migrationPath || !dsn) {
     console.error(
       'Usage: pnpm exec tsx scripts/ci/migration-precondition-drill.ts <migration.sql> [--json]\n' +
         '  POSTGRES_URL must point at an EPHEMERAL scratch database. Never a production DSN.',
@@ -237,13 +239,19 @@ async function main(): Promise<number> {
     return 2;
   }
 
-  const cases = await runDrill(connectionString, migrationPath);
+  const cases = runDrill(dsn, migrationPath);
   const failures = cases.filter((c) => c.status === 'fail');
 
   if (json) {
     console.log(
       JSON.stringify(
-        { schema_version: 1, gate: 'migration-precondition-drill', migration: migrationPath, cases, ok: failures.length === 0 },
+        {
+          schema_version: 1,
+          gate: 'migration-precondition-drill',
+          migration: migrationPath,
+          cases,
+          ok: failures.length === 0,
+        },
         null,
         2,
       ),
@@ -263,11 +271,12 @@ async function main(): Promise<number> {
   return failures.length === 0 ? 0 : 1;
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop() ?? '')) {
-  main()
-    .then((code) => process.exit(code))
-    .catch((err) => {
-      console.error(err);
-      process.exit(1);
-    });
+const invokedPath = process.argv[1] ?? '';
+if (invokedPath.endsWith('migration-precondition-drill.ts')) {
+  try {
+    process.exit(main());
+  } catch (err) {
+    console.error(err);
+    process.exit(1);
+  }
 }

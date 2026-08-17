@@ -363,23 +363,47 @@ jobs:
           POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: |
           FAIL=0
+          DRILLED=0
           while IFS= read -r MIGRATION; do
             [[ -z "$MIGRATION" ]] && continue
 
-            # Fail-closed on opt-out: a migration with no
-            # "-- FAIL-CLOSED-PRECONDITION:" declaration is only exempt if it
-            # explicitly says so. Silence is a failure, not a skip -- otherwise a
-            # typo'd marker would make the drill pass by doing nothing.
-            if grep -q -- '-- NO-PRECONDITION-REQUIRED:' "$MIGRATION"; then
-              echo "=== $MIGRATION: exempt (declared NO-PRECONDITION-REQUIRED) ==="
+            # Both marker greps are anchored to the start of a comment line.
+            # An unanchored grep matches PROSE that merely mentions a marker, which
+            # is how the first run of this job silently exempted the very migration
+            # it exists to test -- and still reported green.
+            HAS_GUARD=0
+            HAS_EXEMPT=0
+            grep -qE '^[[:space:]]*--[[:space:]]*FAIL-CLOSED-PRECONDITION:' "$MIGRATION" && HAS_GUARD=1
+            grep -qE '^[[:space:]]*--[[:space:]]*NO-PRECONDITION-REQUIRED:' "$MIGRATION" && HAS_EXEMPT=1
+
+            # A migration cannot both declare a guard and claim exemption from it.
+            # Ambiguity resolves to failure, never to skipping.
+            if [[ "$HAS_GUARD" -eq 1 && "$HAS_EXEMPT" -eq 1 ]]; then
+              echo "::error title=precondition-drill::$MIGRATION declares BOTH a fail-closed precondition and an exemption. Contradictory declarations fail closed."
+              FAIL=1
+              continue
+            fi
+
+            # Exemption applies only when no guard is declared.
+            if [[ "$HAS_EXEMPT" -eq 1 ]]; then
+              echo "=== $MIGRATION: exempt (explicit exemption marker, no guard declared) ==="
               continue
             fi
 
             echo "=== Drilling precondition: $MIGRATION ==="
+            DRILLED=$((DRILLED + 1))
             if ! pnpm exec tsx scripts/ci/migration-precondition-drill.ts "$MIGRATION"; then
               FAIL=1
             fi
           done <<< "${{ steps.detect.outputs.migrations }}"
+
+          # A run that drilled nothing is not a pass. Without this, any future
+          # marker-matching bug degrades silently into a green no-op.
+          echo "drilled $DRILLED migration(s)"
+          if [[ "$DRILLED" -eq 0 ]]; then
+            echo "::error title=precondition-drill::New migrations were detected but NONE were drilled. A green run that tested nothing is a failure, not a pass."
+            exit 1
+          fi
 
           if [[ "$FAIL" -ne 0 ]]; then
             echo "::error title=precondition-drill::A migration's fail-closed precondition did not refuse as required."
@@ -404,3 +428,28 @@ jobs:
             exit 1
           fi
           echo "PASS: drill correctly rejected a declared-but-unenforced precondition"
+
+          # Regression fixture for the marker-classification bug that made the first
+          # run of this job green while drilling nothing: a migration whose PROSE
+          # mentions the exemption marker must still be classified as guarded.
+          cat > /tmp/adv-prose-mention.sql <<'SQL'
+          -- A migration that declares neither this marker nor an explicit
+          -- "-- NO-PRECONDITION-REQUIRED:" declaration fails the drill outright.
+          -- FAIL-CLOSED-PRECONDITION: public._adv_prose_fixture
+          SELECT 1;
+          SQL
+
+          HAS_GUARD=0
+          HAS_EXEMPT=0
+          grep -qE '^[[:space:]]*--[[:space:]]*FAIL-CLOSED-PRECONDITION:' /tmp/adv-prose-mention.sql && HAS_GUARD=1
+          grep -qE '^[[:space:]]*--[[:space:]]*NO-PRECONDITION-REQUIRED:' /tmp/adv-prose-mention.sql && HAS_EXEMPT=1
+
+          if [[ "$HAS_GUARD" -ne 1 ]]; then
+            echo "FAIL: a declared guard was not detected"
+            exit 1
+          fi
+          if [[ "$HAS_EXEMPT" -ne 0 ]]; then
+            echo "FAIL: prose mentioning the exemption marker was classified as an exemption — this is the original fail-open bug"
+            exit 1
+          fi
+          echo "PASS: prose mentioning the exemption marker does not exempt a guarded migration"

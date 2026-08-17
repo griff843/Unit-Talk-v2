@@ -29,9 +29,11 @@
 
 -- Machine-readable declaration consumed by scripts/ci/migration-precondition-drill.ts.
 -- CI seeds each of these relations independently and requires this migration to
--- refuse with SQLSTATE 42P07 before any DDL. Editing or removing this line does not
--- weaken the gate: a migration with neither this marker nor an explicit
--- "-- NO-PRECONDITION-REQUIRED:" declaration fails the drill outright.
+-- refuse with SQLSTATE 42P07 before any DDL. Removing this line does not weaken the
+-- gate: a migration that declares neither this marker nor an explicit exemption
+-- marker fails the drill outright. See that script for the exemption's exact spelling;
+-- it is deliberately not quoted here, because a comment quoting a marker is
+-- indistinguishable from a comment declaring one.
 -- FAIL-CLOSED-PRECONDITION: public.command_center_game_threads, public.command_center_delivery_mappings
 
 -- ─────────────────────────────────────────────────────────────────────────────
