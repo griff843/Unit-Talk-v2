@@ -14,29 +14,30 @@ Zero-context operator runbook for the four failure-sensitive operations that mus
 
 ## Universal preflight
 
-Run from `C:\Dev\Unit-Talk-v2-main`.
+Run from the repo root: `cd "$(git rev-parse --show-toplevel)"` (normally `/home/griff843/code/Unit-Talk-v2`).
 
 ### Required env vars
 
-```powershell
-if (-not (Test-Path .\local.env) -and -not (Test-Path .\.env)) { throw "local.env or .env is required." }
-if (-not $env:LINEAR_API_TOKEN -and -not $env:LINEAR_API_KEY) { throw "LINEAR_API_TOKEN or LINEAR_API_KEY is required for operator queue and lane checks." }
-if (-not $env:GITHUB_TOKEN) { throw "GITHUB_TOKEN is required for PR and merge-state checks." }
-if (-not $env:SUPABASE_URL -or -not $env:SUPABASE_SERVICE_ROLE_KEY) { throw "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for runtime and DB-backed operator commands." }
+Env is loaded from `local.env` > `.env` by `@unit-talk/config`; export vars into the shell first when a check below needs them (`source local.env`).
+
+```bash
+[ -f ./local.env ] || [ -f ./.env ] || { echo "local.env or .env is required." >&2; exit 1; }
+[ -n "${LINEAR_API_TOKEN:-}" ] || [ -n "${LINEAR_API_KEY:-}" ] || { echo "LINEAR_API_TOKEN or LINEAR_API_KEY is required for operator queue and lane checks." >&2; exit 1; }
+[ -n "${GITHUB_TOKEN:-}" ] || { echo "GITHUB_TOKEN is required for PR and merge-state checks." >&2; exit 1; }
+{ [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; } || { echo "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for runtime and DB-backed operator commands." >&2; exit 1; }
 ```
 
 ### Required tools / CLIs
 
-```powershell
-$tools = "git","node","pnpm","npx","gh","psql","pg_restore","gzip"
-foreach ($tool in $tools) {
-  if (-not (Get-Command $tool -ErrorAction SilentlyContinue)) { throw "$tool is required for /operator-runbook." }
-}
+```bash
+for tool in git node pnpm npx gh psql pg_restore gzip; do
+  command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required for /operator-runbook." >&2; exit 1; }
+done
 ```
 
 ### Repository sanity
 
-```powershell
+```bash
 git status --short --branch
 pnpm ops:health -- --json
 pnpm ops:brief
@@ -61,7 +62,7 @@ Produces a current operational snapshot: repo health, active lanes, GitHub PR st
 
 ### Exact commands to run
 
-```powershell
+```bash
 pnpm ops:health
 pnpm ops:brief
 pnpm linear:work
@@ -100,13 +101,13 @@ Validates that a target database still has the minimum required tables, row coun
 
 Dry run first:
 
-```powershell
+```bash
 npx tsx scripts/backup/rollback-validate.ts --tables submissions,picks,pick_lifecycle,distribution_outbox,audit_log --min-rows submissions:1,picks:1 --dry-run
 ```
 
 Live validation with foreign-key checks:
 
-```powershell
+```bash
 npx tsx scripts/backup/rollback-validate.ts --tables submissions,picks,pick_lifecycle,distribution_outbox,audit_log --min-rows submissions:1,picks:1 --check-fk
 ```
 
@@ -141,19 +142,19 @@ Replays a previously captured provider-offer pack or runs the slate replay harne
 
 Capture a provider-offer replay pack:
 
-```powershell
+```bash
 npx tsx scripts/utv2-796-slate-replay.ts --engine provider-offer --action capture --provider sgo --league NBA --capture-root out/provider-offer-replay
 ```
 
 Replay that pack safely in memory:
 
-```powershell
-npx tsx scripts/utv2-796-slate-replay.ts --engine provider-offer --action replay --pack-dir out/provider-offer-replay\<pack-name> --persistence in-memory
+```bash
+npx tsx scripts/utv2-796-slate-replay.ts --engine provider-offer --action replay --pack-dir out/provider-offer-replay/<pack-name> --persistence in-memory
 ```
 
 Run slate replay harness:
 
-```powershell
+```bash
 npx tsx scripts/utv2-796-slate-replay.ts --engine slate --action run --volume 1x
 ```
 
@@ -190,13 +191,13 @@ Restores a dump into a non-production target and proves the restored database co
 
 Dry run first:
 
-```powershell
+```bash
 npx tsx scripts/backup/restore-verify.ts --dry-run --dump-file <path-to-dump> --target-url <non-prod-database-url> --target-environment staging
 ```
 
 Run the actual restore verification:
 
-```powershell
+```bash
 npx tsx scripts/backup/restore-verify.ts --dump-file <path-to-dump> --target-url <non-prod-database-url> --target-environment staging --expected-table picks --expected-table audit_log --expected-table distribution_outbox --expected-table settlement_records --expected-table pick_lifecycle
 ```
 

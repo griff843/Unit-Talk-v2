@@ -37,6 +37,8 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 Before resolving targets or routing any issue, run the live governor and reconciliation checks. Abort on any hard fail or block; do not proceed to Phase 1.
 
+This five-command gate sequence is **canonical**. `/dispatch-board` and `/loop-dispatch` run the same sequence and must stay identical to it — if a copy diverges, this skill wins; fix the divergent copy rather than following it.
+
 ```bash
 pnpm ops:substrate-guard
 pnpm ops:merge-risk
@@ -170,13 +172,12 @@ For each validated target:
 
 **T1 lanes — mandatory planning phase before execution:**
 
-Spawn a planning subagent before touching any code. Use `model: "sonnet"` (Sonnet 5) for all T1 work — standard and novel/constitutional/governance scope alike. There is no higher planning-model tier: genuinely novel architecture, constitutional scope, or unresolved scope ambiguity is a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
+Spawn a planning subagent before touching any code. Omit the `model` override — the planning subagent inherits the session model. Planning quality gates the entire lane; never pin it to a lower tier. Genuinely novel architecture, constitutional scope, or unresolved scope ambiguity is a Rule 9 Griff-escalation trigger, not a model-routing decision. Full policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md` (model routing updated 2026-08-17 — subagents inherit the session model).
 
 The plan this subagent produces is an **Outcome Contract** — a planning artifact only. It does not replace the lane manifest, `file_scope_lock`, `expected_proof_paths`, R-level checks, or PM merge gates. Its "Scope" and proof-relevant sections must generate-or-match the lane manifest's `file_scope_lock`/`expected_proof_paths` at lane-start time. Any divergence discovered later (e.g. the PR touches files outside the declared scope) is itself a Rule 9 escalation trigger — do not silently patch the manifest and continue.
 
 ```typescript
 Agent({
-  model: "sonnet",
   description: `T1 planning: ${issue_id}`,
   prompt: `You are planning a T1 lane before implementation begins. Do not write code.
 
@@ -226,7 +227,7 @@ After the planning subagent returns, immediately post the Outcome Contract as a 
 ```
 mcp__claude_ai_Linear__save_comment({
   issueId: "<issue_id>",
-  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: sonnet\nStatus: awaiting Griff review before implementation begins."
+  body: "## T1 Outcome Contract — awaiting PM approval\n\n<paste full Outcome Contract here>\n\n---\nPlanning model: session default (inherited)\nStatus: awaiting Griff review before implementation begins."
 })
 ```
 Do not begin implementation until Griff approves — either in-session or via a Linear reply/label change.
@@ -237,8 +238,6 @@ Every Claude lane (T1 after plan approval, T2, T3) implements via a background `
 
 ```typescript
 Agent({
-  run_in_background: true,
-  model: "sonnet",
   description: `Claude lane: ${issue_id}`,
   prompt: `Implement ${issue_id} in the pre-created lane worktree at ${worktree_path}. This worktree already exists — cd into that exact path and work there; do not create a new worktree or touch the main checkout.
 
@@ -304,8 +303,6 @@ Claude lanes are no longer single-threaded. Both executors run their implementat
 
 ```typescript
 Agent({
-  run_in_background: true,
-  model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
   subagent_type: "codex-return-reviewer",
   description: `Lane return review: ${issue_id}`,
   prompt: `Review the returned diff for ${issue_id} (executor: ${executor}).
@@ -323,7 +320,7 @@ Return: APPROVE or REJECT with findings.`
 })
 ```
 
-**Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, use `model: "opus"`. Otherwise `model: "sonnet"`.
+**Tier C detection:** Before spawning, check the PR diff with `gh pr diff --name-only <pr>`. If output contains any Tier C path, state that explicitly in the review prompt so the reviewer applies the invariant checklist with full rigor. The reviewer inherits the session model — never down-tier an invariant review.
 
 5. On APPROVE (and, for T1, after PM_VERDICT): `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then acquire the closeout mutex and close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`. **Merge and close stay fully serialized through the merge mutex regardless of how many lanes finished implementation concurrently** — if two lanes both want to merge around the same time, queue the second: wait for the first's `ops:lane-close` to exit before acquiring the mutex for the next. Concurrent execution windows are fine; concurrent merge/close attempts are not.
 6. If abandoning an active lane before work begins, release the lease explicitly:
@@ -332,14 +329,7 @@ Return: APPROVE or REJECT with findings.`
    ```
 
 **Monitoring long-running shell commands:**
-When running `pnpm build`, `pnpm test`, or other slow Bash commands in background, use the `Monitor` tool to stream stdout in real time rather than waiting blind:
-```typescript
-// Launch long build in background
-Bash({ command: "pnpm build", run_in_background: true })
-// Then stream its output
-Monitor({ /* process reference */ })
-```
-Do not poll with sleep loops — Monitor receives each stdout line as a notification.
+Run slow commands (`pnpm build`, `pnpm test`, long verify runs) with the Bash tool's `run_in_background: true` — the command keeps running across turns and the session is re-invoked automatically when it exits; no polling needed. For external state the harness cannot track (CI on a merge SHA, a remote queue), use the `Monitor` tool with an until-loop, or `ScheduleWakeup` with a delay matched to how fast that state actually changes. Never poll with bare `sleep` loops — the harness blocks sleep-then-check chains.
 
 ### Merge order declaration
 

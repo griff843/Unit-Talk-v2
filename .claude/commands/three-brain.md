@@ -26,27 +26,18 @@ description: |
 
 ## Model selection for Claude lanes
 
-Three-brain returns both an executor and a **planning model** for T1 Claude lanes. The orchestrator session stays on its current model; the planning subagent spawned in Phase 4 of `/dispatch` uses the model below.
+Claude subagents (planning, implementation, critique) **inherit the session model** — do not pass a `model` override to pin them to a lower tier. Down-tier pinning was a Sonnet-era cost control, superseded 2026-08-17 (see `docs/05_operations/OPERATING_MODEL_SONNET5.md` §1). Model choice is never an escalation mechanism: genuinely novel-architecture, constitutional-scope, or ambiguous-boundary T1 work is a Rule 9 Griff-escalation trigger (scope ambiguity / Tier C), not a model-routing decision.
 
 ### T1 planning subagents
 
 | Condition | Planning model | Rationale |
 |---|---|---|
-| T1, all scopes (standard and novel/constitutional/governance) | `sonnet` (Sonnet 5) | Adaptive thinking + improved agentic bench make Sonnet 5 sufficient for T1 planning across scope types |
+| T1, all scopes | inherit session model (omit `model`) | Planning quality gates the entire lane; never down-tier it |
 | T2 / T3 Claude | *(none — no planning subagent)* | Bounded work; orchestrator session handles directly |
-
-**Default:** `sonnet`. There is no escalation tier above Sonnet 5 for planning — genuinely novel-architecture, constitutional-scope, or ambiguous-boundary T1 work is a Rule 9 Griff-escalation trigger (scope ambiguity / Tier C), not a model-routing decision. Full model policy: `docs/05_operations/OPERATING_MODEL_SONNET5.md`.
 
 ### Codex lane critique model
 
-When reviewing a Codex-returned diff (Phase 5 of `/dispatch`), the critique step must use the correct model tier — Sonnet misses subtle invariant violations on Tier C paths.
-
-| Codex diff touches | Critique model | Rationale |
-|---|---|---|
-| Any Tier C path (see Rule 2) | `opus` — spawn a dedicated critique subagent | Invariant violations in domain/contracts/migrations are not always syntactically visible |
-| Standard T2 path, no Tier C | Sonnet (orchestrator session) | Sonnet is sufficient for bounded scope review |
-
-Spawn the Opus critique subagent the same way as the planning subagent — block on result before applying tier label or requesting merge.
+When reviewing a Codex-returned diff (Phase 5 of `/dispatch`): any diff touching a Tier C path (see Rule 2) gets a dedicated critique subagent — spawned the same way as the planning subagent, inheriting the session model — and the orchestrator blocks on its result before applying the tier label or requesting merge. Invariant violations in domain/contracts/migrations are not always syntactically visible; never down-tier this review. Standard T2 diffs with no Tier C path may be reviewed in the orchestrator session directly.
 
 ### Haiku subagents — cheap reads and summaries
 
@@ -67,7 +58,7 @@ Agent({
 })
 ```
 
-**Haiku constraints:** read-only tasks only. Never use Haiku for: routing decisions, code generation, proof review, or anything where a wrong answer has downstream consequences. If the task requires judgment, use Sonnet minimum.
+**Haiku constraints:** read-only tasks only. Never use Haiku for: routing decisions, code generation, proof review, or anything where a wrong answer has downstream consequences. If the task requires judgment, omit the `model` override so the subagent inherits the session model.
 
 ---
 

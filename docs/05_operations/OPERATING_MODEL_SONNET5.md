@@ -2,6 +2,8 @@
 
 **Authority:** Claude/governance-owned. Changes require PM review.
 **Produced by:** UTV2-1390 (2026-07-01), following adversarial review of a proposed operating-model change and PM decisions on scope.
+
+> **Model-routing update (2026-08-17, PM-directed, ratified by merge of this PR):** §1's model-pinning rules are superseded. Claude subagents (planning, implementation, critique) now **inherit the session model** — no `model` override pinning them to Sonnet/Opus, and Fable 5 is no longer excluded from routing. Everything else in this document (Outcome Contracts, PM gates, runtime validation by tier, cutover rules) remains binding. Rule 9 escalation is unchanged: escalation goes to Griff, never to a different model.
 **Depends on:** `docs/05_operations/agent-role-contracts.md`, `docs/governance/AGENT_SKILL_CONTRACTS.md`, `.claude/commands/three-brain.md`, `.claude/commands/dispatch.md`.
 
 ---
@@ -17,14 +19,14 @@ This document is the canonical source for the Sonnet-5-era operating model: what
 ## 1. Roles
 
 - **PM (Griff):** defines outcome, constraints, forbidden actions, proof requirements, and gates. Reviews artifacts (Outcome Contracts, proof bundles, diffs) — not narrative summaries.
-- **Claude (Sonnet 5):** owns diagnosis, implementation strategy, lane decomposition, preflight, and dispatch recommendations. Orchestrates; does not self-certify Done.
+- **Claude (session model — Sonnet 5 or stronger):** owns diagnosis, implementation strategy, lane decomposition, preflight, and dispatch recommendations. Orchestrates; does not self-certify Done. Subagents it spawns (planning, implementation, critique) inherit the session model unless a cheaper tier is explicitly appropriate for read-only summarization (see `three-brain.md` Haiku table).
 - **Codex:** implements scoped code lanes, constrained by the existing T1/Tier C rules in `three-brain.md` (Rule 1, Rule 2 remain absolute — Codex never touches `packages/domain/`, `packages/contracts/`, migrations, lifecycle, or auth, regardless of tier). Which concrete Codex model and reasoning effort execute a lane is a separate, deterministic decision (`three-brain.md`'s Codex model-profile routing table, canonical policy `docs/05_operations/policies/codex-model-routing.json`) — it selects execution strength only and never changes the tier/scope/merge gates in this document.
-- **Opus 4.8:** reserved for Tier C / adversarial review only (Codex-diff critique on Tier C paths, per `three-brain.md`'s existing Codex-critique-model table). Not used for routine T1 planning.
-- **Fable 5:** removed from active routing. It is no longer a valid `model` value for any agent, skill, or planning subagent. Work that would previously have escalated to Fable 5 (novel architecture, constitutional scope, unresolved ambiguity) now escalates to Griff per Rule 9 (scope ambiguity / Tier C triggers) instead of routing to a different model.
+- **Opus 4.8:** *(superseded 2026-08-17)* previously reserved for Tier C / adversarial review; Tier C critique subagents now inherit the session model like all other Claude subagents.
+- **Fable 5:** *(superseded 2026-08-17)* previously removed from active routing under the UTV2-1390 decision. Fable 5 (or whatever model the session runs) is now the default for all Claude subagents via session-model inheritance. The escalation rule survives unchanged: novel architecture, constitutional scope, or unresolved ambiguity escalates to Griff per Rule 9 — model strength is never a substitute for a PM gate.
 
 ## 2. Outcome Contract — planning artifact only
 
-For every new T1 lane, the planning subagent (Sonnet 5, per `three-brain.md`) produces an Outcome Contract before implementation begins:
+For every new T1 lane, the planning subagent (session model, per `three-brain.md`) produces an Outcome Contract before implementation begins:
 
 - Issue
 - Objective

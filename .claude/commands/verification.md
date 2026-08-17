@@ -10,9 +10,11 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 
 | Tier | Required Verification | Required Proof | Merge Authority |
 |---|---|---|---|
-| **T1** | `type-check` + `test` + `test:db` + runtime proof | Evidence bundle v1 (static + runtime), SHA-tied | PM `t1-approved` label |
-| **T2** | `type-check` + `test` + issue-specific | Diff summary + verification log | Orchestrator on green |
-| **T3** | `type-check` + `test` | Green CI on merge SHA | Orchestrator on green |
+| **T1** | `type-check` + `test` + `test:db` + runtime proof | Evidence bundle v1 (static + runtime), SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
+| **T2** | `type-check` + `test` + issue-specific | Diff summary + verification log | GitHub PR review approval **or** `pm-verdict/v1` APPROVED comment |
+| **T3** | `type-check` + `test` | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
+
+Merge Authority is defined mechanically by `.github/workflows/merge-gate.yml` (ratified 2026-05-18, UTV2-979). This table must always match that workflow — if they diverge, the workflow wins and this table is stale. For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the PR-review branch; no PM presence is mechanically required.
 
 ---
 
@@ -77,9 +79,9 @@ Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 
 ---
 
-## PM verdict format (required for T2/T1 merge gate)
+## PM verdict format (T1 merge gate; optional for T2)
 
-When posting a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
+Required for every T1 merge. For T2 it is one of two accepted approval artifacts — a GitHub PR review approval is the usual path, and a `pm-verdict/v1` comment is only needed when that path isn't used. When posting a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
 
 ```
 PM_VERDICT: APPROVED
