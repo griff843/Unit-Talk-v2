@@ -6,7 +6,7 @@ Verified implementation SHA: `dc7f04accd7d31d737fb714dfbfbdb3c4b26ae80`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
-**STATUS: EVIDENCE INCOMPLETE — the refusal drill has not yet run in CI.** Nothing below claims the fail-closed precondition works. That claim becomes available only when the `precondition-drill` job executes and passes at this branch's head. This bundle is written before that run, deliberately, so no result is asserted in advance.
+**STATUS: EVIDENCE COMPLETE except the PM approval artifact.** The refusal drill executed and passed at head `c706673e67df388051fdab26b58c5e007e9e6bfa` (run 31996952192, job 95290190423), proving both relations independently. Commits after the implementation anchor are proof-path only, enforced mechanically by `proof-binding-validator`. The production ledger repair remains separately prohibited.
 
 ## Summary
 
@@ -32,12 +32,12 @@ A fail-closed precondition was added at `fda0a266`, but **its refusal path was n
 - [x] ESLint clean on the new script.
 - [x] The drill job references no secrets — asserted by parsing the workflow YAML and testing the serialized job for `secrets.`.
 - [x] `live-schema-parity.yml`, which holds a production-superuser URL, is **not** modified by this lane.
-- [ ] The migration refuses with `SQLSTATE 42P07` when `public.command_center_game_threads` pre-exists — **PENDING CI**.
-- [ ] The migration refuses with `SQLSTATE 42P07` when `public.command_center_delivery_mappings` pre-exists — **PENDING CI**, and proven separately from the case above because the guard claims "either", not "both".
-- [ ] No DDL runs on a refused attempt — schema fingerprint byte-identical before and after — **PENDING CI**, proven per relation.
-- [ ] The guard does not simply always refuse: the migration still applies in full on an empty scratch schema — **PENDING CI**.
-- [ ] The empty-database apply → rollback → reapply convergence proof stays green — **PENDING CI** (existing `schema-roundtrip-drill` job, preserved untouched).
-- [ ] Live Schema Parity, staging writable DB proof, `pnpm verify`, required CI, proof binding, and independent exact-head review — **PENDING CI at the final head**.
+- [x] The migration refuses with `SQLSTATE 42P07` when `public.command_center_game_threads` pre-exists — run 31996952192: `[PASS] raised SQLSTATE 42P07`.
+- [x] The migration refuses with `SQLSTATE 42P07` when `public.command_center_delivery_mappings` pre-exists — run 31996952192: `[PASS] raised SQLSTATE 42P07`. Seeded and asserted separately from the case above, because the guard claims "either", not "both".
+- [x] No DDL runs on a refused attempt — schema fingerprint byte-identical before and after, asserted per relation. Run 31996952192, both cases PASS.
+- [x] The guard does not simply always refuse: run 31996952192 `[PASS] applies on an empty scratch schema — created all declared relations`.
+- [x] The empty-database apply → rollback → reapply convergence proof stays green — `schema-roundtrip-drill` job 95290190466, PASS, preserved untouched.
+- [x] Live Schema Parity (job 95290200913), staging writable DB proof (job 95290247439), `pnpm verify` (job 95291314897) and proof binding all PASS at this head. Independent exact-head review is recorded separately and is not asserted here in advance.
 - [x] RLS is preserved as production has it — enabled on both tables with zero policies, which denies every non-superuser role without BYPASSRLS. Replaying without it would produce a scratch schema strictly more permissive than production.
 
 ## EVIDENCE:
@@ -57,16 +57,16 @@ A fail-closed precondition was added at `fda0a266`, but **its refusal path was n
 | ESLint on new script | PASS | `pnpm exec eslint scripts/ci/migration-precondition-drill.ts` exit 0. |
 | Drill job carries no secrets | PASS | Workflow YAML parsed; serialized `precondition-drill` job tested for `secrets.` — none present. |
 | Live Schema Parity workflow untouched | PASS | Not in this lane's `file_scope_lock` and not modified. |
-| `scripts/ci/r-level-check.ts` | PENDING | Runs in CI on this branch. |
-| Refusal — `command_center_game_threads` pre-existing | PENDING | Requires the `precondition-drill` job. |
-| Refusal — `command_center_delivery_mappings` pre-existing | PENDING | Requires the `precondition-drill` job; proven independently of the case above. |
-| No DDL on refusal (schema fingerprint unchanged) | PENDING | Requires the `precondition-drill` job. |
-| Applies on empty scratch schema | PENDING | Requires the `precondition-drill` job. |
-| Rollback / reapply convergence | PENDING | Existing `schema-roundtrip-drill` job, rerun at this head. |
-| Live Schema Parity | PENDING | Rerun at final head. |
-| `pnpm test:db` / writable DB verification | PENDING | Staging rerun at final head. |
-| `pnpm verify` | PENDING | Rerun at final head. |
-| Proof binding | PENDING | `proof-binding-validator` at final head. |
+| `scripts/ci/r-level-check.ts` | PASS | R-Level Compliance green at this head. |
+| Refusal — `command_center_game_threads` pre-existing | PASS | Run 31996952192 — raised SQLSTATE 42P07. |
+| Refusal — `command_center_delivery_mappings` pre-existing | PASS | Run 31996952192 — raised SQLSTATE 42P07, seeded independently. |
+| No DDL on refusal (schema fingerprint unchanged) | PASS | Run 31996952192 — fingerprint identical before/after, both relations. |
+| Applies on empty scratch schema | PASS | Run 31996952192 — created both declared relations. |
+| Rollback / reapply convergence | PASS | `schema-roundtrip-drill` job 95290190466. |
+| Live Schema Parity | PASS | Job 95290200913. |
+| `pnpm test:db` / writable DB verification | PASS | Writable DB proof (staging) job 95290247439. |
+| `pnpm verify` | PASS | Job 95291314897. |
+| Proof binding | PASS | `proof-binding-validator` green; commits after the anchor are proof-path only. |
 | Exact-head independent review | PENDING | No result is asserted here in advance. |
 
 ## Diff summary

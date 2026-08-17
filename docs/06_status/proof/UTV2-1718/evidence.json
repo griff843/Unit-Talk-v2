@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1718",
   "title": "Live Schema Parity ledger repair (successor): capture Command Center DDL with a fail-closed precondition",
   "tier": "T1",
-  "status": "evidence_incomplete",
+  "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
     "verified_source_sha": "dc7f04accd7d31d737fb714dfbfbdb3c4b26ae80",
@@ -93,22 +93,48 @@
     }
   },
   "runtime_proof": {
-    "status": "PENDING",
-    "note": "No runtime assertion is claimed. Every item below requires CI execution at this branch's head."
+    "status": "PASS",
+    "head": "c706673e67df388051fdab26b58c5e007e9e6bfa",
+    "precondition_drill": {
+      "run": 31996952192,
+      "job": 95290190423,
+      "result": "PASS",
+      "cases": [
+        "refuses when public.command_center_game_threads pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.command_center_game_threads pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.command_center_game_threads case \u2014 back to baseline",
+        "refuses when public.command_center_delivery_mappings pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.command_center_delivery_mappings pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.command_center_delivery_mappings case \u2014 back to baseline",
+        "applies on an empty scratch schema \u2014 created all declared relations"
+      ],
+      "fail_open_defences": [
+        "adversarial fixture rejected: a declared-but-unenforced precondition fails the drill",
+        "regression: prose mentioning the exemption marker does not exempt a guarded migration",
+        "a run that drills zero detected migrations fails rather than reporting a green no-op"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "job": 95290190466,
+      "result": "PASS",
+      "detail": "empty-database apply -> rollback -> reapply convergence preserved"
+    },
+    "live_schema_parity": {
+      "job": 95290200913,
+      "result": "PASS"
+    },
+    "writable_db_proof_staging": {
+      "job": 95290247439,
+      "result": "PASS"
+    },
+    "verify": {
+      "job": 95291314897,
+      "result": "PASS"
+    }
   },
   "pending_evidence": [
-    "refusal with SQLSTATE 42P07 when public.command_center_game_threads pre-exists",
-    "refusal with SQLSTATE 42P07 when public.command_center_delivery_mappings pre-exists (proven independently, because the guard claims 'either' not 'both')",
-    "no DDL on a refused attempt \u2014 schema fingerprint byte-identical before and after, per relation",
-    "migration still applies in full on an empty scratch schema (guard does not always refuse)",
-    "adversarial fixture: a declared-but-unenforced precondition is rejected by the drill",
-    "empty-database apply -> rollback -> reapply convergence preserved",
-    "Live Schema Parity at final head",
-    "staging writable DB proof at final head",
-    "pnpm verify at final head",
-    "scripts/ci/r-level-check.ts at final head",
-    "proof binding at final head",
-    "independent exact-head review"
+    "independent exact-head review",
+    "PM approval artifact (t1-approved label + pm-verdict/v1 APPROVED)"
   ],
   "prohibited_actions": [
     {
@@ -122,8 +148,8 @@
     "The drill runs against an ephemeral scratch database, so it proves the guard's behaviour, not that production's current state matches expectations. Production state remains covered by Live Schema Parity."
   ],
   "sign_off": {
-    "ready_for_pm_review": false,
-    "blocking": "the refusal drill has not yet executed; no fail-closed claim is supported until it does"
+    "ready_for_pm_review": true,
+    "blocking": "independent exact-head review not yet run; no verifier result asserted in advance"
   },
   "drill_self_defect": {
     "summary": "The drill's first CI run reported PASS while drilling nothing.",
@@ -152,5 +178,11 @@
     "missed_by": "a PM verdict and an independent exact-head review both accepted this precondition's design by reading it; the defect is invisible to reading and only execution surfaced it",
     "fix": "array_append(existing, ...), which is unambiguous",
     "status": "fix pushed; 42P07 conformance remains PENDING until the drill re-runs green"
+  },
+  "open_pm_decision": {
+    "check": "Require live-DB proof for runtime changes",
+    "state": "FAIL",
+    "required_merge_context": false,
+    "detail": "Fires because the migration is a sensitive runtime path with no matching live-DB proof FILE (apps/*/src/t1-proof-*.test.ts and similar). This lane's runtime evidence is workflow-level and stronger for a ledger-capture migration, but does not satisfy the guard's path rule. The skip-proof-coverage label was scoped by PM as a one-PR decision for the predecessor and has NOT been applied here."
   }
 }
