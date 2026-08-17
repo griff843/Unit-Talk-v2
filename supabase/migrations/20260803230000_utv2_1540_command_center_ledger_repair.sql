@@ -46,12 +46,19 @@ DO $$
 DECLARE
   existing text[] := ARRAY[]::text[];
 BEGIN
+  -- array_append, not `||`. With an untyped literal, `text[] || 'foo'` resolves to
+  -- array-to-array concatenation, so Postgres tries to parse the relation name as an
+  -- array literal and dies with 22P02 "malformed array literal" -- before ever
+  -- reaching the RAISE below. The guard still refused, but by crashing on its own
+  -- first statement rather than by design: no 42P07, no message naming the
+  -- authorization boundary, and no hint pointing at `migration repair`. Caught by
+  -- the refusal drill; it is invisible to any amount of reading.
   IF to_regclass('public.command_center_game_threads') IS NOT NULL THEN
-    existing := existing || 'public.command_center_game_threads';
+    existing := array_append(existing, 'public.command_center_game_threads');
   END IF;
 
   IF to_regclass('public.command_center_delivery_mappings') IS NOT NULL THEN
-    existing := existing || 'public.command_center_delivery_mappings';
+    existing := array_append(existing, 'public.command_center_delivery_mappings');
   END IF;
 
   IF array_length(existing, 1) > 0 THEN
