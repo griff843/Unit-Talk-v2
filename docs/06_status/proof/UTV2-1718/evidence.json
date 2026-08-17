@@ -6,7 +6,7 @@
   "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "80d2fc1e993e7ff8f5e1ec7f1070bf69f806cfa2",
+    "verified_source_sha": "3ce86b98a5aa01ae244794253a8c7e716f2ce733",
     "verified_source_note": "Re-anchored to the sanctioned ops:merge-wrapper pr-update-branch merge commit. Re-anchoring was mechanically required, not elective: the readiness-ledger bot committed docs/06_status/readiness/readiness-score.json to main, the branch refresh brought it into branch history after the previous anchor 8317f0aa, and proof-binding-validator correctly refused it as a non-proof change. No implementation was altered to satisfy the validator -- the authored implementation is unchanged since a9943aa1. Commits after this anchor are proof-path only. Post-merge closeout rebinds to the merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -14,10 +14,10 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "sha_type": "implementation_sha",
-    "merge_sha": null,
+    "sha_type": "merge_sha",
+    "merge_sha": "3ce86b98a5aa01ae244794253a8c7e716f2ce733",
     "pr_number": null,
-    "bound_at": null
+    "bound_at": "2026-08-17T10:15:04.944Z"
   },
   "predecessor": {
     "issue_id": "UTV2-1540",
@@ -54,7 +54,7 @@
       ".github/workflows/migration-reversibility-gate.yml (precondition-drill job + path trigger)"
     ],
     "deliberately_not_modified": [
-      ".github/workflows/live-schema-parity.yml \u2014 carries a production-superuser database URL; must not be touched to run a drill"
+      ".github/workflows/live-schema-parity.yml — carries a production-superuser database URL; must not be touched to run a drill"
     ]
   },
   "fail_closed_precondition": {
@@ -95,13 +95,13 @@
       "job": 95298344670,
       "result": "PASS",
       "cases": [
-        "refuses when public.command_center_game_threads pre-exists \u2014 raised SQLSTATE 42P07",
-        "no DDL ran when public.command_center_game_threads pre-exists \u2014 schema fingerprint identical before and after the attempt",
-        "scratch restored after public.command_center_game_threads case \u2014 back to baseline",
-        "refuses when public.command_center_delivery_mappings pre-exists \u2014 raised SQLSTATE 42P07",
-        "no DDL ran when public.command_center_delivery_mappings pre-exists \u2014 schema fingerprint identical before and after the attempt",
-        "scratch restored after public.command_center_delivery_mappings case \u2014 back to baseline",
-        "applies on an empty scratch schema \u2014 created all declared relations"
+        "refuses when public.command_center_game_threads pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.command_center_game_threads pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.command_center_game_threads case — back to baseline",
+        "refuses when public.command_center_delivery_mappings pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.command_center_delivery_mappings pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.command_center_delivery_mappings case — back to baseline",
+        "applies on an empty scratch schema — created all declared relations"
       ],
       "fail_open_defences": [
         "adversarial fixture rejected: a declared-but-unenforced precondition fails the drill",
@@ -156,7 +156,7 @@
     "summary": "The drill's first CI run reported PASS while drilling nothing.",
     "cause": "The workflow's exemption check used an unanchored grep for the opt-out marker. The migration's comment explaining the opt-out quoted that literal token, so prose was read as a declaration and the migration was exempted.",
     "why_it_looked_green": "The adversarial fixture still passed, so the job's green was indistinguishable from a real pass.",
-    "class": "fail-open: the control silently did nothing and reported success \u2014 the same class the drill exists to catch",
+    "class": "fail-open: the control silently did nothing and reported success — the same class the drill exists to catch",
     "fixes": [
       "both marker greps anchored to the start of a comment line",
       "a guard declaration takes precedence over an exemption; declaring both fails closed",
