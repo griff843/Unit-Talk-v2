@@ -1,8 +1,8 @@
 # PROOF: UTV2-1718
 
-MERGE_SHA: 8317f0aa2efab9a893ecefefec7000f6784a5084
+MERGE_SHA: 80d2fc1e993e7ff8f5e1ec7f1070bf69f806cfa2
 
-Verified implementation SHA: `8317f0aa2efab9a893ecefefec7000f6784a5084`
+Verified implementation SHA: `80d2fc1e993e7ff8f5e1ec7f1070bf69f806cfa2`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
@@ -62,7 +62,7 @@ A fail-closed precondition was added at `fda0a266`, but **its refusal path was n
 | Refusal — `command_center_delivery_mappings` pre-existing | PASS | Run 31999981947 (job 95298344670) — raised SQLSTATE 42P07, seeded independently. |
 | No DDL on refusal (schema fingerprint unchanged) | PASS | Run 31999981947 (job 95298344670) — fingerprint identical before/after, both relations. |
 | Applies on empty scratch schema | PASS | Run 31999981947 (job 95298344670) — created both declared relations. |
-| Rollback / reapply convergence | PASS | Run 31999981947 (job 95298344670), job 95298344658. |
+| Rollback / reapply convergence | PASS | Run 31999981947, job 95298344658. |
 | Live Schema Parity | PASS | Run 31999981924, job 95298356338. |
 | `pnpm test:db` / writable DB verification | PASS | Writable DB proof (staging) run 31999981913, job 95298344972. |
 | `pnpm verify` | PASS | Run 31999981913, job 95299289128. |

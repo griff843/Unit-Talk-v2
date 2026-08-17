@@ -6,8 +6,8 @@
   "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "8317f0aa2efab9a893ecefefec7000f6784a5084",
-    "verified_source_note": "Implementation commit on this branch: carried predecessor blobs, the precondition marker, the refusal drill script, and its workflow job registration. Commits after this must be proof-path only, which proof-binding-validator enforces mechanically. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force a re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
+    "verified_source_sha": "80d2fc1e993e7ff8f5e1ec7f1070bf69f806cfa2",
+    "verified_source_note": "Re-anchored to the sanctioned ops:merge-wrapper pr-update-branch merge commit. Re-anchoring was mechanically required, not elective: the readiness-ledger bot committed docs/06_status/readiness/readiness-score.json to main, the branch refresh brought it into branch history after the previous anchor 8317f0aa, and proof-binding-validator correctly refused it as a non-proof change. No implementation was altered to satisfy the validator -- the authored implementation is unchanged since a9943aa1. Commits after this anchor are proof-path only. Post-merge closeout rebinds to the merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -110,24 +110,28 @@
       ]
     },
     "schema_roundtrip_drill": {
-      "job": 95290190466,
+      "job": 95298344658,
       "result": "PASS",
       "detail": "empty-database apply -> rollback -> reapply convergence preserved",
-      "note": "rerun green at head a9943aa1"
+      "note": "rerun green at head a9943aa1",
+      "run": 31999981947
     },
     "live_schema_parity": {
-      "job": 95290200913,
-      "result": "PASS"
+      "job": 95298356338,
+      "result": "PASS",
+      "run": 31999981924
     },
     "writable_db_proof_staging": {
-      "job": 95290247439,
-      "result": "PASS"
+      "job": 95298344972,
+      "result": "PASS",
+      "run": 31999981913
     },
     "verify": {
-      "job": 95291314897,
-      "result": "PASS"
+      "job": 95299289128,
+      "result": "PASS",
+      "run": 31999981913
     },
-    "citation_note": "Cited runs were produced at head a9943aa1. Every commit after that head is proof-path only, enforced mechanically by proof-binding-validator, so the non-proof content these runs exercised is identical to the final head. The drill re-executes on every push -- it is not a cached artifact -- and has passed at every head since the guard fix."
+    "citation_note": "Cited runs were produced at source head a9943aa1d9e24201e0acdfd76c59d1c7813a068d. The branch was subsequently refreshed against main through ops:merge-wrapper pr-update-branch, which imported one inherited commit from main (docs/06_status/readiness/readiness-score.json, written by the readiness-ledger bot). That inherited file is not PR-authored content: no authored non-proof path changed after a9943aa1, verifiable with  which is empty. The drill re-executes on every push and is not a cached artifact."
   },
   "pending_evidence": [
     "independent exact-head review",
