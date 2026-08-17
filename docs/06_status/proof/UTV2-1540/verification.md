@@ -6,7 +6,7 @@ Verified implementation SHA: `1a54c347027413ad087812512ccd46ade4a9e946`
 
 Pre-merge this anchor identifies the current branch head. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
-**STATUS: EVIDENCE COMPLETE on head `6507d71c`.** Every runtime check below was executed in CI at this exact head and its run is cited. The only outstanding item is the PM approval artifact; the production ledger repair remains separately prohibited.
+**STATUS: EVIDENCE COMPLETE.** Every runtime check below was executed in CI and cites the run that proves it. Runs 31985814340 / 31985814356 / 31985814388 were produced at head `6507d71c`; the commits since then are proof-path only, which `proof-binding-validator` enforces mechanically. The only outstanding item is the PM approval artifact; the production ledger repair remains separately prohibited.
 
 ## Summary
 
@@ -23,7 +23,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 - [x] Down script verified as a genuine reversal — CI run 31985814356 hashed the schema pre-up, applied down, and confirmed the hash matched.
 - [x] Reapply convergence verified — same run confirmed determinism after re-applying.
 - [x] Writable DB proof against staging passed — CI run 31985814388.
-- [x] `pnpm verify` green on head `6507d71c` — CI run 31985814388.
+- [x] `pnpm verify` green — CI run 31985814388, re-confirmed green after the PR left draft.
 - [x] Independent exact-head review completed: RISK LOW, all eight verification items confirmed by execution, no scope bleed, no secrets, and no production mutation.
 - [x] The migration is idempotent by construction: every statement is `IF NOT EXISTS`, so replay and re-run are no-ops.
 - [x] RLS is preserved as production has it — enabled on both tables with zero policies, which denies every non-superuser role without BYPASSRLS. Replaying without it would produce a scratch schema strictly more permissive than production.
@@ -49,7 +49,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 | Rollback / down-script verification | PASS | CI run 31985814356 — hash-verified reversal. |
 | Reapply + convergence | PASS | CI run 31985814356 — determinism confirmed. |
 | `pnpm test:db` / writable DB verification | PASS | CI run 31985814388, staging-ci. |
-| `pnpm verify` | PASS | CI run 31985814388 on head 6507d71c. |
+| `pnpm verify` | PASS | CI run 31985814388; re-confirmed green on the non-draft head. |
 | Exact-head independent review | PASS | RISK LOW; all eight items confirmed by execution. |
 
 ### Type generation from the fully replayed scratch schema
@@ -104,6 +104,14 @@ This machine is under deliberate credential containment: `SUPABASE_PROJECT_REF=c
 An operator packet has been prepared requesting a temporary, least-privileged, read-only production schema-introspection credential delivered through `SUPABASE_DB_URL`. It grants `CONNECT`, schema `USAGE`, and `REFERENCES` — deliberately **not** `SELECT` — so the role can see object metadata through `information_schema` without reading a single row. It carries a 48-hour expiry, statement/idle/lock timeouts, `default_transaction_read_only`, a connection cap, mandatory SSL, and exact revocation SQL. No owner token, admin password, or service-role key is requested.
 
 No production role has been created and no production mutation has been performed.
+
+### Outstanding gate: proof-coverage guard
+
+`Require live-DB proof for runtime changes` fails on the non-draft head. It fires because `supabase/migrations/20260803230000_...sql` is a sensitive runtime path, and it requires a matching change to a live-DB proof file (`apps/*/src/t1-proof-*.test.ts`, `apps/api/src/*test-db*.ts`, or a package/app `src/scripts/*.ts`). This lane changes none of those, and `apps/**` is outside its declared file scope.
+
+This lane's live verification is workflow-level rather than file-level: Live Schema Parity compares the replayed repository schema against **real production** and reports zero drift, and the round-trip drill hash-verifies replay, rollback, and reapply. Those are stronger evidence for a ledger-capture migration than an in-repo proof test would be, but they do not satisfy this guard's file-path rule.
+
+The guard is not one of the four required merge contexts. It is recorded here rather than bypassed; the `skip-proof-coverage` label exists but is not applied, because suppressing a fail-closed gate is a PM decision.
 
 ### Known limitations
 
