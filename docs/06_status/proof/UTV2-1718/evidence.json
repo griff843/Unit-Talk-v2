@@ -6,7 +6,7 @@
   "status": "evidence_incomplete",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "0dda9a969910fdee76ca9afc110fff36bbd54360",
+    "verified_source_sha": "1daba9ce454249d30f643de87a731875f768ded5",
     "verified_source_note": "Implementation commit on this branch: carried predecessor blobs, the precondition marker, the refusal drill script, and its workflow job registration. Commits after this must be proof-path only, which proof-binding-validator enforces mechanically. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force a re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -59,7 +59,7 @@
       ".github/workflows/migration-reversibility-gate.yml (precondition-drill job + path trigger)"
     ],
     "deliberately_not_modified": [
-      ".github/workflows/live-schema-parity.yml — carries a production-superuser database URL; must not be touched to run a drill"
+      ".github/workflows/live-schema-parity.yml \u2014 carries a production-superuser database URL; must not be touched to run a drill"
     ]
   },
   "fail_closed_precondition": {
@@ -71,10 +71,26 @@
     "idempotency_note": "Idempotency is deliberately NOT the safety property. IF NOT EXISTS skips silently, which is indistinguishable from success. Refusal is the property under test."
   },
   "static_proof": {
-    "type_check": { "status": "PASS", "detail": "pnpm type-check exit 0 on this branch" },
-    "eslint": { "status": "PASS", "detail": "pnpm exec eslint scripts/ci/migration-precondition-drill.ts exit 0" },
-    "carried_blob_identity": { "status": "PASS", "detail": "git hash-object matched git rev-parse fda0a266:<path> for all three carried files" },
-    "drill_job_secret_free": { "status": "PASS", "detail": "workflow YAML parsed; serialized precondition-drill job contains no 'secrets.' reference" }
+    "type_check": {
+      "status": "PASS",
+      "detail": "pnpm type-check exit 0 on this branch"
+    },
+    "eslint": {
+      "status": "PASS",
+      "detail": "pnpm exec eslint scripts/ci/migration-precondition-drill.ts exit 0"
+    },
+    "carried_blob_identity": {
+      "status": "PASS",
+      "detail": "git hash-object matched git rev-parse fda0a266:<path> for all three carried files"
+    },
+    "drill_job_secret_free": {
+      "status": "PASS",
+      "detail": "workflow YAML parsed; serialized precondition-drill job contains no 'secrets.' reference"
+    },
+    "privileged_db_client_boundary": {
+      "status": "PASS",
+      "detail": "drill shells out to psql instead of constructing a client; pnpm ci:db-client-boundary reports 4 pre-existing sites, all classified, none added by this lane"
+    }
   },
   "runtime_proof": {
     "status": "PENDING",
@@ -83,7 +99,7 @@
   "pending_evidence": [
     "refusal with SQLSTATE 42P07 when public.command_center_game_threads pre-exists",
     "refusal with SQLSTATE 42P07 when public.command_center_delivery_mappings pre-exists (proven independently, because the guard claims 'either' not 'both')",
-    "no DDL on a refused attempt — schema fingerprint byte-identical before and after, per relation",
+    "no DDL on a refused attempt \u2014 schema fingerprint byte-identical before and after, per relation",
     "migration still applies in full on an empty scratch schema (guard does not always refuse)",
     "adversarial fixture: a declared-but-unenforced precondition is rejected by the drill",
     "empty-database apply -> rollback -> reapply convergence preserved",
@@ -108,5 +124,18 @@
   "sign_off": {
     "ready_for_pm_review": false,
     "blocking": "the refusal drill has not yet executed; no fail-closed claim is supported until it does"
+  },
+  "drill_self_defect": {
+    "summary": "The drill's first CI run reported PASS while drilling nothing.",
+    "cause": "The workflow's exemption check used an unanchored grep for the opt-out marker. The migration's comment explaining the opt-out quoted that literal token, so prose was read as a declaration and the migration was exempted.",
+    "why_it_looked_green": "The adversarial fixture still passed, so the job's green was indistinguishable from a real pass.",
+    "class": "fail-open: the control silently did nothing and reported success \u2014 the same class the drill exists to catch",
+    "fixes": [
+      "both marker greps anchored to the start of a comment line",
+      "a guard declaration takes precedence over an exemption; declaring both fails closed",
+      "a run that drills zero detected migrations fails instead of reporting a green no-op",
+      "regression fixture asserting prose mentioning the exemption marker does not exempt a guarded migration"
+    ],
+    "detected_by": "reading the job's actual stdout rather than trusting its conclusion"
   }
 }

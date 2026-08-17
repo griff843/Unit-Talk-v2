@@ -1,8 +1,8 @@
 # PROOF: UTV2-1718
 
-MERGE_SHA: 0dda9a969910fdee76ca9afc110fff36bbd54360
+MERGE_SHA: 1daba9ce454249d30f643de87a731875f768ded5
 
-Verified implementation SHA: `0dda9a969910fdee76ca9afc110fff36bbd54360`
+Verified implementation SHA: `1daba9ce454249d30f643de87a731875f768ded5`
 
 Pre-merge this anchor identifies the implementation commit on this branch. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
@@ -68,6 +68,38 @@ A fail-closed precondition was added at `fda0a266`, but **its refusal path was n
 | `pnpm verify` | PENDING | Rerun at final head. |
 | Proof binding | PENDING | `proof-binding-validator` at final head. |
 | Exact-head independent review | PENDING | No result is asserted here in advance. |
+
+## Diff summary
+
+| File | Change | Note |
+|---|---|---|
+| `supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql` | carried + marker | Blob carried identically from the predecessor head; a `FAIL-CLOSED-PRECONDITION` declaration line was added so CI knows which relations to seed. |
+| `db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql` | carried unchanged | Blob `69af4194`, identical to the predecessor head. |
+| `packages/db/src/database.types.ts` | carried unchanged | Blob `a49a3853`, generated from a replayed scratch schema, credential-free. |
+| `scripts/ci/migration-precondition-drill.ts` | new | The refusal drill. Shells out to `psql` rather than constructing a database client, so it adds no privileged-client site. |
+| `.github/workflows/migration-reversibility-gate.yml` | modified | Adds the `precondition-drill` job and its path trigger. No secrets referenced. |
+| `docs/06_status/proof/UTV2-1718/*` | new | This bundle. |
+| `.ops/sync/UTV2-1718.yml`, `docs/06_status/lanes/UTV2-1718.json` | new | Lane control plane. |
+
+Commands run locally on this branch: `pnpm type-check` (exit 0), `pnpm test` is exercised through `pnpm verify` in CI, `pnpm verify` runs as a required context, and `scripts/ci/r-level-check.ts` runs in CI.
+
+## Corrected fail-open defect in this lane's own drill
+
+The drill's first CI run reported **PASS while testing nothing**. Its real output was:
+
+```
+=== supabase/migrations/20260803230000_..._ledger_repair.sql: exempt (declared NO-PRECONDITION-REQUIRED) ===
+```
+
+The workflow's exemption check was an unanchored `grep -q -- '-- NO-PRECONDITION-REQUIRED:'`. The migration's comment *explaining* the opt-out quoted that literal token, so the grep matched prose and exempted the very migration the drill exists to test. The adversarial fixture still passed, which made the green look earned.
+
+This is the same fail-open class the drill was built to catch, and it defeated the drill's own defences. Three changes, because removing the prose alone would leave the mechanism just as fragile:
+
+1. **Both marker greps are anchored** to the start of a comment line, so prose can never be read as a declaration.
+2. **A guard declaration takes precedence over an exemption**, and declaring both is a hard failure. Ambiguity resolves to failure, never to skipping.
+3. **A run that drills zero migrations fails.** If migrations were detected but none drilled, the job errors instead of reporting a green no-op. This is the backstop that would have caught the original bug regardless of the grep.
+
+A regression fixture asserts that prose mentioning the exemption marker does not exempt a guarded migration.
 
 ## Refusal drill — method
 
