@@ -29,25 +29,14 @@
     "rejection_reason": "the fail-closed precondition had never been observed refusing; a harness required scripts/ci and .github/workflows, outside that lane's file scope",
     "governance_note": "no atomic supersession command and no Linear Failed state exist; transferred by explicit PM close-and-transfer disposition. Tracked in UTV2-1668."
   },
-  "verifier": {
-    "identity": "independent-review-agent:pr-risk-reviewer",
-    "kind": "automated adversarial reviewer, separate from the authoring actor",
-    "method": "execution-based: re-derived carried-blob hashes, ran proof-binding-validator and ci:db-client-boundary, read raw precondition-drill CI logs, and independently re-ran the drill at the review head rather than trusting this bundle",
-    "result": "SUPERSEDED_PENDING_REREVIEW",
-    "safe_to_merge": false,
-    "safe_to_merge_reason": "pending T1 PM approval artifacts; correct gate state, not a defect",
-    "bound_to_head": "802afd664d84586ff31f88cb16f2b8e79fd1312b",
-    "note": "Reviewer confirmed this bundle contained no pre-written verdict. Recorded only after the review returned.",
-    "superseded_reason": "This review was bound to 802afd66. The .ops/sync contract correction, the .gitkeep removal and a commit-message rewrite all landed afterwards, so the verdict no longer describes the head. A fresh exact-head review is required and has not yet run. No result is asserted here.",
-    "prior_result_at_802afd66": "RISK_LOW"
-  },
   "scope": {
     "carried_from_predecessor": [
       {
         "path": "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql",
         "blob_sha": "b4a3667af78472d820c47a5010305dd4f72e5ca7",
-        "identical_to_fda0a266": true,
-        "note": "the precondition marker comment was added after carry; the blob hash above is the carried state"
+        "identical_to_fda0a266": false,
+        "note": "Carried from fda0a266 at blob b4a3667a, then MODIFIED in this lane. Two changes only: the FAIL-CLOSED-PRECONDITION marker line, and the array_append fix for the guard defect the drill caught (the guard crashed with 22P02 instead of raising its declared 42P07). The down script and database.types.ts remain byte-identical to fda0a266.",
+        "current_blob_sha": "1f4edbb7"
       },
       {
         "path": "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
@@ -222,5 +211,10 @@
       "status": "fixed",
       "detail": "offending commit message rewritten with --force-with-lease; tree content unchanged apart from the authorized .gitkeep removal. Branch history now carries Closes UTV2-1718 and no other issue id."
     }
-  ]
+  ],
+  "independent_review": {
+    "self_recorded": false,
+    "note": "Deliberately empty. The authoring actor does not write verifier identity, method, or result into this bundle -- not even in a non-asserting form. On the predecessor lane a reviewer verdict was pre-written here before any review ran; a later reviewer observed that author-written verifier scaffolding is itself the anti-pattern, whether or not it asserts a result. Independent review verdicts are delivered to the PM in the review packet and live in the PR's own review artifacts, which the author cannot author.",
+    "where_to_find_it": "PR #1428 review artifacts and the exact-head review packet returned to the PM"
+  }
 }
