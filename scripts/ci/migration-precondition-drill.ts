@@ -59,6 +59,17 @@ export const REQUIRED_SQLSTATE = '42P07';
 /** psql prints `ERROR:  42P07: message` under VERBOSITY=verbose. */
 const SQLSTATE_PATTERN = /^(?:psql:[^\n]*?)?ERROR:\s+([0-9A-Z]{5}):/m;
 
+/**
+ * The first ERROR line psql emitted, trimmed of its `psql:file:line:` prefix.
+ *
+ * Reported alongside a SQLSTATE mismatch: a bare "expected X, got Y" gives a
+ * reviewer nothing to act on and invites guessing about the cause.
+ */
+export function extractErrorMessage(psqlOutput: string): string {
+  const line = psqlOutput.split('\n').find((l) => /ERROR:/.test(l));
+  return line ? line.replace(/^psql:[^\s]*:\s*/, '').trim() : '(no ERROR line in psql output)';
+}
+
 const SCHEMA_FINGERPRINT_QUERY = `
   SELECT 'relation' AS kind, n.nspname || '.' || c.relname AS ident, c.relkind::text AS extra
     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -170,7 +181,9 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
       cases.push({
         name: `refuses when ${relation} pre-exists`,
         status: 'fail',
-        detail: `migration failed with SQLSTATE ${sqlstate ?? 'unknown'}, expected ${REQUIRED_SQLSTATE}`,
+        detail:
+          `migration failed with SQLSTATE ${sqlstate ?? 'unknown'}, expected ${REQUIRED_SQLSTATE}. ` +
+          `psql reported: ${extractErrorMessage(attempt.stderr)}`,
       });
     } else {
       cases.push({
@@ -207,7 +220,7 @@ export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
       status: 'fail',
       detail:
         `migration failed with SQLSTATE ${extractSqlstate(clean.stderr) ?? 'unknown'} ` +
-        'when no target relation existed',
+        `when no target relation existed. psql reported: ${extractErrorMessage(clean.stderr)}`,
     });
   } else {
     const missing = relations.filter((relation) => {
