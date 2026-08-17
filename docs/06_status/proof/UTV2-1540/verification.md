@@ -105,13 +105,15 @@ An operator packet has been prepared requesting a temporary, least-privileged, r
 
 No production role has been created and no production mutation has been performed.
 
-### Outstanding gate: proof-coverage guard
+### Proof-coverage guard — failed, then suppressed by label
 
-`Require live-DB proof for runtime changes` fails on the non-draft head. It fires because `supabase/migrations/20260803230000_...sql` is a sensitive runtime path, and it requires a matching change to a live-DB proof file (`apps/*/src/t1-proof-*.test.ts`, `apps/api/src/*test-db*.ts`, or a package/app `src/scripts/*.ts`). This lane changes none of those, and `apps/**` is outside its declared file scope.
+`Require live-DB proof for runtime changes` failed on the non-draft head. It fires because `supabase/migrations/20260803230000_...sql` is a sensitive runtime path, and it requires a matching change to a live-DB proof file (`apps/*/src/t1-proof-*.test.ts`, `apps/api/src/*test-db*.ts`, or a package/app `src/scripts/*.ts`). This lane changes none of those, and `apps/**` is outside its declared file scope.
 
 This lane's live verification is workflow-level rather than file-level: Live Schema Parity compares the replayed repository schema against **real production** and reports zero drift, and the round-trip drill hash-verifies replay, rollback, and reapply. Those are stronger evidence for a ledger-capture migration than an in-repo proof test would be, but they do not satisfy this guard's file-path rule.
 
-The guard is not one of the four required merge contexts. It is recorded here rather than bypassed; the `skip-proof-coverage` label exists but is not applied, because suppressing a fail-closed gate is a PM decision.
+The guard is not one of the four required merge contexts.
+
+The orchestrator recorded the failure rather than bypassing it, because suppressing a fail-closed gate is a PM decision. The `skip-proof-coverage` label was subsequently applied to PR #1378 **by the `griff843` account at 2026-08-17T02:26:40Z**, out of band, which is why this check now reports green. The orchestrator did not apply the label; a transcript search for any `--add-label skip-proof-coverage` invocation returns zero matches. Because executors and the human share the `griff843` GitHub identity, the label event alone does not prove a human made the call — **this suppression is listed as an open finding in `evidence.json` and requires explicit PM confirmation.**
 
 ### Known limitations
 
