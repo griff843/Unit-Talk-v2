@@ -39,3 +39,26 @@ The validator regression assertions were moved intact into the wired
 and close-eligibility preflight now invokes the wired suite. The focused two-file run passed all 130
 tests with zero failures. `pnpm verify` passed the complete static gate and then was blocked only by
 the established local staging-identity guard for writable DB proof.
+
+### Attempt 4 PM correction addendum
+
+Substantive correction SHA: `47188002a36131fc72c635a03779e9bfad69cb17`.
+
+- Pre-merge callers now select an explicit pre-merge contract context and reject schema v1 with
+  `legacy_v1_not_allowed_pre_merge`; the post-merge historical reader explicitly retains v1.
+- Migration receipt heads now exact-match the verified source SHA pre-merge. Post-merge mismatches
+  require a real Git ancestor and proof/bookkeeping-only paths in every intervening commit; missing
+  Git context, unrelated heads, and non-proof deltas fail by named codes.
+- `modeling` and `data-canonical` now resolve to `app-runtime`, requiring non-empty queries and row
+  counts. `governance` remains in the static profile used by this lane.
+- Wired schema/truth tests passed 136/136. Hosted CI run `32079807804` passed `pnpm test:db` 7/7 in
+  job `95540431352`, passed all T1 live proof suites, and passed static plus same-run receipt
+  verification in job `95541744993`. Local writable proof remains blocked/deferred by the required
+  `127.0.0.1` identity refusal.
+- R-level verification passed with 16 changed files and no matching rule.
+
+The requested UTV2-1718 replay exposes a PM decision point, not a safe implementation branch:
+receipt `a9943aa1d9e24201e0acdfd76c59d1c7813a068d` is not an ancestor of squash merge
+`3ce86b98a5aa01ae244794253a8c7e716f2ce733`. The mandated ancestor-iff rule therefore rejects it as
+`migration_receipt_not_ancestor`. This correction deliberately does not weaken the rule with an
+unratified squash-merge exception.

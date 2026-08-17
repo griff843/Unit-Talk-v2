@@ -159,3 +159,65 @@ fail 0
 required live-DB guard. Local writable proof remains truthfully blocked/deferred because
 `host=127.0.0.1` cannot resolve to staging ref `xskgrzbteyqdufktjrjx`; the writable DB portion must
 run through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
+
+### Attempt 4 PM correction addendum
+
+Substantive correction SHA: `47188002a36131fc72c635a03779e9bfad69cb17`.
+
+The wired regression command required by the correction brief passed:
+
+```text
+pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+1..3
+# tests 136
+# suites 3
+# pass 136
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+The cases pin both validation contexts: schema v1 is rejected pre-merge with
+`legacy_v1_not_allowed_pre_merge` and remains readable post-merge; migration receipt heads must
+exact-match pre-merge; Git-verified proof-only ancestry passes post-merge; stale non-proof and
+unrelated heads fail; and modeling/data-canonical lanes now require app-runtime queries and row
+counts while governance remains static.
+
+Local `pnpm verify` again passed the complete `verify:static` stage and then truthfully stopped at
+the staging identity guard. A separate local `pnpm test:db` produced the required refusal:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub
+environment with CI_SUPABASE_* credentials.
+```
+
+The authoritative hosted run then passed against the required project:
+
+```text
+CI run: 32079807804
+Writable DB proof job: 95540431352 — PASS
+pnpm test:db TAP: tests 7, pass 7, fail 0, skipped 0
+T1 live proof suites: PASS
+Receipt artifact: 9304856369
+Verify/receipt-consumer job: 95541744993 — PASS
+Receipt verifier: observed xskgrzbteyqdufktjrjx; expected xskgrzbteyqdufktjrjx; Verdict: PASS
+```
+
+R-level verification at the substantive head:
+
+```text
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 16
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+One acceptance premise cannot simultaneously satisfy the mandated rule. The actual UTV2-1718
+receipt head `a9943aa1d9e24201e0acdfd76c59d1c7813a068d` is not a Git ancestor of its squash-merge binding
+`3ce86b98a5aa01ae244794253a8c7e716f2ce733` (`git merge-base --is-ancestor` exits 1). Therefore the
+new literal ancestor-iff validator correctly returns `migration_receipt_not_ancestor` for that
+historical bundle. No squash-merge bypass was added; PM must choose either a different mechanically
+verifiable squash provenance rule or a rebinding target that is a real descendant of the receipt.

@@ -5,11 +5,11 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "title": "Closeout contract repair: one version-aware proof contract for pre-merge and post-merge gates",
-  "status": "STATIC_VERIFIED_LIVE_DB_DEFERRED",
-  "generated_at": "2026-08-17T14:38:46Z",
+  "status": "CORRECTIONS_VERIFIED_PM_DECISION_REQUIRED",
+  "generated_at": "2026-08-17T23:28:00Z",
   "sha_binding": {
-    "verified_source_sha": "f5abb5e5a9bde0b4f00057b6baa7b7b55bccbd1e",
-    "verified_source_note": "This is the exact substantive branch head after the contract repair, wrapper-generated model-routing evidence, and wired-suite test relocation. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
+    "verified_source_sha": "47188002a36131fc72c635a03779e9bfad69cb17",
+    "verified_source_note": "This is the exact substantive branch head for the PM correction pass: explicit pre/post-merge validation contexts, pre-merge schema-v1 rejection, migration receipt/source binding, Git-verified post-merge proof-only ancestry, and app-runtime classification for modeling/data-canonical lanes. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -35,50 +35,69 @@
     },
     "pnpm_verify": {
       "command": "pnpm verify",
-      "status": "BLOCKED_DEFERRED",
-      "exit_code": 1,
-      "detail": "The static stage passed. The full command then reached test:db and was intentionally refused because host 127.0.0.1 cannot be resolved to the required staging project. The authoritative full run must execute in staging-ci with CI_SUPABASE_* credentials."
+      "status": "PASS",
+      "run": 32079807804,
+      "job": 95541744993,
+      "detail": "GitHub staging CI passed the complete static verification, Command Center tests, and same-run DB proof receipt verification. The authoring workstation's full command separately reached test:db and was intentionally refused because host 127.0.0.1 cannot be resolved to the required staging project."
     },
     "focused_regression": {
-      "command": "pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
+      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
       "status": "PASS",
-      "tests": 321,
-      "suites": 2,
+      "tests": 136,
+      "suites": 3,
       "fail": 0,
       "skipped": 0,
       "required_scenarios": [
-        "supported schema-v1 bundles remain readable",
-        "schema-v2 migration receipts pass without fabricated queries or row_counts",
-        "schema-v2 app/runtime proof still fails closed without queries and row_counts",
-        "schema-v2 evidence fails without a valid sha_binding",
-        "unknown, undeclared, mismatched, and author-authored verifier inputs fail closed"
+        "schema-v1 bundles fail pre-merge and remain readable only in the explicit post-merge historical context",
+        "migration receipt head exact-match passes pre-merge and mismatches fail by named code",
+        "post-merge proof-only ancestry passes only after Git verifies ancestry and every intervening commit path",
+        "stale non-proof and unrelated migration receipt heads fail closed",
+        "modeling and data-canonical lanes require app-runtime queries and row_counts while governance remains static"
       ]
     },
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Verdict: PASS; 18 changed files; no R-level rules matched."
+      "detail": "Verdict: PASS; 16 changed files; no R-level rules matched at substantive head 47188002a36131fc72c635a03779e9bfad69cb17."
     },
     "shared_contract_self_validation": {
-      "command": "validateEvidenceBundleContract(evidence, { laneType: 'governance', tier: 'T1' }) and scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1720 --json",
+      "command": "validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType: 'governance', tier: 'T1' }) and scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1720 --json",
       "status": "PASS",
       "detail": "Shared contract resolved schema_version 2, static profile from manifest lane_type, and zero failures. Binding validation resolved both CI placeholder fields from Git and reported zero violations."
     }
   },
   "runtime_proof": {
-    "status": "BLOCKED_DEFERRED",
+    "status": "PASS_STAGING_CI_LOCAL_BLOCKED_DEFERRED",
     "command": "pnpm test:db",
-    "exit_code": 1,
-    "classification": "staging_target_identity_unresolved",
-    "configured_host": "127.0.0.1",
-    "resolved_project_ref": "unidentified",
-    "required_project_ref": "xskgrzbteyqdufktjrjx",
-    "literal_refusal": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+    "staging_ci": {
+      "run": 32079807804,
+      "job": 95540431352,
+      "result": "PASS",
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "t1_live_suites": "PASS",
+      "receipt_artifact_id": 9304856369,
+      "receipt_verification_job": 95541744993
+    },
+    "local_workstation": {
+      "status": "BLOCKED_DEFERRED",
+      "exit_code": 1,
+      "classification": "staging_target_identity_unresolved",
+      "configured_host": "127.0.0.1",
+      "resolved_project_ref": "unidentified",
+      "required_project_ref": "xskgrzbteyqdufktjrjx",
+      "literal_refusal": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    },
     "production_mutation_performed": false,
     "fabricated_queries_or_row_counts": false
   },
   "pending_evidence": [
-    "staging-ci pnpm verify and pnpm test:db receipt bound to the exact PR head",
+    "PM decision on the irreconcilable UTV2-1718 squash-merge replay premise: receipt a9943aa1d9e24201e0acdfd76c59d1c7813a068d is not a Git ancestor of rebound merge SHA 3ce86b98a5aa01ae244794253a8c7e716f2ce733, so the mandated ancestor-iff rule returns migration_receipt_not_ancestor",
     "external GitHub required-check verifier provenance bound to sha_binding.verified_source_sha",
     "post-merge proof rebind to the authoritative merge SHA"
   ]
