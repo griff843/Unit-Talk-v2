@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1718",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1718-migration-refusal-drill",
+  "branch": "claude/utv2-1718-migration-refusal-drill",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1428",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/migration-reversibility-gate.yml",
+    ".ops/sync/UTV2-1718.yml",
+    "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
+    "docs/06_status/proof/UTV2-1718/evidence.json",
+    "docs/06_status/proof/UTV2-1718/verification.md",
+    "packages/db/src/database.types.ts",
+    "scripts/ci/migration-precondition-drill.ts",
+    "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1718/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-08-17T04:22:41.690Z",
+  "heartbeat_at": "2026-08-17T04:29:00.428Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1718-migration-refusal-drill.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1718-migration-refusal-drill",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
