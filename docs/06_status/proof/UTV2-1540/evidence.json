@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-1540",
   "title": "Live Schema Parity ledger repair for the two Command Center tables",
   "tier": "T1",
