@@ -41,8 +41,15 @@
     ]
   },
   "static_proof": {
-    "idempotent_by_construction": true,
-    "note": "Every statement is IF NOT EXISTS, so scratch replay and re-run are no-ops. Verified by reading the migration, not by execution.",
+    "idempotent_by_construction": false,
+    "fail_closed_precondition": {
+      "present": true,
+      "errcode": "42P07",
+      "refuses_on": "either public.command_center_game_threads or public.command_center_delivery_mappings already existing",
+      "position": "first executable statement, before any DDL",
+      "executed_proof": "PENDING — requires the CI refusal drill; reading the SQL is not proof the guard fires"
+    },
+    "note": "Idempotency is deliberately NOT claimed and is not the safety property. An earlier revision claimed every statement was IF NOT EXISTS so a re-run was a no-op; that described intended operator practice as an enforced property. IF NOT EXISTS skips silently, which is indistinguishable from success, and the trailing ALTER TABLE ... ENABLE ROW LEVEL SECURITY was unguarded entirely. The boundary is now a fail-closed precondition that refuses, and table creation is unguarded so a race fails loudly.",
     "rls_preserved": "Enabled on both tables with zero policies, matching production. Replaying without it would yield a schema strictly more permissive than production."
   },
   "runtime_proof": {
@@ -172,8 +179,9 @@
     "teardown": "supabase stop --no-backup immediately after evidence collection"
   },
   "independent_review": {
-    "result": "RISK_MEDIUM",
-    "head": "b74c3c502eb38e36c240ecfb062d2c3e08bc9cf1",
+    "result": "SUPERSEDED_PENDING_REREVIEW",
+    "superseded_reason": "The review below examined the migration BEFORE the fail-closed precondition existed. PM verdict at ae5faf5f found an executable defect neither the reviewer nor the authoring actor caught: the migration had no precondition, so a normal production deploy could execute it ahead of the authorized ledger repair and bypass the operator boundary. The migration has since changed, so this verdict no longer describes the code. A fresh exact-head review is required and has not yet run. No result is asserted here.",
+    "reviewed_head": "b74c3c502eb38e36c240ecfb062d2c3e08bc9cf1",
     "head_confirmed_against": "gh pr view 1378 --json headRefOid and local git rev-parse HEAD",
     "safe_to_merge_recommendation": false,
     "confirmed_by_independent_execution": [

@@ -12,7 +12,11 @@ Pre-merge this anchor identifies the current branch head. Post-merge closeout au
 
 `public.command_center_game_threads` and `public.command_center_delivery_mappings` exist on production `zfzdnfwdarxucxtaojxm` with real data but have no migration file, no Supabase migration-history entry, and no generated-types entry. They were created out of band against the live database.
 
-This lane captures the exact live DDL so the repository can be replayed from scratch to reach live truth, closing the deny-by-default Live Schema Parity gate for these two relations. Nothing in the migration mutates production: the tables already exist, so on production it is registered as already-applied rather than executed. Every statement is `IF NOT EXISTS` so a scratch replay converges and a re-run is a no-op.
+This lane captures the exact live DDL so the repository can be replayed from scratch to reach live truth, closing the deny-by-default Live Schema Parity gate for these two relations. On production the version is *registered* as already-applied under explicit operator authorization, and is never executed.
+
+**Correction (PM verdict at `ae5faf5f`).** An earlier revision of this document claimed "nothing in the migration mutates production" and "every statement is `IF NOT EXISTS` so a re-run is a no-op." That was wrong in a way that mattered. `IF NOT EXISTS` does not refuse — it *skips silently*, which is indistinguishable from success. Nothing prevented a normal production deploy from executing this version before the separately-authorized ledger repair registered it, and the unconditional `ALTER TABLE ... ENABLE ROW LEVEL SECURITY` at the end was not guarded at all. The claim described intended operator practice as if it were an enforced property. It was not enforced.
+
+The migration now opens with a **fail-closed precondition** that raises `SQLSTATE 42P07` and refuses if *either* Command Center relation already exists, before any DDL statement runs. Table creation is now unguarded `CREATE TABLE`, so a race or partially-dropped state fails loudly instead of being skipped.
 
 ## ASSERTIONS:
 
@@ -25,7 +29,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 - [x] Writable DB proof against staging passed — CI run 31985814388.
 - [x] `pnpm verify` green — CI run 31985814388, re-confirmed green after the PR left draft.
 - [x] Independent exact-head review completed: RISK LOW, all eight verification items confirmed by execution, no scope bleed, no secrets, and no production mutation.
-- [x] The migration is idempotent by construction: every statement is `IF NOT EXISTS`, so replay and re-run are no-ops.
+- [ ] The migration refuses to execute where either Command Center relation already exists, before any DDL runs — PENDING CI EXECUTION of the refusal drill (see "Refusal drill" below). Idempotency is explicitly **not** claimed and is not the safety property here; refusal is.
 - [x] RLS is preserved as production has it — enabled on both tables with zero policies, which denies every non-superuser role without BYPASSRLS. Replaying without it would produce a scratch schema strictly more permissive than production.
 
 ## EVIDENCE:
@@ -40,7 +44,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 | Check | Result | Evidence |
 |---|---|---|
 | `pnpm ops:merge-wrapper pr-update-branch` | PASS | Branch refreshed to current `main`; 143 behind → 0. No manual rebase. |
-| Migration idempotency by construction | PASS | Every statement `IF NOT EXISTS`; verified by reading the migration. |
+| Migration refuses on pre-existing relation (fail-closed precondition) | PENDING | Requires CI execution against scratch Postgres. Reading the SQL is not proof that the guard fires — the control must be observed failing on the condition it names. |
 | `scripts/ci/r-level-check.ts` | PASS | R-level check run against this change; no additional required artifacts triggered. |
 | `pnpm supabase:types` | PASS | Generated from the local scratch replay at `127.0.0.1:54322`; 4608 lines written; all eight required entries asserted. |
 | Live Schema Parity | PASS | CI run 31985814340 — 0 drift across relations, columns, constraints, indexes, policies, triggers. |
@@ -104,6 +108,19 @@ This machine is under deliberate credential containment: `SUPABASE_PROJECT_REF=c
 An operator packet has been prepared requesting a temporary, least-privileged, read-only production schema-introspection credential delivered through `SUPABASE_DB_URL`. It grants `CONNECT`, schema `USAGE`, and `REFERENCES` — deliberately **not** `SELECT` — so the role can see object metadata through `information_schema` without reading a single row. It carries a 48-hour expiry, statement/idle/lock timeouts, `default_transaction_read_only`, a connection cap, mandatory SSL, and exact revocation SQL. No owner token, admin password, or service-role key is requested.
 
 No production role has been created and no production mutation has been performed.
+
+### Refusal drill — required, not yet executed
+
+The precondition is a control. Per the standing principle that a control is only proven by making it FAIL on the condition it names, reading the SQL proves nothing. Two cases must be executed:
+
+1. **Refusal** — with either Command Center relation pre-existing, the migration exits non-zero with `SQLSTATE 42P07` **and performs no DDL** (the other relation must still be absent afterwards). Must be proven for each relation independently, since the guard claims "either", not "both".
+2. **Clean replay** — on an empty scratch database, the migration applies in full, and the existing down → reapply hash chain still converges.
+
+Case 2 is already exercised by the `Schema round-trip drill` job on a scratch Postgres, and by `supabase db reset` inside Live Schema Parity. **Case 1 has no harness.** Adding one requires `scripts/ci/**` and `.github/workflows/**`, both outside this lane's `file_scope_lock`, so it is pending a governed scope expansion rather than silently added.
+
+This drill could not be run on the authoring workstation: there is no local Postgres and the Docker daemon is not reachable. Per standing PM direction not to block on local Docker or workstation software changes, the drill belongs in hosted CI.
+
+**Blast radius of the new guard, checked before push:** only `live-schema-parity.yml` and `schema-baseline-dump.yml` apply migrations, and both do so via `supabase db reset` against a *local scratch* stack that starts empty. No workflow pushes migrations to staging or production. The Writable DB proof runs tests against staging but does not apply migrations. The guard therefore cannot break an existing CI path.
 
 ### Proof-coverage guard — failed, then suppressed by label
 

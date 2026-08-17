@@ -10,19 +10,64 @@
 -- these two relations. Same defect class as UTV2-1447 (G-24), different tables.
 --
 -- The DDL below was read out of pg_attribute / pg_constraint / pg_indexes / pg_trigger /
--- pg_class / pg_policies on 2026-08-03, read-only. Nothing here mutates production: the
--- tables already exist, so on production this migration is registered as already-applied
--- via `supabase migration repair --status applied 20260803230000` rather than executed.
--- Every statement is still written IF NOT EXISTS so a scratch-DB replay reaches the same
--- schema and a re-run is a no-op.
+-- pg_class / pg_policies on 2026-08-03, read-only.
+--
+-- THIS MIGRATION IS FOR SCHEMA REPLAY FROM EMPTY ONLY. It must never execute against an
+-- environment that already carries these tables — that environment is production, and
+-- executing there would bypass the operator authorization boundary. On production this
+-- version is REGISTERED as already-applied via
+--   supabase migration repair --status applied 20260803230000
+-- under explicit operator authorization, and is never executed.
+--
+-- That boundary is enforced below by a fail-closed precondition, not by convention and
+-- not by IF NOT EXISTS. `IF NOT EXISTS` would make an accidental production run SILENT,
+-- which is indistinguishable from success and is exactly the failure this guard prevents.
+-- The precondition RAISEs (SQLSTATE 42P07) before a single DDL statement runs.
 --
 -- Ordering note: command_center_game_threads is created first because
 -- command_center_delivery_mappings carries an FK to it.
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- command_center_game_threads — Discord forum-thread-per-game tracking
+-- FAIL-CLOSED PRECONDITION — must remain the first executable statement.
+--
+-- Refuses if EITHER target relation already exists. Because this runs before any
+-- CREATE, a refusal leaves the database byte-identical to how it was found.
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.command_center_game_threads (
+DO $$
+DECLARE
+  existing text[] := ARRAY[]::text[];
+BEGIN
+  IF to_regclass('public.command_center_game_threads') IS NOT NULL THEN
+    existing := existing || 'public.command_center_game_threads';
+  END IF;
+
+  IF to_regclass('public.command_center_delivery_mappings') IS NOT NULL THEN
+    existing := existing || 'public.command_center_delivery_mappings';
+  END IF;
+
+  IF array_length(existing, 1) > 0 THEN
+    RAISE EXCEPTION
+      'UTV2-1540 ledger-repair migration refused: pre-existing Command Center relation(s) detected: %',
+      array_to_string(existing, ', ')
+      USING
+        ERRCODE = '42P07',
+        DETAIL  = 'This migration captures live DDL so an empty database can be replayed to live truth. '
+                  'It is not a repair script and it must not run where the tables already exist.',
+        HINT    = 'Register this version as applied instead of executing it: '
+                  'supabase migration repair --status applied 20260803230000 '
+                  '(requires explicit operator authorization).';
+  END IF;
+END
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- command_center_game_threads — Discord forum-thread-per-game tracking
+--
+-- Unguarded CREATE TABLE, deliberately. The precondition above has already proven this
+-- relation is absent, so IF NOT EXISTS could only ever mask a race or a partially-dropped
+-- state — both of which must fail loudly rather than silently skip.
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE public.command_center_game_threads (
   id                 uuid        NOT NULL DEFAULT gen_random_uuid(),
   guild_id           text        NOT NULL,
   forum_channel_id   text        NOT NULL,
@@ -75,8 +120,9 @@ CREATE INDEX IF NOT EXISTS command_center_game_threads_starts_at_idx
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- command_center_delivery_mappings — guild/channel/thread delivery-receipt mapping
+-- Unguarded for the same reason as above.
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.command_center_delivery_mappings (
+CREATE TABLE public.command_center_delivery_mappings (
   id                  uuid        NOT NULL DEFAULT gen_random_uuid(),
   guild_id            text        NOT NULL,
   pick_id             uuid,
