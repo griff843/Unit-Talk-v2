@@ -10,10 +10,11 @@ name: Close Eligibility Preflight
 # that could have run pre-merge and did not. This runs it pre-merge.
 #
 # The decision is made by evaluateCloseEligibilityPreflight() in
-# scripts/ops/truth-check-lib.ts -- the same module the close gate uses, calling
-# the same evaluateT2ProofEvidence() for P11-P14. It is deliberately not a
-# second implementation of those rules: two copies would drift, which is the
-# duplicated-authority class this program keeps rediscovering.
+# scripts/ops/truth-check-lib.ts -- the same module the close gate uses. T1
+# evidence is evaluated through validateEvidenceBundleContract() in the
+# canonical scripts/ops/proof-schema.ts module; P11-P14 still reuse
+# evaluateT2ProofEvidence(). There is deliberately no workflow-local proof
+# schema: duplicated contracts are how a lane becomes mergeable but unclosable.
 
 on:
   pull_request:

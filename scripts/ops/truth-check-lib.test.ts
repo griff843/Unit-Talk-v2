@@ -743,6 +743,101 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
   );
 });
 
+function schemaV2MigrationBundle(): EvidenceBundleV1 {
+  return {
+    schema_version: 2,
+    sha_binding: {
+      verified_source_sha: 'a'.repeat(40),
+      evidence_commit_sha: 'set-by-ci',
+      current_pr_head_sha: 'set-by-ci',
+    },
+    static_proof: { type_check: { status: 'PASS' } },
+    runtime_proof: {
+      head: 'a'.repeat(40),
+      precondition_drill: {
+        result: 'PASS',
+        run: 31999981947,
+        job: 95298344670,
+        cases: ['refuses on a pre-existing relation', 'applies on an empty scratch schema'],
+      },
+      schema_roundtrip_drill: { result: 'PASS', run: 31999981947, job: 95298344658 },
+      live_schema_parity: { result: 'PASS', run: 31999981924, job: 95298356338 },
+      writable_db_proof_staging: { result: 'PASS', run: 31999981913, job: 95298344972 },
+    },
+  };
+}
+
+const EXTERNAL_VERIFIER = {
+  source: 'github-required-check' as const,
+  producer: 'github-app:15368:verify',
+  verified_sha: 'a'.repeat(40),
+  details_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/31999981913',
+};
+
+test('schema-v2 migration T1 passes R1/R2 without fabricated queries or row_counts', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    { laneType: 'migration', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+
+  assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [
+    ['R1', 'pass'],
+    ['R2', 'pass'],
+    ['R3', 'pass'],
+  ]);
+});
+
+test('schema-v2 app/runtime T1 still fails without queries and row_counts', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  const bundle = schemaV2MigrationBundle();
+  bundle.runtime_proof = { queries: [], row_counts: [] };
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle },
+    { laneType: 'runtime', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+
+  assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [
+    ['R1', 'fail'],
+    ['R2', 'fail'],
+    ['R3', 'pass'],
+  ]);
+  assert.match(checks[0]?.detail ?? '', /runtime_proof\.queries/);
+  assert.match(checks[1]?.detail ?? '', /runtime_proof\.row_counts/);
+});
+
+test('schema-v2 verifier provenance is external and exact-head, never evidence-authored identity', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    { laneType: 'migration', verifierProvenance: null },
+  );
+  assert.equal(checks.find((check) => check.id === 'R3')?.status, 'fail');
+  assert.match(checks.find((check) => check.id === 'R3')?.detail ?? '', /external exact-head/);
+
+  const staleChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => staleChecks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    {
+      laneType: 'migration',
+      verifierProvenance: { ...EXTERNAL_VERIFIER, verified_sha: 'b'.repeat(40) },
+    },
+  );
+  assert.equal(staleChecks.find((check) => check.id === 'R3')?.status, 'fail');
+});
+
 function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
   return {
     schema_version: 1,
@@ -1586,6 +1681,64 @@ function cepInput(overrides: Record<string, unknown> = {}) {
 test('CEP-0: a conformant packet is eligible before merge', () => {
   const r = evaluateCloseEligibilityPreflight(cepInput());
   assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking, null, 2));
+});
+
+function migrationCepInput(laneType = 'migration') {
+  const artifacts = [
+    { path: 'docs/06_status/proof/UTV2-1718/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-1718/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+    {
+      path: 'docs/06_status/proof/UTV2-1718/evidence.json',
+      content: JSON.stringify(schemaV2MigrationBundle()),
+    },
+  ];
+  return {
+    manifest: {
+      issue_id: 'UTV2-1718',
+      lane_type: laneType,
+      tier: 'T1',
+      schema_version: 2,
+      created_by: 'claude',
+      expected_proof_paths: artifacts.map((artifact) => artifact.path),
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1428',
+    },
+    proof_artifacts: artifacts,
+  } as never;
+}
+
+test('schema-v2 migration packet passes pre-merge and post-merge shared contract without row counts', () => {
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput());
+  assert.equal(
+    preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status,
+    'pass',
+    JSON.stringify(preMerge.blocking),
+  );
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    { laneType: 'migration', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+  assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
+});
+
+test('close eligibility catches shared proof-profile disagreement before merge', () => {
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('runtime'));
+  assert.equal(preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status, 'fail');
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    { laneType: 'runtime', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+  assert.equal(postMerge.find((check) => check.id === 'R1')?.status, 'fail');
+  assert.equal(postMerge.find((check) => check.id === 'R2')?.status, 'fail');
 });
 
 // CEP-E2 scope. Found live on this lane's own PR (#1390): the check globbed the

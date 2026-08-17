@@ -38,13 +38,13 @@ The manifest is **not** authoritative for: shipped code (use `main`), CI outcome
 | **Close** | `ops:truth-check` passes | `status: done`, `closed_at` set | `ops:lane-close` |
 | **Block** | explicit block or heartbeat timeout | `status: blocked`, `blocked_by` populated | `ops:lane:block` or reconcile |
 | **Reopen** | truth-check exit code `4` | `status: reopened`, `reopen_history[]` appended | `ops:truth-check` |
-| **Override close** | PM force-close | `status: done`, `override: {reason, by}` set | `ops:lane-close --override` |
 
 **Laws:**
 - A manifest file is created **only** by `ops:lane-start`. No manual creation.
 - A manifest is never deleted. Closed manifests remain for audit.
 - State transitions follow the lifecycle in `EXECUTION_TRUTH_MODEL.md` §2. Illegal transitions are rejected by the writer.
 - Concurrent writes are prevented by the file-scope lock mechanism (§6).
+- There is no override close transition. Failed closeout conditions require a scoped repair lane and normal PR; they cannot be bypassed in `ops:lane-close`.
 
 ---
 
