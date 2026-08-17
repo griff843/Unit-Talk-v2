@@ -62,3 +62,23 @@ receipt `a9943aa1d9e24201e0acdfd76c59d1c7813a068d` is not an ancestor of squash 
 `3ce86b98a5aa01ae244794253a8c7e716f2ce733`. The mandated ancestor-iff rule therefore rejects it as
 `migration_receipt_not_ancestor`. This correction deliberately does not weaken the rule with an
 unratified squash-merge exception.
+
+### Attempt 5 squash-aware receipt-binding addendum
+
+Substantive correction SHA: `c6c0f26e0573c6d9924a5108d4c65f86d9ccdb83`.
+
+- `EvidenceContractContext` now accepts an explicit GitHub API merged-PR attestation; the contract
+  remains pure and performs no network fetch.
+- `runTruthCheck` passes the PR number, merge SHA, and merged PR head SHA it already obtains from the
+  authoritative GitHub pull-request record.
+- Post-merge migration binding requires the rebound source to equal the attested merge SHA and the
+  receipt to equal or reach the attested PR head through proof-only commits. Direct proof-only
+  ancestry to the verified source remains supported for non-squash merges.
+- Missing or malformed attestations, missing repository context, unavailable commits, unrelated
+  histories, non-proof deltas, and merge-attestation mismatches remain named fail-closed outcomes.
+- Squash-shaped positive and negative fixtures are wired into the existing proof-schema and
+  truth-check suites. The required five-file focused run passed 328/328, and `pnpm verify:static`
+  passed lint, type-check, build, all unit tests, and command verification.
+
+This is acceptance-criterion compatibility based on GitHub's rank-1 merge record, not a bypass. No
+UTV2-1718 artifact was changed.

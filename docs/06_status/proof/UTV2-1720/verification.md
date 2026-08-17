@@ -221,3 +221,40 @@ receipt head `a9943aa1d9e24201e0acdfd76c59d1c7813a068d` is not a Git ancestor of
 new literal ancestor-iff validator correctly returns `migration_receipt_not_ancestor` for that
 historical bundle. No squash-merge bypass was added; PM must choose either a different mechanically
 verifiable squash provenance rule or a rebinding target that is a real descendant of the receipt.
+
+### Attempt 5 squash-aware receipt-binding addendum
+
+Substantive correction SHA: `c6c0f26e0573c6d9924a5108d4c65f86d9ccdb83`.
+
+The post-merge contract is now squash-aware through rank-1 GitHub merge-record attestation, without
+an override or bypass. `runTruthCheck` supplies the PR number, GitHub-recorded merge SHA, and
+GitHub-recorded merged-PR head SHA to the pure evidence contract. The contract requires the rebound
+`sha_binding.verified_source_sha` to equal the attested merge SHA, then accepts the receipt only when
+it equals the attested PR head or reaches that head through proof-only branch commits. The existing
+proof-only receipt-to-verified-source ancestry path remains an alternative for direct/non-squash
+merges. Missing attestations, missing repository context, unavailable commits, unrelated histories,
+non-proof deltas, and attested merge mismatches all fail closed with named errors.
+
+This makes the UTV2-1718 squash-shaped replay mechanically verifiable: its receipt belongs to the
+real pre-squash branch history, while the rebound source belongs to the squash commit recorded by
+GitHub. No UTV2-1718 artifacts were edited.
+
+```text
+pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 328
+pass 328
+fail 0
+
+pnpm verify:static
+PASS (lint, type-check, build, pnpm test, smart-form verification, and command verification)
+
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 16
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+Writable live-DB proof remains blocked/deferred locally: target identity could not be resolved from
+its URL (`host=127.0.0.1`). Writable DB verification requires `xskgrzbteyqdufktjrjx` and must run
+through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. The previously captured
+hosted staging receipt remains recorded in `evidence.json` and `runtime-verification.md`.
