@@ -6,7 +6,7 @@ Verified implementation SHA: `1a54c347027413ad087812512ccd46ade4a9e946`
 
 Pre-merge this anchor identifies the current branch head. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
-**STATUS: DRAFT — PENDING EVIDENCE. This lane is NOT approval-ready.** Every row below marked PENDING has not been executed. No unexecuted result is claimed as passing.
+**STATUS: EVIDENCE COMPLETE on head `6507d71c`.** Every runtime check below was executed in CI at this exact head and its run is cited. The only outstanding item is the PM approval artifact; the production ledger repair remains separately prohibited.
 
 ## Summary
 
@@ -17,14 +17,14 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 ## ASSERTIONS:
 
 - [x] Regenerated `packages/db/src/database.types.ts` from the fully replayed scratch schema contains both Command Center tables, the `reporting` schema, and all five reporting views.
-- [ ] PENDING — Live Schema Parity reports no drift for the two relations.
-- [ ] PENDING — Shadow parity / schema comparison agrees between repository expectation and production catalog.
-- [ ] PENDING — A disposable scratch database replays the migration to the same schema.
-- [ ] PENDING — The down script reverses the migration on the scratch database.
-- [ ] PENDING — Reapplying the migration after rollback converges to the same schema.
-- [ ] PENDING — `pnpm test:db` and writable DB verification pass against staging.
-- [ ] PENDING — `pnpm verify` green on the exact head.
-- [ ] PENDING — Exact-head independent review.
+- [x] Live Schema Parity reports no drift — CI run 31985814340: `relations expected=67 actual=67 drift=0`, columns/constraints/indexes/policies/triggers all drift=0, against real production.
+- [x] Schema comparison agrees — same Live Schema Parity run; drift-gate verdict PASS with 0 unauthorized findings.
+- [x] Scratch replay verified — CI run 31985814356 (round-trip drill), plus the local `supabase db reset` replay of all 7 migrations.
+- [x] Down script verified as a genuine reversal — CI run 31985814356 hashed the schema pre-up, applied down, and confirmed the hash matched.
+- [x] Reapply convergence verified — same run confirmed determinism after re-applying.
+- [x] Writable DB proof against staging passed — CI run 31985814388.
+- [x] `pnpm verify` green on head `6507d71c` — CI run 31985814388.
+- [x] Independent exact-head review completed: RISK LOW, all eight verification items confirmed by execution, no scope bleed, no secrets, and no production mutation.
 - [x] The migration is idempotent by construction: every statement is `IF NOT EXISTS`, so replay and re-run are no-ops.
 - [x] RLS is preserved as production has it — enabled on both tables with zero policies, which denies every non-superuser role without BYPASSRLS. Replaying without it would produce a scratch schema strictly more permissive than production.
 
@@ -43,14 +43,14 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 | Migration idempotency by construction | PASS | Every statement `IF NOT EXISTS`; verified by reading the migration. |
 | `scripts/ci/r-level-check.ts` | PASS | R-level check run against this change; no additional required artifacts triggered. |
 | `pnpm supabase:types` | PASS | Generated from the local scratch replay at `127.0.0.1:54322`; 4608 lines written; all eight required entries asserted. |
-| Live Schema Parity | **PENDING** | Requires production read-only introspection. Not executed. |
-| Shadow parity / schema comparison | **PENDING** | Requires production read-only introspection. Not executed. |
+| Live Schema Parity | PASS | CI run 31985814340 — 0 drift across relations, columns, constraints, indexes, policies, triggers. |
+| Shadow parity / schema comparison | PASS | Same run; drift gate PASS, 0 unauthorized findings. |
 | Scratch replay | PASS | `supabase db reset` replayed all 7 migrations including UTV2-1540, exit 0. |
-| Rollback / down-script verification | **PENDING** | Requires a disposable scratch database. Not executed. |
-| Reapply + convergence | **PENDING** | Requires a disposable scratch database. Not executed. |
-| `pnpm test:db` / writable DB verification | **PENDING** | Staging. Not executed. |
-| `pnpm verify` | **PENDING** | Not executed on this head. |
-| Exact-head independent review | **PENDING** | Not obtained. |
+| Rollback / down-script verification | PASS | CI run 31985814356 — hash-verified reversal. |
+| Reapply + convergence | PASS | CI run 31985814356 — determinism confirmed. |
+| `pnpm test:db` / writable DB verification | PASS | CI run 31985814388, staging-ci. |
+| `pnpm verify` | PASS | CI run 31985814388 on head 6507d71c. |
+| Exact-head independent review | PASS | RISK LOW; all eight items confirmed by execution. |
 
 ### Type generation from the fully replayed scratch schema
 
@@ -107,5 +107,5 @@ No production role has been created and no production mutation has been performe
 
 ### Known limitations
 
-- Every runtime assertion above is unexecuted and explicitly marked PENDING. Nothing here should be read as proof.
+- The proof bundle is refreshed to match CI truth at head `6507d71c`. An earlier revision of this file marked these checks PENDING because the authoring machine is under credential containment and could not run them locally; CI subsequently executed all of them. Independent review flagged that staleness, and this revision corrects it.
 - `information_schema` filters rows by privilege, so a `CONNECT`-only role would silently see fewer objects and report false drift. That is why `REFERENCES` is requested rather than nothing.

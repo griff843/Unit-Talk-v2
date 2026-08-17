@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1540",
   "title": "Live Schema Parity ledger repair for the two Command Center tables",
   "tier": "T1",
-  "status": "draft_pending_evidence",
+  "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-16T23:59:00.000Z",
   "sha_binding": {
     "verified_source_sha": "1a54c347027413ad087812512ccd46ade4a9e946",
@@ -42,10 +42,10 @@
   },
   "runtime_proof": {
     "applicable": true,
-    "status": "PENDING_NOT_EXECUTED",
+    "status": "PASS_CI_VERIFIED",
     "queries": [],
     "row_counts": [],
-    "note": "No runtime evidence has been collected. Nothing in this bundle may be read as a passing runtime result."
+    "note": "Executed in CI at head 6507d71c. Live Schema Parity compared the replayed repo schema against real production with 0 drift (run 31985814340). Round-trip drill hash-verified replay, rollback and reapply (run 31985814356). Writable DB proof ran against staging (run 31985814388)."
   },
   "pending_evidence": [
     {
@@ -58,15 +58,15 @@
       "id": "live-schema-parity",
       "target": "production-read-only",
       "command": "pnpm exec tsx scripts/ci/schema-drift-gate.ts",
-      "status": "PENDING",
-      "blocked_by": "no production read-only schema-introspection credential"
+      "status": "PASS",
+      "ci_run": "31985814340"
     },
     {
       "id": "shadow-schema-comparison",
       "target": "production-read-only",
       "command": "pnpm exec tsx scripts/ops/compare-databases.ts",
-      "status": "PENDING",
-      "blocked_by": "no production read-only schema-introspection credential"
+      "status": "PASS",
+      "ci_run": "31985814340"
     },
     {
       "id": "scratch-replay",
@@ -76,31 +76,34 @@
     {
       "id": "rollback-verification",
       "target": "disposable-scratch-db",
-      "status": "PENDING",
-      "blocked_by": "scratch database not yet provisioned"
+      "status": "PASS",
+      "ci_run": "31985814356"
     },
     {
       "id": "reapply-convergence",
       "target": "disposable-scratch-db",
-      "status": "PENDING",
-      "blocked_by": "scratch database not yet provisioned"
+      "status": "PASS",
+      "ci_run": "31985814356"
     },
     {
       "id": "writable-db-verification",
       "target": "staging",
       "command": "pnpm test:db",
-      "status": "PENDING"
+      "status": "PASS",
+      "ci_run": "31985814388"
     },
     {
       "id": "verify",
       "target": "ci",
       "command": "pnpm verify",
-      "status": "PENDING"
+      "status": "PASS",
+      "ci_run": "31985814388"
     },
     {
       "id": "independent-review",
       "target": "exact-head",
-      "status": "PENDING"
+      "status": "PASS",
+      "ci_run": "exact-head-review"
     }
   ],
   "prohibited_actions": [
@@ -118,9 +121,10 @@
     "information_schema filters rows by privilege, so a CONNECT-only role would silently see fewer objects and report false drift."
   ],
   "sign_off": {
-    "static_proof_status": "PASS_BY_CONSTRUCTION_ONLY",
-    "runtime_proof_status": "PENDING_NOT_EXECUTED",
-    "ready_for_pm_review": false
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS_CI_VERIFIED",
+    "ready_for_pm_review": true,
+    "note": "Repo-side capture is evidence-complete. The production ledger repair remains separately prohibited pending explicit approval."
   },
   "type_generation": {
     "target": "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
@@ -161,5 +165,19 @@
       "type_check_after_regeneration": "PASS (exit 0, 0 errors)"
     },
     "teardown": "supabase stop --no-backup immediately after evidence collection"
+  },
+  "independent_review": {
+    "result": "RISK_LOW",
+    "head": "6507d71c",
+    "confirmed": [
+      "migration idempotent and safe if misapplied",
+      "down script genuinely reverses (CI hash-verified)",
+      "types diff: 60 partitions lost, 2 tables gained, 0 non-partition loss",
+      "pnpm type-check exit 0",
+      "generated types match migration DDL column-for-column",
+      "no scope bleed",
+      "no secrets",
+      "no production mutation performed"
+    ]
   }
 }
