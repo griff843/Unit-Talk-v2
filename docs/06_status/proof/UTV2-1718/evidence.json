@@ -6,7 +6,7 @@
   "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-17T04:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "dc7f04accd7d31d737fb714dfbfbdb3c4b26ae80",
+    "verified_source_sha": "8317f0aa2efab9a893ecefefec7000f6784a5084",
     "verified_source_note": "Implementation commit on this branch: carried predecessor blobs, the precondition marker, the refusal drill script, and its workflow job registration. Commits after this must be proof-path only, which proof-binding-validator enforces mechanically. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force a re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -30,10 +30,16 @@
     "governance_note": "no atomic supersession command and no Linear Failed state exist; transferred by explicit PM close-and-transfer disposition. Tracked in UTV2-1668."
   },
   "verifier": {
-    "identity": "PENDING",
-    "result": "PENDING",
-    "bound_to_head": "PENDING",
-    "note": "No verifier result is recorded in advance. On the predecessor lane the authoring actor pre-wrote a reviewer verdict into the bundle before any review ran; that was self-certification and the reviewer caught it. This field stays PENDING until a real exact-head review returns."
+    "identity": "independent-review-agent:pr-risk-reviewer",
+    "kind": "automated adversarial reviewer, separate from the authoring actor",
+    "method": "execution-based: re-derived carried-blob hashes, ran proof-binding-validator and ci:db-client-boundary, read raw precondition-drill CI logs, and independently re-ran the drill at the review head rather than trusting this bundle",
+    "result": "SUPERSEDED_PENDING_REREVIEW",
+    "safe_to_merge": false,
+    "safe_to_merge_reason": "pending T1 PM approval artifacts; correct gate state, not a defect",
+    "bound_to_head": "802afd664d84586ff31f88cb16f2b8e79fd1312b",
+    "note": "Reviewer confirmed this bundle contained no pre-written verdict. Recorded only after the review returned.",
+    "superseded_reason": "This review was bound to 802afd66. The .ops/sync contract correction, the .gitkeep removal and a commit-message rewrite all landed afterwards, so the verdict no longer describes the head. A fresh exact-head review is required and has not yet run. No result is asserted here.",
+    "prior_result_at_802afd66": "RISK_LOW"
   },
   "scope": {
     "carried_from_predecessor": [
@@ -183,6 +189,38 @@
     "check": "Require live-DB proof for runtime changes",
     "state": "FAIL",
     "required_merge_context": false,
-    "detail": "Fires because the migration is a sensitive runtime path with no matching live-DB proof FILE (apps/*/src/t1-proof-*.test.ts and similar). This lane's runtime evidence is workflow-level and stronger for a ledger-capture migration, but does not satisfy the guard's path rule. The skip-proof-coverage label was scoped by PM as a one-PR decision for the predecessor and has NOT been applied here."
-  }
+    "detail": "Fires because the migration is a sensitive runtime path with no matching live-DB proof FILE (apps/*/src/t1-proof-*.test.ts and similar). This lane's runtime evidence is workflow-level and stronger for a ledger-capture migration, but does not satisfy the guard's path rule. The skip-proof-coverage label was scoped by PM as a one-PR decision for the predecessor and has NOT been applied here.",
+    "resolution": "skip-proof-coverage AUTHORIZED by PM for PR #1428 only. Applicability decision, not a waiver of database execution and not a reusable precedent: the generic path guard accepts app/controller live-DB test locations that do not fit a migration-ledger repair, and this lane carries stronger applicable evidence."
+  },
+  "review_findings_actioned": [
+    {
+      "finding": ".ops/sync/UTV2-1718.yml used a non-standard entities.issues object form, breaking the Return review packet job",
+      "severity": "blocker",
+      "status": "fixed",
+      "detail": "rewritten to the standard bare-string schema; consumer now resolves UTV2-1718"
+    },
+    {
+      "finding": "precondition-drill detects new migrations with git diff --diff-filter=A, so a PR that MODIFIES an already-merged migration to add a precondition would not be drilled",
+      "severity": "warning",
+      "status": "open",
+      "detail": "same fail-open family this lane closed; out of scope for this PR whose migration is genuinely added. Recorded for follow-up."
+    },
+    {
+      "finding": "Require live-DB proof for runtime changes fires; not a required merge context",
+      "severity": "warning",
+      "status": "open_pm_decision"
+    },
+    {
+      "finding": "docs/06_status/proof/UTV2-1718/.gitkeep was tracked but absent from file_scope_lock, failing Return review packet",
+      "severity": "blocker",
+      "status": "fixed",
+      "detail": "placeholder removed rather than widening file_scope_lock to accommodate an empty file"
+    },
+    {
+      "finding": "a commit message referenced a second issue identity, failing Branch Discipline",
+      "severity": "blocker",
+      "status": "fixed",
+      "detail": "offending commit message rewritten with --force-with-lease; tree content unchanged apart from the authorized .gitkeep removal. Branch history now carries Closes UTV2-1718 and no other issue id."
+    }
+  ]
 }
