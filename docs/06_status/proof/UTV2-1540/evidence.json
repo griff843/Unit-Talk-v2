@@ -6,8 +6,8 @@
   "status": "evidence_complete_pending_pm_approval",
   "generated_at": "2026-08-16T23:59:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "1a54c347027413ad087812512ccd46ade4a9e946",
-    "verified_source_note": "Branch head after refresh, carrying the migration, down script, and the database.types.ts regenerated from the replayed scratch schema. Re-anchored here because the readiness-ledger bot commits docs/06_status/readiness/readiness-score.json to main, and CI evaluates the PR merge ref, so any bot commit after the anchor reads as a non-proof change. Commits after this are proof-only. Post-merge closeout rebinds to the authoritative merge SHA.",
+    "verified_source_sha": "009ec2ff2deb6a416dff7f2d4ee5bc3e45798b8b",
+    "verified_source_note": "Re-anchored from 1a54c347 to 009ec2ff. 1a54c347 was the implementation commit BEFORE the fail-closed precondition existed; the PM verdict at ae5faf5f required a substantive migration change, so proof-binding-validator correctly refused the migration edit as a non-proof change after the old anchor. 009ec2ff is the new substantive commit, carrying the migration with its precondition, the down script, and the database.types.ts regenerated from the replayed scratch schema. Commits after this are proof-only. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force another re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
