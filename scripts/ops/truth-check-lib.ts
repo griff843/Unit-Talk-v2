@@ -337,8 +337,10 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
       const parsed = tryParseEvidenceBundle(artifact.content);
       if (!parsed) return hasRuntimeProofTextEvidence(artifact.content);
       const contract = validateEvidenceBundleContract(parsed, {
+        gate: 'post-merge-read',
         laneType: input.manifest.lane_type,
         tier: input.manifest.tier,
+        repoRoot: ROOT,
       });
       return contract.schemaVersion === 1
         ? hasRuntimeReferences(parsed.runtime_proof)
@@ -616,6 +618,7 @@ export function evaluateCloseEligibilityPreflight(
     if (evidenceArtifact) {
       try {
         contract = validateEvidenceBundleContract(JSON.parse(evidenceArtifact.content), {
+          gate: 'pre-merge',
           laneType: input.manifest.lane_type,
           tier: input.manifest.tier,
         });
@@ -1234,8 +1237,10 @@ export async function runTruthCheck(
         } else {
           addCheck('P5', 'pass', 'evidence bundle found');
           const evidenceContract = validateEvidenceBundleContract(evidence.bundle, {
+            gate: 'post-merge-read',
             laneType: manifest.lane_type,
             tier,
+            repoRoot: ROOT,
           });
           if (evidenceContract.valid) {
             addCheck(
@@ -1547,8 +1552,10 @@ export function addUnsupportedRuntimeChecks(
   }
 
   const contract = validateEvidenceBundleContract(evidence.bundle, {
+    gate: 'post-merge-read',
     laneType: context.laneType,
     tier,
+    repoRoot: ROOT,
   });
 
   if (contract.schemaVersion === 2) {

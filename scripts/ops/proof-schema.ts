@@ -11,6 +11,8 @@
  * contract.
  */
 
+import { spawnSync } from 'node:child_process';
+
 export const PROOF_SCHEMA_VERSION = 2 as const;
 
 export type GateVerdict = 'PASS' | 'FAIL' | 'SKIP';
@@ -95,6 +97,7 @@ export interface EvidenceContractFailure extends ValidationFailure {
   code:
     | 'invalid_root'
     | 'unsupported_schema_version'
+    | 'legacy_v1_not_allowed_pre_merge'
     | 'sha_binding_missing'
     | 'sha_binding_invalid'
     | 'proof_profile_missing'
@@ -105,6 +108,10 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'runtime_queries_missing'
     | 'runtime_row_counts_missing'
     | 'migration_head_missing'
+    | 'migration_receipt_head_mismatch'
+    | 'migration_receipt_not_ancestor'
+    | 'migration_receipt_non_proof_delta'
+    | 'migration_receipt_ancestry_unverified'
     | 'migration_refusal_drill_missing'
     | 'migration_empty_scratch_missing'
     | 'migration_roundtrip_missing'
@@ -113,10 +120,16 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'author_verifier_forbidden';
 }
 
+export type EvidenceValidationGate = 'pre-merge' | 'post-merge-read';
+
 export interface EvidenceContractContext {
+  /** Explicit caller boundary: authoring gates reject v1; historical readers may accept it. */
+  gate: EvidenceValidationGate;
   /** Authoritative declaration from the lane manifest. */
   laneType?: string | null;
   tier?: string | null;
+  /** Required to mechanically verify a post-merge migration receipt rebind. */
+  repoRoot?: string | null;
 }
 
 export interface EvidenceContractResult {
@@ -128,16 +141,17 @@ export interface EvidenceContractResult {
   bundle: Record<string, unknown> | null;
 }
 
-const APP_RUNTIME_LANE_TYPES = new Set(['runtime', 'delivery-ui']);
+// Ratified T1 precedent treats modeling/analytics and canonical-data lanes as
+// decision/data truth: they require the same live queries + row counts as
+// application runtime lanes and cannot self-select the static profile.
+const APP_RUNTIME_LANE_TYPES = new Set(['runtime', 'delivery-ui', 'modeling', 'data-canonical']);
 const STATIC_LANE_TYPES = new Set([
   'claude',
   'claude-governance',
   'codex',
   'codex-cli',
-  'data-canonical',
   'governance',
   'hygiene',
-  'modeling',
   'verification',
 ]);
 const AUTHORABLE_PROFILES = new Set<EvidenceProofProfile>(['app-runtime', 'migration', 'static']);
@@ -165,6 +179,64 @@ function migrationReceiptPass(value: unknown): value is Record<string, unknown> 
   return String(value['result'] ?? '').toUpperCase() === 'PASS' &&
     isPositiveRunId(value['run']) &&
     isPositiveRunId(value['job']);
+}
+
+type MigrationReceiptBindingResult =
+  | { status: 'pass' }
+  | { status: 'not-ancestor' }
+  | { status: 'non-proof-delta'; paths: string[] }
+  | { status: 'unverified'; detail: string };
+
+function verifyProofOnlyMigrationAncestry(
+  receiptHead: string,
+  verifiedSourceSha: string,
+  issueId: string,
+  repoRoot: string | null | undefined,
+): MigrationReceiptBindingResult {
+  if (!repoRoot) {
+    return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
+  }
+  if (!/^(?:UTV2|UNI)-\d+$/.test(issueId)) {
+    return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires a valid issue_id' };
+  }
+
+  const ancestry = spawnSync(
+    'git',
+    ['merge-base', '--is-ancestor', receiptHead, verifiedSourceSha],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
+    return {
+      status: 'unverified',
+      detail: ancestry.error?.message || String(ancestry.stderr ?? '').trim() || 'git ancestry check did not complete',
+    };
+  }
+  if (ancestry.status === 1) return { status: 'not-ancestor' };
+
+  // Inspect every commit, not just the net tree diff: a non-proof file changed
+  // and later reverted is still a substantive delta and must fail closed.
+  const changed = spawnSync(
+    'git',
+    ['log', '-m', '--format=', '--name-only', '--no-renames', `${receiptHead}..${verifiedSourceSha}`],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  if (changed.error || changed.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: changed.error?.message || String(changed.stderr ?? '').trim() || 'git changed-path check did not complete',
+    };
+  }
+
+  const proofPrefix = `docs/06_status/proof/${issueId}/`;
+  const exactBookkeepingPaths = new Set([
+    `docs/06_status/lanes/${issueId}.json`,
+    `.ops/sync/${issueId}.yml`,
+  ]);
+  const paths = [...new Set(changed.stdout.split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean))];
+  const nonProof = paths.filter(
+    (filePath) => !filePath.startsWith(proofPrefix) && !exactBookkeepingPaths.has(filePath),
+  );
+  return nonProof.length > 0 ? { status: 'non-proof-delta', paths: nonProof } : { status: 'pass' };
 }
 
 function validateV2Binding(
@@ -206,6 +278,7 @@ function validateProfileEvidence(
   profile: EvidenceProofProfile,
   bundle: Record<string, unknown>,
   failures: EvidenceContractFailure[],
+  context: EvidenceContractContext,
 ): void {
   if (profile === 'legacy-v1') return;
 
@@ -247,12 +320,55 @@ function validateProfileEvidence(
     return;
   }
 
-  if (typeof runtimeProof['head'] !== 'string' || !SHA_RE.test(runtimeProof['head'])) {
+  const receiptHead = runtimeProof['head'];
+  if (typeof receiptHead !== 'string' || !SHA_RE.test(receiptHead)) {
     failures.push({
       code: 'migration_head_missing',
       field: 'runtime_proof.head',
       message: 'migration proof requires the exact 40-character source head for its run/job receipts',
     });
+  } else {
+    const binding = bundle['sha_binding'];
+    const verifiedSourceSha = isPopulatedRecord(binding) &&
+      typeof binding['verified_source_sha'] === 'string' &&
+      SHA_RE.test(binding['verified_source_sha'])
+      ? binding['verified_source_sha']
+      : null;
+    if (verifiedSourceSha && receiptHead !== verifiedSourceSha) {
+      if (context.gate === 'pre-merge') {
+        failures.push({
+          code: 'migration_receipt_head_mismatch',
+          field: 'runtime_proof.head',
+          message: 'pre-merge migration receipt head must equal sha_binding.verified_source_sha',
+        });
+      } else {
+        const ancestry = verifyProofOnlyMigrationAncestry(
+          receiptHead,
+          verifiedSourceSha,
+          String(bundle['issue_id'] ?? ''),
+          context.repoRoot,
+        );
+        if (ancestry.status === 'not-ancestor') {
+          failures.push({
+            code: 'migration_receipt_not_ancestor',
+            field: 'runtime_proof.head',
+            message: 'migration receipt head is not an ancestor of sha_binding.verified_source_sha',
+          });
+        } else if (ancestry.status === 'non-proof-delta') {
+          failures.push({
+            code: 'migration_receipt_non_proof_delta',
+            field: 'runtime_proof.head',
+            message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
+          });
+        } else if (ancestry.status === 'unverified') {
+          failures.push({
+            code: 'migration_receipt_ancestry_unverified',
+            field: 'runtime_proof.head',
+            message: `migration receipt ancestry could not be mechanically verified: ${ancestry.detail}`,
+          });
+        }
+      }
+    }
   }
 
   const refusal = runtimeProof['precondition_drill'];
@@ -315,7 +431,7 @@ function validateProfileEvidence(
  */
 export function validateEvidenceBundleContract(
   candidate: unknown,
-  context: EvidenceContractContext = {},
+  context: EvidenceContractContext,
 ): EvidenceContractResult {
   if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
     return {
@@ -346,6 +462,20 @@ export function validateEvidenceBundleContract(
   }
 
   if (rawVersion === 1) {
+    if (context.gate === 'pre-merge') {
+      return {
+        valid: false,
+        schemaVersion: 1,
+        profile: 'legacy-v1',
+        profileSource: 'legacy-schema',
+        failures: [{
+          code: 'legacy_v1_not_allowed_pre_merge',
+          field: 'schema_version',
+          message: 'schema-v1 evidence is historical read-only and cannot pass a pre-merge authoring gate',
+        }],
+        bundle,
+      };
+    }
     return {
       valid: true,
       schemaVersion: 1,
@@ -403,7 +533,7 @@ export function validateEvidenceBundleContract(
     });
   }
 
-  if (profile) validateProfileEvidence(profile, bundle, failures);
+  if (profile) validateProfileEvidence(profile, bundle, failures, context);
 
   return {
     valid: failures.length === 0,

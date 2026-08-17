@@ -130,7 +130,7 @@ export function validateBindingEvidenceContract(
   evidence: unknown,
   laneType: string | null,
 ): EvidenceContractResult {
-  return validateEvidenceBundleContract(evidence, { laneType });
+  return validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType });
 }
 
 function main(): void {
@@ -164,8 +164,8 @@ function main(): void {
   const contract = validateBindingEvidenceContract(evidence, resolveLaneType(evidence));
   violations.push(...contract.failures.map((failure) => `${failure.field}: ${failure.message}`));
 
-  // V1 is a supported legacy read contract and has no sha_binding. Its
-  // applicability ends after the shared version-aware validation above.
+  // V1 is historical read-only. The explicit pre-merge contract records the
+  // named violation before this shape-specific early return.
   if (contract.schemaVersion === 1) {
     emit(args, evidence, '', head, violations, contract);
     return;

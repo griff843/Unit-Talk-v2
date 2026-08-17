@@ -1,5 +1,9 @@
 import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   validateProofSchema,
   isProofStale,
@@ -153,14 +157,20 @@ function migrationEvidence() {
   };
 }
 
-test('version-aware evidence contract accepts supported schema-v1 bundles', () => {
-  const result = validateEvidenceBundleContract({ schema_version: 1 });
+test('version-aware evidence contract accepts schema-v1 only for post-merge historical reads', () => {
+  const result = validateEvidenceBundleContract(
+    { schema_version: 1 },
+    { gate: 'post-merge-read' },
+  );
   assert.equal(result.valid, true);
   assert.equal(result.profile, 'legacy-v1');
 });
 
 test('schema-v2 migration profile accepts executed receipts without queries or row_counts', () => {
-  const result = validateEvidenceBundleContract(migrationEvidence(), { laneType: 'migration', tier: 'T1' });
+  const result = validateEvidenceBundleContract(
+    migrationEvidence(),
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
   assert.equal(result.valid, true, JSON.stringify(result.failures));
   assert.equal(result.profile, 'migration');
 });
@@ -168,7 +178,10 @@ test('schema-v2 migration profile accepts executed receipts without queries or r
 test('schema-v2 evidence fails without valid sha_binding', () => {
   const evidence = migrationEvidence();
   Reflect.deleteProperty(evidence, 'sha_binding');
-  const result = validateEvidenceBundleContract(evidence, { laneType: 'migration', tier: 'T1' });
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
   assert.equal(result.valid, false);
   assert.ok(result.failures.some((failure) => failure.code === 'sha_binding_missing'));
 });
@@ -179,31 +192,37 @@ test('app-runtime profile fails closed without queries and row_counts', () => {
     static_proof: { type_check: { status: 'PASS' } },
     runtime_proof: { queries: [], row_counts: [] },
   };
-  const result = validateEvidenceBundleContract(evidence, { laneType: 'runtime', tier: 'T1' });
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'pre-merge', laneType: 'runtime', tier: 'T1' },
+  );
   assert.equal(result.valid, false);
   assert.ok(result.failures.some((failure) => failure.code === 'runtime_queries_missing'));
   assert.ok(result.failures.some((failure) => failure.code === 'runtime_row_counts_missing'));
 });
 
 test('schema-v2 proof profiles reject unknown, undeclared, mismatched, and author-verifier input', () => {
-  const undeclared = validateEvidenceBundleContract({
-    ...migrationEvidence(),
-    proof_profile: undefined,
-  });
+  const undeclared = validateEvidenceBundleContract(
+    { ...migrationEvidence(), proof_profile: undefined },
+    { gate: 'pre-merge' },
+  );
   assert.ok(undeclared.failures.some((failure) => failure.code === 'proof_profile_missing'));
 
-  const unknown = validateEvidenceBundleContract({ ...migrationEvidence(), proof_profile: 'weakest' });
+  const unknown = validateEvidenceBundleContract(
+    { ...migrationEvidence(), proof_profile: 'weakest' },
+    { gate: 'pre-merge' },
+  );
   assert.ok(unknown.failures.some((failure) => failure.code === 'proof_profile_unknown'));
 
   const mismatch = validateEvidenceBundleContract(
     { ...migrationEvidence(), proof_profile: 'static' },
-    { laneType: 'runtime', tier: 'T1' },
+    { gate: 'pre-merge', laneType: 'runtime', tier: 'T1' },
   );
   assert.ok(mismatch.failures.some((failure) => failure.code === 'proof_profile_mismatch'));
 
   const selfCertified = validateEvidenceBundleContract(
     { ...migrationEvidence(), verifier: { identity: 'implementer' } },
-    { laneType: 'migration', tier: 'T1' },
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
   );
   assert.ok(selfCertified.failures.some((failure) => failure.code === 'author_verifier_forbidden'));
 });
@@ -251,11 +270,153 @@ describe('proof-binding-validator', () => {
     assert.ok(result.failures.some((failure) => failure.code === 'sha_binding_missing'));
   });
 
-  test('binding gate keeps supported schema-v1 evidence readable', () => {
+  test('binding gate rejects schema-v1 evidence before merge', () => {
     const result = validateBindingEvidenceContract({ schema_version: 1 }, null);
-    assert.equal(result.valid, true);
+    assert.equal(result.valid, false);
     assert.equal(result.profile, 'legacy-v1');
+    assert.ok(result.failures.some((failure) => failure.code === 'legacy_v1_not_allowed_pre_merge'));
   });
+});
+
+function createReceiptBindingRepo(): {
+  repoRoot: string;
+  receiptHead: string;
+  proofOnlyHead: string;
+  nonProofHead: string;
+  unrelatedHead: string;
+} {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-binding-'));
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'proof-schema@example.test');
+  git('config', 'user.name', 'Proof Schema Test');
+  write('source.txt', 'receipt source\n');
+  git('add', '.');
+  git('commit', '-m', 'receipt source');
+  const receiptHead = git('rev-parse', 'HEAD');
+
+  write('docs/06_status/proof/UTV2-9000/evidence.json', '{"proof":true}\n');
+  write('docs/06_status/lanes/UTV2-9000.json', '{}\n');
+  write('.ops/sync/UTV2-9000.yml', 'version: 1\n');
+  git('add', '.');
+  git('commit', '-m', 'proof-only rebind');
+  const proofOnlyHead = git('rev-parse', 'HEAD');
+
+  write('scripts/substantive.ts', 'export const changed = true;\n');
+  git('add', '.');
+  git('commit', '-m', 'non-proof delta');
+  const nonProofHead = git('rev-parse', 'HEAD');
+
+  git('switch', '--orphan', 'unrelated');
+  write('unrelated.txt', 'unrelated history\n');
+  git('add', '.');
+  git('commit', '-m', 'unrelated root');
+  const unrelatedHead = git('rev-parse', 'HEAD');
+  git('switch', 'main');
+
+  return { repoRoot, receiptHead, proofOnlyHead, nonProofHead, unrelatedHead };
+}
+
+function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
+  const evidence = migrationEvidence();
+  evidence.sha_binding.verified_source_sha = verifiedSourceSha;
+  evidence.runtime_proof.head = receiptHead;
+  return evidence;
+}
+
+test('migration receipt binding is exact pre-merge and fail-closed on mismatch', () => {
+  const exact = validateEvidenceBundleContract(
+    migrationEvidence(),
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(exact.valid, true, JSON.stringify(exact.failures));
+
+  const mismatchEvidence = migrationEvidence();
+  mismatchEvidence.runtime_proof.head = OTHER_SHA;
+  const mismatch = validateEvidenceBundleContract(
+    mismatchEvidence,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(mismatch.valid, false);
+  assert.ok(mismatch.failures.some((failure) => failure.code === 'migration_receipt_head_mismatch'));
+});
+
+test('post-merge migration receipt binding accepts only proof-only Git ancestry', () => {
+  const repo = createReceiptBindingRepo();
+  try {
+    const proofOnly = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.proofOnlyHead),
+      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+    );
+    assert.equal(proofOnly.valid, true, JSON.stringify(proofOnly.failures));
+
+    const stale = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.nonProofHead),
+      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+    );
+    assert.equal(stale.valid, false);
+    assert.ok(stale.failures.some((failure) => failure.code === 'migration_receipt_non_proof_delta'));
+
+    const unrelated = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.unrelatedHead, repo.proofOnlyHead),
+      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1', repoRoot: repo.repoRoot },
+    );
+    assert.equal(unrelated.valid, false);
+    assert.ok(unrelated.failures.some((failure) => failure.code === 'migration_receipt_not_ancestor'));
+
+    const noGitContext = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.proofOnlyHead),
+      { gate: 'post-merge-read', laneType: 'migration', tier: 'T1' },
+    );
+    assert.equal(noGitContext.valid, false);
+    assert.ok(noGitContext.failures.some((failure) => failure.code === 'migration_receipt_ancestry_unverified'));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+for (const laneType of ['modeling', 'data-canonical'] as const) {
+  test(`${laneType} T1 evidence requires app-runtime queries and row counts`, () => {
+    const evidence = {
+      ...migrationEvidence(),
+      proof_profile: 'app-runtime',
+      runtime_proof: { queries: [], row_counts: [] },
+    };
+    const result = validateEvidenceBundleContract(
+      evidence,
+      { gate: 'pre-merge', laneType, tier: 'T1' },
+    );
+    assert.equal(result.profile, 'app-runtime');
+    assert.equal(result.valid, false);
+    assert.ok(result.failures.some((failure) => failure.code === 'runtime_queries_missing'));
+    assert.ok(result.failures.some((failure) => failure.code === 'runtime_row_counts_missing'));
+  });
+}
+
+test('governance evidence remains on the static proof profile', () => {
+  const evidence = {
+    schema_version: 2,
+    issue_id: 'UTV2-9000',
+    proof_profile: 'static',
+    sha_binding: {
+      verified_source_sha: VALID_SHA,
+      evidence_commit_sha: 'set-by-ci',
+      current_pr_head_sha: 'set-by-ci',
+    },
+    static_proof: { type_check: { status: 'PASS' } },
+  };
+  const result = validateEvidenceBundleContract(
+    evidence,
+    { gate: 'pre-merge', laneType: 'governance', tier: 'T1' },
+  );
+  assert.equal(result.profile, 'static');
+  assert.equal(result.valid, true, JSON.stringify(result.failures));
 });
 
 describe('isProofStale', () => {

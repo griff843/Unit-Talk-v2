@@ -1683,13 +1683,16 @@ test('CEP-0: a conformant packet is eligible before merge', () => {
   assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking, null, 2));
 });
 
-function migrationCepInput(laneType = 'migration') {
+function migrationCepInput(
+  laneType = 'migration',
+  evidenceBundle: EvidenceBundleV1 = schemaV2MigrationBundle(),
+) {
   const artifacts = [
     { path: 'docs/06_status/proof/UTV2-1718/verification.md', content: CEP_CONFORMANT_VERIFICATION },
     { path: 'docs/06_status/proof/UTV2-1718/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
     {
       path: 'docs/06_status/proof/UTV2-1718/evidence.json',
-      content: JSON.stringify(schemaV2MigrationBundle()),
+      content: JSON.stringify(evidenceBundle),
     },
   ];
   return {
@@ -1721,6 +1724,31 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
     'T1',
     { bundle: schemaV2MigrationBundle() },
     { laneType: 'migration', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+  assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
+});
+
+test('schema-v1 is rejected pre-merge but remains readable by the historical post-merge path', () => {
+  const legacyBundle: EvidenceBundleV1 = {
+    schema_version: 1,
+    runtime_proof: {
+      queries: [{ query: 'select 1', result: 'PASS' }],
+      row_counts: [{ table: 'picks', count: 1 }],
+    },
+    verifier: { identity: 'independent-reviewer' },
+  };
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('migration', legacyBundle));
+  const bindingFinding = preMerge.findings.find((finding) => finding.id === 'CEP-E7');
+  assert.equal(bindingFinding?.status, 'fail');
+  assert.match(bindingFinding?.detail ?? '', /schema-v1 evidence is historical read-only/);
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: legacyBundle },
+    { laneType: 'migration' },
   );
   assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
 });
