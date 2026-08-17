@@ -70,7 +70,9 @@ const SCHEMA_FINGERPRINT_QUERY = `
     JOIN pg_namespace n ON n.oid = c.relnamespace
    WHERE n.nspname = 'public' AND a.attnum > 0 AND NOT a.attisdropped
   UNION ALL
-  SELECT 'constraint', n.nspname || '.' || conname, pg_get_constraintdef(oid)
+  -- con.oid, not a bare oid: pg_namespace also exposes oid, and the unqualified
+  -- form fails with 42702 (ambiguous column reference).
+  SELECT 'constraint', n.nspname || '.' || con.conname, pg_get_constraintdef(con.oid)
     FROM pg_constraint con JOIN pg_namespace n ON n.oid = con.connamespace
    WHERE n.nspname = 'public'
   UNION ALL

@@ -406,7 +406,11 @@ jobs:
           fi
 
           if [[ "$FAIL" -ne 0 ]]; then
-            echo "::error title=precondition-drill::A migration's fail-closed precondition did not refuse as required."
+            # Deliberately does not assert WHICH failure occurred: the drill exits
+            # non-zero both when a guard fails to refuse and when the drill itself
+            # errors. Claiming the former when it was the latter would be a false
+            # finding, so the cause is left to the drill's own output above.
+            echo "::error title=precondition-drill::The precondition drill did not pass. See the drill output above for whether a guard failed to refuse or the drill itself errored."
             exit 1
           fi
 
