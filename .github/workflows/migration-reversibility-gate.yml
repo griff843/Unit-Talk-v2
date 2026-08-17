@@ -7,6 +7,7 @@ on:
       - 'db/migrations-rollback/**'
       - 'scripts/ci/migration-reversibility-gate.ts'
       - 'scripts/ci/schema-roundtrip-hash.ts'
+      - 'scripts/ci/migration-precondition-drill.ts'
       - '.github/workflows/migration-reversibility-gate.yml'
 
 permissions:
@@ -269,3 +270,137 @@ jobs:
           fi
           echo ""
           echo "PASS: All new migrations passed the schema round-trip drill."
+
+  # UTV2-1718 — proves a migration's fail-closed precondition actually refuses.
+  #
+  # Deliberately a SEPARATE job from schema-roundtrip-drill, for two reasons:
+  #   1. The round-trip drill leaves the new migration applied. This drill needs a
+  #      schema where the target relations are ABSENT, so sharing a database would
+  #      make the refusal cases untestable.
+  #   2. The existing apply -> rollback -> reapply convergence proof is green and
+  #      must stay untouched. Adding steps to that job risks perturbing it.
+  #
+  # Ephemeral postgres service only. This job must never be given a production or
+  # staging DSN: its whole method is seeding decoy relations and forcing failures.
+  precondition-drill:
+    name: Fail-closed precondition drill (scratch Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Detect new migrations on this PR
+        id: detect
+        run: |
+          if ! git rev-parse --verify "origin/${{ github.base_ref }}" > /dev/null 2>&1; then
+            echo "ERROR: Cannot resolve origin/${{ github.base_ref }}" >&2
+            exit 2
+          fi
+          NEW=$(git diff --name-only --diff-filter=A \
+                "origin/${{ github.base_ref }}...HEAD" \
+                -- supabase/migrations/ | grep '\.sql$' || true)
+          echo "migrations<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NEW" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [[ -n "$NEW" ]]; then
+            echo "has_migration=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migration=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply baseline migrations to scratch DB
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Everything EXCEPT the new migrations, matching the round-trip drill.
+          # ON_ERROR_STOP=0 because some baseline migrations need Supabase-only
+          # extensions absent from the scratch container. The drill itself is
+          # strict.
+          NEW_LIST="${{ steps.detect.outputs.migrations }}"
+          for f in supabase/migrations/*.sql; do
+            if echo "$NEW_LIST" | grep -qF "$(basename "$f")"; then
+              echo "Skipping new migration (not yet applied): $f"
+            else
+              psql "$POSTGRES_URL" -f "$f" --quiet 2>&1 \
+                | grep -v "^$" | sed "s/^/  [$(basename "$f")] /" || true
+            fi
+          done
+
+      - name: Drill each new migration's fail-closed precondition
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          FAIL=0
+          while IFS= read -r MIGRATION; do
+            [[ -z "$MIGRATION" ]] && continue
+
+            # Fail-closed on opt-out: a migration with no
+            # "-- FAIL-CLOSED-PRECONDITION:" declaration is only exempt if it
+            # explicitly says so. Silence is a failure, not a skip -- otherwise a
+            # typo'd marker would make the drill pass by doing nothing.
+            if grep -q -- '-- NO-PRECONDITION-REQUIRED:' "$MIGRATION"; then
+              echo "=== $MIGRATION: exempt (declared NO-PRECONDITION-REQUIRED) ==="
+              continue
+            fi
+
+            echo "=== Drilling precondition: $MIGRATION ==="
+            if ! pnpm exec tsx scripts/ci/migration-precondition-drill.ts "$MIGRATION"; then
+              FAIL=1
+            fi
+          done <<< "${{ steps.detect.outputs.migrations }}"
+
+          if [[ "$FAIL" -ne 0 ]]; then
+            echo "::error title=precondition-drill::A migration's fail-closed precondition did not refuse as required."
+            exit 1
+          fi
+
+      - name: Adversarial fixture — a guard that does not refuse must fail the drill
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Defence-in-depth: proves the drill reports FAIL rather than silently
+          # passing when a migration declares a precondition it does not enforce.
+          # Without this, a drill bug would look identical to a healthy guard.
+          cat > /tmp/adv-no-guard.sql <<'SQL'
+          -- FAIL-CLOSED-PRECONDITION: public._adv_precondition_fixture
+          CREATE TABLE IF NOT EXISTS public._adv_precondition_fixture (id uuid PRIMARY KEY);
+          SQL
+
+          if pnpm exec tsx scripts/ci/migration-precondition-drill.ts /tmp/adv-no-guard.sql; then
+            echo "FAIL: drill passed a migration whose declared guard never refuses"
+            exit 1
+          fi
+          echo "PASS: drill correctly rejected a declared-but-unenforced precondition"

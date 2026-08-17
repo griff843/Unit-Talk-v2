@@ -1,0 +1,14 @@
+version: 1
+approval:
+  status: pending
+  tier: T1
+  authority: pm-verdict/v1
+entities:
+  issues:
+    - id: UTV2-1718
+      title: "Live Schema Parity ledger repair (successor): capture Command Center DDL with a fail-closed precondition"
+      lane_type: migration
+      executor: claude
+      predecessor: UTV2-1540
+      predecessor_pr: 1378
+      predecessor_rejected_head: fda0a266348ec186f0bf6010e41a77aada4bfd75
