@@ -4,10 +4,10 @@ MERGE_SHA: f1eb161109286aab7d7e70300dac598a52ecf350
 
 ASSERTIONS:
 
-- The pre-merge binding is the exact substantive source head; post-merge automation must rebind this anchor to the authoritative merge SHA.
-- Schema-v1 evidence remains readable while schema-v2 evidence uses one fail-closed, manifest-selected proof profile.
-- Static governance proof does not fabricate runtime queries or row counts, and app-runtime proof remains strict.
-- Schema-v2 verifier provenance comes from an external exact-head required check, never an author-written identity.
+- [x] The pre-merge binding is the exact substantive source head; post-merge automation must rebind this anchor to the authoritative merge SHA.
+- [x] Schema-v1 evidence remains readable while schema-v2 evidence uses one fail-closed, manifest-selected proof profile.
+- [x] Static governance proof does not fabricate runtime queries or row counts, and app-runtime proof remains strict.
+- [x] Schema-v2 verifier provenance comes from an external exact-head required check, never an author-written identity.
 
 EVIDENCE:
 

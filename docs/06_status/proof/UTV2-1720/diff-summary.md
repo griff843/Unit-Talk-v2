@@ -25,7 +25,7 @@ Substantive source binding: `f1eb161109286aab7d7e70300dac598a52ecf350`.
 - `scripts/ci/proof-binding-validator.test.ts` — proves the binding gate consumes the shared contract.
 - `scripts/ops/truth-check-lib.ts` — makes P6/P10 and T1 R1-R3 profile-aware and external-provenance-aware across pre/post-merge evaluation.
 - `scripts/ops/truth-check-lib.test.ts` — proves pre/post-merge agreement, migration truthfulness, runtime strictness, and exact-head verifier behavior.
-- `docs/06_status/lanes/UTV2-1720.json`, `docs/06_status/proof/UTV2-1720/.gitkeep`, and `docs/06_status/proof/UTV2-1720/model-routing.json` — orchestrator-created lane bookkeeping and wrapper-generated model-routing evidence.
+- `docs/06_status/lanes/UTV2-1720.json` and `docs/06_status/proof/UTV2-1720/model-routing.json` — orchestrator-created lane bookkeeping and wrapper-generated model-routing evidence.
 - `docs/06_status/proof/UTV2-1720/evidence.json`, `verification.md`, `runtime-verification.md`, and this file — SHA-bound closeout evidence for the lane.
 
 No UTV2-1718 source, manifest, proof, or Linear state was modified. No exception, override, or bypass was introduced.
