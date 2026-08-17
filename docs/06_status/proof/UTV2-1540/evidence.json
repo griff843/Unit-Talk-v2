@@ -6,8 +6,8 @@
   "status": "draft_pending_evidence",
   "generated_at": "2026-08-16T23:59:00.000Z",
   "sha_binding": {
-    "verified_source_sha": "9d25ad39cdadbc2bbf392c37e9b530439efe1a6e",
-    "verified_source_note": "Substantive implementation commit: the migration, down script, and the database.types.ts regenerated from the replayed scratch schema. Commits after this are proof-only. Post-merge closeout rebinds to the authoritative merge SHA.",
+    "verified_source_sha": "1a54c347027413ad087812512ccd46ade4a9e946",
+    "verified_source_note": "Branch head after refresh, carrying the migration, down script, and the database.types.ts regenerated from the replayed scratch schema. Re-anchored here because the readiness-ledger bot commits docs/06_status/readiness/readiness-score.json to main, and CI evaluates the PR merge ref, so any bot commit after the anchor reads as a non-proof change. Commits after this are proof-only. Post-merge closeout rebinds to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {

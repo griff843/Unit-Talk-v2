@@ -1,8 +1,8 @@
 # PROOF: UTV2-1540
 
-MERGE_SHA: 9d25ad39cdadbc2bbf392c37e9b530439efe1a6e
+MERGE_SHA: 1a54c347027413ad087812512ccd46ade4a9e946
 
-Verified implementation SHA: `9d25ad39cdadbc2bbf392c37e9b530439efe1a6e`
+Verified implementation SHA: `1a54c347027413ad087812512ccd46ade4a9e946`
 
 Pre-merge this anchor identifies the current branch head. Post-merge closeout automation rebinds proof artifacts to the authoritative merge SHA.
 
