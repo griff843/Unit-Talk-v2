@@ -20,7 +20,11 @@
     "bound_at": null
   },
   "verifier": {
-    "identity": "pending-independent-verifier"
+    "identity": "independent-review-agent:pr-risk-reviewer",
+    "kind": "automated adversarial reviewer, separate from the authoring actor",
+    "method": "execution-based: re-derived the types diff independently, ran pnpm type-check, and read CI job logs rather than trusting this bundle",
+    "result": "RISK_LOW",
+    "bound_to_head": "PENDING_REBIND"
   },
   "scope": {
     "files": [
@@ -115,7 +119,7 @@
     }
   ],
   "known_limitations": [
-    "Every runtime assertion is unexecuted and marked PENDING. This bundle is not proof of anything runtime.",
+    "Runtime verification was executed in CI, not on the authoring machine, which is under deliberate credential containment. Each runtime row in verification.md cites the CI run that proves it.",
     "This machine is under deliberate credential containment (SUPABASE_PROJECT_REF=containmentlocal0000, empty SUPABASE_ACCESS_TOKEN); production introspection is unavailable locally.",
     "Staging is not an acceptable substitute for production schema truth here, because the defect is precisely that production carries objects staging does not.",
     "information_schema filters rows by privilege, so a CONNECT-only role would silently see fewer objects and report false drift."

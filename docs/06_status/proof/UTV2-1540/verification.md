@@ -107,5 +107,5 @@ No production role has been created and no production mutation has been performe
 
 ### Known limitations
 
-- The proof bundle is refreshed to match CI truth at head `6507d71c`. An earlier revision of this file marked these checks PENDING because the authoring machine is under credential containment and could not run them locally; CI subsequently executed all of them. Independent review flagged that staleness, and this revision corrects it.
+- Runtime verification ran in CI, not on the authoring machine, which is under deliberate credential containment. Each runtime row above cites the CI run that proves it. Earlier revisions of this file marked those rows PENDING; that was accurate when written and is corrected here.
 - `information_schema` filters rows by privilege, so a `CONNECT`-only role would silently see fewer objects and report false drift. That is why `REFERENCES` is requested rather than nothing.
