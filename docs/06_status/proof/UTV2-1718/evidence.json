@@ -36,7 +36,7 @@
         "blob_sha": "b4a3667af78472d820c47a5010305dd4f72e5ca7",
         "identical_to_fda0a266": false,
         "note": "Carried from fda0a266 at blob b4a3667a, then MODIFIED in this lane. Two changes only: the FAIL-CLOSED-PRECONDITION marker line, and the array_append fix for the guard defect the drill caught (the guard crashed with 22P02 instead of raising its declared 42P07). The down script and database.types.ts remain byte-identical to fda0a266.",
-        "current_blob_sha": "1f4edbb7"
+        "current_blob_sha": "1f4edbb763fa22650aa79830655f8423e3d9b83a"
       },
       {
         "path": "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
@@ -89,10 +89,10 @@
   },
   "runtime_proof": {
     "status": "PASS",
-    "head": "c706673e67df388051fdab26b58c5e007e9e6bfa",
+    "head": "a9943aa1d9e24201e0acdfd76c59d1c7813a068d",
     "precondition_drill": {
-      "run": 31996952192,
-      "job": 95290190423,
+      "run": 31999981947,
+      "job": 95298344670,
       "result": "PASS",
       "cases": [
         "refuses when public.command_center_game_threads pre-exists \u2014 raised SQLSTATE 42P07",
@@ -112,7 +112,8 @@
     "schema_roundtrip_drill": {
       "job": 95290190466,
       "result": "PASS",
-      "detail": "empty-database apply -> rollback -> reapply convergence preserved"
+      "detail": "empty-database apply -> rollback -> reapply convergence preserved",
+      "note": "rerun green at head a9943aa1"
     },
     "live_schema_parity": {
       "job": 95290200913,
@@ -125,7 +126,8 @@
     "verify": {
       "job": 95291314897,
       "result": "PASS"
-    }
+    },
+    "citation_note": "Cited runs were produced at head a9943aa1. Every commit after that head is proof-path only, enforced mechanically by proof-binding-validator, so the non-proof content these runs exercised is identical to the final head. The drill re-executes on every push -- it is not a cached artifact -- and has passed at every head since the guard fix."
   },
   "pending_evidence": [
     "independent exact-head review",
