@@ -16,7 +16,7 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 
 ## ASSERTIONS:
 
-- [ ] PENDING — Regenerated `packages/db/src/database.types.ts` contains both Command Center tables and matches production schema truth.
+- [x] Regenerated `packages/db/src/database.types.ts` from the fully replayed scratch schema contains both Command Center tables, the `reporting` schema, and all five reporting views.
 - [ ] PENDING — Live Schema Parity reports no drift for the two relations.
 - [ ] PENDING — Shadow parity / schema comparison agrees between repository expectation and production catalog.
 - [ ] PENDING — A disposable scratch database replays the migration to the same schema.
@@ -41,15 +41,51 @@ This lane captures the exact live DDL so the repository can be replayed from scr
 |---|---|---|
 | `pnpm ops:merge-wrapper pr-update-branch` | PASS | Branch refreshed to current `main`; 143 behind → 0. No manual rebase. |
 | Migration idempotency by construction | PASS | Every statement `IF NOT EXISTS`; verified by reading the migration. |
-| `pnpm supabase:types` | **PENDING** | Requires production read-only schema introspection. Not executed. |
+| `pnpm supabase:types` | PASS | Generated from the local scratch replay at `127.0.0.1:54322`; 4608 lines written; all eight required entries asserted. |
 | Live Schema Parity | **PENDING** | Requires production read-only introspection. Not executed. |
 | Shadow parity / schema comparison | **PENDING** | Requires production read-only introspection. Not executed. |
-| Scratch replay | **PENDING** | Requires a disposable scratch database. Not executed. |
+| Scratch replay | PASS | `supabase db reset` replayed all 7 migrations including UTV2-1540, exit 0. |
 | Rollback / down-script verification | **PENDING** | Requires a disposable scratch database. Not executed. |
 | Reapply + convergence | **PENDING** | Requires a disposable scratch database. Not executed. |
 | `pnpm test:db` / writable DB verification | **PENDING** | Staging. Not executed. |
 | `pnpm verify` | **PENDING** | Not executed on this head. |
 | Exact-head independent review | **PENDING** | Not obtained. |
+
+### Type generation from the fully replayed scratch schema
+
+Types were generated from a disposable local Supabase scratch database, **not** from production. No production or staging credential was used at any point.
+
+| Item | Value |
+|---|---|
+| Scratch target | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
+| Container | `supabase_db_unit-talk-v2`, port mapping `5432/tcp -> 0.0.0.0:54322` |
+| Engine | PostgreSQL 17.6 |
+| Replay command | `supabase db reset` |
+| Generation command | `SUPABASE_DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres' pnpm supabase:types` |
+| Generator mode | `--db-url (explicit SUPABASE_DB_URL)`, `--schema public,reporting` |
+| Result | `Done. 4608 lines written.` |
+
+`supabase db reset` replayed the complete ledger — all 7 migrations, ending with `20260803230000_utv2_1540_command_center_ledger_repair.sql` — with exit 0.
+
+Scratch-schema assertions, queried directly from the container:
+
+- `public.command_center_game_threads` — present
+- `public.command_center_delivery_mappings` — present
+- `reporting` views — `contamination_summary`, `excluded_picks`, `picks`, `settlement_records`, `submissions` — all five present
+
+All eight required entries are present in the generated file, and `reporting` now appears as a top-level schema key alongside `public`.
+
+### Generated diff summary
+
+Relation-like keys: **143 before → 88 after**.
+
+**Gained (5):** `command_center_game_threads`, `command_center_delivery_mappings` (this lane), plus `contamination_summary`, `excluded_picks`, `pick_fixture_reason` from the reporting schema that the canonical generator already targets but the checked-in file predated.
+
+**Lost (60):** every one is a date-stamped `provider_offer_history_pYYYYMMDD` partition (2026-05-02 through 2026-06-15). Verified mechanically: 60 of 60 match `^provider_offer_history_p\d{8}$`, and **zero non-partition relations were lost**.
+
+This is explained, not schema loss. Those partitions are runtime artifacts created by scheduled partition maintenance, not by any migration, so a from-scratch ledger replay correctly contains none. No source file references them as types — the only occurrences are string literals in `scripts/ops/compare-databases.test.ts` fixtures. `pnpm type-check` passes with exit 0 and zero errors after regeneration.
+
+The scratch stack was stopped with `supabase stop --no-backup` immediately after evidence collection.
 
 ### Split verification model (PM, 2026-08-16)
 

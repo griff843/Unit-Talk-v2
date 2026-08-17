@@ -50,10 +50,9 @@
   "pending_evidence": [
     {
       "id": "types-regeneration",
-      "target": "production-read-only",
+      "target": "disposable-local-scratch",
       "command": "pnpm supabase:types",
-      "status": "PENDING",
-      "blocked_by": "no production read-only schema-introspection credential"
+      "status": "PASS"
     },
     {
       "id": "live-schema-parity",
@@ -71,9 +70,8 @@
     },
     {
       "id": "scratch-replay",
-      "target": "disposable-scratch-db",
-      "status": "PENDING",
-      "blocked_by": "scratch database not yet provisioned"
+      "target": "disposable-local-scratch",
+      "status": "PASS"
     },
     {
       "id": "rollback-verification",
@@ -123,5 +121,45 @@
     "static_proof_status": "PASS_BY_CONSTRUCTION_ONLY",
     "runtime_proof_status": "PENDING_NOT_EXECUTED",
     "ready_for_pm_review": false
+  },
+  "type_generation": {
+    "target": "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    "target_kind": "disposable_local_supabase_scratch",
+    "production_credentials_used": false,
+    "container": "supabase_db_unit-talk-v2",
+    "engine": "PostgreSQL 17.6",
+    "replay_command": "supabase db reset",
+    "migrations_applied": 7,
+    "final_migration": "20260803230000_utv2_1540_command_center_ledger_repair.sql",
+    "generation_command": "SUPABASE_DB_URL='postgresql://postgres:postgres@127.0.0.1:54322/postgres' pnpm supabase:types",
+    "generator_mode": "--db-url (explicit SUPABASE_DB_URL), --schema public,reporting",
+    "lines_written": 4608,
+    "schema_assertions": {
+      "public.command_center_game_threads": true,
+      "public.command_center_delivery_mappings": true,
+      "reporting.picks": true,
+      "reporting.excluded_picks": true,
+      "reporting.submissions": true,
+      "reporting.settlement_records": true,
+      "reporting.contamination_summary": true,
+      "reporting_schema_top_level_key": true
+    },
+    "diff_summary": {
+      "relation_keys_before": 143,
+      "relation_keys_after": 88,
+      "gained": [
+        "command_center_game_threads",
+        "command_center_delivery_mappings",
+        "contamination_summary",
+        "excluded_picks",
+        "pick_fixture_reason"
+      ],
+      "lost_count": 60,
+      "lost_all_match": "^provider_offer_history_p\\d{8}$",
+      "non_partition_losses": 0,
+      "explanation": "Lost relations are exclusively date-stamped provider_offer_history partitions created by scheduled partition maintenance, not by any migration. A from-scratch ledger replay correctly contains none. No source references them as types; the only occurrences are string literals in compare-databases.test.ts fixtures.",
+      "type_check_after_regeneration": "PASS (exit 0, 0 errors)"
+    },
+    "teardown": "supabase stop --no-backup immediately after evidence collection"
   }
 }
