@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1718",
+  "title": "Live Schema Parity ledger repair (successor): capture Command Center DDL with a fail-closed precondition",
+  "tier": "T1",
+  "status": "evidence_incomplete",
+  "generated_at": "2026-08-17T04:30:00Z",
+  "sha_binding": {
+    "verified_source_sha": "0dda9a969910fdee76ca9afc110fff36bbd54360",
+    "verified_source_note": "Implementation commit on this branch: carried predecessor blobs, the precondition marker, the refusal drill script, and its workflow job registration. Commits after this must be proof-path only, which proof-binding-validator enforces mechanically. Note that CI evaluates the PR merge ref, so a readiness-ledger bot commit landing on main can surface as a non-proof change and force a re-anchor. Post-merge closeout rebinds to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "implementation_sha",
+    "merge_sha": null,
+    "pr_number": null,
+    "bound_at": null
+  },
+  "predecessor": {
+    "issue_id": "UTV2-1540",
+    "pr_number": 1378,
+    "rejected_head": "fda0a266348ec186f0bf6010e41a77aada4bfd75",
+    "disposition": "bounce cap reached (3 authorized CHANGES_REQUIRED verdicts under pm-verdict/v1); PR closed unmerged, Linear moved to Canceled with needs-reframe + pm-triage",
+    "canceled_semantics": "the execution attempt ended without shipping; the production requirement was not withdrawn",
+    "record_preserved": "PR, remote branch, exact head, comments, reviews, CI results and proof bundle all retained; history not rewritten",
+    "rejection_reason": "the fail-closed precondition had never been observed refusing; a harness required scripts/ci and .github/workflows, outside that lane's file scope",
+    "governance_note": "no atomic supersession command and no Linear Failed state exist; transferred by explicit PM close-and-transfer disposition. Tracked in UTV2-1668."
+  },
+  "verifier": {
+    "identity": "PENDING",
+    "result": "PENDING",
+    "bound_to_head": "PENDING",
+    "note": "No verifier result is recorded in advance. On the predecessor lane the authoring actor pre-wrote a reviewer verdict into the bundle before any review ran; that was self-certification and the reviewer caught it. This field stays PENDING until a real exact-head review returns."
+  },
+  "scope": {
+    "carried_from_predecessor": [
+      {
+        "path": "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql",
+        "blob_sha": "b4a3667af78472d820c47a5010305dd4f72e5ca7",
+        "identical_to_fda0a266": true,
+        "note": "the precondition marker comment was added after carry; the blob hash above is the carried state"
+      },
+      {
+        "path": "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
+        "blob_sha": "69af4194ffad2477b3c8a17e943a92ffcf6a8f7f",
+        "identical_to_fda0a266": true
+      },
+      {
+        "path": "packages/db/src/database.types.ts",
+        "blob_sha": "a49a385388cc1265d81d4337edbcce89b02e91d2",
+        "identical_to_fda0a266": true
+      }
+    ],
+    "added_by_this_lane": [
+      "scripts/ci/migration-precondition-drill.ts",
+      ".github/workflows/migration-reversibility-gate.yml (precondition-drill job + path trigger)"
+    ],
+    "deliberately_not_modified": [
+      ".github/workflows/live-schema-parity.yml — carries a production-superuser database URL; must not be touched to run a drill"
+    ]
+  },
+  "fail_closed_precondition": {
+    "errcode": "42P07",
+    "refuses_on": "either public.command_center_game_threads or public.command_center_delivery_mappings already existing",
+    "position": "first executable statement, before any DDL",
+    "declared_marker": "-- FAIL-CLOSED-PRECONDITION: public.command_center_game_threads, public.command_center_delivery_mappings",
+    "idempotency_claimed": false,
+    "idempotency_note": "Idempotency is deliberately NOT the safety property. IF NOT EXISTS skips silently, which is indistinguishable from success. Refusal is the property under test."
+  },
+  "static_proof": {
+    "type_check": { "status": "PASS", "detail": "pnpm type-check exit 0 on this branch" },
+    "eslint": { "status": "PASS", "detail": "pnpm exec eslint scripts/ci/migration-precondition-drill.ts exit 0" },
+    "carried_blob_identity": { "status": "PASS", "detail": "git hash-object matched git rev-parse fda0a266:<path> for all three carried files" },
+    "drill_job_secret_free": { "status": "PASS", "detail": "workflow YAML parsed; serialized precondition-drill job contains no 'secrets.' reference" }
+  },
+  "runtime_proof": {
+    "status": "PENDING",
+    "note": "No runtime assertion is claimed. Every item below requires CI execution at this branch's head."
+  },
+  "pending_evidence": [
+    "refusal with SQLSTATE 42P07 when public.command_center_game_threads pre-exists",
+    "refusal with SQLSTATE 42P07 when public.command_center_delivery_mappings pre-exists (proven independently, because the guard claims 'either' not 'both')",
+    "no DDL on a refused attempt — schema fingerprint byte-identical before and after, per relation",
+    "migration still applies in full on an empty scratch schema (guard does not always refuse)",
+    "adversarial fixture: a declared-but-unenforced precondition is rejected by the drill",
+    "empty-database apply -> rollback -> reapply convergence preserved",
+    "Live Schema Parity at final head",
+    "staging writable DB proof at final head",
+    "pnpm verify at final head",
+    "scripts/ci/r-level-check.ts at final head",
+    "proof binding at final head",
+    "independent exact-head review"
+  ],
+  "prohibited_actions": [
+    {
+      "command": "supabase migration repair --status applied 20260803230000",
+      "reason": "production mutation; requires explicit PM approval and is not part of this lane's completion criteria",
+      "performed": false
+    }
+  ],
+  "known_limitations": [
+    "The refusal drill cannot run on the authoring workstation: no local Postgres and the Docker daemon is unreachable. Per standing PM direction not to block on local Docker or workstation software changes, it runs in hosted CI.",
+    "The drill runs against an ephemeral scratch database, so it proves the guard's behaviour, not that production's current state matches expectations. Production state remains covered by Live Schema Parity."
+  ],
+  "sign_off": {
+    "ready_for_pm_review": false,
+    "blocking": "the refusal drill has not yet executed; no fail-closed claim is supported until it does"
+  }
+}
