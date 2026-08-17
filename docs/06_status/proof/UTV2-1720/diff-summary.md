@@ -29,3 +29,13 @@ Substantive source binding: `f1eb161109286aab7d7e70300dac598a52ecf350`.
 - `docs/06_status/proof/UTV2-1720/evidence.json`, `verification.md`, `runtime-verification.md`, and this file — SHA-bound closeout evidence for the lane.
 
 No UTV2-1718 source, manifest, proof, or Linear state was modified. No exception, override, or bypass was introduced.
+
+### Attempt 3 wiring repair addendum
+
+Substantive repair SHA: `f5abb5e5a9bde0b4f00057b6baa7b7b55bccbd1e`.
+
+The validator regression assertions were moved intact into the wired
+`scripts/ops/proof-schema.test.ts` suite, the newly added unwired standalone test file was removed,
+and close-eligibility preflight now invokes the wired suite. The focused two-file run passed all 130
+tests with zero failures. `pnpm verify` passed the complete static gate and then was blocked only by
+the established local staging-identity guard for writable DB proof.

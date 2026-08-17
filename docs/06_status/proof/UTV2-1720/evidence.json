@@ -8,8 +8,8 @@
   "status": "STATIC_VERIFIED_LIVE_DB_DEFERRED",
   "generated_at": "2026-08-17T14:38:46Z",
   "sha_binding": {
-    "verified_source_sha": "f1eb161109286aab7d7e70300dac598a52ecf350",
-    "verified_source_note": "This is the exact substantive branch head after the contract repair and wrapper-generated model-routing evidence. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
+    "verified_source_sha": "f5abb5e5a9bde0b4f00057b6baa7b7b55bccbd1e",
+    "verified_source_note": "This is the exact substantive branch head after the contract repair, wrapper-generated model-routing evidence, and wired-suite test relocation. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {

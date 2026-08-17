@@ -141,3 +141,21 @@ Verdict: PASS
 Changed files: 18
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
+
+### Attempt 3 wiring repair addendum
+
+The three `proof-binding-validator` regression cases were relocated from the unwired
+`scripts/ci/proof-binding-validator.test.ts` file into the already-wired
+`scripts/ops/proof-schema.test.ts` suite. The close-eligibility preflight now runs that wired suite.
+
+```text
+pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 130
+pass 130
+fail 0
+```
+
+`pnpm verify` completed `verify:static`, including executable wiring with `new=0`, then reached the
+required live-DB guard. Local writable proof remains truthfully blocked/deferred because
+`host=127.0.0.1` cannot resolve to staging ref `xskgrzbteyqdufktjrjx`; the writable DB portion must
+run through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
