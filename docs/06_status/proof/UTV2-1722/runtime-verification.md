@@ -1,0 +1,27 @@
+# Runtime verification
+
+This governance lane changes closeout automation and proof-verification contracts. It does not change application runtime, database schema, or production data.
+
+## Static runtime-contract coverage
+
+- Profile selection is manifest-authoritative and fails closed for unknown profiles.
+- Migration and static evidence remain non-destructive during proof generation.
+- Schema-v2 evidence never receives author-side verifier identity.
+- The workflow evaluates the same working-tree bind that it persists, and persistence occurs only after the closeout gate passes.
+- P10/R3 verifier provenance uses the shared, strategy-aware merged-PR attestation resolver for squash, rebase, and two-parent merges.
+- Authentic historical bundles pass only with their matching attestations; stale, swapped, malformed, and unverifiable receipts fail closed by named code.
+
+The required focused suite passed 505 tests with zero failures and zero skipped tests. The complete static gate also passed.
+
+## Writable live-DB proof
+
+`pnpm test:db` was executed and the staging identity guard refused the local target before any write-capable test ran:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+
+No production mutation was performed, and no query or row-count evidence was fabricated. Hosted writable verification remains a `staging-ci` responsibility using `CI_SUPABASE_*` credentials.
