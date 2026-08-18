@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-18T09:22:04Z",
   "sha_binding": {
-    "verified_source_sha": "d21f5f028160222a07a1c2a01a6def63bd67897b",
+    "verified_source_sha": "dd68cda490b9c64c74a45c6b4336d0371e92c26a",
     "verified_source_note": "Exact substantive branch head containing the closeout recovery implementation. Commits after this anchor are restricted to this lane's proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI. Post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "head_sha",
-    "bound_at": "2026-08-18T09:22:04Z"
+    "bound_at": "2026-08-18T09:55:51Z"
   },
   "static_proof": {
     "pnpm_verify_static": {
@@ -70,7 +70,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Verdict: PASS; 12 changed files; no R-level rules matched, so no R-level artifacts are required."
+      "detail": "Verdict: PASS; 17 changed files; no R-level rules matched, so no R-level artifacts are required."
     }
   },
   "runtime_proof": {

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1722
 
-MERGE_SHA: d21f5f028160222a07a1c2a01a6def63bd67897b
+MERGE_SHA: dd68cda490b9c64c74a45c6b4336d0371e92c26a
 
 ASSERTIONS:
 
@@ -21,7 +21,7 @@ historical restoration: PASS (source and restored blob 426c5898e6ae50de0611fc79c
 
 ## Verification
 
-Substantive source binding: `d21f5f028160222a07a1c2a01a6def63bd67897b`.
+Substantive source binding: `dd68cda490b9c64c74a45c6b4336d0371e92c26a`.
 
 ### Static gate
 
@@ -93,6 +93,6 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 ```text
 Verdict: PASS
-Changed files: 12
+Changed files: 17
 Rules matched: (none) — no R-level artifacts required for this diff
 ```

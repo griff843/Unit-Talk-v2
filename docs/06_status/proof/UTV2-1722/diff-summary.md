@@ -1,8 +1,8 @@
 ## Diff summary
 
-MERGE_SHA: d21f5f028160222a07a1c2a01a6def63bd67897b
+MERGE_SHA: dd68cda490b9c64c74a45c6b4336d0371e92c26a
 
-Substantive source binding: `d21f5f028160222a07a1c2a01a6def63bd67897b`.
+Substantive source binding: `dd68cda490b9c64c74a45c6b4336d0371e92c26a`.
 
 ### Requirement mapping
 
@@ -75,6 +75,6 @@ No other file was changed by `823b38dc`.
 ```text
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 12
+Changed files: 17
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
