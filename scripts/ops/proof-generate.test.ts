@@ -2205,6 +2205,36 @@ test('BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof
   }
 });
 
+test('schema-v1 governance lanes retain legacy additive DB-proof harvesting', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-v1-governance-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9014', {
+      schema_version: 1,
+      issue_id: 'UTV2-9014',
+      runtime_proof: { status: 'not_run' },
+    });
+    const result = autoHarvestCiDbProofIntoEvidence(
+      root,
+      'UTV2-9014',
+      HARVEST_MERGE_SHA,
+      'governance',
+      'codex-cli',
+      {
+        ghExecutor: harvestHappyPathExecutor(),
+        zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+        testSourceText: HARVEST_REAL_TEST_SOURCE,
+      },
+    );
+
+    assert.strictEqual(result.code, 'harvested');
+    const after = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.ok(after.runtime_proof.queries.length > 0);
+    assert.ok(after.runtime_proof.row_counts.length > 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('schema-v2 app-runtime harvest populates runtime proof without authoring verifier identity', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-v2-runtime-'));
   try {

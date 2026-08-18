@@ -1688,7 +1688,11 @@ test('post-merge lane close workflow delegates to repair-merged lane closeout', 
   assert.match(workflow, /pnpm ops:lane-close "\$\{close_args\[@\]\}"/);
   assert.match(workflow, /Bind proof artifacts to merge SHA/);
   assert.match(workflow, /git add docs\/06_status\/proof\/"\$ISSUE_ID"\//);
-  assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID"/);
+  assert.strictEqual(
+    (workflow.match(/pnpm ops:truth-check "\$ISSUE_ID" --explain/gu) ?? []).length,
+    1,
+    'only the post-rebase terminal-state retry invokes truth-check directly',
+  );
   assert.doesNotMatch(workflow, /manifest\.status = 'done'/);
   assert.match(workflow, /git add "\$MANIFEST_PATH"/);
 });
@@ -2433,7 +2437,7 @@ test('UTV2-1586 #15 pre-existing repair path with populated pr_url is unchanged'
   assert.strictEqual(result.manifest.pr_url, manifest.pr_url);
 });
 
-test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair commands', () => {
+test('UTV2-1586 #16 workflow dispatch forwards PR only to the trusted repair command', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2441,11 +2445,7 @@ test('UTV2-1586 #16 workflow dispatch forwards PR only to trusted repair command
   assert.match(workflow, /pr:\n\s+description: "Original implementation PR URL or number/);
   assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
   assert.match(workflow, /close_args\+=\(--pr "\$EXPLICIT_PR"\)/);
-  assert.strictEqual(
-    (workflow.match(/--pr "\$EXPLICIT_PR"/gu) ?? []).length,
-    2,
-    'the initial gate and post-rebase gate re-run are both trusted repair commands',
-  );
+  assert.strictEqual((workflow.match(/--pr "\$EXPLICIT_PR"/gu) ?? []).length, 1);
   assert.match(workflow, /git ls-files -- "\$per_issue_sync"/);
   assert.match(workflow, /git add -A -- "\$per_issue_sync"/);
   assert.doesNotMatch(workflow, /if \[ -f "\$per_issue_sync" \]/);

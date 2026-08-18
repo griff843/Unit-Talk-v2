@@ -938,6 +938,47 @@ test('external verifier bridge rejects stale, malformed, mismatched, and unverif
   }
 });
 
+test('external verifier bridge fetches the immutable PR-head ref when the attested commit is absent locally', () => {
+  const headSha = 'c'.repeat(40);
+  const mergeSha = 'd'.repeat(40);
+  const mainRef = 'e'.repeat(40);
+  let headChecks = 0;
+  const calls: string[][] = [];
+  const result = verifyExternalVerifierProvenanceBinding({
+    receiptSha: headSha,
+    verifiedSourceSha: mergeSha,
+    context: {
+      gate: 'post-merge-read',
+      repoRoot: '/tmp/utv2-proof-schema-fetch-seam',
+      mergedPrAttestation: mergedPrAttestation(mergeSha, headSha),
+      gitRunner: (args) => {
+        calls.push([...args]);
+        if (args[0] === 'cat-file' && args[2] === `${headSha}^{commit}`) {
+          headChecks += 1;
+          return { status: headChecks === 1 ? 1 : 0, stdout: '', stderr: '' };
+        }
+        if (args[0] === 'fetch') return { status: 0, stdout: '', stderr: '' };
+        if (args[0] === 'cat-file' && args[2] === `${mergeSha}^{commit}`) {
+          return { status: 0, stdout: '', stderr: '' };
+        }
+        if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+          return { status: 1, stdout: '', stderr: '' };
+        }
+        if (args[0] === 'merge-base') return { status: 0, stdout: `${mainRef}\n`, stderr: '' };
+        throw new Error(`unexpected git call: ${args.join(' ')}`);
+      },
+    },
+  });
+
+  assert.equal(result.valid, true, JSON.stringify(result));
+  assert.equal(result.code, 'verifier_provenance_bound_merged_pr_head');
+  assert.deepEqual(
+    calls.find((args) => args[0] === 'fetch'),
+    ['fetch', '--no-tags', 'origin', 'refs/pull/1428/head'],
+  );
+  assert.equal(headChecks, 2);
+});
+
 test('external verifier provenance remains exact-head before merge', () => {
   const result = verifyExternalVerifierProvenanceBinding({
     receiptSha: VALID_SHA,

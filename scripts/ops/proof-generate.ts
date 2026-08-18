@@ -1320,10 +1320,6 @@ export function autoHarvestCiDbProofIntoEvidence(
       reason: `manifest lane_type '${laneType ?? ''}' does not resolve to an authorable proof profile`,
     };
   }
-  if (profile !== 'app-runtime') {
-    return { attempted: false, applied: false, code: `profile_${profile}_not_harvested` };
-  }
-
   const evidenceRelPath = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase(), 'evidence.json');
   const evidenceAbsolutePath = safeRepoPath(root, evidenceRelPath);
   if (!fs.existsSync(evidenceAbsolutePath)) {
@@ -1335,6 +1331,13 @@ export function autoHarvestCiDbProofIntoEvidence(
     existing = JSON.parse(fs.readFileSync(evidenceAbsolutePath, 'utf8')) as Record<string, unknown>;
   } catch {
     return { attempted: false, applied: false, code: 'evidence_unparseable', evidence_path: evidenceRelPath };
+  }
+
+  // Schema v1 predates proof profiles and retains its additive CI harvest
+  // contract even when a modern manifest lane_type maps to migration/static.
+  // Profile-aware immutability applies to schema-v2 bundles only.
+  if (profile !== 'app-runtime' && existing['schema_version'] !== 1) {
+    return { attempted: false, applied: false, code: `profile_${profile}_not_harvested` };
   }
 
   const existingRuntimeProof = existing['runtime_proof'];

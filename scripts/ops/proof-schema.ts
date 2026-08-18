@@ -138,7 +138,7 @@ export interface EvidenceContractContext {
   tier?: string | null;
   /** Required to mechanically verify a post-merge migration receipt rebind. */
   repoRoot?: string | null;
-  /** Rank-1 GitHub merge record supplied by the caller; the contract never fetches it. */
+  /** Rank-1 GitHub merge record supplied by the caller; the contract may fetch its immutable PR-head ref. */
   mergedPrAttestation?: MergedPrAttestation | null;
   /** Deterministic test seam; production callers always use the local Git repository. */
   gitRunner?: EvidenceGitRunner;
@@ -241,6 +241,33 @@ function verifyCommitAvailable(
       result.error?.message || String(result.stderr ?? '').trim() || 'git cat-file did not complete'
     }`,
   };
+}
+
+function ensureAttestedPrHeadAvailable(
+  attestation: MergedPrAttestation,
+  context: EvidenceContractContext,
+): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
+  const unavailable = verifyCommitAvailable(attestation.head_sha, 'GitHub-recorded PR head', context);
+  if (!unavailable) return null;
+
+  // A merged source branch may be auto-deleted before post-merge closeout.
+  // GitHub retains refs/pull/<n>/head, so fetch that immutable PR ref rather
+  // than making verifier authority depend on incidental local object state.
+  const fetched = runEvidenceGit(
+    ['fetch', '--no-tags', 'origin', `refs/pull/${attestation.pr_number}/head`],
+    context.repoRoot!,
+    context.gitRunner,
+  );
+  if (fetched.error || fetched.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: fetched.error?.message ||
+        String(fetched.stderr ?? '').trim() ||
+        `${unavailable.detail}; immutable PR-head fetch did not complete`,
+    };
+  }
+
+  return verifyCommitAvailable(attestation.head_sha, 'GitHub-recorded PR head after fetch', context);
 }
 
 function verifyProofOnlyMigrationAncestry(
@@ -373,13 +400,10 @@ function resolveMergedPrAttestation(
     };
   }
 
-  for (const [sha, label] of [
-    [attestation.head_sha, 'GitHub-recorded PR head'],
-    [attestation.merge_sha, 'GitHub-recorded merge'],
-  ] as const) {
-    const unavailable = verifyCommitAvailable(sha, label, context);
-    if (unavailable) return unavailable;
-  }
+  const headUnavailable = ensureAttestedPrHeadAvailable(attestation, context);
+  if (headUnavailable) return headUnavailable;
+  const mergeUnavailable = verifyCommitAvailable(attestation.merge_sha, 'GitHub-recorded merge', context);
+  if (mergeUnavailable) return mergeUnavailable;
 
   const headAncestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', attestation.head_sha, attestation.merge_sha],

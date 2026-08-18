@@ -1679,11 +1679,10 @@ test('UTV2-1722: proof binding is persisted only after the closeout gate passes'
   assert.doesNotMatch(workflow, /chore\(proof\): bind \$ISSUE_ID/);
   assert.match(workflow, /for attempt in 1 2 3/);
   assert.match(workflow, /git pull --rebase origin main/);
-  assert.strictEqual(
-    workflow.match(/pnpm ops:lane-close "\$\{close_args\[@\]\}"/gu)?.length,
-    2,
-    'the initial closeout and every post-rebase retry use the identical governed gate',
-  );
+  assert.strictEqual(workflow.match(/pnpm ops:lane-close "\$\{close_args\[@\]\}"/gu)?.length, 1);
+  assert.strictEqual(workflow.match(/pnpm ops:truth-check "\$ISSUE_ID" --explain/gu)?.length, 1);
+  assert.match(workflow, /terminal-state no-op \(`already_closed`\)/);
+  assert.match(workflow, /git commit --amend --no-edit/);
   assert.match(workflow, /retry gate failed/);
   assert.match(workflow, /Refusing another push; main remains unmutated/);
   assert.match(workflow, /Bookkeeping push failed after 3 attempts/);
@@ -1796,7 +1795,7 @@ test('UTV2-1722 behavior: failed closeout leaves durable proof unchanged', () =>
   assert.strictEqual(fs.existsSync(path.join(root, 'git-calls')), false);
 });
 
-test('UTV2-1722 behavior: concurrent main advancement re-runs the gate before retrying persistence', () => {
+test('UTV2-1722 behavior: concurrent main advancement re-runs truth-check before retrying persistence', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-retry-'));
   fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1684'), { recursive: true });
   const state = path.join(root, 'push-count');
@@ -1830,11 +1829,10 @@ touch "$GATE_MARKER"`,
   });
   assert.strictEqual(result.status, 0, result.stderr);
   assert.strictEqual(fs.readFileSync(state, 'utf8'), '2');
-  assert.match(fs.readFileSync(gitLog, 'utf8'), /push\npull --rebase origin main\npush\n/u);
   assert.strictEqual(fs.existsSync(gateMarker), true);
   assert.match(
     fs.readFileSync(pnpmLog, 'utf8'),
-    /^ops:lane-close UTV2-1684 --repair-merged --explain --post-merge-trusted --pr 1397\n$/u,
+    /^ops:truth-check UTV2-1684 --explain\n$/u,
   );
   const gitCalls = fs.readFileSync(gitLog, 'utf8').trim().split('\n');
   assert.strictEqual(gitCalls.filter((call) => call === 'push').length, 2);
@@ -1882,7 +1880,7 @@ exit 23`,
   assert.ok(gitCalls.indexOf('pull --rebase origin main') > gitCalls.indexOf('push'));
   assert.match(
     fs.readFileSync(pnpmLog, 'utf8'),
-    /^ops:lane-close UTV2-1722 --repair-merged --explain --post-merge-trusted\n$/u,
+    /^ops:truth-check UTV2-1722 --explain\n$/u,
   );
   assert.strictEqual(fs.existsSync(durableMain), false);
 });
