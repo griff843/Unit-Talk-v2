@@ -86,6 +86,7 @@ import {
   verifyExternalVerifierProvenanceBinding,
   type MergedPrAttestation,
   type EvidenceContractResult,
+  type EvidenceGitRunner,
 } from './proof-schema.js';
 
 const FULL_SHA_RE = /^[0-9a-f]{40}$/i;
@@ -1563,6 +1564,7 @@ export function addUnsupportedRuntimeChecks(
     verifierProvenance?: ExternalVerifierProvenance | null;
     mergedPrAttestation?: MergedPrAttestation | null;
     repoRoot?: string | null;
+    gitRunner?: EvidenceGitRunner;
   } = {},
 ): void {
   if (tier !== 'T1') {
@@ -1592,6 +1594,7 @@ export function addUnsupportedRuntimeChecks(
     tier,
     repoRoot: context.repoRoot,
     mergedPrAttestation: context.mergedPrAttestation,
+    gitRunner: context.gitRunner,
   });
 
   if (contract.schemaVersion === 2) {
@@ -1625,6 +1628,7 @@ export function addUnsupportedRuntimeChecks(
         tier,
         repoRoot: context.repoRoot,
         mergedPrAttestation: context.mergedPrAttestation,
+        gitRunner: context.gitRunner,
       },
     });
     if (context.verifierProvenance && verifierBinding.valid) {

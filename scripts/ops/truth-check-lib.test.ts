@@ -749,6 +749,7 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
 
 const AUTHENTIC_PR_HEAD = 'aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7';
 const AUTHENTIC_MERGE_SHA = '3ce86b98a5aa01ae244794253a8c7e716f2ce733';
+const RESTORED_RECEIPT_HEAD = 'a9943aa1d9e24201e0acdfd76c59d1c7813a068d';
 
 const MERGED_PR_ATTESTATION = {
   merge_sha: AUTHENTIC_MERGE_SHA,
@@ -767,10 +768,30 @@ const AUTHENTIC_SQUASH_GIT: EvidenceGitRunner = (args) => {
     return { status: 0, stdout: '', stderr: '' };
   }
   if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+    if (args[2] === RESTORED_RECEIPT_HEAD && args[3] === AUTHENTIC_PR_HEAD) {
+      return { status: 0, stdout: '', stderr: '' };
+    }
     return { status: 1, stdout: '', stderr: '' };
   }
   if (args[0] === 'merge-base' && args.length === 3) {
     return { status: 0, stdout: `${'c'.repeat(40)}\n`, stderr: '' };
+  }
+  if (args[0] === 'rev-parse' && args[1] === '--verify') {
+    return { status: 0, stdout: `${'c'.repeat(40)}\n`, stderr: '' };
+  }
+  if (args[0] === 'diff' && args[1] === '--name-only') {
+    return {
+      status: 0,
+      stdout: [
+        'docs/06_status/proof/UTV2-1718/evidence.json',
+        'docs/06_status/proof/UTV2-1718/verification.md',
+        'docs/06_status/readiness/readiness-score.json',
+      ].join('\n'),
+      stderr: '',
+    };
+  }
+  if (args[0] === 'rev-parse' && args[1]?.includes(':docs/06_status/readiness/readiness-score.json')) {
+    return { status: 0, stdout: `${'d'.repeat(40)}\n`, stderr: '' };
   }
   return {
     status: 2,
