@@ -1,13 +1,15 @@
 ## Diff summary
 
-MERGE_SHA: 3da00344981941595ddc51fad0acd91155a53f25
+MERGE_SHA: 1d7dc09c81151591e9d4aadd4ed038603444dce6
 
-Substantive source binding: `3da00344981941595ddc51fad0acd91155a53f25`.
+Substantive source binding: `1d7dc09c81151591e9d4aadd4ed038603444dce6`.
 
 ### Correction addendum
 
-- Persistence retries now re-run the identical trusted closeout gate after every `git pull --rebase origin main`; any non-zero result stops before another push and names the fresh-dispatch recovery path.
-- Behavioral spawnSync tests enforce gate-before-retry ordering and prove a failing post-rebase gate produces no successful persistence mutation.
+- Persistence retries now run canonical `ops:truth-check` after every `git pull --rebase origin main`, amend the fresh receipt into the bookkeeping commit, and stop before another push on any non-zero result.
+- Behavioral spawnSync tests enforce truth-check-before-retry ordering and prove a failing post-rebase gate produces no successful persistence mutation.
+- Legacy schema-v1 governance bundles retain their additive DB-proof harvest path; profile-aware immutability remains schema-v2-only.
+- The merged-PR verifier fetches GitHub's immutable `refs/pull/<n>/head` when the attested PR-head commit is absent locally.
 - Writable DB proof is closed by the verified exact-head CI receipt from run `32126797482`, job `95679040123`, head `ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a`; the local containment refusal remains recorded without fabricated TAP.
 - Removed the redundant proof-directory `.gitkeep`.
 

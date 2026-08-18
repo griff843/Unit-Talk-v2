@@ -1,13 +1,15 @@
 # PROOF: UTV2-1722
 
-MERGE_SHA: 3da00344981941595ddc51fad0acd91155a53f25
+MERGE_SHA: 1d7dc09c81151591e9d4aadd4ed038603444dce6
 
 ASSERTIONS:
 
 - [x] Migration and static profiles are not harvested as app-runtime evidence, and unknown profiles fail closed.
 - [x] Schema-v2 proof generation never authors `verifier.identity`.
 - [x] A failed post-merge closeout cannot durably persist proof binding changes.
-- [x] A rejected persistence push cannot retry after rebasing until the identical trusted closeout gate passes again.
+- [x] A rejected persistence push cannot retry after rebasing until canonical truth-check passes and its fresh receipt is amended into the bookkeeping commit.
+- [x] Legacy schema-v1 governance bundles retain additive DB-proof harvesting.
+- [x] Post-merge attestation fetches the immutable PR-head ref when the original head is absent locally.
 - [x] P10/R3 accepts an original PR-head receipt after merge only through an authentic merged-PR attestation.
 - [x] The damaged historical migration evidence is byte-identical to its authoritative source blob.
 - [x] The required writable DB proof passed in exact-head staging CI.
@@ -16,14 +18,14 @@ EVIDENCE:
 
 ```text
 static gate: PASS
-focused regressions: PASS (506 tests, 0 failed, 0 skipped)
+focused regressions: PASS (508 tests, 0 failed, 0 skipped)
 writable DB: PASS (CI run 32126797482, job 95679040123, head ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a)
 historical restoration: PASS (source and restored blob 426c5898e6ae50de0611fc79cd458295b91a9d1c)
 ```
 
 ## Verification
 
-Substantive source binding: `3da00344981941595ddc51fad0acd91155a53f25`.
+Substantive source binding: `1d7dc09c81151591e9d4aadd4ed038603444dce6`.
 
 ### Static gate
 
@@ -55,15 +57,15 @@ pnpm exec tsx --test 'scripts/ops/ci-db-proof-harvest.test.ts' 'scripts/ops/lane
 Literal TAP trailer:
 
 ```text
-1..488
-# tests 506
+1..490
+# tests 508
 # suites 3
-# pass 506
+# pass 508
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 3955.064354
+# duration_ms 3094.720965
 ```
 
 ### Writable DB proof
@@ -102,7 +104,7 @@ Because the local staging guard exits before `tsx --test` starts, that local att
 
 ### Correction addendum
 
-At substantive head `3da00344981941595ddc51fad0acd91155a53f25`, the persistence retry loop re-runs the same trusted `ops:lane-close` invocation after every rebase. A non-zero re-run emits the named `post-merge-lane-close retry gate failed` warning and exits before another push. The spawnSync harness proves gate-before-retry ordering and zero successful persistence on a failed re-run. The obsolete `.gitkeep` was removed because this proof directory contains real artifacts.
+At substantive head `1d7dc09c81151591e9d4aadd4ed038603444dce6`, the persistence retry loop explicitly runs canonical `ops:truth-check` after every rebase because terminal `ops:lane-close` would return `already_closed`. A passing receipt is amended into the bookkeeping commit; a non-zero result emits the named `post-merge-lane-close retry gate failed` warning and exits before another push. The spawnSync harness proves truth-check-before-retry ordering and zero successful persistence on failure. The same correction set preserves schema-v1 governance harvesting and fetches `refs/pull/<n>/head` when an attested PR head is missing locally. The obsolete `.gitkeep` remains removed.
 
 ### R-level compliance
 
