@@ -1,6 +1,6 @@
 # PROOF: UTV2-1720
 
-MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
+MERGE_SHA: b0cdfee3578eb7aed11039d91f142516da54002e
 
 ASSERTIONS:
 
@@ -13,7 +13,7 @@ EVIDENCE:
 
 ```text
 static gate: PASS
-focused regression: PASS (331 tests, 0 failed, 0 skipped)
+focused regression: PASS (332 tests, 0 failed, 0 skipped)
 writable DB: PASS in staging CI; BLOCKED_DEFERRED locally at the staging identity guard
 shared contract: PASS
 proof binding: PASS
@@ -22,7 +22,7 @@ r-level check: PASS
 
 ## Verification
 
-Substantive source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
+Substantive source binding: `b0cdfee3578eb7aed11039d91f142516da54002e`.
 
 ### Static gate
 
@@ -306,3 +306,48 @@ Hosted staging CI run `32084054556` completed successfully at the substantive he
 `xskgrzbteyqdufktjrjx`; T1 live suites passed. Receipt artifact `9306145939` was accepted by verify
 job `95553478646`, which also passed the complete static gate. The local invocation remains
 truthfully blocked/deferred by the documented `127.0.0.1` identity refusal.
+
+### Attempt 7 merge-base main-reference addendum
+
+Substantive correction SHA: `b0cdfee3578eb7aed11039d91f142516da54002e`.
+
+The migration receipt delta check now derives one main-side reference with
+`git merge-base <attested-original-head> <attested-merge-sha>` and uses it for both the branch-side
+and direct target paths. GitHub retains the original pull-request head across merge strategies, so
+the merge base identifies the fork or last merged-main point for squash and merge commits and the
+pre-replay fork point for a rebase merge. A Git error, empty output, malformed merge base, or missing
+main-side path remains an `unverified` fail-closed outcome.
+
+The wired rebase fixture creates a receipt at branch commit 1, introduces a lane-authored non-proof
+file at commit 2, adds a trailing proof commit 3, advances main, and replays the chain with new SHAs.
+With the original branch head and replayed tip in the attestation, validation rejects the new file
+as `migration_receipt_non_proof_delta`. The existing squash/main-import and preserved PR #1428-shaped
+cases remain green.
+
+```text
+pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 332
+suites 3
+pass 332
+fail 0
+skipped 0
+
+pnpm verify:static
+PASS
+
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 17
+Rules matched: (none)
+```
+
+For the preserved PR #1428-shaped history, `git merge-base` resolved to
+`0dd73e2f2d931eaf8d08666c7103b886a5dacca9`. The imported readiness file has blob
+`0a0aadc3ad884b8066eba01620fc5bf46b4a567e` at both the original branch head and that merge base,
+so the legitimate main import remains accepted.
+
+Hosted staging CI run `32087027202` passed writable DB job `95561575709`: `pnpm test:db` passed
+7/7 against `xskgrzbteyqdufktjrjx`, and the T1 live suites passed. Receipt artifact `9307172976`
+was accepted by verify job `95562787686`, which passed same-run receipt validation, the full static
+gate, and Command Center tests.
+Local writable proof remains blocked/deferred by the documented `127.0.0.1` identity refusal.

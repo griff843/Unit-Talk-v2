@@ -1,6 +1,6 @@
 # PROOF: UTV2-1720
 
-MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
+MERGE_SHA: b0cdfee3578eb7aed11039d91f142516da54002e
 
 ASSERTIONS:
 
@@ -17,7 +17,7 @@ production mutation performed: false
 
 ## Runtime verification
 
-Source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
+Source binding: `b0cdfee3578eb7aed11039d91f142516da54002e`.
 
 This lane changes governance and CI closeout tooling; its declared schema-v2 proof profile is `static`. It does not change application runtime, database schema, or a DB-writing service. The shared contract therefore does not require fabricated runtime queries or monitored-table row counts.
 
@@ -40,6 +40,18 @@ observed and expected project refs to `xskgrzbteyqdufktjrjx`, then passed `pnpm 
 7 tests passed, 0 failed, and 0 skipped. The T1 live suites also passed. Receipt artifact
 `9306145939` was independently accepted by verify job `95553478646`, which passed the full static
 gate and reported a receipt-verifier `PASS`.
+
+The authoring workstation remains `BLOCKED_DEFERRED` because its configured host is `127.0.0.1` and
+cannot be identified as the staging project. The hosted receipt is the authoritative writable proof.
+
+## Attempt 7 hosted staging receipt
+
+GitHub Actions run `32087027202` executed at substantive source head
+`b0cdfee3578eb7aed11039d91f142516da54002e`. Writable DB job `95561575709` resolved both the
+observed and expected project refs to `xskgrzbteyqdufktjrjx`, passed `pnpm test:db` with 7 tests
+passed, 0 failed, and 0 skipped, and passed all T1 live suites. Receipt artifact `9307172976` was
+accepted by verify job `95562787686`, which also passed the full static gate and Command Center
+tests.
 
 The authoring workstation remains `BLOCKED_DEFERRED` because its configured host is `127.0.0.1` and
 cannot be identified as the staging project. The hosted receipt is the authoritative writable proof.

@@ -1,8 +1,8 @@
 ## Diff summary
 
-MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
+MERGE_SHA: b0cdfee3578eb7aed11039d91f142516da54002e
 
-Substantive source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
+Substantive source binding: `b0cdfee3578eb7aed11039d91f142516da54002e`.
 
 ### Requirement mapping
 
@@ -107,3 +107,24 @@ Substantive correction SHA: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
 The accepted net-diff trade-off is explicit in code: a non-proof change that is fully reverted before
 merge is invisible, which is acceptable because the reverted content never shipped and the receipts
 remain representative of the shipped tree. No UTV2-1718 artifact was modified.
+
+### Attempt 7 merge-base main-reference addendum
+
+Substantive correction SHA: `b0cdfee3578eb7aed11039d91f142516da54002e`.
+
+- Both migration ancestry paths now compare target blobs against one main reference computed by
+  `git merge-base` from the attested original pull-request head and attested merge SHA.
+- This preserves squash and merge-commit main imports while preventing a GitHub rebase-merge tip's
+  first parent—another replayed lane commit—from being mistaken for pre-PR main.
+- Merge-base errors, empty or malformed results, missing files, and unequal blobs fail closed through
+  the existing named outcomes.
+- A wired three-commit replay fixture now proves that a lane-authored non-proof file in the middle
+  commit fails `migration_receipt_non_proof_delta` after the chain is replayed onto advanced main.
+- The five-file focused suite passed 332/332, `pnpm verify:static` passed, and R-level verification
+  passed with 17 changed files and no matching rules.
+- The preserved PR #1428-shaped scenario resolves merge base
+  `0dd73e2f2d931eaf8d08666c7103b886a5dacca9` and retains the matching imported-file blob
+  `0a0aadc3ad884b8066eba01620fc5bf46b4a567e`.
+- Hosted staging run `32087027202` passed writable DB proof and T1 live suites in job `95561575709`,
+  then passed static and same-run receipt verification in job `95562787686`; local writable proof
+  remains blocked/deferred by the required staging identity guard.
