@@ -357,29 +357,87 @@ function verifyPostMergeMigrationReceiptBinding(
     return { status: 'pass' };
   }
 
-  const mergeBase = spawnSync(
+  const headAncestry = spawnSync(
     'git',
-    ['merge-base', attestation.head_sha, attestation.merge_sha],
+    ['merge-base', '--is-ancestor', attestation.head_sha, attestation.merge_sha],
     { cwd: context.repoRoot, encoding: 'utf8' },
   );
-  const mainRef = String(mergeBase.stdout ?? '').trim();
-  if (mergeBase.error || mergeBase.status !== 0 || !SHA_RE.test(mainRef)) {
+  if (headAncestry.error || headAncestry.status === null || headAncestry.status > 1) {
     return {
       status: 'unverified',
-      detail: mergeBase.error?.message ||
-        String(mergeBase.stderr ?? '').trim() ||
-        'GitHub-recorded PR head and merge SHA do not have a resolvable merge base',
+      detail: headAncestry.error?.message ||
+        String(headAncestry.stderr ?? '').trim() ||
+        'GitHub-recorded PR-head ancestry check did not complete',
     };
+  }
+
+  let mainRef: string;
+  if (headAncestry.status === 0) {
+    // A two-parent merge commit contains the original PR head, so merge-base
+    // would degenerate to that head. Require a real merge and use parent 1,
+    // which GitHub records as the pre-merge base-branch tip.
+    const parents = spawnSync(
+      'git',
+      ['rev-list', '--parents', '-n', '1', attestation.merge_sha],
+      { cwd: context.repoRoot, encoding: 'utf8' },
+    );
+    const parentTokens = String(parents.stdout ?? '').trim().split(/\s+/).filter(Boolean);
+    if (parents.error || parents.status !== 0 || parentTokens.length < 3) {
+      return {
+        status: 'unverified',
+        detail: parents.error?.message ||
+          String(parents.stderr ?? '').trim() ||
+          'GitHub-recorded merge contains the PR head but is not a two-parent merge commit',
+      };
+    }
+
+    const firstParent = spawnSync(
+      'git',
+      ['rev-parse', `${attestation.merge_sha}^1`],
+      { cwd: context.repoRoot, encoding: 'utf8' },
+    );
+    mainRef = String(firstParent.stdout ?? '').trim();
+    if (firstParent.error || firstParent.status !== 0 || !SHA_RE.test(mainRef)) {
+      return {
+        status: 'unverified',
+        detail: firstParent.error?.message ||
+          String(firstParent.stderr ?? '').trim() ||
+          'GitHub-recorded merge first parent could not be resolved',
+      };
+    }
+    if (mainRef.toLowerCase() === attestation.head_sha.toLowerCase()) {
+      return {
+        status: 'unverified',
+        detail: 'GitHub-recorded merge has anomalous parent ordering: parent 1 equals the PR head',
+      };
+    }
+  } else {
+    // Squash and rebase strategies leave the original PR head disjoint from the
+    // recorded merge SHA. Their merge base is the pre-PR main-side reference.
+    const mergeBase = spawnSync(
+      'git',
+      ['merge-base', attestation.head_sha, attestation.merge_sha],
+      { cwd: context.repoRoot, encoding: 'utf8' },
+    );
+    mainRef = String(mergeBase.stdout ?? '').trim();
+    if (mergeBase.error || mergeBase.status !== 0 || !SHA_RE.test(mainRef)) {
+      return {
+        status: 'unverified',
+        detail: mergeBase.error?.message ||
+          String(mergeBase.stderr ?? '').trim() ||
+          'GitHub-recorded PR head and merge SHA do not have a resolvable merge base',
+      };
+    }
   }
 
   // A squash merge disconnects the PR-head history from the merge commit.
   // Validate both real branch-side ancestry and the direct non-squash path;
   // either path may establish a proof-only rebind, but neither may bypass the
   // authoritative GitHub merge/head attestation above. The original PR head is
-  // retained by GitHub across squash, merge, and rebase strategies, so its merge
-  // base with the recorded merge SHA identifies the main state from which an
-  // allowed main-sync import could have come. In particular, a rebased chain's
-  // merge SHA parent is another replayed PR commit, not the pre-PR main state.
+  // retained by GitHub across squash, merge, and rebase strategies. The
+  // strategy-specific reference above identifies the main state from which an
+  // allowed main-sync import could have come without accepting a degenerate
+  // reference back to the PR head.
   const branchSide = verifyProofOnlyMigrationAncestry(
     receiptHead,
     attestation.head_sha,
