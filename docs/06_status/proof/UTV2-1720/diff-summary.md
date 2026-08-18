@@ -128,3 +128,21 @@ Substantive correction SHA: `b0cdfee3578eb7aed11039d91f142516da54002e`.
 - Hosted staging run `32087027202` passed writable DB proof and T1 live suites in job `95561575709`,
   then passed static and same-run receipt verification in job `95562787686`; local writable proof
   remains blocked/deferred by the required staging identity guard.
+
+### Attempt 8 strategy-discriminated main-reference addendum
+
+Substantive correction SHA: `e98e062139ad0fddcfe4b87be6c0a8b34216bead`.
+
+- The validator now distinguishes real two-parent merges from disjoint squash/rebase histories with
+  `git merge-base --is-ancestor` before selecting the main-side comparison reference.
+- A two-parent merge uses `merge_sha^1`, because an unconditional merge base would degenerate to the
+  PR head and make every target-to-main blob comparison trivially equal.
+- Squash and rebase retain the merge-base reference, where the original PR head is disjoint from the
+  recorded merge SHA and the merge base identifies the pre-PR main state.
+- A contained PR head with a single-parent merge SHA, an unexpected ancestry result, malformed merge
+  shape, or parent 1 equal to the PR head fails closed as `migration_receipt_ancestry_unverified`.
+- Wired real-Git fixtures prove dirty two-parent merges fail with the offending filename, clean
+  proof-only merges tolerate independent main advance, and single-parent anomalies fail closed.
+- The five-file focused suite passed 335/335. `pnpm verify:static` passed; full `pnpm verify` repeated
+  the static pass and then stopped at the required local staging identity guard. Direct
+  `pnpm test:db` reached the same blocked/deferred guard before the writable test runner.

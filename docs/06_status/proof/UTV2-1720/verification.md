@@ -351,3 +351,48 @@ Hosted staging CI run `32087027202` passed writable DB job `95561575709`: `pnpm 
 was accepted by verify job `95562787686`, which passed same-run receipt validation, the full static
 gate, and Command Center tests.
 Local writable proof remains blocked/deferred by the documented `127.0.0.1` identity refusal.
+
+### Attempt 8 strategy-discriminated main-reference addendum
+
+Substantive correction SHA: `e98e062139ad0fddcfe4b87be6c0a8b34216bead`.
+
+The previous unconditional merge-base rule was correct for disjoint squash and rebase histories but
+degenerate for a two-parent merge commit: because the original PR head is an ancestor of the merge,
+its merge base with the merge SHA is the PR head itself. Comparing target blobs to that same tree
+would accept every post-receipt lane delta.
+
+The validator now first runs `git merge-base --is-ancestor <attested-head> <attested-merge>`. When
+the result is true, it requires at least two parents, resolves `merge_sha^1` as the pre-merge main
+tip, and rejects anomalous parent ordering where parent 1 equals the PR head. When the histories are
+disjoint, it retains `git merge-base <attested-head> <attested-merge>` for squash and rebase. Git
+errors, a null or unexpected ancestry exit, a single-parent merge-like successor, malformed parent
+identity, and malformed merge-base identity all return the existing fail-closed `unverified` result.
+
+Three wired regressions cover the strategy boundary. A real `git merge --no-ff` fixture with a
+lane-authored non-proof file after the receipt fails `migration_receipt_non_proof_delta` and names
+the file. A second real merge fixture with only proof/bookkeeping changes after the receipt and an
+independent main-side file passes. A single-parent successor containing the original PR head fails
+`migration_receipt_ancestry_unverified`. All prior squash, rebase, attestation, and main-import
+regressions remain green.
+
+```text
+pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 335
+suites 3
+pass 335
+fail 0
+skipped 0
+
+pnpm verify:static
+PASS
+
+pnpm verify
+STATIC PASS; writable DB stage BLOCKED_DEFERRED by the required staging identity guard
+
+pnpm test:db
+BLOCKED_DEFERRED before the test runner by the required staging identity guard
+```
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL
+(host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the
+staging-ci GitHub environment with CI_SUPABASE_* credentials.

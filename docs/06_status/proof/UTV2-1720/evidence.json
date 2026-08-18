@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "title": "Closeout contract repair: one version-aware proof contract for pre-merge and post-merge gates",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-18T01:18:30Z",
+  "generated_at": "2026-08-18T01:50:31Z",
   "sha_binding": {
-    "verified_source_sha": "b0cdfee3578eb7aed11039d91f142516da54002e",
-    "verified_source_note": "This is the exact substantive branch head for the merge-base correction pass. Post-merge migration receipt binding requires a caller-supplied GitHub API attestation whose merge SHA equals the verified source and whose PR head equals or has a proof-only branch ancestry path from the receipt. Branch-side and direct ancestry paths use the net tree diff from receipt to target; each non-proof path must have the same blob at the target and at the single main-side reference computed by git merge-base between the attested original PR head and attested merge SHA. Missing attestation, repository context, commits, merge base, or main-side files; unrelated histories; and lane-authored non-proof deltas all fail closed. The preserved PR #1428-shaped regression validates with zero failures because its only non-proof net delta matches the main-import blob at the computed fork point. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
+    "verified_source_sha": "e98e062139ad0fddcfe4b87be6c0a8b34216bead",
+    "verified_source_note": "This is the exact substantive branch head for the strategy-aware main-reference correction. Post-merge migration receipt binding requires a caller-supplied GitHub API attestation whose merge SHA equals the verified source and whose PR head equals or has a proof-only branch ancestry path from the receipt. The validator first checks whether the attested original PR head is an ancestor of the attested merge SHA. A real two-parent merge commit uses merge_sha^1 as the pre-merge main reference, with merge-shape and parent-order guards; a disjoint squash or rebase history uses the merge base of the attested head and merge SHA. Branch-side and direct ancestry paths then use the net tree diff from receipt to target, and each non-proof path must have the same blob at the target and the strategy-selected main reference. Missing attestation, repository context, commits, parent or merge-base identity, or main-side files; anomalous single-parent or parent-ordered merges; unrelated histories; and lane-authored non-proof deltas all fail closed. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -43,7 +43,7 @@
     "focused_regression": {
       "command": "pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
       "status": "PASS",
-      "tests": 332,
+      "tests": 335,
       "suites": 3,
       "fail": 0,
       "skipped": 0,
@@ -51,8 +51,10 @@
         "schema-v1 bundles fail pre-merge and remain readable only in the explicit post-merge historical context",
         "migration receipt head exact-match passes pre-merge and mismatches fail by named code",
         "squash-shaped migration binding passes only when the GitHub API attests both the rebound merge SHA and the original merged PR head SHA",
-        "post-merge branch-side or direct ancestry passes only after Git verifies ancestry and a net-tree non-proof delta matches the blob at the computed main-side merge base",
-        "a main-imported file whose target blob equals the computed fork-point blob passes, while a lane-authored changed or new non-proof file fails migration_receipt_non_proof_delta",
+        "post-merge branch-side or direct ancestry passes only after Git verifies ancestry and a net-tree non-proof delta matches the blob at the strategy-selected main-side reference",
+        "a two-parent merge commit uses its first parent as pre-merge main, rejects lane-authored non-proof drift, and accepts proof-only rebinds plus an independent main advance",
+        "a single-parent merge-like successor that contains the original PR head fails migration_receipt_ancestry_unverified",
+        "a main-imported file whose target blob equals the computed main-side blob passes, while a lane-authored changed or new non-proof file fails migration_receipt_non_proof_delta",
         "a three-commit branch replayed onto advanced main by rebase fails migration_receipt_non_proof_delta when its middle commit introduced a lane-authored non-proof file",
         "missing attestation, unavailable commits, Git errors, stale non-proof deltas, unrelated heads, and merge-attestation mismatches fail closed",
         "modeling and data-canonical lanes require app-runtime queries and row_counts while governance remains static"
@@ -61,7 +63,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Verdict: PASS; 17 changed files; no R-level rules matched at substantive head b0cdfee3578eb7aed11039d91f142516da54002e."
+      "detail": "Verdict: PASS; 16 changed files; no R-level rules matched at substantive head e98e062139ad0fddcfe4b87be6c0a8b34216bead."
     },
     "shared_contract_self_validation": {
       "command": "validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType: 'governance', tier: 'T1' }) and scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1720 --json",

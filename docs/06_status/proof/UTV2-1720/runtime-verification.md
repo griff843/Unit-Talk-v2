@@ -1,6 +1,6 @@
 # PROOF: UTV2-1720
 
-MERGE_SHA: b0cdfee3578eb7aed11039d91f142516da54002e
+MERGE_SHA: e98e062139ad0fddcfe4b87be6c0a8b34216bead
 
 ASSERTIONS:
 
@@ -17,7 +17,7 @@ production mutation performed: false
 
 ## Runtime verification
 
-Source binding: `b0cdfee3578eb7aed11039d91f142516da54002e`.
+Source binding: `e98e062139ad0fddcfe4b87be6c0a8b34216bead`.
 
 This lane changes governance and CI closeout tooling; its declared schema-v2 proof profile is `static`. It does not change application runtime, database schema, or a DB-writing service. The shared contract therefore does not require fabricated runtime queries or monitored-table row counts.
 
@@ -43,6 +43,19 @@ gate and reported a receipt-verifier `PASS`.
 
 The authoring workstation remains `BLOCKED_DEFERRED` because its configured host is `127.0.0.1` and
 cannot be identified as the staging project. The hosted receipt is the authoritative writable proof.
+
+## Attempt 8 local verification and deferred writable proof
+
+The strategy-aware correction at `e98e062139ad0fddcfe4b87be6c0a8b34216bead` passed
+`pnpm verify:static` and the five-file focused suite (335 tests, 335 passed, 0 failed, 0 skipped).
+The full `pnpm verify` repeated the complete static gate successfully and then reached
+`pnpm test:db`. The direct `pnpm test:db` invocation reached the same guard. Both stopped before
+the writable test runner because the local URL resolves only to `127.0.0.1`, not the required
+staging project `xskgrzbteyqdufktjrjx`.
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL
+(host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the
+staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
 ## Attempt 7 hosted staging receipt
 
