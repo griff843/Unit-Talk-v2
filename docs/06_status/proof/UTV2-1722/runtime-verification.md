@@ -1,4 +1,23 @@
-# Runtime verification
+# PROOF: UTV2-1722
+
+MERGE_SHA: d21f5f028160222a07a1c2a01a6def63bd67897b
+
+ASSERTIONS:
+
+- [x] The governance runtime contract is covered by static and focused regression gates.
+- [x] The local writable-DB command was refused before mutation because the target cannot be attested as staging.
+- [x] Hosted writable-DB verification remains delegated to the credential-gated `staging-ci` environment.
+
+EVIDENCE:
+
+```text
+static gate: PASS
+focused issue regressions: PASS (505 tests, 0 failed, 0 skipped)
+local writable DB: BLOCKED_DEFERRED by target identity guard
+production mutation performed: false
+```
+
+## Verification
 
 This governance lane changes closeout automation and proof-verification contracts. It does not change application runtime, database schema, or production data.
 
