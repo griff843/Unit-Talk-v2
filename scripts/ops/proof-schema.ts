@@ -140,7 +140,18 @@ export interface EvidenceContractContext {
   repoRoot?: string | null;
   /** Rank-1 GitHub merge record supplied by the caller; the contract never fetches it. */
   mergedPrAttestation?: MergedPrAttestation | null;
+  /** Deterministic test seam; production callers always use the local Git repository. */
+  gitRunner?: EvidenceGitRunner;
 }
+
+export interface EvidenceGitResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: Error;
+}
+
+export type EvidenceGitRunner = (args: readonly string[], cwd: string) => EvidenceGitResult;
 
 export interface EvidenceContractResult {
   valid: boolean;
@@ -191,6 +202,21 @@ function migrationReceiptPass(value: unknown): value is Record<string, unknown> 
     isPositiveRunId(value['job']);
 }
 
+function runEvidenceGit(
+  args: readonly string[],
+  repoRoot: string,
+  runner?: EvidenceGitRunner,
+): EvidenceGitResult {
+  if (runner) return runner(args, repoRoot);
+  const result = spawnSync('git', [...args], { cwd: repoRoot, encoding: 'utf8' });
+  return {
+    status: result.status,
+    stdout: String(result.stdout ?? ''),
+    stderr: String(result.stderr ?? ''),
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
+
 type MigrationReceiptBindingResult =
   | { status: 'pass' }
   | { status: 'not-ancestor' }
@@ -205,9 +231,9 @@ type MergedPrAttestationResolution =
 function verifyCommitAvailable(
   sha: string,
   label: string,
-  repoRoot: string,
+  context: EvidenceContractContext,
 ): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
-  const result = spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot, encoding: 'utf8' });
+  const result = runEvidenceGit(['cat-file', '-e', `${sha}^{commit}`], context.repoRoot!, context.gitRunner);
   if (!result.error && result.status === 0) return null;
   return {
     status: 'unverified',
@@ -222,8 +248,9 @@ function verifyProofOnlyMigrationAncestry(
   verifiedSourceSha: string,
   mainSideReference: string,
   issueId: string,
-  repoRoot: string | null | undefined,
+  context: EvidenceContractContext,
 ): MigrationReceiptBindingResult {
+  const repoRoot = context.repoRoot;
   if (!repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
@@ -231,10 +258,10 @@ function verifyProofOnlyMigrationAncestry(
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires a valid issue_id' };
   }
 
-  const ancestry = spawnSync(
-    'git',
+  const ancestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', receiptHead, verifiedSourceSha],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
     return {
@@ -244,10 +271,10 @@ function verifyProofOnlyMigrationAncestry(
   }
   if (ancestry.status === 1) return { status: 'not-ancestor' };
 
-  const mainSide = spawnSync(
-    'git',
+  const mainSide = runEvidenceGit(
     ['rev-parse', '--verify', `${mainSideReference}^{commit}`],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (mainSide.error || mainSide.status !== 0) {
     return {
@@ -263,10 +290,10 @@ function verifyProofOnlyMigrationAncestry(
   // before the merge. A non-proof change made and fully reverted after receipts
   // is intentionally invisible: reverted content never shipped, so the receipts
   // remain representative of the delivered tree.
-  const changed = spawnSync(
-    'git',
+  const changed = runEvidenceGit(
     ['diff', '--name-only', receiptHead, verifiedSourceSha],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (changed.error || changed.status !== 0) {
     return {
@@ -286,15 +313,15 @@ function verifyProofOnlyMigrationAncestry(
   );
   const offendingPaths: string[] = [];
   for (const filePath of nonProof) {
-    const targetBlob = spawnSync(
-      'git',
+    const targetBlob = runEvidenceGit(
       ['rev-parse', `${verifiedSourceSha}:${filePath}`],
-      { cwd: repoRoot, encoding: 'utf8' },
+      repoRoot,
+      context.gitRunner,
     );
-    const mainBlob = spawnSync(
-      'git',
+    const mainBlob = runEvidenceGit(
       ['rev-parse', `${mainSideReference}:${filePath}`],
-      { cwd: repoRoot, encoding: 'utf8' },
+      repoRoot,
+      context.gitRunner,
     );
     if (targetBlob.error || targetBlob.status === null || mainBlob.error || mainBlob.status === null) {
       return {
@@ -350,14 +377,14 @@ function resolveMergedPrAttestation(
     [attestation.head_sha, 'GitHub-recorded PR head'],
     [attestation.merge_sha, 'GitHub-recorded merge'],
   ] as const) {
-    const unavailable = verifyCommitAvailable(sha, label, context.repoRoot);
+    const unavailable = verifyCommitAvailable(sha, label, context);
     if (unavailable) return unavailable;
   }
 
-  const headAncestry = spawnSync(
-    'git',
+  const headAncestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', attestation.head_sha, attestation.merge_sha],
-    { cwd: context.repoRoot, encoding: 'utf8' },
+    context.repoRoot,
+    context.gitRunner,
   );
   if (headAncestry.error || headAncestry.status === null || headAncestry.status > 1) {
     return {
@@ -373,10 +400,10 @@ function resolveMergedPrAttestation(
     // A two-parent merge commit contains the original PR head, so merge-base
     // would degenerate to that head. Require a real merge and use parent 1,
     // which GitHub records as the pre-merge base-branch tip.
-    const parents = spawnSync(
-      'git',
+    const parents = runEvidenceGit(
       ['rev-list', '--parents', '-n', '1', attestation.merge_sha],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     const parentTokens = String(parents.stdout ?? '').trim().split(/\s+/).filter(Boolean);
     if (parents.error || parents.status !== 0 || parentTokens.length < 3) {
@@ -388,10 +415,10 @@ function resolveMergedPrAttestation(
       };
     }
 
-    const firstParent = spawnSync(
-      'git',
+    const firstParent = runEvidenceGit(
       ['rev-parse', `${attestation.merge_sha}^1`],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     mainRef = String(firstParent.stdout ?? '').trim();
     if (firstParent.error || firstParent.status !== 0 || !SHA_RE.test(mainRef)) {
@@ -411,10 +438,10 @@ function resolveMergedPrAttestation(
   } else {
     // Squash and rebase strategies leave the original PR head disjoint from the
     // recorded merge SHA. Their merge base is the pre-PR main-side reference.
-    const mergeBase = spawnSync(
-      'git',
+    const mergeBase = runEvidenceGit(
       ['merge-base', attestation.head_sha, attestation.merge_sha],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     mainRef = String(mergeBase.stdout ?? '').trim();
     if (mergeBase.error || mergeBase.status !== 0 || !SHA_RE.test(mainRef)) {
@@ -440,7 +467,7 @@ function verifyPostMergeMigrationReceiptBinding(
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
 
-  const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context.repoRoot);
+  const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context);
   if (receiptUnavailable) return receiptUnavailable;
 
   const resolution = resolveMergedPrAttestation(verifiedSourceSha, context);
@@ -464,14 +491,14 @@ function verifyPostMergeMigrationReceiptBinding(
     attestation.head_sha,
     mainRef,
     issueId,
-    context.repoRoot,
+    context,
   );
   const direct = verifyProofOnlyMigrationAncestry(
     receiptHead,
     verifiedSourceSha,
     mainRef,
     issueId,
-    context.repoRoot,
+    context,
   );
   if (branchSide.status === 'pass' || direct.status === 'pass') return { status: 'pass' };
 

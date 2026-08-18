@@ -30,7 +30,10 @@ import {
 } from './truth-check-lib.js';
 import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
-import { verifyExternalVerifierProvenanceBinding } from './proof-schema.js';
+import {
+  verifyExternalVerifierProvenanceBinding,
+  type EvidenceGitRunner,
+} from './proof-schema.js';
 import { getRepoRoot } from './shared.js';
 import type { CheckResult, LaneManifest, TruthCheckResult } from './shared.js';
 
@@ -754,6 +757,28 @@ const MERGED_PR_ATTESTATION = {
   source: 'github-api' as const,
 };
 
+// actions/checkout intentionally supplies a shallow PR checkout, so historical
+// commit objects are not available to the wired CI suite. Strategy mechanics
+// are exercised against real temporary repositories in proof-schema.test.ts;
+// this strict seam exposes only the authentic squash-shaped facts needed to
+// replay the real read-only bundles without network-fetching old objects.
+const AUTHENTIC_SQUASH_GIT: EvidenceGitRunner = (args) => {
+  if (args[0] === 'cat-file' && args[1] === '-e') {
+    return { status: 0, stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+    return { status: 1, stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args.length === 3) {
+    return { status: 0, stdout: `${'c'.repeat(40)}\n`, stderr: '' };
+  }
+  return {
+    status: 2,
+    stdout: '',
+    stderr: `unexpected injected Git command: ${args.join(' ')}`,
+  };
+};
+
 function schemaV2MigrationBundle(verifiedSourceSha = AUTHENTIC_PR_HEAD): EvidenceBundleV1 {
   return {
     schema_version: 2,
@@ -797,6 +822,7 @@ test('schema-v2 migration T1 passes R1/R2 without fabricated queries or row_coun
       verifierProvenance: EXTERNAL_VERIFIER,
       mergedPrAttestation: MERGED_PR_ATTESTATION,
       repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
     },
   );
 
@@ -840,6 +866,7 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
       verifierProvenance: null,
       mergedPrAttestation: MERGED_PR_ATTESTATION,
       repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
     },
   );
   assert.equal(checks.find((check) => check.id === 'R3')?.status, 'fail');
@@ -856,6 +883,7 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
       verifierProvenance: { ...EXTERNAL_VERIFIER, verified_sha: 'b'.repeat(40) },
       mergedPrAttestation: MERGED_PR_ATTESTATION,
       repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
     },
   );
   assert.equal(staleChecks.find((check) => check.id === 'R3')?.status, 'fail');
@@ -913,6 +941,7 @@ test('real restored and closeout bundles accept only their authentic merged-PR a
         verifierProvenance,
         mergedPrAttestation: attestation,
         repoRoot,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
       },
     );
     assert.deepStrictEqual(
@@ -924,7 +953,12 @@ test('real restored and closeout bundles accept only their authentic merged-PR a
     const verifierBinding = verifyExternalVerifierProvenanceBinding({
       receiptSha: fixture.headSha,
       verifiedSourceSha: bundle.sha_binding?.verified_source_sha,
-      context: { gate: 'post-merge-read', repoRoot, mergedPrAttestation: attestation },
+      context: {
+        gate: 'post-merge-read',
+        repoRoot,
+        mergedPrAttestation: attestation,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
+      },
     });
     assert.equal(verifierBinding.valid, true, `${fixture.issueId}: ${JSON.stringify(verifierBinding)}`);
 
@@ -946,6 +980,7 @@ test('real restored and closeout bundles accept only their authentic merged-PR a
         verifierProvenance,
         mergedPrAttestation: swappedAttestation,
         repoRoot,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
       },
     );
     assert.equal(swappedChecks.find((check) => check.id === 'R3')?.status, 'fail');
@@ -1848,6 +1883,7 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
       verifierProvenance: EXTERNAL_VERIFIER,
       mergedPrAttestation: MERGED_PR_ATTESTATION,
       repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
     },
   );
   assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
