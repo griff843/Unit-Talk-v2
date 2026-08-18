@@ -216,6 +216,7 @@ function verifyCommitAvailable(
 function verifyProofOnlyMigrationAncestry(
   receiptHead: string,
   verifiedSourceSha: string,
+  mainSideReference: string,
   issueId: string,
   repoRoot: string | null | undefined,
 ): MigrationReceiptBindingResult {
@@ -239,11 +240,28 @@ function verifyProofOnlyMigrationAncestry(
   }
   if (ancestry.status === 1) return { status: 'not-ancestor' };
 
-  // Inspect every commit, not just the net tree diff: a non-proof file changed
-  // and later reverted is still a substantive delta and must fail closed.
+  const mainSide = spawnSync(
+    'git',
+    ['rev-parse', '--verify', `${mainSideReference}^{commit}`],
+    { cwd: repoRoot, encoding: 'utf8' },
+  );
+  if (mainSide.error || mainSide.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: mainSide.error?.message ||
+        String(mainSide.stderr ?? '').trim() ||
+        `main-side reference ${mainSideReference} could not be resolved`,
+    };
+  }
+
+  // Compare the shipped trees, not the intervening commit walk. This permits a
+  // main-sync import only when its target blob exactly matches main immediately
+  // before the merge. A non-proof change made and fully reverted after receipts
+  // is intentionally invisible: reverted content never shipped, so the receipts
+  // remain representative of the delivered tree.
   const changed = spawnSync(
     'git',
-    ['log', '-m', '--format=', '--name-only', '--no-renames', `${receiptHead}..${verifiedSourceSha}`],
+    ['diff', '--name-only', receiptHead, verifiedSourceSha],
     { cwd: repoRoot, encoding: 'utf8' },
   );
   if (changed.error || changed.status !== 0) {
@@ -262,7 +280,36 @@ function verifyProofOnlyMigrationAncestry(
   const nonProof = paths.filter(
     (filePath) => !filePath.startsWith(proofPrefix) && !exactBookkeepingPaths.has(filePath),
   );
-  return nonProof.length > 0 ? { status: 'non-proof-delta', paths: nonProof } : { status: 'pass' };
+  const offendingPaths: string[] = [];
+  for (const filePath of nonProof) {
+    const targetBlob = spawnSync(
+      'git',
+      ['rev-parse', `${verifiedSourceSha}:${filePath}`],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+    const mainBlob = spawnSync(
+      'git',
+      ['rev-parse', `${mainSideReference}:${filePath}`],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+    if (targetBlob.error || targetBlob.status === null || mainBlob.error || mainBlob.status === null) {
+      return {
+        status: 'unverified',
+        detail: targetBlob.error?.message || mainBlob.error?.message ||
+          `blob identity for ${filePath} could not be resolved`,
+      };
+    }
+    if (
+      targetBlob.status !== 0 ||
+      mainBlob.status !== 0 ||
+      targetBlob.stdout.trim() !== mainBlob.stdout.trim()
+    ) {
+      offendingPaths.push(filePath);
+    }
+  }
+  return offendingPaths.length > 0
+    ? { status: 'non-proof-delta', paths: offendingPaths }
+    : { status: 'pass' };
 }
 
 function verifyPostMergeMigrationReceiptBinding(
@@ -317,12 +364,14 @@ function verifyPostMergeMigrationReceiptBinding(
   const branchSide = verifyProofOnlyMigrationAncestry(
     receiptHead,
     attestation.head_sha,
+    `${attestation.merge_sha}^1`,
     issueId,
     context.repoRoot,
   );
   const direct = verifyProofOnlyMigrationAncestry(
     receiptHead,
     verifiedSourceSha,
+    `${verifiedSourceSha}^1`,
     issueId,
     context.repoRoot,
   );

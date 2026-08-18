@@ -347,6 +347,80 @@ function mergedPrAttestation(mergeSha: string, headSha: string) {
   };
 }
 
+function createMainImportReceiptBindingRepo(): {
+  repoRoot: string;
+  receiptHead: string;
+  importedHead: string;
+  importedSquashSha: string;
+  laneChangedHead: string;
+  laneChangedSquashSha: string;
+  laneNewHead: string;
+  laneNewSquashSha: string;
+} {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-main-import-'));
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+  const squash = (target: string, parent: string, message: string): string => git(
+    'commit-tree',
+    git('rev-parse', `${target}^{tree}`),
+    '-p',
+    parent,
+    '-m',
+    message,
+  );
+
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'proof-schema@example.test');
+  git('config', 'user.name', 'Proof Schema Test');
+  write('source.txt', 'receipt source\n');
+  git('add', '.');
+  git('commit', '-m', 'receipt source');
+  const receiptHead = git('rev-parse', 'HEAD');
+  git('branch', 'lane', receiptHead);
+
+  write('docs/06_status/readiness/readiness-score.json', '{"from":"main"}\n');
+  git('add', '.');
+  git('commit', '-m', 'main readiness update');
+  const mainImportHead = git('rev-parse', 'HEAD');
+
+  git('switch', 'lane');
+  git('merge', '--no-edit', 'main');
+  write('docs/06_status/proof/UTV2-9000/evidence.json', '{"proof":true}\n');
+  git('add', '.');
+  git('commit', '-m', 'proof-only rebind after main sync');
+  const importedHead = git('rev-parse', 'HEAD');
+  const importedSquashSha = squash(importedHead, mainImportHead, 'squash main-import lane');
+
+  git('switch', '-c', 'lane-changed', importedHead);
+  write('source.txt', 'lane-authored change after receipts\n');
+  git('add', '.');
+  git('commit', '-m', 'lane-authored non-proof change');
+  const laneChangedHead = git('rev-parse', 'HEAD');
+  const laneChangedSquashSha = squash(laneChangedHead, mainImportHead, 'squash changed lane');
+
+  git('switch', '-c', 'lane-new', importedHead);
+  write('scripts/lane-authored-new.ts', 'export const laneAuthored = true;\n');
+  git('add', '.');
+  git('commit', '-m', 'lane-authored new non-proof file');
+  const laneNewHead = git('rev-parse', 'HEAD');
+  const laneNewSquashSha = squash(laneNewHead, mainImportHead, 'squash lane with new file');
+
+  return {
+    repoRoot,
+    receiptHead,
+    importedHead,
+    importedSquashSha,
+    laneChangedHead,
+    laneChangedSquashSha,
+    laneNewHead,
+    laneNewSquashSha,
+  };
+}
+
 test('migration receipt binding is exact pre-merge and fail-closed on mismatch', () => {
   const exact = validateEvidenceBundleContract(
     migrationEvidence(),
@@ -475,6 +549,71 @@ test('post-merge migration receipt binding is squash-aware and attestation-bound
     assert.equal(wrongMergeAttestation.valid, false);
     assert.ok(wrongMergeAttestation.failures.some(
       (failure) => failure.code === 'migration_receipt_merge_attestation_mismatch',
+    ));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('post-merge squash binding accepts a net-diff main import with matching pre-merge blob', () => {
+  const repo = createMainImportReceiptBindingRepo();
+  try {
+    const result = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.importedSquashSha),
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.importedSquashSha, repo.importedHead),
+      },
+    );
+    assert.equal(result.valid, true, JSON.stringify(result.failures));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('post-merge squash binding rejects lane-authored non-proof blob drift after receipts', () => {
+  const repo = createMainImportReceiptBindingRepo();
+  try {
+    const result = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.laneChangedSquashSha),
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.laneChangedSquashSha, repo.laneChangedHead),
+      },
+    );
+    assert.equal(result.valid, false);
+    assert.ok(result.failures.some(
+      (failure) => failure.code === 'migration_receipt_non_proof_delta' &&
+        failure.message.includes('source.txt'),
+    ));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('post-merge squash binding rejects a lane-authored new non-proof file after receipts', () => {
+  const repo = createMainImportReceiptBindingRepo();
+  try {
+    const result = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.laneNewSquashSha),
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.laneNewSquashSha, repo.laneNewHead),
+      },
+    );
+    assert.equal(result.valid, false);
+    assert.ok(result.failures.some(
+      (failure) => failure.code === 'migration_receipt_non_proof_delta' &&
+        failure.message.includes('scripts/lane-authored-new.ts'),
     ));
   } finally {
     fs.rmSync(repo.repoRoot, { recursive: true, force: true });
