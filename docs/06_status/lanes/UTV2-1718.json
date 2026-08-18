@@ -23,14 +23,24 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1718/evidence.json"
   ],
-  "status": "in_review",
+  "status": "blocked",
   "started_at": "2026-08-17T04:22:41.690Z",
   "heartbeat_at": "2026-08-17T04:29:00.428Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1718-migration-refusal-drill.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-18T06:20:03.131Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 25.9h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
