@@ -284,6 +284,7 @@ function createReceiptBindingRepo(): {
   proofOnlyHead: string;
   nonProofHead: string;
   squashMergeSha: string;
+  nonProofSquashSha: string;
   unrelatedHead: string;
 } {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-binding-'));
@@ -317,8 +318,18 @@ function createReceiptBindingRepo(): {
   const squashMergeSha = git(
     'commit-tree',
     git('rev-parse', `${proofOnlyHead}^{tree}`),
+    '-p',
+    receiptHead,
     '-m',
     'squash merge',
+  );
+  const nonProofSquashSha = git(
+    'commit-tree',
+    git('rev-parse', `${nonProofHead}^{tree}`),
+    '-p',
+    receiptHead,
+    '-m',
+    'squash merge with non-proof delta',
   );
 
   git('switch', '--orphan', 'unrelated');
@@ -328,7 +339,15 @@ function createReceiptBindingRepo(): {
   const unrelatedHead = git('rev-parse', 'HEAD');
   git('switch', 'main');
 
-  return { repoRoot, receiptHead, proofOnlyHead, nonProofHead, squashMergeSha, unrelatedHead };
+  return {
+    repoRoot,
+    receiptHead,
+    proofOnlyHead,
+    nonProofHead,
+    squashMergeSha,
+    nonProofSquashSha,
+    unrelatedHead,
+  };
 }
 
 function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
@@ -421,6 +440,53 @@ function createMainImportReceiptBindingRepo(): {
   };
 }
 
+function createRebaseReceiptBindingRepo(): {
+  repoRoot: string;
+  receiptHead: string;
+  originalHead: string;
+  replayedTip: string;
+} {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-rebase-binding-'));
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'proof-schema@example.test');
+  git('config', 'user.name', 'Proof Schema Test');
+  write('base.txt', 'fork point\n');
+  git('add', '.');
+  git('commit', '-m', 'main fork point');
+  git('switch', '-c', 'lane');
+
+  write('docs/06_status/proof/UTV2-9000/evidence.json', '{"receipt":true}\n');
+  git('add', '.');
+  git('commit', '-m', 'receipt commit');
+  const receiptHead = git('rev-parse', 'HEAD');
+
+  write('scripts/lane-authored-new.ts', 'export const laneAuthored = true;\n');
+  git('add', '.');
+  git('commit', '-m', 'lane-authored non-proof file');
+  const laneChange = git('rev-parse', 'HEAD');
+
+  write('docs/06_status/proof/UTV2-9000/verification.md', 'trailing proof commit\n');
+  git('add', '.');
+  git('commit', '-m', 'trailing proof commit');
+  const originalHead = git('rev-parse', 'HEAD');
+
+  git('switch', 'main');
+  write('main-advance.txt', 'main advanced before replay\n');
+  git('add', '.');
+  git('commit', '-m', 'advance main before rebase merge');
+  git('cherry-pick', receiptHead, laneChange, originalHead);
+  const replayedTip = git('rev-parse', 'HEAD');
+
+  return { repoRoot, receiptHead, originalHead, replayedTip };
+}
+
 test('migration receipt binding is exact pre-merge and fail-closed on mismatch', () => {
   const exact = validateEvidenceBundleContract(
     migrationEvidence(),
@@ -454,13 +520,13 @@ test('post-merge migration receipt binding accepts only proof-only Git ancestry'
     assert.equal(proofOnly.valid, true, JSON.stringify(proofOnly.failures));
 
     const stale = validateEvidenceBundleContract(
-      migrationEvidenceAt(repo.receiptHead, repo.nonProofHead),
+      migrationEvidenceAt(repo.receiptHead, repo.nonProofSquashSha),
       {
         gate: 'post-merge-read',
         laneType: 'migration',
         tier: 'T1',
         repoRoot: repo.repoRoot,
-        mergedPrAttestation: mergedPrAttestation(repo.nonProofHead, repo.nonProofHead),
+        mergedPrAttestation: mergedPrAttestation(repo.nonProofSquashSha, repo.nonProofHead),
       },
     );
     assert.equal(stale.valid, false);
@@ -608,6 +674,29 @@ test('post-merge squash binding rejects a lane-authored new non-proof file after
         tier: 'T1',
         repoRoot: repo.repoRoot,
         mergedPrAttestation: mergedPrAttestation(repo.laneNewSquashSha, repo.laneNewHead),
+      },
+    );
+    assert.equal(result.valid, false);
+    assert.ok(result.failures.some(
+      (failure) => failure.code === 'migration_receipt_non_proof_delta' &&
+        failure.message.includes('scripts/lane-authored-new.ts'),
+    ));
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('post-merge rebase binding rejects a lane-authored non-proof file in the replayed chain', () => {
+  const repo = createRebaseReceiptBindingRepo();
+  try {
+    const result = validateEvidenceBundleContract(
+      migrationEvidenceAt(repo.receiptHead, repo.replayedTip),
+      {
+        gate: 'post-merge-read',
+        laneType: 'migration',
+        tier: 'T1',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.replayedTip, repo.originalHead),
       },
     );
     assert.equal(result.valid, false);

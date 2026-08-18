@@ -357,21 +357,40 @@ function verifyPostMergeMigrationReceiptBinding(
     return { status: 'pass' };
   }
 
+  const mergeBase = spawnSync(
+    'git',
+    ['merge-base', attestation.head_sha, attestation.merge_sha],
+    { cwd: context.repoRoot, encoding: 'utf8' },
+  );
+  const mainRef = String(mergeBase.stdout ?? '').trim();
+  if (mergeBase.error || mergeBase.status !== 0 || !SHA_RE.test(mainRef)) {
+    return {
+      status: 'unverified',
+      detail: mergeBase.error?.message ||
+        String(mergeBase.stderr ?? '').trim() ||
+        'GitHub-recorded PR head and merge SHA do not have a resolvable merge base',
+    };
+  }
+
   // A squash merge disconnects the PR-head history from the merge commit.
   // Validate both real branch-side ancestry and the direct non-squash path;
   // either path may establish a proof-only rebind, but neither may bypass the
-  // authoritative GitHub merge/head attestation above.
+  // authoritative GitHub merge/head attestation above. The original PR head is
+  // retained by GitHub across squash, merge, and rebase strategies, so its merge
+  // base with the recorded merge SHA identifies the main state from which an
+  // allowed main-sync import could have come. In particular, a rebased chain's
+  // merge SHA parent is another replayed PR commit, not the pre-PR main state.
   const branchSide = verifyProofOnlyMigrationAncestry(
     receiptHead,
     attestation.head_sha,
-    `${attestation.merge_sha}^1`,
+    mainRef,
     issueId,
     context.repoRoot,
   );
   const direct = verifyProofOnlyMigrationAncestry(
     receiptHead,
     verifiedSourceSha,
-    `${verifiedSourceSha}^1`,
+    mainRef,
     issueId,
     context.repoRoot,
   );
