@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-18T09:22:04Z",
   "sha_binding": {
-    "verified_source_sha": "dd68cda490b9c64c74a45c6b4336d0371e92c26a",
+    "verified_source_sha": "52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0",
     "verified_source_note": "Exact substantive branch head containing the closeout recovery implementation. Commits after this anchor are restricted to this lane's proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI. Post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "head_sha",
-    "bound_at": "2026-08-18T09:55:51Z"
+    "bound_at": "2026-08-18T10:12:44Z"
   },
   "static_proof": {
     "pnpm_verify_static": {

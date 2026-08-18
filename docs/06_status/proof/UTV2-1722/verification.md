@@ -1,6 +1,6 @@
 # PROOF: UTV2-1722
 
-MERGE_SHA: dd68cda490b9c64c74a45c6b4336d0371e92c26a
+MERGE_SHA: 52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0
 
 ASSERTIONS:
 
@@ -21,7 +21,7 @@ historical restoration: PASS (source and restored blob 426c5898e6ae50de0611fc79c
 
 ## Verification
 
-Substantive source binding: `dd68cda490b9c64c74a45c6b4336d0371e92c26a`.
+Substantive source binding: `52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0`.
 
 ### Static gate
 
@@ -61,7 +61,7 @@ Literal TAP trailer:
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 3439.850106
+# duration_ms 2755.73902
 ```
 
 ### Writable DB proof
