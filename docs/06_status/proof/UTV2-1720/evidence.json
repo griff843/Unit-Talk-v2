@@ -8,14 +8,16 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-18T01:50:31Z",
   "sha_binding": {
-    "verified_source_sha": "e98e062139ad0fddcfe4b87be6c0a8b34216bead",
+    "verified_source_sha": "374261599d63fea9a4112d94e4db18c05532e171",
     "verified_source_note": "This is the exact substantive branch head for the strategy-aware main-reference correction. Post-merge migration receipt binding requires a caller-supplied GitHub API attestation whose merge SHA equals the verified source and whose PR head equals or has a proof-only branch ancestry path from the receipt. The validator first checks whether the attested original PR head is an ancestor of the attested merge SHA. A real two-parent merge commit uses merge_sha^1 as the pre-merge main reference, with merge-shape and parent-order guards; a disjoint squash or rebase history uses the merge base of the attested head and merge SHA. Branch-side and direct ancestry paths then use the net tree diff from receipt to target, and each non-proof path must have the same blob at the target and the strategy-selected main reference. Missing attestation, repository context, commits, parent or merge-base identity, or main-side files; anomalous single-parent or parent-ordered merges; unrelated histories; and lane-authored non-proof deltas all fail closed. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-18T07:07:04.114Z"
   },
   "static_proof": {
     "pnpm_verify_static": {
