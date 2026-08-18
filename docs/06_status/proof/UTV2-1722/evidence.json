@@ -6,9 +6,9 @@
   "proof_profile": "static",
   "title": "Closeout recovery: profile-aware harvesting, rollback-safe persistence, and merged-PR verifier provenance",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-18T11:41:51Z",
+  "generated_at": "2026-08-18T12:07:03Z",
   "sha_binding": {
-    "verified_source_sha": "1d7dc09c81151591e9d4aadd4ed038603444dce6",
+    "verified_source_sha": "8762836ba710b9b8c08cac4549935174f735e9fe",
     "verified_source_note": "Exact substantive branch head containing the closeout recovery implementation. Commits after this anchor are restricted to this lane's proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI. Post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "head_sha",
-    "bound_at": "2026-08-18T11:41:51Z"
+    "bound_at": "2026-08-18T12:07:03Z"
   },
   "static_proof": {
     "pnpm_verify_static": {
@@ -38,7 +38,7 @@
     "focused_regression": {
       "command": "pnpm exec tsx --test scripts/ops/ci-db-proof-harvest.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/workflow-hardening.test.ts",
       "status": "PASS",
-      "tests": 508,
+      "tests": 509,
       "suites": 3,
       "fail": 0,
       "skipped": 0,
@@ -47,7 +47,7 @@
         "static and schema-v2 evidence never gain author-side verifier identity",
         "unknown proof profiles fail closed without harvesting",
         "failed post-merge closeout leaves no durable proof mutation",
-        "post-rebase persistence retries run canonical truth-check before another push, amend its fresh receipt, and leave main unmutated on failure",
+        "trusted post-merge closeout retains the merge mutex through one guarded push, never rebases or retries a rejection, and releases the exact lock after the persistence attempt",
         "legacy schema-v1 governance lanes retain additive CI DB-proof harvesting",
         "missing local PR-head commits are fetched from GitHub's immutable pull-request ref before attestation checks",
         "squash, rebase, and two-parent merges use the shared merged-PR attestation bridge",
