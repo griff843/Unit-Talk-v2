@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "title": "Closeout contract repair: one version-aware proof contract for pre-merge and post-merge gates",
   "status": "CORRECTIONS_VERIFIED_PM_DECISION_REQUIRED",
-  "generated_at": "2026-08-17T23:50:06Z",
+  "generated_at": "2026-08-18T00:28:23Z",
   "sha_binding": {
-    "verified_source_sha": "c6c0f26e0573c6d9924a5108d4c65f86d9ccdb83",
-    "verified_source_note": "This is the exact substantive branch head for the squash-aware correction pass. Post-merge migration receipt binding requires a caller-supplied GitHub API attestation whose merge SHA equals the verified source and whose PR head equals or has a proof-only branch ancestry path from the receipt; the existing proof-only direct ancestry path remains valid for non-squash merges. Missing attestation, missing repository context, unavailable commits, unrelated histories, and non-proof deltas all fail closed. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
+    "verified_source_sha": "129f36c23399de8c94cac3b9da2e3119d2d65a2c",
+    "verified_source_note": "This is the exact substantive branch head for the net-tree-diff correction pass. Post-merge migration receipt binding requires a caller-supplied GitHub API attestation whose merge SHA equals the verified source and whose PR head equals or has a proof-only branch ancestry path from the receipt. Branch-side and direct ancestry paths use the net tree diff from receipt to target; each non-proof path must have the same blob as the verified main-side parent. Missing attestation, repository context, commits, or main-side files; unrelated histories; and lane-authored non-proof deltas all fail closed. The real UTV2-1718 bundle validates with zero failures because its only non-proof net delta matches the attested merge's first parent. Commits after this anchor are restricted to UTV2-1720 proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI at validation time. Post-merge closeout rebinds the proof artifacts to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -36,14 +36,14 @@
     "pnpm_verify": {
       "command": "pnpm verify",
       "status": "PASS",
-      "run": 32079807804,
-      "job": 95541744993,
+      "run": 32084054556,
+      "job": 95553478646,
       "detail": "GitHub staging CI passed the complete static verification, Command Center tests, and same-run DB proof receipt verification. The authoring workstation's full command separately reached test:db and was intentionally refused because host 127.0.0.1 cannot be resolved to the required staging project."
     },
     "focused_regression": {
       "command": "pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts",
       "status": "PASS",
-      "tests": 328,
+      "tests": 331,
       "suites": 3,
       "fail": 0,
       "skipped": 0,
@@ -51,15 +51,16 @@
         "schema-v1 bundles fail pre-merge and remain readable only in the explicit post-merge historical context",
         "migration receipt head exact-match passes pre-merge and mismatches fail by named code",
         "squash-shaped migration binding passes only when the GitHub API attests both the rebound merge SHA and the original merged PR head SHA",
-        "post-merge branch-side or direct ancestry passes only after Git verifies ancestry and every intervening commit path",
-        "missing attestation, unavailable commits, stale non-proof deltas, unrelated heads, and merge-attestation mismatches fail closed",
+        "post-merge branch-side or direct ancestry passes only after Git verifies ancestry and a net-tree non-proof delta matches the verified main-side parent blob",
+        "a main-imported file whose target blob equals the attested merge parent passes, while a lane-authored changed or new non-proof file fails migration_receipt_non_proof_delta",
+        "missing attestation, unavailable commits, Git errors, stale non-proof deltas, unrelated heads, and merge-attestation mismatches fail closed",
         "modeling and data-canonical lanes require app-runtime queries and row_counts while governance remains static"
       ]
     },
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Verdict: PASS; 16 changed files; no R-level rules matched at substantive head c6c0f26e0573c6d9924a5108d4c65f86d9ccdb83."
+      "detail": "Verdict: PASS; 17 changed files; no R-level rules matched at substantive head 129f36c23399de8c94cac3b9da2e3119d2d65a2c."
     },
     "shared_contract_self_validation": {
       "command": "validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType: 'governance', tier: 'T1' }) and scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1720 --json",
@@ -71,8 +72,8 @@
     "status": "PASS_STAGING_CI_LOCAL_BLOCKED_DEFERRED",
     "command": "pnpm test:db",
     "staging_ci": {
-      "run": 32079807804,
-      "job": 95540431352,
+      "run": 32084054556,
+      "job": 95552759089,
       "result": "PASS",
       "project_ref": "xskgrzbteyqdufktjrjx",
       "tap": {
@@ -82,8 +83,8 @@
         "skipped": 0
       },
       "t1_live_suites": "PASS",
-      "receipt_artifact_id": 9304856369,
-      "receipt_verification_job": 95541744993
+      "receipt_artifact_id": 9306145939,
+      "receipt_verification_job": 95553478646
     },
     "local_workstation": {
       "status": "BLOCKED_DEFERRED",

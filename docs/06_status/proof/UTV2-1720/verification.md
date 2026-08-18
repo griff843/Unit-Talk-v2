@@ -1,6 +1,6 @@
 # PROOF: UTV2-1720
 
-MERGE_SHA: f1eb161109286aab7d7e70300dac598a52ecf350
+MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
 
 ASSERTIONS:
 
@@ -13,8 +13,8 @@ EVIDENCE:
 
 ```text
 static gate: PASS
-focused regression: PASS (321 tests, 0 failed, 0 skipped)
-writable DB: BLOCKED_DEFERRED at the staging identity guard
+focused regression: PASS (331 tests, 0 failed, 0 skipped)
+writable DB: PASS in staging CI; BLOCKED_DEFERRED locally at the staging identity guard
 shared contract: PASS
 proof binding: PASS
 r-level check: PASS
@@ -22,7 +22,7 @@ r-level check: PASS
 
 ## Verification
 
-Substantive source binding: `f1eb161109286aab7d7e70300dac598a52ecf350`.
+Substantive source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
 
 ### Static gate
 
@@ -258,3 +258,51 @@ Writable live-DB proof remains blocked/deferred locally: target identity could n
 its URL (`host=127.0.0.1`). Writable DB verification requires `xskgrzbteyqdufktjrjx` and must run
 through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. The previously captured
 hosted staging receipt remains recorded in `evidence.json` and `runtime-verification.md`.
+
+### Attempt 6 net-tree-diff receipt-delta addendum
+
+Substantive correction SHA: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
+
+The branch-side and direct migration ancestry paths now calculate the shipped delta with
+`git diff --name-only <receiptHead> <target>`, after retaining the existing Git ancestry check.
+Proof and lane-bookkeeping paths remain exempt. Every remaining path must resolve to the same blob
+at the target and the verified main-side parent (`<attestedMergeSha>^1` for the squash path or
+`<verifiedSourceSha>^1` for the direct path). A missing main-side path, unequal blob, or Git failure
+fails closed with a named result. This deliberately ignores a non-proof edit that was fully reverted
+before merge because the reverted content did not ship and the receipt remains representative of
+the shipped tree.
+
+The real UTV2-1718 bundle was replayed read-only with PR `1428`, attested merge
+`3ce86b98a5aa01ae244794253a8c7e716f2ce733`, attested head
+`aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7`, and receipt head
+`a9943aa1d9e24201e0acdfd76c59d1c7813a068d`. Contract validation returned `valid: true` with zero
+failures. Its net delta contained two exempt UTV2-1718 proof files plus
+`docs/06_status/readiness/readiness-score.json`; that file's blob was
+`0a0aadc3ad884b8066eba01620fc5bf46b4a567e` at both the attested branch head and the merge's first
+parent, proving it was a main-sync import.
+
+```text
+pnpm exec tsx --test scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 140
+pass 140
+fail 0
+
+pnpm exec tsx --test scripts/ci/proof-binding-validator.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-auditor-gate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts
+tests 331
+pass 331
+fail 0
+
+pnpm verify:static
+PASS
+
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 17
+Rules matched: (none)
+```
+
+Hosted staging CI run `32084054556` completed successfully at the substantive head. Writable DB job
+`95552759089` passed `pnpm test:db` with 7 tests passed, 0 failed, and 0 skipped against project
+`xskgrzbteyqdufktjrjx`; T1 live suites passed. Receipt artifact `9306145939` was accepted by verify
+job `95553478646`, which also passed the complete static gate. The local invocation remains
+truthfully blocked/deferred by the documented `127.0.0.1` identity refusal.

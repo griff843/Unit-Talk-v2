@@ -1,6 +1,6 @@
 # PROOF: UTV2-1720
 
-MERGE_SHA: f1eb161109286aab7d7e70300dac598a52ecf350
+MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
 
 ASSERTIONS:
 
@@ -9,7 +9,7 @@ ASSERTIONS:
 EVIDENCE:
 
 ```text
-runtime proof status: BLOCKED_DEFERRED
+runtime proof status: PASS_STAGING_CI_LOCAL_BLOCKED_DEFERRED
 configured host: 127.0.0.1
 required staging project: xskgrzbteyqdufktjrjx
 production mutation performed: false
@@ -17,7 +17,7 @@ production mutation performed: false
 
 ## Runtime verification
 
-Source binding: `f1eb161109286aab7d7e70300dac598a52ecf350`.
+Source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
 
 This lane changes governance and CI closeout tooling; its declared schema-v2 proof profile is `static`. It does not change application runtime, database schema, or a DB-writing service. The shared contract therefore does not require fabricated runtime queries or monitored-table row counts.
 
@@ -30,4 +30,16 @@ Writable DB status is `BLOCKED_DEFERRED`, not PASS. `pnpm test:db` was stopped b
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
-No production mutation or live-channel action was performed. The authoritative writable-DB and full `pnpm verify` receipts must be produced by the PR’s `staging-ci` environment and independently bound to the exact head by required-check provenance.
+No production mutation or live-channel action was performed.
+
+## Attempt 6 hosted staging receipt
+
+GitHub Actions run `32084054556` completed successfully at substantive source head
+`129f36c23399de8c94cac3b9da2e3119d2d65a2c`. Writable DB job `95552759089` resolved both the
+observed and expected project refs to `xskgrzbteyqdufktjrjx`, then passed `pnpm test:db` with
+7 tests passed, 0 failed, and 0 skipped. The T1 live suites also passed. Receipt artifact
+`9306145939` was independently accepted by verify job `95553478646`, which passed the full static
+gate and reported a receipt-verifier `PASS`.
+
+The authoring workstation remains `BLOCKED_DEFERRED` because its configured host is `127.0.0.1` and
+cannot be identified as the staging project. The hosted receipt is the authoritative writable proof.

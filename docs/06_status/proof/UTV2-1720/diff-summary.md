@@ -1,8 +1,8 @@
 ## Diff summary
 
-MERGE_SHA: f1eb161109286aab7d7e70300dac598a52ecf350
+MERGE_SHA: 129f36c23399de8c94cac3b9da2e3119d2d65a2c
 
-Substantive source binding: `f1eb161109286aab7d7e70300dac598a52ecf350`.
+Substantive source binding: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
 
 ### Requirement mapping
 
@@ -82,3 +82,28 @@ Substantive correction SHA: `c6c0f26e0573c6d9924a5108d4c65f86d9ccdb83`.
 
 This is acceptance-criterion compatibility based on GitHub's rank-1 merge record, not a bypass. No
 UTV2-1718 artifact was changed.
+
+### Attempt 6 net-tree-diff receipt-delta addendum
+
+Substantive correction SHA: `129f36c23399de8c94cac3b9da2e3119d2d65a2c`.
+
+- The post-receipt delta is now the net tree diff from receipt head to target, avoiding both
+  main-sync commit imports and `git log -m` relisting of pre-receipt lane scope.
+- After the unchanged ancestry and proof/bookkeeping exemptions, every non-proof target blob must
+  equal its blob in the verified main-side parent. Missing main-side files, unequal blobs, and Git
+  failures remain fail-closed named outcomes.
+- Wired regressions prove a squash main-import passes, an existing lane-authored non-proof drift
+  fails, and a newly added lane-authored non-proof file fails. All prior attestation and ancestry
+  regressions remain green; the five-file suite passed 331/331.
+- The real UTV2-1718 bundle replay returned `valid: true` with zero failures. Its only non-proof net
+  delta, `docs/06_status/readiness/readiness-score.json`, has blob
+  `0a0aadc3ad884b8066eba01620fc5bf46b4a567e` at both head
+  `aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7` and merge parent
+  `3ce86b98a5aa01ae244794253a8c7e716f2ce733^1`, proving a main-sync import.
+- Hosted staging CI run `32084054556` passed writable DB proof 7/7, T1 live suites, the full static
+  gate, and same-run receipt verification. Local writable proof remains blocked/deferred by the
+  required staging identity guard.
+
+The accepted net-diff trade-off is explicit in code: a non-proof change that is fully reverted before
+merge is invisible, which is acceptable because the reverted content never shipped and the receipts
+remain representative of the shipped tree. No UTV2-1718 artifact was modified.
