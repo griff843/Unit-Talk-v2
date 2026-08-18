@@ -81,6 +81,13 @@ import {
 // reuse that single definition here rather than adding a third independent one.
 import { matchesLockPattern } from '../ci/file-scope-guard.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
+import {
+  validateEvidenceBundleContract,
+  type MergedPrAttestation,
+  type EvidenceContractResult,
+} from './proof-schema.js';
+
+const FULL_SHA_RE = /^[0-9a-f]{40}$/i;
 
 interface RunTruthCheckOptions {
   issueId: string;
@@ -125,6 +132,13 @@ const P0_PROJECT_ID = '46229dc4-c7c1-4ccb-af0d-dedaf8147a97';
 
 export interface EvidenceBundleV1 {
   schema_version: number;
+  proof_profile?: string;
+  sha_binding?: {
+    verified_source_sha?: string;
+    evidence_commit_sha?: string;
+    current_pr_head_sha?: string;
+    [key: string]: unknown;
+  };
   merge_sha?: string;
   generated_at?: string;
   verifier?: {
@@ -143,6 +157,13 @@ export interface EvidenceBundleV1 {
     row_counts?: unknown[];
     [key: string]: unknown;
   };
+}
+
+export interface ExternalVerifierProvenance {
+  source: 'github-required-check';
+  producer: string;
+  verified_sha: string;
+  details_url: string | null;
 }
 
 export interface CommitCheckResult {
@@ -212,11 +233,12 @@ export interface CloseoutTruthGateInput {
     | 'files_changed'
     | 'expected_proof_paths'
     | 'created_by'
-  >;
+  > & Partial<Pick<LaneManifest, 'lane_type' | 'tier'>>;
   linear_state: string;
   pr_merged: boolean;
   pr_merge_sha: string | null;
   pr_head_sha?: string | null;
+  mergedPrAttestation?: MergedPrAttestation | null;
   proof_artifacts: CloseoutProofArtifact[];
   merge_timestamp_ms?: number | null;
   runtime_proof_required?: boolean;
@@ -317,14 +339,22 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   if (input.runtime_proof_required) {
     const runtimeEvidence = input.proof_artifacts.some((artifact) => {
       const parsed = tryParseEvidenceBundle(artifact.content);
-      return parsed
+      if (!parsed) return hasRuntimeProofTextEvidence(artifact.content);
+      const contract = validateEvidenceBundleContract(parsed, {
+        gate: 'post-merge-read',
+        laneType: input.manifest.lane_type,
+        tier: input.manifest.tier,
+        repoRoot: ROOT,
+        mergedPrAttestation: input.mergedPrAttestation,
+      });
+      return contract.schemaVersion === 1
         ? hasRuntimeReferences(parsed.runtime_proof)
-        : hasRuntimeProofTextEvidence(artifact.content);
+        : contract.valid;
     });
     if (!runtimeEvidence) {
-      fail('C6', 'runtime-proof closeout requires live/runtime evidence, not narrative-only proof');
+      fail('C6', 'runtime-proof closeout requires evidence valid for the manifest-declared proof profile');
     } else {
-      pass('C6', 'runtime-proof evidence is present');
+      pass('C6', 'runtime-proof evidence satisfies the manifest-declared proof profile');
     }
   } else {
     pass('C6', 'runtime-proof evidence not required for this closeout');
@@ -407,7 +437,7 @@ export interface CloseEligibilityFinding {
 export interface CloseEligibilityPreflightInput {
   manifest: Pick<
     LaneManifest,
-    'issue_id' | 'tier' | 'schema_version' | 'created_by' | 'expected_proof_paths' | 'pr_url'
+    'issue_id' | 'tier' | 'schema_version' | 'created_by' | 'expected_proof_paths' | 'pr_url' | 'lane_type'
   > & { model_routing?: unknown };
   /** Proof artifacts as they exist at the PR head. */
   proof_artifacts: CloseoutProofArtifact[];
@@ -585,6 +615,32 @@ export function evaluateCloseEligibilityPreflight(
   if (sidecar) {
     const verdict = evaluateModelRoutingSidecar(sidecar.content);
     add('CEP-E6', 'evidence', verdict.ok ? 'pass' : 'fail', verdict.detail, 'UTV2-1649');
+  }
+
+  if (input.manifest.tier === 'T1') {
+    const evidenceArtifact = artifacts.find((artifact) => /(?:^|\/)evidence(?:-bundle)?\.json$/i.test(artifact.path));
+    let contract: EvidenceContractResult | null = null;
+    if (evidenceArtifact) {
+      try {
+        contract = validateEvidenceBundleContract(JSON.parse(evidenceArtifact.content), {
+          gate: 'pre-merge',
+          laneType: input.manifest.lane_type,
+          tier: input.manifest.tier,
+        });
+      } catch {
+        contract = null;
+      }
+    }
+    add(
+      'CEP-E7',
+      'evidence',
+      contract?.valid ? 'pass' : 'fail',
+      contract?.valid
+        ? `evidence satisfies shared schema-v${contract.schemaVersion} ${contract.profile} contract`
+        : contract
+          ? `shared evidence contract failed: ${contract.failures.map((failure) => `${failure.field}: ${failure.message}`).join('; ')}`
+          : 'T1 proof requires a readable evidence.json evaluated by the shared evidence contract',
+    );
   }
 
   // ── 2. Manifest readiness ────────────────────────────────────────────────
@@ -786,6 +842,7 @@ export async function runTruthCheck(
   let mergeSha: string | null = null;
   let prUrl: string | null = null;
   let mergeTimestamp: string | null = null;
+  let verifierProvenance: ExternalVerifierProvenance | null = null;
 
   const addCheck = (id: string, status: 'pass' | 'fail' | 'skip', detail: string): void => {
     checks.push({ id, status, detail });
@@ -1002,6 +1059,19 @@ export async function runTruthCheck(
 
     const prRef = parsePullRequestUrl(prUrl);
     const pullRequest = await fetchGitHubPullRequest(prRef.owner, prRef.repo, prRef.number, githubToken);
+    const mergedPrAttestation: MergedPrAttestation | null =
+      pullRequest.merged &&
+      typeof pullRequest.merge_commit_sha === 'string' &&
+      FULL_SHA_RE.test(pullRequest.merge_commit_sha) &&
+      typeof pullRequest.head?.sha === 'string' &&
+      FULL_SHA_RE.test(pullRequest.head.sha)
+        ? {
+            merge_sha: pullRequest.merge_commit_sha,
+            head_sha: pullRequest.head.sha,
+            pr_number: prRef.number,
+            source: 'github-api',
+          }
+        : null;
     if (!pullRequest.merged || !pullRequest.merge_commit_sha) {
       addCheck('G1', 'fail', 'pull request is not merged');
     } else {
@@ -1049,6 +1119,20 @@ export async function runTruthCheck(
     });
     const evidence = JSON.stringify(requiredCheckResult.evidence ?? []);
     if (requiredCheckResult.passed) {
+      const externalReceipt = (requiredCheckResult.evidence ?? []).find(
+        (receipt) => receipt.matched && receipt.passed && receipt.candidate_app_id !== null,
+      );
+      const verifiedSha = requiredCheckResult.checkedSha === 'merge'
+        ? mergeSha
+        : (pullRequest.head?.sha ?? null);
+      if (externalReceipt && verifiedSha && /^[0-9a-f]{40}$/i.test(verifiedSha)) {
+        verifierProvenance = {
+          source: 'github-required-check',
+          producer: `github-app:${externalReceipt.candidate_app_id}:${externalReceipt.candidate_name ?? externalReceipt.context}`,
+          verified_sha: verifiedSha,
+          details_url: externalReceipt.details_url,
+        };
+      }
       const detail = requiredCheckResult.checkedSha === 'head-admin-merge'
         ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}; evidence=${evidence}`
         : requiredCheckResult.checkedSha === 'head'
@@ -1145,6 +1229,7 @@ export async function runTruthCheck(
       pr_merged: pullRequest.merged,
       pr_merge_sha: pullRequest.merge_commit_sha,
       pr_head_sha: pullRequest.head?.sha,
+      mergedPrAttestation,
       proof_artifacts: proofFiles.map((proofPath) => ({
         path: relativeToRoot(proofPath),
         content: safeRead(proofPath),
@@ -1170,16 +1255,36 @@ export async function runTruthCheck(
           addCheck('P5', 'fail', 'no expected proof path resolved to a readable evidence bundle');
         } else {
           addCheck('P5', 'pass', 'evidence bundle found');
-          if (evidence.bundle.schema_version === 1) {
-            addCheck('P6', 'pass', 'evidence bundle schema_version is 1');
+          const evidenceContract = validateEvidenceBundleContract(evidence.bundle, {
+            gate: 'post-merge-read',
+            laneType: manifest.lane_type,
+            tier,
+            repoRoot: ROOT,
+            mergedPrAttestation,
+          });
+          if (evidenceContract.valid) {
+            addCheck(
+              'P6',
+              'pass',
+              `evidence bundle satisfies shared schema-v${evidenceContract.schemaVersion} ${evidenceContract.profile} contract`,
+            );
           } else {
-            addCheck('P6', 'fail', 'evidence bundle schema_version must be 1');
+            addCheck(
+              'P6',
+              'fail',
+              `shared evidence contract failed: ${evidenceContract.failures.map((failure) => `${failure.field}: ${failure.message}`).join('; ')}`,
+            );
           }
 
-          if (hasPopulatedObject(evidence.bundle.static_proof) && hasPopulatedObject(evidence.bundle.runtime_proof)) {
-            addCheck('P7', 'pass', 'evidence bundle includes static_proof and runtime_proof');
+          const populatedStatic = hasPopulatedObject(evidence.bundle.static_proof);
+          const populatedRuntime = hasPopulatedObject(evidence.bundle.runtime_proof);
+          const profileSectionsPresent = evidenceContract.profile === 'static'
+            ? populatedStatic
+            : populatedStatic && populatedRuntime;
+          if (profileSectionsPresent || evidenceContract.profile === 'legacy-v1' && populatedStatic && populatedRuntime) {
+            addCheck('P7', 'pass', `evidence sections satisfy ${evidenceContract.profile} profile`);
           } else {
-            addCheck('P7', 'fail', 'evidence bundle must include populated static_proof and runtime_proof sections');
+            addCheck('P7', 'fail', `evidence sections do not satisfy ${evidenceContract.profile ?? 'undeclared'} profile`);
           }
 
           const testRunLogStatus = evaluateTestRunLogEvidence(evidence.bundle.static_proof, mergeSha);
@@ -1191,22 +1296,46 @@ export async function runTruthCheck(
             addCheck('P8', 'fail', 'static_proof must reference test run logs tied to merge SHA');
           }
 
-          if (hasRuntimeReferences(evidence.bundle.runtime_proof)) {
-            addCheck('P9', 'pass', 'runtime_proof references live DB evidence');
+          if (evidenceContract.schemaVersion === 2 && evidenceContract.valid) {
+            addCheck('P9', 'pass', `${evidenceContract.profile} profile evidence is complete`);
+          } else if (evidenceContract.schemaVersion === 1 && hasRuntimeReferences(evidence.bundle.runtime_proof)) {
+            addCheck('P9', 'pass', 'legacy runtime_proof references live DB evidence');
           } else {
-            addCheck('P9', 'fail', 'runtime_proof must reference live DB queries, row counts, or receipts');
+            addCheck('P9', 'fail', 'proof does not satisfy its declared runtime/migration/static evidence profile');
           }
 
-          const verifierIdentity = evidence.bundle.verifier?.identity?.trim();
-          if (verifierIdentity && verifierIdentity !== manifest.created_by) {
-            addCheck('P10', 'pass', 'verifier.identity is set and distinct from implementing lane identity');
+          if (evidenceContract.schemaVersion === 1) {
+            const verifierIdentity = evidence.bundle.verifier?.identity?.trim();
+            if (verifierIdentity && verifierIdentity !== manifest.created_by) {
+              addCheck('P10', 'pass', 'legacy verifier.identity is set and distinct from implementing lane identity');
+            } else {
+              addCheck('P10', 'fail', 'legacy verifier.identity must be set and not equal to manifest.created_by');
+            }
+          } else if (
+            verifierProvenance &&
+            shaMatches(verifierProvenance.verified_sha, evidence.bundle.sha_binding?.verified_source_sha)
+          ) {
+            addCheck(
+              'P10',
+              'pass',
+              `external exact-head verifier provenance: ${verifierProvenance.producer} at ${verifierProvenance.verified_sha}`,
+            );
           } else {
-            addCheck('P10', 'fail', 'verifier.identity must be set and not equal to manifest.created_by');
+            addCheck(
+              'P10',
+              'fail',
+              'schema-v2 proof requires an external GitHub required-check receipt bound to sha_binding.verified_source_sha',
+            );
           }
         }
       }
 
-      addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence);
+      addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence, {
+        laneType: manifest.lane_type,
+        verifierProvenance,
+        mergedPrAttestation,
+        repoRoot: ROOT,
+      });
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
       for (const check of evaluateT2ProofEvidence({
@@ -1418,6 +1547,12 @@ export function addUnsupportedRuntimeChecks(
   noRuntime: boolean,
   tier: LaneTier,
   evidence: { bundle: EvidenceBundleV1 } | null,
+  context: {
+    laneType?: string | null;
+    verifierProvenance?: ExternalVerifierProvenance | null;
+    mergedPrAttestation?: MergedPrAttestation | null;
+    repoRoot?: string | null;
+  } = {},
 ): void {
   if (tier !== 'T1') {
     addCheck('R1', 'skip', 'runtime checks skipped for non-T1 tier');
@@ -1434,12 +1569,71 @@ export function addUnsupportedRuntimeChecks(
   }
 
   if (!evidence) {
-    addCheck('R1', 'fail', 'evidence bundle required for R1 runtime query check');
-    addCheck('R2', 'fail', 'evidence bundle required for R2 monitored-table check');
-    addCheck('R3', 'fail', 'evidence bundle required for R3 verifier-identity check');
+    addCheck('R1', 'fail', 'evidence bundle required for R1 proof-profile check');
+    addCheck('R2', 'fail', 'evidence bundle required for R2 proof-profile check');
+    addCheck('R3', 'fail', 'evidence bundle required for R3 verifier-provenance check');
     return;
   }
 
+  const contract = validateEvidenceBundleContract(evidence.bundle, {
+    gate: 'post-merge-read',
+    laneType: context.laneType,
+    tier,
+    repoRoot: context.repoRoot,
+    mergedPrAttestation: context.mergedPrAttestation,
+  });
+
+  if (contract.schemaVersion === 2) {
+    if (!contract.valid) {
+      const detail = contract.failures.map((failure) => `${failure.field}: ${failure.message}`).join('; ');
+      addCheck('R1', 'fail', `declared proof profile failed: ${detail}`);
+      addCheck('R2', 'fail', `declared proof profile failed: ${detail}`);
+    } else if (contract.profile === 'app-runtime') {
+      const runtimeProof = evidence.bundle.runtime_proof;
+      const queryCount = Array.isArray(runtimeProof?.queries) ? runtimeProof.queries.length : 0;
+      const rowCount = Array.isArray(runtimeProof?.row_counts) ? runtimeProof.row_counts.length : 0;
+      addCheck('R1', 'pass', `app-runtime profile has ${queryCount} runtime quer${queryCount === 1 ? 'y' : 'ies'}`);
+      addCheck('R2', 'pass', `app-runtime profile has ${rowCount} monitored-table row count entr${rowCount === 1 ? 'y' : 'ies'}`);
+    } else if (contract.profile === 'migration') {
+      addCheck('R1', 'pass', 'migration profile has exact-head refusal and empty-scratch execution receipts');
+      addCheck('R2', 'pass', 'migration profile has rollback/reapply, schema-parity, and staging DB receipts');
+    } else if (contract.profile === 'static') {
+      addCheck('R1', 'pass', 'static profile explicitly does not require runtime queries');
+      addCheck('R2', 'pass', 'static profile explicitly does not require monitored-table row counts');
+    } else {
+      addCheck('R1', 'fail', 'schema-v2 proof profile is unknown or undeclared');
+      addCheck('R2', 'fail', 'schema-v2 proof profile is unknown or undeclared');
+    }
+
+    if (
+      context.verifierProvenance &&
+      shaMatches(context.verifierProvenance.verified_sha, evidence.bundle.sha_binding?.verified_source_sha)
+    ) {
+      addCheck(
+        'R3',
+        'pass',
+        `external exact-head verifier receipt ${context.verifierProvenance.producer} at ${context.verifierProvenance.verified_sha}`,
+      );
+    } else {
+      addCheck(
+        'R3',
+        'fail',
+        'schema-v2 T1 proof requires external exact-head CI verifier provenance bound to sha_binding.verified_source_sha',
+      );
+    }
+    return;
+  }
+
+  if (contract.schemaVersion !== 1) {
+    const detail = contract.failures.map((failure) => `${failure.field}: ${failure.message}`).join('; ');
+    addCheck('R1', 'fail', `unsupported evidence contract: ${detail}`);
+    addCheck('R2', 'fail', `unsupported evidence contract: ${detail}`);
+    addCheck('R3', 'fail', `unsupported evidence contract: ${detail}`);
+    return;
+  }
+
+  // Schema v1 remains supported under its historical runtime contract. New v2
+  // bundles cannot use this path and cannot self-author verifier identity.
   const rp = evidence.bundle.runtime_proof;
   const queries = Array.isArray(rp?.queries) ? rp.queries : [];
   if (queries.length > 0) {

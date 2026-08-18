@@ -1,9 +1,10 @@
 #!/usr/bin/env tsx
 /**
- * proof-binding-validator — Schema v2 proof binding gate (UTV2-1083/1088).
+ * proof-binding-validator — version-aware proof binding gate.
  *
- * Validates that a schema v2 evidence.json is correctly bound:
- *   1. sha_binding block is present; schema_version is 2
+ * Validates evidence.json through the canonical proof-schema module, then for
+ * schema v2 validates that the binding resolves against the current checkout:
+ *   1. sha_binding block is present and structurally valid
  *   2. verified_source_sha is a real 40-char hex SHA
  *   3. verified_source_sha is an ancestor of current HEAD
  *   4. Every commit between verified_source_sha and HEAD touches only proof/evidence paths
@@ -27,23 +28,17 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  validateEvidenceBundleContract,
+  type EvidenceContractResult,
+} from '../ops/proof-schema.js';
 
 const SENTINELS = new Set(['set-by-ci', 'validated-by-ci-at-runtime']);
 const SHA_RE = /^[0-9a-f]{40}$/;
 const PROOF_ONLY_PREFIXES = ['docs/06_status/proof/', 'docs/06_status/lanes/'];
-
-interface SchemaV2Evidence {
-  schema_version: 2;
-  issue_id: string;
-  sha_binding: {
-    verified_source_sha: string;
-    verified_source_note?: string;
-    evidence_commit_sha: string;
-    current_pr_head_sha: string;
-  };
-}
 
 interface ParsedArgs {
   proofDir: string;
@@ -61,8 +56,8 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 interface BindingResult {
-  schema_version: 2;
-  gate: 'proof-binding-v2';
+  schema_version: 1 | 2 | null;
+  gate: 'proof-binding-versioned';
   issue_id: string;
   verified_source_sha: string;
   resolved_evidence_commit_sha: string;
@@ -71,6 +66,18 @@ interface BindingResult {
   placeholder_fields_resolved: boolean;
   violations: string[];
   ok: boolean;
+}
+
+interface SchemaV2Binding {
+  verified_source_sha: string;
+  evidence_commit_sha: string;
+  current_pr_head_sha: string;
+}
+
+interface EvidenceRecord extends Record<string, unknown> {
+  schema_version?: unknown;
+  issue_id?: unknown;
+  sha_binding?: unknown;
 }
 
 function git(cmd: string): string {
@@ -105,6 +112,27 @@ function resolveEvidenceCommit(repoRelPath: string): string {
   }
 }
 
+function resolveLaneType(evidence: EvidenceRecord): string | null {
+  const issueId = typeof evidence.issue_id === 'string' ? evidence.issue_id.toUpperCase() : '';
+  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) return null;
+  const repoRoot = git('git rev-parse --show-toplevel');
+  const manifestPath = join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
+  if (!existsSync(manifestPath)) return null;
+  try {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { lane_type?: unknown };
+    return typeof manifest.lane_type === 'string' ? manifest.lane_type : null;
+  } catch {
+    return null;
+  }
+}
+
+export function validateBindingEvidenceContract(
+  evidence: unknown,
+  laneType: string | null,
+): EvidenceContractResult {
+  return validateEvidenceBundleContract(evidence, { gate: 'pre-merge', laneType });
+}
+
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
   if (!args.proofDir) {
@@ -120,9 +148,9 @@ function main(): void {
     process.exit(2);
   }
 
-  let evidence: SchemaV2Evidence;
+  let evidence: EvidenceRecord;
   try {
-    evidence = JSON.parse(readFileSync(evidencePath, 'utf8')) as SchemaV2Evidence;
+    evidence = JSON.parse(readFileSync(evidencePath, 'utf8')) as EvidenceRecord;
   } catch (err) {
     process.stderr.write(
       `proof-binding-validator: INFRA_ERROR — cannot parse evidence.json: ${(err as Error).message}\n`,
@@ -133,16 +161,19 @@ function main(): void {
   const violations: string[] = [];
   const head: string = process.env['GITHUB_SHA'] ?? git('git rev-parse HEAD');
 
-  // Rule 1: schema_version must be 2 and sha_binding must exist
-  if (evidence.schema_version !== 2) {
-    violations.push(
-      `schema_version must be 2, got ${String(evidence.schema_version)} — upgrade evidence.json to schema v2`,
-    );
+  const contract = validateBindingEvidenceContract(evidence, resolveLaneType(evidence));
+  violations.push(...contract.failures.map((failure) => `${failure.field}: ${failure.message}`));
+
+  // V1 is historical read-only. The explicit pre-merge contract records the
+  // named violation before this shape-specific early return.
+  if (contract.schemaVersion === 1) {
+    emit(args, evidence, '', head, violations, contract);
+    return;
   }
-  const binding = evidence.sha_binding;
+
+  const binding = evidence.sha_binding as SchemaV2Binding | undefined;
   if (!binding) {
-    violations.push('sha_binding block is missing from evidence.json');
-    emit(args, evidence, '', head, violations);
+    emit(args, evidence, '', head, violations, contract);
     return;
   }
 
@@ -201,15 +232,16 @@ function main(): void {
     );
   }
 
-  emit(args, evidence, resolvedEvidenceSha, head, violations);
+  emit(args, evidence, resolvedEvidenceSha, head, violations, contract);
 }
 
 function emit(
   args: ParsedArgs,
-  evidence: Partial<SchemaV2Evidence>,
+  evidence: EvidenceRecord,
   resolvedEvidenceSha: string,
   resolvedHeadSha: string,
   violations: string[],
+  contract: EvidenceContractResult,
 ): void {
   const ok = violations.length === 0;
   const placeholderFieldsResolved =
@@ -218,10 +250,14 @@ function emit(
     SHA_RE.test(resolvedHeadSha) &&
     !SENTINELS.has(resolvedHeadSha);
   const result: BindingResult = {
-    schema_version: 2,
-    gate: 'proof-binding-v2',
-    issue_id: evidence.issue_id ?? 'unknown',
-    verified_source_sha: evidence.sha_binding?.verified_source_sha ?? '',
+    schema_version: contract.schemaVersion,
+    gate: 'proof-binding-versioned',
+    issue_id: typeof evidence.issue_id === 'string' ? evidence.issue_id : 'unknown',
+    verified_source_sha:
+      typeof evidence.sha_binding === 'object' && evidence.sha_binding !== null &&
+      typeof (evidence.sha_binding as Record<string, unknown>)['verified_source_sha'] === 'string'
+        ? String((evidence.sha_binding as Record<string, unknown>)['verified_source_sha'])
+        : '',
     resolved_evidence_commit_sha: resolvedEvidenceSha || '(unresolved)',
     resolved_current_pr_head_sha: resolvedHeadSha || '(unresolved)',
     placeholder_fields_resolved: placeholderFieldsResolved,
@@ -252,4 +288,14 @@ function emit(
   process.exit(ok ? 0 : 1);
 }
 
-main();
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) main();

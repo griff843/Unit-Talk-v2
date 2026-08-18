@@ -174,8 +174,8 @@ When `ops:lane-start` refuses a new lane due to concurrency conflict:
    - If heartbeat > 24h old → the lane is stranded; `ops:reconcile` auto-blocks it and releases its locks.
    - If heartbeat is fresh → the blocking lane is active; wait or split scope.
 3. If the incoming work is urgent and the blocking lane cannot be expedited:
-   - PM may force-close the blocking lane via `ops:lane-close --override` with a documented reason.
-   - Override closes are recorded in `truth_check_history` with `verdict: "override"`.
+   - Escalate the scheduling decision to PM and wait for the blocking lane to close or be reconciled through the governed lifecycle.
+   - `ops:lane-close` has no override or force-close path; truth-check failures require a scoped repair lane and normal PR.
 4. Never start a conflicting lane by manually bypassing `ops:lane-start`. The manifest is the enforcement mechanism.
 
 ---
@@ -192,7 +192,7 @@ When `ops:lane-start` refuses a new lane due to concurrency conflict:
 | Tier C path exposure | Dispatch preflight records candidate Tier C path exposure before the lane can be started |
 | Dependency blockers | Dispatch preflight records branch, token, required-doc, and dependency blockers before the lane can be started |
 | Stale manifest cleanup | `ops:reconcile` (cron or pre-start) transitions heartbeat-expired manifests |
-| Override tracking | `ops:lane-close --override` records in manifest `truth_check_history` |
+| Closeout failures | `ops:lane-close` fails closed; remediation uses a scoped repair lane and normal PR |
 
 Every dispatch attempt must have a machine-readable preflight artifact that captures:
 
