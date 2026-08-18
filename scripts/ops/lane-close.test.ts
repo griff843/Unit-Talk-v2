@@ -1684,15 +1684,13 @@ test('post-merge lane close workflow delegates to repair-merged lane closeout', 
     'utf8',
   );
 
-  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
+  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted --retain-merge-lock\)/);
   assert.match(workflow, /pnpm ops:lane-close "\$\{close_args\[@\]\}"/);
   assert.match(workflow, /Bind proof artifacts to merge SHA/);
   assert.match(workflow, /git add docs\/06_status\/proof\/"\$ISSUE_ID"\//);
-  assert.strictEqual(
-    (workflow.match(/pnpm ops:truth-check "\$ISSUE_ID" --explain/gu) ?? []).length,
-    1,
-    'only the post-rebase terminal-state retry invokes truth-check directly',
-  );
+  assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID" --explain/gu);
+  assert.doesNotMatch(workflow, /git pull --rebase origin main/gu);
+  assert.match(workflow, /Release closeout merge mutex after persistence attempt/);
   assert.doesNotMatch(workflow, /manifest\.status = 'done'/);
   assert.match(workflow, /git add "\$MANIFEST_PATH"/);
 });
@@ -2443,7 +2441,7 @@ test('UTV2-1586 #16 workflow dispatch forwards PR only to the trusted repair com
     'utf8',
   );
   assert.match(workflow, /pr:\n\s+description: "Original implementation PR URL or number/);
-  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted\)/);
+  assert.match(workflow, /close_args=\("\$ISSUE_ID" --repair-merged --explain --post-merge-trusted --retain-merge-lock\)/);
   assert.match(workflow, /close_args\+=\(--pr "\$EXPLICIT_PR"\)/);
   assert.strictEqual((workflow.match(/--pr "\$EXPLICIT_PR"/gu) ?? []).length, 1);
   assert.match(workflow, /git ls-files -- "\$per_issue_sync"/);
@@ -2660,6 +2658,34 @@ test('UTV2-1690: failed terminal manifest persistence restores the active lease'
   } finally {
     fs.rmSync(leaseRegistryDir, { recursive: true, force: true });
   }
+});
+
+test('UTV2-1722: trusted closeout can retain the merge mutex through caller persistence', async () => {
+  const manifest = createManifest({ status: 'merged' });
+  let preserveMergeLock: boolean | undefined;
+
+  const completion = await completeSuccessfulLaneClose(
+    manifest.issue_id,
+    manifest,
+    createTruthCheckResult(),
+    {
+      preserveMergeLock: true,
+      beginLeaseRelease: () => ({ warnings: [], commit: () => {}, rollback: () => {} }),
+      finalizeManifest: () => ({
+        ...manifest,
+        status: 'done',
+        closed_at: '2026-08-18T12:30:00.000Z',
+      }),
+      releaseLocks: (_issue, _branch, options) => {
+        preserveMergeLock = options?.preserveMergeLock;
+        return { warnings: ['merge lock preserved for persistence'] };
+      },
+    },
+  );
+
+  assert.strictEqual(preserveMergeLock, true);
+  assert.strictEqual(completion.manifest.status, 'done');
+  assert.deepStrictEqual(completion.warnings, ['merge lock preserved for persistence']);
 });
 
 test('UTV2-1613 R1: a normal successful close releases the dispatch lease', () => {

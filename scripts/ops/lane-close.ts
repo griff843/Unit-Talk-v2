@@ -1495,7 +1495,12 @@ export function completeAlreadyClosedLaneCleanup(
   manifest: LaneManifest,
   options: {
     repoRoot?: string;
-    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    preserveMergeLock?: boolean;
+    releaseLocks?: (
+      issue: string,
+      branch: string,
+      lockOptions?: { preserveMergeLock?: boolean },
+    ) => { warnings: string[] };
     cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
   } = {},
 ): SuccessfulLaneCloseResult {
@@ -1511,6 +1516,7 @@ export function completeAlreadyClosedLaneCleanup(
   const closeoutLocks = (options.releaseLocks ?? releaseCloseoutLocks)(
     manifest.issue_id,
     manifest.branch,
+    { preserveMergeLock: options.preserveMergeLock },
   );
   const worktreeCleanup = (options.cleanupWorktree ?? cleanupClosedLaneWorktree)(manifest);
 
@@ -1683,8 +1689,19 @@ export async function completeSuccessfulLaneClose(
      * ISSUE, not merely the lane. Absent means the issue stays open.
      */
     completionIntent?: boolean;
+    /**
+     * Trusted post-merge automation may keep the merge mutex through the
+     * subsequent persistence step. The caller must release it after the push
+     * attempt; ordinary lane-close callers retain the existing release-on-close
+     * behavior.
+     */
+    preserveMergeLock?: boolean;
     beginLeaseRelease?: (issue: string) => TerminalLeaseReleaseTransaction;
-    releaseLocks?: (issue: string, branch: string) => { warnings: string[] };
+    releaseLocks?: (
+      issue: string,
+      branch: string,
+      lockOptions?: { preserveMergeLock?: boolean },
+    ) => { warnings: string[] };
     cleanupWorktree?: (manifest: LaneManifest) => Exclude<LaneWorktreeCleanup, 'not_requested'>;
   } = {},
 ): Promise<SuccessfulLaneCloseResult> {
@@ -1735,9 +1752,12 @@ export async function completeSuccessfulLaneClose(
   }
 
   const closeoutLocks = options.releaseLocks
-    ? options.releaseLocks(issueId, manifestBeforeClose.branch)
+    ? options.releaseLocks(issueId, manifestBeforeClose.branch, {
+        preserveMergeLock: options.preserveMergeLock,
+      })
     : releaseCloseoutLocks(issueId, manifestBeforeClose.branch, {
         leaseAlreadyReleased: true,
+        preserveMergeLock: options.preserveMergeLock,
       });
 
   // Worktree removal is deliberately last: every earlier fallible local
@@ -1942,6 +1962,21 @@ async function main(): Promise<void> {
     const trustedPostMerge = isTrustedPostMergeAutomation(process.env, {
       postMergeTrusted: bools.has('post-merge-trusted'),
     });
+    const retainMergeLock = bools.has('retain-merge-lock');
+
+    // Holding the mutex beyond this process is a capability reserved for the
+    // exact trusted post-merge workflow. Without this guard a local caller
+    // could strand the serialized merge queue simply by passing a CLI flag.
+    if (retainMergeLock && !trustedPostMerge) {
+      emitJson({
+        ok: false,
+        code: 'untrusted_invocation' as CloseoutFailureCode,
+        outcome: 'blocked' satisfies CloseoutOutcome,
+        remediation: remediationForCode('untrusted_invocation'),
+        issue_id: issueId,
+      });
+      process.exit(1);
+    }
 
     // Idempotent no-op BEFORE any lock is taken, so a re-close cannot create
     // the residue it would then trip over on the next attempt.
@@ -2067,7 +2102,9 @@ async function main(): Promise<void> {
           },
         };
         if (validatedPr) {
-          cleanup = completeAlreadyClosedLaneCleanup(manifest);
+          cleanup = completeAlreadyClosedLaneCleanup(manifest, {
+            preserveMergeLock: retainMergeLock,
+          });
         }
         transaction?.commit();
         transaction = null;
@@ -2213,7 +2250,10 @@ async function main(): Promise<void> {
       issueId,
       manifest,
       result,
-      { trustedBindingRepair: Boolean(validatedPr) },
+      {
+        trustedBindingRepair: Boolean(validatedPr),
+        preserveMergeLock: retainMergeLock,
+      },
     );
     manifest = completion.manifest;
     const outcome: CloseoutOutcome =
