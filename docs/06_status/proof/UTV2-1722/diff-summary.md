@@ -84,6 +84,6 @@ No other file was changed by `823b38dc`.
 ```text
 npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 17
+Changed files: 18
 Rules matched: (none) — no R-level artifacts required for this diff
 ```

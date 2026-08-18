@@ -65,7 +65,7 @@ Literal TAP trailer:
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 2913.263301
+# duration_ms 3644.470974
 ```
 
 ### Writable DB proof
@@ -112,6 +112,6 @@ At substantive head `8762836ba710b9b8c08cac4549935174f735e9fe`, trusted post-mer
 
 ```text
 Verdict: PASS
-Changed files: 17
+Changed files: 18
 Rules matched: (none) — no R-level artifacts required for this diff
 ```

@@ -73,7 +73,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Verdict: PASS; 17 changed files; no R-level rules matched, so no R-level artifacts are required."
+      "detail": "Verdict: PASS; 18 changed files; no R-level rules matched, so no R-level artifacts are required."
     }
   },
   "runtime_proof": {
