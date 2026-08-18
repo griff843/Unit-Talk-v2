@@ -504,7 +504,10 @@ jobs:
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          EXPLICIT_PR: ${{ steps.extract.outputs.pr_input }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # The proof binding remains only in this working tree until the
@@ -530,7 +533,10 @@ jobs:
 
             # main can advance between checkout and push (another PR merges
             # mid-closeout). Rebase the bookkeeping commit and retry instead
-            # of failing the closeout and stranding a ghost lane.
+            # of failing the closeout and stranding a ghost lane. The merge
+            # mutex is already released by a successful lane-close, so the
+            # smallest truthful race fix is to re-run that identical gate
+            # after every rebase and allow another push only if it passes.
             pushed=false
             for attempt in 1 2 3; do
               if git push; then
@@ -539,6 +545,18 @@ jobs:
               fi
               echo "::warning title=post-merge-lane-close::Push attempt $attempt rejected (main advanced). Rebasing and retrying."
               git pull --rebase origin main
+
+              close_args=("$ISSUE_ID" --repair-merged --explain --post-merge-trusted)
+              if [ -n "$EXPLICIT_PR" ]; then
+                close_args+=(--pr "$EXPLICIT_PR")
+              fi
+              retry_close_code=0
+              retry_close_output=$(pnpm ops:lane-close "${close_args[@]}" 2>&1) || retry_close_code=$?
+              echo "$retry_close_output"
+              if [ "$retry_close_code" != "0" ]; then
+                echo "::warning title=post-merge-lane-close retry gate failed::Closeout gate re-run failed after rebasing main (exit $retry_close_code). Refusing another push; main remains unmutated. Re-run this workflow from a fresh dispatch."
+                exit "$retry_close_code"
+              fi
             done
             if [ "$pushed" != "true" ]; then
               echo "::error title=post-merge-lane-close::Bookkeeping push failed after 3 attempts."

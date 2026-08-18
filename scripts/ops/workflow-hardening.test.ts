@@ -1679,6 +1679,13 @@ test('UTV2-1722: proof binding is persisted only after the closeout gate passes'
   assert.doesNotMatch(workflow, /chore\(proof\): bind \$ISSUE_ID/);
   assert.match(workflow, /for attempt in 1 2 3/);
   assert.match(workflow, /git pull --rebase origin main/);
+  assert.strictEqual(
+    workflow.match(/pnpm ops:lane-close "\$\{close_args\[@\]\}"/gu)?.length,
+    2,
+    'the initial closeout and every post-rebase retry use the identical governed gate',
+  );
+  assert.match(workflow, /retry gate failed/);
+  assert.match(workflow, /Refusing another push; main remains unmutated/);
   assert.match(workflow, /Bookkeeping push failed after 3 attempts/);
 });
 
@@ -1789,17 +1796,22 @@ test('UTV2-1722 behavior: failed closeout leaves durable proof unchanged', () =>
   assert.strictEqual(fs.existsSync(path.join(root, 'git-calls')), false);
 });
 
-test('UTV2-1684 behavior: concurrent main advancement rebases and retries persistence', () => {
+test('UTV2-1722 behavior: concurrent main advancement re-runs the gate before retrying persistence', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-retry-'));
   fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1684'), { recursive: true });
   const state = path.join(root, 'push-count');
   const gitLog = path.join(root, 'git-calls');
+  const pnpmLog = path.join(root, 'pnpm-calls');
+  const gateMarker = path.join(root, 'gate-passed');
   const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
     cwd: root,
     env: {
       ISSUE_ID: 'UTV2-1684',
       MANIFEST_PATH: 'manifest.json',
+      EXPLICIT_PR: '1397',
       GIT_LOG: gitLog,
+      PNPM_LOG: pnpmLog,
+      GATE_MARKER: gateMarker,
       PUSH_COUNT: state,
     },
     mocks: {
@@ -1808,15 +1820,71 @@ if [ "$1" = diff ]; then exit 1; fi
 if [ "$1" = push ]; then
   count=0; [ ! -f "$PUSH_COUNT" ] || count=$(cat "$PUSH_COUNT")
   count=$((count + 1)); printf '%s' "$count" > "$PUSH_COUNT"
-  [ "$count" -gt 1 ]
+  [ "$count" -gt 1 ] && [ -f "$GATE_MARKER" ]
   exit $?
 fi
 exit 0`,
+      pnpm: `printf '%s\n' "$*" >> "$PNPM_LOG"
+touch "$GATE_MARKER"`,
     },
   });
   assert.strictEqual(result.status, 0, result.stderr);
   assert.strictEqual(fs.readFileSync(state, 'utf8'), '2');
-  assert.match(fs.readFileSync(gitLog, 'utf8'), /push\npull --rebase origin main\npush/u);
+  assert.match(fs.readFileSync(gitLog, 'utf8'), /push\npull --rebase origin main\npush\n/u);
+  assert.strictEqual(fs.existsSync(gateMarker), true);
+  assert.match(
+    fs.readFileSync(pnpmLog, 'utf8'),
+    /^ops:lane-close UTV2-1684 --repair-merged --explain --post-merge-trusted --pr 1397\n$/u,
+  );
+  const gitCalls = fs.readFileSync(gitLog, 'utf8').trim().split('\n');
+  assert.strictEqual(gitCalls.filter((call) => call === 'push').length, 2);
+  assert.ok(gitCalls.lastIndexOf('push') > gitCalls.indexOf('pull --rebase origin main'));
+});
+
+test('UTV2-1722 behavior: a failing post-rebase gate performs no successful persistence mutation', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-retry-gate-fail-'));
+  fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1722'), { recursive: true });
+  const gitLog = path.join(root, 'git-calls');
+  const pnpmLog = path.join(root, 'pnpm-calls');
+  const pushCount = path.join(root, 'push-count');
+  const durableMain = path.join(root, 'durable-main-mutated');
+  const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
+    cwd: root,
+    env: {
+      ISSUE_ID: 'UTV2-1722',
+      MANIFEST_PATH: 'manifest.json',
+      EXPLICIT_PR: '',
+      GIT_LOG: gitLog,
+      PNPM_LOG: pnpmLog,
+      PUSH_COUNT: pushCount,
+      DURABLE_MAIN: durableMain,
+    },
+    mocks: {
+      git: `printf '%s\n' "$*" >> "$GIT_LOG"
+if [ "$1" = diff ]; then exit 1; fi
+if [ "$1" = push ]; then
+  count=0; [ ! -f "$PUSH_COUNT" ] || count=$(cat "$PUSH_COUNT")
+  count=$((count + 1)); printf '%s' "$count" > "$PUSH_COUNT"
+  if [ "$count" -gt 1 ]; then touch "$DURABLE_MAIN"; exit 0; fi
+  exit 1
+fi
+exit 0`,
+      pnpm: `printf '%s\n' "$*" >> "$PNPM_LOG"
+exit 23`,
+    },
+  });
+
+  assert.strictEqual(result.status, 23, result.stderr);
+  assert.match(result.stdout + result.stderr, /retry gate failed/);
+  assert.match(result.stdout + result.stderr, /Refusing another push; main remains unmutated/);
+  const gitCalls = fs.readFileSync(gitLog, 'utf8').trim().split('\n');
+  assert.strictEqual(gitCalls.filter((call) => call === 'push').length, 1);
+  assert.ok(gitCalls.indexOf('pull --rebase origin main') > gitCalls.indexOf('push'));
+  assert.match(
+    fs.readFileSync(pnpmLog, 'utf8'),
+    /^ops:lane-close UTV2-1722 --repair-merged --explain --post-merge-trusted\n$/u,
+  );
+  assert.strictEqual(fs.existsSync(durableMain), false);
 });
 
 test('UTV2-1722 supplemental shape: proof side effects are closeable-only and persistence is post-gate', () => {
