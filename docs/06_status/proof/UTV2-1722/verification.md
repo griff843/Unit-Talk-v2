@@ -1,27 +1,29 @@
 # PROOF: UTV2-1722
 
-MERGE_SHA: 52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0
+MERGE_SHA: 3da00344981941595ddc51fad0acd91155a53f25
 
 ASSERTIONS:
 
 - [x] Migration and static profiles are not harvested as app-runtime evidence, and unknown profiles fail closed.
 - [x] Schema-v2 proof generation never authors `verifier.identity`.
 - [x] A failed post-merge closeout cannot durably persist proof binding changes.
+- [x] A rejected persistence push cannot retry after rebasing until the identical trusted closeout gate passes again.
 - [x] P10/R3 accepts an original PR-head receipt after merge only through an authentic merged-PR attestation.
 - [x] The damaged historical migration evidence is byte-identical to its authoritative source blob.
+- [x] The required writable DB proof passed in exact-head staging CI.
 
 EVIDENCE:
 
 ```text
 static gate: PASS
-focused regressions: PASS (505 tests, 0 failed, 0 skipped)
-writable DB: BLOCKED_DEFERRED locally by staging target identity guard
+focused regressions: PASS (506 tests, 0 failed, 0 skipped)
+writable DB: PASS (CI run 32126797482, job 95679040123, head ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a)
 historical restoration: PASS (source and restored blob 426c5898e6ae50de0611fc79cd458295b91a9d1c)
 ```
 
 ## Verification
 
-Substantive source binding: `52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0`.
+Substantive source binding: `3da00344981941595ddc51fad0acd91155a53f25`.
 
 ### Static gate
 
@@ -53,20 +55,33 @@ pnpm exec tsx --test 'scripts/ops/ci-db-proof-harvest.test.ts' 'scripts/ops/lane
 Literal TAP trailer:
 
 ```text
-1..487
-# tests 505
+1..488
+# tests 506
 # suites 3
-# pass 505
+# pass 506
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 2755.73902
+# duration_ms 3955.064354
 ```
 
 ### Writable DB proof
 
-Command: `pnpm test:db`
+Authoritative staging CI receipt:
+
+```text
+result: PASS
+run: 32126797482
+job: 95679040123 (Writable DB proof (staging only))
+head: ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a
+run URL: https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482
+job URL: https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482/job/95679040123
+```
+
+`gh run view 32126797482` and `gh api repos/griff843/Unit-Talk-v2/actions/jobs/95679040123` both report `conclusion: success`; the credentialed job completed both `Run writable DB proof against staging` and `Run the T1 live proof suites against staging` successfully.
+
+The local `pnpm test:db` attempt remains recorded only as proof that the workstation guard refused the unidentified containment target before tests ran:
 
 Literal output:
 
@@ -83,9 +98,11 @@ ELIFECYCLE Command failed with exit code 1.
 ELIFECYCLE Command failed with exit code 1.
 ```
 
-Because the staging guard exits before `tsx --test` starts, this run has no legitimate live-DB TAP trailer. A passing live-DB result is not fabricated.
+Because the local staging guard exits before `tsx --test` starts, that local attempt has no legitimate live-DB TAP trailer. No local passing result is fabricated; the successful CI receipt above is the required writable-DB evidence.
 
-Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+### Correction addendum
+
+At substantive head `3da00344981941595ddc51fad0acd91155a53f25`, the persistence retry loop re-runs the same trusted `ops:lane-close` invocation after every rebase. A non-zero re-run emits the named `post-merge-lane-close retry gate failed` warning and exits before another push. The spawnSync harness proves gate-before-retry ordering and zero successful persistence on a failed re-run. The obsolete `.gitkeep` was removed because this proof directory contains real artifacts.
 
 ### R-level compliance
 

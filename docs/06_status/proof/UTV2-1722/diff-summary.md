@@ -1,8 +1,15 @@
 ## Diff summary
 
-MERGE_SHA: 52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0
+MERGE_SHA: 3da00344981941595ddc51fad0acd91155a53f25
 
-Substantive source binding: `52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0`.
+Substantive source binding: `3da00344981941595ddc51fad0acd91155a53f25`.
+
+### Correction addendum
+
+- Persistence retries now re-run the identical trusted closeout gate after every `git pull --rebase origin main`; any non-zero result stops before another push and names the fresh-dispatch recovery path.
+- Behavioral spawnSync tests enforce gate-before-retry ordering and prove a failing post-rebase gate produces no successful persistence mutation.
+- Writable DB proof is closed by the verified exact-head CI receipt from run `32126797482`, job `95679040123`, head `ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a`; the local containment refusal remains recorded without fabricated TAP.
+- Removed the redundant proof-directory `.gitkeep`.
 
 ### Requirement mapping
 

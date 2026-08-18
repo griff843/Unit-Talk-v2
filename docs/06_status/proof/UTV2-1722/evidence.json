@@ -6,9 +6,9 @@
   "proof_profile": "static",
   "title": "Closeout recovery: profile-aware harvesting, rollback-safe persistence, and merged-PR verifier provenance",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-18T09:22:04Z",
+  "generated_at": "2026-08-18T11:15:39Z",
   "sha_binding": {
-    "verified_source_sha": "52e43d1ec2dcbe74b3de6af3bb41a2953d1257c0",
+    "verified_source_sha": "3da00344981941595ddc51fad0acd91155a53f25",
     "verified_source_note": "Exact substantive branch head containing the closeout recovery implementation. Commits after this anchor are restricted to this lane's proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI. Post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "head_sha",
-    "bound_at": "2026-08-18T10:12:44Z"
+    "bound_at": "2026-08-18T11:15:39Z"
   },
   "static_proof": {
     "pnpm_verify_static": {
@@ -38,7 +38,7 @@
     "focused_regression": {
       "command": "pnpm exec tsx --test scripts/ops/ci-db-proof-harvest.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/workflow-hardening.test.ts",
       "status": "PASS",
-      "tests": 505,
+      "tests": 506,
       "suites": 3,
       "fail": 0,
       "skipped": 0,
@@ -47,6 +47,7 @@
         "static and schema-v2 evidence never gain author-side verifier identity",
         "unknown proof profiles fail closed without harvesting",
         "failed post-merge closeout leaves no durable proof mutation",
+        "post-rebase persistence retries re-run the closeout gate before another push and a failed re-run leaves main unmutated",
         "squash, rebase, and two-parent merges use the shared merged-PR attestation bridge",
         "stale, unrelated, malformed, or unverifiable verifier receipts fail closed by named code",
         "authentic historical bundles pass only with their matching merged-PR attestations"
@@ -74,8 +75,24 @@
     }
   },
   "runtime_proof": {
-    "status": "BLOCKED_DEFERRED",
+    "status": "PASS",
     "command": "pnpm test:db",
+    "ci_receipt": {
+      "result": "PASS",
+      "run": 32126797482,
+      "job": 95679040123,
+      "head": "ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a",
+      "workflow": "CI",
+      "job_name": "Writable DB proof (staging only)",
+      "run_attempt": 1,
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482/job/95679040123",
+      "verified_with": [
+        "gh run view 32126797482",
+        "gh api repos/griff843/Unit-Talk-v2/actions/jobs/95679040123"
+      ],
+      "detail": "GitHub reports conclusion=success for the exact PR head, including the writable database proof and T1 live proof suite steps against staging. This is the authoritative credentialed receipt; no local TAP result is fabricated."
+    },
     "local_workstation": {
       "status": "BLOCKED_DEFERRED",
       "exit_code": 1,
@@ -89,7 +106,6 @@
     "fabricated_queries_or_row_counts": false
   },
   "pending_evidence": [
-    "writable DB verification through the staging-ci GitHub environment with CI_SUPABASE_* credentials",
     "external GitHub required-check verifier provenance bound to sha_binding.verified_source_sha",
     "post-merge proof rebind to the authoritative merge SHA"
   ]
