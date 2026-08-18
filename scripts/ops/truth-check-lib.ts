@@ -83,6 +83,7 @@ import { matchesLockPattern } from '../ci/file-scope-guard.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
 import {
   validateEvidenceBundleContract,
+  verifyExternalVerifierProvenanceBinding,
   type MergedPrAttestation,
   type EvidenceContractResult,
 } from './proof-schema.js';
@@ -1311,21 +1312,31 @@ export async function runTruthCheck(
             } else {
               addCheck('P10', 'fail', 'legacy verifier.identity must be set and not equal to manifest.created_by');
             }
-          } else if (
-            verifierProvenance &&
-            shaMatches(verifierProvenance.verified_sha, evidence.bundle.sha_binding?.verified_source_sha)
-          ) {
-            addCheck(
-              'P10',
-              'pass',
-              `external exact-head verifier provenance: ${verifierProvenance.producer} at ${verifierProvenance.verified_sha}`,
-            );
           } else {
-            addCheck(
-              'P10',
-              'fail',
-              'schema-v2 proof requires an external GitHub required-check receipt bound to sha_binding.verified_source_sha',
-            );
+            const verifierBinding = verifyExternalVerifierProvenanceBinding({
+              receiptSha: verifierProvenance?.verified_sha,
+              verifiedSourceSha: evidence.bundle.sha_binding?.verified_source_sha,
+              context: {
+                gate: 'post-merge-read',
+                laneType: manifest.lane_type,
+                tier,
+                repoRoot: ROOT,
+                mergedPrAttestation,
+              },
+            });
+            if (verifierProvenance && verifierBinding.valid) {
+              addCheck(
+                'P10',
+                'pass',
+                `external verifier provenance (${verifierBinding.code}): ${verifierProvenance.producer} at ${verifierProvenance.verified_sha}`,
+              );
+            } else {
+              addCheck(
+                'P10',
+                'fail',
+                `schema-v2 proof requires external exact-head verifier provenance or an attested original-PR-head receipt: ${verifierBinding.code}: ${verifierBinding.detail}`,
+              );
+            }
           }
         }
       }
@@ -1605,20 +1616,28 @@ export function addUnsupportedRuntimeChecks(
       addCheck('R2', 'fail', 'schema-v2 proof profile is unknown or undeclared');
     }
 
-    if (
-      context.verifierProvenance &&
-      shaMatches(context.verifierProvenance.verified_sha, evidence.bundle.sha_binding?.verified_source_sha)
-    ) {
+    const verifierBinding = verifyExternalVerifierProvenanceBinding({
+      receiptSha: context.verifierProvenance?.verified_sha,
+      verifiedSourceSha: evidence.bundle.sha_binding?.verified_source_sha,
+      context: {
+        gate: 'post-merge-read',
+        laneType: context.laneType,
+        tier,
+        repoRoot: context.repoRoot,
+        mergedPrAttestation: context.mergedPrAttestation,
+      },
+    });
+    if (context.verifierProvenance && verifierBinding.valid) {
       addCheck(
         'R3',
         'pass',
-        `external exact-head verifier receipt ${context.verifierProvenance.producer} at ${context.verifierProvenance.verified_sha}`,
+        `external verifier receipt (${verifierBinding.code}) ${context.verifierProvenance.producer} at ${context.verifierProvenance.verified_sha}`,
       );
     } else {
       addCheck(
         'R3',
         'fail',
-        'schema-v2 T1 proof requires external exact-head CI verifier provenance bound to sha_binding.verified_source_sha',
+        `schema-v2 T1 proof requires external exact-head CI verifier provenance or an attested original-PR-head receipt: ${verifierBinding.code}: ${verifierBinding.detail}`,
       );
     }
     return;

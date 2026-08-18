@@ -21,6 +21,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import type { ModelRoutingBlock } from './model-routing.js';
+import { declaredProfileForLaneType } from './proof-schema.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -1267,9 +1268,10 @@ export interface AutoHarvestCiDbProofResult {
 
 /**
  * UTV2-1641: when a merge SHA is available and `evidence.json` exists but does
- * not yet carry a populated `runtime_proof` (both `queries` and `row_counts`
- * non-empty), attempts to harvest CI's own genuine "Writable DB proof (staging
- * only)" evidence for that merge SHA and merge it in.
+ * belongs to the shared contract's app-runtime profile and does not yet carry
+ * a populated `runtime_proof` (both `queries` and `row_counts` non-empty),
+ * attempts to harvest CI's own genuine "Writable DB proof (staging only)"
+ * evidence for that merge SHA and merge it in.
  *
  * This is deliberately best-effort and additive, mirroring
  * `scripts/ops/proof-repair.ts`'s idempotency contract:
@@ -1282,8 +1284,12 @@ export interface AutoHarvestCiDbProofResult {
  *     `truth-check`'s R1/R2 are left to fail on their own honest terms, which
  *     is the correct outcome for a lane whose CI truly never ran a live DB
  *     proof (e.g. T2/T3, or a CI run that predates this job's existence).
- *   - `verifier` is merged via `mergeVerifierIdentity` (UTV2-1642's fix), never
- *     replaced -- any pre-existing rich verifier narrative survives.
+ *   - Migration and static profiles are immutable to this app-runtime harvest.
+ *     The manifest lane_type is authoritative through the shared profile
+ *     resolver, and an unknown lane type fails closed without harvesting.
+ *   - Schema-v2 evidence never receives an author-side verifier identity. Its
+ *     verifier provenance comes only from external required-check receipts.
+ *     Legacy schema-v1 bundles retain their historical additive behavior.
  *
  * The caller (`main`, and therefore `post-merge-lane-close.yml`'s
  * `pnpm ops:proof-generate ... --merge-sha ...` invocation) treats a failure
@@ -1297,11 +1303,25 @@ export function autoHarvestCiDbProofIntoEvidence(
   root: string,
   issueId: string,
   mergeSha: string | null,
+  laneType: string | null | undefined,
   manifestCreatedBy: string | null | undefined,
   options: HarvestCiDbProofOptions & { write?: boolean } = {},
 ): AutoHarvestCiDbProofResult {
   if (!mergeSha) {
     return { attempted: false, applied: false, code: 'no_merge_sha' };
+  }
+
+  const profile = declaredProfileForLaneType(laneType);
+  if (!profile) {
+    return {
+      attempted: false,
+      applied: false,
+      code: 'unknown_proof_profile',
+      reason: `manifest lane_type '${laneType ?? ''}' does not resolve to an authorable proof profile`,
+    };
+  }
+  if (profile !== 'app-runtime') {
+    return { attempted: false, applied: false, code: `profile_${profile}_not_harvested` };
   }
 
   const evidenceRelPath = path.posix.join('docs', '06_status', 'proof', issueId.toUpperCase(), 'evidence.json');
@@ -1335,30 +1355,31 @@ export function autoHarvestCiDbProofIntoEvidence(
     return { attempted: true, applied: false, code: harvested.code, reason: harvested.reason, evidence_path: evidenceRelPath };
   }
 
-  const priorIdentity =
-    existingVerifier && typeof existingVerifier === 'object' && typeof (existingVerifier as Record<string, unknown>)['identity'] === 'string'
-      ? ((existingVerifier as Record<string, unknown>)['identity'] as string)
-      : null;
-  const harvestNote =
-    `runtime_proof auto-harvested by ops:proof-generate from CI job "${harvested.runInfo.job}" ` +
-    `(run ${harvested.runInfo.run_id}, job ${harvested.runInfo.job_id})`;
-  const identityCandidate = priorIdentity && priorIdentity.trim() ? `${priorIdentity}; ${harvestNote}` : harvestNote;
-
-  if (manifestCreatedBy && identityCandidate === manifestCreatedBy) {
-    return {
-      attempted: true,
-      applied: false,
-      code: 'verifier_identity_matches_creator',
-      reason: `harvested verifier identity would equal manifest.created_by (${manifestCreatedBy})`,
-      evidence_path: evidenceRelPath,
-    };
-  }
-
   const next: Record<string, unknown> = {
     ...existing,
-    verifier: mergeVerifierIdentity(existingVerifier, identityCandidate),
     runtime_proof: harvested.runtimeProof,
   };
+  if (existing['schema_version'] !== 2) {
+    const priorIdentity =
+      existingVerifier && typeof existingVerifier === 'object' && typeof (existingVerifier as Record<string, unknown>)['identity'] === 'string'
+        ? ((existingVerifier as Record<string, unknown>)['identity'] as string)
+        : null;
+    const harvestNote =
+      `runtime_proof auto-harvested by ops:proof-generate from CI job "${harvested.runInfo.job}" ` +
+      `(run ${harvested.runInfo.run_id}, job ${harvested.runInfo.job_id})`;
+    const identityCandidate = priorIdentity && priorIdentity.trim() ? `${priorIdentity}; ${harvestNote}` : harvestNote;
+
+    if (manifestCreatedBy && identityCandidate === manifestCreatedBy) {
+      return {
+        attempted: true,
+        applied: false,
+        code: 'verifier_identity_matches_creator',
+        reason: `harvested verifier identity would equal manifest.created_by (${manifestCreatedBy})`,
+        evidence_path: evidenceRelPath,
+      };
+    }
+    next['verifier'] = mergeVerifierIdentity(existingVerifier, identityCandidate);
+  }
   if (options.write ?? true) {
     fs.writeFileSync(evidenceAbsolutePath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
   }
@@ -1491,9 +1512,16 @@ function main(argv = process.argv.slice(2)): number {
   let harvestResult: AutoHarvestCiDbProofResult | null = null;
   if (!bools.has('no-harvest-ci-db-proof')) {
     try {
-      harvestResult = autoHarvestCiDbProofIntoEvidence(ROOT, issueId, input.gitTruth.merge_sha, manifest.created_by, {
-        write: !bools.has('dry-run'),
-      });
+      harvestResult = autoHarvestCiDbProofIntoEvidence(
+        ROOT,
+        issueId,
+        input.gitTruth.merge_sha,
+        manifest.lane_type,
+        manifest.created_by,
+        {
+          write: !bools.has('dry-run'),
+        },
+      );
     } catch (error) {
       harvestResult = {
         attempted: true,

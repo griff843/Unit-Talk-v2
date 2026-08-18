@@ -166,7 +166,7 @@ const STATIC_LANE_TYPES = new Set([
 ]);
 const AUTHORABLE_PROFILES = new Set<EvidenceProofProfile>(['app-runtime', 'migration', 'static']);
 
-function declaredProfileForLaneType(laneType: string | null | undefined): EvidenceProofProfile | null {
+export function declaredProfileForLaneType(laneType: string | null | undefined): EvidenceProofProfile | null {
   const normalized = laneType?.trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === 'migration') return 'migration';
@@ -197,6 +197,10 @@ type MigrationReceiptBindingResult =
   | { status: 'non-proof-delta'; paths: string[] }
   | { status: 'attestation-mismatch'; detail: string }
   | { status: 'unverified'; detail: string };
+
+type MergedPrAttestationResolution =
+  | { status: 'pass'; attestation: MergedPrAttestation; mainRef: string }
+  | Extract<MigrationReceiptBindingResult, { status: 'attestation-mismatch' | 'unverified' }>;
 
 function verifyCommitAvailable(
   sha: string,
@@ -312,12 +316,10 @@ function verifyProofOnlyMigrationAncestry(
     : { status: 'pass' };
 }
 
-function verifyPostMergeMigrationReceiptBinding(
-  receiptHead: string,
+function resolveMergedPrAttestation(
   verifiedSourceSha: string,
-  issueId: string,
   context: EvidenceContractContext,
-): MigrationReceiptBindingResult {
+): MergedPrAttestationResolution {
   if (!context.repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
@@ -345,16 +347,11 @@ function verifyPostMergeMigrationReceiptBinding(
   }
 
   for (const [sha, label] of [
-    [receiptHead, 'migration receipt head'],
     [attestation.head_sha, 'GitHub-recorded PR head'],
     [attestation.merge_sha, 'GitHub-recorded merge'],
   ] as const) {
     const unavailable = verifyCommitAvailable(sha, label, context.repoRoot);
     if (unavailable) return unavailable;
-  }
-
-  if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
-    return { status: 'pass' };
   }
 
   const headAncestry = spawnSync(
@@ -430,6 +427,30 @@ function verifyPostMergeMigrationReceiptBinding(
     }
   }
 
+  return { status: 'pass', attestation, mainRef };
+}
+
+function verifyPostMergeMigrationReceiptBinding(
+  receiptHead: string,
+  verifiedSourceSha: string,
+  issueId: string,
+  context: EvidenceContractContext,
+): MigrationReceiptBindingResult {
+  if (!context.repoRoot) {
+    return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
+  }
+
+  const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context.repoRoot);
+  if (receiptUnavailable) return receiptUnavailable;
+
+  const resolution = resolveMergedPrAttestation(verifiedSourceSha, context);
+  if (resolution.status !== 'pass') return resolution;
+  const { attestation, mainRef } = resolution;
+
+  if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
+    return { status: 'pass' };
+  }
+
   // A squash merge disconnects the PR-head history from the merge commit.
   // Validate both real branch-side ancestry and the direct non-squash path;
   // either path may establish a proof-only rebind, but neither may bypass the
@@ -471,6 +492,94 @@ function verifyPostMergeMigrationReceiptBinding(
   if (nonProofPaths.length > 0) return { status: 'non-proof-delta', paths: nonProofPaths };
 
   return { status: 'not-ancestor' };
+}
+
+export type ExternalVerifierBindingCode =
+  | 'verifier_provenance_bound_exact_source'
+  | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_receipt_sha_invalid'
+  | 'verifier_source_sha_invalid'
+  | 'verifier_receipt_head_mismatch'
+  | 'verifier_merge_attestation_mismatch'
+  | 'verifier_merge_attestation_unverified';
+
+export type ExternalVerifierBindingResult =
+  | { valid: true; code: 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'; detail: string }
+  | { valid: false; code: Exclude<ExternalVerifierBindingCode, 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'>; detail: string };
+
+/**
+ * Binds an external required-check receipt to schema-v2 evidence. Before merge,
+ * and whenever checks ran on the merge SHA itself, exact-source equality is the
+ * only accepted path. After a squash/rebase/two-parent merge, the receipt may
+ * instead name the original PR head only when the caller supplies the same
+ * authoritative GitHub merged-PR attestation used by migration receipts.
+ */
+export function verifyExternalVerifierProvenanceBinding(input: {
+  receiptSha: string | null | undefined;
+  verifiedSourceSha: string | null | undefined;
+  context: EvidenceContractContext;
+}): ExternalVerifierBindingResult {
+  const receiptSha = input.receiptSha?.trim() ?? '';
+  const verifiedSourceSha = input.verifiedSourceSha?.trim() ?? '';
+  if (!SHA_RE.test(receiptSha)) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_sha_invalid',
+      detail: 'external verifier receipt must identify a full 40-character Git SHA',
+    };
+  }
+  if (!SHA_RE.test(verifiedSourceSha)) {
+    return {
+      valid: false,
+      code: 'verifier_source_sha_invalid',
+      detail: 'sha_binding.verified_source_sha must be a full 40-character Git SHA',
+    };
+  }
+  if (receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase()) {
+    return {
+      valid: true,
+      code: 'verifier_provenance_bound_exact_source',
+      detail: 'external verifier receipt exactly matches sha_binding.verified_source_sha',
+    };
+  }
+  if (input.context.gate !== 'post-merge-read') {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'pre-merge external verifier receipt must exactly match sha_binding.verified_source_sha',
+    };
+  }
+
+  const attestation = input.context.mergedPrAttestation;
+  if (!attestation || receiptSha.toLowerCase() !== attestation.head_sha?.toLowerCase()) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'external verifier receipt must match the GitHub-attested original PR head',
+    };
+  }
+
+  const resolution = resolveMergedPrAttestation(verifiedSourceSha, input.context);
+  if (resolution.status === 'attestation-mismatch') {
+    return {
+      valid: false,
+      code: 'verifier_merge_attestation_mismatch',
+      detail: resolution.detail,
+    };
+  }
+  if (resolution.status === 'unverified') {
+    return {
+      valid: false,
+      code: 'verifier_merge_attestation_unverified',
+      detail: resolution.detail,
+    };
+  }
+
+  return {
+    valid: true,
+    code: 'verifier_provenance_bound_merged_pr_head',
+    detail: `GitHub merged-PR attestation connects original head ${receiptSha} to merge ${verifiedSourceSha}`,
+  };
 }
 
 function validateV2Binding(

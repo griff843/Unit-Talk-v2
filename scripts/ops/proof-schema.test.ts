@@ -9,6 +9,7 @@ import {
   isProofStale,
   PROOF_SCHEMA_VERSION,
   validateEvidenceBundleContract,
+  verifyExternalVerifierProvenanceBinding,
   type ProofSchemaV2,
 } from './proof-schema.js';
 import { validateBindingEvidenceContract } from '../ci/proof-binding-validator.js';
@@ -659,7 +660,7 @@ test('post-merge migration receipt binding is squash-aware and attestation-bound
   const repo = createReceiptBindingRepo();
   try {
     const squashShaped = migrationEvidenceAt(repo.receiptHead, repo.squashMergeSha);
-    const attestation = mergedPrAttestation(repo.squashMergeSha, repo.receiptHead);
+    const attestation = mergedPrAttestation(repo.squashMergeSha, repo.proofOnlyHead);
     const accepted = validateEvidenceBundleContract(
       squashShaped,
       {
@@ -843,6 +844,108 @@ test('post-merge two-parent binding accepts proof-only rebind plus independent m
   } finally {
     fs.rmSync(repo.repoRoot, { recursive: true, force: true });
   }
+});
+
+test('external verifier bridge accepts authentic squash, rebase, and two-parent merged-PR attestations', () => {
+  const squash = createReceiptBindingRepo();
+  const rebase = createRebaseReceiptBindingRepo();
+  const merge = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  try {
+    const cases = [
+      {
+        receiptSha: squash.proofOnlyHead,
+        verifiedSourceSha: squash.squashMergeSha,
+        repoRoot: squash.repoRoot,
+      },
+      {
+        receiptSha: rebase.originalHead,
+        verifiedSourceSha: rebase.replayedTip,
+        repoRoot: rebase.repoRoot,
+      },
+      {
+        receiptSha: merge.originalHead,
+        verifiedSourceSha: merge.mergeSha,
+        repoRoot: merge.repoRoot,
+      },
+    ];
+
+    for (const fixture of cases) {
+      const result = verifyExternalVerifierProvenanceBinding({
+        receiptSha: fixture.receiptSha,
+        verifiedSourceSha: fixture.verifiedSourceSha,
+        context: {
+          gate: 'post-merge-read',
+          repoRoot: fixture.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(fixture.verifiedSourceSha, fixture.receiptSha),
+        },
+      });
+      assert.equal(result.valid, true, JSON.stringify(result));
+      assert.equal(result.code, 'verifier_provenance_bound_merged_pr_head');
+    }
+  } finally {
+    fs.rmSync(squash.repoRoot, { recursive: true, force: true });
+    fs.rmSync(rebase.repoRoot, { recursive: true, force: true });
+    fs.rmSync(merge.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('external verifier bridge rejects stale, malformed, mismatched, and unverifiable receipts by named code', () => {
+  const repo = createReceiptBindingRepo();
+  try {
+    const context = {
+      gate: 'post-merge-read' as const,
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.squashMergeSha, repo.proofOnlyHead),
+    };
+    assert.equal(
+      verifyExternalVerifierProvenanceBinding({
+        receiptSha: repo.receiptHead,
+        verifiedSourceSha: repo.squashMergeSha,
+        context,
+      }).code,
+      'verifier_receipt_head_mismatch',
+    );
+    assert.equal(
+      verifyExternalVerifierProvenanceBinding({
+        receiptSha: 'not-a-sha',
+        verifiedSourceSha: repo.squashMergeSha,
+        context,
+      }).code,
+      'verifier_receipt_sha_invalid',
+    );
+    assert.equal(
+      verifyExternalVerifierProvenanceBinding({
+        receiptSha: repo.proofOnlyHead,
+        verifiedSourceSha: repo.proofOnlyMergeSha,
+        context,
+      }).code,
+      'verifier_merge_attestation_mismatch',
+    );
+
+    const unavailable = 'f'.repeat(40);
+    const unverifiable = verifyExternalVerifierProvenanceBinding({
+      receiptSha: unavailable,
+      verifiedSourceSha: repo.squashMergeSha,
+      context: {
+        gate: 'post-merge-read',
+        repoRoot: repo.repoRoot,
+        mergedPrAttestation: mergedPrAttestation(repo.squashMergeSha, unavailable),
+      },
+    });
+    assert.equal(unverifiable.code, 'verifier_merge_attestation_unverified');
+  } finally {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('external verifier provenance remains exact-head before merge', () => {
+  const result = verifyExternalVerifierProvenanceBinding({
+    receiptSha: VALID_SHA,
+    verifiedSourceSha: OTHER_SHA,
+    context: { gate: 'pre-merge' },
+  });
+  assert.equal(result.valid, false);
+  assert.equal(result.code, 'verifier_receipt_head_mismatch');
 });
 
 test('post-merge binding rejects a single-parent merge SHA that contains the PR head', () => {

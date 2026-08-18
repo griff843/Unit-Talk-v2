@@ -2039,7 +2039,7 @@ test('autoHarvestCiDbProofIntoEvidence: no merge SHA -> no-op, nothing attempted
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-sha-'));
   try {
     writeHarvestEvidence(root, 'UTV2-9001', { schema_version: 1 });
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9001', null, 'claude');
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9001', null, 'runtime', 'claude');
     assert.strictEqual(result.attempted, false);
     assert.strictEqual(result.applied, false);
     assert.strictEqual(result.code, 'no_merge_sha');
@@ -2051,7 +2051,7 @@ test('autoHarvestCiDbProofIntoEvidence: no merge SHA -> no-op, nothing attempted
 test('autoHarvestCiDbProofIntoEvidence: no evidence.json at all -> no-op (T2/T3 lanes never harvest into nothing)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-no-evidence-'));
   try {
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9002', HARVEST_MERGE_SHA, 'claude');
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9002', HARVEST_MERGE_SHA, 'runtime', 'claude');
     assert.strictEqual(result.attempted, false);
     assert.strictEqual(result.applied, false);
     assert.strictEqual(result.code, 'no_evidence_bundle');
@@ -2068,11 +2068,93 @@ test('autoHarvestCiDbProofIntoEvidence: already-populated runtime_proof -> no-op
       verifier: { identity: 'existing-verifier' },
       runtime_proof: { queries: [{ table: 'picks', description: 'x' }], row_counts: [{ table: 'picks', count: 1, status: 'y' }] },
     });
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9003', HARVEST_MERGE_SHA, 'claude');
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9003', HARVEST_MERGE_SHA, 'runtime', 'claude');
     assert.strictEqual(result.attempted, false);
     assert.strictEqual(result.code, 'already_populated');
     const untouched = JSON.parse(fs.readFileSync(path.join(root, 'docs/06_status/proof/UTV2-9003/evidence.json'), 'utf8'));
     assert.strictEqual(untouched.verifier.identity, 'existing-verifier');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('profile-aware harvest preserves migration runtime proof byte-for-byte', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-migration-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9010', {
+      schema_version: 2,
+      proof_profile: 'migration',
+      runtime_proof: {
+        head: 'a'.repeat(40),
+        precondition_drill: { result: 'PASS', run: 1, job: 2 },
+      },
+    });
+    const before = fs.readFileSync(evidencePath);
+    const result = autoHarvestCiDbProofIntoEvidence(
+      root,
+      'UTV2-9010',
+      HARVEST_MERGE_SHA,
+      'migration',
+      'codex-cli',
+      { ghExecutor: () => { throw new Error('migration profile must not query GitHub harvest data'); } },
+    );
+
+    assert.strictEqual(result.code, 'profile_migration_not_harvested');
+    assert.strictEqual(result.attempted, false);
+    assert.deepStrictEqual(fs.readFileSync(evidencePath), before);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('profile-aware harvest leaves static schema-v2 evidence unchanged and never adds verifier identity', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-static-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9011', {
+      schema_version: 2,
+      proof_profile: 'static',
+      static_proof: { type_check: { status: 'PASS' } },
+    });
+    const before = fs.readFileSync(evidencePath);
+    const result = autoHarvestCiDbProofIntoEvidence(
+      root,
+      'UTV2-9011',
+      HARVEST_MERGE_SHA,
+      'governance',
+      'codex-cli',
+      { ghExecutor: () => { throw new Error('static profile must not query GitHub harvest data'); } },
+    );
+
+    assert.strictEqual(result.code, 'profile_static_not_harvested');
+    assert.deepStrictEqual(fs.readFileSync(evidencePath), before);
+    const after = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.strictEqual(after.verifier, undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('profile-aware harvest fails closed when manifest lane_type is unknown', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-unknown-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9012', {
+      schema_version: 2,
+      proof_profile: 'app-runtime',
+      runtime_proof: { status: 'not_run' },
+    });
+    const before = fs.readFileSync(evidencePath);
+    const result = autoHarvestCiDbProofIntoEvidence(
+      root,
+      'UTV2-9012',
+      HARVEST_MERGE_SHA,
+      'future-unratified-profile',
+      'codex-cli',
+      { ghExecutor: () => { throw new Error('unknown profile must not query GitHub harvest data'); } },
+    );
+
+    assert.strictEqual(result.code, 'unknown_proof_profile');
+    assert.strictEqual(result.applied, false);
+    assert.deepStrictEqual(fs.readFileSync(evidencePath), before);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -2096,7 +2178,7 @@ test('BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof
     const before = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
     assert.strictEqual(Array.isArray(before.runtime_proof?.queries), false);
 
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9004', HARVEST_MERGE_SHA, 'claude', {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9004', HARVEST_MERGE_SHA, 'runtime', 'claude', {
       ghExecutor: harvestHappyPathExecutor(),
       zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
       testSourceText: HARVEST_REAL_TEST_SOURCE,
@@ -2123,6 +2205,36 @@ test('BEFORE/AFTER (UTV2-1641): a genuine CI receipt harvests real runtime_proof
   }
 });
 
+test('schema-v2 app-runtime harvest populates runtime proof without authoring verifier identity', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-harvest-v2-runtime-'));
+  try {
+    const evidencePath = writeHarvestEvidence(root, 'UTV2-9013', {
+      schema_version: 2,
+      proof_profile: 'app-runtime',
+      runtime_proof: { status: 'not_run' },
+    });
+    const result = autoHarvestCiDbProofIntoEvidence(
+      root,
+      'UTV2-9013',
+      HARVEST_MERGE_SHA,
+      'runtime',
+      'codex-cli',
+      {
+        ghExecutor: harvestHappyPathExecutor(),
+        zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
+        testSourceText: HARVEST_REAL_TEST_SOURCE,
+      },
+    );
+
+    assert.strictEqual(result.code, 'harvested');
+    const after = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    assert.ok(after.runtime_proof.queries.length > 0);
+    assert.strictEqual(after.verifier, undefined);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('autoHarvestCiDbProofIntoEvidence: no CI evidence exists for this merge SHA -> fails closed, evidence.json untouched (R1/R2 stay honestly failed)', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1641-harvest-noci-'));
   try {
@@ -2134,7 +2246,7 @@ test('autoHarvestCiDbProofIntoEvidence: no CI evidence exists for this merge SHA
     const before = fs.readFileSync(evidencePath, 'utf8');
 
     const noPrExecutor: GhExecutor = () => Buffer.from(JSON.stringify([]));
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9005', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'claude', {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9005', 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef', 'runtime', 'claude', {
       ghExecutor: noPrExecutor,
     });
 
@@ -2156,7 +2268,7 @@ test('autoHarvestCiDbProofIntoEvidence: refuses when the harvested verifier iden
     const collidingCreator =
       'runtime_proof auto-harvested by ops:proof-generate from CI job "Writable DB proof (staging only)" ' +
       `(run ${HARVEST_RUN_ID}, job ${HARVEST_JOB_ID})`;
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9006', HARVEST_MERGE_SHA, collidingCreator, {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9006', HARVEST_MERGE_SHA, 'runtime', collidingCreator, {
       ghExecutor: harvestHappyPathExecutor(),
       zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
       testSourceText: HARVEST_REAL_TEST_SOURCE,
@@ -2173,7 +2285,7 @@ test('autoHarvestCiDbProofIntoEvidence: --dry-run-equivalent (write:false) compu
   try {
     const evidencePath = writeHarvestEvidence(root, 'UTV2-9007', { schema_version: 1, runtime_proof: { status: 'not_run' } });
     const before = fs.readFileSync(evidencePath, 'utf8');
-    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9007', HARVEST_MERGE_SHA, 'claude', {
+    const result = autoHarvestCiDbProofIntoEvidence(root, 'UTV2-9007', HARVEST_MERGE_SHA, 'runtime', 'claude', {
       ghExecutor: harvestHappyPathExecutor(),
       zipExtractor: () => HARVEST_REAL_RECEIPT_RAW,
       testSourceText: HARVEST_REAL_TEST_SOURCE,

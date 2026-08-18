@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
@@ -31,6 +30,7 @@ import {
 } from './truth-check-lib.js';
 import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
+import { verifyExternalVerifierProvenanceBinding } from './proof-schema.js';
 import { getRepoRoot } from './shared.js';
 import type { CheckResult, LaneManifest, TruthCheckResult } from './shared.js';
 
@@ -744,29 +744,27 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
   );
 });
 
-const CURRENT_REPO_HEAD = execFileSync('git', ['rev-parse', 'HEAD'], {
-  cwd: getRepoRoot(),
-  encoding: 'utf8',
-}).trim();
+const AUTHENTIC_PR_HEAD = 'aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7';
+const AUTHENTIC_MERGE_SHA = '3ce86b98a5aa01ae244794253a8c7e716f2ce733';
 
 const MERGED_PR_ATTESTATION = {
-  merge_sha: CURRENT_REPO_HEAD,
-  head_sha: CURRENT_REPO_HEAD,
+  merge_sha: AUTHENTIC_MERGE_SHA,
+  head_sha: AUTHENTIC_PR_HEAD,
   pr_number: 1428,
   source: 'github-api' as const,
 };
 
-function schemaV2MigrationBundle(): EvidenceBundleV1 {
+function schemaV2MigrationBundle(verifiedSourceSha = AUTHENTIC_PR_HEAD): EvidenceBundleV1 {
   return {
     schema_version: 2,
     sha_binding: {
-      verified_source_sha: CURRENT_REPO_HEAD,
+      verified_source_sha: verifiedSourceSha,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
     },
     static_proof: { type_check: { status: 'PASS' } },
     runtime_proof: {
-      head: CURRENT_REPO_HEAD,
+      head: AUTHENTIC_PR_HEAD,
       precondition_drill: {
         result: 'PASS',
         run: 31999981947,
@@ -783,7 +781,7 @@ function schemaV2MigrationBundle(): EvidenceBundleV1 {
 const EXTERNAL_VERIFIER = {
   source: 'github-required-check' as const,
   producer: 'github-app:15368:verify',
-  verified_sha: CURRENT_REPO_HEAD,
+  verified_sha: AUTHENTIC_PR_HEAD,
   details_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/31999981913',
 };
 
@@ -793,7 +791,7 @@ test('schema-v2 migration T1 passes R1/R2 without fabricated queries or row_coun
     (id, status, detail) => checks.push({ id, status, detail }),
     false,
     'T1',
-    { bundle: schemaV2MigrationBundle() },
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
     {
       laneType: 'migration',
       verifierProvenance: EXTERNAL_VERIFIER,
@@ -836,7 +834,7 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
     (id, status, detail) => checks.push({ id, status, detail }),
     false,
     'T1',
-    { bundle: schemaV2MigrationBundle() },
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
     {
       laneType: 'migration',
       verifierProvenance: null,
@@ -852,7 +850,7 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
     (id, status, detail) => staleChecks.push({ id, status, detail }),
     false,
     'T1',
-    { bundle: schemaV2MigrationBundle() },
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
     {
       laneType: 'migration',
       verifierProvenance: { ...EXTERNAL_VERIFIER, verified_sha: 'b'.repeat(40) },
@@ -861,6 +859,103 @@ test('schema-v2 verifier provenance is external and exact-head, never evidence-a
     },
   );
   assert.equal(staleChecks.find((check) => check.id === 'R3')?.status, 'fail');
+});
+
+test('real restored and closeout bundles accept only their authentic merged-PR attestations', () => {
+  const repoRoot = getRepoRoot();
+  const fixtures = [
+    {
+      issueId: 'UTV2-1718',
+      laneType: 'migration',
+      headSha: AUTHENTIC_PR_HEAD,
+      mergeSha: AUTHENTIC_MERGE_SHA,
+      prNumber: 1428,
+    },
+    {
+      issueId: 'UTV2-1720',
+      laneType: 'governance',
+      headSha: '9db2dd994b84369f95be862349237992c5741ca4',
+      mergeSha: '374261599d63fea9a4112d94e4db18c05532e171',
+      prNumber: 1430,
+    },
+  ] as const;
+
+  const bundles = new Map(fixtures.map((fixture) => [
+    fixture.issueId,
+    JSON.parse(fs.readFileSync(
+      path.join(repoRoot, 'docs/06_status/proof', fixture.issueId, 'evidence.json'),
+      'utf8',
+    )) as EvidenceBundleV1,
+  ]));
+
+  for (const fixture of fixtures) {
+    const bundle = bundles.get(fixture.issueId)!;
+    const attestation = {
+      merge_sha: fixture.mergeSha,
+      head_sha: fixture.headSha,
+      pr_number: fixture.prNumber,
+      source: 'github-api' as const,
+    };
+    const verifierProvenance = {
+      source: 'github-required-check' as const,
+      producer: 'github-app:15368:verify',
+      verified_sha: fixture.headSha,
+      details_url: null,
+    };
+    const authenticChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+    addUnsupportedRuntimeChecks(
+      (id, status, detail) => authenticChecks.push({ id, status, detail }),
+      false,
+      'T1',
+      { bundle },
+      {
+        laneType: fixture.laneType,
+        verifierProvenance,
+        mergedPrAttestation: attestation,
+        repoRoot,
+      },
+    );
+    assert.deepStrictEqual(
+      authenticChecks.map((check) => [check.id, check.status]),
+      [['R1', 'pass'], ['R2', 'pass'], ['R3', 'pass']],
+      `${fixture.issueId} authentic attestation`,
+    );
+
+    const verifierBinding = verifyExternalVerifierProvenanceBinding({
+      receiptSha: fixture.headSha,
+      verifiedSourceSha: bundle.sha_binding?.verified_source_sha,
+      context: { gate: 'post-merge-read', repoRoot, mergedPrAttestation: attestation },
+    });
+    assert.equal(verifierBinding.valid, true, `${fixture.issueId}: ${JSON.stringify(verifierBinding)}`);
+
+    const other = fixtures.find((candidate) => candidate.issueId !== fixture.issueId)!;
+    const swappedAttestation = {
+      merge_sha: other.mergeSha,
+      head_sha: other.headSha,
+      pr_number: other.prNumber,
+      source: 'github-api' as const,
+    };
+    const swappedChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+    addUnsupportedRuntimeChecks(
+      (id, status, detail) => swappedChecks.push({ id, status, detail }),
+      false,
+      'T1',
+      { bundle },
+      {
+        laneType: fixture.laneType,
+        verifierProvenance,
+        mergedPrAttestation: swappedAttestation,
+        repoRoot,
+      },
+    );
+    assert.equal(swappedChecks.find((check) => check.id === 'R3')?.status, 'fail');
+    const swappedBinding = verifyExternalVerifierProvenanceBinding({
+      receiptSha: fixture.headSha,
+      verifiedSourceSha: bundle.sha_binding?.verified_source_sha,
+      context: { gate: 'post-merge-read', repoRoot, mergedPrAttestation: swappedAttestation },
+    });
+    assert.equal(swappedBinding.valid, false);
+  }
 });
 
 function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
@@ -1747,7 +1842,7 @@ test('schema-v2 migration packet passes pre-merge and post-merge shared contract
     (id, status, detail) => postMerge.push({ id, status, detail }),
     false,
     'T1',
-    { bundle: schemaV2MigrationBundle() },
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
     {
       laneType: 'migration',
       verifierProvenance: EXTERNAL_VERIFIER,
