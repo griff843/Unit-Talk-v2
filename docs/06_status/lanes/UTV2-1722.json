@@ -1,0 +1,60 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1722",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1722-closeout-recovery",
+  "branch": "codex/utv2-1722-closeout-recovery",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1431",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/post-merge-lane-close.yml",
+    ".ops/sync/UTV2-1722.yml",
+    "docs/06_status/proof/UTV2-1718/evidence.json",
+    "docs/06_status/proof/UTV2-1722/diff-summary.md",
+    "docs/06_status/proof/UTV2-1722/evidence.json",
+    "docs/06_status/proof/UTV2-1722/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1722/verification.md",
+    "scripts/ops/ci-db-proof-harvest.test.ts",
+    "scripts/ops/ci-db-proof-harvest.ts",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/proof-generate.test.ts",
+    "scripts/ops/proof-generate.ts",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/workflow-hardening.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1722/evidence.json",
+    "docs/06_status/proof/UTV2-1722/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-08-18T09:03:20.422Z",
+  "heartbeat_at": "2026-08-18T09:29:03.549Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1722-closeout-recovery.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1722-closeout-recovery",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

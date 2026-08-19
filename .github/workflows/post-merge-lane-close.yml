@@ -337,39 +337,8 @@ jobs:
             # this invocation deliberately never does -- it is bound only by
             # the validated ops:lane-close --repair-merged step below.
             pnpm ops:proof-generate "$ISSUE_ID" --merge-sha "$MERGE_SHA" --json
-            echo "::notice title=post-merge-lane-close::Proof artifacts regenerated with authoritative merge SHA for $ISSUE_ID."
+            echo "::notice title=post-merge-lane-close::Proof artifacts regenerated in the working tree with authoritative merge SHA for $ISSUE_ID; persistence is deferred until the closeout gate passes."
           fi
-
-      - name: Persist proof binding before downstream closeout gates
-        # Persist only the proof produced by the closeable flow above. This
-        # preserves the status gate as lifecycle authority.
-        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.resolve_sha.outputs.merge_sha != ''
-        env:
-          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add "docs/06_status/proof/$ISSUE_ID/"
-          if git diff --cached --quiet; then
-            echo "::notice title=post-merge-lane-close::Proof binding already persisted."
-            exit 0
-          fi
-          git commit -m "chore(proof): bind $ISSUE_ID to authoritative merge SHA [skip ci]"
-          pushed=false
-          for attempt in 1 2 3; do
-            if git push; then
-              pushed=true
-              break
-            fi
-            echo "::warning title=post-merge-lane-close::Proof-binding push attempt $attempt rejected because main advanced. Rebasing and retrying."
-            git pull --rebase origin main
-          done
-          if [ "$pushed" != "true" ]; then
-            echo "::error title=post-merge-lane-close::Proof binding could not be persisted after 3 attempts."
-            exit 1
-          fi
-          echo "::notice title=post-merge-lane-close::Proof binding persisted before truth-check and lane-close gates."
 
       - name: Run lane closeout (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
@@ -398,7 +367,12 @@ jobs:
           # Passing the flag alone (e.g. from a local shell or another workflow)
           # does nothing without this exact context, and this exact context
           # without the flag still fails closed to the governed-PR repair path.
-          close_args=("$ISSUE_ID" --repair-merged --explain --post-merge-trusted)
+          # Keep the merge mutex through the persistence step. This is the
+          # smaller of the two approved race fixes: main cannot advance after
+          # the successful gate, so no terminal-lane truth receipt needs to be
+          # rewritten. A later always() step releases the exact issue/branch
+          # mutex after the push attempt.
+          close_args=("$ISSUE_ID" --repair-merged --explain --post-merge-trusted --retain-merge-lock)
           if [ -n "$EXPLICIT_PR" ]; then
             close_args+=(--pr "$EXPLICIT_PR")
           fi
@@ -530,14 +504,20 @@ jobs:
           fi
           echo "::notice title=post-merge-lane-close::Scope guard OK -- only $ISSUE_ID's own manifest/proof/sync paths are dirty."
 
-      - name: Commit and push manifest change
+      - name: Commit and push gate-evaluated closeout state
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.lane_close.outputs.exit_code == '0'
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The proof binding remains only in this working tree until the
+          # exact closeout gate that evaluated it has passed. Commit proof,
+          # manifest, and sync cleanup atomically so a failed gate can never
+          # leave durable proof mutation on main.
           git add "$MANIFEST_PATH"
           git add docs/06_status/proof/"$ISSUE_ID"/ 2>/dev/null || true
 
@@ -555,24 +535,39 @@ jobs:
           else
             git commit -m "chore(lanes): close $ISSUE_ID — lane closed, sync file removed"
 
-            # main can advance between checkout and push (another PR merges
-            # mid-closeout). Rebase the bookkeeping commit and retry instead
-            # of failing the closeout and stranding a ghost lane.
-            pushed=false
-            for attempt in 1 2 3; do
-              if git push; then
-                pushed=true
-                break
-              fi
-              echo "::warning title=post-merge-lane-close::Push attempt $attempt rejected (main advanced). Rebasing and retrying."
-              git pull --rebase origin main
-            done
-            if [ "$pushed" != "true" ]; then
-              echo "::error title=post-merge-lane-close::Bookkeeping push failed after 3 attempts."
+            # The successful closeout gate deliberately retained the merge
+            # mutex, so this push targets the exact main state that was
+            # evaluated. A rejection means the serialization invariant was
+            # violated; never rebase a terminal proof onto unevaluated state.
+            # Fail closed and let a fresh workflow dispatch recover.
+            if ! git push; then
+              echo "::error title=post-merge-lane-close guarded push rejected::Main advanced while the closeout merge mutex was held. Refusing to rebase or retry; main remains unmutated. Re-run this workflow from a fresh dispatch."
               exit 1
             fi
             echo "::notice title=post-merge-lane-close::Lane $ISSUE_ID closed and manifest committed."
           fi
+
+      - name: Release closeout merge mutex after persistence attempt
+        if: >-
+          always() &&
+          steps.extract.outputs.issue_id != '' &&
+          steps.manifest.outputs.exists == 'true' &&
+          steps.status.outputs.closeable == 'true' &&
+          steps.lane_close.outputs.exit_code == '0'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          set -euo pipefail
+
+          manifest_branch=$(jq -r '.branch // empty' "$MANIFEST_PATH")
+          if [ -z "$manifest_branch" ]; then
+            echo "::error title=post-merge-lane-close::Cannot release retained merge mutex: manifest branch missing."
+            exit 1
+          fi
+
+          pnpm ops:merge-lock release --issue "$ISSUE_ID" --branch "$manifest_branch"
+          echo "::notice title=post-merge-lane-close::Released retained merge mutex for $ISSUE_ID on $manifest_branch after the persistence attempt."
 
       - name: Post summary annotation
         if: always() && steps.extract.outputs.issue_id != ''

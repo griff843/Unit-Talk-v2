@@ -1652,10 +1652,10 @@ test('UTV2-1684: post-merge proof binding uses resolved merge authority on every
     'utf8',
   );
   const bindStart = workflow.indexOf('- name: Bind proof artifacts to merge SHA');
-  const persistStart = workflow.indexOf('- name: Persist proof binding before downstream closeout gates');
   const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
-  assert.ok(bindStart >= 0 && persistStart > bindStart && closeStart > persistStart);
-  const bindBlock = workflow.slice(bindStart, persistStart);
+  const persistStart = workflow.indexOf('- name: Commit and push gate-evaluated closeout state');
+  assert.ok(bindStart >= 0 && closeStart > bindStart && persistStart > closeStart);
+  const bindBlock = workflow.slice(bindStart, closeStart);
   const bindCondition = bindBlock.split('\n').find((line) => line.trimStart().startsWith('if:')) ?? '';
   assert.doesNotMatch(bindCondition, /github\.event_name/);
   assert.match(bindBlock, /steps\.resolve_sha\.outputs\.merge_sha != ''/);
@@ -1663,20 +1663,29 @@ test('UTV2-1684: post-merge proof binding uses resolved merge authority on every
   assert.doesNotMatch(workflow, /falling back to github\.sha/);
 });
 
-test('UTV2-1684: proof binding persists before unrelated closeout failures and rejects mismatches', () => {
+test('UTV2-1722: proof binding is persisted only after the closeout gate passes', () => {
   const workflow = fs.readFileSync(
     path.join(ROOT, '.github/workflows/post-merge-lane-close.yml'),
     'utf8',
   );
-  const persistStart = workflow.indexOf('- name: Persist proof binding before downstream closeout gates');
+  const persistStart = workflow.indexOf('- name: Commit and push gate-evaluated closeout state');
   const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
   const failStart = workflow.indexOf('- name: Fail on lane closeout failure');
-  assert.ok(persistStart >= 0 && persistStart < closeStart && closeStart < failStart);
+  assert.ok(closeStart >= 0 && closeStart < failStart && failStart < persistStart);
   assert.match(workflow, /Refusing mismatched proof binding/);
-  assert.match(workflow, /git commit -m "chore\(proof\): bind \$ISSUE_ID/);
-  assert.match(workflow, /for attempt in 1 2 3/);
-  assert.match(workflow, /git pull --rebase origin main/);
-  assert.match(workflow, /Proof binding could not be persisted after 3 attempts/);
+  assert.match(workflow, /persistence is deferred until the closeout gate passes/);
+  assert.match(workflow, /steps\.lane_close\.outputs\.exit_code == '0'/);
+  assert.match(workflow, /Commit proof,\n\s+# manifest, and sync cleanup atomically/);
+  assert.doesNotMatch(workflow, /chore\(proof\): bind \$ISSUE_ID/);
+  assert.match(workflow, /--post-merge-trusted --retain-merge-lock/);
+  assert.match(workflow, /Release closeout merge mutex after persistence attempt/);
+  assert.match(workflow, /always\(\)/);
+  assert.doesNotMatch(workflow, /git pull --rebase origin main/);
+  assert.strictEqual(workflow.match(/pnpm ops:lane-close "\$\{close_args\[@\]\}"/gu)?.length, 1);
+  assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID" --explain/gu);
+  assert.doesNotMatch(workflow, /git commit --amend --no-edit/);
+  assert.match(workflow, /Refusing to rebase or retry; main remains unmutated/);
+  assert.match(workflow, /ops:merge-lock release --issue "\$ISSUE_ID" --branch "\$manifest_branch"/);
 });
 
 function utv21684PostMergeStep(name: string): Record<string, unknown> {
@@ -1758,9 +1767,11 @@ test('UTV2-1684 behavior: push identity divergence fails closed', () => {
   assert.doesNotMatch(result.output, /merge_sha=/);
 });
 
-test('UTV2-1684 behavior: persisted proof survives a downstream truth-check failure', () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-persisted-'));
+test('UTV2-1722 behavior: failed closeout leaves durable proof unchanged', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-nondestructive-'));
   fs.writeFileSync(path.join(root, 'manifest.json'), '{}\n');
+  const durableProof = path.join(root, 'durable-main-proof.md');
+  fs.writeFileSync(durableProof, 'unbound-main-state\n');
   const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1684');
   const bind = runUtv21684PostMergeStep('Bind proof artifacts to merge SHA', {
     cwd: root,
@@ -1772,54 +1783,115 @@ test('UTV2-1684 behavior: persisted proof survives a downstream truth-check fail
   });
   assert.strictEqual(bind.status, 0, bind.stderr);
 
-  const gitLog = path.join(root, 'git-calls');
-  const persist = runUtv21684PostMergeStep('Persist proof binding before downstream closeout gates', {
+  const failedGate = runUtv21684PostMergeStep('Run lane closeout (hard-gate)', {
     cwd: root,
-    env: { ISSUE_ID: 'UTV2-1684', GIT_LOG: gitLog },
+    env: { ISSUE_ID: 'UTV2-1684', EXPLICIT_PR: '' },
     mocks: {
-      git: `printf '%s\\n' "$*" >> "$GIT_LOG"\nif [ "$1" = diff ]; then exit 1; fi\nexit 0`,
+      pnpm: "printf '%s\\n' '{\"verdict\":\"fail\"}'\nexit 17",
     },
   });
-  assert.strictEqual(persist.status, 0, persist.stderr);
-  assert.match(fs.readFileSync(gitLog, 'utf8'), /^push$/mu);
-  assert.strictEqual(spawnSync('bash', ['-c', 'exit 17'], { cwd: root }).status, 17);
-  assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8').trim(), utv21684MergeSha);
+  assert.strictEqual(failedGate.status, 17, failedGate.stderr);
+  assert.strictEqual(fs.readFileSync(durableProof, 'utf8'), 'unbound-main-state\n');
+  assert.strictEqual(fs.existsSync(path.join(root, 'git-calls')), false);
 });
 
-test('UTV2-1684 behavior: concurrent main advancement rebases and retries persistence', () => {
+test('UTV2-1722 behavior: guarded persistence pushes once then releases the retained mutex', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-retry-'));
   fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1684'), { recursive: true });
-  const state = path.join(root, 'push-count');
-  const gitLog = path.join(root, 'git-calls');
-  const result = runUtv21684PostMergeStep('Persist proof binding before downstream closeout gates', {
+  const eventLog = path.join(root, 'events');
+  const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
     cwd: root,
-    env: { ISSUE_ID: 'UTV2-1684', GIT_LOG: gitLog, PUSH_COUNT: state },
+    env: {
+      ISSUE_ID: 'UTV2-1684',
+      MANIFEST_PATH: 'manifest.json',
+      EVENT_LOG: eventLog,
+    },
     mocks: {
-      git: `printf '%s\\n' "$*" >> "$GIT_LOG"
+      git: `printf 'git %s\\n' "$*" >> "$EVENT_LOG"
 if [ "$1" = diff ]; then exit 1; fi
-if [ "$1" = push ]; then
-  count=0; [ ! -f "$PUSH_COUNT" ] || count=$(cat "$PUSH_COUNT")
-  count=$((count + 1)); printf '%s' "$count" > "$PUSH_COUNT"
-  [ "$count" -gt 1 ]
-  exit $?
-fi
 exit 0`,
     },
   });
   assert.strictEqual(result.status, 0, result.stderr);
-  assert.strictEqual(fs.readFileSync(state, 'utf8'), '2');
-  assert.match(fs.readFileSync(gitLog, 'utf8'), /push\npull --rebase origin main\npush/u);
+
+  const release = runUtv21684PostMergeStep('Release closeout merge mutex after persistence attempt', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1684', MANIFEST_PATH: 'manifest.json', EVENT_LOG: eventLog },
+    mocks: {
+      jq: "printf '%s\\n' 'codex/utv2-1684-closeout'",
+      pnpm: `printf 'pnpm %s\\n' "$*" >> "$EVENT_LOG"`,
+    },
+  });
+  assert.strictEqual(release.status, 0, release.stderr);
+  const events = fs.readFileSync(eventLog, 'utf8').trim().split('\n');
+  assert.strictEqual(events.filter((event) => event === 'git push').length, 1);
+  assert.ok(events.indexOf('pnpm ops:merge-lock release --issue UTV2-1684 --branch codex/utv2-1684-closeout') > events.indexOf('git push'));
+  assert.ok(events.every((event) => !event.includes('pull --rebase')));
 });
 
-test('UTV2-1684 supplemental shape: proof side effects are closeable-only and persist first', () => {
+test('UTV2-1722 behavior: a rejected guarded push never rebases or retries and still releases the mutex', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-retry-gate-fail-'));
+  fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1722'), { recursive: true });
+  const gitLog = path.join(root, 'git-calls');
+  const pnpmLog = path.join(root, 'pnpm-calls');
+  const durableMain = path.join(root, 'durable-main-mutated');
+  const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
+    cwd: root,
+    env: {
+      ISSUE_ID: 'UTV2-1722',
+      MANIFEST_PATH: 'manifest.json',
+      EXPLICIT_PR: '',
+      GIT_LOG: gitLog,
+      PNPM_LOG: pnpmLog,
+      DURABLE_MAIN: durableMain,
+    },
+    mocks: {
+      git: `printf '%s\n' "$*" >> "$GIT_LOG"
+if [ "$1" = diff ]; then exit 1; fi
+if [ "$1" = push ]; then
+  exit 1
+fi
+exit 0`,
+    },
+  });
+
+  assert.strictEqual(result.status, 1, result.stderr);
+  assert.match(result.stdout + result.stderr, /guarded push rejected/);
+  assert.match(result.stdout + result.stderr, /Refusing to rebase or retry; main remains unmutated/);
+  const gitCalls = fs.readFileSync(gitLog, 'utf8').trim().split('\n');
+  assert.strictEqual(gitCalls.filter((call) => call === 'push').length, 1);
+  assert.ok(gitCalls.every((call) => call !== 'pull --rebase origin main'));
+  assert.strictEqual(fs.existsSync(durableMain), false);
+
+  const release = runUtv21684PostMergeStep('Release closeout merge mutex after persistence attempt', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1722', MANIFEST_PATH: 'manifest.json', PNPM_LOG: pnpmLog },
+    mocks: {
+      jq: "printf '%s\\n' 'codex/utv2-1722-closeout-recovery'",
+      pnpm: `printf '%s\\n' "$*" >> "$PNPM_LOG"`,
+    },
+  });
+  assert.strictEqual(release.status, 0, release.stderr);
+  assert.match(fs.readFileSync(pnpmLog, 'utf8'), /ops:merge-lock release --issue UTV2-1722 --branch codex\/utv2-1722-closeout-recovery/u);
+});
+
+test('UTV2-1722 supplemental shape: proof side effects are closeable-only and persistence is post-gate', () => {
   const workflow = readWorkflow('post-merge-lane-close.yml');
   assert.ok(
-    workflow.indexOf('- name: Persist proof binding before downstream closeout gates') <
+    workflow.indexOf('- name: Bind proof artifacts to merge SHA') <
       workflow.indexOf('- name: Run lane closeout (hard-gate)'),
   );
-  for (const name of ['Bind proof artifacts to merge SHA', 'Persist proof binding before downstream closeout gates']) {
+  assert.ok(
+    workflow.indexOf('- name: Run lane closeout (hard-gate)') <
+      workflow.indexOf('- name: Commit and push gate-evaluated closeout state'),
+  );
+  for (const name of ['Bind proof artifacts to merge SHA', 'Commit and push gate-evaluated closeout state']) {
     assert.match(String(utv21684PostMergeStep(name).if), /steps\.status\.outputs\.closeable == 'true'/u);
   }
+  assert.match(
+    String(utv21684PostMergeStep('Commit and push gate-evaluated closeout state').if),
+    /steps\.lane_close\.outputs\.exit_code == '0'/u,
+  );
 });
 
 test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () => {

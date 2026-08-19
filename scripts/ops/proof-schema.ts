@@ -138,9 +138,20 @@ export interface EvidenceContractContext {
   tier?: string | null;
   /** Required to mechanically verify a post-merge migration receipt rebind. */
   repoRoot?: string | null;
-  /** Rank-1 GitHub merge record supplied by the caller; the contract never fetches it. */
+  /** Rank-1 GitHub merge record supplied by the caller; the contract may fetch its immutable PR-head ref. */
   mergedPrAttestation?: MergedPrAttestation | null;
+  /** Deterministic test seam; production callers always use the local Git repository. */
+  gitRunner?: EvidenceGitRunner;
 }
+
+export interface EvidenceGitResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error?: Error;
+}
+
+export type EvidenceGitRunner = (args: readonly string[], cwd: string) => EvidenceGitResult;
 
 export interface EvidenceContractResult {
   valid: boolean;
@@ -166,7 +177,7 @@ const STATIC_LANE_TYPES = new Set([
 ]);
 const AUTHORABLE_PROFILES = new Set<EvidenceProofProfile>(['app-runtime', 'migration', 'static']);
 
-function declaredProfileForLaneType(laneType: string | null | undefined): EvidenceProofProfile | null {
+export function declaredProfileForLaneType(laneType: string | null | undefined): EvidenceProofProfile | null {
   const normalized = laneType?.trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === 'migration') return 'migration';
@@ -191,6 +202,21 @@ function migrationReceiptPass(value: unknown): value is Record<string, unknown> 
     isPositiveRunId(value['job']);
 }
 
+function runEvidenceGit(
+  args: readonly string[],
+  repoRoot: string,
+  runner?: EvidenceGitRunner,
+): EvidenceGitResult {
+  if (runner) return runner(args, repoRoot);
+  const result = spawnSync('git', [...args], { cwd: repoRoot, encoding: 'utf8' });
+  return {
+    status: result.status,
+    stdout: String(result.stdout ?? ''),
+    stderr: String(result.stderr ?? ''),
+    ...(result.error ? { error: result.error } : {}),
+  };
+}
+
 type MigrationReceiptBindingResult =
   | { status: 'pass' }
   | { status: 'not-ancestor' }
@@ -198,12 +224,16 @@ type MigrationReceiptBindingResult =
   | { status: 'attestation-mismatch'; detail: string }
   | { status: 'unverified'; detail: string };
 
+type MergedPrAttestationResolution =
+  | { status: 'pass'; attestation: MergedPrAttestation; mainRef: string }
+  | Extract<MigrationReceiptBindingResult, { status: 'attestation-mismatch' | 'unverified' }>;
+
 function verifyCommitAvailable(
   sha: string,
   label: string,
-  repoRoot: string,
+  context: EvidenceContractContext,
 ): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
-  const result = spawnSync('git', ['cat-file', '-e', `${sha}^{commit}`], { cwd: repoRoot, encoding: 'utf8' });
+  const result = runEvidenceGit(['cat-file', '-e', `${sha}^{commit}`], context.repoRoot!, context.gitRunner);
   if (!result.error && result.status === 0) return null;
   return {
     status: 'unverified',
@@ -213,13 +243,41 @@ function verifyCommitAvailable(
   };
 }
 
+function ensureAttestedPrHeadAvailable(
+  attestation: MergedPrAttestation,
+  context: EvidenceContractContext,
+): Extract<MigrationReceiptBindingResult, { status: 'unverified' }> | null {
+  const unavailable = verifyCommitAvailable(attestation.head_sha, 'GitHub-recorded PR head', context);
+  if (!unavailable) return null;
+
+  // A merged source branch may be auto-deleted before post-merge closeout.
+  // GitHub retains refs/pull/<n>/head, so fetch that immutable PR ref rather
+  // than making verifier authority depend on incidental local object state.
+  const fetched = runEvidenceGit(
+    ['fetch', '--no-tags', 'origin', `refs/pull/${attestation.pr_number}/head`],
+    context.repoRoot!,
+    context.gitRunner,
+  );
+  if (fetched.error || fetched.status !== 0) {
+    return {
+      status: 'unverified',
+      detail: fetched.error?.message ||
+        String(fetched.stderr ?? '').trim() ||
+        `${unavailable.detail}; immutable PR-head fetch did not complete`,
+    };
+  }
+
+  return verifyCommitAvailable(attestation.head_sha, 'GitHub-recorded PR head after fetch', context);
+}
+
 function verifyProofOnlyMigrationAncestry(
   receiptHead: string,
   verifiedSourceSha: string,
   mainSideReference: string,
   issueId: string,
-  repoRoot: string | null | undefined,
+  context: EvidenceContractContext,
 ): MigrationReceiptBindingResult {
+  const repoRoot = context.repoRoot;
   if (!repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
@@ -227,10 +285,10 @@ function verifyProofOnlyMigrationAncestry(
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires a valid issue_id' };
   }
 
-  const ancestry = spawnSync(
-    'git',
+  const ancestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', receiptHead, verifiedSourceSha],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
     return {
@@ -240,10 +298,10 @@ function verifyProofOnlyMigrationAncestry(
   }
   if (ancestry.status === 1) return { status: 'not-ancestor' };
 
-  const mainSide = spawnSync(
-    'git',
+  const mainSide = runEvidenceGit(
     ['rev-parse', '--verify', `${mainSideReference}^{commit}`],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (mainSide.error || mainSide.status !== 0) {
     return {
@@ -259,10 +317,10 @@ function verifyProofOnlyMigrationAncestry(
   // before the merge. A non-proof change made and fully reverted after receipts
   // is intentionally invisible: reverted content never shipped, so the receipts
   // remain representative of the delivered tree.
-  const changed = spawnSync(
-    'git',
+  const changed = runEvidenceGit(
     ['diff', '--name-only', receiptHead, verifiedSourceSha],
-    { cwd: repoRoot, encoding: 'utf8' },
+    repoRoot,
+    context.gitRunner,
   );
   if (changed.error || changed.status !== 0) {
     return {
@@ -282,15 +340,15 @@ function verifyProofOnlyMigrationAncestry(
   );
   const offendingPaths: string[] = [];
   for (const filePath of nonProof) {
-    const targetBlob = spawnSync(
-      'git',
+    const targetBlob = runEvidenceGit(
       ['rev-parse', `${verifiedSourceSha}:${filePath}`],
-      { cwd: repoRoot, encoding: 'utf8' },
+      repoRoot,
+      context.gitRunner,
     );
-    const mainBlob = spawnSync(
-      'git',
+    const mainBlob = runEvidenceGit(
       ['rev-parse', `${mainSideReference}:${filePath}`],
-      { cwd: repoRoot, encoding: 'utf8' },
+      repoRoot,
+      context.gitRunner,
     );
     if (targetBlob.error || targetBlob.status === null || mainBlob.error || mainBlob.status === null) {
       return {
@@ -312,12 +370,10 @@ function verifyProofOnlyMigrationAncestry(
     : { status: 'pass' };
 }
 
-function verifyPostMergeMigrationReceiptBinding(
-  receiptHead: string,
+function resolveMergedPrAttestation(
   verifiedSourceSha: string,
-  issueId: string,
   context: EvidenceContractContext,
-): MigrationReceiptBindingResult {
+): MergedPrAttestationResolution {
   if (!context.repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
   }
@@ -344,23 +400,15 @@ function verifyPostMergeMigrationReceiptBinding(
     };
   }
 
-  for (const [sha, label] of [
-    [receiptHead, 'migration receipt head'],
-    [attestation.head_sha, 'GitHub-recorded PR head'],
-    [attestation.merge_sha, 'GitHub-recorded merge'],
-  ] as const) {
-    const unavailable = verifyCommitAvailable(sha, label, context.repoRoot);
-    if (unavailable) return unavailable;
-  }
+  const headUnavailable = ensureAttestedPrHeadAvailable(attestation, context);
+  if (headUnavailable) return headUnavailable;
+  const mergeUnavailable = verifyCommitAvailable(attestation.merge_sha, 'GitHub-recorded merge', context);
+  if (mergeUnavailable) return mergeUnavailable;
 
-  if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
-    return { status: 'pass' };
-  }
-
-  const headAncestry = spawnSync(
-    'git',
+  const headAncestry = runEvidenceGit(
     ['merge-base', '--is-ancestor', attestation.head_sha, attestation.merge_sha],
-    { cwd: context.repoRoot, encoding: 'utf8' },
+    context.repoRoot,
+    context.gitRunner,
   );
   if (headAncestry.error || headAncestry.status === null || headAncestry.status > 1) {
     return {
@@ -376,10 +424,10 @@ function verifyPostMergeMigrationReceiptBinding(
     // A two-parent merge commit contains the original PR head, so merge-base
     // would degenerate to that head. Require a real merge and use parent 1,
     // which GitHub records as the pre-merge base-branch tip.
-    const parents = spawnSync(
-      'git',
+    const parents = runEvidenceGit(
       ['rev-list', '--parents', '-n', '1', attestation.merge_sha],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     const parentTokens = String(parents.stdout ?? '').trim().split(/\s+/).filter(Boolean);
     if (parents.error || parents.status !== 0 || parentTokens.length < 3) {
@@ -391,10 +439,10 @@ function verifyPostMergeMigrationReceiptBinding(
       };
     }
 
-    const firstParent = spawnSync(
-      'git',
+    const firstParent = runEvidenceGit(
       ['rev-parse', `${attestation.merge_sha}^1`],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     mainRef = String(firstParent.stdout ?? '').trim();
     if (firstParent.error || firstParent.status !== 0 || !SHA_RE.test(mainRef)) {
@@ -414,10 +462,10 @@ function verifyPostMergeMigrationReceiptBinding(
   } else {
     // Squash and rebase strategies leave the original PR head disjoint from the
     // recorded merge SHA. Their merge base is the pre-PR main-side reference.
-    const mergeBase = spawnSync(
-      'git',
+    const mergeBase = runEvidenceGit(
       ['merge-base', attestation.head_sha, attestation.merge_sha],
-      { cwd: context.repoRoot, encoding: 'utf8' },
+      context.repoRoot,
+      context.gitRunner,
     );
     mainRef = String(mergeBase.stdout ?? '').trim();
     if (mergeBase.error || mergeBase.status !== 0 || !SHA_RE.test(mainRef)) {
@@ -428,6 +476,30 @@ function verifyPostMergeMigrationReceiptBinding(
           'GitHub-recorded PR head and merge SHA do not have a resolvable merge base',
       };
     }
+  }
+
+  return { status: 'pass', attestation, mainRef };
+}
+
+function verifyPostMergeMigrationReceiptBinding(
+  receiptHead: string,
+  verifiedSourceSha: string,
+  issueId: string,
+  context: EvidenceContractContext,
+): MigrationReceiptBindingResult {
+  if (!context.repoRoot) {
+    return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
+  }
+
+  const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context);
+  if (receiptUnavailable) return receiptUnavailable;
+
+  const resolution = resolveMergedPrAttestation(verifiedSourceSha, context);
+  if (resolution.status !== 'pass') return resolution;
+  const { attestation, mainRef } = resolution;
+
+  if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
+    return { status: 'pass' };
   }
 
   // A squash merge disconnects the PR-head history from the merge commit.
@@ -443,14 +515,14 @@ function verifyPostMergeMigrationReceiptBinding(
     attestation.head_sha,
     mainRef,
     issueId,
-    context.repoRoot,
+    context,
   );
   const direct = verifyProofOnlyMigrationAncestry(
     receiptHead,
     verifiedSourceSha,
     mainRef,
     issueId,
-    context.repoRoot,
+    context,
   );
   if (branchSide.status === 'pass' || direct.status === 'pass') return { status: 'pass' };
 
@@ -471,6 +543,94 @@ function verifyPostMergeMigrationReceiptBinding(
   if (nonProofPaths.length > 0) return { status: 'non-proof-delta', paths: nonProofPaths };
 
   return { status: 'not-ancestor' };
+}
+
+export type ExternalVerifierBindingCode =
+  | 'verifier_provenance_bound_exact_source'
+  | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_receipt_sha_invalid'
+  | 'verifier_source_sha_invalid'
+  | 'verifier_receipt_head_mismatch'
+  | 'verifier_merge_attestation_mismatch'
+  | 'verifier_merge_attestation_unverified';
+
+export type ExternalVerifierBindingResult =
+  | { valid: true; code: 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'; detail: string }
+  | { valid: false; code: Exclude<ExternalVerifierBindingCode, 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'>; detail: string };
+
+/**
+ * Binds an external required-check receipt to schema-v2 evidence. Before merge,
+ * and whenever checks ran on the merge SHA itself, exact-source equality is the
+ * only accepted path. After a squash/rebase/two-parent merge, the receipt may
+ * instead name the original PR head only when the caller supplies the same
+ * authoritative GitHub merged-PR attestation used by migration receipts.
+ */
+export function verifyExternalVerifierProvenanceBinding(input: {
+  receiptSha: string | null | undefined;
+  verifiedSourceSha: string | null | undefined;
+  context: EvidenceContractContext;
+}): ExternalVerifierBindingResult {
+  const receiptSha = input.receiptSha?.trim() ?? '';
+  const verifiedSourceSha = input.verifiedSourceSha?.trim() ?? '';
+  if (!SHA_RE.test(receiptSha)) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_sha_invalid',
+      detail: 'external verifier receipt must identify a full 40-character Git SHA',
+    };
+  }
+  if (!SHA_RE.test(verifiedSourceSha)) {
+    return {
+      valid: false,
+      code: 'verifier_source_sha_invalid',
+      detail: 'sha_binding.verified_source_sha must be a full 40-character Git SHA',
+    };
+  }
+  if (receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase()) {
+    return {
+      valid: true,
+      code: 'verifier_provenance_bound_exact_source',
+      detail: 'external verifier receipt exactly matches sha_binding.verified_source_sha',
+    };
+  }
+  if (input.context.gate !== 'post-merge-read') {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'pre-merge external verifier receipt must exactly match sha_binding.verified_source_sha',
+    };
+  }
+
+  const attestation = input.context.mergedPrAttestation;
+  if (!attestation || receiptSha.toLowerCase() !== attestation.head_sha?.toLowerCase()) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'external verifier receipt must match the GitHub-attested original PR head',
+    };
+  }
+
+  const resolution = resolveMergedPrAttestation(verifiedSourceSha, input.context);
+  if (resolution.status === 'attestation-mismatch') {
+    return {
+      valid: false,
+      code: 'verifier_merge_attestation_mismatch',
+      detail: resolution.detail,
+    };
+  }
+  if (resolution.status === 'unverified') {
+    return {
+      valid: false,
+      code: 'verifier_merge_attestation_unverified',
+      detail: resolution.detail,
+    };
+  }
+
+  return {
+    valid: true,
+    code: 'verifier_provenance_bound_merged_pr_head',
+    detail: `GitHub merged-PR attestation connects original head ${receiptSha} to merge ${verifiedSourceSha}`,
+  };
 }
 
 function validateV2Binding(
