@@ -4,8 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import type { MergedPrAttestation } from './proof-schema.js';
 import {
   atomicWrite,
+  buildMergedPrAttestation,
+  resolveApplyProfileGuard,
+  REBIND_APPLY_ALLOWED_PROFILE,
   CANONICAL_PROOF_ARTIFACTS,
   BINDING_ROW_LABELS,
   bindingRowPattern,
@@ -344,26 +348,56 @@ test('CLI previews by default and writes only with --apply', () => {
 });
 
 test('PR identity is validated before any write', () => {
-  const good = {
-    number: 1313, state: 'MERGED', head_sha: HEAD,
-    merge_commit_sha: MERGE, base_ref: 'main', merge_sha_on_base: true,
-  };
+  const att = (over: Partial<MergedPrAttestation> = {}): MergedPrAttestation => ({
+    merge_sha: MERGE, head_sha: HEAD, pr_number: 1313, source: 'github-api', ...over,
+  });
+  const good = { attestation: att(), state: 'MERGED', base_ref: 'main', merge_sha_on_base: true };
   assert.deepStrictEqual(validatePrIdentity(SHAS, good, { executionShaOnBranch: true }), []);
 
   assert.ok(validatePrIdentity(SHAS, { ...good, state: 'OPEN' })
     .some((e) => /not MERGED/.test(e)), 'an unmerged PR must be refused');
 
-  assert.ok(validatePrIdentity(SHAS, { ...good, merge_commit_sha: 'f'.repeat(40) })
+  assert.ok(validatePrIdentity(SHAS, { ...good, attestation: att({ merge_sha: 'f'.repeat(40) }) })
     .some((e) => /is not PR #1313's merge commit/.test(e)), 'a foreign merge SHA must be refused');
 
-  assert.ok(validatePrIdentity(SHAS, { ...good, head_sha: 'a'.repeat(40) })
+  assert.ok(validatePrIdentity(SHAS, { ...good, attestation: att({ head_sha: 'a'.repeat(40) }) })
     .some((e) => /is not PR #1313's head/.test(e)), 'a mismatched approved head must be refused');
 
   assert.ok(validatePrIdentity(SHAS, { ...good, merge_sha_on_base: false })
     .some((e) => /not reachable from base branch/.test(e)), 'an unreachable merge SHA must be refused');
 
-  assert.ok(validatePrIdentity(SHAS, { ...good, merge_commit_sha: null })
-    .some((e) => /no merge commit recorded/.test(e)));
+  assert.ok(validatePrIdentity(
+    SHAS,
+    { ...good, attestation: att({ source: 'narrative-claim' as MergedPrAttestation['source'] }) },
+    { executionShaOnBranch: true },
+  ).some((e) => /is not github-api/.test(e)), 'a non-GitHub attestation source must be refused');
+});
+
+test('UTV2-1722 CONTRACT: the identity core is the shared MergedPrAttestation, built fail-closed', () => {
+  // A record missing its merge commit — an open PR, or a truncated response —
+  // must yield named errors and NO attestation, mirroring how the shipped
+  // evidence contract refuses an incomplete merged-PR attestation.
+  const complete = buildMergedPrAttestation({ number: 1313, headRefOid: HEAD, mergeCommitOid: MERGE });
+  assert.deepStrictEqual(complete.errors, []);
+  assert.deepStrictEqual(complete.attestation, {
+    merge_sha: MERGE, head_sha: HEAD, pr_number: 1313, source: 'github-api',
+  });
+
+  const noMerge = buildMergedPrAttestation({ number: 1313, headRefOid: HEAD, mergeCommitOid: null });
+  assert.strictEqual(noMerge.attestation, null);
+  assert.ok(noMerge.errors.some((e) => /no merge commit recorded/.test(e)));
+
+  const shortHead = buildMergedPrAttestation({ number: 1313, headRefOid: 'abc123', mergeCommitOid: MERGE });
+  assert.strictEqual(shortHead.attestation, null);
+  assert.ok(shortHead.errors.some((e) => /head "abc123" is not a 40-character SHA/.test(e)));
+
+  const badNumber = buildMergedPrAttestation({ number: 0, headRefOid: HEAD, mergeCommitOid: MERGE });
+  assert.strictEqual(badNumber.attestation, null);
+  assert.ok(badNumber.errors.some((e) => /not a positive integer/.test(e)));
+
+  const proseMerge = buildMergedPrAttestation({ number: 1313, headRefOid: HEAD, mergeCommitOid: 'pending merge' });
+  assert.strictEqual(proseMerge.attestation, null);
+  assert.ok(proseMerge.errors.some((e) => /merge commit "pending merge" is not a 40-character SHA/.test(e)));
 });
 
 test('squash semantics: the approved head is NOT required to be an ancestor of the merge SHA', () => {
@@ -371,8 +405,8 @@ test('squash semantics: the approved head is NOT required to be an ancestor of t
   // Requiring ancestry between them would reject every correct squash rebind,
   // so identity is asserted via the PR record instead.
   const errors = validatePrIdentity(SHAS, {
-    number: 1313, state: 'MERGED', head_sha: HEAD,
-    merge_commit_sha: MERGE, base_ref: 'main', merge_sha_on_base: true,
+    attestation: { merge_sha: MERGE, head_sha: HEAD, pr_number: 1313, source: 'github-api' },
+    state: 'MERGED', base_ref: 'main', merge_sha_on_base: true,
   }, { executionShaOnBranch: true });
   assert.deepStrictEqual(errors, []);
   assert.notStrictEqual(SHAS.merge_sha, SHAS.approved_head_sha);
@@ -653,8 +687,8 @@ test('P1 ADVERSARIAL: the replay guard is load-bearing — an undeclared same-ke
 
 test('P1: execution_sha is validated against the approved head', () => {
   const pr = {
-    number: 1, state: 'MERGED', head_sha: HEAD,
-    merge_commit_sha: MERGE, base_ref: 'main', merge_sha_on_base: true,
+    attestation: { merge_sha: MERGE, head_sha: HEAD, pr_number: 1, source: 'github-api' as const },
+    state: 'MERGED', base_ref: 'main', merge_sha_on_base: true,
   };
   assert.deepStrictEqual(validatePrIdentity(SHAS, pr, { executionShaOnBranch: true }), []);
   assert.ok(
@@ -1877,7 +1911,12 @@ test('P1: --apply without a completed PR identity validation is refused BY THE C
   execFileSync('git', ['init', '-q'], { cwd: dir });
   const proofDir = path.join(dir, 'docs', '06_status', 'proof', 'UTV2-1592');
   fs.mkdirSync(proofDir, { recursive: true });
-  fs.writeFileSync(path.join(proofDir, 'evidence.json'), EVIDENCE);
+  // Affirmatively static so the --apply profile guard passes and the refusal
+  // under test is the IDENTITY gate, not the profile gate.
+  fs.writeFileSync(
+    path.join(proofDir, 'evidence.json'),
+    JSON.stringify({ ...JSON.parse(EVIDENCE), schema_version: 2, proof_profile: 'static' }, null, 2) + '\n',
+  );
   fs.writeFileSync(path.join(proofDir, 'verification.md'), RICH_VERIFICATION);
   const digests = {
     evidence: sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8')),
@@ -2218,4 +2257,146 @@ test('P2: machine-tagged proof claims are verified against the implementation', 
     new RegExp(`including ${actualTestCount} proof-rebind assertions`).test(evidence),
     `evidence.json must state ${actualTestCount} proof-rebind assertions, not a stale count`,
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1722 contract integration + the --apply profile hard guard.
+// ---------------------------------------------------------------------------
+
+test('HARD GUARD: --apply is allowlisted to static-profile bundles, fail closed on everything else', () => {
+  const staticBundle = JSON.stringify({ schema_version: 2, proof_profile: 'static' });
+
+  // Allowed: affirmatively static, by authored profile or by manifest lane_type.
+  const byEvidence = resolveApplyProfileGuard('UTV2-1592', staticBundle, null);
+  assert.strictEqual(byEvidence.allowed, true);
+  assert.strictEqual(byEvidence.profile, REBIND_APPLY_ALLOWED_PROFILE);
+  assert.strictEqual(byEvidence.source, 'evidence');
+
+  const byLane = resolveApplyProfileGuard('UTV2-1592', JSON.stringify({ schema_version: 1 }), 'governance');
+  assert.strictEqual(byLane.allowed, true);
+  assert.strictEqual(byLane.source, 'manifest-lane-type');
+
+  // Refused: migration and app-runtime (production decision truth), each with a
+  // named rationale and the preview escape hatch.
+  const migration = resolveApplyProfileGuard('UTV2-1718', JSON.stringify({ schema_version: 2 }), 'migration');
+  assert.strictEqual(migration.allowed, false);
+  assert.strictEqual(migration.profile, 'migration');
+  assert.ok(migration.errors.some((e) => /--apply is refused for migration proof bundles/.test(e)));
+  assert.ok(migration.errors.some((e) => /preview \(without --apply\) remains available/.test(e)));
+
+  const runtime = resolveApplyProfileGuard(
+    'UTV2-1592', JSON.stringify({ schema_version: 2, proof_profile: 'app-runtime' }), null,
+  );
+  assert.strictEqual(runtime.allowed, false);
+  assert.strictEqual(runtime.profile, 'app-runtime');
+  assert.ok(runtime.errors.some((e) => /--apply is refused for app-runtime proof bundles/.test(e)));
+
+  // Manifest lane_type WINS over the authored profile — the contract's own
+  // precedence. A migration lane cannot launder itself static via proof_profile.
+  const laundered = resolveApplyProfileGuard('UTV2-1718', staticBundle, 'migration');
+  assert.strictEqual(laundered.allowed, false);
+  assert.ok(laundered.errors.some((e) => /conflicts with manifest lane_type "migration"/.test(e)));
+
+  // Fail closed: unclassifiable inputs never reach a write.
+  const incident = resolveApplyProfileGuard('UTV2-1592', staticBundle, 'incident-containment');
+  assert.strictEqual(incident.allowed, false);
+  assert.ok(incident.errors.some((e) => /does not map to a recognised proof profile/.test(e)));
+
+  const unknownProfile = resolveApplyProfileGuard(
+    'UTV2-1592', JSON.stringify({ schema_version: 2, proof_profile: 'totally-safe' }), null,
+  );
+  assert.strictEqual(unknownProfile.allowed, false);
+  assert.ok(unknownProfile.errors.some((e) => /not a recognised profile/.test(e)));
+
+  const unauthored = resolveApplyProfileGuard('UTV2-1592', JSON.stringify({ schema_version: 2 }), null);
+  assert.strictEqual(unauthored.allowed, false);
+  assert.ok(unauthored.errors.some((e) => /unclassifiable; --apply refused/.test(e)));
+
+  const notJson = resolveApplyProfileGuard('UTV2-1592', '{nope', null);
+  assert.strictEqual(notJson.allowed, false);
+  assert.ok(notJson.errors.some((e) => /not valid JSON/.test(e)));
+
+  const notObject = resolveApplyProfileGuard('UTV2-1592', '[1,2]', 'governance');
+  assert.strictEqual(notObject.allowed, false);
+  assert.ok(notObject.errors.some((e) => /not a JSON object/.test(e)));
+});
+
+test('HARD GUARD: the CLI refuses --apply against a non-static bundle BEFORE identity validation, writing zero bytes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-rebind-profile-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  const proofDir = path.join(dir, 'docs', '06_status', 'proof', 'UTV2-1592');
+  fs.mkdirSync(proofDir, { recursive: true });
+  const migrationEvidence = JSON.stringify(
+    { ...JSON.parse(EVIDENCE), schema_version: 2, proof_profile: 'migration' }, null, 2,
+  ) + '\n';
+  fs.writeFileSync(path.join(proofDir, 'evidence.json'), migrationEvidence);
+  fs.writeFileSync(path.join(proofDir, 'verification.md'), RICH_VERIFICATION);
+  const digests = {
+    evidence: sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8')),
+    verification: sha256(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8')),
+  };
+  const script = path.join(process.cwd(), 'scripts', 'ops', 'proof-rebind.ts');
+  const run = (args: string[]): { code: string; errors?: string[]; profile?: string | null } => {
+    let out = '';
+    try {
+      out = execFileSync('npx', ['tsx', script, ...args],
+        { cwd: dir, encoding: 'utf8', env: { ...process.env, PATH: process.env.PATH ?? '' } });
+    } catch (error) {
+      out = (error as { stdout?: string }).stdout ?? '';
+    }
+    return JSON.parse(out);
+  };
+  const base = ['--issue', 'UTV2-1592', '--merge-sha', MERGE, '--approved-head', HEAD];
+
+  // --pr is supplied, but the guard refuses first: no gh/network dependency, a
+  // deliberately unresolvable PR number proves identity validation never ran.
+  const refused = run([...base, '--apply', '--pr', '999999999']);
+  assert.strictEqual(refused.code, 'proof_rebind_apply_profile_refused');
+  assert.strictEqual(refused.profile, 'migration');
+  assert.ok((refused.errors ?? []).some((e) => /--apply is refused for migration proof bundles/.test(e)),
+    `got: ${JSON.stringify(refused.errors)}`);
+
+  // PREVIEW of the same non-static bundle stays available and writes nothing.
+  const preview = run(base);
+  assert.strictEqual(preview.code, 'proof_rebind_preview');
+
+  assert.strictEqual(sha256(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8')), digests.evidence);
+  assert.strictEqual(sha256(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8')), digests.verification);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('REAL BUNDLE: preview of the UTV2-1718 migration bundle leaves every byte untouched, and --apply is profile-refused', () => {
+  // A fixture COPY of a real merged migration bundle, exercised read-only. The
+  // assertions are state-independent: whatever binding state the real bundle is
+  // in, preview must write nothing and the profile guard must refuse a write.
+  const evidenceRel = 'docs/06_status/proof/UTV2-1718/evidence.json';
+  const verificationRel = 'docs/06_status/proof/UTV2-1718/verification.md';
+  const manifestRel = 'docs/06_status/lanes/UTV2-1718.json';
+  const evidence = readRealBundle(evidenceRel);
+  const verification = readRealBundle(verificationRel);
+  const manifest = JSON.parse(readRealBundle(manifestRel)) as { lane_type?: string };
+  assert.strictEqual(manifest.lane_type, 'migration',
+    'precondition: UTV2-1718 is the migration-lane fixture — if its lane_type changes, re-derive this contract');
+
+  const { deps, store } = memoryDeps({
+    [path.join('/repo', evidenceRel)]: evidence,
+    [path.join('/repo', verificationRel)]: verification,
+  });
+  const result = rebindProofBundle(
+    { issueId: 'UTV2-1718', shas: SHAS, prUrl: PR_URL, files: [evidenceRel, verificationRel], root: '/repo' },
+    { write: false },
+    deps,
+  );
+  assert.ok(
+    ['proof_rebind_preview', 'proof_rebind_refused', 'proof_rebind_noop'].includes(result.code),
+    `preview of a real bundle must never report applied, got ${result.code}`,
+  );
+  assert.strictEqual(store[path.join('/repo', evidenceRel)], evidence, 'preview must not move a single evidence byte');
+  assert.strictEqual(store[path.join('/repo', verificationRel)], verification,
+    'preview must not move a single verification byte');
+
+  const guard = resolveApplyProfileGuard('UTV2-1718', evidence, manifest.lane_type ?? null);
+  assert.strictEqual(guard.allowed, false);
+  assert.strictEqual(guard.profile, 'migration');
+  assert.ok(guard.errors.some((e) => /--apply is refused for migration proof bundles/.test(e)));
 });

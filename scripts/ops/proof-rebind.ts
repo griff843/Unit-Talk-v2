@@ -24,7 +24,14 @@
  *  - Binding regions are an allowlist. A field not on the list is never written.
  *  - Everything outside the binding regions must be byte-identical; the write is
  *    refused if it is not.
- *  - Identity and ancestry are validated against GitHub before any write.
+ *  - Identity and ancestry are validated against GitHub before any write. The
+ *    identity core is the shared `MergedPrAttestation` shape the UTV2-1722
+ *    evidence contract (proof-schema.ts) and ops:truth-check consume — this
+ *    tool does not maintain a parallel notion of merge authority.
+ *  - --apply is allowlisted to bundles affirmatively classified `static` by the
+ *    contract's own profile rules (manifest lane_type first, authored
+ *    proof_profile second, conflicts and unknowns refuse). app-runtime,
+ *    migration, legacy and unclassifiable bundles are PREVIEW-ONLY here.
  *  - A preview enumerates every field and file that would change, and writes
  *    nothing.
  *  - sha256 of every file is recorded before and after.
@@ -79,6 +86,11 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { emitJson, getFlag, parseArgs, ROOT } from './shared.js';
+import {
+  declaredProfileForLaneType,
+  type EvidenceProofProfile,
+  type MergedPrAttestation,
+} from './proof-schema.js';
 
 export type ShaClass = 'execution_sha' | 'approved_head_sha' | 'merge_sha';
 
@@ -1006,13 +1018,58 @@ export function planVerificationRebind(
   return { next, changes, errors };
 }
 
+/**
+ * The GitHub PR record a rebind validates identity against. Its authority core
+ * is the SAME `MergedPrAttestation` shape the shipped UTV2-1722 evidence
+ * contract (`scripts/ops/proof-schema.ts`) and `ops:truth-check` consume for
+ * merged-PR attestation: rank-1 GitHub merge/head/PR-number truth, tagged with
+ * its source. This tool must not grow a parallel notion of merge authority, so
+ * it carries the shared type and only adds the record fields the contract does
+ * not need (state, base ref, base reachability).
+ */
 export interface PullRequestIdentity {
-  number: number;
+  attestation: MergedPrAttestation;
   state: string;
-  head_sha: string;
-  merge_commit_sha: string | null;
   base_ref: string;
   merge_sha_on_base: boolean;
+}
+
+/**
+ * Builds the shared `MergedPrAttestation` from a raw GitHub PR record,
+ * fail-closed: an incomplete or malformed record yields named errors and no
+ * attestation, exactly like the contract-side resolution refuses an incomplete
+ * attestation rather than trusting whatever fields happen to be present.
+ */
+export function buildMergedPrAttestation(record: {
+  number: unknown;
+  headRefOid: unknown;
+  mergeCommitOid: unknown;
+}): { attestation: MergedPrAttestation | null; errors: string[] } {
+  const errors: string[] = [];
+  const prNumber = record.number;
+  if (typeof prNumber !== 'number' || !Number.isSafeInteger(prNumber) || prNumber <= 0) {
+    errors.push(`the PR record's number "${String(prNumber)}" is not a positive integer — refusing`);
+  }
+  const headSha = record.headRefOid;
+  if (typeof headSha !== 'string' || !SHA_PATTERN.test(headSha)) {
+    errors.push(`the PR record's head "${String(headSha)}" is not a 40-character SHA — refusing`);
+  }
+  const mergeSha = record.mergeCommitOid;
+  if (mergeSha === null || mergeSha === undefined) {
+    errors.push('the PR record has no merge commit recorded — refusing');
+  } else if (typeof mergeSha !== 'string' || !SHA_PATTERN.test(mergeSha)) {
+    errors.push(`the PR record's merge commit "${String(mergeSha)}" is not a 40-character SHA — refusing`);
+  }
+  if (errors.length > 0) return { attestation: null, errors };
+  return {
+    attestation: {
+      merge_sha: mergeSha as string,
+      head_sha: headSha as string,
+      pr_number: prNumber as number,
+      source: 'github-api',
+    },
+    errors: [],
+  };
 }
 
 /**
@@ -1024,7 +1081,11 @@ export interface PullRequestIdentity {
  * NOT an ancestor of the merge commit. Asserting ancestry between them would be
  * wrong and would reject every correct squash rebind. What must hold instead is
  * that the merge commit is reachable from the base branch, and that both SHAs
- * match the PR record.
+ * match the PR record. The three SHA classes stay distinct throughout:
+ * execution_sha is where the evidence ran, approved_head_sha is the reviewed PR
+ * head, merge_sha is the base-branch commit — the same distinction the shipped
+ * contract draws between an external receipt's head and
+ * `sha_binding.verified_source_sha`.
  */
 export function validatePrIdentity(
   shas: ShaSet,
@@ -1032,21 +1093,23 @@ export function validatePrIdentity(
   opts: { executionShaOnBranch?: boolean } = {},
 ): string[] {
   const errors: string[] = [];
-  if (pr.state.toUpperCase() !== 'MERGED') {
-    errors.push(`PR #${pr.number} is ${pr.state}, not MERGED — refusing to bind a merge SHA`);
+  const att = pr.attestation;
+  if (att.source !== 'github-api') {
+    errors.push(`PR #${att.pr_number}'s attestation source "${String(att.source)}" is not github-api — refusing`);
   }
-  if (pr.merge_commit_sha === null) {
-    errors.push(`PR #${pr.number} has no merge commit recorded`);
-  } else if (pr.merge_commit_sha !== shas.merge_sha) {
+  if (pr.state.toUpperCase() !== 'MERGED') {
+    errors.push(`PR #${att.pr_number} is ${pr.state}, not MERGED — refusing to bind a merge SHA`);
+  }
+  if (att.merge_sha !== shas.merge_sha) {
     errors.push(
-      `merge_sha "${shas.merge_sha}" is not PR #${pr.number}'s merge commit ` +
-        `("${pr.merge_commit_sha}") — refusing`,
+      `merge_sha "${shas.merge_sha}" is not PR #${att.pr_number}'s merge commit ` +
+        `("${att.merge_sha}") — refusing`,
     );
   }
-  if (pr.head_sha !== shas.approved_head_sha) {
+  if (att.head_sha !== shas.approved_head_sha) {
     errors.push(
-      `approved_head_sha "${shas.approved_head_sha}" is not PR #${pr.number}'s head ` +
-        `("${pr.head_sha}") — refusing`,
+      `approved_head_sha "${shas.approved_head_sha}" is not PR #${att.pr_number}'s head ` +
+        `("${att.head_sha}") — refusing`,
     );
   }
   if (!pr.merge_sha_on_base) {
@@ -1082,6 +1145,114 @@ export function deriveCanonicalPrUrl(recordUrl: string | null, prNumber: number)
   if (!match) return null;
   if (Number.parseInt(match[1], 10) !== prNumber) return null;
   return recordUrl;
+}
+
+/**
+ * The single proof profile a rebind may WRITE to. Everything else — app-runtime
+ * (production/runtime decision truth), migration (receipts bound by the shipped
+ * UTV2-1722 attestation contract), legacy or unclassifiable bundles — is
+ * preview-only: those bundles carry evidence whose consumers reach beyond this
+ * tool's byte-fidelity guarantees, so a rewrite of even their binding fields
+ * must go through its own governed change, not a CLI flag.
+ */
+export const REBIND_APPLY_ALLOWED_PROFILE: EvidenceProofProfile = 'static';
+
+export interface ApplyProfileVerdict {
+  allowed: boolean;
+  profile: EvidenceProofProfile | null;
+  source: 'manifest-lane-type' | 'evidence' | null;
+  errors: string[];
+}
+
+/**
+ * HARD GUARD for --apply: classifies the bundle by the SAME precedence the
+ * shipped evidence contract uses — the lane manifest's `lane_type` (via the
+ * contract's own `declaredProfileForLaneType`) wins, the bundle's authored
+ * `proof_profile` may not conflict with it — and permits a write ONLY for a
+ * bundle affirmatively classified `static`. Fail closed: an unparseable
+ * bundle, an unknown or missing profile, an unrecognised lane type (incident,
+ * containment, or anything else the contract does not map), or a
+ * manifest/evidence conflict all refuse. Preview never consults this guard and
+ * never writes.
+ */
+export function resolveApplyProfileGuard(
+  issueId: string,
+  evidenceRaw: string,
+  laneType: string | null,
+): ApplyProfileVerdict {
+  const refuse = (profile: EvidenceProofProfile | null, ...errors: string[]): ApplyProfileVerdict => ({
+    allowed: false,
+    profile,
+    source: null,
+    errors,
+  });
+
+  let bundle: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(evidenceRaw);
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return refuse(null, `${issueId}: evidence.json is not a JSON object — cannot classify the bundle; --apply refused`);
+    }
+    bundle = parsed as Record<string, unknown>;
+  } catch (error) {
+    return refuse(
+      null,
+      `${issueId}: evidence.json is not valid JSON (${(error as Error).message}) — cannot classify the bundle; --apply refused`,
+    );
+  }
+
+  const declared = declaredProfileForLaneType(laneType);
+  const authored = bundle['proof_profile'];
+  const AUTHORABLE = new Set<EvidenceProofProfile>(['app-runtime', 'migration', 'static']);
+
+  if (authored !== undefined && (typeof authored !== 'string' || !AUTHORABLE.has(authored as EvidenceProofProfile))) {
+    return refuse(
+      null,
+      `${issueId}: proof_profile "${String(authored)}" is not a recognised profile — cannot classify the bundle; --apply refused`,
+    );
+  }
+  if (declared !== null && authored !== undefined && authored !== declared) {
+    return refuse(
+      declared,
+      `${issueId}: proof_profile "${String(authored)}" conflicts with manifest lane_type "${String(laneType)}" ` +
+        `(${declared}) — ambiguous classification; --apply refused`,
+    );
+  }
+  // A lane type that IS declared but does not map to a contract profile —
+  // incident, containment, or any future type — must not be overridden by the
+  // bundle's self-authored profile. The manifest is the higher authority, and
+  // an authority the guard cannot read fails closed.
+  if (laneType !== null && laneType.trim() !== '' && declared === null) {
+    return refuse(
+      null,
+      `${issueId}: lane_type "${laneType}" does not map to a recognised proof profile — ` +
+        'unclassifiable; --apply refused (preview remains available)',
+    );
+  }
+
+  const profile: EvidenceProofProfile | null = declared ?? (typeof authored === 'string' ? (authored as EvidenceProofProfile) : null);
+  const source: ApplyProfileVerdict['source'] = declared !== null ? 'manifest-lane-type' : profile !== null ? 'evidence' : null;
+
+  if (profile === null) {
+    // Only reachable without a usable lane_type: the manifest-authority refusal
+    // above already covered a declared-but-unmapped lane type.
+    return refuse(
+      null,
+      `${issueId}: the bundle authors no proof_profile and no lane manifest lane_type is available — ` +
+        'unclassifiable; --apply refused (preview remains available)',
+    );
+  }
+  if (profile !== REBIND_APPLY_ALLOWED_PROFILE) {
+    return refuse(
+      profile,
+      `${issueId}: --apply is refused for ${profile} proof bundles — ` +
+        (profile === 'migration'
+          ? 'migration receipts are bound by the merged-PR attestation contract and must be repaired under their own governed change'
+          : 'production/runtime decision evidence must be repaired under its own governed change') +
+        '; preview (without --apply) remains available and writes nothing',
+    );
+  }
+  return { allowed: true, profile, source, errors: [] };
 }
 
 export interface RebindInput {
@@ -1422,6 +1593,56 @@ async function main(): Promise<void> {
     return;
   }
 
+  // HARD GUARD: --apply is allowlisted to bundles affirmatively classified
+  // `static`. Runs BEFORE identity validation — a bundle this tool must never
+  // write is refused without consulting the network, and no flag reaches past
+  // it. Preview never enters this branch and never writes.
+  if (apply) {
+    const evidenceAbs = path.join(ROOT, proofRoot, 'evidence.json');
+    let evidenceRaw: string | null = null;
+    try {
+      evidenceRaw = fs.readFileSync(evidenceAbs, 'utf8');
+    } catch {
+      evidenceRaw = null;
+    }
+    let laneType: string | null = null;
+    const manifestAbs = path.join(ROOT, 'docs', '06_status', 'lanes', `${issueId}.json`);
+    if (fs.existsSync(manifestAbs)) {
+      try {
+        const manifest = JSON.parse(fs.readFileSync(manifestAbs, 'utf8')) as Record<string, unknown>;
+        laneType = typeof manifest['lane_type'] === 'string' ? manifest['lane_type'] : null;
+      } catch {
+        emitJson({
+          ok: false,
+          code: 'proof_rebind_apply_profile_refused',
+          issue_id: issueId,
+          errors: [`${issueId}: lane manifest exists but could not be parsed — cannot classify the bundle; --apply refused`],
+        });
+        process.exitCode = 1;
+        return;
+      }
+    }
+    const guard = evidenceRaw === null
+      ? {
+          allowed: false,
+          profile: null,
+          source: null,
+          errors: [`${issueId}: evidence.json is unreadable — cannot classify the bundle; --apply refused`],
+        }
+      : resolveApplyProfileGuard(issueId, evidenceRaw, laneType);
+    if (!guard.allowed) {
+      emitJson({
+        ok: false,
+        code: 'proof_rebind_apply_profile_refused',
+        issue_id: issueId,
+        profile: guard.profile,
+        errors: guard.errors,
+      });
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   if (prNumber && !skipPrCheck) {
     try {
       const raw = execFileSync(
@@ -1433,7 +1654,19 @@ async function main(): Promise<void> {
         number: number; state: string; headRefOid: string;
         mergeCommit: { oid: string } | null; baseRefName: string; url?: string;
       };
-      const derivedUrl = deriveCanonicalPrUrl(pr.url ?? null, pr.number);
+      // The identity core is the SHARED MergedPrAttestation shape the UTV2-1722
+      // evidence contract consumes — built fail-closed from the GitHub record.
+      const built = buildMergedPrAttestation({
+        number: pr.number,
+        headRefOid: pr.headRefOid,
+        mergeCommitOid: pr.mergeCommit?.oid ?? null,
+      });
+      if (built.attestation === null) {
+        emitJson({ ok: false, code: 'proof_rebind_refused', issue_id: issueId, shas, errors: built.errors });
+        process.exitCode = 1;
+        return;
+      }
+      const derivedUrl = deriveCanonicalPrUrl(pr.url ?? null, built.attestation.pr_number);
       if (derivedUrl === null) {
         emitJson({
           ok: false,
@@ -1452,10 +1685,8 @@ async function main(): Promise<void> {
       const identityErrors = validatePrIdentity(
         shas,
         {
-          number: pr.number,
+          attestation: built.attestation,
           state: pr.state,
-          head_sha: pr.headRefOid,
-          merge_commit_sha: pr.mergeCommit?.oid ?? null,
           base_ref: pr.baseRefName,
           merge_sha_on_base: reachable(shas.merge_sha, `origin/${pr.baseRefName}`),
         },
