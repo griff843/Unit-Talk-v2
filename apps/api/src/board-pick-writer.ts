@@ -245,7 +245,7 @@ export class BoardPickWriter {
       const event =
         universe.event_id != null ? eventById.get(universe.event_id) ?? null : null;
       const selection = buildBoardSelectionLabel(participant?.display_name ?? null, side, line);
-      const eventStartTime = readEventStartTime(event);
+      const eventStartTime = readBoardEventStartTime(event);
       const normalizedSport = event?.sport_id ?? normalizeSportKey(universe.sport_key);
       const freshnessInfo = evaluateProviderDataFreshness({
         snapshotAt: universe.last_offer_snapshot_at,
@@ -499,7 +499,23 @@ function normalizeSportKey(value: string | null) {
   return value;
 }
 
-function readEventStartTime(event: { event_date: string; metadata: Record<string, unknown> } | null) {
+/**
+ * The provider-published event start time, or `null`.
+ *
+ * UTV2-1611: this function used to fall back to `${event_date}T00:00:00Z` when
+ * `metadata.starts_at` was absent. A calendar date is not a kickoff time, so
+ * that fallback FABRICATED evidence: the synthesized midnight instant flowed
+ * into `evaluateProviderDataFreshness` (deciding the proximity tier and
+ * therefore the staleness threshold that gates the write) and into pick
+ * metadata as `eventTime`/`eventStartTime`, indistinguishable downstream from
+ * a real provider value. For an evening game it understates the start by up to
+ * a full day, which relaxes the freshness gate exactly when it should tighten.
+ *
+ * Absent evidence now reads as absent. Freshness evaluation and the automated
+ * write boundary both treat a missing event start as unknown and apply their
+ * own conservative defaults rather than trusting an invented one.
+ */
+export function readBoardEventStartTime(event: { event_date: string; metadata: Record<string, unknown> } | null) {
   if (!event) {
     return null;
   }
@@ -509,5 +525,5 @@ function readEventStartTime(event: { event_date: string; metadata: Record<string
     return startsAt.trim();
   }
 
-  return event.event_date ? `${event.event_date}T00:00:00Z` : null;
+  return null;
 }

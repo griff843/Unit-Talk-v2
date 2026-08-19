@@ -1,9 +1,26 @@
 import type { PickLifecycleState, PickSource, SubmissionPayload, WriterRole } from '@unit-talk/contracts';
 import { evaluateEdgePriceFreshness } from '@unit-talk/domain';
+import { GOVERNANCE_BRAKE_SOURCES } from './distribution-service.js';
 
+/**
+ * How a source is admitted to the automated write boundary.
+ *
+ *  - `boundary-required`   the source has NO direct-to-validated release
+ *                          class. EVERY submission enters the boundary,
+ *                          marker or not. A missing producer identity or
+ *                          missing market evidence fails closed (throws)
+ *                          rather than degrading to `validated`.
+ *  - `boundary-when-marked` the source has a ratified source-only governed
+ *                          path (the Phase 7A brake). A `systemGenerated`
+ *                          marker opts a full production into this stricter
+ *                          boundary; without it the source brake governs.
+ *  - `human-ingress`       human or externally-relayed submission. The normal
+ *                          `validated` path applies.
+ */
 type AutomatedWriteBoundaryPolicy =
-  | 'system-marker-required'
-  | 'governed-elsewhere';
+  | 'boundary-required'
+  | 'boundary-when-marked'
+  | 'human-ingress';
 
 /**
  * Every current PickSource must make an explicit write-boundary decision. The
@@ -12,22 +29,58 @@ type AutomatedWriteBoundaryPolicy =
  * rejected by the submission parser; direct typed callers can still opt into
  * the boundary with `systemGenerated: true`.
  *
- * `governed-elsewhere` does not mean human. Existing alert/model sources keep
- * their Phase 7A governance path; this boundary owns automated board/scanner
- * materialization. A `systemGenerated` marker always opts into this stricter
- * boundary regardless of the source's current policy.
+ * UTV2-1611: `board-construction` is `boundary-required`, not
+ * `boundary-when-marked`. The previous marker-only admission meant a board
+ * submission that simply omitted `metadata.systemGenerated` was treated as a
+ * human write and persisted as `validated` — governance that depended on every
+ * producer remembering to stamp a field. Admission is now decided by the
+ * SOURCE, which the producer cannot forget to set.
  */
 const AUTOMATED_WRITE_BOUNDARY_POLICY = {
-  'smart-form': 'governed-elsewhere',
-  feed: 'governed-elsewhere',
-  system: 'governed-elsewhere',
-  'alert-agent': 'governed-elsewhere',
-  'model-driven': 'governed-elsewhere',
-  api: 'governed-elsewhere',
-  'discord-bot': 'governed-elsewhere',
-  'system-pick-scanner': 'system-marker-required',
-  'board-construction': 'system-marker-required',
+  'smart-form': 'human-ingress',
+  feed: 'human-ingress',
+  system: 'human-ingress',
+  api: 'human-ingress',
+  'discord-bot': 'human-ingress',
+  'alert-agent': 'boundary-when-marked',
+  'model-driven': 'boundary-when-marked',
+  'system-pick-scanner': 'boundary-when-marked',
+  'board-construction': 'boundary-required',
 } as const satisfies Record<PickSource, AutomatedWriteBoundaryPolicy>;
+
+/**
+ * Structural invariant, checked once at module load: a source may only be
+ * classified as automated here if it is ALSO a member of
+ * `GOVERNANCE_BRAKE_SOURCES`. That set is keyed on source alone and needs no
+ * marker, so it is the fallback brake that catches anything which bypasses
+ * this boundary. Without the invariant the two mechanisms can drift and a
+ * source can end up with no brake at all — exactly the state
+ * `board-construction` was in before UTV2-1611.
+ *
+ * This is deliberately a hard throw at import time rather than a lint rule: a
+ * misclassified source must take the process down, not ship.
+ */
+export function assertEveryAutomatedSourceIsBraked(
+  policyBySource: Readonly<Record<string, AutomatedWriteBoundaryPolicy>>,
+  brakeSources: ReadonlySet<string>,
+): void {
+  for (const [source, policy] of Object.entries(policyBySource)) {
+    if (policy === 'human-ingress') continue;
+    if (!brakeSources.has(source)) {
+      throw new Error(
+        `Automated write boundary misconfiguration: source "${source}" is classified ` +
+          `"${policy}" but is absent from GOVERNANCE_BRAKE_SOURCES, so it has no ` +
+          'source-keyed fallback brake. Add it to GOVERNANCE_BRAKE_SOURCES in ' +
+          'distribution-service.ts or classify it as "human-ingress".',
+      );
+    }
+  }
+}
+
+assertEveryAutomatedSourceIsBraked(
+  AUTOMATED_WRITE_BOUNDARY_POLICY,
+  GOVERNANCE_BRAKE_SOURCES as ReadonlySet<string>,
+);
 
 export type AutomatedWriteBoundaryFailureCode =
   | 'MISSING_AUTOMATED_PRODUCER'
@@ -80,28 +133,36 @@ export class AutomatedWriteBoundaryError extends Error {
 }
 
 /**
- * This boundary governs genuine automated PRODUCTIONS, identified by the
- * `systemGenerated` marker that every automated producer stamps. Such a
- * submission materializes directly into `awaiting_approval` in one atomic
- * write, so it is never externally actionable as `validated`.
+ * Admission to the automated write boundary. Two independent routes:
  *
- * It is deliberately NOT the only governance layer. The Phase 7A brake in
- * `distribution-service.ts` (`GOVERNANCE_BRAKE_SOURCES`) separately governs
- * autonomous SOURCES -- system-pick-scanner, alert-agent, model-driven -- by
- * source alone and needs no marker. `t1-proof-awaiting-approval.test.ts`
- * exercises that path with minimal source-only fixtures, which is why this
- * boundary must not claim them: they carry no producer identity or market
- * evidence and are governed by the other mechanism.
+ *  1. SOURCE. A `boundary-required` source is admitted unconditionally. This is
+ *     the route that closes UTV2-1611: `board-construction` has no
+ *     direct-to-validated release class, so a board submission enters the
+ *     boundary whether or not the producer stamped `systemGenerated`. Keying
+ *     admission on the marker alone made governance a function of producer
+ *     discipline — one forgotten field released an ungoverned pick.
+ *  2. MARKER. `metadata.systemGenerated === true` opts any submission into the
+ *     boundary, including sources typed `boundary-when-marked` and runtime
+ *     source values outside `PickSource`.
  *
- * `board-construction` is the gap this lane closes. It was excluded from
- * GOVERNANCE_BRAKE_SOURCES as "operator-triggered", but the board writer is
- * scheduled and autonomous, so its picks reached `validated` ungoverned.
+ * `boundary-when-marked` sources (system-pick-scanner, alert-agent,
+ * model-driven) are NOT admitted by source. They have a ratified source-only
+ * governed path: the Phase 7A brake in `distribution-service.ts`, keyed on
+ * source and needing no marker, which `t1-proof-awaiting-approval.test.ts`
+ * exercises with minimal fixtures carrying no producer identity and no market
+ * evidence. Admitting those by source would fail them closed and convert a
+ * ratified governed path into dropped submissions. They are still braked —
+ * the module-load invariant above proves every automated source is in
+ * GOVERNANCE_BRAKE_SOURCES.
  *
  * Adding a valid source cannot compile until it is deliberately classified in
- * AUTOMATED_WRITE_BOUNDARY_POLICY below.
+ * AUTOMATED_WRITE_BOUNDARY_POLICY above.
  */
 export function isAutomatedProducerSubmission(payload: SubmissionPayload): boolean {
-  return payload.metadata?.['systemGenerated'] === true;
+  if (payload.metadata?.['systemGenerated'] === true) {
+    return true;
+  }
+  return readBoundaryPolicy(payload.source) === 'boundary-required';
 }
 
 /**
@@ -118,15 +179,13 @@ export function prepareAutomatedSubmission(
     return { automated: false, payload };
   }
 
-  // A `system-marker-required` source that omits the marker is still automated
-  // and still governed: it flows through this boundary and materializes into
-  // `awaiting_approval` like any other automated submission. It is deliberately
-  // NOT rejected. `t1-proof-awaiting-approval.test.ts` exercises exactly this
-  // shape -- source-only brake cases for system-pick-scanner, alert-agent, and
-  // model-driven -- and rejecting it would convert a ratified governed path
-  // into a hard failure that drops the submission. The architecture condition
-  // is that such a pick can never be externally actionable as `validated`;
-  // braking satisfies that without losing data.
+  // Everything past this point FAILS CLOSED. An admitted submission that cannot
+  // produce a complete, attributable, fresh write-boundary record is rejected
+  // before persistence: it is never silently downgraded to a non-automated
+  // write and never defaults to `validated`. For a `boundary-required` source
+  // this is the whole point — a board production with no producer identity or
+  // no market evidence is not releasable in any state, so it must not be
+  // written at all.
   const metadata = payload.metadata ?? {};
 
   const producer = readNonEmptyString(payload.submittedBy);
@@ -210,9 +269,21 @@ export function prepareAutomatedSubmission(
 export function detectAutomatedDirectToValidatedWrite(
   observation: AutomatedPickWriteObservation,
 ): AutomatedWriteBoundaryViolation | null {
+  // `validated` is forbidden as a RESTING state, not merely as a state.
+  //
+  // For a `boundary-required` source it is never legal at all: the pick is born
+  // in `awaiting_approval`, so a `validated` row is by definition an ungoverned
+  // direct write. The marker says the same thing for any source, including
+  // runtime values outside PickSource.
+  //
+  // A `boundary-when-marked` source with NO marker is deliberately NOT flagged
+  // by source alone: its ratified governed path is the Phase 7A brake, which
+  // moves it validated -> awaiting_approval, so `validated` is a legal
+  // transient there. Flagging it would turn a lawful in-flight state into a
+  // hard failure on the idempotent re-submission path.
+  const policy = readBoundaryPolicy(observation.source);
   const automated =
-    observation.metadata?.['systemGenerated'] === true ||
-    readBoundaryPolicy(observation.source) === 'system-marker-required';
+    observation.metadata?.['systemGenerated'] === true || policy === 'boundary-required';
   if (!automated || observation.status !== 'validated') {
     return null;
   }
@@ -236,7 +307,7 @@ export function assertNoAutomatedDirectToValidatedWrite(
   }
 }
 
-function readBoundaryPolicy(source: PickSource): AutomatedWriteBoundaryPolicy | undefined {
+function readBoundaryPolicy(source: PickSource | string): AutomatedWriteBoundaryPolicy | undefined {
   const policyByRuntimeSource = AUTOMATED_WRITE_BOUNDARY_POLICY as Readonly<
     Partial<Record<string, AutomatedWriteBoundaryPolicy>>
   >;

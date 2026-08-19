@@ -15,7 +15,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import type { IPickCandidateRepository, PickIdUpdate } from '@unit-talk/db';
-import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
+import {
+  readBoardEventStartTime,
+  runBoardPickWriter,
+  shouldScheduleBoardPickWriter,
+} from './board-pick-writer.js';
 import type {
   PickCandidateUpsertInput,
   MarketUniverseUpsertInput,
@@ -628,4 +632,32 @@ test('scheduler flags grant execution only and cannot release an automated board
   const pick = await repos.picks.findPickById(result.pickIds[0]!);
 
   assert.equal(pick?.status, 'awaiting_approval');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1611 regression — no fabricated event start time
+// ---------------------------------------------------------------------------
+
+test('REGRESSION UTV2-1611: board event start time is never fabricated from a date at midnight', () => {
+  // A calendar date is not a kickoff time. Synthesising `<date>T00:00:00Z`
+  // invents an event start the provider never published, which then drives the
+  // freshness proximity tier and lands in pick metadata as if it were evidence.
+  assert.equal(
+    readBoardEventStartTime({ event_date: '2026-08-19', metadata: {} }),
+    null,
+    'a bare event_date must not be promoted into a fabricated midnight start time',
+  );
+  assert.equal(
+    readBoardEventStartTime({ event_date: '2026-08-19', metadata: { starts_at: '  ' } }),
+    null,
+  );
+  assert.equal(
+    readBoardEventStartTime({
+      event_date: '2026-08-19',
+      metadata: { starts_at: '2026-08-19T23:10:00Z' },
+    }),
+    '2026-08-19T23:10:00Z',
+    'a real provider-published start time is still used',
+  );
+  assert.equal(readBoardEventStartTime(null), null);
 });

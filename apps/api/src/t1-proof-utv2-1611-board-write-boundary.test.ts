@@ -8,11 +8,12 @@
  *
  * This is distinct from `t1-proof-awaiting-approval.test.ts`, which covers the
  * Phase 7A SOURCE brake (system-pick-scanner, alert-agent, model-driven) using
- * minimal source-only fixtures. `board-construction` is deliberately absent
- * from `GOVERNANCE_BRAKE_SOURCES`, so before this lane its picks reached
- * `validated` ungoverned. The governing mechanism here is the shared automated
- * write boundary, keyed on the `systemGenerated` marker every automated
- * producer stamps.
+ * minimal source-only fixtures. Before this lane `board-construction` was
+ * absent from `GOVERNANCE_BRAKE_SOURCES` and had no marker-independent brake,
+ * so its picks reached `validated` ungoverned. The governing mechanism here is
+ * the shared automated write boundary, admitted by SOURCE (board-construction
+ * is `boundary-required`), with `GOVERNANCE_BRAKE_SOURCES` membership as the
+ * source-keyed fallback brake.
  *
  * Gated on SUPABASE_SERVICE_ROLE_KEY. Fixtures are uniquely namespaced with a
  * per-run UUID under the `utv2-1611-boundary-*` prefix and are voided at the
@@ -30,6 +31,7 @@ import type { SubmissionPayload } from '@unit-talk/contracts';
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
+  transitionPickLifecycle,
   type RepositoryBundle,
 } from '@unit-talk/db';
 import { submitPickController } from './controllers/submit-pick-controller.js';
@@ -167,11 +169,46 @@ after(async () => {
   if (skipReason) return;
   // Leave no fixture in an actionable state. `voided` is terminal and is never
   // distributed, so this cannot leak into delivery.
+  //
+  // UTV2-1611: cleanup goes through the lifecycle FSM, never a direct status
+  // PATCH. A raw `PATCH picks SET status='voided'` writes the lifecycle column
+  // without the matching `pick_lifecycle` row, so it (a) is not validated
+  // against `pickLifecycleTransitions` and would happily perform a forbidden
+  // transition, and (b) leaves an unauditable status change — the very class of
+  // ungoverned direct write this proof exists to disprove. A proof that cleans
+  // up by bypassing the control it is proving is not evidence.
   for (const pickId of createdPickIds) {
-    await fetch(`${supabaseUrl}/rest/v1/picks?id=eq.${pickId}`, {
-      method: 'PATCH',
-      headers: { ...authHeaders(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ status: 'voided' }),
-    });
+    try {
+      await transitionPickLifecycle(
+        repositories.picks,
+        pickId,
+        'voided',
+        'UTV2-1611 live proof fixture cleanup',
+        'operator_override',
+      );
+    } catch (cleanupError) {
+      // Surface rather than swallow: a fixture left actionable is an operational
+      // fact the run must report, not hide.
+      console.error(
+        JSON.stringify({
+          proof: 'UTV2-1611',
+          event: 'fixture_cleanup_failed',
+          pickId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        }),
+      );
+      throw cleanupError;
+    }
+  }
+
+  // The cleanup itself must be auditable: every voided fixture carries a
+  // matching pick_lifecycle row. This is the assertion a direct PATCH cannot
+  // satisfy.
+  for (const pickId of createdPickIds) {
+    const rows = await restQuery<LifecycleRow>(
+      `pick_lifecycle?pick_id=eq.${pickId}&to_state=eq.voided&select=pick_id,from_state,to_state,writer_role`,
+    );
+    assert.equal(rows.length, 1, `voiding fixture ${pickId} must write exactly one lifecycle event`);
+    assert.equal(rows[0]!.from_state, 'awaiting_approval');
   }
 });
