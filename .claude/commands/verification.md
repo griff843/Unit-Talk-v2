@@ -10,9 +10,19 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 
 | Tier | Required Verification | Required Proof | Merge Authority |
 |---|---|---|---|
-| **T1** | `type-check` + `test` + `test:db` + runtime proof | Evidence bundle v1 (static + runtime), SHA-tied | PM `t1-approved` label |
-| **T2** | `type-check` + `test` + issue-specific | Diff summary + verification log | Orchestrator on green |
-| **T3** | `type-check` + `test` | Green CI on merge SHA | Orchestrator on green |
+| **T1** | `type-check` + `test` + `test:db` + runtime proof | Evidence bundle v1 (static + runtime), SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
+| **T2** | `type-check` + `test` + issue-specific | Diff summary + verification log | any ONE of: `pm-verdict/v1` APPROVED comment from CODEOWNERS, a GitHub PR review approval, or an `executor-result/v1` self-attestation comment from an authorized reviewer |
+| **T3** | `type-check` + `test` | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
+
+Merge Authority is defined mechanically by `.github/workflows/merge-gate.yml` (ratified 2026-05-18, UTV2-979). This table must always match that workflow — if they diverge, the workflow wins and this table is stale.
+
+**T2 has three accepted approval artifacts, not two** (`merge-gate.yml`, T2 branch):
+
+1. a `pm-verdict/v1` APPROVED comment from a CODEOWNERS member;
+2. a GitHub PR review approval; or
+3. an `EXECUTOR_RESULT: READY_FOR_REVIEW` / `schema: executor-result/v1` comment from an authorized reviewer (UTV2-1523).
+
+Path 3 exists because **the orchestrator cannot always self-approve**: when the PR author and the reviewing identity are the same GitHub account, GitHub rejects the review outright, so `gh pr review --approve` is not a reliable T2 path. Do not assume orchestrator self-approval satisfies the gate — when it is refused, post the `executor-result/v1` comment instead. Comment format and required fields: `docs/05_operations/schemas/executor-result-v1.md`.
 
 ---
 
@@ -77,9 +87,9 @@ Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
 
 ---
 
-## PM verdict format (required for T2/T1 merge gate)
+## PM verdict format (T1 merge gate; one of three T2 artifacts)
 
-When posting a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
+Required for every T1 merge. For T2 it is one of the three accepted approval artifacts listed in the tier matrix above; a `pm-verdict/v1` comment is needed only when neither a GitHub PR review approval nor an `executor-result/v1` self-attestation is used. When posting a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
 
 ```
 PM_VERDICT: APPROVED

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # .claude/hooks/pre-proof-validator.sh
 # PreToolUse hook: validates proof bundles before git commit.
-# Exit 0 = allow silently. Exit 2 = non-blocking warning shown to Claude.
+# Exit 0 = allow silently. Exit 2 = BLOCKS the commit (PreToolUse semantics —
+# any non-zero exit denies the call and surfaces stderr to Claude). Deliberate
+# fail-closed: a malformed proof bundle would fail CI's proof gates anyway, so
+# fix the listed issues and re-run the commit.
 
 input=$(cat)
 command=$(echo "$input" | python3 -c "
@@ -66,7 +69,7 @@ for f in $verification_files; do
 done
 
 if [ "${#failures[@]}" -gt 0 ]; then
-  echo "PROOF VALIDATOR: staged proof bundle has issues:" >&2
+  echo "PROOF VALIDATOR: commit blocked — staged proof bundle has issues (fix and re-commit):" >&2
   for msg in "${failures[@]}"; do
     echo "  - $msg" >&2
   done

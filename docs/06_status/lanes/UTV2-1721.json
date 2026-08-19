@@ -18,6 +18,8 @@
     ".claude/commands/verification.md",
     ".claude/hooks/bash-safety-guard.sh",
     ".claude/hooks/pre-proof-validator.sh",
+    ".ops/sync/UTV2-1721.yml",
+    "docs/06_status/lanes/UTV2-1721.json",
     "docs/06_status/proof/UTV2-1721/diff-summary.md",
     "docs/06_status/proof/UTV2-1721/evidence.json",
     "docs/06_status/proof/UTV2-1721/verification.md"
