@@ -1,5 +1,5 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 3b3846c37423f3654843db6be99a096def164298
+MERGE_SHA: 7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab
 
 Bound to `3b3846c37423f3654843db6be99a096def164298`, the sixth-iteration head:
 it merges current main (post-UTV2-1722 evidence contract), adopts the shared
@@ -572,5 +572,5 @@ apparatus. No proof bundle other than this lane's own is modified by this PR.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1315
