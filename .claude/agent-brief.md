@@ -2,7 +2,7 @@
 
 > **Prepend this file to every bounded agent dispatch.** It is the repo-specific gotcha list that every lane needs to know before touching code. Re-discovering these pitfalls each session is a waste of context and has caused real production incidents.
 >
-> Last updated: 2026-04-11. Update when a new drift class is discovered or a policy changes.
+> Last updated: 2026-08-17. Update when a new drift class is discovered or a policy changes.
 
 This brief is **in addition to** `CLAUDE.md` (execution model, tier/lane rules, merge policy). Read CLAUDE.md for process; read this for the repo's actual traps.
 
@@ -39,7 +39,7 @@ npx tsx scripts/link-worktree-env.ts <worktree-path>
 
 ## 3. Scanner quiescence posture (as of Phase 7A)
 
-`SYSTEM_PICK_SCANNER_ENABLED=false` in `local.env` with an inline do-not-revert comment on line 60. The scheduled `system-pick-scanner` in `apps/api/src/index.ts` runs on API startup when this flag is `true`.
+`SYSTEM_PICK_SCANNER_ENABLED` is now **absent** from `local.env`; the scanner defaults to off (`apps/api/src/system-pick-scanner.ts` — "default: off"), so the quiesced posture holds. *(Updated 2026-08-17: the earlier explicit `=false` line-60 entry no longer exists.)* The scheduled `system-pick-scanner` in `apps/api/src/index.ts` runs on API startup only when this flag is set `true`.
 
 **Why it's off:** every API bounce with it on produces autonomous-source picks that trigger the Phase 7A brake path. Any drift in the brake path accumulates stranded rows in production. Until the full UTV2-494 evidence bundle is accepted and stranded-row remediation lands, the scanner stays quiesced.
 
@@ -106,7 +106,7 @@ export const GOVERNANCE_BRAKE_SOURCES: ReadonlySet<PickSource> = new Set<PickSou
 
 **Rule:** when you need to move a pick between lifecycle states, always go through `transitionPickLifecycle`. Never write `picks.status` + `pick_lifecycle` directly from application code — that path is not atomic and has left orphaned rows in production before.
 
-**Optional-method gotcha:** `PickRepository.transitionPickLifecycleAtomic` is currently **optional** on the interface because updating `FakePickRepository` in `apps/worker/src/worker-runtime.test.ts` was out of scope for UTV2-519. Lane tests must either check `typeof repo.transitionPickLifecycleAtomic === 'function'` before invoking directly, or use `.call()` with a non-null assertion after an `assert.ok` check (see `apps/api/src/t1-proof-awaiting-approval.test.ts:248-266` for the working pattern). Tightening this to required is tracked under UTV2-520 Part 2.
+**Optional-method gotcha [REMEDIATED: 2026-08-17 via UTV2-520]:** `PickRepository.transitionPickLifecycleAtomic` is now **required** on the interface (`packages/db/src/repositories.ts`; InMemory throws a typed sentinel — see `packages/db/src/lifecycle.ts:124`). The old `typeof`-check / `.call()` dance is no longer needed; call it directly through `transitionPickLifecycle`.
 
 ---
 
@@ -194,7 +194,7 @@ These are known, tracked, and out of scope for incidental repair:
 - 3 failures in `apps/api/src/promotion-edge-integration.test.ts` (documented in `apps/api/CLAUDE.md`)
 - `alert-agent` cross-app imports from `apps/api/src/` (documented drift)
 - 24+ stranded `awaiting_approval` rows (see #4)
-- `transitionPickLifecycleAtomic?` optional on interface (see #8; tracked under UTV2-520 Part 2)
+- ~~`transitionPickLifecycleAtomic?` optional on interface~~ [REMEDIATED: 2026-08-17 via UTV2-520 — now required, see #8]
 - Worker DOWN status during proof work (worker is not in the brake path; scanner quiesced covers the risk)
 
 **Rule:** your task does not fix these. Your task does not mention these as blockers unless your specific slice directly depends on one of them. If you encounter something that looks like a new failure, check baseline first (`git stash -u && <verification command>`). If it reproduces on baseline, it's pre-existing — flag it and move on.
@@ -216,7 +216,7 @@ A bounded stop with precise evidence is strictly better than a wider blast radiu
 
 ---
 
-## 18. Proof files must be `.md`; `lane_type: verification` does not cover `apps/api/src/**`
+## 17. Proof files must be `.md`; `lane_type: verification` does not cover `apps/api/src/**`
 
 **The trap:** Codex defaults to `lane_type: verification` for test-correction work and writes proof as `verification.md`. Both break CI in ways that aren't obvious from the error.
 
@@ -236,6 +236,6 @@ Canonical spec: `docs/05_operations/LANE_MANIFEST_SPEC.md §14`
 
 ---
 
-## 17. This brief is append-only
+## 18. This brief is append-only
 
 When a new drift class is found, add a numbered section. Do not delete sections without PM approval — they exist because an incident happened. If a gotcha is fully remediated (e.g. the constraint is now enforced at CI time), mark it `[REMEDIATED: <date> via <issue>]` and keep the section as historical context.
