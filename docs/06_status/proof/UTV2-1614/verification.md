@@ -1,13 +1,16 @@
 # PROOF: UTV2-1614
-MERGE_SHA: 179c3047b475b2551fe8237c03983b927da51c15
+MERGE_SHA: 3b3846c37423f3654843db6be99a096def164298
 
-Bound to `179c3047b475b2551fe8237c03983b927da51c15`, the commit carrying the
-final state of every in-scope file. Code and proof are separate commits so the
-proof names a SHA that actually contains the code it describes. The production
-change landed in the code-only commit `60c9598ab1fcba915938986daa1bd50bd9b15d74`;
-`e829d2bb` was a test-only follow-up (see "CI-only repair" below) and `179c3047b475b2551fe8237c03983b927da51c15`
-closes every finding of five successive adversarial exact-head reviews (see
-the review sections below).
+Bound to `3b3846c37423f3654843db6be99a096def164298`, the sixth-iteration head:
+it merges current main (post-UTV2-1722 evidence contract), adopts the shared
+`MergedPrAttestation` identity core, and adds the static-only `--apply` profile
+hard guard. Code and proof are separate commits so the proof names a SHA that
+actually contains the code it describes. History of the earlier heads: the
+production change landed in the code-only commit
+`60c9598ab1fcba915938986daa1bd50bd9b15d74`; `e829d2bb` was a test-only
+follow-up (see "CI-only repair" below);
+`179c3047b475b2551fe8237c03983b927da51c15` closed every finding of five
+successive adversarial exact-head reviews (see the review sections below).
 
 ## Summary
 
@@ -172,8 +175,13 @@ OUTSIDE the binding section and resembles a binding row — survives untouched.
 
 ### Live-DB runtime proof
 
+Historical (fifth-review head, 2026-07-28, PRE-UTV2-1630 isolation — this run
+legitimately targeted production because staging did not yet exist and the
+staging guard had not yet shipped; recorded as history, not as this head's
+proof):
+
 ```
-$ pnpm test:db
+$ pnpm test:db          # 2026-07-28, project zfzdnfwdarxucxtaojxm
 1..7
 # tests 7
 # suites 0
@@ -185,20 +193,48 @@ $ pnpm test:db
 # duration_ms 92747.662803
 ```
 
-Live Supabase project `zfzdnfwdarxucxtaojxm`. This lane ships ops tooling with
-no DB schema or query changes; `pnpm test:db` establishes that the live-DB suite
-remains undisturbed. The suite writes its own fixture rows, which are test
-artifacts and must be excluded from any production pick or settlement count.
+Current (sixth-iteration head, post-UTV2-1630): `pnpm test:db` run locally is
+REFUSED by the staging identity guard before any client is constructed, exactly
+as designed — no staging credential exists outside the `staging-ci` GitHub
+environment, and this machine holds none:
 
-Recorded honestly: an earlier run on this branch failed 1 of 7 —
-`UTV2-883: no duplicate participants for the same external_id and sport` with
-`Failed to list participants by type: TypeError: fetch failed`, a transport-level
-failure reaching Supabase. No file in this lane's scope touches the DB layer.
-Every subsequent run, including the one above, passed 7/7 with no code change.
-The failing run is not claimed as a pass; the passing run is the runtime proof,
-and CI on the merge SHA is authoritative.
+```
+$ pnpm test:db
+[assert-staging] host=unparseable ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL
+(host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx.
+Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+No production database was touched and no TAP was fabricated. The genuine
+writable run for this branch is CI's — see "Staging DB proof (CI)" below —
+and the binding control is the same-run `ci-db-proof-receipt/v2` verified
+inside the required `verify` context, per proof-auditor-gate's own delegation
+(proof-file TAP text is explicitly not evidence of the target database).
+
+### Staging DB proof (CI)
+
+Workflow `Staging DB Proof` run 32279673068, dispatched on this branch at head
+`3b3846c37423f3654843db6be99a096def164298`, ran `pnpm test:db` against the
+approved staging project `xskgrzbteyqdufktjrjx` with `CI_SUPABASE_*`
+credentials. TAP is quoted verbatim under "Sixth iteration" below, alongside
+the run URL, and the required `verify` context reproduces and verifies its own
+same-run receipt on every push of this branch.
 
 ### Static verification
+
+Fifth-review head (historical):
+
+```
+$ pnpm test:ops
+# tests 1334
+# pass 1334
+# fail 0
+# skipped 0
+```
+
+Sixth-iteration head (current, after merging main — the suite absorbed main's
+growth):
 
 ```
 $ pnpm type-check
@@ -208,16 +244,26 @@ $ pnpm lint
 (clean)
 
 $ pnpm test:ops
-# tests 1334
-# pass 1334
+1..2247
+# tests 2331
+# pass 2331
 # fail 0
 # skipped 0
 ```
 
-`test:ops` rose from 1299 to 1334 as the proof-rebind suite went from 36 to 71
-assertions. `pnpm verify` covers lint, type-check, build and the full test suite.
-Stages run sequentially because `verify:parallel` was OOM-killed locally
-(exit 137); that is not a waiver, and CI on the merge SHA is authoritative.
+`test:ops` rose from 1299 to 1334 across the five review iterations, then to
+2331 after the main merge, as the proof-rebind suite went from 36 to 75
+assertions. `pnpm verify` covers lint, type-check, build and the full test
+suite, and CI on the merge SHA is authoritative.
+
+R-level compliance on the final head:
+
+```
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 ### CI-only repair after the first CI run
 
@@ -436,6 +482,88 @@ NON-RECURSIVE would have found: 591
 
 Every one of the 593 artifacts plans identically before and after this
 revision's fixes. Preview only; nothing was written.
+
+### Sixth iteration — main synchronization, the UTV2-1722 contract, and the profile hard guard
+
+The branch was 250 commits behind main when this iteration began. Main was
+merged (the only conflict was `package.json` test wiring; both sides' test
+entries are kept and `proof-rebind.test.ts` remains wired into `test:ops`), and
+the tool was reconciled with the evidence contract that shipped in the interim:
+
+- **Shared merged-PR attestation core.** `PullRequestIdentity` now carries the
+  exported `MergedPrAttestation` type from `scripts/ops/proof-schema.ts` — the
+  same rank-1 GitHub merge/head/PR-number record the shipped evidence contract
+  and `ops:truth-check` consume — built fail-closed from the `gh pr view`
+  record by `buildMergedPrAttestation` (incomplete or malformed records yield
+  named errors and no attestation). This tool no longer maintains a parallel
+  notion of merge authority. The three SHA classes stay semantically distinct
+  end to end: `execution_sha` is where the evidence ran, `approved_head_sha` is
+  the reviewed PR head, `merge_sha` is the base-branch commit — the same
+  distinction the contract draws between an external receipt's head and
+  `sha_binding.verified_source_sha`.
+- **Static-only `--apply` profile hard guard.** `resolveApplyProfileGuard`
+  classifies the bundle by the contract's own precedence — the lane manifest's
+  `lane_type` (via the contract's exported `declaredProfileForLaneType`) wins,
+  the authored `proof_profile` may not conflict with it — and permits a write
+  ONLY for a bundle affirmatively classified `static`. app-runtime (production
+  decision truth), migration (receipts bound by the merged-PR attestation
+  contract), legacy, incident/containment or otherwise unmapped lane types,
+  conflicts, unknown profiles and unparseable bundles all refuse with the named
+  code `proof_rebind_apply_profile_refused` — BEFORE identity validation, with
+  no network dependency and zero bytes written. Preview never consults the
+  guard and never writes.
+- The seven review threads from the exact-head reviews of `612b8ca`, `e933827`
+  and `da29843` (`--apply --skip-pr-check` bypass, duplicate JSON binding
+  tokens, missing required evidence fields, duplicate required keys, PR-URL
+  derivation, valueless top-level `MERGE_SHA:`, duplicate optional keys) were
+  each closed by the five review-fix commits recorded above; this iteration
+  re-verified each against the current code and each remains locked by its own
+  adversarial regression in the suite.
+
+New adversarial regressions this iteration (75 total, up from 71): fail-closed
+attestation construction (no merge commit, short head, non-integer PR number,
+prose merge value), the profile-guard matrix (allowed static by evidence and by
+lane type; refused migration, app-runtime, laundering via authored profile
+under a migration lane, unmapped lane types, unknown profiles, unparseable and
+non-object JSON), a CLI-level proof that the profile refusal happens before
+identity validation and writes zero bytes, and a read-only REAL-BUNDLE contract:
+a fixture copy of the merged UTV2-1718 migration bundle is previewed and every
+byte is asserted untouched, and its `--apply` is asserted profile-refused.
+
+### Staging DB proof (CI) — TAP
+
+Workflow `Staging DB Proof`, run
+<https://github.com/griff843/Unit-Talk-v2/actions/runs/32279673068>, branch
+`claude/utv2-1614-proof-rebind` at head
+`3b3846c37423f3654843db6be99a096def164298`, staging project
+`xskgrzbteyqdufktjrjx`:
+
+```
+$ pnpm test:db
+[assert-staging] host=***.supabase.co ref=*** expected=***
+[assert-staging] OK: target is the approved staging project ***
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 107330.677232
+```
+
+(The `***` masks are GitHub Actions' own secret redaction of the staging host
+and project ref in the public log; the job's "Assert staging credentials
+present" step verified the ref equals the approved staging project before the
+suite ran, and run 32279673068's receipt binds the output to its SHA-256.)
 
 ### Scope
 

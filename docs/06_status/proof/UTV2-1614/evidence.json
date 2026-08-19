@@ -1,22 +1,19 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "proof_profile": "static",
   "issue_id": "UTV2-1614",
   "sha_binding": {
-    "verified_source_sha": "179c3047b475b2551fe8237c03983b927da51c15",
+    "verified_source_sha": "3b3846c37423f3654843db6be99a096def164298",
     "merge_sha": null,
-    "evidence_commit_sha": "179c3047b475b2551fe8237c03983b927da51c15",
-    "current_pr_head_sha": "179c3047b475b2551fe8237c03983b927da51c15",
-    "verified_source_note": "Bound to 179c3047b475b2551fe8237c03983b927da51c15, the commit carrying the final state of every in-scope file. Five successive adversarial exact-head reviews have been run; every finding of all five is closed. No existing refusal was relaxed except one that was WRONG: rejecting the repository's own CI-resolved sentinels, which 25 real bundles legitimately store."
-  },
-  "verifier": {
-    "identity": "claude-opus-5",
-    "role": "orchestrator"
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "verified_source_note": "Bound to 3b3846c37423f3654843db6be99a096def164298, the sixth-iteration head: it merges current main (post-UTV2-1722 evidence contract), adopts the shared MergedPrAttestation identity core, and adds the static-only --apply profile hard guard. The prior head 179c3047b475b2551fe8237c03983b927da51c15 closed five successive adversarial exact-head reviews; every one of those fixes is preserved unchanged on this head (no planner code was touched in this iteration). Earlier sha_binding note retained in verification.md history."
   },
   "tier": "T1",
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "note": "type-check, lint and test:ops clean on 179c3047b475b2551fe8237c03983b927da51c15, run sequentially; verify:parallel OOM-killed locally (exit 137), not a waiver."
+      "note": "verify:static (env, lint, type-check, build, full test suite, smart-form verify, command wiring) green locally after synchronizing with current main (was 250 commits behind); the machine-tagged proof-claim test is green against this bundle's refreshed counts. verify's live-db half (test:live-db) is refused locally by the staging identity guard by design — no staging credential exists outside the staging-ci GitHub environment — so full pnpm verify green is CI's required verify context, which holds those credentials; the same suite passed 7/7 against staging in workflow run 32279673068 on this branch."
     },
     "type_check": {
       "status": "PASS"
@@ -29,7 +26,7 @@
     },
     "test": {
       "status": "PASS",
-      "note": "test:ops 1334 passing, including 71 proof-rebind assertions (was 1299 / 36 at the first rejected head)."
+      "note": "test:ops 2331 tests on this head (the suite absorbed main's growth in the merge), including 75 proof-rebind assertions (was 71 at the fifth-review head, 36 at the first rejected head). The four new assertions are adversarial: fail-closed MergedPrAttestation construction, the --apply profile-guard matrix, a CLI-level profile refusal proven to write zero bytes, and a read-only real-bundle preview contract."
     },
     "test_run_logs": [
       {
@@ -40,50 +37,27 @@
     "mutation_verification": {
       "status": "PASS",
       "method": "spot-verified",
-      "note": "Every fix across this revision chain was reverted individually on scratch copies and the suite re-run; every revert fails. Thirty-one verified in total. This revision adds four code mutations - fence-opener precedence reverted, empty ATX heading support removed, raw-HTML blocks narrowed back to the pre tag, and temp-file cleanup on pre-rename failure removed - plus a discovery mutation showing a non-recursive sweep finds 591 of 593 artifacts, and a stale-claim mutation: the machine-tagged claim test failed against the live narrative when written, which is how the stale fixture-resolution claim was confirmed."
+      "note": "Every fix across the first five revisions was reverted individually on scratch copies and the suite re-run; every revert fails (thirty-one verified in total, detailed in verification.md). This iteration's guards are regression-locked the same way: removing the apply-profile guard's manifest-precedence branch fails the guard-matrix test; removing the CLI profile gate fails the CLI-level refusal test; accepting an incomplete PR record fails the fail-closed attestation test."
     },
     "r_level_check": {
       "status": "PASS",
       "verdict": "PASS",
-      "changed_files": 7,
-      "rules_matched": "ops tooling + its test + test wiring only; no application, domain, package or migration path touched"
+      "changed_files": 8,
+      "rules_matched": "ops tooling + its test + test wiring + this lane's own proof bundle; no application, domain, package or migration path touched"
     },
     "regression_sweep": {
       "status": "PASS",
-      "scope": "all 593 artifacts under docs/06_status/proof, discovered RECURSIVELY - 397 verification.md and 196 evidence.json",
+      "scope": "all 593 artifacts under docs/06_status/proof, discovered RECURSIVELY - 397 verification.md and 196 evidence.json (as of the fifth-review head)",
       "method": "each artifact re-planned under the previous head's ruleset and this one, each verification.md using its OWN PR row so PR identity is never the differentiator, and the per-artifact refusal sets compared",
       "result": "593 identical; 0 newly refused; 0 newly planned",
-      "discovery_correction": "the previous sweep walked one directory level and reported 591. Two evidence.json bundles nest one level deeper inside a drift-evidence subdirectory. A non-recursive walk finds 591 of 593; the two missed paths are named in the run output."
+      "note": "Performed at 179c3047b475b2551fe8237c03983b927da51c15 and still representative of this head: the sixth iteration changed no planner code (planEvidenceRebind, planVerificationRebind, the mask and the verbatim scanner are byte-identical); it changed only CLI identity validation, the apply-profile gate, and their types, none of which participate in planning."
     }
   },
-  "runtime_proof": {
-    "command": "pnpm test:db",
-    "status": "PASS",
-    "tests": 7,
-    "pass": 7,
-    "fail": 0,
-    "duration_ms": 92747,
-    "queries": [
-      "database repository bundle persists a submission and settlement against live Supabase",
-      "atomic enqueue rollback verification",
-      "atomic delivery confirmation rollback",
-      "atomic settlement rollback",
-      "no-duplicate-participants check",
-      "re-settlement correction chain integrity"
-    ],
-    "receipts": [
-      {
-        "supabase_project": "zfzdnfwdarxucxtaojxm",
-        "duration_ms": 92747,
-        "tests_run": 7,
-        "tests_pass": 7,
-        "note": "Live Supabase. Ops tooling lane with no DB schema or query changes; test:db establishes the live-DB suite is undisturbed. 7/7 clean on this head. Earlier on this branch one run failed 1 of 7 with 'Failed to list participants by type: TypeError: fetch failed', a transport-level failure reaching Supabase; no in-scope file touches the DB layer and every subsequent run passed 7/7. That failing run is recorded, not claimed as a pass. Fixture rows written by the suite are test artifacts and must be excluded from production counts."
-      }
-    ],
-    "additional": "ops:proof-rebind preview run against two real bundles; --apply was never used and git status reported both proof directories clean afterwards. The PR-1311 lane bundle returns proof_rebind_refused (canonical '## Merge SHA Binding' section absent; sha256_before == sha256_after for both artifacts). The PR-1313 lane bundle returns proof_rebind_preview with errors: [] and exactly five binding changes, with the line count unchanged, only the declared lines differing, the verified_source_note narrative byte-identical, and the out-of-section narrative row 'Merge SHA: pending merge. This bundle is bound to ...' untouched. The previous revision's proof described the PR-1313 bundle as refused for carrying explanatory prose; that statement was wrong and is retracted. Both contracts are locked as tests that read the WORKING TREE and are state-aware: the pre-rebind state asserts exactly five changes, the post-rebind state asserts a clean no-op, and an idempotency round-trip runs unconditionally, so neither branch can pass vacuously."
+  "runtime_proof_delegation": {
+    "note": "Writable live-DB proof is CI's responsibility under the UTV2-1630 isolation model: pnpm test:db run locally is REFUSED by scripts/ci/assert-staging-target.ts (no staging credentials exist outside the staging-ci GitHub environment), and proof-file TAP text is explicitly not evidence per proof-auditor-gate. The genuine staging run for this branch is workflow run 32279673068 (Staging DB Proof, head 3b3846c37423f3654843db6be99a096def164298); its TAP and the local refusal are both recorded verbatim in verification.md. The binding control remains the same-run ci-db-proof-receipt/v2 verified inside the required verify context on the final head."
   },
   "blast_radius": {
     "production_mutation_on_merge": false,
-    "note": "Merging adds a CLI that defaults to preview and cannot write without a completed PR identity validation."
+    "note": "Merging adds a CLI that defaults to preview, cannot write without a completed PR identity validation, and now additionally refuses --apply against any bundle not affirmatively classified static (app-runtime, migration, legacy, incident/containment or otherwise unclassifiable bundles are preview-only)."
   }
 }
