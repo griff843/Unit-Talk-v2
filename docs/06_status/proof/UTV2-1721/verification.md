@@ -27,6 +27,36 @@ ASSERTIONS:
 
 EVIDENCE:
 
+### 0. Gate commands executed, verbatim
+
+```text
+$ pnpm verify
+  -> verify:static PASS (env:check, lint, type-check, build, full unit suite)
+  -> test:db REFUSED by ci:assert-staging under credential containment (see §2)
+  -> overall exit 1, attributable solely to the containment refusal
+
+$ pnpm type-check
+  -> clean
+
+$ pnpm test
+  -> tests=4969 pass=4969 fail=0 skipped=0
+
+$ npx tsx scripts/ci/r-level-check.ts --issue UTV2-1721
+  Verdict: PASS
+  Changed files: 13
+  Rules matched: (none) - no R-level artifacts required for this diff
+
+$ npx tsx scripts/ops/proof-auditor-gate.ts --proof-dir docs/06_status/proof/UTV2-1721 --sha b71ca9239177c19c80da85ad2568990fe61ec31d
+  Verdict: PASS
+
+$ npx tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof/UTV2-1721 --issue UTV2-1721
+  evidence_commit_sha / current_pr_head_sha: resolved by CI, no sentinels remaining
+  proof-binding-validator: PASS
+```
+
+`pnpm verify` is reported here in full rather than only its green `verify:static` prefix: the run does exit non-zero, and the sole cause is the staging-identity refusal quoted in §2. No test, lint, type-check or build failure occurs.
+
+
 ### 1. Static verification — full unit suite green
 
 ```text
