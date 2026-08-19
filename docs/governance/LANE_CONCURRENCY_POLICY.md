@@ -174,8 +174,8 @@ When `ops:lane-start` refuses a new lane due to concurrency conflict:
    - If heartbeat > 24h old → the lane is stranded; `ops:reconcile` auto-blocks it and releases its locks.
    - If heartbeat is fresh → the blocking lane is active; wait or split scope.
 3. If the incoming work is urgent and the blocking lane cannot be expedited:
-   - PM may force-close the blocking lane via `ops:lane-close --override` with a documented reason.
-   - Override closes are recorded in `truth_check_history` with `verdict: "override"`.
+   - Escalate the scheduling decision to PM and wait for the blocking lane to close or be reconciled through the governed lifecycle.
+   - `ops:lane-close` has no override or force-close path; truth-check failures require a scoped repair lane and normal PR.
 4. Never start a conflicting lane by manually bypassing `ops:lane-start`. The manifest is the enforcement mechanism.
 
 ---
@@ -192,7 +192,7 @@ When `ops:lane-start` refuses a new lane due to concurrency conflict:
 | Tier C path exposure | Dispatch preflight records candidate Tier C path exposure before the lane can be started |
 | Dependency blockers | Dispatch preflight records branch, token, required-doc, and dependency blockers before the lane can be started |
 | Stale manifest cleanup | `ops:reconcile` (cron or pre-start) transitions heartbeat-expired manifests |
-| Override tracking | `ops:lane-close --override` records in manifest `truth_check_history` |
+| Closeout failures | `ops:lane-close` fails closed; remediation uses a scoped repair lane and normal PR |
 
 Every dispatch attempt must have a machine-readable preflight artifact that captures:
 
@@ -300,7 +300,50 @@ swap ceiling have been sized for that load. This does **not** change
 `scripts/ops/lane-maximizer.ts` reports the current full-verification throttle
 state in `lane_saturation_forecast.full_verify_throttle`. If that throttle is
 saturated, do not start another manual full `pnpm verify`/`pnpm test` run until a
-slot clears, even if executor lane slots are still available.
+slot clears, even if executor lane slots are still available. A slot counts
+against that forecast only when its owner is provably alive — a slot left by a
+dead process is reported as reclaimable, not as saturation.
+
+#### 10a.1 Slot ownership and reclaim (UTV2-1594)
+
+The semaphore is implemented in `scripts/ops/verify-semaphore.ts`. Each occupied
+slot holds a **durable ownership record** — operation id, pid plus process-start
+identity, hostname and boot id, issue/branch/worktree, command, acquired-at,
+heartbeat, lease expiry and an absolute hard deadline. The record is
+self-describing: any process that can read the directory can decide whether the
+owner is alive without help from the process that wrote it.
+
+Reclaim is **proof-based, not clock-based**. A slot is reclaimed only when its
+owner is provably gone:
+
+| Reclaimed | Never reclaimed automatically |
+|---|---|
+| owner pid is dead on this host | owner pid is alive |
+| pid was recycled into a different process (start-time mismatch) | owner is alive but its heartbeat merely lapsed |
+| the host rebooted since acquisition (kernel boot id changed) | owner ran on another host and its lease has not expired |
+| an unverifiable foreign-host owner whose lease expired | a slot created seconds ago whose record is not written yet |
+| the absolute hard deadline elapsed | — |
+
+The hard deadline is the single bound that can retire a still-running owner; a
+heartbeat renews the lease but never the hard deadline. Every reclaim is
+appended to `reap-log.jsonl` in the semaphore directory with its reason.
+
+Operator command:
+
+```bash
+pnpm ops:verify-slots            # who holds each slot, age, heartbeat, reason
+pnpm ops:verify-slots --json     # same, machine-readable
+pnpm ops:verify-slots reap       # safe pass: removes only provably dead owners
+```
+
+`pnpm ops:verify-slots` also lists **waiting** processes (issue, branch, pid,
+how long they have waited). A queued preflight prints its own progress to stderr
+rather than appearing hung.
+
+The semaphore directory remains per worktree checkout, as specified above. An
+operator who wants one host-wide semaphore across worktrees can point every
+checkout at a shared path with `UNIT_TALK_FULL_VERIFY_SEMAPHORE_DIR=<path>`;
+that is an opt-in and does not change the default policy.
 
 Example 5-lane topology (safe class mix):
 ```

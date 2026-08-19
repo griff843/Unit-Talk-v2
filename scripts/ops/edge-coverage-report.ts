@@ -12,7 +12,7 @@
  *   npx tsx scripts/ops/edge-coverage-report.ts [--days N] [--json] [--out FILE]
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
 
@@ -68,7 +68,7 @@ async function computeEdgeCoverage(days: number): Promise<EdgeCoverageBreakdown>
     throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
   }
 
-  const client = createClient(supabaseUrl, supabaseKey);
+  const client = createPrivilegedClient(supabaseUrl, supabaseKey);
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
   const { data, error } = await client

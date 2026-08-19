@@ -1,0 +1,1235 @@
+﻿2026-08-01T02:28:59.1741735Z Current runner version: '2.336.0'
+2026-08-01T02:28:59.1767506Z ##[group]Runner Image Provisioner
+2026-08-01T02:28:59.1768815Z Hosted Compute Agent
+2026-08-01T02:28:59.1769459Z Version: 20260707.563
+2026-08-01T02:28:59.1770238Z Commit: 02667638d2b423fbc733a8e32a88b44996a3ba6e
+2026-08-01T02:28:59.1771084Z Build Date: 2026-07-07T19:33:50Z
+2026-08-01T02:28:59.1771784Z Worker ID: {77a72959-0db0-4fd7-87a4-e581baa461a2}
+2026-08-01T02:28:59.1772637Z Azure Region: westus
+2026-08-01T02:28:59.1773266Z ##[endgroup]
+2026-08-01T02:28:59.1775194Z ##[group]Operating System
+2026-08-01T02:28:59.1775918Z Ubuntu
+2026-08-01T02:28:59.1776504Z 24.04.4
+2026-08-01T02:28:59.1777158Z LTS
+2026-08-01T02:28:59.1777695Z ##[endgroup]
+2026-08-01T02:28:59.1778519Z ##[group]Runner Image
+2026-08-01T02:28:59.1779229Z Image: ubuntu-24.04
+2026-08-01T02:28:59.1779842Z Version: 20260720.247.2
+2026-08-01T02:28:59.1781236Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260720.247/images/ubuntu/Ubuntu2404-Readme.md
+2026-08-01T02:28:59.1782892Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260720.247
+2026-08-01T02:28:59.1783899Z ##[endgroup]
+2026-08-01T02:28:59.1785235Z ##[group]GITHUB_TOKEN Permissions
+2026-08-01T02:28:59.1787211Z Contents: read
+2026-08-01T02:28:59.1787953Z Metadata: read
+2026-08-01T02:28:59.1788825Z Packages: read
+2026-08-01T02:28:59.1789458Z ##[endgroup]
+2026-08-01T02:28:59.1791792Z Secret source: Actions
+2026-08-01T02:28:59.1792906Z Prepare workflow directory
+2026-08-01T02:28:59.2142932Z Prepare all required actions
+2026-08-01T02:28:59.2194241Z Getting action download info
+2026-08-01T02:28:59.5868648Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-08-01T02:29:00.0679940Z Download action repository 'pnpm/action-setup@v4' (SHA:b906affcce14559ad1aafd4ab0e942779e9f58b1)
+2026-08-01T02:29:00.5477284Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-08-01T02:29:00.6337565Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-08-01T02:29:00.8503269Z Complete job name: Writable DB proof (staging only)
+2026-08-01T02:29:00.9390465Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:29:00.9399955Z ##[group]Run actions/checkout@v4
+2026-08-01T02:29:00.9400794Z with:
+2026-08-01T02:29:00.9401311Z   repository: griff843/Unit-Talk-v2
+2026-08-01T02:29:00.9405513Z   token: ***
+2026-08-01T02:29:00.9406003Z   ssh-strict: true
+2026-08-01T02:29:00.9406499Z   ssh-user: git
+2026-08-01T02:29:00.9407020Z   persist-credentials: true
+2026-08-01T02:29:00.9407567Z   clean: true
+2026-08-01T02:29:00.9408066Z   sparse-checkout-cone-mode: true
+2026-08-01T02:29:00.9408872Z   fetch-depth: 1
+2026-08-01T02:29:00.9409385Z   fetch-tags: false
+2026-08-01T02:29:00.9409885Z   show-progress: true
+2026-08-01T02:29:00.9410401Z   lfs: false
+2026-08-01T02:29:00.9410914Z   submodules: false
+2026-08-01T02:29:00.9411425Z   set-safe-directory: true
+2026-08-01T02:29:00.9412002Z   allow-unsafe-pr-checkout: false
+2026-08-01T02:29:00.9412919Z ##[endgroup]
+2026-08-01T02:29:01.0581222Z Syncing repository: griff843/Unit-Talk-v2
+2026-08-01T02:29:01.0584472Z ##[group]Getting Git version info
+2026-08-01T02:29:01.0585403Z Working directory is '/home/runner/work/Unit-Talk-v2/Unit-Talk-v2'
+2026-08-01T02:29:01.0586608Z [command]/usr/bin/git version
+2026-08-01T02:29:01.0677348Z git version 2.54.0
+2026-08-01T02:29:01.0699297Z ##[endgroup]
+2026-08-01T02:29:01.0716563Z Temporarily overriding HOME='/home/runner/work/_temp/c0b7494e-316f-4f25-8270-e7c2ef3956a3' before making global git config changes
+2026-08-01T02:29:01.0720073Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-01T02:29:01.0728948Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:29:01.0791710Z Deleting the contents of '/home/runner/work/Unit-Talk-v2/Unit-Talk-v2'
+2026-08-01T02:29:01.0802795Z ##[group]Initializing the repository
+2026-08-01T02:29:01.0804732Z [command]/usr/bin/git init /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:29:01.0932213Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-08-01T02:29:01.0934811Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-08-01T02:29:01.0937114Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-08-01T02:29:01.0939517Z hint: call:
+2026-08-01T02:29:01.0940465Z hint:
+2026-08-01T02:29:01.0941603Z hint: 	git config --global init.defaultBranch <name>
+2026-08-01T02:29:01.0943086Z hint:
+2026-08-01T02:29:01.0944457Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-08-01T02:29:01.0946491Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-08-01T02:29:01.0948518Z hint:
+2026-08-01T02:29:01.0949667Z hint: 	git branch -m <name>
+2026-08-01T02:29:01.0950775Z hint:
+2026-08-01T02:29:01.0952233Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-08-01T02:29:01.0954388Z Initialized empty Git repository in /home/runner/work/Unit-Talk-v2/Unit-Talk-v2/.git/
+2026-08-01T02:29:01.0958654Z [command]/usr/bin/git remote add origin https://github.com/griff843/Unit-Talk-v2
+2026-08-01T02:29:01.1036700Z ##[endgroup]
+2026-08-01T02:29:01.1038622Z ##[group]Disabling automatic garbage collection
+2026-08-01T02:29:01.1041399Z [command]/usr/bin/git config --local gc.auto 0
+2026-08-01T02:29:01.1097252Z ##[endgroup]
+2026-08-01T02:29:01.1099023Z ##[group]Setting up auth
+2026-08-01T02:29:01.1109963Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-01T02:29:01.1135600Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-01T02:29:01.1577484Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-01T02:29:01.1616084Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-01T02:29:01.1853952Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-01T02:29:01.1893119Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-01T02:29:01.2130686Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-08-01T02:29:01.2172397Z ##[endgroup]
+2026-08-01T02:29:01.2173318Z ##[group]Fetching the repository
+2026-08-01T02:29:01.2183014Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +b36840e452333cb605e1d0c61f3aec547e50be3d:refs/remotes/pull/1343/merge
+2026-08-01T02:29:03.7220578Z From https://github.com/griff843/Unit-Talk-v2
+2026-08-01T02:29:03.7223743Z  * [new ref]         b36840e452333cb605e1d0c61f3aec547e50be3d -> pull/1343/merge
+2026-08-01T02:29:03.7264012Z ##[endgroup]
+2026-08-01T02:29:03.7265248Z ##[group]Determining the checkout info
+2026-08-01T02:29:03.7266784Z ##[endgroup]
+2026-08-01T02:29:03.7272929Z [command]/usr/bin/git sparse-checkout disable
+2026-08-01T02:29:03.7335173Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-08-01T02:29:03.7370017Z ##[group]Checking out the ref
+2026-08-01T02:29:03.7372960Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/1343/merge
+2026-08-01T02:29:04.3021775Z Note: switching to 'refs/remotes/pull/1343/merge'.
+2026-08-01T02:29:04.3022653Z 
+2026-08-01T02:29:04.3023714Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-08-01T02:29:04.3024883Z changes and commit them, and you can discard any commits you make in this
+2026-08-01T02:29:04.3025676Z state without impacting any branches by switching back to a branch.
+2026-08-01T02:29:04.3026114Z 
+2026-08-01T02:29:04.3026436Z If you want to create a new branch to retain commits you create, you may
+2026-08-01T02:29:04.3027097Z do so (now or later) by using -c with the switch command. Example:
+2026-08-01T02:29:04.3027485Z 
+2026-08-01T02:29:04.3027661Z   git switch -c <new-branch-name>
+2026-08-01T02:29:04.3027928Z 
+2026-08-01T02:29:04.3028106Z Or undo this operation with:
+2026-08-01T02:29:04.3028728Z 
+2026-08-01T02:29:04.3028881Z   git switch -
+2026-08-01T02:29:04.3029110Z 
+2026-08-01T02:29:04.3029445Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-08-01T02:29:04.3029928Z 
+2026-08-01T02:29:04.3030438Z HEAD is now at b36840e Merge 4aaa6c56d3f741b7bcc9ae9cd17c1478120f3772 into f4c529b51267d86c2dfbd38bdcfab527bd31668c
+2026-08-01T02:29:04.3055093Z ##[endgroup]
+2026-08-01T02:29:04.3105627Z [command]/usr/bin/git log -1 --format=%H
+2026-08-01T02:29:04.3136375Z b36840e452333cb605e1d0c61f3aec547e50be3d
+2026-08-01T02:29:04.3410580Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:29:04.3412724Z ##[group]Run pnpm/action-setup@v4
+2026-08-01T02:29:04.3413050Z with:
+2026-08-01T02:29:04.3413298Z   version: 10.29.3
+2026-08-01T02:29:04.3413568Z   dest: ~/setup-pnpm
+2026-08-01T02:29:04.3413843Z   run_install: null
+2026-08-01T02:29:04.3414101Z   cache: false
+2026-08-01T02:29:04.3414422Z   cache_dependency_path: pnpm-lock.yaml
+2026-08-01T02:29:04.3414769Z   package_json_file: package.json
+2026-08-01T02:29:04.3415120Z   standalone: false
+2026-08-01T02:29:04.3415392Z ##[endgroup]
+2026-08-01T02:29:04.4898855Z ##[group]Running self-installer...
+2026-08-01T02:29:04.9267356Z (node:2272) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-01T02:29:05.0615643Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-01T02:29:05.0616530Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2026-08-01T02:29:05.0739664Z Packages: +1
+2026-08-01T02:29:05.0740507Z +
+2026-08-01T02:29:05.4683726Z Progress: resolved 1, reused 0, downloaded 1, added 1, done
+2026-08-01T02:29:05.4980776Z 
+2026-08-01T02:29:05.4981817Z dependencies:
+2026-08-01T02:29:05.4982325Z + pnpm 10.29.3 (11.18.0 is available)
+2026-08-01T02:29:05.4982636Z 
+2026-08-01T02:29:05.5022787Z Done in 814ms
+2026-08-01T02:29:05.5214086Z ##[endgroup]
+2026-08-01T02:29:05.5214424Z Installation Completed!
+2026-08-01T02:29:05.5404406Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:29:05.5405761Z ##[group]Run actions/setup-node@v4
+2026-08-01T02:29:05.5406034Z with:
+2026-08-01T02:29:05.5406231Z   node-version: 22
+2026-08-01T02:29:05.5406445Z   cache: pnpm
+2026-08-01T02:29:05.5406645Z   always-auth: false
+2026-08-01T02:29:05.5406869Z   check-latest: false
+2026-08-01T02:29:05.5409953Z   token: ***
+2026-08-01T02:29:05.5410166Z env:
+2026-08-01T02:29:05.5410443Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:05.5410770Z ##[endgroup]
+2026-08-01T02:29:05.6878087Z Found in cache @ /opt/hostedtoolcache/node/22.23.1/x64
+2026-08-01T02:29:05.6884192Z (node:2286) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-01T02:29:05.6885393Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-01T02:29:05.6886851Z ##[group]Environment details
+2026-08-01T02:29:06.1266616Z node: v22.23.1
+2026-08-01T02:29:06.1266897Z npm: 10.9.8
+2026-08-01T02:29:06.1267119Z yarn: 1.22.22
+2026-08-01T02:29:06.1267652Z ##[endgroup]
+2026-08-01T02:29:06.1292243Z [command]/home/runner/setup-pnpm/node_modules/.bin/pnpm store path --silent
+2026-08-01T02:29:06.5332529Z /home/runner/setup-pnpm/node_modules/.bin/store/v10
+2026-08-01T02:29:06.8043350Z Cache hit for: node-cache-Linux-x64-pnpm-837c986a0bd0d977cc4749ff7116c540f9408aeaa8dbd6abd72230227bcec31d
+2026-08-01T02:29:06.8159046Z (node:2286) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-01T02:29:08.1064691Z Received 0 of 138453736 (0.0%), 0.0 MBs/sec
+2026-08-01T02:29:09.1099465Z Received 113246208 of 138453736 (81.8%), 53.9 MBs/sec
+2026-08-01T02:29:09.4818462Z Received 138453736 of 138453736 (100.0%), 55.6 MBs/sec
+2026-08-01T02:29:09.4819758Z Cache Size: ~132 MB (138453736 B)
+2026-08-01T02:29:09.4945308Z [command]/usr/bin/tar -xf /home/runner/work/_temp/b4bec52a-4f67-4ea7-99f5-eda98907e31b/cache.tzst -P -C /home/runner/work/Unit-Talk-v2/Unit-Talk-v2 --use-compress-program unzstd
+2026-08-01T02:29:11.2857382Z Cache restored successfully
+2026-08-01T02:29:11.2927949Z Cache restored from key: node-cache-Linux-x64-pnpm-837c986a0bd0d977cc4749ff7116c540f9408aeaa8dbd6abd72230227bcec31d
+2026-08-01T02:29:11.3083387Z ##[group]Run pnpm install --frozen-lockfile
+2026-08-01T02:29:11.3083834Z [36;1mpnpm install --frozen-lockfile[0m
+2026-08-01T02:29:11.3142045Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:11.3142332Z env:
+2026-08-01T02:29:11.3142607Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:11.3142932Z ##[endgroup]
+2026-08-01T02:29:11.6325122Z Scope: all 18 workspace projects
+2026-08-01T02:29:11.7095565Z Lockfile is up to date, resolution step is skipped
+2026-08-01T02:29:11.7560751Z Progress: resolved 1, reused 0, downloaded 0, added 0
+2026-08-01T02:29:11.8739818Z Packages: +513
+2026-08-01T02:29:11.8741528Z ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+2026-08-01T02:29:12.7569492Z Progress: resolved 513, reused 508, downloaded 0, added 355
+2026-08-01T02:29:12.9912218Z Progress: resolved 513, reused 508, downloaded 0, added 513, done
+2026-08-01T02:29:13.3611647Z 
+2026-08-01T02:29:13.3612316Z devDependencies:
+2026-08-01T02:29:13.3613102Z + @eslint/js 9.39.4
+2026-08-01T02:29:13.3613803Z + @types/node 24.12.0
+2026-08-01T02:29:13.3614413Z + eslint 9.39.4
+2026-08-01T02:29:13.3615058Z + eslint-plugin-react-hooks 7.1.1
+2026-08-01T02:29:13.3615637Z + globals 16.5.0
+2026-08-01T02:29:13.3616094Z + micromatch 4.0.8
+2026-08-01T02:29:13.3616569Z + playwright 1.58.2
+2026-08-01T02:29:13.3617139Z + postgres 3.4.9
+2026-08-01T02:29:13.3617662Z + prettier 3.8.1
+2026-08-01T02:29:13.3618577Z + tsx 4.21.0
+2026-08-01T02:29:13.3619096Z + typescript 5.9.3
+2026-08-01T02:29:13.3619695Z + typescript-eslint 8.57.1
+2026-08-01T02:29:13.3620324Z + yaml 2.8.3
+2026-08-01T02:29:13.3620636Z 
+2026-08-01T02:29:13.4036657Z ╭ Warning ─────────────────────────────────────────────────────────────────────╮
+2026-08-01T02:29:13.4037787Z │                                                                              │
+2026-08-01T02:29:13.4065083Z │   Ignored build scripts: esbuild@0.27.4, sharp@0.34.5,                       │
+2026-08-01T02:29:13.4066374Z │   unrs-resolver@1.11.1.                                                      │
+2026-08-01T02:29:13.4067113Z │   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+2026-08-01T02:29:13.4068218Z │   to run scripts.                                                            │
+2026-08-01T02:29:13.4069556Z │                                                                              │
+2026-08-01T02:29:13.4071045Z ╰──────────────────────────────────────────────────────────────────────────────╯
+2026-08-01T02:29:13.4244880Z Done in 2s using pnpm v10.29.3
+2026-08-01T02:29:13.4439370Z ##[group]Run set -euo pipefail
+2026-08-01T02:29:13.4439771Z [36;1mset -euo pipefail[0m
+2026-08-01T02:29:13.4440222Z [36;1mfor name in CI_SUPABASE_URL CI_SUPABASE_PROJECT_REF CI_SUPABASE_SECRET_KEY; do[0m
+2026-08-01T02:29:13.4440680Z [36;1m  if [ -z "${!name:-}" ]; then[0m
+2026-08-01T02:29:13.4441110Z [36;1m    echo "::error::$name is empty — staging-ci did not release its secrets."[0m
+2026-08-01T02:29:13.4441530Z [36;1m    exit 1[0m
+2026-08-01T02:29:13.4441757Z [36;1m  fi[0m
+2026-08-01T02:29:13.4441961Z [36;1mdone[0m
+2026-08-01T02:29:13.4442258Z [36;1mecho "resolved project ref: $CI_SUPABASE_PROJECT_REF"[0m
+2026-08-01T02:29:13.4442855Z [36;1mif [ "$CI_SUPABASE_PROJECT_REF" != "***" ]; then[0m
+2026-08-01T02:29:13.4443287Z [36;1m  echo "::error::project ref is not the approved staging project"[0m
+2026-08-01T02:29:13.4443693Z [36;1m  exit 1[0m
+2026-08-01T02:29:13.4443908Z [36;1mfi[0m
+2026-08-01T02:29:13.4490060Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:13.4490396Z env:
+2026-08-01T02:29:13.4490673Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:13.4491218Z   CI_SUPABASE_URL: ***
+2026-08-01T02:29:13.4491511Z   CI_SUPABASE_PROJECT_REF: ***
+2026-08-01T02:29:13.4491885Z   CI_SUPABASE_SECRET_KEY: ***
+2026-08-01T02:29:13.4492137Z ##[endgroup]
+2026-08-01T02:29:13.4564253Z resolved project ref: ***
+2026-08-01T02:29:13.4601465Z ##[group]Run set -euo pipefail
+2026-08-01T02:29:13.4601831Z [36;1mset -euo pipefail[0m
+2026-08-01T02:29:13.4602097Z [36;1mumask 077[0m
+2026-08-01T02:29:13.4602314Z [36;1m{[0m
+2026-08-01T02:29:13.4602531Z [36;1m  echo "NODE_ENV=test"[0m
+2026-08-01T02:29:13.4602819Z [36;1m  echo "UNIT_TALK_APP_ENV=test"[0m
+2026-08-01T02:29:13.4603161Z [36;1m  echo "UNIT_TALK_ACTIVE_WORKSPACE=staging-ci"[0m
+2026-08-01T02:29:13.4603554Z [36;1m  echo "UNIT_TALK_LEGACY_WORKSPACE=staging-ci"[0m
+2026-08-01T02:29:13.4603892Z [36;1m  echo "LINEAR_TEAM_ID=staging-ci"[0m
+2026-08-01T02:29:13.4604204Z [36;1m  echo "LINEAR_TEAM_KEY=UTV2"[0m
+2026-08-01T02:29:13.4604505Z [36;1m  echo "LINEAR_TEAM_NAME=staging-ci"[0m
+2026-08-01T02:29:13.4604864Z [36;1m  echo "UNIT_TALK_API_RUNTIME_MODE=fail_open"[0m
+2026-08-01T02:29:13.4605295Z [36;1m  echo "UNIT_TALK_JWT_SECRET=staging-ci-not-a-production-secret"[0m
+2026-08-01T02:29:13.4605722Z [36;1m  echo "SUPABASE_URL=${CI_SUPABASE_URL}"[0m
+2026-08-01T02:29:13.4606150Z [36;1m  echo "SUPABASE_PROJECT_REF=${CI_SUPABASE_PROJECT_REF}"[0m
+2026-08-01T02:29:13.4606589Z [36;1m  echo "SUPABASE_ANON_KEY=${CI_SUPABASE_PUBLISHABLE_KEY}"[0m
+2026-08-01T02:29:13.4607028Z [36;1m  echo "SUPABASE_SERVICE_ROLE_KEY=${CI_SUPABASE_SECRET_KEY}"[0m
+2026-08-01T02:29:13.4607467Z [36;1m  echo "UNIT_TALK_DB_ACCESS_MODE=writable-isolated"[0m
+2026-08-01T02:29:13.4607805Z [36;1m} > local.env[0m
+2026-08-01T02:29:13.4608117Z [36;1mecho "local.env written (values redacted); keys:"[0m
+2026-08-01T02:29:13.4608751Z [36;1mcut -d= -f1 local.env | sed 's/^/  /'[0m
+2026-08-01T02:29:13.4653473Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:13.4653804Z env:
+2026-08-01T02:29:13.4654080Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:13.4654623Z   CI_SUPABASE_URL: ***
+2026-08-01T02:29:13.4654914Z   CI_SUPABASE_PROJECT_REF: ***
+2026-08-01T02:29:13.4655321Z   CI_SUPABASE_PUBLISHABLE_KEY: ***
+2026-08-01T02:29:13.4655694Z   CI_SUPABASE_SECRET_KEY: ***
+2026-08-01T02:29:13.4655973Z ##[endgroup]
+2026-08-01T02:29:13.4733694Z local.env written (values redacted); keys:
+2026-08-01T02:29:13.4748034Z   NODE_ENV
+2026-08-01T02:29:13.4748601Z   UNIT_TALK_APP_ENV
+2026-08-01T02:29:13.4748885Z   UNIT_TALK_ACTIVE_WORKSPACE
+2026-08-01T02:29:13.4749220Z   UNIT_TALK_LEGACY_WORKSPACE
+2026-08-01T02:29:13.4749677Z   LINEAR_TEAM_ID
+2026-08-01T02:29:13.4750060Z   LINEAR_TEAM_KEY
+2026-08-01T02:29:13.4750467Z   LINEAR_TEAM_NAME
+2026-08-01T02:29:13.4751145Z   UNIT_TALK_API_RUNTIME_MODE
+2026-08-01T02:29:13.4751605Z   UNIT_TALK_JWT_SECRET
+2026-08-01T02:29:13.4752018Z   SUPABASE_URL
+2026-08-01T02:29:13.4752590Z   SUPABASE_PROJECT_REF
+2026-08-01T02:29:13.4753007Z   SUPABASE_ANON_KEY
+2026-08-01T02:29:13.4753291Z   SUPABASE_SERVICE_ROLE_KEY
+2026-08-01T02:29:13.4753558Z   UNIT_TALK_DB_ACCESS_MODE
+2026-08-01T02:29:13.4781398Z ##[group]Run set -euo pipefail
+2026-08-01T02:29:13.4781760Z [36;1mset -euo pipefail[0m
+2026-08-01T02:29:13.4782135Z [36;1mhead=$(ls supabase/migrations/*.sql | tail -1 | xargs basename)[0m
+2026-08-01T02:29:13.4782580Z [36;1mecho "head=$head" >> "$GITHUB_OUTPUT"[0m
+2026-08-01T02:29:13.4827890Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:13.4828451Z env:
+2026-08-01T02:29:13.4828745Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:13.4829089Z ##[endgroup]
+2026-08-01T02:29:13.4988492Z ##[group]Run pnpm exec tsx scripts/ci/seed-staging-fixtures.ts
+2026-08-01T02:29:13.4989036Z [36;1mpnpm exec tsx scripts/ci/seed-staging-fixtures.ts[0m
+2026-08-01T02:29:13.5034579Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:13.5034865Z env:
+2026-08-01T02:29:13.5035143Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:13.5035499Z ##[endgroup]
+2026-08-01T02:29:14.2859940Z [seed-staging] resolved host=***.supabase.co ref=***
+2026-08-01T02:29:14.3090798Z [seed-staging] retained by design: settlement_records, picks, submissions
+2026-08-01T02:29:14.4355210Z [seed-staging] reset distribution_receipts: 1 row(s) deleted
+2026-08-01T02:29:14.5526127Z [seed-staging] reset distribution_outbox: 11 row(s) deleted
+2026-08-01T02:29:14.6156053Z [seed-staging] reset system_runs: 1 row(s) deleted
+2026-08-01T02:29:14.6841890Z [seed-staging] sports: 9 synthetic row(s) upserted
+2026-08-01T02:29:14.7421168Z [seed-staging] cappers: 1 synthetic row(s) upserted
+2026-08-01T02:29:14.8037157Z [seed-staging] market_families: 6 synthetic row(s) upserted
+2026-08-01T02:29:14.8625845Z [seed-staging] selection_types: 3 synthetic row(s) upserted
+2026-08-01T02:29:14.9328723Z [seed-staging] market_types: 133 synthetic row(s) upserted
+2026-08-01T02:29:14.9329704Z [seed-staging] done (mutable tables reset, reference data re-seeded)
+2026-08-01T02:29:14.9643970Z ##[group]Run set -euo pipefail
+2026-08-01T02:29:14.9644330Z [36;1mset -euo pipefail[0m
+2026-08-01T02:29:14.9644596Z [36;1mmkdir -p .out[0m
+2026-08-01T02:29:14.9644861Z [36;1mpnpm ci:assert-staging[0m
+2026-08-01T02:29:14.9645133Z [36;1mpnpm ci:db-smoke[0m
+2026-08-01T02:29:14.9645561Z [36;1mtest -f "$CI_DB_PROOF_RECEIPT_PATH" || { echo "::error::receipt not produced"; exit 1; }[0m
+2026-08-01T02:29:14.9691425Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:29:14.9691701Z env:
+2026-08-01T02:29:14.9691973Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:29:14.9692322Z   CI_REQUIRE_DB_SMOKE: true
+2026-08-01T02:29:14.9692794Z   CI_DB_PROOF_RECEIPT_PATH: /home/runner/work/Unit-Talk-v2/Unit-Talk-v2/.out/ci-db-proof-receipt.json
+2026-08-01T02:29:14.9693463Z   CI_REPO_MIGRATION_HEAD: 20260731000000_utv2_1399_fixture_excluding_reporting_views.sql
+2026-08-01T02:29:14.9693941Z   CI_FIXTURE_RUN_ID: utv2-1630-30680085299-1
+2026-08-01T02:29:14.9694224Z ##[endgroup]
+2026-08-01T02:29:15.2645800Z 
+2026-08-01T02:29:15.2646754Z > @unit-talk/v2@0.1.0 ci:assert-staging /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:29:15.2647431Z > tsx scripts/ci/assert-staging-target.ts
+2026-08-01T02:29:15.2647684Z 
+2026-08-01T02:29:15.6962964Z [assert-staging] host=***.supabase.co ref=*** expected=***
+2026-08-01T02:29:15.6970198Z [assert-staging] OK: target is the approved staging project ***
+2026-08-01T02:29:16.0569083Z 
+2026-08-01T02:29:16.0570062Z > @unit-talk/v2@0.1.0 ci:db-smoke /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:29:16.0570913Z > tsx scripts/ci/required-db-smoke.ts
+2026-08-01T02:29:16.0571262Z 
+2026-08-01T02:29:16.3318734Z [ci:db-smoke] required=true
+2026-08-01T02:29:16.3319537Z [ci:db-smoke] supabase_credentials=present
+2026-08-01T02:29:16.3320880Z [ci:db-smoke] resolved target host=***.supabase.co ref=***
+2026-08-01T02:30:01.9721194Z 
+2026-08-01T02:30:01.9722244Z > @unit-talk/v2@0.1.0 test:db /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:30:01.9724580Z > pnpm ci:assert-staging && tsx --test apps/api/src/database-smoke.test.ts
+2026-08-01T02:30:01.9725527Z 
+2026-08-01T02:30:01.9725668Z 
+2026-08-01T02:30:01.9726589Z > @unit-talk/v2@0.1.0 ci:assert-staging /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:30:01.9727558Z > tsx scripts/ci/assert-staging-target.ts
+2026-08-01T02:30:01.9727970Z 
+2026-08-01T02:30:01.9729338Z [assert-staging] host=***.supabase.co ref=*** expected=***
+2026-08-01T02:30:01.9730442Z [assert-staging] OK: target is the approved staging project ***
+2026-08-01T02:30:01.9731182Z TAP version 13
+2026-08-01T02:30:01.9732127Z # Subtest: database repository bundle persists a submission and settlement when Supabase is configured
+2026-08-01T02:30:01.9733624Z ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+2026-08-01T02:30:01.9734830Z   ---
+2026-08-01T02:30:01.9735245Z   duration_ms: 7328.863987
+2026-08-01T02:30:01.9735723Z   type: 'test'
+2026-08-01T02:30:01.9736117Z   ...
+2026-08-01T02:30:01.9736953Z # Subtest: UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+2026-08-01T02:30:01.9738381Z ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+2026-08-01T02:30:01.9739112Z   ---
+2026-08-01T02:30:01.9739523Z   duration_ms: 6962.76841
+2026-08-01T02:30:01.9739953Z   type: 'test'
+2026-08-01T02:30:01.9740301Z   ...
+2026-08-01T02:30:01.9741392Z # Subtest: UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+2026-08-01T02:30:01.9743135Z ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+2026-08-01T02:30:01.9744023Z   ---
+2026-08-01T02:30:01.9744374Z   duration_ms: 7208.004726
+2026-08-01T02:30:01.9744768Z   type: 'test'
+2026-08-01T02:30:01.9745118Z   ...
+2026-08-01T02:30:01.9745968Z # Subtest: UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+2026-08-01T02:30:01.9747668Z ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+2026-08-01T02:30:01.9748724Z   ---
+2026-08-01T02:30:01.9749077Z   duration_ms: 6925.363968
+2026-08-01T02:30:01.9749451Z   type: 'test'
+2026-08-01T02:30:01.9749782Z   ...
+2026-08-01T02:30:01.9750472Z # Subtest: UTV2-883: no duplicate participants for the same external_id and sport
+2026-08-01T02:30:01.9751440Z ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+2026-08-01T02:30:01.9752045Z   ---
+2026-08-01T02:30:01.9752354Z   duration_ms: 63.675111
+2026-08-01T02:30:01.9752724Z   type: 'test'
+2026-08-01T02:30:01.9753037Z   ...
+2026-08-01T02:30:01.9754161Z # Subtest: UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+2026-08-01T02:30:01.9755634Z ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+2026-08-01T02:30:01.9756593Z   ---
+2026-08-01T02:30:01.9757282Z   duration_ms: 7461.497321
+2026-08-01T02:30:01.9757843Z   type: 'test'
+2026-08-01T02:30:01.9759053Z   ...
+2026-08-01T02:30:01.9760193Z # Subtest: UTV2-996: correction chain is additive — original settlement row is not mutated
+2026-08-01T02:30:01.9761600Z ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+2026-08-01T02:30:01.9762557Z   ---
+2026-08-01T02:30:01.9763012Z   duration_ms: 7949.873377
+2026-08-01T02:30:01.9763639Z   type: 'test'
+2026-08-01T02:30:01.9764136Z   ...
+2026-08-01T02:30:01.9764658Z 1..7
+2026-08-01T02:30:01.9765073Z # tests 7
+2026-08-01T02:30:01.9765587Z # suites 0
+2026-08-01T02:30:01.9766038Z # pass 7
+2026-08-01T02:30:01.9766491Z # fail 0
+2026-08-01T02:30:01.9767033Z # cancelled 0
+2026-08-01T02:30:01.9786036Z # skipped 0
+2026-08-01T02:30:01.9786470Z # todo 0
+2026-08-01T02:30:01.9786844Z # duration_ms 44580.023432
+2026-08-01T02:30:01.9789076Z [ci:db-smoke] receipt written to /home/runner/work/Unit-Talk-v2/Unit-Talk-v2/.out/ci-db-proof-receipt.json (sha256=e94648d8fac077a48602b8f1e2f25463097f688f87d60d92f8f6823658fc2d1a, target=***)
+2026-08-01T02:30:01.9791102Z [ci:db-smoke] DB smoke passed
+2026-08-01T02:30:02.0073770Z ##[group]Run set -euo pipefail
+2026-08-01T02:30:02.0074139Z [36;1mset -euo pipefail[0m
+2026-08-01T02:30:02.0074407Z [36;1mpnpm test:t1-proof:live[0m
+2026-08-01T02:30:02.0120754Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:30:02.0121060Z env:
+2026-08-01T02:30:02.0121354Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:30:02.0121732Z   CI_FIXTURE_RUN_ID: utv2-1630-30680085299-1
+2026-08-01T02:30:02.0122025Z ##[endgroup]
+2026-08-01T02:30:02.3132348Z 
+2026-08-01T02:30:02.3133479Z > @unit-talk/v2@0.1.0 test:t1-proof:live /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:30:02.3144017Z > pnpm ci:assert-staging && tsx --test apps/api/src/t1-proof-awaiting-approval.test.ts && tsx --test apps/api/src/t1-proof-atomicity.test.ts && tsx --test apps/api/src/t1-proof-awaiting-approval-review.test.ts && tsx --test apps/api/src/t1-proof-lifecycle-invariants.test.ts && tsx --test apps/api/src/t1-proof-risk-score.test.ts && tsx --test apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts && tsx --test apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts && tsx --test apps/api/src/t1-proof-utv2-1116-artifact-sha-immutability.test.ts && tsx --test apps/api/src/t1-proof-utv2-1107-picks-fsm-trigger.test.ts && tsx --test apps/api/src/t1-proof-execution-intent.test.ts && tsx --test apps/api/src/t1-proof-utv2-1136-settlement-records-immutability.test.ts && tsx --test apps/api/src/t1-proof-utv2-1137-settlement-corrections.test.ts && tsx --test apps/ingestor/src/t1-proof-utv2-1282-bounded-dedup.test.ts && tsx --test apps/api/src/t1-proof-utv2-1327-promotion-enrichment.test.ts && tsx --test apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts
+2026-08-01T02:30:02.3151732Z 
+2026-08-01T02:30:02.6230923Z 
+2026-08-01T02:30:02.6232125Z > @unit-talk/v2@0.1.0 ci:assert-staging /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:30:02.6232916Z > tsx scripts/ci/assert-staging-target.ts
+2026-08-01T02:30:02.6233223Z 
+2026-08-01T02:30:02.8919713Z [assert-staging] host=***.supabase.co ref=*** expected=***
+2026-08-01T02:30:02.8921048Z [assert-staging] OK: target is the approved staging project ***
+2026-08-01T02:30:03.0649537Z TAP version 13
+2026-08-01T02:30:12.9971531Z #   system-pick-scanner brake OK — pickId=8334d761-d1cf-423f-b6c9-7d032b7d247b
+2026-08-01T02:30:13.0003756Z # Subtest: UTV2-519 brake path: system-pick-scanner
+2026-08-01T02:30:13.0010668Z ok 1 - UTV2-519 brake path: system-pick-scanner
+2026-08-01T02:30:13.0011389Z   ---
+2026-08-01T02:30:13.0011632Z   duration_ms: 9438.590652
+2026-08-01T02:30:13.0011891Z   type: 'test'
+2026-08-01T02:30:13.0012113Z   ...
+2026-08-01T02:30:23.6719653Z #   alert-agent brake OK — pickId=7f7ea1c9-f378-4335-9e06-241c489c8bf2
+2026-08-01T02:30:23.6740620Z # Subtest: UTV2-519 brake path: alert-agent
+2026-08-01T02:30:23.6742582Z ok 2 - UTV2-519 brake path: alert-agent
+2026-08-01T02:30:23.6744285Z   ---
+2026-08-01T02:30:23.6744541Z   duration_ms: 10674.19746
+2026-08-01T02:30:23.6744808Z   type: 'test'
+2026-08-01T02:30:23.6745041Z   ...
+2026-08-01T02:30:31.5280329Z #   model-driven brake OK — pickId=506f71c1-a7f1-44c7-b2b7-3ac270799d21
+2026-08-01T02:30:31.5300669Z # Subtest: UTV2-519 brake path: model-driven
+2026-08-01T02:30:31.5303585Z ok 3 - UTV2-519 brake path: model-driven
+2026-08-01T02:30:31.5304248Z   ---
+2026-08-01T02:30:31.5304563Z   duration_ms: 7856.203154
+2026-08-01T02:30:31.5304887Z   type: 'test'
+2026-08-01T02:30:31.5305221Z   ...
+2026-08-01T02:30:40.0251531Z #   atomic rollback OK — pickId=b4bdb4e2-a2ee-45f9-85cc-703c7d4dc5d2 (cleaned up to voided)
+2026-08-01T02:30:40.0254486Z #   UTV2-519 test run created pick ids: ["8334d761-d1cf-423f-b6c9-7d032b7d247b","7f7ea1c9-f378-4335-9e06-241c489c8bf2","506f71c1-a7f1-44c7-b2b7-3ac270799d21","b4bdb4e2-a2ee-45f9-85cc-703c7d4dc5d2"]
+2026-08-01T02:30:40.0257674Z # Subtest: UTV2-519 atomic rollback: mismatched fromState leaves picks.status and pick_lifecycle untouched
+2026-08-01T02:30:40.0260211Z ok 4 - UTV2-519 atomic rollback: mismatched fromState leaves picks.status and pick_lifecycle untouched
+2026-08-01T02:30:40.0261550Z   ---
+2026-08-01T02:30:40.0262200Z   duration_ms: 8497.003889
+2026-08-01T02:30:40.0262773Z   type: 'test'
+2026-08-01T02:30:40.0263227Z   ...
+2026-08-01T02:30:40.0263847Z # Subtest: UTV2-519 created pick ids (diagnostics)
+2026-08-01T02:30:40.0264511Z ok 5 - UTV2-519 created pick ids (diagnostics)
+2026-08-01T02:30:40.0264878Z   ---
+2026-08-01T02:30:40.0265127Z   duration_ms: 0.339418
+2026-08-01T02:30:40.0265405Z   type: 'test'
+2026-08-01T02:30:40.0265650Z   ...
+2026-08-01T02:30:40.0472061Z 1..5
+2026-08-01T02:30:40.0472567Z # tests 5
+2026-08-01T02:30:40.0472962Z # suites 0
+2026-08-01T02:30:40.0473361Z # pass 5
+2026-08-01T02:30:40.0473723Z # fail 0
+2026-08-01T02:30:40.0474112Z # cancelled 0
+2026-08-01T02:30:40.0474733Z # skipped 0
+2026-08-01T02:30:40.0489046Z # todo 0
+2026-08-01T02:30:40.0489759Z # duration_ms 36996.746043
+2026-08-01T02:30:40.1955568Z TAP version 13
+2026-08-01T02:30:40.5989975Z #   ✓ process_submission_atomic
+2026-08-01T02:30:40.6021355Z # Subtest: STEP 1 — RPC existence
+2026-08-01T02:30:40.6025432Z     # Subtest: process_submission_atomic exists
+2026-08-01T02:30:40.6079100Z     ok 1 - process_submission_atomic exists
+2026-08-01T02:30:40.6082618Z       ---
+2026-08-01T02:30:40.6085820Z       duration_ms: 145.403616
+2026-08-01T02:30:40.6086427Z       type: 'test'
+2026-08-01T02:30:40.6086807Z       ...
+2026-08-01T02:30:40.6587450Z #   ✓ enqueue_distribution_atomic
+2026-08-01T02:30:40.6597513Z     # Subtest: enqueue_distribution_atomic exists
+2026-08-01T02:30:40.6600945Z     ok 2 - enqueue_distribution_atomic exists
+2026-08-01T02:30:40.6602828Z       ---
+2026-08-01T02:30:40.6603207Z       duration_ms: 58.714611
+2026-08-01T02:30:40.6603636Z       type: 'test'
+2026-08-01T02:30:40.6603901Z       ...
+2026-08-01T02:30:40.7088130Z #   ✓ claim_next_outbox
+2026-08-01T02:30:40.7097982Z     # Subtest: claim_next_outbox exists
+2026-08-01T02:30:40.7101714Z     ok 3 - claim_next_outbox exists
+2026-08-01T02:30:40.7102969Z       ---
+2026-08-01T02:30:40.7103374Z       duration_ms: 50.253426
+2026-08-01T02:30:40.7103802Z       type: 'test'
+2026-08-01T02:30:40.7104052Z       ...
+2026-08-01T02:30:40.7829897Z #   ✓ confirm_delivery_atomic
+2026-08-01T02:30:40.7839960Z     # Subtest: confirm_delivery_atomic exists
+2026-08-01T02:30:40.7842561Z     ok 4 - confirm_delivery_atomic exists
+2026-08-01T02:30:40.7843123Z       ---
+2026-08-01T02:30:40.7843535Z       duration_ms: 74.100839
+2026-08-01T02:30:40.7844011Z       type: 'test'
+2026-08-01T02:30:40.7844408Z       ...
+2026-08-01T02:30:40.8300741Z #   ✓ settle_pick_atomic
+2026-08-01T02:30:40.8317635Z     # Subtest: settle_pick_atomic exists
+2026-08-01T02:30:40.8320289Z     ok 5 - settle_pick_atomic exists
+2026-08-01T02:30:40.8321048Z       ---
+2026-08-01T02:30:40.8321694Z       duration_ms: 46.998961
+2026-08-01T02:30:40.8322440Z       type: 'test'
+2026-08-01T02:30:40.8323045Z       ...
+2026-08-01T02:30:40.8324161Z     1..5
+2026-08-01T02:30:40.8326966Z ok 1 - STEP 1 — RPC existence
+2026-08-01T02:30:40.8327583Z   ---
+2026-08-01T02:30:40.8328465Z   duration_ms: 376.931968
+2026-08-01T02:30:40.8329152Z   type: 'suite'
+2026-08-01T02:30:40.8329693Z   ...
+2026-08-01T02:30:40.8849298Z #   ✓ Submission c21469f2-9490-4bac-8ced-2d0c2e77b8ce, Pick 7af6f44e-27c8-4713-b589-54c031d18900 created atomically
+2026-08-01T02:30:40.8861860Z # Subtest: STEP 2 — Submission atomicity (UTV2-218)
+2026-08-01T02:30:40.8863495Z     # Subtest: A. atomic submission creates all records
+2026-08-01T02:30:40.8866073Z     ok 1 - A. atomic submission creates all records
+2026-08-01T02:30:40.8866737Z       ---
+2026-08-01T02:30:40.8867162Z       duration_ms: 54.323017
+2026-08-01T02:30:40.8867654Z       type: 'test'
+2026-08-01T02:30:40.8867964Z       ...
+2026-08-01T02:30:40.9404026Z #   ✓ Duplicate returned original pick 7af6f44e-27c8-4713-b589-54c031d18900
+2026-08-01T02:30:40.9409534Z     # Subtest: B. duplicate returns existing pick (idempotent)
+2026-08-01T02:30:40.9413962Z     ok 2 - B. duplicate returns existing pick (idempotent)
+2026-08-01T02:30:40.9414598Z       ---
+2026-08-01T02:30:40.9415129Z       duration_ms: 54.757665
+2026-08-01T02:30:40.9415431Z       type: 'test'
+2026-08-01T02:30:40.9415667Z       ...
+2026-08-01T02:30:40.9906725Z #   ✓ 1 pick record — no orphans
+2026-08-01T02:30:40.9936461Z     # Subtest: C. exactly 1 pick for idempotency key
+2026-08-01T02:30:40.9939820Z     ok 3 - C. exactly 1 pick for idempotency key
+2026-08-01T02:30:40.9941446Z       ---
+2026-08-01T02:30:40.9941859Z       duration_ms: 50.755232
+2026-08-01T02:30:40.9942650Z       type: 'test'
+2026-08-01T02:30:40.9943086Z       ...
+2026-08-01T02:30:40.9943425Z     1..3
+2026-08-01T02:30:40.9944203Z ok 2 - STEP 2 — Submission atomicity (UTV2-218)
+2026-08-01T02:30:40.9944667Z   ---
+2026-08-01T02:30:40.9944902Z   duration_ms: 160.558412
+2026-08-01T02:30:40.9945161Z   type: 'suite'
+2026-08-01T02:30:40.9945420Z   ...
+2026-08-01T02:30:41.1952508Z #   ✓ Pick queued + outbox pending — atomic
+2026-08-01T02:30:41.1961725Z # Subtest: STEP 3 — Enqueue atomicity (UTV2-219)
+2026-08-01T02:30:41.1962803Z     # Subtest: A. atomic enqueue transitions + creates outbox
+2026-08-01T02:30:41.1965527Z     ok 1 - A. atomic enqueue transitions + creates outbox
+2026-08-01T02:30:41.1966155Z       ---
+2026-08-01T02:30:41.1966392Z       duration_ms: 60.543884
+2026-08-01T02:30:41.1966668Z       type: 'test'
+2026-08-01T02:30:41.1966889Z       ...
+2026-08-01T02:30:41.3120806Z #   ✓ Consistent: pick=queued, outbox rows=1
+2026-08-01T02:30:41.3129293Z     # Subtest: B. no zombie pick (outbox exists for queued pick)
+2026-08-01T02:30:41.3131259Z     ok 2 - B. no zombie pick (outbox exists for queued pick)
+2026-08-01T02:30:41.3131828Z       ---
+2026-08-01T02:30:41.3132190Z       duration_ms: 116.677171
+2026-08-01T02:30:41.3132556Z       type: 'test'
+2026-08-01T02:30:41.3132798Z       ...
+2026-08-01T02:30:41.3684949Z #   ✓ Re-enqueue correctly returned null
+2026-08-01T02:30:41.3698474Z     # Subtest: C. re-enqueue returns null (already queued)
+2026-08-01T02:30:41.3700775Z     ok 3 - C. re-enqueue returns null (already queued)
+2026-08-01T02:30:41.3705144Z       ---
+2026-08-01T02:30:41.3705563Z       duration_ms: 56.383507
+2026-08-01T02:30:41.3705979Z       type: 'test'
+2026-08-01T02:30:41.3706216Z       ...
+2026-08-01T02:30:41.3706424Z     1..3
+2026-08-01T02:30:41.3706894Z ok 3 - STEP 3 — Enqueue atomicity (UTV2-219)
+2026-08-01T02:30:41.3707207Z   ---
+2026-08-01T02:30:41.3707417Z   duration_ms: 377.455174
+2026-08-01T02:30:41.3707671Z   type: 'suite'
+2026-08-01T02:30:41.3707874Z   ...
+2026-08-01T02:30:41.5827105Z #   ✓ claim_next_outbox returns null for empty target
+2026-08-01T02:30:41.5835292Z # Subtest: STEP 4 — Delivery idempotency (UTV2-220)
+2026-08-01T02:30:41.5836842Z     # Subtest: A. claim returns null for empty target
+2026-08-01T02:30:41.5838035Z     ok 1 - A. claim returns null for empty target
+2026-08-01T02:30:41.5838791Z       ---
+2026-08-01T02:30:41.5839173Z       duration_ms: 56.701124
+2026-08-01T02:30:41.5839580Z       type: 'test'
+2026-08-01T02:30:41.5839809Z       ...
+2026-08-01T02:30:41.6357867Z #   ✓ Outbox=sent, lifecycle=posted, receipt created, audit logged
+2026-08-01T02:30:41.6368582Z     # Subtest: B. confirm_delivery_atomic — marks sent + lifecycle + receipt
+2026-08-01T02:30:41.6369663Z     ok 2 - B. confirm_delivery_atomic — marks sent + lifecycle + receipt
+2026-08-01T02:30:41.6370278Z       ---
+2026-08-01T02:30:41.6370650Z       duration_ms: 52.996953
+2026-08-01T02:30:41.6371087Z       type: 'test'
+2026-08-01T02:30:41.6371337Z       ...
+2026-08-01T02:30:41.6952710Z #   ✓ Re-confirm idempotent — NO duplicate delivery
+2026-08-01T02:30:41.6959193Z     # Subtest: C. re-confirm returns alreadyConfirmed=true (NO double post)
+2026-08-01T02:30:41.6960685Z     ok 3 - C. re-confirm returns alreadyConfirmed=true (NO double post)
+2026-08-01T02:30:41.6961328Z       ---
+2026-08-01T02:30:41.6961682Z       duration_ms: 59.489403
+2026-08-01T02:30:41.6962423Z       type: 'test'
+2026-08-01T02:30:41.6962654Z       ...
+2026-08-01T02:30:41.7454893Z #   ✓ Pick status=posted, posted_at=2026-08-01T02:30:41.61628+00:00
+2026-08-01T02:30:41.7456309Z     # Subtest: D. pick is posted (not stuck in queued)
+2026-08-01T02:30:41.7459282Z     ok 4 - D. pick is posted (not stuck in queued)
+2026-08-01T02:30:41.7460070Z       ---
+2026-08-01T02:30:41.7460778Z       duration_ms: 48.582948
+2026-08-01T02:30:41.7461487Z       type: 'test'
+2026-08-01T02:30:41.7462106Z       ...
+2026-08-01T02:30:41.7462662Z     1..4
+2026-08-01T02:30:41.7463392Z ok 4 - STEP 4 — Delivery idempotency (UTV2-220)
+2026-08-01T02:30:41.7463844Z   ---
+2026-08-01T02:30:41.7464180Z   duration_ms: 375.392381
+2026-08-01T02:30:41.7464548Z   type: 'suite'
+2026-08-01T02:30:41.7464903Z   ...
+2026-08-01T02:30:41.9057600Z #   ✓ Settlement + lifecycle + audit — atomic
+2026-08-01T02:30:41.9065893Z # Subtest: STEP 5 — Settlement atomicity (UTV2-221)
+2026-08-01T02:30:41.9066742Z     # Subtest: A. atomic settlement creates record + transitions
+2026-08-01T02:30:41.9069072Z     ok 1 - A. atomic settlement creates record + transitions
+2026-08-01T02:30:41.9069693Z       ---
+2026-08-01T02:30:41.9070065Z       duration_ms: 54.247382
+2026-08-01T02:30:41.9070524Z       type: 'test'
+2026-08-01T02:30:41.9070794Z       ...
+2026-08-01T02:30:41.9633624Z #   ✓ Duplicate settlement idempotent
+2026-08-01T02:30:41.9639873Z     # Subtest: B. duplicate returns existing (idempotent)
+2026-08-01T02:30:41.9642166Z     ok 2 - B. duplicate returns existing (idempotent)
+2026-08-01T02:30:41.9643184Z       ---
+2026-08-01T02:30:41.9643496Z       duration_ms: 57.461362
+2026-08-01T02:30:41.9643862Z       type: 'test'
+2026-08-01T02:30:41.9644155Z       ...
+2026-08-01T02:30:42.0141259Z #   ✓ 1 settlement record — no duplicates
+2026-08-01T02:30:42.0148325Z     # Subtest: C. exactly 1 settlement record
+2026-08-01T02:30:42.0151109Z     ok 3 - C. exactly 1 settlement record
+2026-08-01T02:30:42.0151716Z       ---
+2026-08-01T02:30:42.0152105Z       duration_ms: 50.695006
+2026-08-01T02:30:42.0152431Z       type: 'test'
+2026-08-01T02:30:42.0152903Z       ...
+2026-08-01T02:30:42.0669477Z #   ✓ Pick settled, settled_at=2026-08-01T02:30:41.8873+00:00
+2026-08-01T02:30:42.0676144Z     # Subtest: D. pick is settled with timestamp
+2026-08-01T02:30:42.0678440Z     ok 4 - D. pick is settled with timestamp
+2026-08-01T02:30:42.0679174Z       ---
+2026-08-01T02:30:42.0679654Z       duration_ms: 52.739891
+2026-08-01T02:30:42.0680458Z       type: 'test'
+2026-08-01T02:30:42.0681054Z       ...
+2026-08-01T02:30:42.0681826Z     1..4
+2026-08-01T02:30:42.0684816Z ok 5 - STEP 5 — Settlement atomicity (UTV2-221)
+2026-08-01T02:30:42.0685500Z   ---
+2026-08-01T02:30:42.0685877Z   duration_ms: 322.888056
+2026-08-01T02:30:42.0686346Z   type: 'suite'
+2026-08-01T02:30:42.0686562Z   ...
+2026-08-01T02:30:42.4470131Z # [api] Startup config invalid: {"event":"startup_config_invalid","service":"api","category":"database_credentials","runtimeModeKey":"UNIT_TALK_API_RUNTIME_MODE","runtimeMode":"fail_closed","productionLike":true,"persistenceMode":"in_memory","dryRun":false,"autorun":null,"maxCyclesPerRun":null,"missingKeys":["SUPABASE_URL","SUPABASE_ANON_KEY","SUPABASE_SERVICE_ROLE_KEY"],"message":"api production runtime is missing required env vars: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY."}
+2026-08-01T02:30:42.4474445Z #   ✓ fail_closed rejects startup without DB — no silent data loss
+2026-08-01T02:30:42.4475294Z # Subtest: STEP 6 — Fail-closed (UTV2-217)
+2026-08-01T02:30:42.4487461Z     # Subtest: API refuses to start in fail_closed without DB
+2026-08-01T02:30:42.4488905Z     ok 1 - API refuses to start in fail_closed without DB
+2026-08-01T02:30:42.4489900Z       ---
+2026-08-01T02:30:42.4490596Z       duration_ms: 379.413967
+2026-08-01T02:30:42.4491099Z       type: 'test'
+2026-08-01T02:30:42.4491473Z       ...
+2026-08-01T02:30:42.4491811Z     1..1
+2026-08-01T02:30:42.4492449Z ok 6 - STEP 6 — Fail-closed (UTV2-217)
+2026-08-01T02:30:42.4492923Z   ---
+2026-08-01T02:30:42.4493769Z   duration_ms: 379.644811
+2026-08-01T02:30:42.4494176Z   type: 'suite'
+2026-08-01T02:30:42.4494526Z   ...
+2026-08-01T02:30:42.4924276Z 1..6
+2026-08-01T02:30:42.4924771Z # tests 20
+2026-08-01T02:30:42.4925152Z # suites 6
+2026-08-01T02:30:42.4926081Z # pass 20
+2026-08-01T02:30:42.4926539Z # fail 0
+2026-08-01T02:30:42.4926922Z # cancelled 0
+2026-08-01T02:30:42.4927323Z # skipped 0
+2026-08-01T02:30:42.4927722Z # todo 0
+2026-08-01T02:30:42.4928476Z # duration_ms 2311.389039
+2026-08-01T02:30:42.6395852Z TAP version 13
+2026-08-01T02:30:51.0660638Z #   [system-pick-scanner/approve] pre-review approval_status=approved pickId=31360ce2-4a96-4bb3-8b95-088630b1e49d
+2026-08-01T02:30:58.9341040Z #   [system-pick-scanner/approve] review lane OK — pickId=31360ce2-4a96-4bb3-8b95-088630b1e49d
+2026-08-01T02:30:58.9359945Z # Subtest: UTV2-521 review lane: approve on system-pick-scanner brake pick
+2026-08-01T02:30:58.9365452Z ok 1 - UTV2-521 review lane: approve on system-pick-scanner brake pick
+2026-08-01T02:30:58.9366287Z   ---
+2026-08-01T02:30:58.9366702Z   duration_ms: 15847.622594
+2026-08-01T02:30:58.9367175Z   type: 'test'
+2026-08-01T02:30:58.9367558Z   ...
+2026-08-01T02:31:06.9471727Z #   [alert-agent/deny] pre-review approval_status=approved pickId=261f59f8-32a8-4c94-9ce3-c3317fc7cc94
+2026-08-01T02:31:07.6310268Z #   [alert-agent/deny] review lane OK — pickId=261f59f8-32a8-4c94-9ce3-c3317fc7cc94
+2026-08-01T02:31:07.6321024Z # Subtest: UTV2-521 review lane: deny on alert-agent brake pick
+2026-08-01T02:31:07.6324462Z ok 2 - UTV2-521 review lane: deny on alert-agent brake pick
+2026-08-01T02:31:07.6324863Z   ---
+2026-08-01T02:31:07.6325100Z   duration_ms: 8696.238601
+2026-08-01T02:31:07.6325360Z   type: 'test'
+2026-08-01T02:31:07.6325578Z   ...
+2026-08-01T02:31:15.6986930Z #   [model-driven/hold] pre-review approval_status=approved pickId=a9b4ce37-f722-480e-9928-7e3e92bf4a01
+2026-08-01T02:31:16.1637209Z #   [model-driven/hold] review lane OK — pickId=a9b4ce37-f722-480e-9928-7e3e92bf4a01
+2026-08-01T02:31:16.1648829Z # Subtest: UTV2-521 review lane: hold on model-driven brake pick
+2026-08-01T02:31:16.1650169Z ok 3 - UTV2-521 review lane: hold on model-driven brake pick
+2026-08-01T02:31:16.1650871Z   ---
+2026-08-01T02:31:16.1651357Z   duration_ms: 8532.709426
+2026-08-01T02:31:16.1651729Z   type: 'test'
+2026-08-01T02:31:16.1651975Z   ...
+2026-08-01T02:31:31.3403675Z #   UTV2-521 review test run created pick ids: ["31360ce2-4a96-4bb3-8b95-088630b1e49d","261f59f8-32a8-4c94-9ce3-c3317fc7cc94","a9b4ce37-f722-480e-9928-7e3e92bf4a01","3c5728fd-248e-420e-b5e4-dee8cd4c0cb1"]
+2026-08-01T02:31:31.3406008Z # Subtest: UTV2-521 regression: non-governance, non-pending pick still rejects with NOT_PENDING
+2026-08-01T02:31:31.3407643Z ok 4 - UTV2-521 regression: non-governance, non-pending pick still rejects with NOT_PENDING
+2026-08-01T02:31:31.3408876Z   ---
+2026-08-01T02:31:31.3409280Z   duration_ms: 15176.11839
+2026-08-01T02:31:31.3409736Z   type: 'test'
+2026-08-01T02:31:31.3410129Z   ...
+2026-08-01T02:31:31.3412265Z # Subtest: UTV2-521 created pick ids (diagnostics)
+2026-08-01T02:31:31.3413090Z ok 5 - UTV2-521 created pick ids (diagnostics)
+2026-08-01T02:31:31.3413661Z   ---
+2026-08-01T02:31:31.3414026Z   duration_ms: 0.266852
+2026-08-01T02:31:31.3414470Z   type: 'test'
+2026-08-01T02:31:31.3414876Z   ...
+2026-08-01T02:31:31.3639304Z 1..5
+2026-08-01T02:31:31.3639749Z # tests 5
+2026-08-01T02:31:31.3640131Z # suites 0
+2026-08-01T02:31:31.3640523Z # pass 5
+2026-08-01T02:31:31.3640911Z # fail 0
+2026-08-01T02:31:31.3641296Z # cancelled 0
+2026-08-01T02:31:31.3641996Z # skipped 0
+2026-08-01T02:31:31.3642611Z # todo 0
+2026-08-01T02:31:31.3643171Z # duration_ms 48738.440504
+2026-08-01T02:31:31.5120928Z TAP version 13
+2026-08-01T02:31:32.9783851Z # Subtest: [live-db] settled rejects all outbound transitions
+2026-08-01T02:31:32.9789128Z ok 1 - [live-db] settled rejects all outbound transitions
+2026-08-01T02:31:32.9789868Z   ---
+2026-08-01T02:31:32.9790278Z   duration_ms: 1099.323314
+2026-08-01T02:31:32.9790720Z   type: 'test'
+2026-08-01T02:31:32.9791822Z   ...
+2026-08-01T02:31:33.6598971Z # Subtest: [live-db] voided rejects all outbound transitions
+2026-08-01T02:31:33.6600455Z ok 2 - [live-db] voided rejects all outbound transitions
+2026-08-01T02:31:33.6600995Z   ---
+2026-08-01T02:31:33.6602154Z   duration_ms: 681.451164
+2026-08-01T02:31:33.6602681Z   type: 'test'
+2026-08-01T02:31:33.6603110Z   ...
+2026-08-01T02:31:33.8553009Z # Subtest: [live-db] draft cannot skip to queued
+2026-08-01T02:31:33.8554401Z ok 3 - [live-db] draft cannot skip to queued
+2026-08-01T02:31:33.8555806Z   ---
+2026-08-01T02:31:33.8556030Z   duration_ms: 195.769638
+2026-08-01T02:31:33.8556384Z   type: 'test'
+2026-08-01T02:31:33.8556609Z   ...
+2026-08-01T02:31:34.1450053Z # Subtest: [live-db] validated cannot jump to posted (must queue first)
+2026-08-01T02:31:34.1450941Z ok 4 - [live-db] validated cannot jump to posted (must queue first)
+2026-08-01T02:31:34.1451483Z   ---
+2026-08-01T02:31:34.1451706Z   duration_ms: 289.650149
+2026-08-01T02:31:34.1451963Z   type: 'test'
+2026-08-01T02:31:34.1452201Z   ...
+2026-08-01T02:31:34.5777581Z # Subtest: [live-db] awaiting_approval cannot bypass queued
+2026-08-01T02:31:34.5778587Z ok 5 - [live-db] awaiting_approval cannot bypass queued
+2026-08-01T02:31:34.5778948Z   ---
+2026-08-01T02:31:34.5779197Z   duration_ms: 432.937714
+2026-08-01T02:31:34.5779463Z   type: 'test'
+2026-08-01T02:31:34.5779710Z   ...
+2026-08-01T02:31:35.1844426Z # Subtest: [live-db] happy path draft->validated->queued->posted->settled
+2026-08-01T02:31:35.1845631Z ok 6 - [live-db] happy path draft->validated->queued->posted->settled
+2026-08-01T02:31:35.1846271Z   ---
+2026-08-01T02:31:35.1846533Z   duration_ms: 606.351114
+2026-08-01T02:31:35.1846819Z   type: 'test'
+2026-08-01T02:31:35.1847059Z   ...
+2026-08-01T02:31:35.7919075Z # Subtest: [live-db] governance brake path validated->awaiting_approval->queued->posted
+2026-08-01T02:31:35.7920406Z ok 7 - [live-db] governance brake path validated->awaiting_approval->queued->posted
+2026-08-01T02:31:35.7920860Z   ---
+2026-08-01T02:31:35.7921111Z   duration_ms: 607.49867
+2026-08-01T02:31:35.7921356Z   type: 'test'
+2026-08-01T02:31:35.7921557Z   ...
+2026-08-01T02:31:36.2766322Z # Subtest: [live-db] any state can be voided
+2026-08-01T02:31:36.2767332Z ok 8 - [live-db] any state can be voided
+2026-08-01T02:31:36.2767746Z   ---
+2026-08-01T02:31:36.2768043Z   duration_ms: 485.180094
+2026-08-01T02:31:36.2768726Z   type: 'test'
+2026-08-01T02:31:36.2768988Z   ...
+2026-08-01T02:31:36.2951033Z 1..8
+2026-08-01T02:31:36.2951403Z # tests 8
+2026-08-01T02:31:36.2951747Z # suites 0
+2026-08-01T02:31:36.2952085Z # pass 8
+2026-08-01T02:31:36.2952416Z # fail 0
+2026-08-01T02:31:36.2952741Z # cancelled 0
+2026-08-01T02:31:36.2953215Z # skipped 0
+2026-08-01T02:31:36.2953649Z # todo 0
+2026-08-01T02:31:36.2954175Z # duration_ms 4797.332351
+2026-08-01T02:31:36.4514039Z TAP version 13
+2026-08-01T02:31:44.4139679Z # Subtest: UTV2-1022: submitted pick persists riskScore and riskModifier in promotion history payload
+2026-08-01T02:31:44.4146406Z ok 1 - UTV2-1022: submitted pick persists riskScore and riskModifier in promotion history payload
+2026-08-01T02:31:44.4147757Z   ---
+2026-08-01T02:31:44.4148327Z   duration_ms: 7515.103334
+2026-08-01T02:31:44.4148790Z   type: 'test'
+2026-08-01T02:31:44.4149105Z   ...
+2026-08-01T02:31:44.5926446Z # Subtest: UTV2-1022: risk scoring is deterministic — same inputs produce same promotion score
+2026-08-01T02:31:44.5928697Z ok 2 - UTV2-1022: risk scoring is deterministic — same inputs produce same promotion score
+2026-08-01T02:31:44.5929686Z   ---
+2026-08-01T02:31:44.5930158Z   duration_ms: 181.016622
+2026-08-01T02:31:44.5930726Z   type: 'test'
+2026-08-01T02:31:44.5931215Z   ...
+2026-08-01T02:31:44.6140033Z 1..2
+2026-08-01T02:31:44.6140424Z # tests 2
+2026-08-01T02:31:44.6141692Z # suites 0
+2026-08-01T02:31:44.6142479Z # pass 2
+2026-08-01T02:31:44.6143021Z # fail 0
+2026-08-01T02:31:44.6143699Z # cancelled 0
+2026-08-01T02:31:44.6145106Z # skipped 0
+2026-08-01T02:31:44.6145513Z # todo 0
+2026-08-01T02:31:44.6145922Z # duration_ms 8176.899766
+2026-08-01T02:31:44.7601109Z TAP version 13
+2026-08-01T02:31:52.5775208Z # {"timestamp":"2026-08-01T02:31:52.571Z","level":"warn","service":"api","message":"stranded-picks-detected","component":"stranded-pick-reconciler","count":199,"pickIds":["dd0968ba-c730-49b5-bbf0-aa6e80296d47","f163d544-5340-40cd-afcc-b504a80b6082","80cafe0f-9052-4510-b68d-0c4a1723e38b","9a68febc-4604-42ac-bfa0-411e20ad895d","de352ef9-ace3-4a79-a54b-0d915ea10ab5","1660b92f-fde8-406b-be0b-99b2631de096","bf6fd5fe-3678-4c86-b09c-4efe765068b4","243fae5b-c9db-433b-b337-f7bae17eb178","373185b9-13a3-4fba-84ec-7f8eebe59c0c","e2400637-b7e4-4b01-bb36-f3a2ba100544","f16789c4-7f8f-448e-8e15-2413fa67a91e","24f9d4df-13f6-41ed-a316-27d08d42e022","74cf6d7f-817f-4e48-916d-df299890e160","0423ca7f-fdbc-43c2-84ef-eb857324930d","2f300004-f69d-40b2-bc12-4d0d0f08de9e","70977424-235b-4085-83a0-b6309bda8108","17130bd3-15d6-428e-a26b-2a10a8b16cba","ff52668f-1de9-4beb-a18f-0479eb8cc057","9c04f40c-0c3d-416a-8c58-50914bc3770c","11067149-8eec-4b58-a509-0d662cc7af95","2c397765-8589-46c7-8375-24297d163aa4","c2ec6e58-4040-4f24-88a5-8fc259607e58","d382fae0-20a8-44df-9e7d-eb141a243a69","24d53f0e-bcc0-48dc-820c-5397be18bab9","9ed1e4c0-efdd-43b2-805b-f4baaaa8ced0","e1020a85-85a7-420a-a37c-a79b7366ebcd","01e1da8e-92af-4729-a404-5da9526cf0f6","37d8b7c2-3bc5-4785-9d7d-1f20ca3cf56f","05e2d299-dd16-45e6-b597-76c45970f0b0","697d442f-879c-4f02-b5e1-f4cc88c97fba","bd504542-755a-4439-87be-b86263701d1c","698de273-1d3c-43e9-9fae-c9e7fa858381","cdac6b05-1d87-4da5-8f9a-8327deb7fa7d","25762c15-9ad8-478b-83be-b4e1c5dcc5fa","4fc57399-5dda-4cf7-99f2-ab9c33fbde47","47fb5075-8920-4e03-9f48-e0d3e053f657","7aabb33e-1fb2-4acb-a5b5-594022451db4","d6639684-b942-48d7-a8c0-165648b27490","e68cdb5b-a843-4651-b659-d00e08adf659","fd367c41-e288-45a9-8876-d8d7b93ff34e","4ae01413-acc2-406b-a1e4-df3782170e76","b98516b4-4cb2-4b43-9ee3-8f2331ddf5c8","b7f1ba91-a8f9-4098-ad88-7b2a7761b418","78cffde2-ef1c-411b-8ae4-22a5df5129f0","3b1f0829-74ea-419a-b6e6-632dccf1c979","1a3dc065-8647-4f44-a1e1-caecb4dd6fad","773c0adb-5075-4b91-a992-05bab8fca71a","5e9783d5-6bd5-47d0-baec-1b468a72992d","c4b6d476-c501-4cc8-bff6-f11c28f4b157","9e130806-9ce8-47b9-83ce-60f4f11be239","6889a066-0a89-4f2d-b0b6-bc53a94004d5","e2293d89-702b-4ade-ace5-1f8768268a14","716dcaa7-7eda-45b6-9d61-b2897587312c","4fdce370-39d3-435f-81cc-8bc99cab50c0","6260c6a1-a378-4519-923a-8674bd133d13","a7717090-bb77-4a56-a421-b4a1d47b9c2d","39d5431d-5c9f-4d39-b76c-d02fd73a4989","4ae91bdc-1bb7-4025-b02a-0bc5d4c1f4df","58f22017-eeb5-4d69-a8a6-31027a6feb6f","f1b1c58a-f9df-496d-9b65-9c51dd700d25","c87baaa2-5d3b-4cc9-badb-373c406c87a0","69636b5b-c873-420d-915a-4678e7542631","c17bacb0-7e20-4864-8c08-88fe3ecf2403","99ddc3af-f56d-4991-8eff-7c1ef0851da6","6f449f59-0c3a-4a07-bd8e-6e94cb301ef3","148322ba-b2eb-4943-babf-dd184e56ddfa","38ad4f46-9445-495b-ad2d-08dd2bd41fac","d136c9bf-af66-464f-afe5-d09062149d52","f1101d6e-3a0e-4aaf-8c1d-8eaad9f2b135","e44dc187-f223-4435-be6c-5c4a6a919762","0477c2fa-923d-4059-86d2-ff13a872f544","13e045a3-6e67-4d59-9175-c6aa4cc79acb","1c8b59c1-a82d-4baf-827f-7b91f75f63bb","9b4f722b-51e9-468a-9183-90c639101083","351fd1c5-f90e-4b0b-a446-3573695589dc","dee455e2-b79b-490f-b5e7-fef67b5f089f","08db95cb-1618-450f-96fa-82c97819b391","9fce6812-ee0c-4f66-8d51-7a8f6cf8fa91","ed180af4-1a57-407b-8204-aa4e2ed480db","ff153166-4b58-4471-b378-acf06c5ccf62","fc2d3873-bd75-4d59-a650-8cc2802bae6b","fe00349c-552d-474f-8526-989c0ecc81cb","253a9f52-2852-4689-8f69-122c923bf74f","5c58cd3f-6f45-4774-ae63-0a3b97189028","79442b83-4a62-4322-9326-ba216eb0ea34","ec469c7c-f4e3-432b-96c5-e4713d707764","37ba298a-50c5-441b-b1a9-d742a3038157","88e8d697-f99a-4f8f-860e-0edbd8d58e78","0d3377bc-8192-4258-8d4a-08801c0e4d6d","c960dde0-c87a-4901-bca2-a4cfae073d3e","de4bbdb7-26ae-494e-a51f-25a8222f4b1d","7ffa87da-ec46-4f88-82b8-e26ff8d00b21","b70ab97c-12b2-4706-a279-32e5325b2425","1e41a57b-10a2-459b-9967-9b7f8fbe91ca","5e289703-9683-4695-ab1d-363db68420a4","cc24e54a-f8ec-474c-b2f5-1f01945f91f6","caf33986-8ef0-4124-aeb1-841fb2144039","42e71f7e-2784-418f-ac3c-1926fb5d392c","03e7ec1e-ec7f-4585-9adf-89cdf93c1963","7e436d44-bf54-4de8-91a0-67b5bf9b0990","001f3aa8-db2b-458f-8965-442a12cf0fc9","90d7516c-1b45-4b19-8f86-bffe65e9d3ec","1b3549f5-2c29-4f3f-8a27-541b173311ae","03c894c2-a344-4b1e-9f89-2d307cfef1c2","4197df14-6b90-4566-a8b4-62ad4d380454","a18f93de-3b42-4e88-a2db-3a0fd6fa0098","b0f5cd84-d7fa-4267-904a-0a3a6e74ccbf","85fa215a-e99b-4b88-b172-c536ab43c758","ae88bd7d-a742-4b76-ab11-574bcc3b16d1","c332b851-f808-439d-ae53-3c50a0143370","81fe67e7-302b-44e7-b664-f742d9f649f0","bc3932cc-f75d-4702-973c-ec73c67c7227","008a6a64-01d7-4ce1-8720-bf42e0b1d7d5","dd099864-7aff-45b8-86bb-35bb2d06efb0","cf13db04-b56d-47e6-96b8-364ef67f7f01","94a76e4f-ad40-4498-b28f-9fd6f3366c4b","6e9da943-a81c-434f-bce7-879643fb8b02","91857fbb-748b-4cc9-9d66-b7d940ea0f67","d3e13184-24f8-4845-879b-b9119d6ca601","1d80292b-44d7-4a4c-819c-9abb018c5d55","a59a6b37-9dc0-4f26-bcc6-af53a7af9c29","318a7e38-fb58-4c8b-a07d-d058a5fa3689","bcd2506a-ebc9-48ae-ba01-f0ed0271db0e","ad5700a0-4f61-4b5c-abc8-4eae6d0623c3","882fc82a-2275-41c4-a2ee-2161b3614342","d8d8f425-976b-46c1-bd9d-932c7500259e","1faadc34-7667-4ae1-85ce-90ad1f410429","31cc6801-bfff-4f66-9cf9-11a0e15e9ade","63b4b514-c2b4-4fa1-86e4-4c9b788ce659","16eb8951-e9fe-4905-bf5b-4d2be40e6b1c","fa44e9ed-5c69-4bb0-a58c-6c59a3d2dbd5","abb80e86-f8dc-444f-9cf0-c896f3a42a17","da59dc15-c861-4be6-8750-a2949f46f23c","e784c330-2e5b-48e4-8806-8b294d00c824","24a59114-0bde-42a2-9498-0ea74035016f","881c5fcd-121f-480a-b0ef-dd706bc0c439","dfa8f196-4766-47bf-a39e-5f38e8d3798e","601134fa-aeab-420d-b1fb-8311abdb18a3","b19956a1-6b78-4d8f-98a7-537df1d4d790","f3e7f2a2-5bdb-4231-9bb4-411faaebb049","c31b34f4-d6c6-4007-b574-a75f2f3e61e7","5ba0dbdf-cfd3-4b0b-9c1e-901a01196f89","ba7ed146-4899-4a51-8b7a-2132ce2c51ee","0d372d90-3ce9-473d-b0d1-07207dc4651a","53354782-5f8d-4b74-b45a-02ea79bd384f","a2324f56-9394-4fa9-b59e-b6072df9ab03","68e51664-0525-41d3-9220-541c87855f6e","a5a3a808-fcda-489a-ac81-5441ccb3754b","f0868b63-fa40-427f-8ad0-82feac81bcce","86e44463-ceda-4f66-8c8b-32f06154fa1e","a6890783-359d-48ad-908e-743a3a26c73c","127c34f9-8593-4f7a-ba2c-73eddcdfc04e","c5b21b5a-2774-4887-9136-fc0e249f0acd","5189e2a4-fbbd-432f-9626-271f3838aaa0","578d1550-e31a-4ba5-a74e-19ee944bae00","0b39e74b-f9d5-4058-aa36-84034195d65a","13e7dd8d-f292-4ff9-80e7-8d88b020e3e6","3fd9d75a-3ee0-4273-bd56-26f9d89af2bc","9738733a-2e1d-4d17-94e6-af16a8a35e69","be2d6685-b9e0-4d44-baeb-914a7caebd53","5fb7f8c3-3b78-484e-94ec-46a18328f6fe","46ebd98c-f383-46a3-af01-9ae34395785e","73798438-2e83-4cf0-a4e3-b5175379e512","567d1f1d-68de-4ae2-812e-f8235c88b1e1","a56f3b9f-166c-4ecf-9a76-06b021747625","b3756675-c9d0-450b-9bd2-656503ab095a","d1c03f07-7f06-45f3-b769-172ec76da6b8","43d11bfc-434d-4be8-942a-a3a6ba43d31b","50bdff31-2a11-459b-b5e9-a84af6375f88","1e7bfaaa-f281-4cab-9852-0d69746c7f25","d8e8e45b-1550-4fad-8190-8147a59e96b6","5602069a-2dfc-453d-b384-bae6bc3a2929","4ab5759c-9753-4017-bfbf-f353236f39a1","5940631c-7ace-48dc-aece-7120b820883d","cc1ebdf7-1705-404b-aa35-82d07c366be1","ea69fee6-6298-4802-9560-781375e23ffb","8d053d3d-e5d9-4899-8e19-1a853267b165","541d99ec-2866-4ab9-bf09-5c11bf0c3fec","83e3eaa1-1c2d-4ce0-bbb3-6f88af40e242","e2a3f367-376e-4fd8-9497-cb40c157032c","a4b5a4f5-c9a9-470b-a8e0-ce33c8a62031","c4c94af2-bee5-4561-89a5-cd0a1fd65d3b","fbf7e022-478e-4d1e-a637-e1401533e54c","10db59d0-3fc4-4ff5-a1b3-07b95d59b207","1f7947ff-ae65-4157-9316-70213824a375","fe3001e9-06ff-4a13-a2cb-94e9c605020c","e343c90a-ae1f-4e87-88a1-e2434c0855e7","e7296fb9-d323-4f92-b59d-51e6c1fff6d9","86eb38b0-fd44-4c81-832e-6fc8b3b377a9","3becb217-74e4-4a69-a645-6b62b0d42775","daee1980-0730-4c91-9f16-964724cfae57","a02fd0d4-1611-4b23-baab-611a0e88e893","c09151ab-565e-4ab1-94ec-122c21384af4","e176125b-f303-4ee1-9a7e-c60bc05b57b2","25a7f8de-ba85-4c4d-9cc4-0600b80ebb39","e0ec00d4-d9d4-433d-93b6-3d73b6f361a2","1b88acd3-bf5a-4f96-bd91-e2ad45fada2c","7fa39e8f-a359-4005-bf86-fb3e63f6a9d7","6f2208b4-3e00-4614-a127-b70c40a6703a"]}
+2026-08-01T02:31:52.5803327Z # Subtest: UTV2-1018: submitted pick completes promotion eval with no stranded row
+2026-08-01T02:31:52.5803993Z ok 1 - UTV2-1018: submitted pick completes promotion eval with no stranded row
+2026-08-01T02:31:52.5804574Z   ---
+2026-08-01T02:31:52.5804792Z   duration_ms: 7381.913808
+2026-08-01T02:31:52.5805038Z   type: 'test'
+2026-08-01T02:31:52.5805244Z   ...
+2026-08-01T02:31:52.6396974Z # {"timestamp":"2026-08-01T02:31:52.634Z","level":"warn","service":"api","message":"stranded-picks-detected","component":"stranded-pick-reconciler","count":199,"pickIds":["dd0968ba-c730-49b5-bbf0-aa6e80296d47","f163d544-5340-40cd-afcc-b504a80b6082","80cafe0f-9052-4510-b68d-0c4a1723e38b","9a68febc-4604-42ac-bfa0-411e20ad895d","de352ef9-ace3-4a79-a54b-0d915ea10ab5","1660b92f-fde8-406b-be0b-99b2631de096","bf6fd5fe-3678-4c86-b09c-4efe765068b4","243fae5b-c9db-433b-b337-f7bae17eb178","373185b9-13a3-4fba-84ec-7f8eebe59c0c","e2400637-b7e4-4b01-bb36-f3a2ba100544","f16789c4-7f8f-448e-8e15-2413fa67a91e","24f9d4df-13f6-41ed-a316-27d08d42e022","74cf6d7f-817f-4e48-916d-df299890e160","0423ca7f-fdbc-43c2-84ef-eb857324930d","2f300004-f69d-40b2-bc12-4d0d0f08de9e","70977424-235b-4085-83a0-b6309bda8108","17130bd3-15d6-428e-a26b-2a10a8b16cba","ff52668f-1de9-4beb-a18f-0479eb8cc057","9c04f40c-0c3d-416a-8c58-50914bc3770c","11067149-8eec-4b58-a509-0d662cc7af95","2c397765-8589-46c7-8375-24297d163aa4","c2ec6e58-4040-4f24-88a5-8fc259607e58","d382fae0-20a8-44df-9e7d-eb141a243a69","24d53f0e-bcc0-48dc-820c-5397be18bab9","9ed1e4c0-efdd-43b2-805b-f4baaaa8ced0","e1020a85-85a7-420a-a37c-a79b7366ebcd","01e1da8e-92af-4729-a404-5da9526cf0f6","37d8b7c2-3bc5-4785-9d7d-1f20ca3cf56f","05e2d299-dd16-45e6-b597-76c45970f0b0","697d442f-879c-4f02-b5e1-f4cc88c97fba","bd504542-755a-4439-87be-b86263701d1c","698de273-1d3c-43e9-9fae-c9e7fa858381","cdac6b05-1d87-4da5-8f9a-8327deb7fa7d","25762c15-9ad8-478b-83be-b4e1c5dcc5fa","4fc57399-5dda-4cf7-99f2-ab9c33fbde47","47fb5075-8920-4e03-9f48-e0d3e053f657","7aabb33e-1fb2-4acb-a5b5-594022451db4","d6639684-b942-48d7-a8c0-165648b27490","e68cdb5b-a843-4651-b659-d00e08adf659","fd367c41-e288-45a9-8876-d8d7b93ff34e","4ae01413-acc2-406b-a1e4-df3782170e76","b98516b4-4cb2-4b43-9ee3-8f2331ddf5c8","b7f1ba91-a8f9-4098-ad88-7b2a7761b418","78cffde2-ef1c-411b-8ae4-22a5df5129f0","3b1f0829-74ea-419a-b6e6-632dccf1c979","1a3dc065-8647-4f44-a1e1-caecb4dd6fad","773c0adb-5075-4b91-a992-05bab8fca71a","5e9783d5-6bd5-47d0-baec-1b468a72992d","c4b6d476-c501-4cc8-bff6-f11c28f4b157","9e130806-9ce8-47b9-83ce-60f4f11be239","6889a066-0a89-4f2d-b0b6-bc53a94004d5","e2293d89-702b-4ade-ace5-1f8768268a14","716dcaa7-7eda-45b6-9d61-b2897587312c","4fdce370-39d3-435f-81cc-8bc99cab50c0","6260c6a1-a378-4519-923a-8674bd133d13","a7717090-bb77-4a56-a421-b4a1d47b9c2d","39d5431d-5c9f-4d39-b76c-d02fd73a4989","4ae91bdc-1bb7-4025-b02a-0bc5d4c1f4df","58f22017-eeb5-4d69-a8a6-31027a6feb6f","f1b1c58a-f9df-496d-9b65-9c51dd700d25","c87baaa2-5d3b-4cc9-badb-373c406c87a0","69636b5b-c873-420d-915a-4678e7542631","c17bacb0-7e20-4864-8c08-88fe3ecf2403","99ddc3af-f56d-4991-8eff-7c1ef0851da6","6f449f59-0c3a-4a07-bd8e-6e94cb301ef3","148322ba-b2eb-4943-babf-dd184e56ddfa","38ad4f46-9445-495b-ad2d-08dd2bd41fac","d136c9bf-af66-464f-afe5-d09062149d52","f1101d6e-3a0e-4aaf-8c1d-8eaad9f2b135","e44dc187-f223-4435-be6c-5c4a6a919762","0477c2fa-923d-4059-86d2-ff13a872f544","13e045a3-6e67-4d59-9175-c6aa4cc79acb","1c8b59c1-a82d-4baf-827f-7b91f75f63bb","9b4f722b-51e9-468a-9183-90c639101083","351fd1c5-f90e-4b0b-a446-3573695589dc","dee455e2-b79b-490f-b5e7-fef67b5f089f","08db95cb-1618-450f-96fa-82c97819b391","9fce6812-ee0c-4f66-8d51-7a8f6cf8fa91","ed180af4-1a57-407b-8204-aa4e2ed480db","ff153166-4b58-4471-b378-acf06c5ccf62","fc2d3873-bd75-4d59-a650-8cc2802bae6b","fe00349c-552d-474f-8526-989c0ecc81cb","253a9f52-2852-4689-8f69-122c923bf74f","5c58cd3f-6f45-4774-ae63-0a3b97189028","79442b83-4a62-4322-9326-ba216eb0ea34","ec469c7c-f4e3-432b-96c5-e4713d707764","37ba298a-50c5-441b-b1a9-d742a3038157","88e8d697-f99a-4f8f-860e-0edbd8d58e78","0d3377bc-8192-4258-8d4a-08801c0e4d6d","c960dde0-c87a-4901-bca2-a4cfae073d3e","de4bbdb7-26ae-494e-a51f-25a8222f4b1d","7ffa87da-ec46-4f88-82b8-e26ff8d00b21","b70ab97c-12b2-4706-a279-32e5325b2425","1e41a57b-10a2-459b-9967-9b7f8fbe91ca","5e289703-9683-4695-ab1d-363db68420a4","cc24e54a-f8ec-474c-b2f5-1f01945f91f6","caf33986-8ef0-4124-aeb1-841fb2144039","42e71f7e-2784-418f-ac3c-1926fb5d392c","03e7ec1e-ec7f-4585-9adf-89cdf93c1963","7e436d44-bf54-4de8-91a0-67b5bf9b0990","001f3aa8-db2b-458f-8965-442a12cf0fc9","90d7516c-1b45-4b19-8f86-bffe65e9d3ec","1b3549f5-2c29-4f3f-8a27-541b173311ae","03c894c2-a344-4b1e-9f89-2d307cfef1c2","4197df14-6b90-4566-a8b4-62ad4d380454","a18f93de-3b42-4e88-a2db-3a0fd6fa0098","b0f5cd84-d7fa-4267-904a-0a3a6e74ccbf","85fa215a-e99b-4b88-b172-c536ab43c758","ae88bd7d-a742-4b76-ab11-574bcc3b16d1","c332b851-f808-439d-ae53-3c50a0143370","81fe67e7-302b-44e7-b664-f742d9f649f0","bc3932cc-f75d-4702-973c-ec73c67c7227","008a6a64-01d7-4ce1-8720-bf42e0b1d7d5","dd099864-7aff-45b8-86bb-35bb2d06efb0","cf13db04-b56d-47e6-96b8-364ef67f7f01","94a76e4f-ad40-4498-b28f-9fd6f3366c4b","6e9da943-a81c-434f-bce7-879643fb8b02","91857fbb-748b-4cc9-9d66-b7d940ea0f67","d3e13184-24f8-4845-879b-b9119d6ca601","1d80292b-44d7-4a4c-819c-9abb018c5d55","a59a6b37-9dc0-4f26-bcc6-af53a7af9c29","318a7e38-fb58-4c8b-a07d-d058a5fa3689","bcd2506a-ebc9-48ae-ba01-f0ed0271db0e","ad5700a0-4f61-4b5c-abc8-4eae6d0623c3","882fc82a-2275-41c4-a2ee-2161b3614342","d8d8f425-976b-46c1-bd9d-932c7500259e","1faadc34-7667-4ae1-85ce-90ad1f410429","31cc6801-bfff-4f66-9cf9-11a0e15e9ade","63b4b514-c2b4-4fa1-86e4-4c9b788ce659","16eb8951-e9fe-4905-bf5b-4d2be40e6b1c","fa44e9ed-5c69-4bb0-a58c-6c59a3d2dbd5","abb80e86-f8dc-444f-9cf0-c896f3a42a17","da59dc15-c861-4be6-8750-a2949f46f23c","e784c330-2e5b-48e4-8806-8b294d00c824","24a59114-0bde-42a2-9498-0ea74035016f","881c5fcd-121f-480a-b0ef-dd706bc0c439","dfa8f196-4766-47bf-a39e-5f38e8d3798e","601134fa-aeab-420d-b1fb-8311abdb18a3","b19956a1-6b78-4d8f-98a7-537df1d4d790","f3e7f2a2-5bdb-4231-9bb4-411faaebb049","c31b34f4-d6c6-4007-b574-a75f2f3e61e7","5ba0dbdf-cfd3-4b0b-9c1e-901a01196f89","ba7ed146-4899-4a51-8b7a-2132ce2c51ee","0d372d90-3ce9-473d-b0d1-07207dc4651a","53354782-5f8d-4b74-b45a-02ea79bd384f","a2324f56-9394-4fa9-b59e-b6072df9ab03","68e51664-0525-41d3-9220-541c87855f6e","a5a3a808-fcda-489a-ac81-5441ccb3754b","f0868b63-fa40-427f-8ad0-82feac81bcce","86e44463-ceda-4f66-8c8b-32f06154fa1e","a6890783-359d-48ad-908e-743a3a26c73c","127c34f9-8593-4f7a-ba2c-73eddcdfc04e","c5b21b5a-2774-4887-9136-fc0e249f0acd","5189e2a4-fbbd-432f-9626-271f3838aaa0","578d1550-e31a-4ba5-a74e-19ee944bae00","0b39e74b-f9d5-4058-aa36-84034195d65a","13e7dd8d-f292-4ff9-80e7-8d88b020e3e6","3fd9d75a-3ee0-4273-bd56-26f9d89af2bc","9738733a-2e1d-4d17-94e6-af16a8a35e69","be2d6685-b9e0-4d44-baeb-914a7caebd53","5fb7f8c3-3b78-484e-94ec-46a18328f6fe","46ebd98c-f383-46a3-af01-9ae34395785e","73798438-2e83-4cf0-a4e3-b5175379e512","567d1f1d-68de-4ae2-812e-f8235c88b1e1","a56f3b9f-166c-4ecf-9a76-06b021747625","b3756675-c9d0-450b-9bd2-656503ab095a","d1c03f07-7f06-45f3-b769-172ec76da6b8","43d11bfc-434d-4be8-942a-a3a6ba43d31b","50bdff31-2a11-459b-b5e9-a84af6375f88","1e7bfaaa-f281-4cab-9852-0d69746c7f25","d8e8e45b-1550-4fad-8190-8147a59e96b6","5602069a-2dfc-453d-b384-bae6bc3a2929","4ab5759c-9753-4017-bfbf-f353236f39a1","5940631c-7ace-48dc-aece-7120b820883d","cc1ebdf7-1705-404b-aa35-82d07c366be1","ea69fee6-6298-4802-9560-781375e23ffb","8d053d3d-e5d9-4899-8e19-1a853267b165","541d99ec-2866-4ab9-bf09-5c11bf0c3fec","83e3eaa1-1c2d-4ce0-bbb3-6f88af40e242","e2a3f367-376e-4fd8-9497-cb40c157032c","a4b5a4f5-c9a9-470b-a8e0-ce33c8a62031","c4c94af2-bee5-4561-89a5-cd0a1fd65d3b","fbf7e022-478e-4d1e-a637-e1401533e54c","10db59d0-3fc4-4ff5-a1b3-07b95d59b207","1f7947ff-ae65-4157-9316-70213824a375","fe3001e9-06ff-4a13-a2cb-94e9c605020c","e343c90a-ae1f-4e87-88a1-e2434c0855e7","e7296fb9-d323-4f92-b59d-51e6c1fff6d9","86eb38b0-fd44-4c81-832e-6fc8b3b377a9","3becb217-74e4-4a69-a645-6b62b0d42775","daee1980-0730-4c91-9f16-964724cfae57","a02fd0d4-1611-4b23-baab-611a0e88e893","c09151ab-565e-4ab1-94ec-122c21384af4","e176125b-f303-4ee1-9a7e-c60bc05b57b2","25a7f8de-ba85-4c4d-9cc4-0600b80ebb39","e0ec00d4-d9d4-433d-93b6-3d73b6f361a2","1b88acd3-bf5a-4f96-bd91-e2ad45fada2c","7fa39e8f-a359-4005-bf86-fb3e63f6a9d7","6f2208b4-3e00-4614-a127-b70c40a6703a"]}
+2026-08-01T02:31:52.6424939Z # Subtest: UTV2-1018: detectStrandedPicks returns PickRecord array with correct shape
+2026-08-01T02:31:52.6425831Z ok 2 - UTV2-1018: detectStrandedPicks returns PickRecord array with correct shape
+2026-08-01T02:31:52.6426249Z   ---
+2026-08-01T02:31:52.6426576Z   duration_ms: 62.060496
+2026-08-01T02:31:52.6426817Z   type: 'test'
+2026-08-01T02:31:52.6427014Z   ...
+2026-08-01T02:31:59.8092823Z # Subtest: UTV2-1018: auditStrandedPicks writes audit records for detected stranded picks
+2026-08-01T02:31:59.8094450Z ok 3 - UTV2-1018: auditStrandedPicks writes audit records for detected stranded picks
+2026-08-01T02:31:59.8095018Z   ---
+2026-08-01T02:31:59.8095278Z   duration_ms: 7173.015292
+2026-08-01T02:31:59.8095575Z   type: 'test'
+2026-08-01T02:31:59.8095823Z   ...
+2026-08-01T02:31:59.8563062Z # Subtest: UTV2-1018: picks table has promotion_target column (schema invariant)
+2026-08-01T02:31:59.8564854Z ok 4 - UTV2-1018: picks table has promotion_target column (schema invariant)
+2026-08-01T02:31:59.8566036Z   ---
+2026-08-01T02:31:59.8566713Z   duration_ms: 47.591182
+2026-08-01T02:31:59.8567172Z   type: 'test'
+2026-08-01T02:31:59.8567553Z   ...
+2026-08-01T02:31:59.8732289Z 1..4
+2026-08-01T02:31:59.8732679Z # tests 4
+2026-08-01T02:31:59.8733021Z # suites 0
+2026-08-01T02:31:59.8733428Z # pass 4
+2026-08-01T02:31:59.8734024Z # fail 0
+2026-08-01T02:31:59.8734816Z # cancelled 0
+2026-08-01T02:31:59.8754199Z # skipped 0
+2026-08-01T02:31:59.8754815Z # todo 0
+2026-08-01T02:31:59.8755631Z # duration_ms 15127.248807
+2026-08-01T02:32:00.0182992Z TAP version 13
+2026-08-01T02:32:00.5487586Z # Subtest: T1 proof — INSERT raw_payloads row succeeds with correct hash
+2026-08-01T02:32:00.5498625Z ok 1 - T1 proof — INSERT raw_payloads row succeeds with correct hash
+2026-08-01T02:32:00.5499873Z   ---
+2026-08-01T02:32:00.5500289Z   duration_ms: 190.409121
+2026-08-01T02:32:00.5500785Z   type: 'test'
+2026-08-01T02:32:00.5501123Z   ...
+2026-08-01T02:32:00.6066465Z # Subtest: T1 proof — UPDATE blocked by immutability trigger
+2026-08-01T02:32:00.6068596Z ok 2 - T1 proof — UPDATE blocked by immutability trigger
+2026-08-01T02:32:00.6070216Z   ---
+2026-08-01T02:32:00.6070568Z   duration_ms: 58.824066
+2026-08-01T02:32:00.6070879Z   type: 'test'
+2026-08-01T02:32:00.6071117Z   ...
+2026-08-01T02:32:00.6625273Z # Subtest: T1 proof — DELETE blocked by immutability trigger
+2026-08-01T02:32:00.6629670Z ok 3 - T1 proof — DELETE blocked by immutability trigger
+2026-08-01T02:32:00.6630417Z   ---
+2026-08-01T02:32:00.6630824Z   duration_ms: 57.135015
+2026-08-01T02:32:00.6631314Z   type: 'test'
+2026-08-01T02:32:00.6631719Z   ...
+2026-08-01T02:32:00.6792089Z 1..3
+2026-08-01T02:32:00.6792491Z # tests 3
+2026-08-01T02:32:00.6792860Z # suites 0
+2026-08-01T02:32:00.6793222Z # pass 3
+2026-08-01T02:32:00.6793744Z # fail 0
+2026-08-01T02:32:00.6794265Z # cancelled 0
+2026-08-01T02:32:00.6794796Z # skipped 0
+2026-08-01T02:32:00.6795235Z # todo 0
+2026-08-01T02:32:00.6795771Z # duration_ms 674.954841
+2026-08-01T02:32:00.8269750Z TAP version 13
+2026-08-01T02:32:01.3641258Z # Subtest: artifact_sha is stored on create and retrieved from live DB
+2026-08-01T02:32:01.3653099Z ok 1 - artifact_sha is stored on create and retrieved from live DB
+2026-08-01T02:32:01.3653791Z   ---
+2026-08-01T02:32:01.3654146Z   duration_ms: 199.782946
+2026-08-01T02:32:01.3654587Z   type: 'test'
+2026-08-01T02:32:01.3654931Z   ...
+2026-08-01T02:32:01.4247753Z # Subtest: artifact_sha defaults to null when not provided on create
+2026-08-01T02:32:01.4249703Z ok 2 - artifact_sha defaults to null when not provided on create
+2026-08-01T02:32:01.4251421Z   ---
+2026-08-01T02:32:01.4251797Z   duration_ms: 61.564828
+2026-08-01T02:32:01.4252207Z   type: 'test'
+2026-08-01T02:32:01.4252464Z   ...
+2026-08-01T02:32:01.6744164Z # Subtest: updateStatus preserves artifact_sha (fail-closed guard)
+2026-08-01T02:32:01.6759324Z ok 3 - updateStatus preserves artifact_sha (fail-closed guard)
+2026-08-01T02:32:01.6760243Z   ---
+2026-08-01T02:32:01.6760631Z   duration_ms: 251.024645
+2026-08-01T02:32:01.6761248Z   type: 'test'
+2026-08-01T02:32:01.6761887Z   ...
+2026-08-01T02:32:01.6923247Z 1..3
+2026-08-01T02:32:01.6923706Z # tests 3
+2026-08-01T02:32:01.6924089Z # suites 0
+2026-08-01T02:32:01.6924473Z # pass 3
+2026-08-01T02:32:01.6924830Z # fail 0
+2026-08-01T02:32:01.6925739Z # cancelled 0
+2026-08-01T02:32:01.6926461Z # skipped 0
+2026-08-01T02:32:01.6927190Z # todo 0
+2026-08-01T02:32:01.6927616Z # duration_ms 879.434057
+2026-08-01T02:32:01.8405521Z TAP version 13
+2026-08-01T02:32:02.4816346Z # Subtest: UTV2-1107: draft → validated is allowed by FSM trigger
+2026-08-01T02:32:02.4821376Z ok 1 - UTV2-1107: draft → validated is allowed by FSM trigger
+2026-08-01T02:32:02.4822010Z   ---
+2026-08-01T02:32:02.4822392Z   duration_ms: 282.987462
+2026-08-01T02:32:02.4822706Z   type: 'test'
+2026-08-01T02:32:02.4822961Z   ...
+2026-08-01T02:32:02.7190121Z # Subtest: UTV2-1107: validated → queued is allowed by FSM trigger
+2026-08-01T02:32:02.7200183Z ok 2 - UTV2-1107: validated → queued is allowed by FSM trigger
+2026-08-01T02:32:02.7201186Z   ---
+2026-08-01T02:32:02.7201878Z   duration_ms: 236.935573
+2026-08-01T02:32:02.7202323Z   type: 'test'
+2026-08-01T02:32:02.7202666Z   ...
+2026-08-01T02:32:02.9278678Z # Subtest: UTV2-1107: validated → awaiting_approval is allowed by FSM trigger
+2026-08-01T02:32:02.9280626Z ok 3 - UTV2-1107: validated → awaiting_approval is allowed by FSM trigger
+2026-08-01T02:32:02.9281579Z   ---
+2026-08-01T02:32:02.9281843Z   duration_ms: 210.635205
+2026-08-01T02:32:02.9282104Z   type: 'test'
+2026-08-01T02:32:02.9282330Z   ...
+2026-08-01T02:32:03.2454631Z # Subtest: UTV2-1107: awaiting_approval → queued is allowed by FSM trigger
+2026-08-01T02:32:03.2455858Z ok 4 - UTV2-1107: awaiting_approval → queued is allowed by FSM trigger
+2026-08-01T02:32:03.2456435Z   ---
+2026-08-01T02:32:03.2456908Z   duration_ms: 316.841122
+2026-08-01T02:32:03.2457436Z   type: 'test'
+2026-08-01T02:32:03.2457859Z   ...
+2026-08-01T02:32:03.5079669Z # Subtest: UTV2-1107: queued → posted is allowed by FSM trigger
+2026-08-01T02:32:03.5080806Z ok 5 - UTV2-1107: queued → posted is allowed by FSM trigger
+2026-08-01T02:32:03.5081395Z   ---
+2026-08-01T02:32:03.5081731Z   duration_ms: 263.137305
+2026-08-01T02:32:03.5082158Z   type: 'test'
+2026-08-01T02:32:03.5082456Z   ...
+2026-08-01T02:32:03.8072121Z # Subtest: UTV2-1107: posted → settled is allowed by FSM trigger
+2026-08-01T02:32:03.8073135Z ok 6 - UTV2-1107: posted → settled is allowed by FSM trigger
+2026-08-01T02:32:03.8073634Z   ---
+2026-08-01T02:32:03.8073889Z   duration_ms: 299.30628
+2026-08-01T02:32:03.8074176Z   type: 'test'
+2026-08-01T02:32:03.8074417Z   ...
+2026-08-01T02:32:03.9610224Z # Subtest: UTV2-1107: draft → settled REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:03.9611620Z ok 7 - UTV2-1107: draft → settled REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:03.9612298Z   ---
+2026-08-01T02:32:03.9612584Z   duration_ms: 153.716126
+2026-08-01T02:32:03.9612897Z   type: 'test'
+2026-08-01T02:32:03.9613158Z   ...
+2026-08-01T02:32:04.1209400Z # Subtest: UTV2-1107: draft → posted REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:04.1210620Z ok 8 - UTV2-1107: draft → posted REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:04.1211209Z   ---
+2026-08-01T02:32:04.1211499Z   duration_ms: 159.779669
+2026-08-01T02:32:04.1211807Z   type: 'test'
+2026-08-01T02:32:04.1212070Z   ...
+2026-08-01T02:32:04.3585429Z # Subtest: UTV2-1107: validated → settled REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:04.3587280Z ok 9 - UTV2-1107: validated → settled REJECTED (skip-transition via direct service-role UPDATE)
+2026-08-01T02:32:04.3587926Z   ---
+2026-08-01T02:32:04.3588456Z   duration_ms: 237.289309
+2026-08-01T02:32:04.3588787Z   type: 'test'
+2026-08-01T02:32:04.3589053Z   ...
+2026-08-01T02:32:04.9262053Z # Subtest: UTV2-1107: settled is terminal — all further transitions REJECTED
+2026-08-01T02:32:04.9263021Z ok 10 - UTV2-1107: settled is terminal — all further transitions REJECTED
+2026-08-01T02:32:04.9263517Z   ---
+2026-08-01T02:32:04.9264255Z   duration_ms: 567.875552
+2026-08-01T02:32:04.9264560Z   type: 'test'
+2026-08-01T02:32:04.9264822Z   ...
+2026-08-01T02:32:05.3630256Z # Subtest: UTV2-1107: voided is terminal — all further transitions REJECTED
+2026-08-01T02:32:05.3634006Z ok 11 - UTV2-1107: voided is terminal — all further transitions REJECTED
+2026-08-01T02:32:05.3634510Z   ---
+2026-08-01T02:32:05.3634737Z   duration_ms: 436.371324
+2026-08-01T02:32:05.3634997Z   type: 'test'
+2026-08-01T02:32:05.3635203Z   ...
+2026-08-01T02:32:05.5175345Z # Subtest: UTV2-1107: draft → voided is allowed by FSM trigger
+2026-08-01T02:32:05.5176622Z ok 12 - UTV2-1107: draft → voided is allowed by FSM trigger
+2026-08-01T02:32:05.5177170Z   ---
+2026-08-01T02:32:05.5177455Z   duration_ms: 154.608753
+2026-08-01T02:32:05.5177768Z   type: 'test'
+2026-08-01T02:32:05.5178038Z   ...
+2026-08-01T02:32:05.7937732Z # Subtest: UTV2-1107: queued → voided is allowed by FSM trigger
+2026-08-01T02:32:05.7939114Z ok 13 - UTV2-1107: queued → voided is allowed by FSM trigger
+2026-08-01T02:32:05.7939699Z   ---
+2026-08-01T02:32:05.7939974Z   duration_ms: 276.881311
+2026-08-01T02:32:05.7940287Z   type: 'test'
+2026-08-01T02:32:05.7940555Z   ...
+2026-08-01T02:32:05.8129103Z 1..13
+2026-08-01T02:32:05.8129586Z # tests 13
+2026-08-01T02:32:05.8129968Z # suites 0
+2026-08-01T02:32:05.8130316Z # pass 13
+2026-08-01T02:32:05.8130651Z # fail 0
+2026-08-01T02:32:05.8131038Z # cancelled 0
+2026-08-01T02:32:05.8131608Z # skipped 0
+2026-08-01T02:32:05.8132691Z # todo 0
+2026-08-01T02:32:05.8133273Z # duration_ms 3986.827958
+2026-08-01T02:32:05.9659865Z TAP version 13
+2026-08-01T02:32:06.3219815Z # Subtest: UTV2-1132: execution_intents table exists and INSERT works
+2026-08-01T02:32:06.3229461Z ok 1 - UTV2-1132: execution_intents table exists and INSERT works
+2026-08-01T02:32:06.3230352Z   ---
+2026-08-01T02:32:06.3230955Z   duration_ms: 127.695084
+2026-08-01T02:32:06.3231653Z   type: 'test'
+2026-08-01T02:32:06.3232029Z   ...
+2026-08-01T02:32:06.4360043Z # Subtest: UTV2-1132: immutability trigger rejects UPDATE
+2026-08-01T02:32:06.4362387Z ok 2 - UTV2-1132: immutability trigger rejects UPDATE
+2026-08-01T02:32:06.4366886Z   ---
+2026-08-01T02:32:06.4367286Z   duration_ms: 113.72699
+2026-08-01T02:32:06.4367735Z   type: 'test'
+2026-08-01T02:32:06.4368412Z   ...
+2026-08-01T02:32:06.5684646Z # Subtest: UTV2-1132: immutability trigger rejects DELETE
+2026-08-01T02:32:06.5687516Z ok 3 - UTV2-1132: immutability trigger rejects DELETE
+2026-08-01T02:32:06.5688419Z   ---
+2026-08-01T02:32:06.5688835Z   duration_ms: 133.548525
+2026-08-01T02:32:06.5689326Z   type: 'test'
+2026-08-01T02:32:06.5689731Z   ...
+2026-08-01T02:32:06.7036980Z # Subtest: UTV2-1132: idempotency_key unique index prevents duplicate re-confirm
+2026-08-01T02:32:06.7038570Z ok 4 - UTV2-1132: idempotency_key unique index prevents duplicate re-confirm
+2026-08-01T02:32:06.7039275Z   ---
+2026-08-01T02:32:06.7039768Z   duration_ms: 135.020206
+2026-08-01T02:32:06.7040259Z   type: 'test'
+2026-08-01T02:32:06.7040670Z   ...
+2026-08-01T02:32:06.8034040Z # Subtest: UTV2-1132: predecessor_id chain persists correctly
+2026-08-01T02:32:06.8035187Z ok 5 - UTV2-1132: predecessor_id chain persists correctly
+2026-08-01T02:32:06.8035884Z   ---
+2026-08-01T02:32:06.8036312Z   duration_ms: 99.484709
+2026-08-01T02:32:06.8036831Z   type: 'test'
+2026-08-01T02:32:06.8037248Z   ...
+2026-08-01T02:32:06.8583183Z # Subtest: UTV2-1132: inputs_hash CHECK rejects non-hex hash
+2026-08-01T02:32:06.8586424Z ok 6 - UTV2-1132: inputs_hash CHECK rejects non-hex hash
+2026-08-01T02:32:06.8587183Z   ---
+2026-08-01T02:32:06.8587637Z   duration_ms: 55.410484
+2026-08-01T02:32:06.8588383Z   type: 'test'
+2026-08-01T02:32:06.8588841Z   ...
+2026-08-01T02:32:06.9066192Z # Subtest: UTV2-1132: status CHECK rejects invalid status value
+2026-08-01T02:32:06.9068006Z ok 7 - UTV2-1132: status CHECK rejects invalid status value
+2026-08-01T02:32:06.9069045Z   ---
+2026-08-01T02:32:06.9069520Z   duration_ms: 48.554802
+2026-08-01T02:32:06.9070023Z   type: 'test'
+2026-08-01T02:32:06.9070454Z   ...
+2026-08-01T02:32:06.9219023Z 1..7
+2026-08-01T02:32:06.9219440Z # tests 7
+2026-08-01T02:32:06.9219806Z # suites 0
+2026-08-01T02:32:06.9220176Z # pass 7
+2026-08-01T02:32:06.9220531Z # fail 0
+2026-08-01T02:32:06.9220976Z # cancelled 0
+2026-08-01T02:32:06.9221798Z # skipped 0
+2026-08-01T02:32:06.9222212Z # todo 0
+2026-08-01T02:32:06.9222616Z # duration_ms 969.749987
+2026-08-01T02:32:07.0725489Z TAP version 13
+2026-08-01T02:32:07.6779916Z # Subtest: UTV2-1136: settlement INSERT succeeds (baseline)
+2026-08-01T02:32:07.6786502Z ok 1 - UTV2-1136: settlement INSERT succeeds (baseline)
+2026-08-01T02:32:07.6786993Z   ---
+2026-08-01T02:32:07.6787221Z   duration_ms: 240.027697
+2026-08-01T02:32:07.6787468Z   type: 'test'
+2026-08-01T02:32:07.6787685Z   ...
+2026-08-01T02:32:07.9086668Z # Subtest: UTV2-1136: UPDATE on settlement_records is rejected by immutability trigger
+2026-08-01T02:32:07.9089442Z ok 2 - UTV2-1136: UPDATE on settlement_records is rejected by immutability trigger
+2026-08-01T02:32:07.9090521Z   ---
+2026-08-01T02:32:07.9090985Z   duration_ms: 231.238085
+2026-08-01T02:32:07.9091390Z   type: 'test'
+2026-08-01T02:32:07.9091617Z   ...
+2026-08-01T02:32:08.1724810Z # Subtest: UTV2-1136: DELETE on settlement_records is rejected by immutability trigger
+2026-08-01T02:32:08.1726489Z ok 3 - UTV2-1136: DELETE on settlement_records is rejected by immutability trigger
+2026-08-01T02:32:08.1727572Z   ---
+2026-08-01T02:32:08.1727932Z   duration_ms: 264.159049
+2026-08-01T02:32:08.1728601Z   type: 'test'
+2026-08-01T02:32:08.1728874Z   ...
+2026-08-01T02:32:08.4591701Z # Subtest: UTV2-1136: correction INSERT (with corrects_id) succeeds — append-only path intact
+2026-08-01T02:32:08.4593451Z ok 4 - UTV2-1136: correction INSERT (with corrects_id) succeeds — append-only path intact
+2026-08-01T02:32:08.4594310Z   ---
+2026-08-01T02:32:08.4594717Z   duration_ms: 287.376113
+2026-08-01T02:32:08.4595177Z   type: 'test'
+2026-08-01T02:32:08.4595564Z   ...
+2026-08-01T02:32:08.4777818Z 1..4
+2026-08-01T02:32:08.4779241Z # tests 4
+2026-08-01T02:32:08.4779641Z # suites 0
+2026-08-01T02:32:08.4780018Z # pass 4
+2026-08-01T02:32:08.4780343Z # fail 0
+2026-08-01T02:32:08.4780674Z # cancelled 0
+2026-08-01T02:32:08.4781029Z # skipped 0
+2026-08-01T02:32:08.4781351Z # todo 0
+2026-08-01T02:32:08.4781743Z # duration_ms 1419.390256
+2026-08-01T02:32:08.6242466Z TAP version 13
+2026-08-01T02:32:09.4122261Z # Subtest: T1 Proof 1 — attempted UPDATE on settlement_records rejected
+2026-08-01T02:32:09.4129995Z ok 1 - T1 Proof 1 — attempted UPDATE on settlement_records rejected
+2026-08-01T02:32:09.4130719Z   ---
+2026-08-01T02:32:09.4131560Z   duration_ms: 342.833814
+2026-08-01T02:32:09.4132177Z   type: 'test'
+2026-08-01T02:32:09.4132421Z   ...
+2026-08-01T02:32:09.7166683Z # Subtest: T1 Proof 2 — single-approver correction rejected by DB constraint
+2026-08-01T02:32:09.7169832Z ok 2 - T1 Proof 2 — single-approver correction rejected by DB constraint
+2026-08-01T02:32:09.7170649Z   ---
+2026-08-01T02:32:09.7171010Z   duration_ms: 304.99471
+2026-08-01T02:32:09.7171411Z   type: 'test'
+2026-08-01T02:32:09.7171709Z   ...
+2026-08-01T02:32:10.0275230Z # Subtest: T1 Proof 3 — dual-authorized correction creates settlement_corrections record
+2026-08-01T02:32:10.0279143Z ok 3 - T1 Proof 3 — dual-authorized correction creates settlement_corrections record
+2026-08-01T02:32:10.0280099Z   ---
+2026-08-01T02:32:10.0280457Z   duration_ms: 311.066715
+2026-08-01T02:32:10.0280805Z   type: 'test'
+2026-08-01T02:32:10.0281056Z   ...
+2026-08-01T02:32:10.3855583Z # Subtest: T1 Proof 4 — PnL reproduces through correction chain
+2026-08-01T02:32:10.3857159Z ok 4 - T1 Proof 4 — PnL reproduces through correction chain
+2026-08-01T02:32:10.3858619Z   ---
+2026-08-01T02:32:10.3859380Z   duration_ms: 358.555509
+2026-08-01T02:32:10.3860053Z   type: 'test'
+2026-08-01T02:32:10.3860594Z   ...
+2026-08-01T02:32:10.4035520Z 1..4
+2026-08-01T02:32:10.4035905Z # tests 4
+2026-08-01T02:32:10.4036217Z # suites 0
+2026-08-01T02:32:10.4036607Z # pass 4
+2026-08-01T02:32:10.4037024Z # fail 0
+2026-08-01T02:32:10.4037532Z # cancelled 0
+2026-08-01T02:32:10.4038583Z # skipped 0
+2026-08-01T02:32:10.4039146Z # todo 0
+2026-08-01T02:32:10.4039644Z # duration_ms 1793.463875
+2026-08-01T02:32:10.5465833Z TAP version 13
+2026-08-01T02:32:10.9844051Z # Subtest: findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)
+2026-08-01T02:32:10.9851303Z ok 1 - findExistingCombinations is bounded by the snapshot window and completes fast on live partitioned history (UTV2-1282)
+2026-08-01T02:32:10.9852785Z   ---
+2026-08-01T02:32:10.9853572Z   duration_ms: 112.83324
+2026-08-01T02:32:10.9854221Z   type: 'test'
+2026-08-01T02:32:10.9854579Z   ...
+2026-08-01T02:32:10.9859214Z # Subtest: UTV2-1459: isSnapshotWithinLookback is true when the snapshot is inside the window
+2026-08-01T02:32:10.9861965Z ok 2 - UTV2-1459: isSnapshotWithinLookback is true when the snapshot is inside the window
+2026-08-01T02:32:10.9863067Z   ---
+2026-08-01T02:32:10.9863432Z   duration_ms: 0.661212
+2026-08-01T02:32:10.9863832Z   type: 'test'
+2026-08-01T02:32:10.9864202Z   ...
+2026-08-01T02:32:10.9865645Z # Subtest: UTV2-1459: isSnapshotWithinLookback is false when the snapshot is older than the window (stale-data condition)
+2026-08-01T02:32:10.9869335Z ok 3 - UTV2-1459: isSnapshotWithinLookback is false when the snapshot is older than the window (stale-data condition)
+2026-08-01T02:32:10.9870301Z   ---
+2026-08-01T02:32:10.9870645Z   duration_ms: 0.157085
+2026-08-01T02:32:10.9871029Z   type: 'test'
+2026-08-01T02:32:10.9871370Z   ...
+2026-08-01T02:32:10.9872150Z # Subtest: UTV2-1459: isSnapshotWithinLookback is false for null or unparseable input
+2026-08-01T02:32:10.9873340Z ok 4 - UTV2-1459: isSnapshotWithinLookback is false for null or unparseable input
+2026-08-01T02:32:10.9874095Z   ---
+2026-08-01T02:32:10.9874462Z   duration_ms: 0.141236
+2026-08-01T02:32:10.9874853Z   type: 'test'
+2026-08-01T02:32:10.9875199Z   ...
+2026-08-01T02:32:11.0463653Z 1..4
+2026-08-01T02:32:11.0464084Z # tests 4
+2026-08-01T02:32:11.0464461Z # suites 0
+2026-08-01T02:32:11.0464871Z # pass 4
+2026-08-01T02:32:11.0465237Z # fail 0
+2026-08-01T02:32:11.0465590Z # cancelled 0
+2026-08-01T02:32:11.0465983Z # skipped 0
+2026-08-01T02:32:11.0466358Z # todo 0
+2026-08-01T02:32:11.0466922Z # duration_ms 513.86592
+2026-08-01T02:32:11.1932696Z TAP version 13
+2026-08-01T02:32:11.6440200Z # Subtest: UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for picks with odds (DEBT-019)
+2026-08-01T02:32:11.6454558Z ok 1 - UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.edge for picks with odds (DEBT-019)
+2026-08-01T02:32:11.6455513Z   ---
+2026-08-01T02:32:11.6455870Z   duration_ms: 3.581439
+2026-08-01T02:32:11.6456253Z   type: 'test'
+2026-08-01T02:32:11.6456654Z   ...
+2026-08-01T02:32:11.6457426Z # Subtest: UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFraction (DEBT-020)
+2026-08-01T02:32:11.6459187Z ok 2 - UTV2-1327: enrichPickAtPromotionTime populates domainAnalysis.kellyFraction (DEBT-020)
+2026-08-01T02:32:11.6460023Z   ---
+2026-08-01T02:32:11.6460365Z   duration_ms: 0.975984
+2026-08-01T02:32:11.6460783Z   type: 'test'
+2026-08-01T02:32:11.6461115Z   ...
+2026-08-01T02:32:11.6462059Z # Subtest: UTV2-1327: enrichPickAtPromotionTime is idempotent when domainAnalysis already present
+2026-08-01T02:32:11.6473536Z ok 3 - UTV2-1327: enrichPickAtPromotionTime is idempotent when domainAnalysis already present
+2026-08-01T02:32:11.6475325Z   ---
+2026-08-01T02:32:11.6475709Z   duration_ms: 0.24456
+2026-08-01T02:32:11.6475985Z   type: 'test'
+2026-08-01T02:32:11.6476193Z   ...
+2026-08-01T02:32:11.6476723Z # Subtest: UTV2-1327: enrichPickAtPromotionTime returns unchanged pick when odds are absent
+2026-08-01T02:32:11.6477491Z ok 4 - UTV2-1327: enrichPickAtPromotionTime returns unchanged pick when odds are absent
+2026-08-01T02:32:11.6477955Z   ---
+2026-08-01T02:32:11.6478419Z   duration_ms: 0.183485
+2026-08-01T02:32:11.6478680Z   type: 'test'
+2026-08-01T02:32:11.6478882Z   ...
+2026-08-01T02:32:11.7228534Z # Subtest: UTV2-1327 live-DB: picks table is accessible via listByLifecycleStates
+2026-08-01T02:32:11.7231953Z ok 5 - UTV2-1327 live-DB: picks table is accessible via listByLifecycleStates
+2026-08-01T02:32:11.7232934Z   ---
+2026-08-01T02:32:11.7233405Z   duration_ms: 97.688078
+2026-08-01T02:32:11.7234187Z   type: 'test'
+2026-08-01T02:32:11.7234645Z   ...
+2026-08-01T02:32:11.7708683Z # Subtest: UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick schema from DB
+2026-08-01T02:32:11.7710644Z ok 6 - UTV2-1327 live-DB: enrichPickAtPromotionTime is stable against real pick schema from DB
+2026-08-01T02:32:11.7711467Z   ---
+2026-08-01T02:32:11.7711809Z   duration_ms: 49.20917
+2026-08-01T02:32:11.7712196Z   type: 'test'
+2026-08-01T02:32:11.7712539Z   ...
+2026-08-01T02:32:11.7879779Z 1..6
+2026-08-01T02:32:11.7880211Z # tests 6
+2026-08-01T02:32:11.7880500Z # suites 0
+2026-08-01T02:32:11.7880859Z # pass 6
+2026-08-01T02:32:11.7881216Z # fail 0
+2026-08-01T02:32:11.7881890Z # cancelled 0
+2026-08-01T02:32:11.7882402Z # skipped 0
+2026-08-01T02:32:11.7883123Z # todo 0
+2026-08-01T02:32:11.7883767Z # duration_ms 608.852498
+2026-08-01T02:32:11.9370211Z TAP version 13
+2026-08-01T02:32:13.2496452Z # Subtest: [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
+2026-08-01T02:32:13.2503799Z ok 1 - [live-db] concurrent claimNextAtomic calls never double-claim or drop a row
+2026-08-01T02:32:13.2504634Z   ---
+2026-08-01T02:32:13.2505032Z   duration_ms: 976.350401
+2026-08-01T02:32:13.2505494Z   type: 'test'
+2026-08-01T02:32:13.2505849Z   ...
+2026-08-01T02:32:13.2692057Z 1..1
+2026-08-01T02:32:13.2693001Z # tests 1
+2026-08-01T02:32:13.2693755Z # suites 0
+2026-08-01T02:32:13.2694382Z # pass 1
+2026-08-01T02:32:13.2696239Z # fail 0
+2026-08-01T02:32:13.2697023Z # cancelled 0
+2026-08-01T02:32:13.2697850Z # skipped 0
+2026-08-01T02:32:13.2699583Z # todo 0
+2026-08-01T02:32:13.2700191Z # duration_ms 1346.284513
+2026-08-01T02:32:13.2933651Z ##[group]Run rm -f local.env
+2026-08-01T02:32:13.2933984Z [36;1mrm -f local.env[0m
+2026-08-01T02:32:13.2979339Z shell: /usr/bin/bash -e {0}
+2026-08-01T02:32:13.2979633Z env:
+2026-08-01T02:32:13.2979899Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:32:13.2980230Z ##[endgroup]
+2026-08-01T02:32:13.3106411Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:32:13.3107742Z ##[group]Run actions/upload-artifact@v4
+2026-08-01T02:32:13.3108033Z with:
+2026-08-01T02:32:13.3108595Z   name: utv2-1630-db-proof-receipt-30680085299-1
+2026-08-01T02:32:13.3108949Z   path: .out/ci-db-proof-receipt.json
+2026-08-01T02:32:13.3109236Z   if-no-files-found: error
+2026-08-01T02:32:13.3109478Z   retention-days: 30
+2026-08-01T02:32:13.3109712Z   compression-level: 6
+2026-08-01T02:32:13.3109935Z   overwrite: false
+2026-08-01T02:32:13.3110163Z   include-hidden-files: false
+2026-08-01T02:32:13.3110421Z env:
+2026-08-01T02:32:13.3110664Z   PNPM_HOME: /home/runner/setup-pnpm/node_modules/.bin
+2026-08-01T02:32:13.3110985Z ##[endgroup]
+2026-08-01T02:32:13.4845502Z (node:3443) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-01T02:32:13.4846391Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-01T02:32:13.4893357Z With the provided path, there will be 1 file uploaded
+2026-08-01T02:32:13.4907565Z Artifact name is valid!
+2026-08-01T02:32:13.4912404Z Root directory input is valid!
+2026-08-01T02:32:13.8200504Z Beginning upload of artifact content to blob storage
+2026-08-01T02:32:13.8387382Z (node:3443) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-08-01T02:32:14.1365559Z Uploaded bytes 1463
+2026-08-01T02:32:14.2214786Z Finished uploading artifact content to blob storage!
+2026-08-01T02:32:14.2216306Z SHA256 digest of uploaded artifact zip is d6c90d6e2695d23f4e9c69fc63db6b7d075bf0610e6a64c2b2cf7b3077d3dd39
+2026-08-01T02:32:14.2217583Z Finalizing artifact upload
+2026-08-01T02:32:14.4270919Z Artifact utv2-1630-db-proof-receipt-30680085299-1.zip successfully finalized. Artifact ID 8811926669
+2026-08-01T02:32:14.4273091Z Artifact utv2-1630-db-proof-receipt-30680085299-1 has been successfully uploaded! Final size is 1463 bytes. Artifact ID is 8811926669
+2026-08-01T02:32:14.4280025Z Artifact download URL: https://github.com/griff843/Unit-Talk-v2/actions/runs/30680085299/artifacts/8811926669
+2026-08-01T02:32:14.4455642Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:32:14.4456950Z Post job cleanup.
+2026-08-01T02:32:14.5694217Z (node:3455) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-08-01T02:32:14.5695377Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-08-01T02:32:14.5697916Z Cache hit occurred on the primary key node-cache-Linux-x64-pnpm-837c986a0bd0d977cc4749ff7116c540f9408aeaa8dbd6abd72230227bcec31d, not saving cache.
+2026-08-01T02:32:14.5810112Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:32:14.5811518Z Post job cleanup.
+2026-08-01T02:32:14.7342738Z Pruning is unnecessary.
+2026-08-01T02:32:14.7539513Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+2026-08-01T02:32:14.7541722Z Post job cleanup.
+2026-08-01T02:32:14.8492155Z [command]/usr/bin/git version
+2026-08-01T02:32:14.8538626Z git version 2.54.0
+2026-08-01T02:32:14.8585295Z Temporarily overriding HOME='/home/runner/work/_temp/44948e5c-b259-4989-ba38-1c60184d2530' before making global git config changes
+2026-08-01T02:32:14.8586821Z Adding repository directory to the temporary git global config as a safe directory
+2026-08-01T02:32:14.8591626Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Unit-Talk-v2/Unit-Talk-v2
+2026-08-01T02:32:14.8635667Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-08-01T02:32:14.8691406Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-08-01T02:32:14.8960362Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-08-01T02:32:14.8989874Z http.https://github.com/.extraheader
+2026-08-01T02:32:14.9003257Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-08-01T02:32:14.9041541Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-08-01T02:32:14.9342940Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-08-01T02:32:14.9387736Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-08-01T02:32:14.9781060Z Cleaning up orphan processes
+2026-08-01T02:32:15.0119318Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4, pnpm/action-setup@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

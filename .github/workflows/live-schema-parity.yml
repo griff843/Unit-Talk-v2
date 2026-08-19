@@ -114,6 +114,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # UTV2-1630: this job puts a PRODUCTION superuser Postgres URL in the
+      # environment and then runs comparison scripts from the PR's own checkout.
+      # Both of those scripts are inside this workflow's own trigger path filter,
+      # so a pull request that edits them executes its own version with full
+      # DDL/DML rights on production. "Catalog reads only" is a property of code
+      # the pull request replaces, not a control.
+      - name: Refuse to run PR-modified code against production
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          npx --yes tsx scripts/ci/assert-unmodified-vs-base.ts \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            scripts/ops/compare-databases.ts \
+            scripts/ci/schema-drift-gate.ts \
+            scripts/ci/assert-unmodified-vs-base.ts
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -143,12 +162,21 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # UTV2-1629: `out-env: ''` suppresses the job-wide $GITHUB_ENV export.
+      #
+      # This job holds a PRODUCTION superuser Postgres URL. Exporting it into
+      # $GITHUB_ENV put it in the environment of every subsequent step —
+      # `supabase start`, `supabase db reset`, `pg_isready`, `supabase stop`,
+      # `upload-artifact` — none of which have any business holding a live
+      # production connection string. Only the two steps that actually read the
+      # live catalog now receive it, via their own `env:` blocks below.
       - name: Select live DB connection URL (prefer pooler) — ACTUAL
+        id: actual-db-url
         uses: ./.github/actions/supabase-pooler-url
         with:
           pooler-url: ${{ secrets.SUPABASE_DB_POOLER_URL }}
           direct-url: ${{ secrets.SUPABASE_DB_URL }}
-          out-env: ACTUAL_DATABASE_URL
+          out-env: ''
 
       - name: Start Supabase local stack
         run: |
@@ -175,6 +203,9 @@ jobs:
       - name: Compare scratch schema to live schema
         id: compare
         continue-on-error: true
+        # One of only two steps in this job scoped to the live connection string.
+        env:
+          ACTUAL_DATABASE_URL: ${{ steps.actual-db-url.outputs.selected-url }}
         # Direct `pnpm exec tsx` invocation: `pnpm <script> -- <args>` forwards the
         # literal `--` to the script, which its arg parser rejects. (UTV2-1274)
         run: >
@@ -202,6 +233,9 @@ jobs:
       # Every other relation/column/constraint/index/policy/trigger remains fail-closed.
       - name: Authorize schema drift gate
         if: always()
+        # The second and last step scoped to the live connection string.
+        env:
+          ACTUAL_DATABASE_URL: ${{ steps.actual-db-url.outputs.selected-url }}
         run: >
           pnpm exec tsx scripts/ci/schema-drift-gate.ts
           --report artifacts/schema-parity/live-schema-parity.json

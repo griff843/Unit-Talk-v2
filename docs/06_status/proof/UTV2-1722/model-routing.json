@@ -1,0 +1,20 @@
+{
+  "issue_id": "UTV2-1722",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.147.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": null,
+  "generated_at": "2026-08-18T12:15:35.080Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "eca0f8745e9a2b5c76f8e263289524b6a16b2602",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1431",
+    "bound_at": "2026-08-19T16:20:25.017Z"
+  }
+}

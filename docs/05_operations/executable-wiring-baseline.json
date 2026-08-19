@@ -1,0 +1,1114 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1624",
+  "description": "Reviewed executable-wiring debt ledger. Every entry is a test file or ops/ci capability that exists in the repository but is not reachable from any required execution path. The ledger may shrink but never grow: pnpm ops:automation-coverage-check fails on any newly unwired test, on any entry missing disposition/owner/issue/expiry, on any stale entry, and when entries exceed max_entries.",
+  "required_roots": [
+    "verify"
+  ],
+  "tests": {
+    "max_entries": 119,
+    "entries": [
+      {
+        "path": "apps/api/src/alert-notification-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/alert-query-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/auth.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/board-construction-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/board-pick-writer.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/candidate-builder-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/closing-line-recovery-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/clv-feedback.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/controllers/review-pick-controller.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/controllers/submit-pick-controller.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/distribution-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/e2e-lifecycle.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "apps/api/src/execution-confirmation-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/fault-injection.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/intelligence-readiness.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "apps/api/src/line-movement-detector.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/market-family-trust-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/model-health-scanner.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/model-performance-service.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "apps/api/src/promotion-service-stale-data.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/routes/kill-switch.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/run-audit-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/settlement-stale-data.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "apps/api/src/stale-data-behavior.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/t1-proof-runtime-truth-spine.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-scoring-integrity.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-1258-pagination.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-1427-kill-switch.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-539-backfill.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-720-historical-clv.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-725.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-750-clv.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-753-settlement-pnl.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-754-provenance-clv.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-757-find-by-provenance.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-795-lifecycle.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-845.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-846.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-985-edge-provenance.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/t1-proof-utv2-988-band-persistence.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/api/src/team-logo-enrichment-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/api/src/trial-expiry-service.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "apps/command-center/e2e/command-center.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/phase1-operational-flows.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/phase2-compliance.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/phase2-verification.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/pick-identity-rendering.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/uni93-upgrade-verification.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/e2e/wave4-intelligence.spec.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Playwright end-to-end spec: needs a running app and a browser, which required CI does not provision."
+      },
+      {
+        "path": "apps/command-center/src/app/api/governance/lanes/route.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/command-center/src/app/command-center-pages.test.tsx",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "React component test: needs a DOM environment that the node:test runner does not provide."
+      },
+      {
+        "path": "apps/command-center/src/app/command-center-rebuild.test.tsx",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "React component test: needs a DOM environment that the node:test runner does not provide."
+      },
+      {
+        "path": "apps/command-center/src/components/ui/shared-components.test.tsx",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "React component test: needs a DOM environment that the node:test runner does not provide."
+      },
+      {
+        "path": "apps/discord-bot/src/ops-restart-guard.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/ingestor/src/archive-payload-guard.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/ingestor/src/ingest-archive-isolation.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/ingestor/src/startup-resilience.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/ingestor/src/t1-proof-utv2-1085-odds-snapshot.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/ingestor/src/t1-proof-utv2-1366-markclosinglines-compact-source.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/qa-agent/src/adapters/unit-talk/surfaces/discord/skills/pick-delivery.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/worker/src/delivery-adapters.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/worker/src/delivery-alerting.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "apps/worker/src/t1-proof-automated-recovery.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
+        "disposition": "external-service",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Red without live database credentials; needs the staging-isolated proof path, not the static verify floor."
+      },
+      {
+        "path": "apps/worker/src/worker-automated-recovery.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1636",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/alert-runtime/src/injury-cooldown.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/alert-runtime/src/injury-detector.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/alert-runtime/src/injury-notification-pass.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/alert-runtime/src/injury-notification-service.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/alert-runtime/src/injury-staleness-guard.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/config/src/secret-presence.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/contracts/src/governance-rollback.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/contracts/src/promotion.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/contracts/src/settlement.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/db/src/inmemory-constraints.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/db/src/market-universe-closing-join.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/db/src/pick-foreign-keys.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/burn-in.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/escalation.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/independent-data-path.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/manipulation-detector.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/provider-anomaly.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/adversarial/replay.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/correlation-detection.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "packages/domain/src/features/matchup-context.test.ts",
+        "disposition": "failing-triage",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Red when run directly. Wiring as-is would block verify for the whole program; triage whether the test is stale or reporting a real defect."
+      },
+      {
+        "path": "packages/domain/src/index.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/lifecycle-validator.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/models/contrarian.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/models/segment-readiness.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/pick-narrative.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/portfolio/concentration-hard-blocks.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/portfolio/drawdown-monitor.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/portfolio/exposure-consistency.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/portfolio/exposure-store.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/probability/index.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/scoring/closing-leakage-guard.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/scoring/promotion-weight-profiles.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/domain/src/scoring/uniqueness.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/observability/src/slo.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/verification/src/engine/fault/fault-injector.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/verification/src/engine/shadow/divergence-classifier.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/verification/src/engine/shadow/shadow-verdict-engine.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "packages/verification/src/engine/strategy/strategy-proof-writer.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "codex-implementation",
+        "issue": "UTV2-1637",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/benchmarks/queue-throughput.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/clvCoverage.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/evidence-bundle/validate-bundle.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/evidence-truthworthiness/run-scoring.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/ops/fix-sync-yml.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "TRIAGED (UTV2-1638): was RED asserting worktree-setup.ps1 is a \"Deprecated compatibility stub\". It is not, and no reachable commit shows it ever was -- the assertion described an intention, not the repository. Replaced with assertions on the invariants the script actually enforces (lane isolation, no junctioned node_modules, frozen install). Now green (2/2); wiring deferred only because package.json is held by another lane."
+      },
+      {
+        "path": "scripts/ops/policy-engine.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "TRIAGED (UTV2-1638): was RED with 12 failures from one cause -- loadPolicies() globbed every *.json in the policies dir and demanded an array, but codex-model-routing.json is a schema-versioned config document, not a rule set. Loader now skips schema-versioned config documents by shape and still hard-errors on anything unrecognised. Now green (21/21); wiring deferred only because package.json is held by another lane."
+      },
+      {
+        "path": "scripts/ops/runtime-verifier-gate.test.ts",
+        "disposition": "failing-triage",
+        "owner": "claude-governance",
+        "issue": "UTV2-1639",
+        "expiry": "2026-10-31",
+        "note": "RED: the gate exits 0 when the supplied merge SHA is absent from the proof file, violating the proof/SHA binding invariant. Tracked as a defect, not as wiring debt."
+      },
+      {
+        "path": "scripts/post-deploy-smoke.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/product-truth-scoreboard.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/provenance/run-provenance-report.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/provider-offer-current-cutover.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/provider-offer-history-retention-summarize.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Green and deterministic when run directly; wire it into a named test command in Phase B."
+      },
+      {
+        "path": "scripts/provider-offers-quarantine-prune-fix.test.ts",
+        "disposition": "phase-b-wiring",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Not executed during the UTV2-1624 inventory; triage before wiring."
+      }
+    ]
+  },
+  "capabilities": {
+    "max_entries": 18,
+    "entries": [
+      {
+        "path": "scripts/ci/check-promotion-target-sync.ts",
+        "disposition": "manual-diagnostic",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Documented promotion-target drift check; never invoked by a workflow. Documentation alone is not coverage \u2014 Phase B wires it or archives it."
+      },
+      {
+        "path": "scripts/ops/apply-branch-protection.sh",
+        "disposition": "one-shot-migration-aid",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Applies branch-protection rules once during repository setup; deliberately never run by CI."
+      },
+      {
+        "path": "scripts/ops/architecture-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/ci-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/codex-wrapper.ts",
+        "disposition": "manual-diagnostic",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Operator-invoked Codex wrapper; no automated caller."
+      },
+      {
+        "path": "scripts/ops/container-e2e-proof.sh",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot container end-to-end proof from an earlier program."
+      },
+      {
+        "path": "scripts/ops/contrarian-review.ts",
+        "disposition": "manual-diagnostic",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Operator-invoked adversarial review aid; no automated caller."
+      },
+      {
+        "path": "scripts/ops/edge-coverage-report.ts",
+        "disposition": "manual-diagnostic",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Operator-invoked edge-coverage report; no automated caller."
+      },
+      {
+        "path": "scripts/ops/edge-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/migrate-lane-types.ts",
+        "disposition": "one-shot-migration-aid",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Migrated legacy lane types to the current taxonomy; retained for provenance."
+      },
+      {
+        "path": "scripts/ops/observability-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/ops-safety-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/remaining-infra-proofs.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/replay-failed-delivery.sh",
+        "disposition": "manual-diagnostic",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Operator-invoked outbox replay aid; intentionally not automated (it re-sends deliveries)."
+      },
+      {
+        "path": "scripts/ops/rollback-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/runtime-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/service-runtime-proof.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "One-shot phase-proof generator from an earlier program."
+      },
+      {
+        "path": "scripts/ops/sync-check.ts",
+        "disposition": "archive-delete-candidate",
+        "owner": "claude-governance",
+        "issue": "UTV2-1638",
+        "expiry": "2026-10-31",
+        "note": "Superseded by scripts/ops/sync-check.mjs, which is what ops:sync-check actually runs."
+      }
+    ]
+  }
+}

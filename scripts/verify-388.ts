@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { readFileSync } from 'fs';
 
 const env = Object.fromEntries(
@@ -11,7 +11,7 @@ const env = Object.fromEntries(
     }),
 );
 
-const sb = createClient(`https://zfzdnfwdarxucxtaojxm.supabase.co`, env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function main() {
   const { data: mt } = await sb

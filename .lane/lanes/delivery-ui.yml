@@ -6,6 +6,13 @@ allowed_path_globs:
   - apps/discord-bot/**
   - apps/smart-form/**
   - apps/qa-agent/**
+  # UTV2-1715: apps/web is the public member-facing site and lives on `main`,
+  # but it appeared in no lane type's allowlist at all, so every lane touching
+  # it failed Lane Authority with `outside_allowed_paths` and no lane type
+  # could legally carry the change. It is a delivery surface like the others
+  # above. Admission correction only -- no taxonomy change, and `max_per_app`
+  # still caps concurrency at one lane per app.
+  - apps/web/**
   - scripts/**
   - .ops/sync/**
   - docs/06_status/lanes/**

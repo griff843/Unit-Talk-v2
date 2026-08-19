@@ -171,3 +171,42 @@ test('governance lane still rejects a mixed-case near-miss on the incidents path
     ['outside_allowed_paths'],
   );
 });
+
+test('UTV2-1715: delivery-ui admits apps/web without widening into other lanes', () => {
+  // apps/web is the public member-facing site and lives on `main`, but it
+  // appeared in no lane type's allowlist, so every lane touching it failed
+  // Lane Authority with `outside_allowed_paths` and no lane type could
+  // legally carry the change.
+  const deliveryUi = loadLaneManifest('delivery-ui');
+
+  const admitted = validateLaneAuthority({
+    manifest: deliveryUi,
+    changedFiles: ['apps/web/src/app/page.tsx', 'apps/web/src/styles/globals.css'],
+  });
+  assert.equal(admitted.ok, true);
+  assert.deepEqual(admitted.violations, []);
+
+  // The correction adds one delivery surface. It must not become a general
+  // write channel into runtime, package, migration, or workflow authority.
+  for (const isolated of [
+    'apps/api/src/board-pick-writer.ts',
+    'packages/domain/src/index.ts',
+    'supabase/migrations/20260101000000_example.sql',
+    '.github/workflows/ci.yml',
+  ]) {
+    const refused = validateLaneAuthority({
+      manifest: deliveryUi,
+      changedFiles: [isolated],
+    });
+    assert.equal(refused.ok, false, `delivery-ui must not admit ${isolated}`);
+  }
+
+  // No other lane type gains apps/web as a side effect.
+  for (const laneType of ['runtime', 'modeling', 'hygiene', 'verification', 'governance'] as const) {
+    const other = validateLaneAuthority({
+      manifest: loadLaneManifest(laneType),
+      changedFiles: ['apps/web/src/app/page.tsx'],
+    });
+    assert.equal(other.ok, false, `${laneType} must not admit apps/web`);
+  }
+});

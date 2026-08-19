@@ -19,9 +19,9 @@
     "docs/06_status/proof/UTV2-1585/evidence.json",
     "docs/06_status/proof/UTV2-1585/model-routing.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-07-24T15:10:40.170Z",
-  "heartbeat_at": "2026-07-24T15:10:40.170Z",
+  "heartbeat_at": "2026-07-30T19:50:00Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1585-merge-gate-canonical-check-identity.json",
@@ -41,5 +41,26 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "reconcile_notes": [
+    {
+      "at": "2026-07-30T19:50:00Z",
+      "action": "capacity-and-lock release only",
+      "from": "started",
+      "to": "merged",
+      "evidence": {
+        "pr": 1305,
+        "merged_at": "2026-07-24T16:40:22Z",
+        "merge_sha": "97527b791fc37acce41f4f46fd88699dce054b66"
+      },
+      "basis": "merged is excluded from ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts)",
+      "explicitly_not": [
+        "not done",
+        "no truth_check_history appended",
+        "no implementation proof altered",
+        "no terminal closeout claimed",
+        "open reconciliation PR untouched"
+      ]
+    }
+  ]
 }

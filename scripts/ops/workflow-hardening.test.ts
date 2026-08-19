@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
@@ -805,6 +807,13 @@ test('UTV2-1550: executor-result-validator.yml never exposes the required check 
     (s) => typeof s.run === 'string' && (s.run as string).includes('executor-result-validate.ts resolve-check-name'),
   );
   assert.ok(resolveStep, 'executor-result-validator.yml must resolve its check name via the tested script, not a duplicated literal');
+
+  const raw = fs.readFileSync(path.join(ROOT, '.github/workflows/executor-result-validator.yml'), 'utf8');
+  assert.match(
+    raw,
+    /conclusion: passed \? 'success' : isRequired \? 'failure' : 'neutral'/,
+    'non-required executor preflight failures must be neutral while required validation stays fail-closed',
+  );
 });
 
 test('UTV2-1550 follow-up: executor-result-validator.yml never executes PR-controlled code to resolve the check name', () => {
@@ -1186,5 +1195,729 @@ test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes con
     bootstrapLike,
     undefined,
     'merge-gate.yml must not carry a PR-head bootstrap-recovery step for merge-gate-verdict.cjs; main always has the trusted file post-UTV2-1554',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1632 — the DB Health Tripwire had never executed a single check.
+//
+// The defect had two independent halves, and a fix that closed only one would
+// have looked identical from the outside:
+//
+//   1. `run: tsx scripts/ops/db-health-tripwire.ts` invoked a workspace binary
+//      by bare name, so the step exited 127 before Node started.
+//   2. `import postgres from 'postgres'` named a package with no manifest entry
+//      and no lockfile entry, so fixing (1) alone would have exited 1 on
+//      MODULE_NOT_FOUND — still zero checks executed.
+//
+// Both halves shared one root property: nothing distinguished "the monitor is
+// broken" from "the monitor found something". The tests below hold the three
+// guarantees that replace that ambiguity — the invocation is linted repo-wide,
+// execution is proved from a receipt rather than from an exit code, and the
+// check logic is shown to compare a measured value against a threshold.
+// ---------------------------------------------------------------------------
+
+import {
+  collectWorkspaceBinaries,
+  leadingCommandWords,
+  runGuard as runBareBinaryGuard,
+  scanDocument as scanWorkflowDocument,
+} from '../ci/workflow-bare-binary-guard.js';
+import {
+  RECEIPT_SCHEMA,
+  countChecks,
+  deriveOutcome,
+  evaluateAutovacuumRow,
+  evaluateSizeRow,
+  evaluateStatementTimeoutRate,
+  evaluateToastRow,
+  gateReceipt,
+  notRunCheck,
+  resolveThresholds,
+  type CheckOutcome,
+  type SizeRow,
+  type TripwireReceipt,
+  type VacuumRow,
+} from './db-health-checks.js';
+
+const MB = 1024 * 1024;
+
+function sizeRow(relname: string, megabytes: number): SizeRow {
+  const bytes = Math.round(megabytes * MB);
+  return {
+    relname,
+    table_size: `${megabytes} MB`,
+    total_size: `${megabytes} MB`,
+    total_bytes: String(bytes),
+  };
+}
+
+// --- The invocation lint -----------------------------------------------------
+
+test('UTV2-1632: no workflow invokes a workspace binary by bare name', () => {
+  const violations = runBareBinaryGuard();
+  assert.deepStrictEqual(
+    violations,
+    [],
+    `bare workspace-binary invocation(s) found — these exit 127 on the runner:\n${violations
+      .map((v) => `  ${v.file} → ${v.job} → ${v.step}: ${v.command}`)
+      .join('\n')}`,
+  );
+});
+
+test('UTV2-1632: the bare-binary guard catches the exact shape that shipped', () => {
+  const binaries = collectWorkspaceBinaries();
+  assert.ok(binaries.has('tsx'), 'tsx is a workspace devDependency and must be in the candidate set');
+  assert.ok(binaries.has('tsc'), 'typescript provides tsc under a different name');
+  assert.ok(
+    !binaries.has('supabase') && !binaries.has('psql') && !binaries.has('gh'),
+    'binaries installed by a setup action or by apt must never be flagged',
+  );
+
+  const offending = `
+name: regression
+jobs:
+  j:
+    steps:
+      - name: Run DB health checks
+        run: tsx scripts/ops/db-health-tripwire.ts
+`;
+  const found = scanWorkflowDocument('regression.yml', offending, binaries);
+  assert.strictEqual(found.length, 1, 'the pre-UTV2-1632 invocation must be reported');
+  assert.strictEqual(found[0]?.binary, 'tsx');
+
+  const fixed = offending.replace('run: tsx', 'run: pnpm exec tsx');
+  assert.deepStrictEqual(
+    scanWorkflowDocument('regression.yml', fixed, binaries),
+    [],
+    'the pnpm exec form must be accepted',
+  );
+});
+
+test('UTV2-1632: the guard reads through shell noise without inventing findings', () => {
+  // A command substitution introduces a new command; the assignment in front of
+  // it is not the command. Getting this wrong reports every `X=$(pnpm exec …)`
+  // in the repository as a violation, which would make the guard useless.
+  assert.deepStrictEqual(leadingCommandWords('NAME=$(pnpm exec tsx a.ts)'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('OUT=$(tsx a.ts)'), ['tsx']);
+  assert.deepStrictEqual(leadingCommandWords('CI=true pnpm install'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('pnpm exec tsx \\\n  a.ts'), ['pnpm']);
+  assert.deepStrictEqual(leadingCommandWords('# comment only'), []);
+  assert.deepStrictEqual(leadingCommandWords('sudo apt-get install -y postgresql-client'), [
+    'apt-get',
+  ]);
+});
+
+// --- The workflow contract ---------------------------------------------------
+
+test('UTV2-1632: the tripwire workflow runs through pnpm exec and proves execution', () => {
+  const wf = readWorkflowYaml('db-health-tripwire.yml');
+  const job = objectField(objectField(wf, 'jobs'), 'db-health-check');
+  const steps = job['steps'] as Array<Record<string, unknown>>;
+  assert.ok(Array.isArray(steps), 'db-health-check must declare steps');
+
+  const byName = (fragment: string): Record<string, unknown> => {
+    const step = steps.find((s) => String(s['name'] ?? '').includes(fragment));
+    assert.ok(step, `expected a step named like "${fragment}"`);
+    return step as Record<string, unknown>;
+  };
+
+  const run = byName('Run DB health checks');
+  assert.match(String(run['run']), /pnpm exec tsx scripts\/ops\/db-health-tripwire\.ts/);
+  assert.match(String(run['run']), /--receipt/, 'the run must name where the receipt is written');
+
+  // Fail-closed: the execution gate must run even when the producer failed, so
+  // a receipt that was never written turns the job red instead of being skipped.
+  const gate = byName('Prove the checks executed');
+  assert.match(String(gate['run']), /--assert-executed/);
+  assert.strictEqual(gate['if'], 'always()', 'the execution gate must not be skippable');
+
+  // The three outcomes must be reported by three different steps, so the name
+  // of the failing step says which one happened.
+  const verdict = byName('Report DB health verdict');
+  assert.match(String(verdict['run']), /--assert-healthy/);
+  assert.ok(
+    steps.indexOf(run) < steps.indexOf(gate) && steps.indexOf(gate) < steps.indexOf(verdict),
+    'harness → execution proof → health verdict must run in that order',
+  );
+
+  assert.strictEqual(
+    objectField(wf, 'permissions')['contents'],
+    'read',
+    'a read-only monitor must hold read-only workflow permissions',
+  );
+
+  const text = readWorkflow('db-health-tripwire.yml');
+  assert.doesNotMatch(text, /echo[^\n]*secrets\./i, 'no step may echo a secret');
+  assert.doesNotMatch(
+    text,
+    /\b(INSERT|UPDATE|DELETE|TRUNCATE|DROP|ALTER)\b/i,
+    'the tripwire workflow must contain no mutating SQL verb',
+  );
+});
+
+// --- Threshold resolution ----------------------------------------------------
+
+test('UTV2-1632: thresholds record where their value came from', () => {
+  const defaults = resolveThresholds({});
+  assert.strictEqual(defaults['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 500);
+  assert.strictEqual(defaults['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'default');
+
+  const fromEnv = resolveThresholds({ SYSTEM_RUNS_SIZE_THRESHOLD_MB: '750' });
+  assert.strictEqual(fromEnv['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 750);
+  assert.strictEqual(fromEnv['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'env');
+
+  const overridden = resolveThresholds({
+    SYSTEM_RUNS_SIZE_THRESHOLD_MB: '750',
+    TRIPWIRE_THRESHOLD_OVERRIDES: '{"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}',
+  });
+  assert.strictEqual(overridden['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.value, 1);
+  assert.strictEqual(overridden['SYSTEM_RUNS_SIZE_THRESHOLD_MB']?.source, 'dispatch_override');
+});
+
+test('UTV2-1632: a threshold override may not reach anything but a threshold', () => {
+  // A dispatch input that could name an arbitrary key would be a way to steer
+  // the job's environment from the outside. Unknown keys fail closed, and so
+  // does a value that silently would have fallen back to the default.
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: '{"SUPABASE_DB_URL":"postgres://x"}' }),
+    /unknown threshold key/i,
+  );
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: 'not json' }),
+    /not valid JSON/i,
+  );
+  assert.throws(
+    () => resolveThresholds({ TRIPWIRE_THRESHOLD_OVERRIDES: '{"AUTOVACUUM_STALENESS_HOURS":"nope"}' }),
+    /not a finite number/i,
+  );
+});
+
+// --- The check logic actually compares a value to a threshold ---------------
+
+test('UTV2-1632: table_size evaluates the measured value against the threshold', () => {
+  const thresholds = resolveThresholds({ SYSTEM_RUNS_SIZE_THRESHOLD_MB: '500' });
+
+  const healthy = evaluateSizeRow(sizeRow('system_runs', 120), thresholds);
+  assert.strictEqual(healthy.status, 'pass');
+  assert.strictEqual(healthy.measured.value, 120);
+  assert.strictEqual(healthy.threshold.value, 500);
+
+  const over = evaluateSizeRow(sizeRow('system_runs', 600), thresholds);
+  assert.strictEqual(over.status, 'tripped');
+  assert.strictEqual(over.severity, 'warn');
+
+  const wayOver = evaluateSizeRow(sizeRow('system_runs', 1200), thresholds);
+  assert.strictEqual(wayOver.severity, 'critical', 'more than 2x the threshold is critical');
+
+  // The boundary is strictly greater-than, so a table exactly at the threshold
+  // does not alert.
+  assert.strictEqual(evaluateSizeRow(sizeRow('system_runs', 500), thresholds).status, 'pass');
+});
+
+test('UTV2-1632: lowering the threshold trips a table that otherwise passes', () => {
+  // This is the unit-level twin of the live negative demonstration: the same
+  // measured value produces a different verdict when only the threshold moves,
+  // which is only possible if the comparison is actually performed.
+  const row = sizeRow('system_runs', 120);
+  assert.strictEqual(evaluateSizeRow(row, resolveThresholds({})).status, 'pass');
+
+  const demo = resolveThresholds({
+    TRIPWIRE_THRESHOLD_OVERRIDES: '{"SYSTEM_RUNS_SIZE_THRESHOLD_MB":"1"}',
+  });
+  const tripped = evaluateSizeRow(row, demo);
+  assert.strictEqual(tripped.status, 'tripped');
+  assert.strictEqual(tripped.threshold.source, 'dispatch_override');
+  assert.strictEqual(tripped.measured.value, 120);
+});
+
+test('UTV2-1632: autovacuum, TOAST and timeout-rate checks each evaluate', () => {
+  const thresholds = resolveThresholds({});
+  const now = new Date('2026-07-31T00:00:00.000Z');
+  const fresh = new Date('2026-07-30T23:00:00.000Z');
+  const stale = new Date('2026-07-01T00:00:00.000Z');
+
+  const base: VacuumRow = {
+    relname: 'system_runs',
+    last_vacuum: fresh,
+    last_autovacuum: fresh,
+    last_analyze: fresh,
+    last_autoanalyze: fresh,
+    n_dead_tup: '10',
+    n_live_tup: '1000',
+    dead_tup_pct: '0.99',
+  };
+  assert.strictEqual(evaluateAutovacuumRow(base, thresholds, now).status, 'pass');
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, last_analyze: stale }, thresholds, now).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, last_vacuum: null }, thresholds, now).severity,
+    'critical',
+    'a table that has never been vacuumed is the 2026-06-22 write-path signature',
+  );
+  assert.strictEqual(
+    evaluateAutovacuumRow({ ...base, n_dead_tup: '900', dead_tup_pct: '47.37' }, thresholds, now)
+      .status,
+    'tripped',
+  );
+
+  const toastBase = {
+    relname: 'raw_payloads',
+    heap_size: '10 MB',
+    toast_plus_index_size: '20 MB',
+    total_size: '30 MB',
+  };
+  assert.strictEqual(evaluateToastRow({ ...toastBase, toast_pct: '66.7' }, thresholds).status, 'pass');
+  assert.strictEqual(
+    evaluateToastRow({ ...toastBase, toast_pct: '95.0' }, thresholds).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateToastRow({ ...toastBase, toast_pct: null }, thresholds).status,
+    'not_run',
+    'an uncomputable ratio is not a pass',
+  );
+
+  const t = (minutes: number): Date => new Date(now.getTime() + minutes * 60_000);
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(10), t(20)], 3, thresholds).status,
+    'pass',
+    '3 in one hour is at the threshold, not over it',
+  );
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(10), t(20), t(30)], 4, thresholds).status,
+    'tripped',
+  );
+  assert.strictEqual(
+    evaluateStatementTimeoutRate([t(0), t(90), t(180), t(270)], 4, thresholds).status,
+    'pass',
+    'four events spread over four hours never exceed the hourly rate',
+  );
+});
+
+// --- Execution proof ---------------------------------------------------------
+
+test('UTV2-1632: a verdict may rest on an observation that has no number', () => {
+  // Caught by the first live production run: `provider_offer_history` has never
+  // been analysed, so `hours since last_analyze` has no value — yet the check
+  // correctly tripped. Requiring a numeric measurement rejected a genuine
+  // finding, so the gate asks whether the check OBSERVED anything, which is the
+  // property that actually distinguishes evaluation from non-evaluation.
+  const thresholds = resolveThresholds({});
+  const now = new Date('2026-07-31T00:00:00.000Z');
+  const neverAnalyzed: VacuumRow = {
+    relname: 'provider_offer_history',
+    last_vacuum: null,
+    last_autovacuum: null,
+    last_analyze: null,
+    last_autoanalyze: null,
+    n_dead_tup: '0',
+    n_live_tup: '0',
+    dead_tup_pct: null,
+  };
+  const outcome = evaluateAutovacuumRow(neverAnalyzed, thresholds, now);
+  assert.strictEqual(outcome.status, 'tripped');
+  assert.strictEqual(outcome.measured.value, null, 'a never-analysed table has no elapsed hours');
+  assert.strictEqual(outcome.measured.observed, true, 'the row was read, so it was observed');
+  assert.match(outcome.detail, /last_analyze=never run/);
+
+  // Not-run rows are the opposite: nothing was read at all.
+  assert.strictEqual(notRunCheck('table_size', 'x', 'unreachable').measured.observed, false);
+});
+
+test('UTV2-1632: a run that evaluated nothing is a harness error, never a pass', () => {
+  assert.strictEqual(deriveOutcome([]), 'harness_error');
+  assert.strictEqual(
+    deriveOutcome([notRunCheck('table_size', 'system_runs', 'unreachable')]),
+    'harness_error',
+    'checks that could not run must not add up to a healthy verdict',
+  );
+
+  const thresholds = resolveThresholds({});
+  const passed = evaluateSizeRow(sizeRow('system_runs', 10), thresholds);
+  const tripped = evaluateSizeRow(sizeRow('raw_payloads', 9000), thresholds);
+  assert.strictEqual(deriveOutcome([passed]), 'checks_passed');
+  assert.strictEqual(deriveOutcome([passed, tripped]), 'checks_tripped');
+});
+
+test('UTV2-1632: the receipt gate is hostile to the receipt it is handed', () => {
+  const thresholds = resolveThresholds({});
+  const checks: CheckOutcome[] = [
+    evaluateSizeRow(sizeRow('system_runs', 10), thresholds),
+    notRunCheck('statement_timeout_rate', null, 'log endpoint unreachable'),
+  ];
+  const receipt: TripwireReceipt = {
+    schema: RECEIPT_SCHEMA,
+    issue: 'UTV2-1632',
+    generated_at: new Date().toISOString(),
+    outcome: 'checks_passed',
+    harness_error: null,
+    run: {
+      workflow: 'DB Health Tripwire',
+      run_id: '123',
+      run_attempt: '1',
+      job: 'db-health-check',
+      sha: 'abc',
+      ref: 'refs/heads/main',
+      event: 'schedule',
+    },
+    target: { kind: 'canonical-production', project_ref: 'zfzdnfwdarxucxtaojxm', host: 'db' },
+    read_only: { mechanism: 'SET TRANSACTION READ ONLY', observed_transaction_read_only: 'on' },
+    thresholds,
+    threshold_override_active: false,
+    counts: countChecks(checks),
+    checks,
+    linear_alert: 'not_applicable',
+  };
+
+  assert.strictEqual(gateReceipt(receipt, {}).verdict, 'PASS');
+
+  // The defect this whole lane exists to prevent.
+  const evaluatedNothing = {
+    ...receipt,
+    outcome: 'checks_passed' as const,
+    checks: [notRunCheck('table_size', 'system_runs', 'unreachable')],
+    counts: countChecks([notRunCheck('table_size', 'system_runs', 'unreachable')]),
+  };
+  const nothing = gateReceipt(evaluatedNothing, {});
+  assert.strictEqual(nothing.verdict, 'FAIL');
+  assert.ok(nothing.reasons.some((r) => /zero executed checks/.test(r)));
+
+  // A verdict must rest on data the check actually read.
+  const unobserved = gateReceipt(
+    {
+      ...receipt,
+      checks: [
+        {
+          ...checks[0],
+          measured: { ...checks[0].measured, observed: false },
+        },
+      ],
+      counts: countChecks([checks[0]]),
+    },
+    {},
+  );
+  assert.strictEqual(unobserved.verdict, 'FAIL');
+  assert.ok(unobserved.reasons.some((r) => /without observing anything/.test(r)));
+
+  // Counts are recomputed, never trusted.
+  const liedCounts = gateReceipt({ ...receipt, counts: { ...receipt.counts, executed: 99 } }, {});
+  assert.strictEqual(liedCounts.verdict, 'FAIL');
+  assert.ok(liedCounts.reasons.some((r) => /do not match counts recomputed/.test(r)));
+
+  // Read-only must be observed, not asserted.
+  const unprovenReadOnly = gateReceipt(
+    { ...receipt, read_only: { mechanism: 'trust me', observed_transaction_read_only: null } },
+    {},
+  );
+  assert.strictEqual(unprovenReadOnly.verdict, 'FAIL');
+  assert.ok(unprovenReadOnly.reasons.some((r) => /transaction_read_only=on/.test(r)));
+
+  // A receipt from another run proves nothing about this one, so a receipt
+  // committed to the repository cannot satisfy the gate.
+  const wrongRun = gateReceipt(receipt, { GITHUB_RUN_ID: '999', GITHUB_RUN_ATTEMPT: '1' });
+  assert.strictEqual(wrongRun.verdict, 'FAIL');
+  assert.ok(wrongRun.reasons.some((r) => /proves nothing about this one/.test(r)));
+
+  // A harness error never passes the execution gate.
+  const broken = gateReceipt(
+    { ...receipt, outcome: 'harness_error', harness_error: 'MODULE_NOT_FOUND: postgres' },
+    {},
+  );
+  assert.strictEqual(broken.verdict, 'FAIL');
+
+  assert.strictEqual(gateReceipt(null, {}).verdict, 'FAIL');
+  assert.strictEqual(gateReceipt({ schema: 'nope' }, {}).verdict, 'FAIL');
+});
+
+test('UTV2-1632: the postgres driver the tripwire imports is a declared dependency', () => {
+  // The original script imported `postgres`, which appeared in no package.json
+  // and no lockfile. A workflow-only fix would have left the import unresolvable
+  // and the checker still dark.
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'),
+  ) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+  const declared = { ...manifest.dependencies, ...manifest.devDependencies };
+  assert.ok(
+    typeof declared['postgres'] === 'string',
+    'scripts/ops/db-health-tripwire.ts imports `postgres`; it must be a declared dependency',
+  );
+});
+
+test('UTV2-1684: post-merge proof binding uses resolved merge authority on every trigger', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const bindStart = workflow.indexOf('- name: Bind proof artifacts to merge SHA');
+  const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
+  const persistStart = workflow.indexOf('- name: Commit and push gate-evaluated closeout state');
+  assert.ok(bindStart >= 0 && closeStart > bindStart && persistStart > closeStart);
+  const bindBlock = workflow.slice(bindStart, closeStart);
+  const bindCondition = bindBlock.split('\n').find((line) => line.trimStart().startsWith('if:')) ?? '';
+  assert.doesNotMatch(bindCondition, /github\.event_name/);
+  assert.match(bindBlock, /steps\.resolve_sha\.outputs\.merge_sha != ''/);
+  assert.match(workflow, /gh pr view "\$pr_number" --json mergeCommit/);
+  assert.doesNotMatch(workflow, /falling back to github\.sha/);
+});
+
+test('UTV2-1722: proof binding is persisted only after the closeout gate passes', () => {
+  const workflow = fs.readFileSync(
+    path.join(ROOT, '.github/workflows/post-merge-lane-close.yml'),
+    'utf8',
+  );
+  const persistStart = workflow.indexOf('- name: Commit and push gate-evaluated closeout state');
+  const closeStart = workflow.indexOf('- name: Run lane closeout (hard-gate)');
+  const failStart = workflow.indexOf('- name: Fail on lane closeout failure');
+  assert.ok(closeStart >= 0 && closeStart < failStart && failStart < persistStart);
+  assert.match(workflow, /Refusing mismatched proof binding/);
+  assert.match(workflow, /persistence is deferred until the closeout gate passes/);
+  assert.match(workflow, /steps\.lane_close\.outputs\.exit_code == '0'/);
+  assert.match(workflow, /Commit proof,\n\s+# manifest, and sync cleanup atomically/);
+  assert.doesNotMatch(workflow, /chore\(proof\): bind \$ISSUE_ID/);
+  assert.match(workflow, /--post-merge-trusted --retain-merge-lock/);
+  assert.match(workflow, /Release closeout merge mutex after persistence attempt/);
+  assert.match(workflow, /always\(\)/);
+  assert.doesNotMatch(workflow, /git pull --rebase origin main/);
+  assert.strictEqual(workflow.match(/pnpm ops:lane-close "\$\{close_args\[@\]\}"/gu)?.length, 1);
+  assert.doesNotMatch(workflow, /pnpm ops:truth-check "\$ISSUE_ID" --explain/gu);
+  assert.doesNotMatch(workflow, /git commit --amend --no-edit/);
+  assert.match(workflow, /Refusing to rebase or retry; main remains unmutated/);
+  assert.match(workflow, /ops:merge-lock release --issue "\$ISSUE_ID" --branch "\$manifest_branch"/);
+});
+
+function utv21684PostMergeStep(name: string): Record<string, unknown> {
+  const workflowPath = process.env.UTV2_1684_WORKFLOW_FIXTURE ??
+    path.join(ROOT, '.github', 'workflows', 'post-merge-lane-close.yml');
+  const workflow = parseYaml(fs.readFileSync(workflowPath, 'utf8')) as {
+    jobs?: { 'lane-close'?: { steps?: Array<Record<string, unknown>> } };
+  };
+  const step = workflow.jobs?.['lane-close']?.steps?.find((candidate) => candidate.name === name);
+  assert.ok(step, `missing workflow step: ${name}`);
+  return step;
+}
+
+function utv21684ExecutableMock(binDir: string, name: string, body: string): void {
+  const target = path.join(binDir, name);
+  fs.writeFileSync(target, `#!/usr/bin/env bash\nset -euo pipefail\n${body}\n`);
+  fs.chmodSync(target, 0o755);
+}
+
+function runUtv21684PostMergeStep(
+  name: string,
+  options: { env?: NodeJS.ProcessEnv; mocks?: Record<string, string>; cwd?: string } = {},
+) {
+  const root = options.cwd ?? fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-step-'));
+  const binDir = path.join(root, '.mock-bin');
+  fs.mkdirSync(binDir, { recursive: true });
+  for (const [command, body] of Object.entries(options.mocks ?? {})) {
+    utv21684ExecutableMock(binDir, command, body);
+  }
+  const outputPath = path.join(root, 'github-output');
+  const run = utv21684PostMergeStep(name).run;
+  assert.strictEqual(typeof run, 'string');
+  const result = spawnSync('bash', ['-c', run], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      GITHUB_OUTPUT: outputPath,
+      ...options.env,
+    },
+  });
+  return {
+    ...result,
+    root,
+    output: fs.existsSync(outputPath) ? fs.readFileSync(outputPath, 'utf8') : '',
+  };
+}
+
+const utv21684MergeSha = '1684168416841684168416841684168416841684';
+
+test('UTV2-1684 behavior: missing mergeCommit fails closed and cannot fall back to github.sha', () => {
+  const result = runUtv21684PostMergeStep('Resolve merge SHA', {
+    env: { MANIFEST_PATH: 'manifest.json', EVENT_NAME: 'push', PUSH_SHA: utv21684MergeSha },
+    mocks: {
+      jq: "printf '%s\\n' 'https://github.com/griff843/Unit-Talk-v2/pull/1397'",
+      gh: "printf '\\n'",
+    },
+  });
+  assert.notStrictEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /has no validated merge SHA/);
+  assert.doesNotMatch(result.output, /merge_sha=/);
+});
+
+test('UTV2-1684 behavior: push identity divergence fails closed', () => {
+  const result = runUtv21684PostMergeStep('Resolve merge SHA', {
+    env: {
+      MANIFEST_PATH: 'manifest.json',
+      EVENT_NAME: 'push',
+      PUSH_SHA: '9999999999999999999999999999999999999999',
+    },
+    mocks: {
+      jq: "printf '%s\\n' 'https://github.com/griff843/Unit-Talk-v2/pull/1397'",
+      gh: `printf '%s\\n' '${utv21684MergeSha}'`,
+    },
+  });
+  assert.notStrictEqual(result.status, 0);
+  assert.match(result.stdout + result.stderr, /diverges from push SHA/);
+  assert.doesNotMatch(result.output, /merge_sha=/);
+});
+
+test('UTV2-1722 behavior: failed closeout leaves durable proof unchanged', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-nondestructive-'));
+  fs.writeFileSync(path.join(root, 'manifest.json'), '{}\n');
+  const durableProof = path.join(root, 'durable-main-proof.md');
+  fs.writeFileSync(durableProof, 'unbound-main-state\n');
+  const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1684');
+  const bind = runUtv21684PostMergeStep('Bind proof artifacts to merge SHA', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1684', MERGE_SHA: utv21684MergeSha, MANIFEST_PATH: 'manifest.json' },
+    mocks: {
+      jq: "printf '\\n'",
+      pnpm: `mkdir -p '${proofDir}'\nprintf '%s\\n' '${utv21684MergeSha}' > '${path.join(proofDir, 'verification.md')}'`,
+    },
+  });
+  assert.strictEqual(bind.status, 0, bind.stderr);
+
+  const failedGate = runUtv21684PostMergeStep('Run lane closeout (hard-gate)', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1684', EXPLICIT_PR: '' },
+    mocks: {
+      pnpm: "printf '%s\\n' '{\"verdict\":\"fail\"}'\nexit 17",
+    },
+  });
+  assert.strictEqual(failedGate.status, 17, failedGate.stderr);
+  assert.strictEqual(fs.readFileSync(durableProof, 'utf8'), 'unbound-main-state\n');
+  assert.strictEqual(fs.existsSync(path.join(root, 'git-calls')), false);
+});
+
+test('UTV2-1722 behavior: guarded persistence pushes once then releases the retained mutex', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1684-retry-'));
+  fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1684'), { recursive: true });
+  const eventLog = path.join(root, 'events');
+  const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
+    cwd: root,
+    env: {
+      ISSUE_ID: 'UTV2-1684',
+      MANIFEST_PATH: 'manifest.json',
+      EVENT_LOG: eventLog,
+    },
+    mocks: {
+      git: `printf 'git %s\\n' "$*" >> "$EVENT_LOG"
+if [ "$1" = diff ]; then exit 1; fi
+exit 0`,
+    },
+  });
+  assert.strictEqual(result.status, 0, result.stderr);
+
+  const release = runUtv21684PostMergeStep('Release closeout merge mutex after persistence attempt', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1684', MANIFEST_PATH: 'manifest.json', EVENT_LOG: eventLog },
+    mocks: {
+      jq: "printf '%s\\n' 'codex/utv2-1684-closeout'",
+      pnpm: `printf 'pnpm %s\\n' "$*" >> "$EVENT_LOG"`,
+    },
+  });
+  assert.strictEqual(release.status, 0, release.stderr);
+  const events = fs.readFileSync(eventLog, 'utf8').trim().split('\n');
+  assert.strictEqual(events.filter((event) => event === 'git push').length, 1);
+  assert.ok(events.indexOf('pnpm ops:merge-lock release --issue UTV2-1684 --branch codex/utv2-1684-closeout') > events.indexOf('git push'));
+  assert.ok(events.every((event) => !event.includes('pull --rebase')));
+});
+
+test('UTV2-1722 behavior: a rejected guarded push never rebases or retries and still releases the mutex', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1722-retry-gate-fail-'));
+  fs.mkdirSync(path.join(root, 'docs/06_status/proof/UTV2-1722'), { recursive: true });
+  const gitLog = path.join(root, 'git-calls');
+  const pnpmLog = path.join(root, 'pnpm-calls');
+  const durableMain = path.join(root, 'durable-main-mutated');
+  const result = runUtv21684PostMergeStep('Commit and push gate-evaluated closeout state', {
+    cwd: root,
+    env: {
+      ISSUE_ID: 'UTV2-1722',
+      MANIFEST_PATH: 'manifest.json',
+      EXPLICIT_PR: '',
+      GIT_LOG: gitLog,
+      PNPM_LOG: pnpmLog,
+      DURABLE_MAIN: durableMain,
+    },
+    mocks: {
+      git: `printf '%s\n' "$*" >> "$GIT_LOG"
+if [ "$1" = diff ]; then exit 1; fi
+if [ "$1" = push ]; then
+  exit 1
+fi
+exit 0`,
+    },
+  });
+
+  assert.strictEqual(result.status, 1, result.stderr);
+  assert.match(result.stdout + result.stderr, /guarded push rejected/);
+  assert.match(result.stdout + result.stderr, /Refusing to rebase or retry; main remains unmutated/);
+  const gitCalls = fs.readFileSync(gitLog, 'utf8').trim().split('\n');
+  assert.strictEqual(gitCalls.filter((call) => call === 'push').length, 1);
+  assert.ok(gitCalls.every((call) => call !== 'pull --rebase origin main'));
+  assert.strictEqual(fs.existsSync(durableMain), false);
+
+  const release = runUtv21684PostMergeStep('Release closeout merge mutex after persistence attempt', {
+    cwd: root,
+    env: { ISSUE_ID: 'UTV2-1722', MANIFEST_PATH: 'manifest.json', PNPM_LOG: pnpmLog },
+    mocks: {
+      jq: "printf '%s\\n' 'codex/utv2-1722-closeout-recovery'",
+      pnpm: `printf '%s\\n' "$*" >> "$PNPM_LOG"`,
+    },
+  });
+  assert.strictEqual(release.status, 0, release.stderr);
+  assert.match(fs.readFileSync(pnpmLog, 'utf8'), /ops:merge-lock release --issue UTV2-1722 --branch codex\/utv2-1722-closeout-recovery/u);
+});
+
+test('UTV2-1722 supplemental shape: proof side effects are closeable-only and persistence is post-gate', () => {
+  const workflow = readWorkflow('post-merge-lane-close.yml');
+  assert.ok(
+    workflow.indexOf('- name: Bind proof artifacts to merge SHA') <
+      workflow.indexOf('- name: Run lane closeout (hard-gate)'),
+  );
+  assert.ok(
+    workflow.indexOf('- name: Run lane closeout (hard-gate)') <
+      workflow.indexOf('- name: Commit and push gate-evaluated closeout state'),
+  );
+  for (const name of ['Bind proof artifacts to merge SHA', 'Commit and push gate-evaluated closeout state']) {
+    assert.match(String(utv21684PostMergeStep(name).if), /steps\.status\.outputs\.closeable == 'true'/u);
+  }
+  assert.match(
+    String(utv21684PostMergeStep('Commit and push gate-evaluated closeout state').if),
+    /steps\.lane_close\.outputs\.exit_code == '0'/u,
+  );
+});
+
+test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () => {
+  // `cancel-in-progress: false` protects a RUNNING job, but GitHub keeps at
+  // most one PENDING run per concurrency group, so a run queued behind the
+  // mutex is cancelled when a newer run enters that group -- with no retry and
+  // no replacement run. Observed on UTV2-1690's closeout: run 31900689921 on
+  // 52b4878b was cancelled while queued, the manifest reached `done`, and the
+  // Linear issue stayed open until a human moved it.
+  const closeout = objectField(readWorkflowYaml('post-merge-lane-close.yml'), 'concurrency');
+  const linear = objectField(readWorkflowYaml('linear-auto-close.yml'), 'concurrency');
+
+  assert.strictEqual(
+    String(closeout.group),
+    'merge-closeout-mutex',
+    'the closeout writer keeps the shared mutex: it commits to main and must stay serialized',
+  );
+
+  assert.notStrictEqual(
+    String(linear.group),
+    String(closeout.group),
+    'linear-auto-close must not share the closeout mutex; a queued run there is cancelled outright',
+  );
+  assert.match(
+    String(linear.group),
+    /\$\{\{\s*github\.sha\s*\}\}/u,
+    'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
 });

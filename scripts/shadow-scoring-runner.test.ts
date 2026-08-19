@@ -180,6 +180,19 @@ test('assertGuardrails passes when all guardrails are 0', async () => {
   assert.doesNotThrow(() => assertGuardrails(makeGuardrails()));
 });
 
+test('parity fails closed when no candidates were scanned', async () => {
+  const { assertParityReadiness } = await import('./shadow-scoring-runner.js');
+  assert.throws(
+    () => assertParityReadiness(makeDailyCounts({ candidatesScanned: 0 })),
+    /PARITY NOT ESTABLISHED/,
+  );
+});
+
+test('parity readiness accepts a non-vacuous candidate population', async () => {
+  const { assertParityReadiness } = await import('./shadow-scoring-runner.js');
+  assert.doesNotThrow(() => assertParityReadiness(makeDailyCounts({ candidatesScanned: 1 })));
+});
+
 test('parseCliOptions parses --dry-run flag', async () => {
   const { parseCliOptions } = await import('./shadow-scoring-runner.js');
   const opts = parseCliOptions(['--dry-run']);
@@ -196,4 +209,47 @@ test('parseCliOptions parses --batch-size', async () => {
   const { parseCliOptions } = await import('./shadow-scoring-runner.js');
   const opts = parseCliOptions(['--batch-size', '50']);
   assert.equal(opts.batchSize, 50);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1629 — the --dry-run path must not load PR-authored application code
+// ---------------------------------------------------------------------------
+
+test('the runner has no STATIC import of apps/, so --dry-run loads no PR-authored app code', async () => {
+  // shadow-parity-required.yml runs this file against PRODUCTION and pins it
+  // against the merge base. A static `import ... from '../apps/...'` is
+  // evaluated before --dry-run is parsed and drags in most of apps/api and
+  // packages/domain — the very paths that trigger the workflow — so the pin
+  // would name one file while the import graph supplied hundreds.
+  //
+  // Type-only positions are fine: `typeof import(...)` is erased at runtime.
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const dir = resolve(fileURLToPath(import.meta.url), '..');
+  const source = readFileSync(resolve(dir, 'shadow-scoring-runner.ts'), 'utf8');
+
+  const staticAppImports = source
+    .split(/\r?\n/)
+    .filter((line) => /^\s*import\s[^(]*from\s+['"][^'"]*\.\.\/apps\//u.test(line));
+
+  assert.deepEqual(
+    staticAppImports,
+    [],
+    'Static import from apps/ found. Load it with `await import(...)` inside the ' +
+      'non-dry-run branch instead — the dry-run path runs with a production credential.',
+  );
+});
+
+test('shadow parity workflow uses only the dedicated read-only credential and fails zero scans', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const dir = resolve(fileURLToPath(import.meta.url), '..');
+  const workflow = readFileSync(resolve(dir, '../.github/workflows/shadow-parity-required.yml'), 'utf8');
+
+  assert.match(workflow, /secrets\.SHADOW_PARITY_READ_ONLY_KEY/);
+  assert.doesNotMatch(workflow, /secrets\.(?:SUPABASE_ANON_KEY|SUPABASE_SERVICE_ROLE_KEY)/);
+  assert.match(workflow, /CRITICAL=\$\(\(CRITICAL \+ 1\)\)[\s\S]*candidatesScanned=0/);
+  assert.match(workflow, /CANDIDATES.*-eq 0[\s\S]*CRITICAL=\$\(\(CRITICAL \+ 1\)\)/);
 });

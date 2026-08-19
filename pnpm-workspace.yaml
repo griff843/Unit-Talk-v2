@@ -4,16 +4,24 @@ packages:
 
 overrides:
   lodash@<4.18.1: 4.18.1
-  postcss@<8.5.10: 8.5.14
+  postcss@<8.5.18: 8.5.18
   react: 18.3.1
   react-dom: 18.3.1
   # Security: force patched versions for advisories flagged by `pnpm audit --prod`.
   # @babel/core GHSA-4x5r-pxfx-6jf8 (HIGH, <=7.29.0); ws GHSA-96hv-2xvq-fx4p +
   # GHSA-58qx-3vcg-4xpx (>=8.0.0 <8.21.0); undici GHSA-vxpw-j846-p89q (HIGH,
-  # WebSocket client DoS, <6.27.0) pulled in via @discordjs/rest.
+  # WebSocket client DoS, <6.27.0) pulled in via @discordjs/rest; next-auth
+  # GHSA-8fpg-xm3f-6cx3 (CRITICAL, existence-based auth checks fail open on
+  # config errors, <=5.0.0-beta.31) in apps/smart-form; sharp libvips CVEs
+  # (HIGH, <0.35.0); next.js DoS/SSRF in Server Actions + rewrites (HIGH,
+  # <15.5.21); postcss source-map path traversal (HIGH, <=8.5.17, bumped the
+  # existing floor above rather than adding a second entry).
   "@babel/core@<7.29.6": 7.29.6
   "ws@>=8.0.0 <8.21.0": 8.21.0
   "undici@<6.27.0": 6.27.0
+  "next-auth@<5.0.0-beta.32": 5.0.0-beta.32
+  "sharp@<0.35.0": 0.35.0
+  "next@<15.5.21": 15.5.21
 
 peerDependencyRules:
   ignoreMissing:

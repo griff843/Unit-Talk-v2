@@ -13,7 +13,7 @@
  *   pnpm stage:freshness --json
  */
 
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 type StageState = 'FRESH' | 'STALE' | 'EMPTY';
@@ -37,7 +37,7 @@ interface FreshnessReport {
 }
 
 const env = loadEnvironment();
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
 const args = process.argv.slice(2);
 const jsonMode = args.includes('--json');

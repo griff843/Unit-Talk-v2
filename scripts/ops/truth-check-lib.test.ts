@@ -10,6 +10,7 @@ import {
   evaluateCloseoutTruthGate,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
@@ -23,9 +24,18 @@ import {
   type CommitCheckResult,
   type EvidenceBundleV1,
   type GitHubCheckRun,
+  evaluateCloseEligibilityPreflight,
+  finalizeWithManifest,
+  evaluateTerminalLeaseInvariant,
 } from './truth-check-lib.js';
+import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
-import type { CheckResult, TruthCheckResult } from './shared.js';
+import {
+  verifyExternalVerifierProvenanceBinding,
+  type EvidenceGitRunner,
+} from './proof-schema.js';
+import { getRepoRoot } from './shared.js';
+import type { CheckResult, LaneManifest, TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
   manifestStatus: 'merged' | 'done',
@@ -38,6 +48,21 @@ function resolveExitCode(
     return 1;
   }
   return 0;
+}
+
+function terminalLease(status: DispatchLease['status']): DispatchLease {
+  return {
+    schema_version: 1,
+    issue_id: 'UTV2-1690',
+    branch: 'codex/utv2-1690-terminal-release',
+    executor: 'codex-cli',
+    cwd: '/repo/.out/worktrees/codex__utv2-1690-terminal-release',
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    heartbeat_at: '2026-08-15T12:00:00.000Z',
+    expires_at: '2026-08-15T16:00:00.000Z',
+    owner: { user: 'u', host: 'h', pid: 1, session_id: 's' },
+    status,
+  };
 }
 
 test('truth-check verdict mapping preserves reopen semantics for G5', () => {
@@ -722,6 +747,273 @@ test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fai
   );
 });
 
+const AUTHENTIC_PR_HEAD = 'aa4d4cfc4d528a7ef4e9f684c08f914f9ba0cfd7';
+const AUTHENTIC_MERGE_SHA = '3ce86b98a5aa01ae244794253a8c7e716f2ce733';
+const RESTORED_RECEIPT_HEAD = 'a9943aa1d9e24201e0acdfd76c59d1c7813a068d';
+
+const MERGED_PR_ATTESTATION = {
+  merge_sha: AUTHENTIC_MERGE_SHA,
+  head_sha: AUTHENTIC_PR_HEAD,
+  pr_number: 1428,
+  source: 'github-api' as const,
+};
+
+// actions/checkout intentionally supplies a shallow PR checkout, so historical
+// commit objects are not available to the wired CI suite. Strategy mechanics
+// are exercised against real temporary repositories in proof-schema.test.ts;
+// this strict seam exposes only the authentic squash-shaped facts needed to
+// replay the real read-only bundles without network-fetching old objects.
+const AUTHENTIC_SQUASH_GIT: EvidenceGitRunner = (args) => {
+  if (args[0] === 'cat-file' && args[1] === '-e') {
+    return { status: 0, stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+    if (args[2] === RESTORED_RECEIPT_HEAD && args[3] === AUTHENTIC_PR_HEAD) {
+      return { status: 0, stdout: '', stderr: '' };
+    }
+    return { status: 1, stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args.length === 3) {
+    return { status: 0, stdout: `${'c'.repeat(40)}\n`, stderr: '' };
+  }
+  if (args[0] === 'rev-parse' && args[1] === '--verify') {
+    return { status: 0, stdout: `${'c'.repeat(40)}\n`, stderr: '' };
+  }
+  if (args[0] === 'diff' && args[1] === '--name-only') {
+    return {
+      status: 0,
+      stdout: [
+        'docs/06_status/proof/UTV2-1718/evidence.json',
+        'docs/06_status/proof/UTV2-1718/verification.md',
+        'docs/06_status/readiness/readiness-score.json',
+      ].join('\n'),
+      stderr: '',
+    };
+  }
+  if (args[0] === 'rev-parse' && args[1]?.includes(':docs/06_status/readiness/readiness-score.json')) {
+    return { status: 0, stdout: `${'d'.repeat(40)}\n`, stderr: '' };
+  }
+  return {
+    status: 2,
+    stdout: '',
+    stderr: `unexpected injected Git command: ${args.join(' ')}`,
+  };
+};
+
+function schemaV2MigrationBundle(verifiedSourceSha = AUTHENTIC_PR_HEAD): EvidenceBundleV1 {
+  return {
+    schema_version: 2,
+    sha_binding: {
+      verified_source_sha: verifiedSourceSha,
+      evidence_commit_sha: 'set-by-ci',
+      current_pr_head_sha: 'set-by-ci',
+    },
+    static_proof: { type_check: { status: 'PASS' } },
+    runtime_proof: {
+      head: AUTHENTIC_PR_HEAD,
+      precondition_drill: {
+        result: 'PASS',
+        run: 31999981947,
+        job: 95298344670,
+        cases: ['refuses on a pre-existing relation', 'applies on an empty scratch schema'],
+      },
+      schema_roundtrip_drill: { result: 'PASS', run: 31999981947, job: 95298344658 },
+      live_schema_parity: { result: 'PASS', run: 31999981924, job: 95298356338 },
+      writable_db_proof_staging: { result: 'PASS', run: 31999981913, job: 95298344972 },
+    },
+  };
+}
+
+const EXTERNAL_VERIFIER = {
+  source: 'github-required-check' as const,
+  producer: 'github-app:15368:verify',
+  verified_sha: AUTHENTIC_PR_HEAD,
+  details_url: 'https://github.com/griff843/Unit-Talk-v2/actions/runs/31999981913',
+};
+
+test('schema-v2 migration T1 passes R1/R2 without fabricated queries or row_counts', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
+    {
+      laneType: 'migration',
+      verifierProvenance: EXTERNAL_VERIFIER,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
+    },
+  );
+
+  assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [
+    ['R1', 'pass'],
+    ['R2', 'pass'],
+    ['R3', 'pass'],
+  ]);
+});
+
+test('schema-v2 app/runtime T1 still fails without queries and row_counts', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  const bundle = schemaV2MigrationBundle();
+  bundle.runtime_proof = { queries: [], row_counts: [] };
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle },
+    { laneType: 'runtime', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+
+  assert.deepStrictEqual(checks.map((check) => [check.id, check.status]), [
+    ['R1', 'fail'],
+    ['R2', 'fail'],
+    ['R3', 'pass'],
+  ]);
+  assert.match(checks[0]?.detail ?? '', /runtime_proof\.queries/);
+  assert.match(checks[1]?.detail ?? '', /runtime_proof\.row_counts/);
+});
+
+test('schema-v2 verifier provenance is external and exact-head, never evidence-authored identity', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
+    {
+      laneType: 'migration',
+      verifierProvenance: null,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
+    },
+  );
+  assert.equal(checks.find((check) => check.id === 'R3')?.status, 'fail');
+  assert.match(checks.find((check) => check.id === 'R3')?.detail ?? '', /external exact-head/);
+
+  const staleChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => staleChecks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
+    {
+      laneType: 'migration',
+      verifierProvenance: { ...EXTERNAL_VERIFIER, verified_sha: 'b'.repeat(40) },
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
+    },
+  );
+  assert.equal(staleChecks.find((check) => check.id === 'R3')?.status, 'fail');
+});
+
+test('real restored and closeout bundles accept only their authentic merged-PR attestations', () => {
+  const repoRoot = getRepoRoot();
+  const fixtures = [
+    {
+      issueId: 'UTV2-1718',
+      laneType: 'migration',
+      headSha: AUTHENTIC_PR_HEAD,
+      mergeSha: AUTHENTIC_MERGE_SHA,
+      prNumber: 1428,
+    },
+    {
+      issueId: 'UTV2-1720',
+      laneType: 'governance',
+      headSha: '9db2dd994b84369f95be862349237992c5741ca4',
+      mergeSha: '374261599d63fea9a4112d94e4db18c05532e171',
+      prNumber: 1430,
+    },
+  ] as const;
+
+  const bundles = new Map(fixtures.map((fixture) => [
+    fixture.issueId,
+    JSON.parse(fs.readFileSync(
+      path.join(repoRoot, 'docs/06_status/proof', fixture.issueId, 'evidence.json'),
+      'utf8',
+    )) as EvidenceBundleV1,
+  ]));
+
+  for (const fixture of fixtures) {
+    const bundle = bundles.get(fixture.issueId)!;
+    const attestation = {
+      merge_sha: fixture.mergeSha,
+      head_sha: fixture.headSha,
+      pr_number: fixture.prNumber,
+      source: 'github-api' as const,
+    };
+    const verifierProvenance = {
+      source: 'github-required-check' as const,
+      producer: 'github-app:15368:verify',
+      verified_sha: fixture.headSha,
+      details_url: null,
+    };
+    const authenticChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+    addUnsupportedRuntimeChecks(
+      (id, status, detail) => authenticChecks.push({ id, status, detail }),
+      false,
+      'T1',
+      { bundle },
+      {
+        laneType: fixture.laneType,
+        verifierProvenance,
+        mergedPrAttestation: attestation,
+        repoRoot,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
+      },
+    );
+    assert.deepStrictEqual(
+      authenticChecks.map((check) => [check.id, check.status]),
+      [['R1', 'pass'], ['R2', 'pass'], ['R3', 'pass']],
+      `${fixture.issueId} authentic attestation`,
+    );
+
+    const verifierBinding = verifyExternalVerifierProvenanceBinding({
+      receiptSha: fixture.headSha,
+      verifiedSourceSha: bundle.sha_binding?.verified_source_sha,
+      context: {
+        gate: 'post-merge-read',
+        repoRoot,
+        mergedPrAttestation: attestation,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
+      },
+    });
+    assert.equal(verifierBinding.valid, true, `${fixture.issueId}: ${JSON.stringify(verifierBinding)}`);
+
+    const other = fixtures.find((candidate) => candidate.issueId !== fixture.issueId)!;
+    const swappedAttestation = {
+      merge_sha: other.mergeSha,
+      head_sha: other.headSha,
+      pr_number: other.prNumber,
+      source: 'github-api' as const,
+    };
+    const swappedChecks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+    addUnsupportedRuntimeChecks(
+      (id, status, detail) => swappedChecks.push({ id, status, detail }),
+      false,
+      'T1',
+      { bundle },
+      {
+        laneType: fixture.laneType,
+        verifierProvenance,
+        mergedPrAttestation: swappedAttestation,
+        repoRoot,
+        gitRunner: AUTHENTIC_SQUASH_GIT,
+      },
+    );
+    assert.equal(swappedChecks.find((check) => check.id === 'R3')?.status, 'fail');
+    const swappedBinding = verifyExternalVerifierProvenanceBinding({
+      receiptSha: fixture.headSha,
+      verifiedSourceSha: bundle.sha_binding?.verified_source_sha,
+      context: { gate: 'post-merge-read', repoRoot, mergedPrAttestation: swappedAttestation },
+    });
+    assert.equal(swappedBinding.valid, false);
+  }
+});
+
 function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
   return {
     schema_version: 1,
@@ -1228,7 +1520,9 @@ test('L3: rejects the stale "In Review" state that does not exist in this worksp
   assert.strictEqual(isLinearStatePermittedForL3('In Review'), false);
 });
 
-test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abandoned)', () => {
+test('L3: rejects non-closeout state names when Linear reported no state type', () => {
+  // Name-only callers keep the strict UTV2-1590 behaviour: with no type to
+  // consult, anything outside the canonical closeout allowlist fails closed.
   for (const state of [
     'Backlog',
     'Blocked',
@@ -1248,6 +1542,64 @@ test('L3: rejects unrelated workflow states (backlog, blocked, cancelled, abando
 test('L3: rejects empty/unknown state', () => {
   assert.strictEqual(isLinearStatePermittedForL3(''), false);
   assert.strictEqual(isLinearStatePermittedForL3(undefined), false);
+});
+
+// ── UTV2-1689 (UTV2-1619 capability 17): lane readiness vs issue workflow state ──
+//
+// A lane may close while its parent issue remains active. The regression fixture
+// is UTV2-1619 itself: an issue with outstanding capabilities whose merged
+// increment (PR #1400, merge SHA b58a2f35) passed all 37 other checks and was
+// blocked from closing solely because the issue sat in "Blocked Internal".
+
+test('L3: an active issue does not block one of its increments from truth-closing', () => {
+  // The three states PM named explicitly in capability 17.
+  for (const state of ['In Claude', 'In Codex', 'Blocked Internal']) {
+    assert.strictEqual(
+      isLinearStatePermittedForL3(state, 'started'),
+      true,
+      `expected active state ${state} to permit an increment to close`,
+    );
+  }
+});
+
+test('L3: gates on state type, not on a configurable state name', () => {
+  // A workspace-renamed active state must still be admitted -- the whole point
+  // of gating on the Linear-defined type rather than a name allowlist.
+  assert.strictEqual(isLinearStatePermittedForL3('Some Renamed Active State', 'started'), true);
+  assert.strictEqual(isLinearStatePermittedForL3('Done', 'completed'), true);
+});
+
+test('L3: still fails closed for abandoned, superseded, and never-started work', () => {
+  // These are the conditions the gate names. Each must actually FAIL -- a
+  // control is only proven by making it fail on the condition it names.
+  const refused: Array<[string, string]> = [
+    ['Cancelled', 'canceled'],
+    ['Duplicate', 'duplicate'],
+    ['Backlog', 'backlog'],
+    ['Ready for Claude', 'unstarted'],
+    ['Triage', 'triage'],
+  ];
+  for (const [name, type] of refused) {
+    assert.strictEqual(
+      isLinearStatePermittedForL3(name, type),
+      false,
+      `expected ${name} (type ${type}) to fail closed`,
+    );
+  }
+});
+
+test('L3: an absent or unrecognized state type never widens the gate', () => {
+  // Fail-closed direction (invariant 10): a missing type must not be read as
+  // permission, and an unknown future type must not be admitted by default.
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', undefined), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ''), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', null), false);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'some_future_type'), false);
+});
+
+test('L3: state type matching is case- and whitespace-insensitive', () => {
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', ' Started '), true);
+  assert.strictEqual(isLinearStatePermittedForL3('In Claude', 'STARTED'), true);
 });
 
 // ── classifyRuntimeProofGap (UTV2-1537) ─────────────────────────────────────────
@@ -1369,4 +1721,660 @@ test('integration: R1/R2/R3 fail against a pre-repair bundle and pass against th
   const postClassification = classifyRuntimeProofGap(postRepairChecks);
   assert.strictEqual(postClassification.isRuntimeProofGap, false);
   assert.strictEqual(hasRuntimeReferences(postRepairBundle.bundle.runtime_proof), true);
+});
+
+// ── UTV2-1640: S1 must honour `/**` scope patterns ──────────────────────────
+// Regression cover for a defect where S1 matched scope with an exact Set
+// lookup, so a `dir/**` entry could never match a real file. The pre-merge
+// file-scope guard passed the same diff, so the two gates disagreed about what
+// a scope lock means. Matching now delegates to the guard's own helper.
+
+const UTV2_1640_SCOPE = [
+  'docs/06_status/proof/UTV2-1640/evidence.json',
+  'docs/06_status/proof/UTV2-1640/verification.md',
+  'packages/db/src/database.types.ts',
+  'supabase/migrations/**',
+  'db/migrations-rollback/**',
+];
+
+test('S1: supabase/migrations/** matches the UTV2-1640 migration', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations/20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: db/migrations-rollback/** matches the down script and the exemption registry', () => {
+  const result = evaluateScopeDiff(
+    [
+      'db/migrations-rollback/20260801220000_utv2_1640_system_runs_autovacuum_tuning.down.sql',
+      'db/migrations-rollback/irreversible-exemption-registry.json',
+    ],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: an unrelated path outside every scope entry still fails', () => {
+  const result = evaluateScopeDiff(
+    ['apps/api/src/submission-service.ts'],
+    UTV2_1640_SCOPE,
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /apps\/api\/src\/submission-service\.ts/);
+});
+
+test('S1: a glob does not match a sibling directory sharing a prefix', () => {
+  const result = evaluateScopeDiff(
+    ['supabase/migrations-archive/legacy.sql'],
+    ['supabase/migrations/**'],
+    [],
+  );
+  assert.strictEqual(result.status, 'fail');
+});
+
+test('S1: exact (non-glob) scope entries still match, and expected_proof_paths are honoured', () => {
+  const result = evaluateScopeDiff(
+    ['packages/db/src/database.types.ts', 'docs/06_status/proof/UTV2-1640/evidence.json'],
+    UTV2_1640_SCOPE,
+    ['docs/06_status/proof/UTV2-1640/evidence.json'],
+  );
+  assert.strictEqual(result.status, 'pass');
+});
+
+test('S1: the historical UTV2-1640 scope lock is unchanged by this repair', () => {
+  const repoRoot = getRepoRoot();
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/lanes/UTV2-1640.json'), 'utf8'),
+  ) as { file_scope_lock: string[] };
+  assert.deepStrictEqual(manifest.file_scope_lock, UTV2_1640_SCOPE);
+});
+
+// ── UTV2-1619: close-eligibility preflight ──────────────────────────────────
+// Every fixture below is reconstructed from a lane that actually merged green
+// and then could not truth-close, each requiring a repair PR afterwards. The
+// acceptance criterion is exactly that: a lane must fail BEFORE merge if it
+// would otherwise require a repair PR AFTER merge.
+
+const CEP_CONFORMANT_VERIFICATION = [
+  '# PROOF: UTV2-9000 — example',
+  '',
+  'MERGE_SHA: ' + 'a'.repeat(40),
+  '',
+  'ASSERTIONS:',
+  '- [x] something was verified',
+  '',
+  'EVIDENCE:',
+  '',
+  '## Verification',
+  '',
+  '```',
+  'pnpm type-check -> 0',
+  'pnpm test -> 0',
+  'pnpm verify -> green in CI',
+  'scripts/ci/r-level-check.ts -> PASS',
+  '```',
+].join('\n');
+
+const CEP_CONFORMANT_DIFF_SUMMARY = [
+  '# UTV2-9000 diff summary',
+  '',
+  'MERGE_SHA: ' + 'a'.repeat(40),
+  '',
+  '- did a thing',
+].join('\n');
+
+const CEP_CONFORMANT_SIDECAR = JSON.stringify({
+  issue_id: 'UTV2-9000',
+  model: 'gpt-5.6-sol',
+  reasoning_effort: 'high',
+  override_used: false,
+});
+
+function cepInput(overrides: Record<string, unknown> = {}) {
+  const artifacts = (overrides.proof_artifacts as unknown[]) ?? [
+    { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+  ];
+  return {
+    manifest: {
+      issue_id: 'UTV2-9000',
+      tier: 'T2',
+      schema_version: 2,
+      created_by: 'claude',
+      expected_proof_paths: (artifacts as { path: string }[]).map((a) => a.path),
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1234',
+      ...(overrides.manifest as object ?? {}),
+    },
+    proof_artifacts: artifacts,
+  } as never;
+}
+
+test('CEP-0: a conformant packet is eligible before merge', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput());
+  assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking, null, 2));
+});
+
+function migrationCepInput(
+  laneType = 'migration',
+  evidenceBundle: EvidenceBundleV1 = schemaV2MigrationBundle(),
+) {
+  const artifacts = [
+    { path: 'docs/06_status/proof/UTV2-1718/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-1718/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+    {
+      path: 'docs/06_status/proof/UTV2-1718/evidence.json',
+      content: JSON.stringify(evidenceBundle),
+    },
+  ];
+  return {
+    manifest: {
+      issue_id: 'UTV2-1718',
+      lane_type: laneType,
+      tier: 'T1',
+      schema_version: 2,
+      created_by: 'claude',
+      expected_proof_paths: artifacts.map((artifact) => artifact.path),
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1428',
+    },
+    proof_artifacts: artifacts,
+  } as never;
+}
+
+test('schema-v2 migration packet passes pre-merge and post-merge shared contract without row counts', () => {
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput());
+  assert.equal(
+    preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status,
+    'pass',
+    JSON.stringify(preMerge.blocking),
+  );
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle(AUTHENTIC_MERGE_SHA) },
+    {
+      laneType: 'migration',
+      verifierProvenance: EXTERNAL_VERIFIER,
+      mergedPrAttestation: MERGED_PR_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: AUTHENTIC_SQUASH_GIT,
+    },
+  );
+  assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
+});
+
+test('schema-v1 is rejected pre-merge but remains readable by the historical post-merge path', () => {
+  const legacyBundle: EvidenceBundleV1 = {
+    schema_version: 1,
+    runtime_proof: {
+      queries: [{ query: 'select 1', result: 'PASS' }],
+      row_counts: [{ table: 'picks', count: 1 }],
+    },
+    verifier: { identity: 'independent-reviewer' },
+  };
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('migration', legacyBundle));
+  const bindingFinding = preMerge.findings.find((finding) => finding.id === 'CEP-E7');
+  assert.equal(bindingFinding?.status, 'fail');
+  assert.match(bindingFinding?.detail ?? '', /schema-v1 evidence is historical read-only/);
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: legacyBundle },
+    { laneType: 'migration' },
+  );
+  assert.deepStrictEqual(postMerge.map((check) => check.status), ['pass', 'pass', 'pass']);
+});
+
+test('close eligibility catches shared proof-profile disagreement before merge', () => {
+  const preMerge = evaluateCloseEligibilityPreflight(migrationCepInput('runtime'));
+  assert.equal(preMerge.findings.find((finding) => finding.id === 'CEP-E7')?.status, 'fail');
+
+  const postMerge: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => postMerge.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: schemaV2MigrationBundle() },
+    { laneType: 'runtime', verifierProvenance: EXTERNAL_VERIFIER },
+  );
+  assert.equal(postMerge.find((check) => check.id === 'R1')?.status, 'fail');
+  assert.equal(postMerge.find((check) => check.id === 'R2')?.status, 'fail');
+});
+
+// CEP-E2 scope. Found live on this lane's own PR (#1390): the check globbed the
+// proof directory and failed on `docs/06_status/proof/UTV2-1619/.gitkeep`, a
+// directory placeholder that exists precisely to be empty and is not a declared
+// artifact. These two tests pin both directions so the repair cannot drift into
+// a weakening — an undeclared placeholder must be ignored, and a DECLARED empty
+// artifact must still fail.
+test('CEP-E2: an undeclared empty placeholder does not block eligibility', () => {
+  const declared = [
+    { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+    { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+  ];
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      // `.gitkeep` is present at the head but absent from expected_proof_paths.
+      proof_artifacts: [...declared, { path: 'docs/06_status/proof/UTV2-9000/.gitkeep', content: '' }],
+      manifest: { expected_proof_paths: declared.map((a) => a.path) },
+    }),
+  );
+  assert.ok(
+    !r.blocking.some((f) => f.id === 'CEP-E2'),
+    `CEP-E2 must ignore undeclared placeholders: ${JSON.stringify(r.blocking, null, 2)}`,
+  );
+});
+
+test('CEP-E2: a DECLARED empty proof artifact still blocks eligibility', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: '   \n  ' },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(
+    r.blocking.some((f) => f.id === 'CEP-E2'),
+    'an empty DECLARED artifact must still fail — the repair narrows the input set, not the rule',
+  );
+});
+
+test('CEP-1: UTV2-1661 regression — manifest missing model_routing is caught pre-merge', () => {
+  // The real defect: truth-check exits infra_error at M2 and masks every later
+  // check, so the lane merged and then could not close.
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { created_by: 'codex-cli', schema_version: 2 } }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-M2'));
+  assert.strictEqual(r.blocking.find((f) => f.id === 'CEP-M2')?.regression_source, 'UTV2-1661');
+});
+
+test('CEP-2: UTV2-1661/1619 regression — proof missing pnpm verify is caught pre-merge', () => {
+  const stripped = CEP_CONFORMANT_VERIFICATION.replace('pnpm verify -> green in CI', 'nothing here');
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: stripped },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E4/P13'));
+});
+
+test('CEP-3: UTV2-1619 regression — proof missing r-level-check is caught pre-merge', () => {
+  const stripped = CEP_CONFORMANT_VERIFICATION.replace('scripts/ci/r-level-check.ts -> PASS', 'R-level check ok');
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: stripped },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E4/P14'));
+});
+
+test('CEP-4: UTV2-1649 regression — unbindable diff-summary is caught pre-merge', () => {
+  // proof-generate refused this after the merge with unbindable_proof_artifact.
+  const noAnchor = '# UTV2-9000 diff summary\n\n- did a thing\n';
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: noAnchor },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  const f = r.blocking.find((x) => x.id === 'CEP-E5');
+  assert.ok(f, 'unbindable artifact must block');
+  assert.strictEqual(f?.regression_source, 'UTV2-1649');
+});
+
+test('CEP-5: UTV2-1649 regression — sidecar missing override_used is caught pre-merge', () => {
+  const bad = JSON.stringify({ issue_id: 'UTV2-9000', model: 'gpt-5.6-sol', reasoning_effort: 'high' });
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+        { path: 'docs/06_status/proof/UTV2-9000/model-routing.json', content: bad },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E6'));
+});
+
+test('CEP-6: a valid sidecar passes', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: CEP_CONFORMANT_VERIFICATION },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+        { path: 'docs/06_status/proof/UTV2-9000/model-routing.json', content: CEP_CONFORMANT_SIDECAR },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, true, JSON.stringify(r.blocking));
+});
+
+test('CEP-7: a declared proof path absent at the head is caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { expected_proof_paths: ['docs/06_status/proof/UTV2-9000/evidence.json'] } }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E1'));
+});
+
+test('CEP-8: missing required verification sections are caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({
+      proof_artifacts: [
+        { path: 'docs/06_status/proof/UTV2-9000/verification.md', content: 'MERGE_SHA: ' + 'a'.repeat(40) },
+        { path: 'docs/06_status/proof/UTV2-9000/diff-summary.md', content: CEP_CONFORMANT_DIFF_SUMMARY },
+      ],
+    }),
+  );
+  assert.strictEqual(r.eligible, false);
+  assert.ok(r.blocking.some((f) => f.id === 'CEP-E3'));
+});
+
+test('CEP-9: an unresolvable tier and unparseable pr_url are caught pre-merge', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput({ manifest: { tier: 'T9', pr_url: null } }));
+  assert.strictEqual(r.eligible, false);
+  const ids = r.blocking.map((f) => f.id);
+  assert.ok(ids.includes('CEP-M1'));
+  assert.ok(ids.includes('CEP-M3'));
+});
+
+test('CEP-10: unknowable-before-merge checks never block, and are never reported as pass', () => {
+  const r = evaluateCloseEligibilityPreflight(cepInput());
+  const unknowable = r.findings.filter((f) => f.status === 'not_knowable_pre_merge');
+  assert.ok(unknowable.length >= 2, 'merge-SHA/CI and external-authority checks must be unknowable');
+  // Asserting them as pass would make the preflight claim something it cannot see.
+  assert.strictEqual(unknowable.some((f) => r.blocking.includes(f)), false);
+  assert.ok(unknowable.some((f) => f.id === 'CEP-C2'));
+  assert.ok(unknowable.some((f) => f.id === 'CEP-L2'));
+});
+
+test('CEP-11: close readiness reports which conditions would fail lane-close after merge', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { created_by: 'codex-cli', schema_version: 2 } }),
+  );
+  const c1 = r.findings.find((f) => f.id === 'CEP-C1');
+  assert.strictEqual(c1?.status, 'fail');
+  assert.match(c1?.detail ?? '', /ops:lane-close would fail after merge on:.*CEP-M2/);
+});
+
+test('CEP-12: every blocking finding names a category, so failures are actionable by area', () => {
+  const r = evaluateCloseEligibilityPreflight(
+    cepInput({ manifest: { tier: 'T9', created_by: 'codex-cli', schema_version: 2, pr_url: null } }),
+  );
+  assert.ok(r.blocking.length >= 3);
+  for (const f of r.blocking) {
+    assert.ok(['evidence', 'manifest', 'close', 'lifecycle'].includes(f.category), f.id);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1691 — dry-run capability
+//
+// The done-gate could not answer "would this lane close?" without changing the
+// answer: finalizeWithManifest persisted a truth_check_history entry, bumped
+// heartbeat_at, and on exit code 4 flipped status to 'reopened'. Diagnosing a
+// population of merged-but-unclosed lanes therefore mutated that population.
+// ---------------------------------------------------------------------------
+
+function dryRunManifestFixture(): LaneManifest {
+  return {
+    schema_version: 2,
+    issue_id: 'UTV2-9999',
+    lane_type: 'governance',
+    executor: 'claude',
+    tier: 'T1',
+    branch: 'claude/utv2-9999-fixture',
+    base_branch: 'main',
+    status: 'in_review',
+    file_scope_lock: [],
+    blocked_by: [],
+    commit_sha: null,
+    pr_url: null,
+    closed_at: null,
+    truth_check_history: [],
+    reopen_history: [],
+  } as unknown as LaneManifest;
+}
+
+function finalizeInput(overrides: Record<string, unknown> = {}): never {
+  return {
+    manifest: dryRunManifestFixture(),
+    issueId: 'UTV2-9999',
+    tier: 'T1',
+    checkedAt: '2026-08-12T00:00:00.000Z',
+    checks: [{ id: 'G5', status: 'fail', detail: 'post-merge touch detected' }],
+    failures: new Set(['G5']),
+    reopenReasons: new Set(['post-merge touch detected']),
+    mergeSha: 'abc1234',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1',
+    verdict: 'reopened',
+    exitCode: 4,
+    runner: 'manual',
+    ...overrides,
+  } as never;
+}
+
+test('UTV2-1691: a dry run never invokes the persistence step, even on the exit-4 reopen path', () => {
+  const writes: LaneManifest[] = [];
+  const result = finalizeWithManifest(
+    finalizeInput({ dryRun: true, writeManifestFn: (m: LaneManifest) => writes.push(m) }),
+  );
+
+  // Exit code 4 is the branch with the largest side effect: it sets
+  // status:'reopened' and rewrites reopen_history. If any mode leaks a write,
+  // this is where it shows.
+  assert.strictEqual(result.exit_code, 4);
+  assert.strictEqual(
+    writes.length,
+    0,
+    `a dry run must not persist; writer was called ${writes.length} time(s)`,
+  );
+});
+
+test('UTV2-1691: the live path still persists — the dry-run flag must not disable the gate for everyone', () => {
+  const writes: LaneManifest[] = [];
+  finalizeWithManifest(
+    finalizeInput({ dryRun: false, writeManifestFn: (m: LaneManifest) => writes.push(m) }),
+  );
+  assert.strictEqual(writes.length, 1, 'live mode must still write exactly once');
+
+  // And the write must carry the real mutation, not an untouched copy.
+  const persisted = writes[0]!;
+  assert.strictEqual(persisted.status, 'reopened', 'exit 4 must reopen in live mode');
+  assert.strictEqual(persisted.truth_check_history.length, 1);
+  assert.strictEqual(persisted.heartbeat_at, '2026-08-12T00:00:00.000Z');
+});
+
+test('UTV2-1691: dry and live produce an identical verdict, check list and failure set', () => {
+  const dry = finalizeWithManifest(finalizeInput({ dryRun: true, writeManifestFn: () => {} }));
+  const live = finalizeWithManifest(finalizeInput({ dryRun: false, writeManifestFn: () => {} }));
+
+  // This is what makes "one shared evaluation path" mechanical rather than a
+  // claim in a comment. If a second path is ever introduced, this fails.
+  assert.deepStrictEqual(dry.checks, live.checks);
+  assert.deepStrictEqual(dry.failures, live.failures);
+  assert.strictEqual(dry.verdict, live.verdict);
+  assert.strictEqual(dry.exit_code, live.exit_code);
+  assert.strictEqual(dry.merge_sha, live.merge_sha);
+  assert.strictEqual(dry.pr_url, live.pr_url);
+});
+
+test('UTV2-1691: the dry-run guarantee holds only while one write site exists — guard the audit', () => {
+  // An exhaustive write audit established that the evaluation path performs
+  // exactly one mutation of any kind. `dryRun` gates that one site, so the
+  // guarantee ("no manifest writes, no proof writes, no Linear mutations, no
+  // GitHub mutations") is only true while that remains so. This test fails if a
+  // future edit adds a write surface, rather than letting the guarantee rot into
+  // a stale comment.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check-lib.ts'),
+    'utf8',
+  );
+
+  const writeSurfaces = [
+    /\bwriteFileSync\s*\(/g,
+    /\bappendFileSync\s*\(/g,
+    /\bcreateWriteStream\s*\(/g,
+    /\bmkdirSync\s*\(/g,
+    /\brmSync\s*\(/g,
+    /\bunlinkSync\s*\(/g,
+    /\brenameSync\s*\(/g,
+    /\bwriteJsonFile\s*\(/g,
+  ];
+  for (const pattern of writeSurfaces) {
+    assert.strictEqual(
+      source.match(pattern)?.length ?? 0,
+      0,
+      `unexpected filesystem write surface ${pattern} in truth-check-lib.ts — the dry-run guarantee no longer holds without gating it`,
+    );
+  }
+
+  // There must be NO direct `writeManifest(...)` invocation anywhere: the only
+  // permitted form is the gated, injectable one below. A future edit that calls
+  // writeManifest directly would be ungated, and fails here.
+  const directCalls = source.match(/\bwriteManifest\s*\(/g) ?? [];
+  assert.strictEqual(
+    directCalls.length,
+    0,
+    `found ${directCalls.length} ungated writeManifest(...) call site(s); persistence must go through the dryRun gate`,
+  );
+
+  // And the gated form must still be present — otherwise persistence was
+  // removed entirely and the live gate silently stopped recording.
+  assert.match(
+    source,
+    /if \(!input\.dryRun\) \{\s*\(input\.writeManifestFn \?\? writeManifest\)\(updated\);/,
+    'the sole persistence site must remain gated behind !input.dryRun',
+  );
+
+  // No Linear or GitHub mutation verbs.
+  assert.strictEqual(
+    /method:\s*'(PUT|PATCH|DELETE)'/.test(source),
+    false,
+    'no GitHub/Linear write verb may appear in the evaluation path',
+  );
+  assert.strictEqual(
+    /\bspawnSync\s*\(|\bexecSync\s*\(/.test(source),
+    false,
+    'no shell-out may appear in the evaluation path (it could invoke a write)',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1691 — independent review findings (Codex, exact head fdf1343d)
+// ---------------------------------------------------------------------------
+
+test('UTV2-1691 P2-1: a dry run is machine-distinguishable from a certifying live run', () => {
+  const dry = finalizeWithManifest(finalizeInput({ dryRun: true, writeManifestFn: () => {} }));
+  const live = finalizeWithManifest(finalizeInput({ dryRun: false, writeManifestFn: () => {} }));
+
+  // The defect: --json emitted an ordinary TruthCheckResult with no marker, so a
+  // passing dry run was byte-indistinguishable from a real gate pass (same
+  // verdict, same exit code). Automation consuming JSON could record it as a
+  // certified result.
+  assert.strictEqual(dry.dry_run, true, 'dry run must be flagged in the machine-readable result');
+  assert.strictEqual(dry.certifies, false, 'a dry run certifies nothing');
+  assert.strictEqual(live.dry_run, false);
+  assert.strictEqual(live.certifies, true);
+
+  // The verdict itself must stay identical -- the markers distinguish the RUN,
+  // not the answer. Collapsing those two would break the shared-path guarantee.
+  assert.strictEqual(dry.verdict, live.verdict);
+  assert.strictEqual(dry.exit_code, live.exit_code);
+  assert.deepStrictEqual(dry.checks, live.checks);
+
+  // And the two results must not be serialization-equal, which is exactly the
+  // property the reviewer said was missing.
+  const strip = (r: TruthCheckResult) => JSON.stringify({ ...r, dry_run: undefined, certifies: undefined });
+  assert.strictEqual(strip(dry), strip(live), 'everything except the markers is identical');
+  assert.notStrictEqual(JSON.stringify(dry), JSON.stringify(live), 'the markers must make them distinguishable');
+});
+
+test('UTV2-1691 P2-2: dry-run remediation text points at lane-close, not truth-check', () => {
+  // The defect: the message said re-running without --dry-run would "close the
+  // lane". A live truth-check only appends history and heartbeat; status=done,
+  // closed_at, the Linear transition and lock release belong to ops:lane-close.
+  // Following the old text left the lane merged and open.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+
+  assert.match(source, /ops:lane-close/, 'remediation must name the command that actually closes a lane');
+  assert.doesNotMatch(
+    source,
+    /Re-run without --dry-run to close the lane/,
+    'the incorrect remediation text must not return',
+  );
+  assert.match(
+    source,
+    /does NOT close the lane/,
+    'the message must state plainly that truth-check does not close',
+  );
+});
+
+test('UTV2-1691 P2-1: the --json branch stamps the markers independently of the library', () => {
+  // Defence in depth: --json is the documented automation interface, so the CLI
+  // must not rely solely on the library having stamped the result.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts', 'ops', 'truth-check.ts'),
+    'utf8',
+  );
+  assert.match(
+    source,
+    /emitJson\(\{[\s\S]*dry_run:\s*bools\.has\('dry-run'\)[\s\S]*certifies:\s*!bools\.has\('dry-run'\)/,
+    'the --json branch must stamp dry_run and certifies itself',
+  );
+});
+
+test('M8 fails when a done manifest still holds its control-checkout lease', () => {
+  const check = evaluateTerminalLeaseInvariant(
+    { issue_id: 'UTV2-1690', status: 'done' },
+    [terminalLease('active')],
+  );
+  assert.strictEqual(check.status, 'fail');
+  assert.match(check.detail, /ops:lane-finalize/);
+});
+
+test('M8 passes only after terminal lease cleanup, while merged closeout remains eligible', () => {
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'done' },
+      [terminalLease('released')],
+    ).status,
+    'pass',
+  );
+  assert.strictEqual(
+    evaluateTerminalLeaseInvariant(
+      { issue_id: 'UTV2-1690', status: 'merged' },
+      [terminalLease('active')],
+    ).status,
+    'pass',
+  );
 });

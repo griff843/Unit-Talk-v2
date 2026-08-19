@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import {
   type LaneExecutionLocation,
@@ -18,6 +19,10 @@ import {
   parseArgs,
   relativeToRoot,
   requireIssueId,
+  readAllManifests,
+  TERMINAL_STATUSES,
+  SUCCESS_TERMINAL_STATUSES,
+  type LaneManifestStatus,
 } from './shared.js';
 
 export type LeaseExecutor = 'claude' | 'codex-cli' | 'codex-cloud';
@@ -138,7 +143,45 @@ const VALID_STATUSES = new Set<LeaseStatus>([
   'released',
 ]);
 
-export const LEASE_REGISTRY_DIR = path.join(ROOT, '.ops', 'leases');
+/**
+ * Coordination state belongs to the control checkout, not to whichever linked
+ * worktree happens to execute an ops command.
+ *
+ * `lane-start` runs from the control checkout and therefore reserves the lease
+ * there. Before UTV2-1690, `lane-close` imported a registry path derived from
+ * its own worktree root, so it released a shadow/nonexistent lease while the
+ * real control-checkout lease remained active. Git's common directory is the
+ * stable identity shared by every linked worktree, and its parent is the
+ * control checkout for this non-bare repository.
+ */
+export function resolveControlCheckoutRoot(
+  repoRoot = ROOT,
+  commonGitDir?: string,
+): string {
+  const rawCommonDir = commonGitDir ?? execFileSync(
+    'git',
+    ['-C', repoRoot, 'rev-parse', '--git-common-dir'],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+  ).trim();
+  const absoluteCommonDir = path.isAbsolute(rawCommonDir)
+    ? path.normalize(rawCommonDir)
+    : path.resolve(repoRoot, rawCommonDir);
+  if (path.basename(absoluteCommonDir) !== '.git') {
+    throw new Error(
+      `Unable to resolve control checkout from git common directory: ${absoluteCommonDir}`,
+    );
+  }
+  return path.dirname(absoluteCommonDir);
+}
+
+export const CONTROL_CHECKOUT_ROOT = resolveControlCheckoutRoot();
+export const LEASE_REGISTRY_DIR = path.join(CONTROL_CHECKOUT_ROOT, '.ops', 'leases');
+
+export interface TerminalLeaseReleaseTransaction {
+  warnings: string[];
+  commit: () => void;
+  rollback: () => void;
+}
 
 export interface ActiveLeaseCheckInput {
   issue_id: string;
@@ -555,6 +598,19 @@ export function releaseLease(
     };
   }
 
+  // A cleanup replay must be a true no-op. Rewriting an already surrendered
+  // lease appended an unbounded series of synthetic release records and made
+  // it impossible to distinguish the actual release from later retries.
+  if (lease.status === 'released' || lease.status === 'reclaimed') {
+    return {
+      ok: true,
+      code: 'lease_released',
+      lease,
+      lease_path: relativePathOrAbsolute(leasePath),
+      stale_leases: [],
+    };
+  }
+
   const released: DispatchLease = {
     ...lease,
     status: 'released',
@@ -581,6 +637,55 @@ export function releaseLease(
     lease: released,
     lease_path: relativePathOrAbsolute(leasePath),
     stale_leases: [],
+  };
+}
+
+function isMissingLeaseResult(result: LeaseReserveResult): boolean {
+  return !result.ok &&
+    result.code === 'lease_invalid_existing' &&
+    result.message.startsWith('Lease not found:');
+}
+
+/**
+ * Releases the lane lease before a terminal manifest is persisted, while
+ * retaining an exact rollback snapshot until the manifest write succeeds.
+ *
+ * Ordering is deliberate: a crash may leave a live manifest with a released
+ * lease (safe and retryable), but it must never leave a terminal manifest with
+ * an active lease. Synchronous write failures restore the byte-for-byte prior
+ * lease so the two local persistence surfaces behave transactionally.
+ */
+export function beginTerminalLeaseRelease(
+  input: LeaseReleaseInput,
+  options: { registryDir?: string; now?: Date } = {},
+): TerminalLeaseReleaseTransaction {
+  const registryDir = options.registryDir ?? LEASE_REGISTRY_DIR;
+  const issueId = requireIssueId(input.issue_id);
+  const leasePath = leasePathForIssue(issueId, registryDir);
+  const before = fs.existsSync(leasePath) ? fs.readFileSync(leasePath) : null;
+  const result = releaseLease(input, options);
+  if (!result.ok && !isMissingLeaseResult(result)) {
+    throw new Error(`Failed to release dispatch lease: ${result.code} ${result.message}`);
+  }
+
+  let active = true;
+  return {
+    warnings: result.ok ? [] : [`dispatch lease already released or missing: ${result.message}`],
+    commit: () => {
+      active = false;
+    },
+    rollback: () => {
+      if (!active) return;
+      if (before === null) {
+        fs.rmSync(leasePath, { force: true });
+      } else {
+        ensureDir(path.dirname(leasePath));
+        const temporary = `${leasePath}.${process.pid}.${Date.now()}.rollback.tmp`;
+        fs.writeFileSync(temporary, before);
+        fs.renameSync(temporary, leasePath);
+      }
+      active = false;
+    },
   };
 }
 
@@ -632,13 +737,85 @@ export function validateActiveLeaseForLane(
   return errors;
 }
 
+/**
+ * Detect resources still held by lanes that have already ended
+ * (UTV2-1619 capability 13).
+ *
+ * WHY THIS EXISTS. Release was tied to a side effect rather than to the lane's
+ * recorded lifecycle transition, so a terminal lane kept its lease until the TTL
+ * happened to expire. Measured 2026-08-05: UTV2-1634 truth-closed at
+ * 2026-08-04T20:03:44Z and its lease was still `active` seventeen hours later,
+ * holding the exact files the next lane needed. The lane's `done` state played
+ * no part in the release; only the clock would have.
+ *
+ * This reports rather than mutates. Detection is not deletion -- a held resource
+ * can be the only extant record of real work (capability 8), so the disposition
+ * is stated per lease and the release itself stays an explicit, recorded act.
+ */
+export interface OrphanedLeaseFinding {
+  issue_id: string;
+  branch: string;
+  lease_status: string;
+  lane_status: string;
+  /** Files the ended lane is still holding. Empty is itself worth reporting. */
+  held_scope: string[];
+  /** True when the lane asserts completion; false for failed/superseded/cancelled. */
+  lane_completed: boolean;
+  reason: string;
+}
+
+/**
+ * @param laneStatusByIssue lifecycle state per issue id, from the lane
+ *   manifests. An issue absent from this map is skipped rather than assumed
+ *   terminal -- an unknown lane state must never justify reclaiming a lease.
+ */
+export function findLeasesHeldByTerminalLanes(
+  laneStatusByIssue: ReadonlyMap<string, LaneManifestStatus>,
+  registryDir = LEASE_REGISTRY_DIR,
+): OrphanedLeaseFinding[] {
+  const findings: OrphanedLeaseFinding[] = [];
+  for (const lease of readAllLeases(registryDir)) {
+    // A lease still HOLDS its file scope in both `active` and
+    // `stale_reclaim_required` -- the second only records that its TTL lapsed,
+    // not that it was given up. Gating on `active` alone made a lease
+    // permanently invisible to orphan detection the moment any earlier report
+    // run flipped it to `stale_reclaim_required`, even once its lane later
+    // reached a terminal state. `reclaimed` and `released` are genuinely
+    // surrendered and stay excluded.
+    // `ACTIVE_NON_RECLAIMED` is already the repo's definition of "this lease
+    // still holds its scope" -- reserveLease uses the same set to decide a
+    // conflict. Reusing it keeps one definition rather than a fourteenth shadow.
+    if (!ACTIVE_NON_RECLAIMED.has(lease.status)) continue;
+    const laneStatus = laneStatusByIssue.get(lease.issue_id.toUpperCase());
+    if (laneStatus === undefined) continue;
+    if (!TERMINAL_STATUSES.has(laneStatus)) continue;
+    findings.push({
+      issue_id: lease.issue_id,
+      branch: lease.branch,
+      lease_status: lease.status,
+      lane_status: laneStatus,
+      held_scope: [...(lease.file_scope_lock ?? [])],
+      lane_completed: SUCCESS_TERMINAL_STATUSES.has(laneStatus),
+      reason:
+        `Lane ${lease.issue_id} reached terminal state "${laneStatus}" but its lease is still ` +
+        'active. Reaching a terminal state must release the lease; a lease outliving its lane ' +
+        'blocks unrelated lanes until an unrelated TTL expires.',
+    });
+  }
+  return findings;
+}
+
 export function buildLeaseStaleReport(
   registryDir = LEASE_REGISTRY_DIR,
   now = new Date(),
+  laneStatusByIssue: ReadonlyMap<string, LaneManifestStatus> = new Map(
+    readAllManifests().map((manifest) => [manifest.issue_id.toUpperCase(), manifest.status]),
+  ),
 ): {
   schema_version: 1;
   run_at: string;
   stale_count: number;
+  orphaned_count: number;
   leases: Array<{
     issue_id: string;
     executor: LeaseExecutor;
@@ -651,8 +828,16 @@ export function buildLeaseStaleReport(
     owner: LeaseOwner;
     file_scope_lock: string[];
   }>;
+  orphaned_leases: OrphanedLeaseFinding[];
 } {
   const leases = readAllLeases(registryDir);
+  // Orphan classification MUST run before `markExpiredActiveLeases`. That call
+  // rewrites every TTL-expired `active` lease to `stale_reclaim_required` and
+  // persists it, and `findLeasesHeldByTerminalLanes` re-reads from disk and
+  // considers only `active` leases. Marking first therefore hides exactly the
+  // leases this report exists to surface: a lease held by a terminal lane long
+  // enough to have outlived its TTL -- which is every real leak observed so far.
+  const orphanedLeases = findLeasesHeldByTerminalLanes(laneStatusByIssue, registryDir);
   const stale = markExpiredActiveLeases(leases, now, registryDir)
     .concat(leases.filter((lease) => lease.status === 'stale_reclaim_required'));
   const unique = new Map(stale.map((lease) => [lease.issue_id, lease]));
@@ -660,6 +845,7 @@ export function buildLeaseStaleReport(
     schema_version: 1,
     run_at: now.toISOString(),
     stale_count: unique.size,
+    orphaned_count: orphanedLeases.length,
     leases: [...unique.values()].map((lease) => ({
       issue_id: lease.issue_id,
       executor: lease.executor,
@@ -672,7 +858,12 @@ export function buildLeaseStaleReport(
       owner: lease.owner,
       file_scope_lock: lease.file_scope_lock,
     })),
+    orphaned_leases: orphanedLeases,
   };
+}
+
+export function leaseReportExitCode(orphanedCount: number): 0 | 1 {
+  return orphanedCount > 0 ? 1 : 0;
 }
 
 export function validateLease(input: unknown): string[] {
@@ -888,14 +1079,21 @@ function runCli(): void {
       if (bools.has('json')) {
         emitJson(report);
       } else {
-        console.log(`[ops:lease report] stale_count=${report.stale_count}`);
+        console.log(
+          `[ops:lease report] stale_count=${report.stale_count} orphaned_count=${report.orphaned_count}`,
+        );
         for (const lease of report.leases) {
           console.log(
             `  [STALE] ${lease.issue_id} ${lease.executor} ${lease.branch} heartbeat=${lease.heartbeat_at} cwd=${lease.cwd}`,
           );
         }
+        for (const finding of report.orphaned_leases) {
+          console.log(
+            `  [ORPHANED] ${finding.issue_id} lane_status=${finding.lane_status} lease_status=${finding.lease_status} scope=${finding.held_scope.join(', ')}`,
+          );
+        }
       }
-      process.exitCode = 0;
+      process.exitCode = leaseReportExitCode(report.orphaned_count);
       return;
     }
 

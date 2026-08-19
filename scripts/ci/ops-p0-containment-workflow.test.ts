@@ -52,6 +52,22 @@ function remoteScript(job: WorkflowJob): string {
   return script.slice(bodyStart, end);
 }
 
+
+/**
+ * Character offset of the ACTUAL restart command. The literal
+ * `docker compose up ...` text also appears inside the trap's printed
+ * rollback_command, which precedes it, so a plain indexOf finds the wrong one.
+ */
+function restartOffset(text: string): number {
+  const lines = text.split('\n');
+  let offset = 0;
+  for (const line of lines) {
+    if (line.trim() === 'docker compose up -d --no-deps --force-recreate api </dev/null') return offset;
+    offset += line.length + 1;
+  }
+  return -1;
+}
+
 test('is manual-only and accepts only the exact confirmation input', () => {
   const { workflow } = load();
   assert.deepStrictEqual(Object.keys(workflow.on ?? {}), ['workflow_dispatch']);
@@ -353,7 +369,7 @@ test('restores env.production automatically if anything fails before the restart
   assert.match(remote, /cp -p -- "\$BACKUP_FILE" "\$ENV_FILE"/, 'the trap must restore from the backup');
 
   const attempted = remote.indexOf('RESTART_DONE=attempted');
-  const restart = remote.indexOf('UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up');
+  const restart = restartOffset(remote);
   const confirmed = remote.indexOf('RESTART_DONE=true');
   assert.ok(attempted >= 0 && attempted < restart, 'restart must be marked attempted before it is tried');
   assert.ok(confirmed > restart, 'RESTART_DONE=true must only be set after compose returns success');
@@ -371,9 +387,7 @@ test('never appends onto a file that lacks a trailing newline', () => {
 
 test('validates each key occurs exactly once and has the exact false value before restart', () => {
   const { text } = load();
-  const validationEnd = text.indexOf(
-    'UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api',
-  );
+  const validationEnd = restartOffset(text);
   assert.ok(validationEnd >= 0, 'API restart must exist');
   const beforeRestart = text.slice(0, validationEnd);
 
@@ -388,8 +402,12 @@ test('validates each key occurs exactly once and has the exact false value befor
 test('reuses the current release image and recreates only the API without dependencies', () => {
   const { text, job } = load();
   const script = runScript(job);
-  assert.match(script, /CURRENT_IMAGE="\$\(tr -d '\\r\\n' < \.unit-talk-release\)"/);
-  assert.match(script, /UNIT_TALK_IMAGE_TAG="\$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api/);
+  // The tag is now EXPORTED once, before any compose evaluation, rather than
+  // prefixed onto the restart alone — the defect that stopped the first
+  // production run verifying its own containment.
+  assert.match(script, /UNIT_TALK_IMAGE_TAG="\$\(tr -d '\\r\\n' < \.unit-talk-release\)"/);
+  assert.match(script, /export UNIT_TALK_IMAGE_TAG/);
+  assert.match(script, /docker compose up -d --no-deps --force-recreate api/);
 
   const composeUpLines = text.split('\n').filter((line) => line.includes('docker compose up'));
   assert.ok(composeUpLines.length >= 2, 'containment and rollback API restart commands must be present');
@@ -447,9 +465,7 @@ test('captures ordered pre-state, post-state, health evidence, and an explicit r
   const { text } = load();
   const pre = text.indexOf('=== PRE-STATE (REDACTED) ===');
   const backup = text.indexOf('cp -p -- "$ENV_FILE" "$BACKUP_FILE"');
-  const restart = text.indexOf(
-    'UNIT_TALK_IMAGE_TAG="$CURRENT_IMAGE" docker compose up -d --no-deps --force-recreate api',
-  );
+  const restart = restartOffset(text);
   const post = text.indexOf('=== POST-STATE (REDACTED) ===');
   const evidence = text.indexOf('=== REDACTED CONTAINMENT EVIDENCE ===');
   const rollback = text.indexOf('=== ROLLBACK RECEIPT ===');

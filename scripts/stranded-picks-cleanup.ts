@@ -9,14 +9,14 @@
 // before --confirm is passed. Default mode is --dry-run.
 
 import { loadEnvironment } from '@unit-talk/config'
-import { createClient } from '@supabase/supabase-js'
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 const env = loadEnvironment()
 const url = env.SUPABASE_URL ?? ''
 const key = env.SUPABASE_SERVICE_ROLE_KEY ?? ''
 if (!url || !key) { console.error('FATAL: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'); process.exit(1) }
 
-const db = createClient(url, key, { auth: { persistSession: false } })
+const db = createPrivilegedClient(url, key, { auth: { persistSession: false } })
 
 const args = process.argv.slice(2)
 const dryRun = !args.includes('--confirm')

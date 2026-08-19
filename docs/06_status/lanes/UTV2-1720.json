@@ -1,0 +1,93 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1720",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1720-closeout-contract-repair",
+  "branch": "codex/utv2-1720-closeout-contract-repair",
+  "base_branch": "main",
+  "commit_sha": "374261599d63fea9a4112d94e4db18c05532e171",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1430",
+  "files_changed": [
+    ".github/workflows/close-eligibility-preflight.yml",
+    "docs/05_operations/EXECUTION_TRUTH_MODEL.md",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/06_status/proof/UTV2-1720/diff-summary.md",
+    "docs/06_status/proof/UTV2-1720/evidence.json",
+    "docs/06_status/proof/UTV2-1720/model-routing.json",
+    "docs/06_status/proof/UTV2-1720/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1720/verification.md",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ci/proof-binding-validator.ts",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/close-eligibility-preflight.yml",
+    ".ops/sync/UTV2-1720.yml",
+    "docs/05_operations/EXECUTION_TRUTH_MODEL.md",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/06_status/proof/UTV2-1720/diff-summary.md",
+    "docs/06_status/proof/UTV2-1720/evidence.json",
+    "docs/06_status/proof/UTV2-1720/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1720/verification.md",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ci/proof-binding-validator.test.ts",
+    "scripts/ci/proof-binding-validator.ts",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1720/evidence.json",
+    "docs/06_status/proof/UTV2-1720/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-17T14:03:52.431Z",
+  "heartbeat_at": "2026-08-19T16:23:10.902Z",
+  "closed_at": "2026-08-19T16:23:10.902Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-18T08:43:58.465Z",
+      "verdict": "fail",
+      "merge_sha": "374261599d63fea9a4112d94e4db18c05532e171",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1430 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-19T16:23:08.163Z",
+      "verdict": "pass",
+      "merge_sha": "374261599d63fea9a4112d94e4db18c05532e171",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1720-closeout-contract-repair",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

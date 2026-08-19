@@ -182,7 +182,7 @@ PM reviews **artifacts**, not narratives.
 - **T1 approval signal:** GitHub label `t1-approved` on the PR. Chat approval is not binding.
 - **Daily digest:** `ops:daily-digest` emits open lanes, stale lanes, truth-check failures, CI health, drift flags. PM reviews the digest, not session transcripts.
 - **Agent self-certification is forbidden.** The agent may declare a lane *ready for truth-check*, never *done*.
-- **PM override:** PM may force-close a lane via `ops:lane-close --override --reason <text>`. Recorded in manifest, appears in next digest.
+- **No closeout override:** `ops:lane-close` has no override or force-close path. A failing truth-check must be repaired through a normal scoped lane and PR; PM approval does not bypass technical verification.
 
 ---
 

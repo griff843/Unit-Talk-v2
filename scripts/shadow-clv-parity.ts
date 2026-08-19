@@ -15,7 +15,8 @@
  * Issue: UTV2-174
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -408,11 +409,11 @@ async function main() {
 
   console.log(`Shadow CLV parity comparison: ${since} to ${until}`);
 
-  const v1Client = createClient(
+  const v1Client = createPrivilegedClient(
     requireEnv('V1_SUPABASE_URL'),
     requireEnv('V1_SUPABASE_SERVICE_ROLE_KEY'),
   );
-  const v2Client = createClient(
+  const v2Client = createPrivilegedClient(
     requireEnv('SUPABASE_URL'),
     requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   );

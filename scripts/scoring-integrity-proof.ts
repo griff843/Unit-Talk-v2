@@ -16,7 +16,7 @@
  *   tsx scripts/scoring-integrity-proof.ts --json
  */
 
-import { createClient } from '@supabase/supabase-js'
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const db = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
+  const db = createPrivilegedClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } })
 
   const now = new Date()
   const cohortStart = new Date(now.getTime() - COHORT_DAYS * 24 * 60 * 60 * 1000)

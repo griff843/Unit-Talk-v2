@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1626",
+  "tier": "T1",
+  "title": "The readiness ledger is measured and published, and the gate says which kind of failure it found",
+  "generated_at": "2026-07-30T23:55:00.000Z",
+  "implementation_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+  "sha_binding": {
+    "verified_source_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+    "current_pr_head_sha": null,
+    "merge_sha": "328ac4b3d05ec4905520c4aedd4d5867e02b3495",
+    "verified_source_note": "Bound to the merge commit on main. PR #1326 was squash-merged, so the implementation head 3839ff43755e60eaebd2661880415c8784c83f7a is not an ancestor of main; 328ac4b3d05ec4905520c4aedd4d5867e02b3495 is the commit that carries this tree. The measurements below were produced on that exact tree and were not re-run afterwards against a different one.",
+    "implementation_head_sha": "3839ff43755e60eaebd2661880415c8784c83f7a"
+  },
+  "verifier": {
+    "identity": "github-actions/CI — run 30591788931, job 91035479830 `Writable DB proof (staging only)` (producer) and job 91036083714 `verify` (independent receipt verifier)",
+    "method": "scripts/ci/verify-db-proof-receipt.ts re-checked the receipt against its own GITHUB_* values inside the required `verify` context and printed `Verdict: PASS` / `Reason: DB proof verified: run 30591788931 attempt 1 @ 29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0`.",
+    "note": "The implementing agent is not the verifier of the writable-DB claim by design: proof text cannot show which database a run reached, so the verifier is the CI job that holds the credential and the separate job that re-derives the receipt's binding. The production-side measurement in runtime_proof below is a different claim with a different verifier — see verifier_scope.",
+    "verifier_scope": "This identity verifies the live-DB execution evidence recorded under runtime_proof.queries, runtime_proof.row_counts (target xskgrzbteyqdufktjrjx) and runtime_proof.ci_receipt. It does not and cannot verify the read-only production readiness measurement, which was taken by scripts/ops/readiness-refresh.ts on a credentialled workstation; that claim rests on the persistence assertion and the source-scanning test recorded elsewhere in this bundle.",
+    "harvest_note": "The queries, row counts and receipt fields were read back on 2026-07-31 from the retained artifacts of that same run — the job logs for jobs 91035479830 and 91036083714, and receipt artifact 8778682075. Nothing was re-run: a re-run would be a different measurement wearing this merge SHA's name."
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "stages_passed": [
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "note": "pnpm verify cannot complete on a workstation without staging credentials — inherited from UTV2-1630, which pinned every writable DB stage to the staging project. verify:static is the sanctioned local equivalent (verify:local). The authoritative full run is the required `verify` context in CI."
+    },
+    "test_ops": {
+      "command": "pnpm test:ops",
+      "tests": 1447,
+      "pass": 1447,
+      "fail": 0,
+      "skipped": 0,
+      "suites": 6,
+      "duration_ms": 19255.442796
+    },
+    "lane_tests_in_isolation": {
+      "files": [
+        "scripts/ops/readiness-refresh.test.ts",
+        "scripts/ci/readiness-ledger-gate.test.ts",
+        "scripts/ci/readiness-refresh-workflow.test.ts",
+        "scripts/ci/direct-main-push-guard.test.ts"
+      ],
+      "tests": 63,
+      "pass": 63,
+      "fail": 0,
+      "skipped": 0
+    },
+    "workflow_credential_scanner": {
+      "command": "pnpm exec tsx scripts/ci/workflow-production-credential-guard.ts",
+      "exit_code": 0,
+      "note": "readiness-refresh.yml holds a production READ credential and is schedule + workflow_dispatch only, so it creates no pull-request-reachable exposure. The pull-request gate job holds no credential at all."
+    }
+  },
+  "runtime_proof": {
+    "mechanism": "live read-only measurement of canonical production",
+    "target_project_ref": "zfzdnfwdarxucxtaojxm",
+    "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+    "targeted_production": true,
+    "mutated_production": false,
+    "read_only_basis": "The generator's only database surface is the ReadOnlyDb wrapper in scripts/ops/readiness-refresh.ts, which exposes select reads only. There is no insert/update/upsert/delete/rpc path in the file, and readiness-refresh.test.ts scans the source to keep it that way.",
+    "measured_ledger": {
+      "generated_at": "2026-07-30T23:40:39.763Z",
+      "verdict": "RED",
+      "observability": "degraded",
+      "schema_version": 2,
+      "dimensions_observed": 9,
+      "blockers": [
+        "deploy_sha_alignment",
+        "ingestor_health",
+        "worker_outbox_health",
+        "dead_letter_count"
+      ],
+      "unreadable": [
+        "db_tripwires",
+        "constitution_convergence"
+      ],
+      "passing": [
+        "pnpm_verify"
+      ],
+      "failing_non_blocking": [
+        "scheduled_observer_health",
+        "proof_coverage"
+      ]
+    },
+    "blocker_detail": {
+      "deploy_sha_alignment": "Last successful deploy run 28415953590 at 2026-06-30T02:30:15Z (741.2h ago) shipped 8deccaceda9f4af3b5efb17ecf23b5151315ed5d; main HEAD 3f83c87692e2fab106156a8ae01f54fd1bdc31d5 is 357 commits ahead.",
+      "ingestor_health": "latest ingestor.cycle started 2026-06-30T12:55:01.189873+00:00 (43845m old, threshold 30m), status \"failed\"; latest merged provider cycle 2026-06-30T12:24:44.890623+00:00; latest game_results row 2026-06-30T07:27:28.089891+00:00.",
+      "worker_outbox_health": "worker.heartbeat 2026-07-16T03:48:17.780927+00:00 (21352m old, threshold 30m, status succeeded); queue buckets pending=9, processing=32, stale_unknown=32, attempted-and-stuck=0.",
+      "dead_letter_count": "1948 dead_letter rows = 1947 bucket:governance_hold (attempt_count=0) + 1 bucket:true_failure (attempt_count>0). Governance holds do not fail readiness under QUEUE_READINESS_SEMANTICS.md v1.0; the single true delivery failure does."
+    },
+    "queries": [
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "ok 1",
+        "duration_ms": 7506.189735
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "ok 2",
+        "duration_ms": 7833.763617
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "result": "ok 3",
+        "duration_ms": 13199.142057
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "result": "ok 4",
+        "duration_ms": 13195.886199
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "ok 5",
+        "duration_ms": 217.12805
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows",
+        "result": "ok 6",
+        "duration_ms": 14598.900333
+      },
+      {
+        "suite": "apps/api/src/database-smoke.test.ts",
+        "case": "UTV2-996: correction chain is additive — original settlement row is not mutated",
+        "result": "ok 7",
+        "duration_ms": 14866.508139
+      }
+    ],
+    "queries_note": "The seven live cases `pnpm test:db` executed against staging xskgrzbteyqdufktjrjx in the CI job that holds the credential, on the head that squash-merged to 328ac4b3. Transcribed from the ci-db-proof-receipt/v2 captured_output of run 30591788931 (artifact 8778682075), whose output_sha256 the verifier re-derived in the `verify` context; not from any local run. These are the writable live-DB queries this head executed; they are not the readiness measurement above, which is read-only against production.",
+    "row_counts": [
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='dead_letter'",
+        "operation": "read",
+        "rows": 1948,
+        "disjoint_breakdown": {
+          "attempt_count=0 (bucket:governance_hold)": 1947,
+          "attempt_count>0 (bucket:true_failure)": 1
+        }
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='pending'",
+        "operation": "read",
+        "rows": 9
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='processing'",
+        "operation": "read",
+        "rows": 32
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='processing' AND updated_at older than the stale-processing window (bucket:stale_unknown)",
+        "operation": "read",
+        "rows": 32,
+        "subset_of": "status='processing'"
+      },
+      {
+        "target": "zfzdnfwdarxucxtaojxm",
+        "table": "distribution_outbox",
+        "filter": "status='pending' AND attempt_count>0 AND updated_at past the retry window (attempted-and-stuck)",
+        "operation": "read",
+        "rows": 0,
+        "subset_of": "status='pending'"
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "distribution_receipts",
+        "operation": "reset",
+        "rows": 2
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "distribution_outbox",
+        "operation": "reset",
+        "rows": 12
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "system_runs",
+        "operation": "reset",
+        "rows": 1
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "sports",
+        "operation": "upsert",
+        "rows": 9
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "cappers",
+        "operation": "upsert",
+        "rows": 1
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "market_families",
+        "operation": "upsert",
+        "rows": 6
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "selection_types",
+        "operation": "upsert",
+        "rows": 3
+      },
+      {
+        "target": "xskgrzbteyqdufktjrjx",
+        "table": "market_types",
+        "operation": "upsert",
+        "rows": 133
+      }
+    ],
+    "row_counts_note": "Two sources, both labelled. The five zfzdnfwdarxucxtaojxm entries are production counts the readiness generator observed read-only at 2026-07-30T23:40:39.763Z; they are the same numbers quoted in blocker_detail above, restated as the individual COUNT queries scripts/ops/readiness-refresh.ts actually issues. They are deliberately not summed: stale_unknown is a subset of processing and attempted-and-stuck a subset of pending, so a total would double-count. The eight xskgrzbteyqdufktjrjx entries were observed by scripts/ci/seed-staging-fixtures.ts in run 30591788931, job 91035479830, immediately before the writable suites ran, read from that job's log: `reset` rows are the deletions it reported for the mutable tables, `upsert` rows the reference data it re-seeded. settlement_records, picks and submissions are retained by design and were not reset.",
+    "ci_receipt": {
+      "schema": "ci-db-proof-receipt/v2",
+      "workflow": "CI",
+      "job": "staging-db-proof",
+      "github_run_id": "30591788931",
+      "github_run_attempt": "1",
+      "github_sha": "29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8",
+      "github_ref_name": "1326/merge",
+      "producer_job_id": "91035479830",
+      "verifier_job_id": "91036083714",
+      "receipt_command": "pnpm test:db",
+      "started_at": "2026-07-30T23:51:43.867Z",
+      "finished_at": "2026-07-30T23:52:56.947Z",
+      "exit_code": 0,
+      "observed_project_ref": "xskgrzbteyqdufktjrjx",
+      "observed_host": "xskgrzbteyqdufktjrjx.supabase.co",
+      "expected_staging_project_ref": "xskgrzbteyqdufktjrjx",
+      "canonical_production_project_ref": "zfzdnfwdarxucxtaojxm",
+      "test_db_tap": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0
+      },
+      "job_tap_total": {
+        "tests": 96,
+        "pass": 96,
+        "fail": 0,
+        "skipped": 0,
+        "blocks": 16
+      },
+      "repo_migration_head": "20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "fixture_run_id": "utv2-1630-30591788931-1",
+      "output_sha256": "d5045b803b46c0d854761efa584f35ec0a5cfc88ecb3df61c4b696109e0af8d5",
+      "receipt_sha256": "f581a90c9e76649c1f4f17feed886458ef35f4315b15c6cded1bb498594a201c",
+      "artifact_id": "8778682075",
+      "artifact_name": "utv2-1630-db-proof-receipt-30591788931-1",
+      "artifact_name_note": "The artifact name is prefixed `utv2-1630` because that string is a literal in ci.yml, written by the lane that built this workflow. It is not a claim about which issue this run belongs to; github_run_id and workflow_ref (refs/pull/1326/merge) are.",
+      "verifier_verdict": "PASS",
+      "verifier_reason": "DB proof verified: run 30591788931 attempt 1 @ 29f3f123db2a0eb3e5d2dbfe983d7f5e934517a8, target xskgrzbteyqdufktjrjx, pass=7 fail=0 skipped=0",
+      "pr": 1326,
+      "head_sha_at_proof": "3839ff43755e60eaebd2661880415c8784c83f7a",
+      "head_sha_note": "github_sha above is the PR merge ref (refs/pull/1326/merge) GitHub synthesised for that run, not the branch head. The branch head it evaluated was 3839ff43755e60eaebd2661880415c8784c83f7a, which squash-merged to main as 328ac4b3d05ec4905520c4aedd4d5867e02b3495.",
+      "job_tap_note": "test_db_tap is the receipt's own tap block for `pnpm test:db`. job_tap_total sums all 16 TAP blocks printed by job 91035479830, i.e. test:db plus the pnpm test:t1-proof:live suites, read from that job's log.",
+      "result": "success"
+    }
+  },
+  "persistence_assertion": {
+    "note": "Exercised in both directions. A one-directional check would be worthless here: the mode exists to catch a run that produced nothing, so it has to be shown failing on that input.",
+    "positive_case": {
+      "input": "the newly measured ledger, against the copy from origin/main",
+      "result": "OK",
+      "exit_code": 0,
+      "output": "[readiness-persistence] OK — ledger rewritten with 9 dimensions, all observed within this run (generated_at 2026-07-30T23:40:39.763Z)"
+    },
+    "negative_case": {
+      "input": "the ledger compared against a byte-identical copy of itself",
+      "result": "NOT_REWRITTEN",
+      "exit_code": 1,
+      "output": "NOT_REWRITTEN: the ledger is byte-identical to the previous version — the generator did not execute, or its output was not published",
+      "significance": "This is the exact shape of the 29 consecutive green refresh runs that left the ledger untouched for 14.8 days. It now fails."
+    }
+  },
+  "gate_classification_proof": {
+    "note": "Same gate, same repository, two inputs — the observer failure and the product condition come back separated and correctly named.",
+    "this_branch_ledger": {
+      "code": "READINESS_RED",
+      "observer_failure": false,
+      "passed": false,
+      "age_hours": 0
+    },
+    "origin_main_ledger": {
+      "code": "LEDGER_STALE",
+      "observer_failure": true,
+      "passed": false,
+      "age_hours": 354.6,
+      "recorded_verdict_in_file": "RED",
+      "significance": "The file says RED, but the gate refuses to report it as READINESS_RED. A stale RED is not evidence of a current RED."
+    }
+  },
+  "defect_being_closed": {
+    "workflow": ".github/workflows/readiness-refresh.yml",
+    "prior_behaviour": "Checked the ledger file's age and opened a GitHub issue. It never invoked a generator, because none existed.",
+    "ledger_generated_at_on_main": "2026-07-16T05:10:24.185Z",
+    "refresh_runs_since_ledger_last_changed": 29,
+    "conclusion_of_those_runs": "success (all 29)",
+    "retained_run_history": "49 runs, 49 successes, oldest 2026-07-07T01:53:12Z",
+    "impact": "The pull-request gate failed every lane on a RED verdict nobody could confirm was still true, and a real regression was indistinguishable from a forgotten artifact. UTV2-1630's proof bundle records the gate as 'red and pre-existing … left red deliberately' — the correct call under the old design, and the signal loss this lane removes."
+  },
+  "self_referential_hazard": {
+    "statement": "This branch changes the Readiness Regression Gate itself, so its status on this pull request is stated explicitly rather than left ambiguous.",
+    "gate_status_on_this_pr": "RED",
+    "reason": "production_genuinely_red",
+    "not_broken_because": "The gate classifies as READINESS_RED with observer_failure=false on a ledger 0h old. All four blocking dimensions are live reads taken today against canonical production.",
+    "is_required_context": false,
+    "blocks_merge": false,
+    "deliberately_not_made_green": "Making it green would require writing a readiness score this lane did not measure, which is exactly the defect this lane exists to remove. The four blockers are production runtime state this diff does not touch.",
+    "follow_up_owners": [
+      "deploy_sha_alignment — main is 357 commits ahead of the last successful deploy (2026-06-30)",
+      "ingestor_health — last ingestor.cycle 2026-06-30, status failed",
+      "worker_outbox_health — worker heartbeat 14.8 days old, 32 rows processing past the 5m window",
+      "dead_letter_count — 1 true delivery failure among 1947 governance holds"
+    ]
+  },
+  "direct_main_push_guard": {
+    "change": "Admitted the scheduled ledger commit as a known automation identity.",
+    "message_pattern": "^ops\\(readiness\\): refresh ledger",
+    "path_scope": [
+      "docs/06_status/readiness/readiness-score.json"
+    ],
+    "rationale": "The ledger has to land on main to be the pull-request gate's input, and it is machine-generated every 6h. Routing it through a pull request would mean either a bot-authored PR every 6h or an artifact that goes stale again. The admission is one exact message pattern and one file, not a widening of the guard."
+  },
+  "known_limitations": [
+    "constitution_convergence and db_tripwires are reported unknown, so observability is degraded even when every readable dimension is fine. Convergence has no generator in this repository; db_tripwires is unreadable because db-health-tripwire.yml is itself failing. Both are recorded as unproven rather than assumed — correct, but it means a fully GREEN verdict is unreachable until a convergence generator exists and the tripwire observer is repaired.",
+    "The scheduled refresher needs SYNC_BOT_TOKEN to push through branch protection. Without it the push step fails — the intended outcome, since a refresh that cannot publish is not a refresh — but it surfaces as an observer-failure issue rather than as a configuration message.",
+    "The persistence assertion proves the ledger is new and was published. It does not prove the numbers inside it are true; that rests on the generator's reads being against the canonical production ref, which is asserted in code and cannot fall back to another target.",
+    "pnpm verify cannot complete on a workstation without staging credentials (inherited from UTV2-1630). Local coverage is verify:static; the authoritative full run is the required `verify` context in CI.",
+    "Live Schema Parity is red and pre-existing: migration-ledger drift tracked under UTV2-1274. This lane touches no migration and the check is not a required context."
+  ],
+  "explicitly_not": [
+    "no production database mutation — every read goes through the select-only ReadOnlyDb wrapper",
+    "no production credential in any pull_request-triggered workflow job; the refresher is schedule + workflow_dispatch only",
+    "no deployment or service restart",
+    "no direct-main push, no admin merge",
+    "no branch-protection change",
+    "no readiness score asserted without measuring it"
+  ]
+}

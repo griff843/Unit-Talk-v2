@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1722",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Closeout recovery: profile-aware harvesting, rollback-safe persistence, and merged-PR verifier provenance",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-18T12:07:03Z",
+  "sha_binding": {
+    "verified_source_sha": "eca0f8745e9a2b5c76f8e263289524b6a16b2602",
+    "verified_source_note": "Exact substantive branch head containing the closeout recovery implementation. Commits after this anchor are restricted to this lane's proof artifacts; evidence_commit_sha and current_pr_head_sha are resolved by CI. Post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-19T16:20:23.754Z"
+  },
+  "static_proof": {
+    "pnpm_verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Environment checks, lint, type-check, build, unit tests, smart-form verification, and command verification completed successfully."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "detail": "Completed inside pnpm verify:static."
+    },
+    "test": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "detail": "Completed inside pnpm verify:static."
+    },
+    "focused_regression": {
+      "command": "pnpm exec tsx --test scripts/ops/ci-db-proof-harvest.test.ts scripts/ops/lane-close.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-schema.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/workflow-hardening.test.ts",
+      "status": "PASS",
+      "tests": 509,
+      "suites": 3,
+      "fail": 0,
+      "skipped": 0,
+      "required_scenarios": [
+        "migration runtime evidence remains byte-identical during proof generation",
+        "static and schema-v2 evidence never gain author-side verifier identity",
+        "unknown proof profiles fail closed without harvesting",
+        "failed post-merge closeout leaves no durable proof mutation",
+        "trusted post-merge closeout retains the merge mutex through one guarded push, never rebases or retries a rejection, and releases the exact lock after the persistence attempt",
+        "legacy schema-v1 governance lanes retain additive CI DB-proof harvesting",
+        "missing local PR-head commits are fetched from GitHub's immutable pull-request ref before attestation checks",
+        "squash, rebase, and two-parent merges use the shared merged-PR attestation bridge",
+        "stale, unrelated, malformed, or unverifiable verifier receipts fail closed by named code",
+        "authentic historical bundles pass only with their matching merged-PR attestations"
+      ]
+    },
+    "historical_restoration": {
+      "source_commit": "97862ddc",
+      "expected_blob": "426c5898e6ae50de0611fc79cd458295b91a9d1c",
+      "restored_blob": "426c5898e6ae50de0611fc79cd458295b91a9d1c",
+      "status": "PASS",
+      "detail": "The damaged migration-profile evidence is byte-identical to the authoritative source blob."
+    },
+    "single_file_damage_proof": {
+      "commit": "823b38dce844871112279868da33bbb994e727bc",
+      "status": "PASS",
+      "changed_files": [
+        "docs/06_status/proof/UTV2-1718/evidence.json"
+      ],
+      "detail": "git show --stat and --name-status prove the automation commit changed only the damaged evidence file."
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Verdict: PASS; 18 changed files; no R-level rules matched, so no R-level artifacts are required."
+    }
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "command": "pnpm test:db",
+    "ci_receipt": {
+      "result": "PASS",
+      "run": 32126797482,
+      "job": 95679040123,
+      "head": "ecd42d20a3ba8d547f078f8b7617cf5498a4ea2a",
+      "workflow": "CI",
+      "job_name": "Writable DB proof (staging only)",
+      "run_attempt": 1,
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32126797482/job/95679040123",
+      "verified_with": [
+        "gh run view 32126797482",
+        "gh api repos/griff843/Unit-Talk-v2/actions/jobs/95679040123"
+      ],
+      "detail": "GitHub reports conclusion=success for the exact PR head, including the writable database proof and T1 live proof suite steps against staging. This is the authoritative credentialed receipt; no local TAP result is fabricated."
+    },
+    "local_workstation": {
+      "status": "BLOCKED_DEFERRED",
+      "exit_code": 1,
+      "classification": "staging_target_identity_unresolved",
+      "configured_host": "127.0.0.1",
+      "resolved_project_ref": "unidentified",
+      "required_project_ref": "xskgrzbteyqdufktjrjx",
+      "literal_refusal": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    },
+    "production_mutation_performed": false,
+    "fabricated_queries_or_row_counts": false
+  },
+  "pending_evidence": [
+    "external GitHub required-check verifier provenance bound to sha_binding.verified_source_sha",
+    "post-merge proof rebind to the authoritative merge SHA"
+  ]
+}

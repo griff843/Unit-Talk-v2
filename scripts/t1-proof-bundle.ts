@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
 
 type CommandResult = {
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
 }
 
 async function collectPipelineSummary(): Promise<PipelineSummary> {
-  const client = createClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
+  const client = createPrivilegedClient(env.SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false },
   });
 

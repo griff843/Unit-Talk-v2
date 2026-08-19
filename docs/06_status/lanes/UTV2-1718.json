@@ -1,0 +1,76 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1718",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1718-migration-refusal-drill",
+  "branch": "claude/utv2-1718-migration-refusal-drill",
+  "base_branch": "main",
+  "commit_sha": "3ce86b98a5aa01ae244794253a8c7e716f2ce733",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1428",
+  "files_changed": [
+    ".github/workflows/migration-reversibility-gate.yml",
+    "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
+    "docs/06_status/proof/UTV2-1718/evidence.json",
+    "docs/06_status/proof/UTV2-1718/verification.md",
+    "packages/db/src/database.types.ts",
+    "scripts/ci/migration-precondition-drill.ts",
+    "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/migration-reversibility-gate.yml",
+    ".ops/sync/UTV2-1718.yml",
+    "db/migrations-rollback/20260803230000_utv2_1540_command_center_ledger_repair.down.sql",
+    "docs/06_status/proof/UTV2-1718/evidence.json",
+    "docs/06_status/proof/UTV2-1718/verification.md",
+    "packages/db/src/database.types.ts",
+    "scripts/ci/migration-precondition-drill.ts",
+    "supabase/migrations/20260803230000_utv2_1540_command_center_ledger_repair.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1718/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-17T04:22:41.690Z",
+  "heartbeat_at": "2026-08-19T16:21:27.642Z",
+  "closed_at": "2026-08-19T16:21:27.642Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-18T06:20:03.131Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 25.9h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-18T06:30:59.926Z",
+      "verdict": "fail",
+      "merge_sha": "3ce86b98a5aa01ae244794253a8c7e716f2ce733",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1428 merged while manifest status was \"blocked\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-19T16:21:24.790Z",
+      "verdict": "pass",
+      "merge_sha": "3ce86b98a5aa01ae244794253a8c7e716f2ce733",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1718-migration-refusal-drill",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

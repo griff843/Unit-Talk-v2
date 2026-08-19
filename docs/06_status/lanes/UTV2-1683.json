@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1683",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1683-ci-db-proof-harvest-merge-sha",
+  "branch": "claude/utv2-1683-ci-db-proof-harvest-merge-sha",
+  "base_branch": "main",
+  "commit_sha": "d637c92c40badf4c1624bfbd7139758e3be05eab",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1396",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1683/diff-summary.md",
+    "docs/06_status/proof/UTV2-1683/verification.md",
+    "scripts/ops/ci-db-proof-harvest.test.ts",
+    "scripts/ops/ci-db-proof-harvest.ts",
+    "scripts/ops/proof-generate.test.ts",
+    "scripts/ops/proof-generate.ts"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1683/diff-summary.md",
+    "docs/06_status/proof/UTV2-1683/verification.md",
+    "scripts/ops/ci-db-proof-harvest.test.ts",
+    "scripts/ops/ci-db-proof-harvest.ts",
+    "scripts/ops/proof-generate.test.ts",
+    "scripts/ops/proof-generate.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1683/diff-summary.md",
+    "docs/06_status/proof/UTV2-1683/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-08-08T22:06:36.952Z",
+  "heartbeat_at": "2026-08-10T01:48:10.106Z",
+  "closed_at": "2026-08-10T01:48:10.106Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-10T01:48:07.730Z",
+      "verdict": "pass",
+      "merge_sha": "d637c92c40badf4c1624bfbd7139758e3be05eab",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1683-ci-db-proof-harvest-merge-sha",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "issue_id": "UTV2-1696",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-terra-medium",
+  "model": "gpt-5.6-terra",
+  "reasoning_effort": "medium",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.147.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "generated_at": "2026-08-12T18:17:56.418Z",
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "2fcdfe853239c9b0281775ef70f4e5ac883c8b92",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1413",
+    "bound_at": "2026-08-13T03:47:06.558Z"
+  }
+}

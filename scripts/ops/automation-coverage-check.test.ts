@@ -72,7 +72,7 @@ test('automation coverage fails recurring manual-purpose tool without target iss
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'FAIL');
   assert.ok(report.findings.some(finding => finding.code === 'AUTO_MANUAL_RECURRING_UNJUSTIFIED'));
@@ -82,7 +82,7 @@ test('automation coverage allows diagnostic-only manual tools', () => {
   const root = tempRoot();
   const registryPath = writeRegistry(root, baseRegistry(root));
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'PASS');
   assert.equal(report.coverage[0]?.required_check_status, 'not-required');
@@ -112,7 +112,7 @@ test('automation coverage fails prompt-agent gate claim without equivalent block
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'FAIL');
   assert.ok(report.findings.some(finding => finding.code === 'AUTO_PROMPT_AGENT_BLOCKING_WITHOUT_GATE'));
@@ -146,11 +146,81 @@ test('automation coverage emits classified trigger and artifact fields', () => {
     }),
   );
 
-  const report = buildAutomationCoverageReport(registryPath);
+  const report = buildAutomationCoverageReport(registryPath, { wiring: false });
 
   assert.equal(report.verdict, 'PASS');
   const reconcileEntry = report.coverage.find(entry => entry.surface === 'scripts/ops/reconcile.ts');
   assert.equal(reconcileEntry?.trigger, '.github/workflows/ops-reconcile.yml schedule');
   assert.equal(reconcileEntry?.artifact, 'reconcile JSON output');
   assert.equal(reconcileEntry?.automation_exists, true);
+});
+
+/* -------------------------------------------------------------------------- */
+/* UTV2-1624 — executable wiring coverage is enforced from this same gate      */
+/* -------------------------------------------------------------------------- */
+
+test('a missing workspace manifest fails closed rather than silently skipping the wiring section', () => {
+  // A required gate that quietly evaluates nothing is the defect class this
+  // check exists to catch, so an unbuildable execution graph is a tool failure.
+  const root = tempRoot();
+  const registryPath = writeRegistry(root, baseRegistry(root));
+
+  const report = buildAutomationCoverageReport(registryPath);
+
+  assert.equal(report.wiring, null);
+  assert.equal(report.verdict, 'FAIL');
+  assert.ok(report.findings.some(finding => finding.code === 'AUTO_WIRING_TOOL_FAILURE'));
+});
+
+test('an unwired test in the analysed workspace fails the required automation coverage gate', () => {
+  const root = tempRoot();
+  write(root, 'package.json', JSON.stringify({ name: 'fixture-root', scripts: { verify: 'eslint .' } }));
+  write(root, 'pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+  write(root, 'src/orphan.test.ts', "import test from 'node:test';\ntest('t', () => {});\n");
+  const registryPath = writeRegistry(root, baseRegistry(root));
+
+  const report = buildAutomationCoverageReport(registryPath);
+
+  assert.equal(report.verdict, 'FAIL');
+  assert.ok(report.wiring);
+  assert.equal(report.wiring?.totals.unwired_new, 1);
+  const finding = report.findings.find(item => item.code === 'WIRING_TEST_UNWIRED_NEW');
+  assert.equal(finding?.category, 'executable-wiring-gap');
+  assert.equal(finding?.surface, 'src/orphan.test.ts');
+});
+
+test('wiring counts are re-derived from the analysed workspace, never hardcoded', () => {
+  const root = tempRoot();
+  write(
+    root,
+    'package.json',
+    JSON.stringify({
+      name: 'fixture-root',
+      scripts: { verify: 'pnpm test && pnpm ops:reconcile', test: 'tsx --test src/a.test.ts', 'ops:reconcile': 'tsx scripts/ops/reconcile.ts' },
+    }),
+  );
+  write(root, 'pnpm-workspace.yaml', 'packages:\n  - apps/*\n');
+  write(root, 'src/a.test.ts', "import test from 'node:test';\ntest('t', () => {});\n");
+  const registryPath = writeRegistry(root, baseRegistry(root));
+
+  const report = buildAutomationCoverageReport(registryPath);
+
+  assert.equal(report.wiring?.totals.test_files, 1);
+  assert.equal(report.wiring?.totals.required_reachable, 1);
+  assert.equal(report.wiring?.totals.unwired, 0);
+  assert.equal(report.verdict, 'PASS');
+});
+
+test('the wiring section can be disabled explicitly without disabling the registry checks', () => {
+  const root = tempRoot();
+  write(root, 'package.json', JSON.stringify({ name: 'fixture-root', scripts: {} }));
+  write(root, 'src/orphan.test.ts', "import test from 'node:test';\ntest('t', () => {});\n");
+  const registryPath = writeRegistry(root, baseRegistry(root));
+
+  const withWiring = buildAutomationCoverageReport(registryPath);
+  const withoutWiring = buildAutomationCoverageReport(registryPath, { wiring: false });
+
+  assert.equal(withWiring.verdict, 'FAIL');
+  assert.equal(withoutWiring.verdict, 'PASS');
+  assert.equal(withoutWiring.wiring, null);
 });

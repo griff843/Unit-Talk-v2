@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 function loadEnv() {
@@ -17,7 +17,7 @@ function loadEnv() {
 
 async function main() {
   loadEnv();
-  const sb = createClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
+  const sb = createPrivilegedClient(process.env['SUPABASE_URL']!, process.env['SUPABASE_SERVICE_ROLE_KEY']!);
 
   const { data: stats } = await sb.from('participants')
     .select('external_id, league, participant_type')

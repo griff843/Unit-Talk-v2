@@ -10,12 +10,38 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { type SupabaseClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { loadEnvironment } from '@unit-talk/config';
-import { createApiRuntimeDependencies } from '../apps/api/src/server.js';
-import { runCandidateScoring } from '../apps/api/src/candidate-scoring-service.js';
+
+/**
+ * UTV2-1629 — `apps/api` is loaded LAZILY, inside the scoring branch only.
+ *
+ * `shadow-parity-required.yml` runs this file with the PRODUCTION service-role
+ * key and pins it against the merge base (assert-unmodified-vs-base.ts), so a
+ * pull request cannot execute its own version of THIS file. That pin was
+ * defeated by a static import: `apps/api/src/server.js` and
+ * `candidate-scoring-service.js` were evaluated at module load, before
+ * `--dry-run` was even parsed, and they transitively pull in most of
+ * `apps/api/src/**` and `packages/domain/src/**`.
+ *
+ * Those are exactly the paths in that workflow's trigger filter. So the job
+ * that fires *because* a PR edits `packages/domain` was executing that PR's
+ * domain code against production — the pin named one file while the import
+ * graph supplied hundreds.
+ *
+ * Pinning the closure instead is not an option: the closure is the code the
+ * check exists to observe, so pinning it means the check never runs. Deferring
+ * the import is: in `--dry-run` the only project code that loads is this file
+ * plus `@unit-talk/config`, both of which the workflow pins. The imports still
+ * resolve identically on the non-dry-run path, which no PR-triggered job takes.
+ */
+type ApiRuntimeModule = typeof import('../apps/api/src/server.js');
+type CandidateScoringModule = typeof import('../apps/api/src/candidate-scoring-service.js');
 
 type Client = SupabaseClient<Record<string, never>>;
 
@@ -96,8 +122,7 @@ async function countTable(
   if (filter) q = filter(q) as typeof q;
   const { count, error } = await q;
   if (error) {
-    console.warn(`[shadow-scoring-runner] count(${table}) error:`, error.message);
-    return 0;
+    throw new Error(`[shadow-scoring-runner] count(${table}) failed: ${error.message}`);
   }
   return count ?? 0;
 }
@@ -178,6 +203,14 @@ export function assertGuardrails(guardrails: Guardrails): void {
   }
 }
 
+export function assertParityReadiness(dailyCounts: DailyCounts): void {
+  if (dailyCounts.candidatesScanned <= 0) {
+    throw new Error(
+      '[shadow-scoring-runner] PARITY NOT ESTABLISHED: candidatesScanned must be greater than 0',
+    );
+  }
+}
+
 async function writeProof(outDir: string, proof: ProofOutput): Promise<void> {
   const absDir = resolve(outDir);
   await mkdir(absDir, { recursive: true });
@@ -190,20 +223,34 @@ async function writeProof(outDir: string, proof: ProofOutput): Promise<void> {
 export async function run(options: CliOptions): Promise<ProofOutput> {
   const environment = loadEnvironment();
 
-  if (!environment.SUPABASE_URL || !environment.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+  // UTV2-1627: production parity must use a dedicated database role whose
+  // grants are mechanically read-only. An anon key commonly cannot see these
+  // protected tables, while a service-role key can write; neither proves safe
+  // parity. There is deliberately no fallback between credential classes.
+  const readKey = process.env['SHADOW_PARITY_READ_ONLY_KEY'];
+  if (!environment.SUPABASE_URL || !readKey) {
+    throw new Error(
+      'SUPABASE_URL and SHADOW_PARITY_READ_ONLY_KEY are required',
+    );
   }
 
-  const client = createClient<Record<string, never>>(
+  // UTV2-1628: the driver comes from the one boundary that may construct it.
+  // The deferral recorded in the inventory ended when the lane that owned this
+  // file landed and added scripts/shadow-scoring-runner.test.ts to `test:ops`,
+  // which put this module inside `pnpm test`'s import graph — the exact
+  // condition the guard's reachability rule fails on regardless of
+  // classification.
+  const client = createPrivilegedClient(
     environment.SUPABASE_URL,
-    environment.SUPABASE_SERVICE_ROLE_KEY,
+    readKey,
     {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
       },
     },
-  );
+    'shadow-scoring-runner',
+  ) as Client;
 
   // Guardrails are always zero -- this runner never touches picks,
   // never sets shadow_mode=false, never enqueues distribution, never promotes.
@@ -219,6 +266,14 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
   let candidatesScoredThisRun = 0;
 
   if (!options.dryRun) {
+    // Loaded here, not at module scope — see the note beside the type imports.
+    const { createApiRuntimeDependencies } = (await import(
+      '../apps/api/src/server.js'
+    )) as ApiRuntimeModule;
+    const { runCandidateScoring } = (await import(
+      '../apps/api/src/candidate-scoring-service.js'
+    )) as CandidateScoringModule;
+
     const runtime = createApiRuntimeDependencies({ environment });
     const repos = runtime.repositories;
 
@@ -246,6 +301,7 @@ export async function run(options: CliOptions): Promise<ProofOutput> {
   }
 
   dailyCounts.candidatesScoredThisRun = candidatesScoredThisRun;
+  assertParityReadiness(dailyCounts);
   assertGuardrails(guardrails);
 
   const proof: ProofOutput = {
@@ -265,7 +321,33 @@ async function main(): Promise<void> {
   await writeProof(options.outDir, proof);
 }
 
-main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+/**
+ * UTV2-1629 — run `main()` only when this file IS the process entrypoint.
+ *
+ * It used to run on any import. `scripts/shadow-scoring-runner.test.ts` imports
+ * the module to reach `parseCliOptions`/`assertGuardrails`, so importing it
+ * fired `main()`, which threw on absent credentials and called `process.exit(1)`
+ * mid-suite — killing the runner before the remaining tests executed. The file
+ * reported 9 of its 12 tests and a non-zero exit, and was quietly left out of
+ * every `pnpm test:*` script, so nothing noticed.
+ *
+ * Real paths compared rather than filenames: an `endsWith()` check fails OPEN
+ * under any rename, copy, symlink or compiled-.js invocation. Same rationale
+ * and same shape as scripts/ci/assert-staging-target.ts.
+ */
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) {
+  main().catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}

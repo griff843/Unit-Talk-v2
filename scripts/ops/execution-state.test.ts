@@ -1,10 +1,17 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { LaneManifest } from './shared.js';
+import {
+  ActiveLaneDiscoveryError,
+  resolveActiveLaneManifests,
+  type LaneManifest,
+} from './shared.js';
 import {
   MAX_CLAUDE_LANES,
   MAX_CODEX_LANES,
-  buildExecutionStateReport,
+  MAX_TOTAL_LANES,
+  buildCurrentExecutionStateReport,
+  buildExecutionStateReport as buildExecutionStateReportFromDiscovery,
+  type BuildExecutionStateReportOptions,
 } from './execution-state.js';
 
 function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -33,6 +40,17 @@ function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     reopen_history: [],
     ...overrides,
   };
+}
+
+function buildExecutionStateReport(
+  manifests: LaneManifest[],
+  options: BuildExecutionStateReportOptions = {},
+) {
+  const discovery = resolveActiveLaneManifests({
+    listOpenPullRequests: () => [],
+    readLocalManifests: () => manifests,
+  });
+  return buildExecutionStateReportFromDiscovery(discovery, options);
 }
 
 test('active lane summary includes active manifests with expected fields', () => {
@@ -69,6 +87,20 @@ test('active lane summary includes active manifests with expected fields', () =>
     recommended_action: 'complete proof artifacts',
     blockers: [],
     source_url: 'https://linear.app/unit-talk-v2/issue/UTV2-974/',
+    manifest_source: 'local_worktree',
+    manifest_location: 'lanes_root',
+    capacity: {
+      observed_at: '2026-05-15T15:00:00.000Z',
+      source_population: 'canonical_active_lane_union',
+      classification_rule: 'classifyLaneCapacity(manifest.status)',
+      classification: 'counted',
+      lifecycle_status: 'started',
+      counts_against: {
+        executor: true,
+        total: true,
+        lane_type: true,
+      },
+    },
   });
 });
 
@@ -165,6 +197,9 @@ test('dispatch slot counting uses active manifest executor routing', () => {
     }),
   ]);
 
+  assert.equal(report.dispatch_slots.total.used, 3);
+  assert.equal(report.dispatch_slots.total.max, MAX_TOTAL_LANES);
+  assert.equal(report.dispatch_slots.total.available, Math.max(0, MAX_TOTAL_LANES - 3));
   assert.equal(report.dispatch_slots.codex.used, 2);
   assert.equal(report.dispatch_slots.codex.max, MAX_CODEX_LANES);
   assert.equal(report.dispatch_slots.codex.available, Math.max(0, MAX_CODEX_LANES - 2));
@@ -283,15 +318,11 @@ test('dispatch dashboard summarizes lane types, singleton blockers, and recommen
     }),
   });
 
-  assert.deepStrictEqual(report.dispatch_dashboard.active_by_executor, {
-    claude: 1,
-    codex: 1,
-    unknown: 0,
-  });
-  assert.deepStrictEqual(report.dispatch_dashboard.active_by_lane_type, {
-    governance: 1,
-    runtime: 1,
-  });
+  assert.equal(report.dispatch_dashboard.active_by_executor.claude.used, 1);
+  assert.equal(report.dispatch_dashboard.active_by_executor.codex.used, 1);
+  assert.equal(report.dispatch_dashboard.active_by_executor.unknown.used, 0);
+  assert.equal(report.dispatch_dashboard.active_by_lane_type.governance?.used, 1);
+  assert.equal(report.dispatch_dashboard.active_by_lane_type.runtime?.used, 1);
   assert.deepStrictEqual(report.dispatch_dashboard.singleton_blockers, [
     {
       lane_type: 'runtime',
@@ -300,5 +331,108 @@ test('dispatch dashboard summarizes lane types, singleton blockers, and recommen
   ]);
   assert.ok(
     report.dispatch_dashboard.recommended_actions.some((action) => action.includes('codex slots available')),
+  );
+});
+
+test('UTV2-1680: execution state reports the canonical local and PR-head union with provenance', () => {
+  const local = createManifest({
+    issue_id: 'UTV2-16801',
+    branch: 'codex/utv2-16801-local',
+  });
+  const prHead = createManifest({
+    issue_id: 'UTV2-16802',
+    branch: 'claude/utv2-16802-pr-head',
+    executor: 'claude',
+    created_by: 'claude',
+  });
+  const discovery = resolveActiveLaneManifests({
+    readLocalManifests: () => [local],
+    listOpenPullRequests: () => [
+      { number: 16802, headRefName: prHead.branch },
+    ],
+    readManifestAtRef: () => prHead,
+  });
+
+  const report = buildExecutionStateReportFromDiscovery(discovery, {
+    generatedAt: '2026-08-11T20:00:00.000Z',
+  });
+
+  assert.deepStrictEqual(
+    report.active_lanes.map((lane) => [lane.issue_id, lane.manifest_source]),
+    [
+      ['UTV2-16801', 'local_worktree'],
+      ['UTV2-16802', 'open_pr_head'],
+    ],
+  );
+  assert.equal(report.active_lane_discovery.source_population, 'canonical_active_lane_union');
+  assert.equal(report.active_lane_discovery.observed_at, '2026-08-11T20:00:00.000Z');
+  assert.match(report.active_lane_discovery.classification_rule, /local_worktree union open_pr_head/);
+});
+
+test('UTV2-1680: parked lanes stay visible but do not consume any reported capacity', () => {
+  const counting = createManifest({
+    issue_id: 'UTV2-16803',
+    lane_type: 'governance',
+    status: 'in_progress',
+  });
+  const parked = createManifest({
+    issue_id: 'UTV2-16804',
+    lane_type: 'runtime',
+    status: 'parked',
+  });
+
+  const report = buildExecutionStateReport([counting, parked], {
+    generatedAt: '2026-08-11T20:01:00.000Z',
+  });
+
+  assert.deepStrictEqual(report.active_lanes.map((lane) => lane.issue_id), [
+    'UTV2-16803',
+    'UTV2-16804',
+  ]);
+  assert.equal(report.active_lanes[1]?.capacity.classification, 'visible_uncounted');
+  assert.equal(report.dispatch_slots.total.used, 1);
+  assert.equal(report.dispatch_slots.codex.used, 1);
+  assert.equal(report.dispatch_dashboard.active_by_lane_type.governance?.used, 1);
+  assert.equal(report.dispatch_dashboard.active_by_lane_type.runtime, undefined);
+  assert.deepStrictEqual(report.dispatch_dashboard.singleton_blockers, []);
+});
+
+test('UTV2-1680: every capacity metric names its population, timestamp, and classification rule', () => {
+  const generatedAt = '2026-08-11T20:02:00.000Z';
+  const report = buildExecutionStateReport([
+    createManifest({ issue_id: 'UTV2-16805', lane_type: 'governance' }),
+  ], { generatedAt });
+
+  const metrics = [
+    ...Object.values(report.dispatch_slots),
+    ...Object.values(report.dispatch_dashboard.active_by_executor),
+    ...Object.values(report.dispatch_dashboard.active_by_lane_type),
+  ];
+  assert.ok(metrics.length > 0);
+  for (const metric of metrics) {
+    assert.equal(metric.source_population, 'canonical_active_lane_union');
+    assert.equal(metric.observed_at, generatedAt);
+    assert.ok(metric.classification_rule.length > 0);
+  }
+  assert.equal(report.dispatch_dashboard.active_by_lane_type.governance?.max, 3);
+});
+
+test('UTV2-1680: active-lane discovery failure is a refusal, never an empty report', () => {
+  assert.throws(
+    () => buildCurrentExecutionStateReport(
+      { generatedAt: '2026-08-11T20:03:00.000Z' },
+      {
+        listOpenPullRequests: () => {
+          throw new Error('GitHub unavailable');
+        },
+        readLocalManifests: () => [],
+      },
+    ),
+    (error: unknown) => {
+      assert.ok(error instanceof ActiveLaneDiscoveryError);
+      assert.equal(error.code, 'active_lane_discovery_failed');
+      assert.match(error.message, /unknown board as an empty one/);
+      return true;
+    },
   );
 });

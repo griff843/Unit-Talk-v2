@@ -12,6 +12,7 @@ export interface CheckObservation {
 
 export interface PrBlockDiagnosticInput {
   pr: number;
+  mergeable: string;
   merge_state_status: string;
   branch_protection_required_checks: string[];
   head_sha: string;
@@ -21,6 +22,7 @@ export interface PrBlockDiagnosticInput {
 export interface PrBlockDiagnostic {
   schema_version: 1;
   pr: number;
+  mergeable: string;
   merge_state_status: string;
   required_checks: string[];
   latest_required: Array<{
@@ -73,8 +75,14 @@ export function buildPrBlockDiagnostic(input: PrBlockDiagnosticInput): PrBlockDi
   });
 
   const blockers = latestRequired
-    .filter((check) => check.conclusion !== 'success' && check.conclusion !== 'neutral' && check.conclusion !== 'skipped')
+    .filter((check) => !isPassingConclusion(check.conclusion))
     .map((check) => `required check not passing: ${check.name} (${check.conclusion ?? check.status ?? 'missing'})`);
+  if (input.merge_state_status === 'BEHIND') {
+    blockers.push('head branch is not up to date with the base branch (mergeStateStatus: BEHIND)');
+  }
+  if (input.merge_state_status === 'DIRTY') {
+    blockers.push('head branch has merge conflicts with the base branch (mergeStateStatus: DIRTY)');
+  }
   if (input.merge_state_status === 'BLOCKED' && blockers.length === 0 && staleFailedContexts.length > 0) {
     blockers.push('mergeStateStatus is BLOCKED with stale failed duplicate contexts present');
   }
@@ -82,6 +90,7 @@ export function buildPrBlockDiagnostic(input: PrBlockDiagnosticInput): PrBlockDi
   return {
     schema_version: 1,
     pr: input.pr,
+    mergeable: input.mergeable,
     merge_state_status: input.merge_state_status,
     required_checks: input.branch_protection_required_checks,
     latest_required: latestRequired,
@@ -90,6 +99,11 @@ export function buildPrBlockDiagnostic(input: PrBlockDiagnosticInput): PrBlockDi
     verdict: blockers.length === 0 ? 'PASS' : 'BLOCKED',
     blockers,
   };
+}
+
+function isPassingConclusion(conclusion: string | null): boolean {
+  const normalized = conclusion?.toLowerCase();
+  return normalized === 'success' || normalized === 'neutral' || normalized === 'skipped';
 }
 
 function compareChecksDesc(left: CheckObservation, right: CheckObservation): number {
@@ -112,7 +126,8 @@ function main(): void {
   if (!Number.isFinite(pr)) {
     throw new Error('Usage: pnpm ops:pr-block-diagnostic --pr <number>');
   }
-  const prData = runGhJson(['pr', 'view', String(pr), '--json', 'mergeStateStatus,headRefOid,statusCheckRollup']) as {
+  const prData = runGhJson(['pr', 'view', String(pr), '--json', 'mergeable,mergeStateStatus,headRefOid,statusCheckRollup']) as {
+    mergeable?: string;
     mergeStateStatus?: string;
     headRefOid?: string;
     statusCheckRollup?: Array<{ name?: string; conclusion?: string | null; status?: string | null; completedAt?: string | null }>;
@@ -127,6 +142,7 @@ function main(): void {
   ];
   emitJson(buildPrBlockDiagnostic({
     pr,
+    mergeable: prData.mergeable ?? 'UNKNOWN',
     merge_state_status: prData.mergeStateStatus ?? 'UNKNOWN',
     branch_protection_required_checks: [...new Set(required)],
     head_sha: prData.headRefOid ?? '',

@@ -10,7 +10,10 @@
  * If a race were surfaced, the plan is to stop and report rather than
  * alter claim logic in this lane.
  *
- * Fixtures prefixed utv2-1497-* are NOT deleted per T1 proof policy.
+ * The suite is writable and must run only against a classified isolated
+ * Supabase target. The canonical privileged-client boundary is asserted before
+ * repositories are created, so a misleading variable name cannot route
+ * fixtures to production.
  *
  * Run: UNIT_TALK_APP_ENV=local npx tsx --test apps/worker/src/t1-proof-utv2-1497-outbox-concurrent-claim.test.ts
  */
@@ -25,6 +28,7 @@ import {
 import {
   createDatabaseRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
+  assertTargetAllowed,
   type RepositoryBundle,
 } from '@unit-talk/db';
 
@@ -48,6 +52,10 @@ const TARGET = `utv2-1497-canary-${RUN_ID}`;
 before(() => {
   if (skipReason) return;
   const env = loadEnvironment();
+  assertTargetAllowed(
+    { url: env.SUPABASE_URL, key: env.SUPABASE_SERVICE_ROLE_KEY },
+    'UTV2-1497 concurrent-claim proof',
+  );
   const connection = createServiceRoleDatabaseConnectionConfig(env);
   repositories = createDatabaseRepositoryBundle(connection);
 });
@@ -56,7 +64,10 @@ before(() => {
 // Helper — creates a pick (satisfies distribution_outbox FK) and enqueues it
 // ---------------------------------------------------------------------------
 
-async function createPickAndEnqueue(label: string, target: string): Promise<{ pickId: string; outboxId: string }> {
+async function createPickAndEnqueue(
+  label: string,
+  target: string,
+): Promise<{ pickId: string; outboxId: string }> {
   const now = new Date().toISOString();
   const submissionId = randomUUID();
 
@@ -111,47 +122,89 @@ async function createPickAndEnqueue(label: string, target: string): Promise<{ pi
 // no double-claim, no dropped row
 // ---------------------------------------------------------------------------
 
-test('[live-db] concurrent claimNextAtomic calls never double-claim or drop a row', { skip: skipReason }, async () => {
-  const ROW_COUNT = 8;
-  const WORKER_COUNT = 12; // more workers than rows to force contention losers
+test(
+  '[live-db] concurrent claimNextAtomic calls never double-claim or drop a row',
+  { skip: skipReason },
+  async () => {
+    const ROW_COUNT = 8;
+    const WORKER_COUNT = 12; // more workers than rows to force contention losers
 
-  const created = await Promise.all(
-    Array.from({ length: ROW_COUNT }, (_, i) => createPickAndEnqueue(`row-${i}-${RUN_ID}`, TARGET)),
-  );
-  const enqueuedOutboxIds = new Set(created.map((c) => c.outboxId));
-  assert.equal(enqueuedOutboxIds.size, ROW_COUNT, 'sanity: all enqueued outbox ids are distinct');
+    const created = await Promise.all(
+      Array.from({ length: ROW_COUNT }, (_, i) =>
+        createPickAndEnqueue(`row-${i}-${RUN_ID}`, TARGET),
+      ),
+    );
+    const enqueuedOutboxIds = new Set(created.map((c) => c.outboxId));
+    assert.equal(
+      enqueuedOutboxIds.size,
+      ROW_COUNT,
+      'sanity: all enqueued outbox ids are distinct',
+    );
 
-  const workerIds = Array.from({ length: WORKER_COUNT }, (_, i) => `utv2-1497-worker-${i}-${RUN_ID}`);
+    const workerIds = Array.from(
+      { length: WORKER_COUNT },
+      (_, i) => `utv2-1497-worker-${i}-${RUN_ID}`,
+    );
 
-  const claims = await Promise.all(
-    workerIds.map((workerId) => repositories.outbox.claimNextAtomic(TARGET, workerId)),
-  );
+    const claims = await Promise.all(
+      workerIds.map((workerId) =>
+        repositories.outbox.claimNextAtomic(TARGET, workerId),
+      ),
+    );
 
-  const successfulClaims = claims.filter((c): c is NonNullable<typeof c> => c !== null);
+    const successfulClaims = claims.filter(
+      (c): c is NonNullable<typeof c> => c !== null,
+    );
 
-  // No dropped row: every enqueued row was claimed by exactly one worker.
-  const claimedOutboxIds = successfulClaims.map((c) => c.id);
-  assert.equal(claimedOutboxIds.length, ROW_COUNT, 'every enqueued row was claimed exactly once across all concurrent callers');
+    // No dropped row: every enqueued row was claimed by exactly one worker.
+    const claimedOutboxIds = successfulClaims.map((c) => c.id);
+    assert.equal(
+      claimedOutboxIds.length,
+      ROW_COUNT,
+      'every enqueued row was claimed exactly once across all concurrent callers',
+    );
 
-  // No double-claim: the claimed set has no duplicates.
-  const claimedIdSet = new Set(claimedOutboxIds);
-  assert.equal(claimedIdSet.size, ROW_COUNT, 'no outbox row was claimed by more than one concurrent caller');
+    // No double-claim: the claimed set has no duplicates.
+    const claimedIdSet = new Set(claimedOutboxIds);
+    assert.equal(
+      claimedIdSet.size,
+      ROW_COUNT,
+      'no outbox row was claimed by more than one concurrent caller',
+    );
 
-  // The claimed set is exactly the enqueued set — disjoint coverage, nothing extra, nothing missing.
-  for (const id of claimedIdSet) {
-    assert.ok(enqueuedOutboxIds.has(id), `claimed outbox id ${id} corresponds to a row this test enqueued`);
-  }
-  for (const id of enqueuedOutboxIds) {
-    assert.ok(claimedIdSet.has(id), `enqueued outbox id ${id} was claimed by some worker`);
-  }
+    // The claimed set is exactly the enqueued set — disjoint coverage, nothing extra, nothing missing.
+    for (const id of claimedIdSet) {
+      assert.ok(
+        enqueuedOutboxIds.has(id),
+        `claimed outbox id ${id} corresponds to a row this test enqueued`,
+      );
+    }
+    for (const id of enqueuedOutboxIds) {
+      assert.ok(
+        claimedIdSet.has(id),
+        `enqueued outbox id ${id} was claimed by some worker`,
+      );
+    }
 
-  // Excess workers (WORKER_COUNT > ROW_COUNT) correctly found nothing left to claim.
-  const nullClaimCount = claims.filter((c) => c === null).length;
-  assert.equal(nullClaimCount, WORKER_COUNT - ROW_COUNT, 'workers beyond the row count receive null (no row left), never a duplicate claim');
+    // Excess workers (WORKER_COUNT > ROW_COUNT) correctly found nothing left to claim.
+    const nullClaimCount = claims.filter((c) => c === null).length;
+    assert.equal(
+      nullClaimCount,
+      WORKER_COUNT - ROW_COUNT,
+      'workers beyond the row count receive null (no row left), never a duplicate claim',
+    );
 
-  // Each successful claim recorded a distinct worker as claimant and moved the row to processing.
-  for (const claim of successfulClaims) {
-    assert.equal(claim.status, 'processing', 'claimed row transitions to processing');
-    assert.ok(claim.claimed_by && workerIds.includes(claim.claimed_by), 'claimed row records one of this test\'s worker ids');
-  }
-});
+    // Each successful claim recorded a distinct worker as claimant and moved the row to processing.
+    for (const claim of successfulClaims) {
+      assert.equal(
+        claim.status,
+        'processing',
+        'claimed row transitions to processing',
+      );
+      assert.ok(
+        claim.claimed_by && workerIds.includes(claim.claimed_by),
+        "claimed row records one of this test's worker ids",
+      );
+    }
+  },
+);

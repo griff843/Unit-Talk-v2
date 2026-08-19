@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1619",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-reconcile-filter-and-write-path",
+  "branch": "claude/utv2-1619-reconcile-filter-and-write-path",
+  "base_branch": "main",
+  "commit_sha": "b58a2f3549df247d2c972bb64baf0ddb6251be43",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1400",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/ops-reconcile.yml",
+    ".github/workflows/reconcile-stale-lanes.yml",
+    "scripts/ops/reconcile.test.ts",
+    "scripts/ops/reconcile.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1619/diff-summary.md",
+    "docs/06_status/proof/UTV2-1619/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-08-10T02:34:52.686Z",
+  "heartbeat_at": "2026-08-11T15:41:27.361Z",
+  "closed_at": "2026-08-11T15:41:27.361Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-11T13:51:43.919Z",
+      "verdict": "fail",
+      "merge_sha": "b58a2f3549df247d2c972bb64baf0ddb6251be43",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1400 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-11T15:41:24.926Z",
+      "verdict": "pass",
+      "merge_sha": "b58a2f3549df247d2c972bb64baf0ddb6251be43",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1619-reconcile-filter-and-write-path",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

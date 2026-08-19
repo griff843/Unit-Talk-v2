@@ -67,6 +67,15 @@ allowed_path_globs:
   - docs/06_status/audits/**
   # Architecture policy and doctrine docs — added UTV2-1253.
   - docs/02_architecture/**
+  # Operator runbooks — added UTV2-1629, same DEBT-025 class as the entries
+  # above. docs/ops/** has existed since the ci-doctor bundle (5f155770) and is
+  # read by ci-doctor checks CV1–CV6, but no lane manifest ever allowed it, so
+  # any governance lane retiring or annotating a runbook failed Lane Authority
+  # with no override available (a File Scope Lock override cannot resolve Lane
+  # Authority — they are separate controls). Reproduced on PR #1325, which
+  # marks docs/ops/SUPABASE_PREVIEW_BRANCH_VALIDATION.md historical after
+  # deleting the workflow it documents.
+  - docs/ops/**
   # Package-root CLAUDE.md files for governance/doc reconciliation lanes. Added UTV2-1199.
   - packages/db/CLAUDE.md
   - packages/contracts/CLAUDE.md
@@ -91,6 +100,12 @@ allowed_path_globs:
   - packages/invariants/**
   - db/migrations-rollback/**
   - apps/api/src/t1-proof-*.test.ts
+  # UTV2-1627: T1 proof fixtures live under apps/worker/ as well as apps/api/,
+  # and the credential-isolation work must repair the worker proof's identity
+  # assertion. Mirrors the apps/api entry above — narrowly scoped to t1-proof
+  # test fixtures only, NOT all of apps/worker/**, which stays forbidden to
+  # every lane type. PM-approved Tier C authority, 2026-07-29.
+  - apps/worker/src/t1-proof-*.test.ts
   - apps/api/src/authority-enforcement.ts
 forbidden_path_globs:
   - supabase/migrations/**

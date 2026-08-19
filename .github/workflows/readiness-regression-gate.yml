@@ -1,68 +1,115 @@
 name: Readiness Regression Gate
 
+# UTV2-1626 — the gate now says WHICH kind of failure it found.
+#
+# It used to inline a bash script that exited 1 for two very different things: a
+# ledger older than 48h, and a RED verdict. Both printed a red X, so a real
+# regression and a forgotten artifact were indistinguishable — and since the
+# ledger was never refreshed, every lane learned to ignore the check entirely.
+#
+# scripts/ci/readiness-ledger-gate.ts separates them:
+#   LEDGER_MISSING / LEDGER_INVALID / LEDGER_STALE / DIMENSION_STALE /
+#   OBSERVER_DEGRADED  → the ledger cannot be trusted (observer failure)
+#   READINESS_RED      → production is measurably failing (product condition)
+#
+# Pull requests compare the committed base and head ledgers. Existing repository
+# debt is reported as a neutral custom check; only a PR-caused classification
+# regression fails. Absolute readiness remains enforced by the scheduled and
+# operational refresh workflows, which continue to call gate mode directly.
+# This job holds no credential and touches no production system.
+
 on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  checks: write
+
 jobs:
   readiness-regression-gate:
-    name: Readiness Regression Gate
+    name: Readiness Regression Evaluation
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check readiness-score.json
-        shell: bash
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compare base and head readiness
+        id: readiness
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LEDGER_PATH: docs/06_status/readiness/readiness-score.json
         run: |
-          SCORE_FILE="docs/06_status/readiness/readiness-score.json"
+          git show "${BASE_SHA}:${LEDGER_PATH}" > /tmp/readiness-base.json
+          set +e
+          pnpm ci:readiness-gate -- \
+            --mode regression \
+            --base /tmp/readiness-base.json \
+            --file "${LEDGER_PATH}" \
+            --json > /tmp/readiness-regression-output.txt 2>&1
+          COMMAND_EXIT=$?
+          set -e
+          sed -n '/^{/,/^}/p' /tmp/readiness-regression-output.txt > /tmp/readiness-regression.json
+          jq -e . /tmp/readiness-regression.json > /dev/null
+          echo "command_exit=${COMMAND_EXIT}" >> "$GITHUB_OUTPUT"
 
-          if [ ! -f "$SCORE_FILE" ]; then
-            echo "::error::$SCORE_FILE not found — readiness ledger missing"
-            exit 1
-          fi
+      - name: Publish readiness authority result
+        id: publish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const result = JSON.parse(fs.readFileSync('/tmp/readiness-regression.json', 'utf8'));
+            const conclusion = result.conclusion;
+            if (!['success', 'neutral', 'failure'].includes(conclusion)) {
+              core.setFailed(`Invalid readiness conclusion: ${conclusion}`);
+              return;
+            }
 
-          VERDICT=$(jq -r '.verdict' "$SCORE_FILE")
-          GENERATED_AT=$(jq -r '.generated_at' "$SCORE_FILE")
-          MAIN_SHA=$(jq -r '.main_sha' "$SCORE_FILE")
+            const details = [
+              `Base: ${result.base.code} — ${result.base.summary}`,
+              `Head: ${result.head.code} — ${result.head.summary}`,
+              '',
+              ...result.head.details,
+            ].join('\n');
 
-          echo "Verdict:      $VERDICT"
-          echo "Generated at: $GENERATED_AT"
-          echo "Ledger SHA:   $MAIN_SHA"
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Readiness Regression Gate',
+              head_sha: context.payload.pull_request.head.sha,
+              status: 'completed',
+              conclusion,
+              completed_at: new Date().toISOString(),
+              output: {
+                title: conclusion === 'neutral'
+                  ? 'Inherited repository readiness debt'
+                  : conclusion === 'failure'
+                    ? 'PR-caused readiness regression'
+                    : 'No readiness regression',
+                summary: result.summary,
+                text: details,
+              },
+            });
 
-          # Staleness check
-          GENERATED_EPOCH=$(date -d "$GENERATED_AT" +%s 2>/dev/null || date -j -f "%Y-%m-%dT%H:%M:%S" "${GENERATED_AT%.*}" +%s 2>/dev/null || echo 0)
-          NOW_EPOCH=$(date +%s)
-          AGE_HOURS=$(( (NOW_EPOCH - GENERATED_EPOCH) / 3600 ))
-
-          echo "Ledger age: ${AGE_HOURS}h"
-
-          FAIL=0
-
-          if [ "$AGE_HOURS" -gt 48 ]; then
-            echo "::error::Readiness ledger is ${AGE_HOURS}h stale (>48h threshold). Update readiness-score.json before merging."
-            FAIL=1
-          elif [ "$AGE_HOURS" -gt 24 ]; then
-            echo "::warning::Readiness ledger is ${AGE_HOURS}h stale (>24h). Consider refreshing readiness-score.json."
-          fi
-
-          # Verdict check
-          if [ "$VERDICT" = "RED" ]; then
-            echo "::error::Readiness verdict is RED — production has blocking failures. Resolve before merging."
-            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
-            echo "::error::Blocking dimensions: $BLOCKERS"
-            FAIL=1
-          elif [ "$VERDICT" = "YELLOW" ]; then
-            BLOCKERS=$(jq -r '.blockers[]?' "$SCORE_FILE" | tr '\n' ', ')
-            echo "::warning::Readiness verdict is YELLOW (blockers: $BLOCKERS). GREEN required for full production clearance."
-          elif [ "$VERDICT" = "GREEN" ]; then
-            echo "Readiness verdict: GREEN — no blocking failures."
-          else
-            echo "::error::Unknown verdict '$VERDICT' in readiness-score.json"
-            FAIL=1
-          fi
-
-          if [ "$FAIL" = "1" ]; then
-            exit 1
-          fi
+            if (conclusion === 'failure') {
+              core.setFailed(result.summary);
+            } else if (conclusion === 'neutral') {
+              core.notice(result.summary);
+            }

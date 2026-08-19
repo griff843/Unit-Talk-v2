@@ -14,7 +14,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # UTV2-1619: this checked out with the default GITHUB_TOKEN, which
+          # cannot push to protected `main` -- so every scheduled run since at
+          # least 2026-08-01 computed its manifest fixes correctly, committed
+          # them, and then died on:
+          #   GH006: Protected branch update failed for refs/heads/main
+          # The reconciler has therefore been a no-op for weeks while appearing
+          # to be scheduled, which is how the ghost backlog accumulated.
+          #
+          # SYNC_BOT_TOKEN is the same repo-owner PAT that post-merge-lane-close.yml
+          # already uses for its manifest commits. Falls back to GITHUB_TOKEN when
+          # unset, in which case the push is blocked exactly as before -- the
+          # failure stays loud rather than silently skipping the write.
+          token: ${{ secrets.SYNC_BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: pnpm/action-setup@v4
 

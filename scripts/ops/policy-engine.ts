@@ -112,6 +112,38 @@ function pathsMatch(policyPaths: string[], contextPaths: string[]): boolean {
 
 export const POLICIES_DIR = path.join(ROOT, 'docs', '05_operations', 'policies');
 
+/**
+ * UTV2-1638: `POLICIES_DIR` holds two different kinds of document, and the
+ * loader originally assumed only one existed.
+ *
+ *  - **Rule sets** — a JSON *array* of `Policy` objects. These are what this
+ *    engine evaluates (`codex-concurrency`, `codex-safety-routing`,
+ *    `post-merge-qa`, `t1-merge-gate`, `tier-c-paths`).
+ *  - **Schema-versioned config documents** — a JSON *object* carrying
+ *    `schema_version` (and usually `policy_version`). `codex-model-routing.json`
+ *    is one: it is the model-routing lookup table read by `model-routing.ts`,
+ *    not a rule set, and it was added to this directory after the loader was
+ *    written.
+ *
+ * Globbing `*.json` and demanding an array made every caller throw
+ * `Policy file must export a JSON array: codex-model-routing.json` — 12 failing
+ * cases from a single cause, on the merge path.
+ *
+ * Skip config documents by their positive shape rather than by filename, so a
+ * future config document does not reintroduce the break. Anything that is
+ * neither a rule-set array nor a recognisable config document is still a hard
+ * error: an unreadable policy directory must never silently evaluate to "no
+ * rules", which would be a fail-open on the merge path.
+ */
+function isSchemaVersionedConfigDocument(parsed: unknown): boolean {
+  return (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    !Array.isArray(parsed) &&
+    'schema_version' in (parsed as Record<string, unknown>)
+  );
+}
+
 export function loadPolicies(): Policy[] {
   if (!fs.existsSync(POLICIES_DIR)) return [];
 
@@ -123,11 +155,20 @@ export function loadPolicies(): Policy[] {
   const policies: Policy[] = [];
   for (const file of files) {
     const fullPath = path.join(POLICIES_DIR, file);
-    const raw = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as Policy[];
-    if (!Array.isArray(raw)) {
-      throw new Error(`Policy file must export a JSON array: ${file}`);
+    const raw = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as unknown;
+
+    if (Array.isArray(raw)) {
+      policies.push(...(raw as Policy[]));
+      continue;
     }
-    policies.push(...raw);
+    if (isSchemaVersionedConfigDocument(raw)) {
+      // Not a rule set. Owned and validated by its own consumer.
+      continue;
+    }
+    throw new Error(
+      `Policy file must export a JSON array of rules, or be a schema-versioned ` +
+        `config document carrying "schema_version": ${file}`,
+    );
   }
   return policies;
 }

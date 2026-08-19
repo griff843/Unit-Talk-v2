@@ -1,6 +1,15 @@
 import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  buildCiProofReceipt,
+  CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
+  EXPECTED_STAGING_SUPABASE_PROJECT_REF,
+  extractProjectRefFromUrl,
+  isApprovedStagingTarget,
+  serializeReceipt,
+} from './isolated-proof-attestation.js';
 
 type EnvMap = Record<string, string | undefined>;
 
@@ -123,18 +132,71 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // UTV2-1630: refuse BEFORE any DB access unless the target is POSITIVELY
+  // identified as a non-production project.
+  //
+  // The first version refused only when production was positively identified,
+  // so every unidentifiable target — custom domain, pooler, tunnel,
+  // `db.<ref>.supabase.co`, empty value — fell through and the smoke test ran
+  // and wrote. That protected the paperwork and left the database exposed,
+  // which is backwards given this lane exists because 310 fixture rows were
+  // written to production.
+  const targetUrl = env['SUPABASE_URL'];
+  const { projectRef, host } = extractProjectRefFromUrl(targetUrl);
+  // Resolved target is echoed WITHOUT credentials so the log shows what was
+  // actually contacted, not what was intended.
+  console.log(
+    `[ci:db-smoke] resolved target host=${host ?? 'unparseable'} ref=${projectRef ?? 'unidentified'}`,
+  );
+  if (!isApprovedStagingTarget(targetUrl)) {
+    console.error(
+      `[ci:db-smoke] refusing to run: target is not the approved staging project. ` +
+        `observed=${projectRef ?? 'unidentified'} expected=${EXPECTED_STAGING_SUPABASE_PROJECT_REF} ` +
+        `production=${CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF}. ` +
+        'Unknown, ambiguous, custom-domain, proxy, tunnel, malformed and missing targets are all refused.',
+    );
+    process.exit(1);
+  }
+
+  const startedAt = new Date().toISOString();
   const result = spawnSync('pnpm test:db', {
     cwd: process.cwd(),
     encoding: 'utf8',
     shell: true,
   });
-  const output = [
+  const finishedAt = new Date().toISOString();
+  const capturedOutput = [
     result.stdout,
     result.stderr,
     result.error ? result.error.message : '',
   ].filter(Boolean).join('\n');
   if (result.stdout) process.stdout.write(result.stdout);
   if (result.stderr) process.stderr.write(result.stderr);
+
+  // Emit a receipt bound to this CI run. The auditor re-checks run/attempt/sha
+  // against its own environment and re-parses TAP from captured_output, so this
+  // cannot be hand-authored, copied from another run, or edited.
+  const receipt = buildCiProofReceipt({
+    supabaseUrl: targetUrl,
+    command: 'pnpm test:db',
+    startedAt,
+    finishedAt,
+    exitCode: result.status,
+    capturedOutput,
+    repoMigrationHead: env['CI_REPO_MIGRATION_HEAD'] ?? null,
+    fixtureRunId: env['CI_FIXTURE_RUN_ID'] ?? null,
+    cleanupResult: env['CI_FIXTURE_CLEANUP_RESULT'] ?? null,
+  });
+  const receiptPath = process.env['CI_DB_PROOF_RECEIPT_PATH'];
+  if (receiptPath) {
+    writeFileSync(receiptPath, serializeReceipt(receipt), 'utf8');
+    console.log(
+      `[ci:db-smoke] receipt written to ${receiptPath} ` +
+        `(sha256=${receipt.receipt_sha256}, target=${receipt.observed_project_ref})`,
+    );
+  }
+
+  const output = capturedOutput;
 
   const evaluation = evaluateDbSmokeResult({
     required,
@@ -177,7 +239,31 @@ function writeSummary(evaluation: DbSmokeEvaluation, required: boolean): void {
   );
 }
 
-if (process.argv[1]?.replace(/\\/g, '/').endsWith('/required-db-smoke.ts')) {
+/**
+ * UTV2-1630: compare resolved real paths, never the filename.
+ *
+ * This file previously used `endsWith('/required-db-smoke.ts')`. That fails
+ * OPEN: under any rename, copy, symlink or compiled-.js invocation `main()`
+ * never runs and the process exits 0 having executed no smoke test and written
+ * no receipt. `ci.yml` happens to catch that with a follow-up `test -f` on the
+ * receipt path, but `proof-gate.yml` and `t1-proof-gate.yml` invoke
+ * `pnpm ci:db-smoke` bare — they would print "C2 PASS: pnpm test:db executed"
+ * having executed nothing.
+ *
+ * The same pattern was replaced with this comparison in assert-staging-target.ts,
+ * seed-staging-fixtures.ts and proof-auditor-gate.ts; this file was missed.
+ */
+function isCliEntrypoint(): boolean {
+  const invoked = process.argv[1];
+  if (!invoked) return false;
+  try {
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isCliEntrypoint()) {
   void main().catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

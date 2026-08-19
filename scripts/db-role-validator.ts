@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import { pathToFileURL } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
 
@@ -77,7 +77,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+  const db = createPrivilegedClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
   });
 
