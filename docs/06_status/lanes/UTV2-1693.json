@@ -23,9 +23,9 @@
     "docs/06_status/proof/UTV2-1693/diff-summary.md",
     "docs/06_status/proof/UTV2-1693/verification.md"
   ],
-  "status": "started",
+  "status": "superseded",
   "started_at": "2026-08-12T14:41:45.783Z",
-  "heartbeat_at": "2026-08-12T15:10:15.150Z",
+  "heartbeat_at": "2026-08-19T20:01:10.645Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1693-operating-constitution.json",
