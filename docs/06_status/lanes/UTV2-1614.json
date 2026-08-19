@@ -24,11 +24,13 @@
     "scripts/ops/proof-rebind.test.ts",
     "package.json",
     "docs/06_status/proof/UTV2-1614/evidence.json",
-    "docs/06_status/proof/UTV2-1614/verification.md"
+    "docs/06_status/proof/UTV2-1614/verification.md",
+    "docs/06_status/proof/UTV2-1614/diff-summary.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1614/evidence.json",
-    "docs/06_status/proof/UTV2-1614/verification.md"
+    "docs/06_status/proof/UTV2-1614/verification.md",
+    "docs/06_status/proof/UTV2-1614/diff-summary.md"
   ],
   "status": "in_review",
   "started_at": "2026-07-28T14:10:00.000Z",
