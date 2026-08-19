@@ -1,6 +1,6 @@
 # Diff summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: 7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab
 
 Substantive source binding: `3b3846c37423f3654843db6be99a096def164298`.
 
