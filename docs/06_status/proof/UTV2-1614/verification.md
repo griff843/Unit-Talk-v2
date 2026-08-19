@@ -572,5 +572,5 @@ apparatus. No proof bundle other than this lane's own is modified by this PR.
 
 ## Merge SHA Binding
 
-Merge SHA: 7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab
+Merge SHA: `7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1315

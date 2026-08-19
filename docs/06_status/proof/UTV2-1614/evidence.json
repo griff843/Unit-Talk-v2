@@ -3,11 +3,13 @@
   "proof_profile": "static",
   "issue_id": "UTV2-1614",
   "sha_binding": {
-    "verified_source_sha": "3b3846c37423f3654843db6be99a096def164298",
+    "verified_source_sha": "7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab",
     "merge_sha": "7cda4bdafdaffd2f1b3e8fb65995eb66e4928cab",
     "evidence_commit_sha": "3b3846c37423f3654843db6be99a096def164298",
     "current_pr_head_sha": "c1f7c9452483fb3ff20e02b173dc7da1f0963682",
-    "verified_source_note": "Bound to 3b3846c37423f3654843db6be99a096def164298, the sixth-iteration head: it merges current main (post-UTV2-1722 evidence contract), adopts the shared MergedPrAttestation identity core, and adds the static-only --apply profile hard guard. The prior head 179c3047b475b2551fe8237c03983b927da51c15 closed five successive adversarial exact-head reviews; every one of those fixes is preserved unchanged on this head (no planner code was touched in this iteration). Earlier sha_binding note retained in verification.md history."
+    "verified_source_note": "Bound to 3b3846c37423f3654843db6be99a096def164298, the sixth-iteration head: it merges current main (post-UTV2-1722 evidence contract), adopts the shared MergedPrAttestation identity core, and adds the static-only --apply profile hard guard. The prior head 179c3047b475b2551fe8237c03983b927da51c15 closed five successive adversarial exact-head reviews; every one of those fixes is preserved unchanged on this head (no planner code was touched in this iteration). Earlier sha_binding note retained in verification.md history.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-19T18:22:30.426Z"
   },
   "tier": "T1",
   "static_proof": {
