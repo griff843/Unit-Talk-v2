@@ -71,12 +71,12 @@
     },
     "review_finding_a_t2_merge_authority": {
       "status": "PASS",
-      "detail": "Corrected against .github/workflows/merge-gate.yml L512-543, which accepts three T2 approval artifacts: pm-verdict/v1 from CODEOWNERS (L521-527), a GitHub PR review approval (L516), and an executor-result/v1 self-attestation from AUTHORIZED_REVIEWERS (L528-535). PR #1429 documented two and wrongly asserted orchestrator self-approval satisfies the gate."
+      "detail": "Corrected against .github/workflows/merge-gate.yml L502-543, which accepts three T2 approval artifacts: pm-verdict/v1 from CODEOWNERS (L521-527), a GitHub PR review approval (L516), and an executor-result/v1 self-attestation from AUTHORIZED_REVIEWERS (L528-535). PR #1429 documented two and wrongly asserted orchestrator self-approval satisfies the gate."
     },
     "review_finding_b_env_export": {
       "status": "PASS",
       "method": "executed",
-      "detail": "First-existing local.env -> .env selection with set -a export, executed across four cases. Case 1 local.env wins and the child process sees it; Case 2 falls back to .env; Case 3 reproduces the defect (bare source leaves the child seeing an empty value); Case 4 fails closed with exit 1."
+      "detail": "Reproduces loadEnvironment()'s layered per-variable merge (.env.example < .env < local.env) under set -a, executed across three cases. Case 1: all three layers present, local.env wins per variable while a .env-only value survives. Case 2: the rejected first-match loop, which leaves a .env-only credential empty in the child process -- the defect this correction removes, and the behaviour the previous revision of this lane shipped. Case 3: no layer present, exits 1 fail-closed. An earlier revision of this bundle described a first-existing-file selection across four cases; that procedure was superseded and no longer appears in the runbook."
     },
     "hook_exit_semantics": {
       "status": "PASS",
@@ -123,7 +123,8 @@
           "fail": 0,
           "skipped": 0
         }
-      }
+      },
+      "run_conclusion_note": "The cited job (96308159380, 'Writable DB proof (staging only)') completed with conclusion success, as did the verify job in the same run. The workflow run's own top-level conclusion reads cancelled because other jobs in that run were superseded by a later push. The receipt cited here is job-level, and its success is independent of the run-level rollup; this is recorded so the discrepancy is not discovered later and mistaken for a masked failure."
     },
     "local_execution": {
       "status": "REFUSED_BY_CONTAINMENT",

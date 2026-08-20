@@ -18,8 +18,8 @@ ASSERTIONS:
 - [x] The T1 database gate is **satisfied, not waived**: `pnpm test:db` and the T1 live-proof suite ran against the approved staging project on this exact head and passed (run 32329786908, job 96308159380). It does not run on this workstation, where `ci:assert-staging` correctly refuses the containment sentinel `127.0.0.1`; the receipt is therefore cited from CI.
 - [x] All six `model:` references in `.claude/commands/dispatch.md` are byte-identical to `origin/main` (L175, L181, L231, L242, L308, L326).
 - [x] The eleven refused files are untouched: `git diff` against `origin/main` reports no change to any `.claude/agents/*.md`, `three-brain.md`, `OPERATING_MODEL_SONNET5.md`, or `agent-brief.md`.
-- [x] T2 Merge Authority documentation now matches `.github/workflows/merge-gate.yml` L512-543 exactly — three approval artifacts, cited by line.
-- [x] The corrected operator-runbook env procedure was executed across four cases, including a reproduction of the defect it fixes.
+- [x] T2 Merge Authority documentation now matches `.github/workflows/merge-gate.yml` L502-543 exactly — three approval artifacts, cited by line.
+- [x] The corrected operator-runbook env procedure reproduces `loadEnvironment()`'s layered per-variable merge and was executed across three cases, including Case 2 which reproduces the defect the correction removes.
 - [x] The corrected `bash-safety-guard` hook was observed blocking two real tool calls in-session.
 - [x] No runtime code, schema, migration, or dependency change. Documentation and harness guidance only.
 

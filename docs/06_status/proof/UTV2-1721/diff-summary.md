@@ -52,7 +52,7 @@ Only three non-model hunks were taken from `dispatch.md`: the canonical-gate-seq
 
 PR #1429 asserted: *"the orchestrator's own `gh pr review --approve` after diff review satisfies the PR-review branch; no PM presence is mechanically required."*
 
-That is wrong, and the correction is verified against the workflow rather than restated from the PR. `.github/workflows/merge-gate.yml` lines 505-543 accept **three** T2 artifacts:
+That is wrong, and the correction is verified against the workflow rather than restated from the PR. `.github/workflows/merge-gate.yml` lines 502-543 accept **three** T2 artifacts:
 
 1. `pm-verdict/v1` APPROVED comment from a CODEOWNERS member (L521-527)
 2. a GitHub PR review approval (L516)
@@ -62,9 +62,9 @@ Path 3 exists precisely because author and reviewer share the `griff843` identit
 
 ### Finding B — operator runbook env loading never reached child processes
 
-PR #1429 instructed `source local.env`. A bare `source` creates shell variables only; `gh`, `psql`, and `pg_restore` never see them. It also dropped the documented first-existing `local.env` -> `.env` selection.
+PR #1429 instructed `source local.env`. Two defects: a bare `source` creates shell variables only, so `gh`, `psql` and `pg_restore` never see them; and selecting a single file misrepresents the loader. `loadEnvironment()` (`packages/config/src/env.ts:175-191`) parses `.env.example`, `.env` and `local.env` and merges them **per variable** in ascending precedence, so a value present only in `.env` survives when `local.env` exists.
 
-Corrected to select the first existing file and export with `set -a`. Executed across four cases — see `verification.md`.
+Corrected to reproduce that layered merge under `set -a`, with the rejected first-match pattern named explicitly so it is not reintroduced. Executed across three cases — Case 1 layered merge, Case 2 the rejected first-match loop dropping a `.env`-only credential, Case 3 fail-closed with no layer present. See `verification.md` §4.
 
 ## Out of scope, recorded for follow-up
 
