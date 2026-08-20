@@ -248,22 +248,36 @@ extract_close_ids_ignoring_suppression() {
   printf '%s\n%s\n%s\n' "$inline" "$trailer" "$closeout" | sort -u | grep -v '^$' | tr '\n' ' ' | sed 's/ $//'
 }
 
-# Was extraction's empty result caused by a deliberate opt-out rather than by
-# the grammar failing to match?
+# Was extraction's empty result caused by a DELIBERATE, EXPLICIT opt-out rather
+# than by the grammar failing to match?
 #
-# UTV2-1724: this replaced a predicate that grepped the message for the strings
-# "plan-only", "partial-fix" or "No-close:". That was a prose escape hatch, and
-# it silently disabled the tripwire — reproduced on THIS lane's own squash
-# merge, whose body merely *describes* the opt-out feature and thereby switched
-# off the control it was describing. A fail-open inside the fix for a fail-open.
+# UTV2-1724, first revision: this grepped the message for "plan-only",
+# "partial-fix" or "No-close:". That was a prose escape hatch — this lane's own
+# commit body, which merely describes the opt-out feature, switched off the
+# control it was describing.
 #
-# The reliable question is not "does the text mention an opt-out" but "did the
-# forms match at all". If they did and the result was filtered away, a human
-# opted out on purpose. If nothing matched, the grammar has drifted. Prose
-# cannot fake the first condition.
+# UTV2-1724, second revision: it asked only whether the close-intent FORMS
+# matched. That closed the prose hole for drifted subjects but opened a
+# narrower one, because extract_linear_close_ids() still suppresses on bare
+# prose:
 #
-# Deliberately does NOT change extract_linear_close_ids()'s own opt-out
-# semantics, which are pre-existing and out of scope here.
+#   chore(lanes): close UTV2-1614 — lane closed, sync file removed
+#
+#   this is not plan-only at all
+#   -> forms matched, extraction suppressed on the word "plan-only",
+#      tripwire read that as deliberate and stayed silent
+#
+# A well-formed sanctioned closeout was voided by one word in its body, with
+# nothing going red — the exact ghost this lane exists to abolish.
+#
+# So "deliberate" now requires an EXPLICIT No-close: trailer naming an ID the
+# forms actually found. Bare prose is not enough to silence the tripwire on a
+# commit that carries a closeout signature: if someone really means to suppress
+# a sanctioned closeout, they name it.
+#
+# extract_linear_close_ids()'s own opt-out semantics are pre-existing and
+# deliberately left untouched — it still suppresses on prose. The difference is
+# that doing so on a closeout commit is now LOUD instead of silent.
 has_close_suppression_marker() {
   local msg
   if [ $# -gt 0 ]; then
@@ -276,9 +290,21 @@ has_close_suppression_marker() {
 
   local raw
   raw=$(extract_close_ids_ignoring_suppression "$msg")
-  [ -n "$raw" ] && return 0
+  [ -n "$raw" ] || return 1
+
+  # An explicit No-close: naming one of the IDs the forms found.
+  local nc
+  nc=$(echo "$msg" | grep -oE 'No-close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  local id ncid
+  for id in $raw; do
+    for ncid in $nc; do
+      [ "$id" = "$ncid" ] && return 0
+    done
+  done
+
   return 1
 }
+
 
 # ---------------------------------------------------------------------------
 # Authoritative merge SHA resolution (UTV2-1724 P1)
@@ -782,6 +808,31 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     pass=$((pass + 1))
   else
     echo "  FAIL  prose mentioning plan-only/partial-fix cannot silence the tripwire"
+    fail=$((fail + 1))
+  fi
+
+  # Hatch 6: extract_linear_close_ids() suppresses on bare prose, so a
+  # well-formed sanctioned closeout could be voided by one word in its body
+  # while the tripwire read that as deliberate and stayed silent. Silencing now
+  # requires an explicit No-close: naming an ID the forms actually found.
+  prose_void_msg=$'chore(lanes): close UTV2-1614 — lane closed, sync file removed\n\nthis is not plan-only at all'
+  if [ -z "$(extract_linear_close_ids "$prose_void_msg")" ] \
+     && has_lane_closeout_signature "$prose_void_msg" \
+     && ! has_close_suppression_marker "$prose_void_msg"; then
+    echo "  PASS  prose cannot silently void a sanctioned closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  prose cannot silently void a sanctioned closeout"
+    fail=$((fail + 1))
+  fi
+
+  # ...but a real, named opt-out still is deliberate.
+  named_optout=$'chore(lanes): close UTV2-1614 — lane closed, sync file removed\n\nNo-close: UTV2-1614'
+  if has_close_suppression_marker "$named_optout"; then
+    echo "  PASS  an explicit No-close naming the found ID still silences the tripwire"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an explicit No-close naming the found ID still silences the tripwire"
     fail=$((fail + 1))
   fi
 

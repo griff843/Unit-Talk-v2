@@ -2,7 +2,7 @@
 
 MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
 
-That SHA is an anchor required by the executor-result validator, not a claim that nothing substantive followed it. This lane has **three** substantive commits: the grammar and tripwire (`44449322`), the completion-gate SHA comparison (`8ace5346`), and two escape hatches in the tripwire itself (`55c8fe10`).
+That SHA is an anchor required by the executor-result validator, not a claim that nothing substantive followed it. The substantive commits are every `fix(ci)` entry in `git log --oneline origin/main..HEAD`; they are not listed by SHA here because the list grew across review rounds and a fixed enumeration went stale twice.
 
 Two files, both under `.github/workflows/`. No runtime code, schema, migration, or dependency change.
 
@@ -18,7 +18,7 @@ Two files, both under `.github/workflows/`. No runtime code, schema, migration, 
 
 4. **`evaluate_completion_block()` added.** The truth-gated completion decision, moved out of the workflow YAML so the harness drives the real decision path rather than a paraphrase of it.
 
-5. **40 test cases added**, taking the harness from **28 to 68**, 0 failures — covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, the tripwire including cases proving prose can neither silence nor trigger it and that all three scopes agree, and the full completion-decision path over realistic manifests and closeout ancestry. Per-section counts are not quoted; run the harness for the current split.
+5. **42 test cases added**, taking the harness from **28 to 70**, 0 failures — covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, the tripwire including cases proving prose can neither silence nor trigger it and that all three scopes agree, and the full completion-decision path over realistic manifests and closeout ancestry. Per-section counts are not quoted; run the harness for the current split.
 
 ## `.github/workflows/linear-auto-close.yml`
 

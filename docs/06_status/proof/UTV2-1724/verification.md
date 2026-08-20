@@ -4,15 +4,9 @@ MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
 
 Lane: auto-close intent grammar misses sanctioned closeout commits, stranding merged lanes as ghosts.
 Tier: T1 · lane_type: governance · proof profile: static
-Substantive commits — **three**, not one. An earlier revision of this line named only the first and said "everything after it is proof-only". That was false, and it pointed a reviewer away from the two most consequential changes in a lane whose entire subject is controls that hide the truth:
+Substantive commits: **every `fix(ci)` commit on this branch**. They are not enumerated by SHA here — the list grew from one to five over successive review rounds, and two revisions of this note stated a count that was already stale. Run `git log --oneline origin/main..HEAD` and read every `fix(ci)` entry; the `chore(proof)` entries are proof-only.
 
-| commit | what it changes |
-|---|---|
-| `4444932205f34aa76058e36072f3aa171057d488` | the close-intent grammar and the fail-closed tripwire |
-| `8ace5346` | the completion gate's SHA comparison — the P1 that survives the grammar fix |
-| `55c8fe10` | two escape hatches in the tripwire itself, both reproduced on this lane's own squash merge |
-
-`MERGE_SHA` stays bound to the first because the executor-result validator requires a single ancestor SHA; it is an anchor, not a claim that nothing substantive followed. Read all three.
+`MERGE_SHA` stays bound to the first because the executor-result validator requires a single ancestor SHA. It is an anchor, not a claim that nothing substantive followed it — an earlier revision made exactly that claim and it was false.
 
 ## Summary
 
@@ -33,13 +27,14 @@ ASSERTIONS:
 - [x] The existing `No-close:` / `plan-only` / `partial-fix` opt-out still suppresses the new form.
 - [x] The fail-closed control is validated **by execution on the condition it names**, not by presence: a drifted closeout template exits 1 with `reason=closeout_signature_unmatched`.
 - [x] The control does not fire on any legitimate case: sanctioned closeout, deliberate opt-out, and an ordinary commit all exit 0.
-- [x] Harness: **68 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] Harness: **70 passed, 0 failed** — all 28 pre-existing cases still green.
 - [x] The tripwire's own escape hatches are closed, both found by adversarial review of this lane:
   - The opt-out test grepped the message for `plan-only` / `partial-fix` / `No-close:`. Any commit whose **prose** mentioned them silently disabled the tripwire — a fail-open inside the fix for a fail-open, reproduced on this lane's own squash merge. It now asks whether the close-intent **forms** matched and were filtered, which prose cannot fake.
   - The signature scanned the whole message, so a commit that merely **described** a closeout template matched. It is now subject-line only, matching the single-line message the producer actually writes. Verified: this PR's own squash merge carries no signature and does not fire.
-- [x] Two further holes found by a later review round, both reproduced before fixing:
+- [x] Further holes found by later review rounds, each reproduced before fixing:
   - **Reverting a closeout reddened `main`.** `git revert` reproduces the reverted subject verbatim, so `Revert "chore(lanes): close <ID> — lane closed, sync file removed"` carried both signatures while extracting nothing, firing the tripwire on a correct, deliberate revert. `Revert "..."` subjects are now exempt: undoing a closeout is an intentional act, not template drift.
   - **A third, unaligned scope — the fourth recurrence of this one bug class.** `extract_close_ids_ignoring_suppression()`, which the tripwire consults to tell a deliberate opt-out from drift, still scanned the whole message after the other two were narrowed to the subject. A drifted subject whose *body* carried a well-formed closeout line therefore reported a form match, the tripwire read that as an intentional opt-out, and real drift passed in silence — the exact ghost this lane exists to abolish. All three scopes are now aligned, and a case asserts agreement across all three rather than two, plus a case reproducing the exploit itself.
+  - **Prose could silently void a valid closeout.** `extract_linear_close_ids()` suppresses on bare `plan-only` / `partial-fix` anywhere in the message — pre-existing behaviour — while the tripwire read any form match as a deliberate opt-out. So a well-formed sanctioned closeout carrying one of those words in its body extracted nothing, and the tripwire stayed silent. Silencing now requires an explicit `No-close:` naming an ID the forms actually found. Extraction's own semantics are unchanged; suppressing a sanctioned closeout by prose is now loud instead of silent.
   - **A scope asymmetry introduced by the subject-only signature.** Extraction still matched any line at column 0, so a commit whose *body* contained `chore(lanes): close UTV2-N ...` would **close that issue** while the tripwire, reading only the subject, stayed structurally blind to it. Extraction's closeout form is now subject-only as well. Extraction and signature must see the same text or the control does not cover the behaviour; a case asserts they agree.
 - [x] The completion-gate defect reproduced against the **real merged `UTV2-1721` manifest** from `main`, not a fixture: a lane with `status: done`, `verdict: pass`, runner `ops:lane-close` and its receipt bound to the merge was refused, because `3ca047fa != 44068585`.
 - [x] `resolve_authoritative_merge_sha()` introduces no new contract: it reads `commit_sha` and the truth-check receipt's `merge_sha` — the two fields the gate already cross-checks — and resolves nothing when they disagree rather than picking a side.
@@ -72,7 +67,7 @@ $ pnpm test
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1724
   Verdict: PASS
-  Changed files: 8
+  Changed files: 7
   Rules matched: (none) — no R-level artifacts required for this diff
 
 $ pnpm verify
@@ -183,7 +178,7 @@ The last two are a matched pair: identical manifest, identical commit, ancestry 
 
 ```text
 $ bash .github/workflows/linear-auto-close.test.sh
-  Results: 68 passed, 0 failed
+  Results: 70 passed, 0 failed
 ```
 
 Per-section counts are deliberately not reproduced here. They shift whenever a case is added to one section rather than another, and two revisions of this bundle already recorded a breakdown that did not match the suite. Run the harness for the current split; the total and the zero-failure result are the load-bearing facts.

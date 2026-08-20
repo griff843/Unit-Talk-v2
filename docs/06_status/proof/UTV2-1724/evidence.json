@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "verified_source_sha": "4444932205f34aa76058e36072f3aa171057d488",
-    "verified_source_note": "Anchor required by the executor-result validator, which needs a single ancestor SHA. NOT a claim that nothing substantive followed it. This lane has three substantive commits: 44449322 (grammar + fail-closed tripwire), 8ace5346 (completion-gate SHA comparison, the P1 that survives the grammar fix), and 55c8fe10 (two escape hatches in the tripwire itself). An earlier revision of this note said everything after the anchor was proof-only, which was false and pointed a reviewer away from the two most consequential changes.",
+    "verified_source_note": "Anchor required by the executor-result validator, which needs a single ancestor SHA. NOT a claim that nothing substantive followed it. The substantive commits are every fix(ci) entry in git log --oneline origin/main..HEAD; they are not enumerated here because the list grew across review rounds and a fixed enumeration went stale twice. An earlier revision claimed everything after the anchor was proof-only, which was false.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -59,7 +59,7 @@
   "static_proof": {
     "harness": {
       "command": "bash .github/workflows/linear-auto-close.test.sh",
-      "pass": 68,
+      "pass": 70,
       "fail": 0,
       "pre_existing_cases_still_green": 28,
       "sections_note": "Per-section counts are not recorded: they shift when a case lands in one section rather than another, and two earlier revisions recorded a breakdown that did not match the suite. Run the harness for the current split."
@@ -103,7 +103,7 @@
       },
       "scripts/ci/r-level-check.ts": {
         "verdict": "PASS",
-        "changed_files": 8,
+        "changed_files": 7,
         "rules_matched": "none"
       },
       "pnpm verify": {
@@ -148,7 +148,7 @@
     {
       "criterion": "Grammar fixed, with matching cases in the harness",
       "status": "PASS",
-      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 68 passed / 0 failed, with all 28 pre-existing cases still green."
+      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 70 passed / 0 failed, with all 28 pre-existing cases still green."
     },
     {
       "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",
@@ -173,7 +173,7 @@
   ],
   "known_limitations": [
     "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1, the fail-closed requirement, and the completion-gate SHA-comparison P1. The replay is a post-merge acceptance phase: this issue must not be marked Done until the sanctioned replay produces three-way GitHub/manifest/Linear agreement and ORCH-MERGED-PR-LINEAR-DONE returns 0.",
-    "Five escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed: a prose-grep opt-out test any commit mentioning plan-only/partial-fix could silence; a whole-message signature scan that fired on commits merely describing a closeout template; a revert of a closeout that reddened main; a scope asymmetry where extraction matched any column-0 line while the signature read only the subject; and a third unaligned scope in the raw-form scan the tripwire consults, which let a drifted subject be silenced by a closeout line in its body. Four of the five are the same bug class - two code paths disagreeing about which part of the commit message they read - which is why a case now asserts all three scopes agree rather than two.",
+    "Six escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed: a prose-grep opt-out test any commit mentioning plan-only/partial-fix could silence; a whole-message signature scan that fired on commits merely describing a closeout template; a revert of a closeout that reddened main; a scope asymmetry where extraction matched any column-0 line while the signature read only the subject; a third unaligned scope in the raw-form scan; and prose in a body silently voiding a valid closeout because extraction suppresses on prose while the tripwire read any form match as deliberate. Five of the six are the same class - two code paths disagreeing about which text they read or what counts as deliberate - which is why cases now assert all three form scopes agree and that only an explicit named No-close silences the tripwire.",
     "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
     "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
   ],
