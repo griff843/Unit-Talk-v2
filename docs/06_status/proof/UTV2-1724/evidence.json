@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1724",
+  "title": "Auto-close intent grammar misses sanctioned closeout commits",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "verified_source_sha": "4444932205f34aa76058e36072f3aa171057d488",
+    "verified_source_note": "Grammar + fail-closed tripwire commit. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "scope": {
+    "files_changed": [
+      ".github/workflows/linear-auto-close.yml",
+      ".github/workflows/linear-auto-close.test.sh"
+    ],
+    "runtime_code_changed": false,
+    "schema_changed": false,
+    "dependency_changed": false
+  },
+  "defect": {
+    "producer": ".github/workflows/post-merge-lane-close.yml:536",
+    "producer_template": "chore(lanes): close $ISSUE_ID — lane closed, sync file removed",
+    "pre_fix_alternation": "(closes|fixes|resolves)",
+    "pre_fix_result_on_producer_output": "empty",
+    "pre_fix_harness_result": "28 passed, 0 failed",
+    "class": "evidence-conflation: an aggregate green that conflates 'nothing to do' with 'the thing this workflow exists to do did not happen'"
+  },
+  "static_proof": {
+    "harness": {
+      "command": "bash .github/workflows/linear-auto-close.test.sh",
+      "pass": 47,
+      "fail": 0,
+      "pre_existing_cases_still_green": 28
+    },
+    "syntax": {
+      "bash_n": "clean",
+      "yaml_parse": "ok"
+    },
+    "control_validated_by_execution": [
+      {
+        "case": "sanctioned closeout",
+        "exit": 0,
+        "decision": "will_close",
+        "ids": "UTV2-1614"
+      },
+      {
+        "case": "drifted closeout template",
+        "exit": 1,
+        "reason": "closeout_signature_unmatched"
+      },
+      {
+        "case": "deliberate opt-out",
+        "exit": 0,
+        "decision": "no_close"
+      },
+      {
+        "case": "ordinary commit",
+        "exit": 0,
+        "decision": "no_close"
+      }
+    ]
+  },
+  "reconcile_baseline": {
+    "command": "pnpm ops:orchestration-reconcile --current --json",
+    "verdict": "FAIL",
+    "exit_code": 1,
+    "pass": 1113,
+    "warn": 169,
+    "fail": 52,
+    "fail_breakdown": {
+      "ORCH-MERGED-PR-LINEAR-DONE": 25,
+      "ORCH-OPEN-PR-MANIFEST-URL": 17,
+      "ORCH-LINEAR-ACTIVE-RECORD": 9,
+      "ORCH-LEASE-MANIFEST": 1
+    },
+    "merged_pr_linear_done_distinct_issues": [
+      "UTV2-1451",
+      "UTV2-1590",
+      "UTV2-1612",
+      "UTV2-1619",
+      "UTV2-1627",
+      "UTV2-1638",
+      "UTV2-1641",
+      "UTV2-1646",
+      "UTV2-1648",
+      "UTV2-1659",
+      "UTV2-1684",
+      "UTV2-1691",
+      "UTV2-1696",
+      "UTV2-1701"
+    ]
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Grammar fixed, with matching cases in the harness",
+      "status": "PASS",
+      "evidence": "Anchored closeout form added; 12 sanctioned-closeout cases and 7 tripwire cases; 47 passed / 0 failed."
+    },
+    {
+      "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",
+      "status": "PASS",
+      "evidence": "Validated by execution: a drifted template exits 1 with reason=closeout_signature_unmatched, while sanctioned closeout, deliberate opt-out and ordinary commits all exit 0."
+    },
+    {
+      "criterion": "Sanctioned replay of the 25-lane backlog",
+      "status": "NOT_STARTED",
+      "evidence": "Deliberately sequenced after this fix merges. Replaying while the grammar is still blind would re-emit commits that again match nothing. Baseline recorded in reconcile_baseline."
+    },
+    {
+      "criterion": "Three-way agreement proven by a clean ops:orchestration-reconcile run",
+      "status": "NOT_STARTED",
+      "evidence": "Follows the replay."
+    },
+    {
+      "criterion": "Zero merged-but-unclosed lanes (ORCH-MERGED-PR-LINEAR-DONE = 0)",
+      "status": "NOT_STARTED",
+      "evidence": "Currently 25. Follows the replay."
+    }
+  ],
+  "known_limitations": [
+    "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1 and the fail-closed requirement only.",
+    "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
+    "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
+  ],
+  "verdict": "READY_FOR_REVIEW_PARTIAL_EXIT_CRITERIA"
+}
