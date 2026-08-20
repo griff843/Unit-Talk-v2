@@ -25,7 +25,7 @@ Run the live governor and reconciliation checks before dispatching any issue. Ab
 
 ### Gate 0 — Lane substrate
 
-The gate sequence below (Gates 0–4) is canonical in `/dispatch` Phase 0 — keep it identical there and here. `/dispatch` runs the substrate guard before it starts a lane; the loop must do the same before it starts a *board* of lanes. Run it first:
+The gate sequence below (Gates 0–4) is canonical in `/dispatch` Phase 0 — keep the same gates in the same order there and here. One intentional difference: this loop runs `ops:substrate-guard --check-linear` where `/dispatch` and `/dispatch-board` run it bare, because the loop dispatches across repeated cycles and must catch Linear/manifest drift that accumulates between them. Keep the flag. `/dispatch` runs the substrate guard before it starts a lane; the loop must do the same before it starts a *board* of lanes. Run it first:
 
 ```bash
 pnpm ops:substrate-guard --check-linear

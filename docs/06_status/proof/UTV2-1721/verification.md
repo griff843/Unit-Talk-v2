@@ -99,27 +99,26 @@ GitHub environment with CI_SUPABASE_* credentials.
 
 PR #1429 documented two paths and asserted orchestrator self-approval satisfies the gate. Path 3 exists because author and reviewer share the `griff843` identity, so GitHub refuses that self-review.
 
-### 4. Review finding B — env loading executed across four cases
+### 4. Review finding B — env layering executed against the real loader semantics
 
-The corrected procedure was run in an isolated temp directory. Case 3 reproduces the defect the fix closes.
+An exact-head review found the first correction still wrong. `loadEnvironment()` (`packages/config/src/env.ts:175-191`) does not select one file: it parses `.env.example`, `.env` and `local.env` and merges them **per variable**, later layers overriding earlier. A first-match loop stops at `local.env` and silently drops every credential that lives only in `.env` — the common local layout. The runbook now reproduces the layered merge, verified by execution:
 
 ```text
-=== CASE 1: both present -> local.env wins AND child process sees it ===
-  selected file : local.env
-  child sees    : [local_env_wins]
+=== CASE 1: layered merge - all three present ===
+  SHARED (local wins)      : [from_local]
+  ONLY_ENV (survives!)     : [env_val]
+  ONLY_EXAMPLE (survives)  : [example_val]
+  ONLY_LOCAL               : [local_val]
 
-=== CASE 2: only .env present -> documented fallback ===
-  selected file : .env
-  child sees    : [exported_ok]
+=== CASE 2: the REJECTED first-match loop, same files ===
+  ONLY_ENV : []   <- EMPTY: .env credentials silently dropped
 
-=== CASE 3: bare source (the OLD advice) -> child must NOT see it ===
-  shell var     : [local_env_wins]
-  child sees    : []   <- empty proves the defect
-
-=== CASE 4: neither file -> must fail closed ===
-  local.env or .env is required.
-  case4 exit=1 (1 = fails closed, correct)
+=== CASE 3: no layers -> fail closed ===
+  no env layer found: expected at least one of .env.example, .env, local.env
+  case3 exit=1 (1 = fails closed)
 ```
+
+Case 2 is the defect this correction removes, and it is the behaviour the previous revision of this lane shipped. The earlier "four cases" evidence described that superseded procedure and has been replaced rather than retained, so no part of this bundle documents a procedure the runbook no longer contains.
 
 ### 5. Hook exit-2 semantics — the control observed blocking two live calls
 
@@ -153,6 +152,22 @@ $ grep -n 'model:' .claude/commands/dispatch.md
 308:   model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
 326: **Tier C detection:** ... use `model: "opus"`. Otherwise `model: "sonnet"`.
 ```
+
+### 7. Review finding C — gate-sequence parity must not strip the loop's Linear check
+
+The parity instruction added to `/dispatch` originally said the three gate sequences "must stay identical" and that `/dispatch` wins on divergence. `/loop-dispatch` invokes `pnpm ops:substrate-guard --check-linear` while `/dispatch` and `/dispatch-board` invoke it bare, so an agent following that instruction could have deleted the loop's Linear drift check in the name of parity.
+
+`dispatch.md:52` documents what the flag buys: "(with `--check-linear`) a Linear/manifest conflict". Parity is now scoped to gate composition and order, and the flag is named as an intentional loop-only addition in both files:
+
+```text
+$ grep -n 'check-linear' .claude/commands/dispatch.md .claude/commands/loop-dispatch.md
+dispatch.md:42:      Parity governs which gates run, not their flags. ... **Do not remove
+                    `--check-linear` from `/loop-dispatch` in the name of parity**
+loop-dispatch.md:28: One intentional difference: this loop runs
+                    `ops:substrate-guard --check-linear` ... Keep the flag.
+```
+
+No command's executed gate sequence changed; only the instruction that governs future edits.
 
 ## Out of scope, recorded
 

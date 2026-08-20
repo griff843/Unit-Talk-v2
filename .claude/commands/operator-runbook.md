@@ -18,16 +18,23 @@ Run from the repo root: `cd "$(git rev-parse --show-toplevel)"` (normally `/home
 
 ### Required env vars
 
-`@unit-talk/config` loads env for Node processes from the first file that exists, in order: `local.env`, then `.env`. Shell-level tools invoked below (`gh`, `psql`, `pg_restore`) do **not** go through that loader, so export the same file into the environment first — `set -a` is required, because a bare `source` only creates shell variables and child processes never see them:
+`@unit-talk/config` does **not** pick one env file — `loadEnvironment()` (`packages/config/src/env.ts:175-191`) parses all three and merges them **per variable**, in ascending precedence: `.env.example`, then `.env`, then `local.env`. A variable set only in `.env` survives even when `local.env` exists.
+
+Shell-level tools invoked below (`gh`, `psql`, `pg_restore`) do not go through that loader, so reproduce the same layered merge before running them. `set -a` is required: a bare `source` creates shell variables that child processes never see.
 
 ```bash
-ENV_FILE=""
-for candidate in local.env .env; do
-  [ -f "$candidate" ] && { ENV_FILE="$candidate"; break; }
+loaded=0
+for layer in .env.example .env local.env; do   # ascending precedence; later wins per variable
+  [ -f "$layer" ] || continue
+  set -a; . "./$layer"; set +a
+  loaded=1
 done
-[ -n "$ENV_FILE" ] || { echo "local.env or .env is required." >&2; exit 1; }
-set -a; . "./$ENV_FILE"; set +a
+[ "$loaded" -eq 1 ] || { echo "no env layer found: expected at least one of .env.example, .env, local.env" >&2; exit 1; }
 ```
+
+Do not substitute a first-match loop (`for f in local.env .env; do ... break; done`). That stops at `local.env` and silently drops every credential that lives only in `.env`, which is the common local layout: machine overrides in `local.env`, real service credentials in `.env`. The checks below would then fail with empty values.
+
+`.env.example` is a template, so a variable present only there carries a placeholder value. That is exactly what the Node loader does too, so the checks below still verify the values the application would actually see.
 
 Then confirm the values the operations below actually depend on:
 

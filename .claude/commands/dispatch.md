@@ -37,7 +37,9 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 Before resolving targets or routing any issue, run the live governor and reconciliation checks. Abort on any hard fail or block; do not proceed to Phase 1.
 
-This five-command gate sequence is **canonical**. `/dispatch-board` and `/loop-dispatch` run the same sequence and must stay identical to it — if a copy diverges, this skill wins; fix the divergent copy rather than following it.
+This five-command gate sequence is **canonical** in composition and order: `/dispatch-board` and `/loop-dispatch` run the same five gates, in this order, and a copy that drops or reorders a gate is stale — fix the copy rather than following it.
+
+Parity governs which gates run, not their flags. `/loop-dispatch` deliberately invokes `pnpm ops:substrate-guard --check-linear` because it dispatches a whole board across repeated cycles, where Linear/manifest drift accumulates between cycles; that flag adds the Linear conflict check described below. **Do not remove `--check-linear` from `/loop-dispatch` in the name of parity** — it is an intentional loop-only addition, not divergence.
 
 ```bash
 pnpm ops:substrate-guard
