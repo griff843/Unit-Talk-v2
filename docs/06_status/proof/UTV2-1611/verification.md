@@ -27,7 +27,7 @@ ASSERTIONS:
 - [x] `pnpm test` — the `test:apps-api-core` root covering this lane reports 444/444 pass, 0 fail.
 - [x] `pnpm ops:automation-coverage-check` verdict PASS with `new=0`: the lane introduces no newly-unwired test file.
 - [x] `scripts/ci/r-level-check.ts` is evaluated by the R-Level Compliance Check on the pull request head.
-- [x] `pnpm verify` is exercised on the PR head in CI. Its `test:db` step requires the staging project and cannot run in this credential-contained environment; the staging result is cited from the CI receipt below rather than asserted locally.
+- [x] `pnpm verify` is green on the PR head in CI. Its `test:db` step requires the staging project and cannot run in this credential-contained environment; the staging result is harvested from CI's verified `ci-db-proof-receipt/v2` artifact rather than asserted locally, yielding 7 `runtime_proof.queries` and 8 `runtime_proof.row_counts`.
 - [x] The branch is rebased onto current `origin/main` and every commit references only this issue.
 - [x] `package.json` and `docs/05_operations/db-writer-classification.json` are byte-identical to `origin/main`; the lane touches no `docs/05_operations/**` or `.lane/**` path.
 
@@ -85,11 +85,36 @@ $ git diff origin/main --name-only | grep -E '^docs/05_operations/|^\.lane/|^pac
 
 This is what removes the `Lane Authority` failure at its cause: the lane no longer touches any path outside the runtime lane's `allowed_path_globs`, so no widening of `.lane/lanes/runtime.yml` is required. It also removes the `Shadow Parity Check` refusal, which guarded `package.json` against modification by a production-credentialed pull request.
 
-### 5. Live staging assertions
+### 5. Live staging proof and harvested runtime evidence
 
-The live cleanup voids through the lifecycle FSM — `transitionPickLifecycle(repositories.picks, pickId, 'voided', ..., 'operator_override')` — and asserts exactly one `pick_lifecycle` row per fixture with `from_state = 'awaiting_approval'`. The previous direct status `PATCH`, which wrote the lifecycle column with no `pick_lifecycle` row and no FSM validation, is not reintroduced; a source-scanning guard test enforces that and was strengthened so it stays load-bearing rather than tautological.
+`pnpm test:db` executed against the approved staging project on this exact head and passed. The evidence was not hand-written: it was harvested from CI's tamper-evident `ci-db-proof-receipt/v2` artifact by `scripts/ops/ci-db-proof-harvest.ts`, which re-verifies the receipt independently (`verifyHarvestedReceipt`) rather than trusting its declared fields.
 
-These assertions require the staging project and do not execute in this credential-contained environment. Their result is recorded from the CI staging receipt on the pull request head.
+```text
+Workflow: CI -> Writable DB proof (staging only)
+Run:      32330316960   Job: 96309632615   Attempt: 1
+Head:     29d05ebc8feab6f8f6bccccc07b5dea8e414d334
+Result:   SUCCESS
+Project:  xskgrzbteyqdufktjrjx  (approved staging)
+
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+
+runtime_proof.queries    : 7 entries, e.g.
+  picks,submissions                                        - repository bundle persists a submission and settlement
+  pick_lifecycle,picks,submissions                          - invalid atomic enqueue writes no lifecycle event or outbox row
+  audit_log,distribution_outbox,distribution_receipts,...   - invalid atomic delivery confirmation rolls back every write
+
+runtime_proof.row_counts : 8 entries, e.g.
+  distribution_receipts  count=1  reset (rows deleted)
+  distribution_outbox    count=2  reset (rows deleted)
+  sports                 count=9  upserted (synthetic reference rows)
+```
+
+This lane's own live assertions live in `apps/api/src/t1-proof-awaiting-approval.test.ts`, which `test:t1-proof:live` already enumerates and `db-writer-classification.json` already classifies. The live cleanup voids through the lifecycle FSM — `transitionPickLifecycle(repositories.picks, pickId, 'voided', ..., 'operator_override')` — and asserts exactly one `pick_lifecycle` row per fixture with `from_state = 'awaiting_approval'`. The previous direct status `PATCH`, which wrote the lifecycle column with no `pick_lifecycle` row and no FSM validation, is not reintroduced; a source-scanning guard test enforces that and was strengthened so it stays load-bearing rather than tautological.
+
+The bundle carries no author-written `verifier.identity`: schema-v2 forbids it, and exact-head provenance comes from CI.
 
 ### 6. Scope and authorization status
 
