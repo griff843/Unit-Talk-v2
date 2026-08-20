@@ -1,6 +1,6 @@
 # UTV2-1724 — diff summary
 
-MERGE_SHA: N/A
+MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
 
 Two files, both under `.github/workflows/`. No runtime code, schema, migration, or dependency change.
 

@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "verified_source_sha": "4444932205f34aa76058e36072f3aa171057d488",
-    "verified_source_note": "Grammar + fail-closed tripwire commit. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_note": "Substantive anchor: the grammar + fail-closed tripwire commit. Everything after it is proof-only. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
