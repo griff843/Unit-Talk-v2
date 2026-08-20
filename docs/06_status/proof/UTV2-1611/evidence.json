@@ -237,7 +237,7 @@
     {
       "criterion": "Writable Postgres proof exercises the exact change through the real pipeline.",
       "status": "PASS",
-      "evidence": "Satisfied by the staging-ci receipt, not deferred. pnpm test:db ran against the approved staging project xskgrzbteyqdufktjrjx on this branch (CI run 32330316960, job 96309632615) and passed. The receipt was harvested into runtime_proof.queries (7 entries, real table names) and runtime_proof.row_counts (8 entries) by scripts/ops/ci-db-proof-harvest.ts, which re-verifies the tamper-evident ci-db-proof-receipt/v2 artifact through verifyHarvestedReceipt rather than trusting its declared fields. The earlier BLOCKED_DEFERRED_TO_STAGING_CI status described the pre-receipt state and no longer holds."
+      "evidence": "Satisfied by the staging-ci receipt, not deferred. pnpm test:db ran against the approved staging project xskgrzbteyqdufktjrjx at branch head 29d05ebc8feab6f8f6bccccc07b5dea8e414d334 (CI run 32330316960, job 96309632615) and passed. That is not the head carrying this bundle; the binding is the diff, not co-location — git diff 29d05ebc HEAD touches no apps/** and no packages/** path, so the exercised code is byte-identical to the code under review. The receipt was harvested into runtime_proof.queries (7 entries, real table names) and runtime_proof.row_counts (8 entries) by scripts/ops/ci-db-proof-harvest.ts, which re-verifies the tamper-evident ci-db-proof-receipt/v2 artifact through verifyHarvestedReceipt rather than trusting its declared fields. The earlier BLOCKED_DEFERRED_TO_STAGING_CI status described the pre-receipt state and no longer holds."
     }
   ],
   "known_limitations": [

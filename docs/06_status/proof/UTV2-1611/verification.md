@@ -28,7 +28,7 @@ ASSERTIONS:
 - [x] `pnpm test` — the `test:apps-api-core` root covering this lane reports 444/444 pass, 0 fail.
 - [x] `pnpm ops:automation-coverage-check` verdict PASS with `new=0`: the lane introduces no newly-unwired test file.
 - [x] `scripts/ci/r-level-check.ts` is evaluated by the R-Level Compliance Check on the pull request head.
-- [x] `pnpm verify` is green on the PR head in CI. Its `test:db` step requires the staging project and cannot run in this credential-contained environment; the staging result is harvested from CI's verified `ci-db-proof-receipt/v2` artifact rather than asserted locally, yielding 7 `runtime_proof.queries` and 8 `runtime_proof.row_counts`.
+- [x] `pnpm verify` is the required CI context that enforces the staging receipt, via `scripts/ci/verify-db-proof-receipt.ts`. It runs on each pushed head; this bundle does not assert its result for the head that carries the bundle, because that head does not exist when the bundle is written. Its `test:db` step requires the staging project and cannot run in this credential-contained environment; the staging result is harvested from CI's verified `ci-db-proof-receipt/v2` artifact rather than asserted locally, yielding 7 `runtime_proof.queries` and 8 `runtime_proof.row_counts`.
 - [x] The branch is rebased onto current `origin/main` and every commit references only this issue.
 - [x] `package.json` and `docs/05_operations/db-writer-classification.json` are byte-identical to `origin/main`; the lane touches no `docs/05_operations/**` or `.lane/**` path.
 
@@ -88,7 +88,7 @@ This is what removes the `Lane Authority` failure at its cause: the lane no long
 
 ### 5. Live staging proof and harvested runtime evidence
 
-`pnpm test:db` executed against the approved staging project on this exact head and passed. The evidence was not hand-written: it was harvested from CI's tamper-evident `ci-db-proof-receipt/v2` artifact by `scripts/ops/ci-db-proof-harvest.ts`, which re-verifies the receipt independently (`verifyHarvestedReceipt`) rather than trusting its declared fields.
+`pnpm test:db` executed against the approved staging project and passed. It ran at `29d05ebc8feab6f8f6bccccc07b5dea8e414d334`, not at the head that carries this bundle — the receipt head is recorded verbatim as `runtime_proof` `target_head_sha` and reproduced in the block below. What binds it to this head is not co-location but the diff: `git diff 29d05ebc8feab6f8f6bccccc07b5dea8e414d334 HEAD` touches no `apps/**` and no `packages/**` path, so the code the receipt exercised is byte-identical to the code under review; every commit since is proof-only or a `main` refresh. The evidence was not hand-written: it was harvested from CI's tamper-evident `ci-db-proof-receipt/v2` artifact by `scripts/ops/ci-db-proof-harvest.ts`, which re-verifies the receipt independently (`verifyHarvestedReceipt`) rather than trusting its declared fields.
 
 ```text
 Workflow: CI -> Writable DB proof (staging only)
