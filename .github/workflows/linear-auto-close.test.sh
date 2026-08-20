@@ -202,6 +202,154 @@ has_close_suppression_marker() {
 }
 
 # ---------------------------------------------------------------------------
+# Authoritative merge SHA resolution (UTV2-1724 P1)
+# ---------------------------------------------------------------------------
+#
+# `github.sha` on a push is the SHA of the PUSHED commit. For an ordinary
+# squash/merge to main that IS the implementation merge SHA, and comparing the
+# manifest against it is correct.
+#
+# For the sanctioned closeout path it is not. post-merge-lane-close.yml pushes
+# a SEPARATE commit AFTER the merge:
+#
+#   3ca047fa  UTV2-1721: port bounded harness corrections (#1432)   <- the merge
+#   44068585  chore(lanes): close UTV2-1721 — lane closed, ...      <- pushed later
+#
+# The manifest's commit_sha is bound to the merge (3ca047fa). github.sha on the
+# closeout push is 44068585. The completion gate's
+# `[ "$m_sha" != "$MERGE_SHA" ]` therefore compares two SHAs that can never be
+# equal, and every sanctioned closeout is refused with
+# "manifest commit_sha X is not this merge SHA Y".
+#
+# That is a second, independent fail-open on the same path as the grammar
+# defect: fixing extraction alone converts a silent `no_close_intent` ghost into
+# a silent `completion withheld` ghost. Same stranded lane, different reason.
+#
+# This resolver deliberately introduces NO new contract. The authoritative merge
+# SHA is the one the sanctioned closeout ALREADY recorded, in the two fields
+# that already exist and are already cross-checked by the gate below:
+#   manifest .commit_sha                          — the implementation merge
+#   manifest .truth_check_history[-1].merge_sha   — the receipt bound to it
+# The resolver reads them; it does not invent a third source of truth.
+#
+# Echoes the resolved SHA, or empty when it cannot be resolved. Empty on a
+# closeout commit is drift and MUST fail closed at the call site.
+resolve_authoritative_merge_sha() {
+  local commit_msg="$1"
+  local manifest_path="$2"
+  local push_sha="$3"
+
+  # Not a closeout commit: the pushed commit IS the merge. Unchanged behaviour.
+  if ! has_lane_closeout_signature "$commit_msg"; then
+    echo "$push_sha"
+    return 0
+  fi
+
+  # Closeout commit: the pushed SHA is the closeout, never the merge.
+  [ -f "$manifest_path" ] || { echo ""; return 0; }
+
+  local m_sha r_sha
+  m_sha=$(jq -r '.commit_sha // ""' "$manifest_path" 2>/dev/null)
+  r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path" 2>/dev/null)
+
+  # Both existing records must agree. If they disagree, the manifest is not a
+  # trustworthy source for the merge SHA and we resolve nothing rather than
+  # picking a side.
+  if [ -z "$m_sha" ] || [ "$m_sha" = "null" ]; then echo ""; return 0; fi
+  if [ "$r_sha" != "$m_sha" ]; then echo ""; return 0; fi
+
+  echo "$m_sha"
+}
+
+# Is `sha` an ancestor of (or identical to) `push_sha` on the remote?
+#
+# The checkout is fetch-depth 1, so there is no local history to walk. Uses the
+# compare API, which reports "behind" or "identical" when the base is reachable
+# from the head.
+#
+# Fails closed: any API error, missing token, or unrecognised status is treated
+# as NOT an ancestor. A completion that cannot be proven does not happen.
+sha_is_ancestor_of_push() {
+  local sha="$1"
+  local push_sha="$2"
+
+  [ -n "$sha" ] || return 1
+  [ -n "$push_sha" ] || return 1
+  [ "$sha" = "$push_sha" ] && return 0
+
+  local repo="${REPO:-griff843/Unit-Talk-v2}"
+  local status
+  status=$(gh api "repos/${repo}/compare/${sha}...${push_sha}" --jq '.status' 2>/dev/null) || return 1
+
+  case "$status" in
+    ahead|identical) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Completion decision (UTV2-1724)
+# ---------------------------------------------------------------------------
+#
+# The truth-gated completion decision, moved out of the workflow YAML and into
+# the shared file so the TEST HARNESS EXERCISES THE REAL DECISION PATH rather
+# than a paraphrase of it. Testing ID extraction alone was how the SHA-comparison
+# defect below survived: the grammar could be fixed and fully green while the
+# gate that consumes its output still refused every sanctioned closeout.
+#
+# Echoes the reason completion is withheld, or empty when the issue may
+# complete. Never exits non-zero — the caller branches on the string.
+#
+# Args: identifier, manifest_path, commit_msg, push_sha
+evaluate_completion_block() {
+  local identifier="$1"
+  local manifest_path="$2"
+  local commit_msg="$3"
+  local push_sha="$4"
+
+  if [ ! -f "$manifest_path" ]; then
+    echo "no lane manifest at $manifest_path; a merge alone is not evidence of completion"
+    return 0
+  fi
+
+  local effective_merge_sha
+  effective_merge_sha=$(resolve_authoritative_merge_sha "$commit_msg" "$manifest_path" "$push_sha")
+
+  if has_lane_closeout_signature "$commit_msg" && [ -z "$effective_merge_sha" ]; then
+    echo "closeout commit but the manifest yields no agreed authoritative merge SHA (commit_sha absent, or truth-check receipt bound to a different SHA)"
+    return 0
+  fi
+
+  local m_status m_sha r_verdict r_sha r_runner
+  m_status=$(jq -r '.status // ""' "$manifest_path")
+  m_sha=$(jq -r '.commit_sha // ""' "$manifest_path")
+  r_verdict=$(jq -r '(.truth_check_history // []) | last | .verdict // ""' "$manifest_path")
+  r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path")
+  r_runner=$(jq -r '(.truth_check_history // []) | last | .runner // ""' "$manifest_path")
+
+  if [ "$m_status" != "done" ] && [ "$m_status" != "merged" ]; then
+    echo "lane status \"$m_status\" does not assert successful completion"
+  elif [ "$r_verdict" != "pass" ]; then
+    echo "latest truth-check verdict is \"$r_verdict\", not \"pass\""
+  elif [ "$r_runner" != "ops:lane-close" ] && [ "$r_runner" != "ops:reconcile" ]; then
+    echo "truth-check runner \"$r_runner\" is not a canonical runner"
+  elif [ -z "$m_sha" ] || [ "$m_sha" != "$effective_merge_sha" ]; then
+    echo "manifest commit_sha \"$m_sha\" is not the authoritative merge SHA $effective_merge_sha"
+  elif ! sha_is_ancestor_of_push "$effective_merge_sha" "$push_sha"; then
+    # For a closeout commit the comparison above is satisfied by construction,
+    # because the resolver reads commit_sha itself. THIS is the check that
+    # carries the real guarantee: the SHA the manifest claims as its merge must
+    # actually be an ancestor of the commit being pushed to main. A manifest
+    # naming a SHA that never landed cannot complete an issue.
+    echo "manifest merge SHA $effective_merge_sha is not an ancestor of the pushed commit $push_sha; it did not land on main"
+  elif [ "$r_sha" != "$m_sha" ]; then
+    echo "truth-check receipt is bound to $r_sha, not to the manifest's $m_sha"
+  else
+    echo ""
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Test harness — runs only when invoked directly, not when sourced
 # ---------------------------------------------------------------------------
 
@@ -515,6 +663,152 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     pass=$((pass + 1))
   else
     echo "  FAIL  deliberate opt-out is distinguishable from drift"
+    fail=$((fail + 1))
+  fi
+
+  echo ""
+  echo "=== UTV2-1724: FULL CLOSEOUT DECISION PATH ==="
+
+  # These exercise extraction -> signature -> SHA resolution -> completion gate
+  # against real manifest shapes and real closeout-commit ancestry. Ancestry is
+  # stubbed so the suite stays hermetic; the stub is declared per-case so a case
+  # cannot silently inherit another's ancestry assumption.
+
+  _fixture_dir=$(mktemp -d)
+  trap 'rm -r "$_fixture_dir" 2>/dev/null || true' EXIT
+
+  MERGE="3ca047fa8fcae2a8768d2ba63cace8019a5a76ca"    # the implementation merge
+  CLOSEOUT="44068585d1d5092f41a7cdaa01909df9b2a4358a" # the later closeout commit
+  CLOSEOUT_MSG="chore(lanes): close UTV2-1721 — lane closed, sync file removed"
+
+  write_manifest() {
+    # $1 name, $2 status, $3 commit_sha, $4 verdict, $5 receipt_sha, $6 runner
+    mkdir -p "$_fixture_dir/docs/06_status/lanes"
+    jq -n --arg s "$2" --arg c "$3" --arg v "$4" --arg r "$5" --arg run "$6" \
+      '{status:$s, commit_sha:$c, truth_check_history:[{verdict:$v, merge_sha:$r, runner:$run}]}' \
+      > "$_fixture_dir/docs/06_status/lanes/$1.json"
+    echo "$_fixture_dir/docs/06_status/lanes/$1.json"
+  }
+
+  stub_ancestry_true() { sha_is_ancestor_of_push() { return 0; }; }
+  stub_ancestry_false() { sha_is_ancestor_of_push() { return 1; }; }
+
+  assert_decision() {
+    local label="$1" expected="$2" actual="$3"
+    if [ "$expected" = "COMPLETE" ] && [ -z "$actual" ]; then
+      echo "  PASS  $label"; pass=$((pass + 1)); return
+    fi
+    if [ "$expected" != "COMPLETE" ] && [ -n "$actual" ] && [[ "$actual" == *"$expected"* ]]; then
+      echo "  PASS  $label"; pass=$((pass + 1)); return
+    fi
+    echo "  FAIL  $label"
+    echo "        expected: '$expected'"
+    echo "        actual:   '$actual'"
+    fail=$((fail + 1))
+  }
+
+  # --- THE DEFECT, reproduced end to end -----------------------------------
+  # A perfectly healthy lane: status done, verdict pass, canonical runner,
+  # receipt bound to the merge. The ONLY thing wrong is that the pushed commit
+  # is the closeout, not the merge.
+  mf=$(write_manifest UTV2-1721 done "$MERGE" pass "$MERGE" ops:lane-close)
+  stub_ancestry_true
+
+  legacy_m_sha=$(jq -r '.commit_sha' "$mf")
+  if [ "$legacy_m_sha" != "$CLOSEOUT" ]; then
+    echo "  PASS  pre-fix: a healthy manifest compared against the pushed closeout SHA can never match"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  pre-fix: a healthy manifest compared against the pushed closeout SHA can never match"
+    fail=$((fail + 1))
+  fi
+
+  assert_decision \
+    "sanctioned closeout on a healthy lane COMPLETES" \
+    "COMPLETE" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Resolution is correct, not merely permissive -------------------------
+  resolved=$(resolve_authoritative_merge_sha "$CLOSEOUT_MSG" "$mf" "$CLOSEOUT")
+  if [ "$resolved" = "$MERGE" ]; then
+    echo "  PASS  resolver returns the implementation merge SHA, not the closeout SHA"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  resolver returns the implementation merge SHA, not the closeout SHA"
+    echo "        expected: $MERGE"
+    echo "        actual:   $resolved"
+    fail=$((fail + 1))
+  fi
+
+  ordinary=$(resolve_authoritative_merge_sha "feat: thing (#12). Closes UTV2-900." "$mf" "$CLOSEOUT")
+  if [ "$ordinary" = "$CLOSEOUT" ]; then
+    echo "  PASS  non-closeout commit still resolves to the pushed SHA (behaviour unchanged)"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  non-closeout commit still resolves to the pushed SHA (behaviour unchanged)"
+    fail=$((fail + 1))
+  fi
+
+  # --- Fail-closed cases ----------------------------------------------------
+  stub_ancestry_true
+
+  mf2=$(write_manifest UTV2-1731 done "" pass "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout with no commit_sha fails closed" \
+    "no agreed authoritative merge SHA" \
+    "$(evaluate_completion_block UTV2-1731 "$mf2" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf3=$(write_manifest UTV2-1732 done "$MERGE" pass "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ops:lane-close)
+  assert_decision \
+    "closeout whose receipt is bound to a different SHA fails closed" \
+    "no agreed authoritative merge SHA" \
+    "$(evaluate_completion_block UTV2-1732 "$mf3" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf4=$(write_manifest UTV2-1733 in_review "$MERGE" pass "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout on a non-terminal lane is refused" \
+    "does not assert successful completion" \
+    "$(evaluate_completion_block UTV2-1733 "$mf4" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf5=$(write_manifest UTV2-1734 done "$MERGE" fail "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout with a failing truth-check is refused" \
+    "not \"pass\"" \
+    "$(evaluate_completion_block UTV2-1734 "$mf5" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf6=$(write_manifest UTV2-1735 done "$MERGE" pass "$MERGE" some-agent)
+  assert_decision \
+    "closeout with a non-canonical runner is refused" \
+    "not a canonical runner" \
+    "$(evaluate_completion_block UTV2-1735 "$mf6" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  assert_decision \
+    "missing manifest is refused" \
+    "no lane manifest" \
+    "$(evaluate_completion_block UTV2-1736 "$_fixture_dir/docs/06_status/lanes/UTV2-1736.json" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Ancestry is load-bearing, proved by making it fail -------------------
+  stub_ancestry_false
+  assert_decision \
+    "a merge SHA that never landed on main is refused (ancestry gate fires)" \
+    "did not land on main" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  stub_ancestry_true
+  assert_decision \
+    "and completes again once ancestry holds — the only variable was ancestry" \
+    "COMPLETE" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Extraction and gate agree on the same commit -------------------------
+  ids=$(extract_linear_close_ids "$CLOSEOUT_MSG")
+  gate=$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")
+  if [ "$ids" = "UTV2-1721" ] && [ -z "$gate" ]; then
+    echo "  PASS  end to end: the same closeout commit both extracts an ID and passes the gate"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  end to end: the same closeout commit both extracts an ID and passes the gate"
+    echo "        ids='$ids' gate='$gate'"
     fail=$((fail + 1))
   fi
 
