@@ -33,12 +33,13 @@ ASSERTIONS:
 - [x] The existing `No-close:` / `plan-only` / `partial-fix` opt-out still suppresses the new form.
 - [x] The fail-closed control is validated **by execution on the condition it names**, not by presence: a drifted closeout template exits 1 with `reason=closeout_signature_unmatched`.
 - [x] The control does not fire on any legitimate case: sanctioned closeout, deliberate opt-out, and an ordinary commit all exit 0.
-- [x] Harness: **67 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] Harness: **68 passed, 0 failed** — all 28 pre-existing cases still green.
 - [x] The tripwire's own escape hatches are closed, both found by adversarial review of this lane:
   - The opt-out test grepped the message for `plan-only` / `partial-fix` / `No-close:`. Any commit whose **prose** mentioned them silently disabled the tripwire — a fail-open inside the fix for a fail-open, reproduced on this lane's own squash merge. It now asks whether the close-intent **forms** matched and were filtered, which prose cannot fake.
   - The signature scanned the whole message, so a commit that merely **described** a closeout template matched. It is now subject-line only, matching the single-line message the producer actually writes. Verified: this PR's own squash merge carries no signature and does not fire.
 - [x] Two further holes found by a later review round, both reproduced before fixing:
   - **Reverting a closeout reddened `main`.** `git revert` reproduces the reverted subject verbatim, so `Revert "chore(lanes): close <ID> — lane closed, sync file removed"` carried both signatures while extracting nothing, firing the tripwire on a correct, deliberate revert. `Revert "..."` subjects are now exempt: undoing a closeout is an intentional act, not template drift.
+  - **A third, unaligned scope — the fourth recurrence of this one bug class.** `extract_close_ids_ignoring_suppression()`, which the tripwire consults to tell a deliberate opt-out from drift, still scanned the whole message after the other two were narrowed to the subject. A drifted subject whose *body* carried a well-formed closeout line therefore reported a form match, the tripwire read that as an intentional opt-out, and real drift passed in silence — the exact ghost this lane exists to abolish. All three scopes are now aligned, and a case asserts agreement across all three rather than two, plus a case reproducing the exploit itself.
   - **A scope asymmetry introduced by the subject-only signature.** Extraction still matched any line at column 0, so a commit whose *body* contained `chore(lanes): close UTV2-N ...` would **close that issue** while the tripwire, reading only the subject, stayed structurally blind to it. Extraction's closeout form is now subject-only as well. Extraction and signature must see the same text or the control does not cover the behaviour; a case asserts they agree.
 - [x] The completion-gate defect reproduced against the **real merged `UTV2-1721` manifest** from `main`, not a fixture: a lane with `status: done`, `verdict: pass`, runner `ops:lane-close` and its receipt bound to the merge was refused, because `3ca047fa != 44068585`.
 - [x] `resolve_authoritative_merge_sha()` introduces no new contract: it reads `commit_sha` and the truth-check receipt's `merge_sha` — the two fields the gate already cross-checks — and resolves nothing when they disagree rather than picking a side.
@@ -184,9 +185,9 @@ The last two are a matched pair: identical manifest, identical commit, ancestry 
 $ bash .github/workflows/linear-auto-close.test.sh
   === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     14 cases, all PASS
   === UTV2-1724: FAIL-CLOSED TRIPWIRE ===            12 cases, all PASS
-  === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     13 cases, all PASS
+  === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     14 cases, all PASS
 
-  Results: 67 passed, 0 failed
+  Results: 68 passed, 0 failed
 ```
 
 ### 5. Reconciliation baseline

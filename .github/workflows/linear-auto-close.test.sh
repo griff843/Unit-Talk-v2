@@ -224,10 +224,26 @@ extract_close_ids_ignoring_suppression() {
   local msg="$1"
   [ -z "$msg" ] && return 0
 
-  local inline trailer closeout
+  # Each form must be matched in the SAME SCOPE extract_linear_close_ids() uses
+  # for it, or this predicate answers a different question than the one the
+  # tripwire is asking.
+  #
+  # UTV2-1724: the closeout grep here read the whole message while extraction
+  # and the signature had both been narrowed to the subject. That third,
+  # unaligned scope reopened the hole twice already closed:
+  #
+  #   subject: chore(lanes): closing UTV2-9999 — lane closed, sync file removed
+  #   body:    chore(lanes): close UTV2-1234 — lane closed, sync file removed
+  #   -> ids=[]  signature=yes  suppression=yes  tripwire SILENT
+  #
+  # A drifted closeout was misclassified as a deliberate opt-out — the exact
+  # silent-ghost outcome this lane exists to abolish. Scope alignment is the
+  # invariant; it is asserted across all three functions by a case below.
+  local inline trailer closeout subject
+  subject=$(echo "$msg" | head -n 1)
   inline=$(echo "$msg" | grep -oiE '\b(closes|fixes|resolves)[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
   trailer=$(echo "$msg" | grep -oE '^Linear-Close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
-  closeout=$(echo "$msg" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  closeout=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
 
   printf '%s\n%s\n%s\n' "$inline" "$trailer" "$closeout" | sort -u | grep -v '^$' | tr '\n' ' ' | sed 's/ $//'
 }
@@ -785,12 +801,28 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   # the gap: a column-0 body line would close an issue the tripwire cannot see.
   asym_msg=$'feat(api): unrelated change\n\nchore(lanes): close UTV2-1234 — lane closed, sync file removed'
   asym_ids=$(extract_linear_close_ids "$asym_msg")
-  if [ -z "$asym_ids" ] && ! has_lane_closeout_signature "$asym_msg"; then
-    echo "  PASS  extraction and signature agree on scope — no blind-spot asymmetry"
+  asym_raw=$(extract_close_ids_ignoring_suppression "$asym_msg")
+  if [ -z "$asym_ids" ] && [ -z "$asym_raw" ] && ! has_lane_closeout_signature "$asym_msg"; then
+    echo "  PASS  all three scopes agree — extraction, raw-form and signature"
     pass=$((pass + 1))
   else
-    echo "  FAIL  extraction and signature agree on scope — no blind-spot asymmetry"
-    echo "        ids='$asym_ids'"
+    echo "  FAIL  all three scopes agree — extraction, raw-form and signature"
+    echo "        ids='$asym_ids' raw='$asym_raw'"
+    fail=$((fail + 1))
+  fi
+
+  # The exploit a two-scope assertion could not catch: a DRIFTED subject whose
+  # body carries a well-formed closeout line. If the raw-form scan reads the
+  # body, it reports a form match, the tripwire reads that as a deliberate
+  # opt-out, and real drift passes in silence.
+  drift_body_msg=$'chore(lanes): closing UTV2-9999 — lane closed, sync file removed\nchore(lanes): close UTV2-1234 — lane closed, sync file removed'
+  if has_lane_closeout_signature "$drift_body_msg" \
+     && ! has_close_suppression_marker "$drift_body_msg" \
+     && [ -z "$(extract_linear_close_ids "$drift_body_msg")" ]; then
+    echo "  PASS  drifted subject is not silenced by a closeout line in the body"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  drifted subject is not silenced by a closeout line in the body"
     fail=$((fail + 1))
   fi
 
