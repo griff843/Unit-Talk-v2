@@ -152,7 +152,7 @@
     {
       "criterion": "Grammar fixed, with matching cases in the harness",
       "status": "PASS",
-      "evidence": "Anchored closeout form added; 12 sanctioned-closeout cases, 7 tripwire cases and 13 full-decision-path cases; 60 passed / 0 failed."
+      "evidence": "Anchored subject-line closeout form added; 14 sanctioned-closeout cases, 12 tripwire cases and 13 full-decision-path cases; 67 passed / 0 failed, with all 28 pre-existing cases still green."
     },
     {
       "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",
@@ -177,7 +177,7 @@
   ],
   "known_limitations": [
     "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1, the fail-closed requirement, and the completion-gate SHA-comparison P1. The replay is a post-merge acceptance phase: this issue must not be marked Done until the sanctioned replay produces three-way GitHub/manifest/Linear agreement and ORCH-MERGED-PR-LINEAR-DONE returns 0.",
-    "Two escape hatches in the tripwire itself were found by adversarial review of this lane and closed: a prose-grep opt-out test that any commit mentioning plan-only/partial-fix could silence, and a whole-message signature scan that fired on commits merely describing a closeout template. Both were reproduced on this lane own squash merge before being fixed.",
+    "Four escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed: a prose-grep opt-out test that any commit mentioning plan-only/partial-fix could silence; a whole-message signature scan that fired on commits merely describing a closeout template; a revert of a closeout that reddened main because git revert reproduces the subject verbatim; and a scope asymmetry where extraction matched any column-0 line while the signature read only the subject, letting a body line close an issue the tripwire could not see. The first two were reproduced on this lane own squash merge.",
     "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
     "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
   ],

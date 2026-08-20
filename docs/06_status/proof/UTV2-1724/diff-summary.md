@@ -8,15 +8,17 @@ Two files, both under `.github/workflows/`. No runtime code, schema, migration, 
 
 ## `.github/workflows/linear-auto-close.test.sh`
 
-1. **Closeout form added to extraction.** A third close-intent form, anchored to line start:
-   `^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+`.
-   Bare `close` is deliberately *not* added to the inline `(closes|fixes|resolves)` alternation — it is an ordinary English word, and matching it anywhere would close an issue on prose like "do not close UTV2-N until the gate lands". Anchoring plus the literal `chore(lanes)` scope matches the sanctioned producer and nothing else.
+1. **Closeout form added to extraction — subject line only.** A third close-intent form:
+   `^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+`, matched against the **first line** of the message.
+   Bare `close` is deliberately *not* added to the inline `(closes|fixes|resolves)` alternation — it is an ordinary English word, and matching it anywhere would close an issue on prose like "do not close UTV2-N until the gate lands". Restricting to the subject matches the single-line message the producer writes, and keeps extraction in the same scope as the signature below. An earlier revision matched any line at column 0, which left a body line able to close an issue the tripwire could not see.
 
-2. **`has_lane_closeout_signature()` added.** A predicate, separate from extraction, that recognizes a commit produced by the closeout path — by its conventional-commit scope with any close verb form, or by the literal trailer phrase. Deliberately **broader** than the grammar that consumes it, so template drift keeps matching the signature while the grammar stops.
+2. **`has_lane_closeout_signature()` added — subject line only.** A predicate, separate from extraction, recognising a commit produced by the closeout path: its conventional-commit scope with any close verb form, or the literal trailer phrase in the subject. Deliberately **broader** than the grammar that consumes it, so template drift keeps matching the signature while the grammar stops. `Revert "..."` subjects are exempt — `git revert` reproduces the reverted subject verbatim, and undoing a closeout is a deliberate act, not drift.
 
-3. **`has_close_suppression_marker()` added.** Distinguishes a deliberate `No-close:` / `plan-only` / `partial-fix` opt-out from drift, so an intentional no-close never trips the tripwire.
+3. **`has_close_suppression_marker()` added.** Answers whether extraction returned empty because a deliberate opt-out filtered the result, or because no close-intent form matched at all. It calls `extract_close_ids_ignoring_suppression()` and checks whether the **forms** matched. An earlier revision grepped the message for the words `plan-only` / `partial-fix` / `No-close:`, which meant any commit whose prose merely mentioned them silently disabled the tripwire.
 
-4. **19 test cases added** — 12 covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, 7 covering the tripwire including a drifted-template case that asserts the control fires. Harness goes 28 → 47 cases, 0 failures.
+4. **`evaluate_completion_block()` added.** The truth-gated completion decision, moved out of the workflow YAML so the harness drives the real decision path rather than a paraphrase of it.
+
+5. **39 test cases added**, taking the harness from **28 to 67**, 0 failures: 14 covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, 12 covering the tripwire including cases proving prose can neither silence nor trigger it, and 13 driving the full completion-decision path over realistic manifests and closeout ancestry.
 
 ## `.github/workflows/linear-auto-close.yml`
 
