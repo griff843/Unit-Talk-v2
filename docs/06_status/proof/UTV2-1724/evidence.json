@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "verified_source_sha": "4444932205f34aa76058e36072f3aa171057d488",
-    "verified_source_note": "Substantive anchor: the grammar + fail-closed tripwire commit. Everything after it is proof-only. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_note": "Anchor required by the executor-result validator, which needs a single ancestor SHA. NOT a claim that nothing substantive followed it. This lane has three substantive commits: 44449322 (grammar + fail-closed tripwire), 8ace5346 (completion-gate SHA comparison, the P1 that survives the grammar fix), and 55c8fe10 (two escape hatches in the tripwire itself). An earlier revision of this note said everything after the anchor was proof-only, which was false and pointed a reviewer away from the two most consequential changes.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -59,12 +59,12 @@
   "static_proof": {
     "harness": {
       "command": "bash .github/workflows/linear-auto-close.test.sh",
-      "pass": 63,
+      "pass": 67,
       "fail": 0,
       "pre_existing_cases_still_green": 28,
       "sections": {
-        "sanctioned closeout commits": 12,
-        "fail-closed tripwire": 10,
+        "sanctioned closeout commits": 14,
+        "fail-closed tripwire": 12,
         "full closeout decision path": 13
       }
     },

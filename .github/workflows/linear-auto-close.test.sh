@@ -86,8 +86,20 @@ extract_linear_close_ids() {
   # producer and nothing else. The other chore(lanes) commits — lane-start
   # metadata, PR binding, truth-check result, auto-reconcile — do not carry
   # the "close " verb and are unaffected.
-  local closeout_ids
-  closeout_ids=$(echo "$msg" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  #
+  # SUBJECT LINE ONLY, matching has_lane_closeout_signature().
+  #
+  # UTV2-1724: an earlier revision matched any line at column 0. Once the
+  # signature was narrowed to the subject, that left an asymmetry a commit
+  # could walk through: a body line at column 0 reading
+  # "chore(lanes): close UTV2-N ..." would CLOSE that issue while the tripwire,
+  # looking only at the subject, stayed structurally blind to it. Extraction
+  # and signature must see the same text or the control does not cover the
+  # behaviour. The producer writes a single-line message, so the subject is the
+  # correct scope for both.
+  local closeout_ids closeout_subject
+  closeout_subject=$(echo "$msg" | head -n 1)
+  closeout_ids=$(echo "$closeout_subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
 
   # Collect all candidate close IDs
   local all_ids
@@ -176,6 +188,15 @@ has_lane_closeout_signature() {
   # changelogs — structurally incapable of triggering it.
   local subject
   subject=$(echo "$msg" | head -n 1)
+
+  # A revert is not a closeout. `git revert` prefixes the reverted subject
+  # verbatim, so "Revert \"chore(lanes): close UTV2-N — lane closed, sync file
+  # removed\"" carries both signatures while extracting nothing — the tripwire
+  # would fire and redden main on a legitimate, correct revert. Undoing a
+  # closeout is a deliberate act, not template drift.
+  case "$subject" in
+    'Revert "'*|'Revert: '*|'revert: '*) return 1 ;;
+  esac
 
   # Signature 1: the conventional-commit scope the closeout path always uses,
   # combined with a close verb in any form.
@@ -636,6 +657,16 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     $'chore(lanes): close UTV2-780 — lane closed, sync file removed\n\nNo-close: UTV2-780' \
     ""
 
+  assert_match \
+    "closeout form is subject-only: a column-0 BODY line must not close" \
+    $'feat(api): unrelated change\n\nchore(lanes): close UTV2-1234 — lane closed, sync file removed' \
+    ""
+
+  assert_match \
+    "reverting a closeout does not close" \
+    'Revert "chore(lanes): close UTV2-1614 — lane closed, sync file removed"' \
+    ""
+
   echo ""
   echo "=== UTV2-1724: FAIL-CLOSED TRIPWIRE ==="
 
@@ -735,6 +766,31 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     pass=$((pass + 1))
   else
     echo "  FAIL  prose mentioning plan-only/partial-fix cannot silence the tripwire"
+    fail=$((fail + 1))
+  fi
+
+  # A revert is a deliberate undo, not template drift. git revert prefixes the
+  # reverted subject verbatim, so without this the tripwire would redden main on
+  # a correct revert.
+  revert_msg='Revert "chore(lanes): close UTV2-1614 — lane closed, sync file removed"'
+  if has_lane_closeout_signature "$revert_msg"; then
+    echo "  FAIL  reverting a closeout does not fire the tripwire"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  reverting a closeout does not fire the tripwire"
+    pass=$((pass + 1))
+  fi
+
+  # Extraction and signature must see the same text, or a commit walks through
+  # the gap: a column-0 body line would close an issue the tripwire cannot see.
+  asym_msg=$'feat(api): unrelated change\n\nchore(lanes): close UTV2-1234 — lane closed, sync file removed'
+  asym_ids=$(extract_linear_close_ids "$asym_msg")
+  if [ -z "$asym_ids" ] && ! has_lane_closeout_signature "$asym_msg"; then
+    echo "  PASS  extraction and signature agree on scope — no blind-spot asymmetry"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  extraction and signature agree on scope — no blind-spot asymmetry"
+    echo "        ids='$asym_ids'"
     fail=$((fail + 1))
   fi
 

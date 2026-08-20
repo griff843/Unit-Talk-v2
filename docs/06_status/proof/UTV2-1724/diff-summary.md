@@ -2,6 +2,8 @@
 
 MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
 
+That SHA is an anchor required by the executor-result validator, not a claim that nothing substantive followed it. This lane has **three** substantive commits: the grammar and tripwire (`44449322`), the completion-gate SHA comparison (`8ace5346`), and two escape hatches in the tripwire itself (`55c8fe10`).
+
 Two files, both under `.github/workflows/`. No runtime code, schema, migration, or dependency change.
 
 ## `.github/workflows/linear-auto-close.test.sh`

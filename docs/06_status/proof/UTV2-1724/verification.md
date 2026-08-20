@@ -4,7 +4,15 @@ MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
 
 Lane: auto-close intent grammar misses sanctioned closeout commits, stranding merged lanes as ghosts.
 Tier: T1 · lane_type: governance · proof profile: static
-Substantive anchor: `4444932205f34aa76058e36072f3aa171057d488`
+Substantive commits — **three**, not one. An earlier revision of this line named only the first and said "everything after it is proof-only". That was false, and it pointed a reviewer away from the two most consequential changes in a lane whose entire subject is controls that hide the truth:
+
+| commit | what it changes |
+|---|---|
+| `4444932205f34aa76058e36072f3aa171057d488` | the close-intent grammar and the fail-closed tripwire |
+| `8ace5346` | the completion gate's SHA comparison — the P1 that survives the grammar fix |
+| `55c8fe10` | two escape hatches in the tripwire itself, both reproduced on this lane's own squash merge |
+
+`MERGE_SHA` stays bound to the first because the executor-result validator requires a single ancestor SHA; it is an anchor, not a claim that nothing substantive followed. Read all three.
 
 ## Summary
 
@@ -25,7 +33,7 @@ ASSERTIONS:
 - [x] The existing `No-close:` / `plan-only` / `partial-fix` opt-out still suppresses the new form.
 - [x] The fail-closed control is validated **by execution on the condition it names**, not by presence: a drifted closeout template exits 1 with `reason=closeout_signature_unmatched`.
 - [x] The control does not fire on any legitimate case: sanctioned closeout, deliberate opt-out, and an ordinary commit all exit 0.
-- [x] Harness: **63 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] Harness: **67 passed, 0 failed** — all 28 pre-existing cases still green.
 - [x] The tripwire's own escape hatches are closed, both found by adversarial review of this lane:
   - The opt-out test grepped the message for `plan-only` / `partial-fix` / `No-close:`. Any commit whose **prose** mentioned them silently disabled the tripwire — a fail-open inside the fix for a fail-open, reproduced on this lane's own squash merge. It now asks whether the close-intent **forms** matched and were filtered, which prose cannot fake.
   - The signature scanned the whole message, so a commit that merely **described** a closeout template matched. It is now subject-line only, matching the single-line message the producer actually writes. Verified: this PR's own squash merge carries no signature and does not fire.
@@ -171,11 +179,11 @@ The last two are a matched pair: identical manifest, identical commit, ancestry 
 
 ```text
 $ bash .github/workflows/linear-auto-close.test.sh
-  === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     12 cases, all PASS
-  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===            10 cases, all PASS
+  === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     14 cases, all PASS
+  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===            12 cases, all PASS
   === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     13 cases, all PASS
 
-  Results: 63 passed, 0 failed
+  Results: 67 passed, 0 failed
 ```
 
 ### 5. Reconciliation baseline
