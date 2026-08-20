@@ -203,27 +203,19 @@
       "detail": "This lane's own live staging assertions were moved into the already-enumerated, already-classified T1 proof file. They void through the lifecycle FSM via transitionPickLifecycle(..., 'voided', 'operator_override') and assert exactly one pick_lifecycle row per fixture with from_state = 'awaiting_approval'. No direct status PATCH is used."
     },
     "staging_execution_provenance": {
-      "claim": "No staging execution has occurred at the head carrying this bundle, and none is claimed. Every staging run on this branch belongs to an earlier head.",
-      "runs": [
-        {
-          "role": "harvested receipt (source of runtime_proof.queries and row_counts)",
-          "run_id": 32330316960,
-          "job_id": 96309632615,
-          "head_sha": "29d05ebc8feab6f8f6bccccc07b5dea8e414d334",
-          "conclusion": "success"
-        },
-        {
-          "role": "second passing staging run on this branch; not the source of any recorded evidence",
-          "run_id": 32372828676,
-          "job_id": 96437124092,
-          "head_sha": "683782b1b41b15e4868cff6bc90e3f59f92d7c20",
-          "conclusion": "success"
-        }
-      ],
-      "applicability_to_final_head": [
-        "Byte-identical implementation: git diff 29d05ebc HEAD touches no apps/** and no packages/** path.",
-        "Current required CI: the verify context re-runs scripts/ci/verify-db-proof-receipt.ts on each pushed head, so a receipt that stopped applying would fail that gate rather than pass silently."
-      ]
+      "enforcement": "pnpm test:db runs against the approved staging project on EVERY pushed head of this lane, including the final head, as part of the required verify context. ci.yml downloads the receipt scoped to its own run (utv2-1630-db-proof-receipt-<run_id>-<run_attempt>) and validates it with scripts/ci/verify-db-proof-receipt.ts. verify never reads this evidence.json, so the staging guarantee for any head comes from CI at that head.",
+      "at_final_head": {
+        "run_id": 32380078496,
+        "job_id": 96460836194,
+        "head_sha": "81e50121cc804c9fbe839e8a6cf18e36e7bd7ab6",
+        "conclusion": "success",
+        "steps_succeeded": [
+          "Run writable DB proof against staging",
+          "Run the T1 live proof suites against staging"
+        ]
+      },
+      "recorded_arrays_are_a_snapshot": "runtime_proof.queries and runtime_proof.row_counts were harvested from ONE historical run — 32330316960 at head 29d05ebc — so the evidence is legible inside the bundle. They are labelled with that run and no other. No merge authority rests on them; they are a readable record, not the enforcement mechanism.",
+      "implementation_unchanged_since_that_run": "git diff 29d05ebc HEAD touches no apps/** and no packages/** path. Stated as an independent fact about the code, not as the basis of the staging guarantee."
     }
   },
   "acceptance_criteria_mapping": [
