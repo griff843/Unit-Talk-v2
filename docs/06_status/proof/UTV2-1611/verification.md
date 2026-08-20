@@ -1,10 +1,10 @@
 # PROOF: UTV2-1611
 
-MERGE_SHA: 0a1488cb7a253f9b63f4ff6af3f0b6306384e4ec
+MERGE_SHA: 5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c
 
 Lane: board pick writer must not bypass the governance brake into `validated`.
 Tier: T1 · lane_type: runtime · executor: codex-cli
-Substantive anchor: `0a1488cb7a253f9b63f4ff6af3f0b6306384e4ec`
+Substantive anchor: `5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c` (the sanctioned pr-update-branch commit; implementation complete at `0a1488cb`, everything since is proof-only or a main refresh)
 
 ## Summary
 

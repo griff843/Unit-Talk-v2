@@ -7,8 +7,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-20T04:10:00Z",
   "sha_binding": {
-    "verified_source_sha": "0a1488cb7a253f9b63f4ff6af3f0b6306384e4ec",
-    "verified_source_note": "Substantive branch head after the five acceptance corrections and the test-surface consolidation, rebased onto current origin/main. Commits after this anchor are restricted to this lane's own proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_sha": "5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c",
+    "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation head because that refresh imported unrelated main content (the merged UTV2-1721 harness lane), so only proof paths change after this anchor. The implementation itself is unchanged: the substantive work was complete at 0a1488cb and every commit since has been proof-only or a main refresh. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
