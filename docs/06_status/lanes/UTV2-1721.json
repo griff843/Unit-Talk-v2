@@ -1,0 +1,46 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1721",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1721-governed-harness-refresh",
+  "branch": "claude/utv2-1721-governed-harness-refresh",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1432",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch-board.md",
+    ".claude/commands/dispatch.md",
+    ".claude/commands/loop-dispatch.md",
+    ".claude/commands/operator-runbook.md",
+    ".claude/commands/verification.md",
+    ".claude/hooks/bash-safety-guard.sh",
+    ".claude/hooks/pre-proof-validator.sh",
+    ".ops/sync/UTV2-1721.yml",
+    "docs/06_status/lanes/UTV2-1721.json",
+    "docs/06_status/proof/UTV2-1721/diff-summary.md",
+    "docs/06_status/proof/UTV2-1721/evidence.json",
+    "docs/06_status/proof/UTV2-1721/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1721/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-08-19T20:02:50.352Z",
+  "heartbeat_at": "2026-08-19T22:00:23.371Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1721-governed-harness-refresh.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1721-governed-harness-refresh",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

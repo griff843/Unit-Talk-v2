@@ -1,0 +1,151 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1721",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Governed harness refresh \u2014 re-admit PR #1429's mechanical corrections without model-routing policy regression",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-19T22:10:00Z",
+  "sha_binding": {
+    "verified_source_sha": "a5d4ac5159da2944351fc3f3d16d840d3c31b1d5",
+    "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation commit because the review-fix commit and the branch refresh both landed after it, so only proof paths change after this anchor. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "static_proof": {
+    "pnpm_verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "env:check, lint, type-check, build and the full unit suite completed clean on the lane branch."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "detail": "tsc -b tsconfig.json clean."
+    },
+    "unit_tests": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "totals": {
+        "tests": 4969,
+        "pass": 4969,
+        "fail": 0,
+        "skipped": 0
+      },
+      "detail": "Aggregate across all test groups on the lane branch."
+    },
+    "scope_conformance": {
+      "status": "PASS",
+      "detail": "7 files ported; 11 refused files verified untouched against origin/main.",
+      "ported": [
+        ".claude/commands/dispatch.md",
+        ".claude/commands/dispatch-board.md",
+        ".claude/commands/loop-dispatch.md",
+        ".claude/commands/operator-runbook.md",
+        ".claude/commands/verification.md",
+        ".claude/hooks/bash-safety-guard.sh",
+        ".claude/hooks/pre-proof-validator.sh"
+      ],
+      "refused": [
+        ".claude/agents/ci-triage.md",
+        ".claude/agents/codex-return-reviewer.md",
+        ".claude/agents/db-proof-reviewer.md",
+        ".claude/agents/lane-governor.md",
+        ".claude/agents/lane-reconciler.md",
+        ".claude/agents/pr-risk-reviewer.md",
+        ".claude/agents/proof-auditor.md",
+        ".claude/agents/runtime-verifier.md",
+        ".claude/commands/three-brain.md",
+        "docs/05_operations/OPERATING_MODEL_SONNET5.md",
+        ".claude/agent-brief.md"
+      ]
+    },
+    "model_control_preservation": {
+      "status": "PASS",
+      "detail": "No model: line added or removed in .claude/commands/dispatch.md. All six references retained byte-for-byte at L175, L181, L231, L242, L308, L326. The model de-pinning change from PR #1429 is deliberately not ported; routing policy is owned by UTV2-1597."
+    },
+    "review_finding_a_t2_merge_authority": {
+      "status": "PASS",
+      "detail": "Corrected against .github/workflows/merge-gate.yml L502-543, which accepts three T2 approval artifacts: pm-verdict/v1 from CODEOWNERS (L521-527), a GitHub PR review approval (L516), and an executor-result/v1 self-attestation from AUTHORIZED_REVIEWERS (L528-535). PR #1429 documented two and wrongly asserted orchestrator self-approval satisfies the gate."
+    },
+    "review_finding_b_env_export": {
+      "status": "PASS",
+      "method": "executed",
+      "detail": "Reproduces loadEnvironment()'s layered per-variable merge (.env.example < .env < local.env) under set -a, executed across three cases. Case 1: all three layers present, local.env wins per variable while a .env-only value survives. Case 2: the rejected first-match loop, which leaves a .env-only credential empty in the child process -- the defect this correction removes, and the behaviour the previous revision of this lane shipped. Case 3: no layer present, exits 1 fail-closed. An earlier revision of this bundle described a first-existing-file selection across four cases; that procedure was superseded and no longer appears in the runbook."
+    },
+    "hook_exit_semantics": {
+      "status": "PASS",
+      "method": "observed",
+      "detail": "The ported bash-safety-guard.sh denied two real tool calls during this lane's own work, confirming the exit code blocks rather than warns. main's copy documents it as a non-blocking warning. Exit codes and matching logic are unchanged by this port; only comments and operator-facing messages differ."
+    }
+  },
+  "blast_radius": {
+    "runtime_code": "none",
+    "schema": "none",
+    "migrations": "none",
+    "dependencies": "none",
+    "surface": "Claude Code harness guidance (.claude/commands, .claude/hooks) only",
+    "behavioural_change": "None at execution time. The two hook files change comments and operator-facing message text only; their exit codes and pattern matching are byte-identical in behaviour."
+  },
+  "out_of_scope_findings": [
+    ".claude/hooks/tier-c-path-guard.sh header documents exit 2 as non-blocking while its own line 133 records the opposite.",
+    "bash-safety-guard.sh matches destructive patterns in quoted/documentation text, not only in executable position.",
+    "CLAUDE.md's Merge Authority table carries the same omission verification.md had; assigned to the CLAUDE.md rebuild successor lane."
+  ],
+  "runtime_proof": {
+    "status": "PASS",
+    "command": "pnpm test:db && pnpm test:t1-proof:live",
+    "detail": "T1 database gate satisfied on the exact head. AGENTS.md:250-255 requires pnpm test:db for every T1 issue regardless of whether it touches the DB layer; the static proof profile does not waive it. Executed in the staging-ci environment against the approved staging project.",
+    "ci_receipt": {
+      "result": "PASS",
+      "workflow": "CI",
+      "job_name": "Writable DB proof (staging only)",
+      "run": 32329786908,
+      "job": 96308159380,
+      "run_attempt": 1,
+      "head": "a5d4ac5159da2944351fc3f3d16d840d3c31b1d5",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32329786908/job/96308159380",
+      "tap": {
+        "test_db": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "skipped": 0
+        },
+        "t1_proof_awaiting_approval": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        }
+      },
+      "run_conclusion_note": "The cited job (96308159380, 'Writable DB proof (staging only)') completed with conclusion success, as did the verify job in the same run. The workflow run's own top-level conclusion reads cancelled because other jobs in that run were superseded by a later push. The receipt cited here is job-level, and its success is independent of the run-level rollup; this is recorded so the discrepancy is not discovered later and mistaken for a masked failure."
+    },
+    "local_execution": {
+      "status": "REFUSED_BY_CONTAINMENT",
+      "detail": "ci:assert-staging refused on this workstation: host=127.0.0.1 ref=unidentified, expected xskgrzbteyqdufktjrjx."
+    }
+  },
+  "review_findings_resolved": [
+    {
+      "id": "P1",
+      "summary": "T1 database verification recorded as refused rather than satisfied.",
+      "resolution": "Bundle now cites the passing staging CI receipt on the exact head; the gate is met, not waived."
+    },
+    {
+      "id": "P2",
+      "summary": "Operator runbook env fix selected the first existing file; loadEnvironment merges all three per variable.",
+      "resolution": "Replaced with the layered merge; re-executed, including a case reproducing the dropped-.env-credential defect."
+    },
+    {
+      "id": "P3",
+      "summary": "Gate-parity wording licensed removing ops:substrate-guard --check-linear from /loop-dispatch.",
+      "resolution": "Parity scoped to gate composition and order; the flag documented as an intentional loop-only addition in both files."
+    }
+  ]
+}
