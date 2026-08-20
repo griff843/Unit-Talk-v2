@@ -117,6 +117,27 @@ jobs:
           ids=$(extract_linear_close_ids "$COMMIT_MSG")
           subject=$(echo "$COMMIT_MSG" | head -n 1)
           if [ -z "$ids" ]; then
+            # UTV2-1724 fail-closed tripwire.
+            #
+            # "No close intent" is the correct, quiet outcome for the vast
+            # majority of commits. It is the WRONG outcome for a commit the
+            # sanctioned closeout path produced — that commit exists precisely
+            # to close an issue, so a no-match means this workflow failed at
+            # its one job.
+            #
+            # Before this check both cases emitted the same ::notice and the
+            # job stayed green. 25 merged lanes were stranded as Linear ghosts
+            # over 24 days with nothing anywhere going red. An aggregate green
+            # that conflates "nothing to do" with "the thing I exist to do did
+            # not happen" is not a signal.
+            #
+            # An explicit opt-out (No-close:, plan-only, partial-fix) is a
+            # deliberate decision, not drift, and stays a notice.
+            if has_lane_closeout_signature "$COMMIT_MSG" \
+               && ! has_close_suppression_marker "$COMMIT_MSG"; then
+              echo "::error title=linear-auto-close::decision=no_close reason=closeout_signature_unmatched commit=\"$subject\" — this commit carries a lane-closeout signature but matched no close-intent form, so its Linear issue will NOT transition. The closeout commit template has almost certainly drifted away from extract_linear_close_ids(). Fix the grammar in .github/workflows/linear-auto-close.test.sh and add a case for the new shape; do not hand-edit the Linear record."
+              exit 1
+            fi
             echo "::notice title=linear-auto-close::decision=no_close reason=no_close_intent commit=\"$subject\""
             echo "ids=" >> "$GITHUB_OUTPUT"
           else
