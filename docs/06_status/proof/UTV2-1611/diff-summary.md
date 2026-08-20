@@ -4,7 +4,7 @@ MERGE_SHA: 5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c
 
 ## What changed
 
-18 files, +1722/-53. Every changed source path is runtime-compatible (`apps/api/src/**`); the remainder are the lane's own manifest, sync file and proof bundle.
+18 files, 53 deletions. The insertion count is deliberately omitted: it counts this bundle's own growth and drifts on every proof edit. Every changed source path is runtime-compatible (`apps/api/src/**`); the remainder are the lane's own manifest, sync file and proof bundle.
 
 ```text
  .ops/sync/UTV2-1611.yml                              |  14 +

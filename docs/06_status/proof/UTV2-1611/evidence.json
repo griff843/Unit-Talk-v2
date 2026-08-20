@@ -201,6 +201,17 @@
       "test_file": "apps/api/src/t1-proof-awaiting-approval.test.ts",
       "runner": "pnpm test:t1-proof:live",
       "detail": "This lane's own live staging assertions were moved into the already-enumerated, already-classified T1 proof file. They void through the lifecycle FSM via transitionPickLifecycle(..., 'voided', 'operator_override') and assert exactly one pick_lifecycle row per fixture with from_state = 'awaiting_approval'. No direct status PATCH is used."
+    },
+    "exact_head_corroboration": {
+      "note": "The harvested queries and row_counts above come from the 29d05ebc run and that is their honest provenance. Independently, the same staging proof ran at the head carrying this bundle and passed, so the diff-binding argument is corroborated rather than relied upon.",
+      "run_id": 32372828676,
+      "job_id": 96437124092,
+      "head_sha": "683782b1b41b15e4868cff6bc90e3f59f92d7c20",
+      "conclusion": "success",
+      "steps_succeeded": [
+        "Run writable DB proof against staging",
+        "Run the T1 live proof suites against staging"
+      ]
     }
   },
   "acceptance_criteria_mapping": [
