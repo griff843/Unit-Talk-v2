@@ -27,7 +27,7 @@ MERGE_SHA: 5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c
  docs/06_status/proof/UTV2-1611/verification.md       |  (self-referential — omitted)
 ```
 
-Two files were deleted: `apps/api/src/automated-write-boundary.test.ts` and `apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts`. Their coverage was not dropped — it moved into already-wired roots (see below).
+Two files were created and then removed **within this lane**: `apps/api/src/automated-write-boundary.test.ts` and `apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts`. Neither exists on `origin/main`, so the PR diff deletes no files at all — the 53 deletions counted above are lines, not files. Their coverage was not dropped; it moved into already-wired roots (see below).
 
 ## The five acceptance corrections
 
