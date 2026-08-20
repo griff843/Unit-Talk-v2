@@ -21,7 +21,8 @@ ASSERTIONS:
 - [x] `board-construction` is a member of `GOVERNANCE_BRAKE_SOURCES`, giving a second, source-keyed fallback brake.
 - [x] `assertEveryAutomatedSourceIsBraked()` runs at module load and throws if any source classified automated is absent from the brake set — the exact drift that produced this defect.
 - [x] Compile-time source exhaustiveness holds: `as const satisfies Record<PickSource, AutomatedWriteBoundaryPolicy>` means a new `PickSource` fails to compile until deliberately classified.
-- [x] Missing marker, missing producer identity, or missing market evidence throws before persistence — no downgrade to the human path, no default to `validated`.
+- [x] Omitting `metadata.systemGenerated` does not create a human path for `board-construction`: it is `boundary-required`, so it is admitted by source and born in `awaiting_approval` regardless of the marker and regardless of whether an operator originated it. Once admitted, a missing producer identity or missing market evidence throws before persistence — never a downgrade to the human path, never a default to `validated`.
+- [x] The `validated` initial state is preserved only for sources classified `human-ingress` (`smart-form`, `feed`, `system`, `api`, `discord-bot`), proved by `automated write boundary preserves the human/manual validated path` driving a `smart-form` submission through the real `processSubmission` path.
 - [x] `pnpm type-check` clean.
 - [x] `pnpm lint` clean.
 - [x] `pnpm test` — the `test:apps-api-core` root covering this lane reports 444/444 pass, 0 fail.
@@ -145,7 +146,9 @@ The manifest records this truthfully and withdraws an earlier entry that asserte
 
 ### 7. Out-of-scope finding: transient `validated` for boundary-when-marked sources
 
-An exact-head review observed that a `system-pick-scanner`, `alert-agent` or `model-driven` submission omitting `metadata.systemGenerated` is admitted as human-ingress, so `processSubmission` persists it as `validated` before the controller's source-keyed brake moves it to `awaiting_approval`.
+An exact-head review observed that a `system-pick-scanner`, `alert-agent` or `model-driven` submission omitting `metadata.systemGenerated` is not admitted to the write boundary — those sources are classified `boundary-when-marked`, not `human-ingress` — so `processSubmission` persists it as `validated` before the controller's source-keyed brake moves it to `awaiting_approval`.
+
+This section is scoped strictly to `boundary-when-marked` sources. It has no `board-construction` analogue: `board-construction` is `boundary-required`, admitted by source, and has no legal `validated` state — transient or resting — so nothing below describes a board submission that may remain `validated`.
 
 Investigated rather than dismissed. The finding describes real behaviour, but it is **not introduced by this lane and is not a defect this lane created**:
 
