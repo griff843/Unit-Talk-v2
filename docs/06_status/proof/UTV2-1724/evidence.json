@@ -62,11 +62,7 @@
       "pass": 68,
       "fail": 0,
       "pre_existing_cases_still_green": 28,
-      "sections": {
-        "sanctioned closeout commits": 14,
-        "fail-closed tripwire": 12,
-        "full closeout decision path": 14
-      }
+      "sections_note": "Per-section counts are not recorded: they shift when a case lands in one section rather than another, and two earlier revisions recorded a breakdown that did not match the suite. Run the harness for the current split."
     },
     "syntax": {
       "bash_n": "clean",
@@ -152,7 +148,7 @@
     {
       "criterion": "Grammar fixed, with matching cases in the harness",
       "status": "PASS",
-      "evidence": "Anchored subject-line closeout form added; 14 sanctioned-closeout cases, 12 tripwire cases and 13 full-decision-path cases; 68 passed / 0 failed, with all 28 pre-existing cases still green."
+      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 68 passed / 0 failed, with all 28 pre-existing cases still green."
     },
     {
       "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",

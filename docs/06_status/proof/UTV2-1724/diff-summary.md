@@ -18,7 +18,7 @@ Two files, both under `.github/workflows/`. No runtime code, schema, migration, 
 
 4. **`evaluate_completion_block()` added.** The truth-gated completion decision, moved out of the workflow YAML so the harness drives the real decision path rather than a paraphrase of it.
 
-5. **40 test cases added**, taking the harness from **28 to 68**, 0 failures: 14 covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, 12 covering the tripwire including cases proving prose can neither silence nor trigger it, and 14 driving the full completion-decision path over realistic manifests and closeout ancestry.
+5. **40 test cases added**, taking the harness from **28 to 68**, 0 failures — covering the sanctioned closeout form and every other `chore(lanes):` producer that must *not* close, the tripwire including cases proving prose can neither silence nor trigger it and that all three scopes agree, and the full completion-decision path over realistic manifests and closeout ancestry. Per-section counts are not quoted; run the harness for the current split.
 
 ## `.github/workflows/linear-auto-close.yml`
 

@@ -183,12 +183,10 @@ The last two are a matched pair: identical manifest, identical commit, ancestry 
 
 ```text
 $ bash .github/workflows/linear-auto-close.test.sh
-  === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     14 cases, all PASS
-  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===            12 cases, all PASS
-  === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     14 cases, all PASS
-
   Results: 68 passed, 0 failed
 ```
+
+Per-section counts are deliberately not reproduced here. They shift whenever a case is added to one section rather than another, and two revisions of this bundle already recorded a breakdown that did not match the suite. Run the harness for the current split; the total and the zero-failure result are the load-bearing facts.
 
 ### 5. Reconciliation baseline
 
