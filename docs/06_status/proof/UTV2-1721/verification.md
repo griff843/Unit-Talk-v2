@@ -4,7 +4,7 @@ MERGE_SHA: pending merge
 
 Lane: governed harness refresh — re-admit the bounded mechanical corrections from PR #1429 without model-routing policy regression.
 Tier: T1 · lane_type: governance · proof profile: static
-Implementation anchor: `b71ca9239177c19c80da85ad2568990fe61ec31d`
+Substantive anchor: `a5d4ac5159da2944351fc3f3d16d840d3c31b1d5` (the sanctioned `pr-update-branch` commit that refreshed this branch onto current `main`)
 
 ## Summary
 
@@ -15,7 +15,7 @@ Seven files ported, eleven refused. Every explicit model/profile control is pres
 ASSERTIONS:
 
 - [x] `verify:static` green on the lane branch: env-check, lint, type-check, build, and the full unit suite — **4969 tests, 4969 pass, 0 fail, 0 skipped**.
-- [x] `test:db` did not run locally: `ci:assert-staging` refused because this environment resolves Supabase to the containment sentinel `127.0.0.1` rather than staging `xskgrzbteyqdufktjrjx`. This is the fail-closed guard behaving correctly, not a lane failure, and `test:db` is not required for a `static` proof profile.
+- [x] The T1 database gate is **satisfied, not waived**: `pnpm test:db` and the T1 live-proof suite ran against the approved staging project on this exact head and passed (run 32329786908, job 96308159380). It does not run on this workstation, where `ci:assert-staging` correctly refuses the containment sentinel `127.0.0.1`; the receipt is therefore cited from CI.
 - [x] All six `model:` references in `.claude/commands/dispatch.md` are byte-identical to `origin/main` (L175, L181, L231, L242, L308, L326).
 - [x] The eleven refused files are untouched: `git diff` against `origin/main` reports no change to any `.claude/agents/*.md`, `three-brain.md`, `OPERATING_MODEL_SONNET5.md`, or `agent-brief.md`.
 - [x] T2 Merge Authority documentation now matches `.github/workflows/merge-gate.yml` L512-543 exactly — three approval artifacts, cited by line.
@@ -69,12 +69,42 @@ $ npx tsx scripts/ci/proof-binding-validator.ts --proof-dir docs/06_status/proof
                  tests=4969 pass=4969 fail=0 skipped=0
 ```
 
-### 2. `test:db` refused by the staging-identity guard (expected under containment)
+### 2. T1 database gate — satisfied by a passing staging run, not waived
+
+An exact-head review raised this correctly: `AGENTS.md:250-255` states that T1 issues **always** require `pnpm test:db`, and a `static` proof profile does not waive it. The previous revision of this bundle recorded only that `test:db` was refused locally under credential containment, which is not evidence that the gate was met.
+
+It was met. `pnpm test:db` and the full T1 live-proof suite executed against the approved staging project on this exact head and passed:
 
 ```text
-> @unit-talk/v2@0.1.0 ci:assert-staging
-> tsx scripts/ci/assert-staging-target.ts
+Workflow: CI -> Writable DB proof (staging only)
+Run:      32329786908   Job: 96308159380   Attempt: 1
+Head:     a5d4ac5159da2944351fc3f3d16d840d3c31b1d5
+Result:   SUCCESS
 
+[assert-staging] OK: target is the approved staging project ***
+
+  pnpm test:db  ->  apps/api/src/database-smoke.test.ts
+# tests 7
+# pass 7
+# fail 0
+# skipped 0
+
+  pnpm test:t1-proof:live  ->  t1-proof-awaiting-approval.test.ts
+# tests 5
+# pass 5
+# fail 0
+# skipped 0
+
+  ... continuing across the enumerated T1 live-proof suite, e.g.
+# tests 20
+# pass 20
+# fail 0
+# skipped 0
+```
+
+The local refusal quoted below remains true of this workstation and is retained because it explains why the receipt is cited from CI rather than reproduced here — it is not an argument that the gate does not apply:
+
+```text
 [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
 [assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
 Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci

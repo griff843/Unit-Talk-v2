@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-19T22:10:00Z",
   "sha_binding": {
-    "verified_source_sha": "b71ca9239177c19c80da85ad2568990fe61ec31d",
-    "verified_source_note": "Exact substantive branch head containing the complete seven-file port and both review-finding corrections. Commits after this anchor are restricted to this lane's own proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI; post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
+    "verified_source_sha": "a5d4ac5159da2944351fc3f3d16d840d3c31b1d5",
+    "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation commit because the review-fix commit and the branch refresh both landed after it, so only proof paths change after this anchor. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -84,11 +84,6 @@
       "detail": "The ported bash-safety-guard.sh denied two real tool calls during this lane's own work, confirming the exit code blocks rather than warns. main's copy documents it as a non-blocking warning. Exit codes and matching logic are unchanged by this port; only comments and operator-facing messages differ."
     }
   },
-  "runtime_proof_delegation": {
-    "reason": "static proof profile. This lane changes documentation and harness guidance only: no runtime code, no schema, no migration, no dependency change. Per scripts/ops/truth-check-lib.ts, the static profile explicitly does not require runtime queries (R1) or monitored-table row counts (R2).",
-    "test_db_local_status": "REFUSED_BY_CONTAINMENT",
-    "test_db_detail": "ci:assert-staging refused locally: host=127.0.0.1 ref=unidentified, expected xskgrzbteyqdufktjrjx. Fail-closed guard behaving correctly; writable DB verification requires the staging-ci GitHub environment."
-  },
   "blast_radius": {
     "runtime_code": "none",
     "schema": "none",
@@ -101,5 +96,55 @@
     ".claude/hooks/tier-c-path-guard.sh header documents exit 2 as non-blocking while its own line 133 records the opposite.",
     "bash-safety-guard.sh matches destructive patterns in quoted/documentation text, not only in executable position.",
     "CLAUDE.md's Merge Authority table carries the same omission verification.md had; assigned to the CLAUDE.md rebuild successor lane."
+  ],
+  "runtime_proof": {
+    "status": "PASS",
+    "command": "pnpm test:db && pnpm test:t1-proof:live",
+    "detail": "T1 database gate satisfied on the exact head. AGENTS.md:250-255 requires pnpm test:db for every T1 issue regardless of whether it touches the DB layer; the static proof profile does not waive it. Executed in the staging-ci environment against the approved staging project.",
+    "ci_receipt": {
+      "result": "PASS",
+      "workflow": "CI",
+      "job_name": "Writable DB proof (staging only)",
+      "run": 32329786908,
+      "job": 96308159380,
+      "run_attempt": 1,
+      "head": "a5d4ac5159da2944351fc3f3d16d840d3c31b1d5",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32329786908/job/96308159380",
+      "tap": {
+        "test_db": {
+          "tests": 7,
+          "pass": 7,
+          "fail": 0,
+          "skipped": 0
+        },
+        "t1_proof_awaiting_approval": {
+          "tests": 5,
+          "pass": 5,
+          "fail": 0,
+          "skipped": 0
+        }
+      }
+    },
+    "local_execution": {
+      "status": "REFUSED_BY_CONTAINMENT",
+      "detail": "ci:assert-staging refused on this workstation: host=127.0.0.1 ref=unidentified, expected xskgrzbteyqdufktjrjx."
+    }
+  },
+  "review_findings_resolved": [
+    {
+      "id": "P1",
+      "summary": "T1 database verification recorded as refused rather than satisfied.",
+      "resolution": "Bundle now cites the passing staging CI receipt on the exact head; the gate is met, not waived."
+    },
+    {
+      "id": "P2",
+      "summary": "Operator runbook env fix selected the first existing file; loadEnvironment merges all three per variable.",
+      "resolution": "Replaced with the layered merge; re-executed, including a case reproducing the dropped-.env-credential defect."
+    },
+    {
+      "id": "P3",
+      "summary": "Gate-parity wording licensed removing ops:substrate-guard --check-linear from /loop-dispatch.",
+      "resolution": "Parity scoped to gate composition and order; the flag documented as an intentional loop-only addition in both files."
+    }
   ]
 }
