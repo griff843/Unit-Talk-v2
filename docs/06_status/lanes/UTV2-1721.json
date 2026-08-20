@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1721-governed-harness-refresh",
   "branch": "claude/utv2-1721-governed-harness-refresh",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1432",
   "files_changed": [],
   "file_scope_lock": [
@@ -27,14 +27,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1721/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-19T20:02:50.352Z",
-  "heartbeat_at": "2026-08-19T22:00:23.371Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-20T05:44:35.276Z",
+  "closed_at": "2026-08-20T05:44:35.276Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1721-governed-harness-refresh.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-20T05:44:33.410Z",
+      "verdict": "pass",
+      "merge_sha": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

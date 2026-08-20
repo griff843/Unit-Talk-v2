@@ -1,6 +1,6 @@
 # PROOF: UTV2-1721
 
-MERGE_SHA: a5d4ac5159da2944351fc3f3d16d840d3c31b1d5
+MERGE_SHA: 3ca047fa8fcae2a8768d2ba63cace8019a5a76ca
 
 Lane: governed harness refresh — re-admit the bounded mechanical corrections from PR #1429 without model-routing policy regression.
 Tier: T1 · lane_type: governance · proof profile: static

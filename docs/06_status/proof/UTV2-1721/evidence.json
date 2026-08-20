@@ -4,18 +4,20 @@
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
-  "title": "Governed harness refresh \u2014 re-admit PR #1429's mechanical corrections without model-routing policy regression",
+  "title": "Governed harness refresh — re-admit PR #1429's mechanical corrections without model-routing policy regression",
   "status": "ready_for_review",
   "generated_at": "2026-08-19T22:10:00Z",
   "sha_binding": {
-    "verified_source_sha": "a5d4ac5159da2944351fc3f3d16d840d3c31b1d5",
+    "verified_source_sha": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca",
     "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation commit because the review-fix commit and the branch refresh both landed after it, so only proof paths change after this anchor. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-20T05:44:32.165Z"
   },
   "static_proof": {
     "pnpm_verify_static": {
