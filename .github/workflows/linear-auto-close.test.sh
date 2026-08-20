@@ -218,17 +218,31 @@ has_lane_closeout_signature() {
   # phrase is an unanchored substring, so a subject merely QUOTING the template
   # — e.g. a commit that changes the template — reddened main. A real closeout,
   # however its scope or verb drifts, always names the issue it closes.
-  # It must NOT additionally require an issue id. An earlier revision did, to
-  # stop a subject merely quoting the template from firing -- but that made the
-  # single most dangerous drift invisible: a template that stops emitting the id
-  # at all, leaving only the trailer phrase, strands every lane at once, and
-  # requiring an id assumes exactly what that drift breaks.
+  # Signature 2 is anchored to the producer's SCOPE, not to a guess about
+  # punctuation.
   #
-  # The quotation case is excluded by looking at quoting, which is what actually
-  # separates the two: a commit that talks ABOUT the phrase puts it in quotes;
-  # a commit that IS a closeout does not.
+  # Two earlier revisions tried to separate "a closeout whose verb or scope
+  # drifted" from "a commit that merely talks about the phrase", and both were
+  # wrong in both directions:
+  #
+  #   - requiring an issue id silenced the id-dropping drift, which is the
+  #     shape most likely to strand every lane at once;
+  #   - excluding subjects containing a quote character silenced any drift whose
+  #     subject happened to contain an apostrophe, and fired on documentation
+  #     that quotes the phrase with backticks or asterisks, which is how this
+  #     repo actually writes markdown.
+  #
+  # Both were heuristics about how a human might punctuate. The producer has a
+  # structural property instead: it is a chore commit. `chore(` is stable across
+  # every drift this signature exists to catch — a changed verb, a dropped id, a
+  # renamed scope — and absent from the docs and template-editing commits that
+  # were reddening main.
+  #
+  # Residual, stated rather than hidden: a chore commit that quotes the phrase
+  # in its own subject still fires. That is the fail-closed direction and far
+  # rarer than the docs case, and signature 1 already covers the common drift.
   if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null \
-     && ! echo "$subject" | grep -qE '["'"'"'][^"'"'"']*lane closed, sync file removed' 2>/dev/null; then
+     && echo "$subject" | grep -qE '^chore\(' 2>/dev/null; then
     return 0
   fi
 
@@ -921,6 +935,37 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     echo "  FAIL  an explicit No-close naming the found ID still silences the tripwire"
     fail=$((fail + 1))
   fi
+
+  # Hatch 10: signature 2 is anchored to the producer's chore( scope, not to a
+  # guess about punctuation. Two earlier heuristics were wrong in BOTH
+  # directions — silencing real drift whose subject contained an apostrophe, and
+  # firing on documentation that quotes the phrase with backticks or asterisks.
+  # Both directions are asserted here so neither can regress silently.
+  for drift in 'chore(lanes): finalize "UTV2-1614" — lane closed, sync file removed' \
+               $'chore(lanes): don\'t finalize — lane closed, sync file removed' \
+               'chore(lane): terminate UTV2-1614 — lane closed, sync file removed' \
+               'chore(lanes): lane closed, sync file removed'; do
+    if has_lane_closeout_signature "$drift"; then
+      echo "  PASS  drift carries the signature: ${drift:0:40}"
+      pass=$((pass + 1))
+    else
+      echo "  FAIL  drift carries the signature: ${drift:0:40}"
+      fail=$((fail + 1))
+    fi
+  done
+
+  for talk in 'docs: describe the `lane closed, sync file removed` trailer' \
+              'docs: **lane closed, sync file removed** explained' \
+              'docs: the (lane closed, sync file removed) phrase' \
+              'fix(ci): stop emitting "lane closed, sync file removed"'; do
+    if has_lane_closeout_signature "$talk"; then
+      echo "  FAIL  a commit merely discussing the phrase stays silent: ${talk:0:40}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  a commit merely discussing the phrase stays silent: ${talk:0:40}"
+      pass=$((pass + 1))
+    fi
+  done
 
   # Hatch 8: the tripwire must not be gated behind an empty id set. `ids` is
   # whole-message while the signature is subject-scoped, so an unrelated id in
