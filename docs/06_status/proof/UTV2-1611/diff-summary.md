@@ -21,10 +21,10 @@ MERGE_SHA: 5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c
  apps/api/src/submission-service.ts                   |  26 +-
  apps/api/src/t1-proof-awaiting-approval.test.ts      | 158 +++-
  docs/06_status/lanes/UTV2-1611.json                  |  66 +
- docs/06_status/proof/UTV2-1611/diff-summary.md       |  54 +
- docs/06_status/proof/UTV2-1611/evidence.json         | 204 +++
+ docs/06_status/proof/UTV2-1611/diff-summary.md       |  (self-referential — omitted)
+ docs/06_status/proof/UTV2-1611/evidence.json         |  (self-referential — omitted)
  docs/06_status/proof/UTV2-1611/model-routing.json    |  14 +
- docs/06_status/proof/UTV2-1611/verification.md       | 130 +
+ docs/06_status/proof/UTV2-1611/verification.md       |  (self-referential — omitted)
 ```
 
 Two files were deleted: `apps/api/src/automated-write-boundary.test.ts` and `apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts`. Their coverage was not dropped — it moved into already-wired roots (see below).
