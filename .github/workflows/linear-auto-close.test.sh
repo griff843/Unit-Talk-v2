@@ -163,24 +163,70 @@ has_lane_closeout_signature() {
 
   [ -z "$msg" ] && return 1
 
+  # SUBJECT LINE ONLY.
+  #
+  # UTV2-1724: this originally scanned the whole message. That made the
+  # signature prose-sensitive, and it misfired on this lane's own commits —
+  # which quote the closeout template in order to explain the defect. A commit
+  # that merely DESCRIBES a closeout would have reddened main.
+  #
+  # The producer writes a single-line commit message, so the signature lives in
+  # the subject and nowhere else. Restricting to the first line matches the
+  # producer exactly and makes body prose — explanations, quoted examples,
+  # changelogs — structurally incapable of triggering it.
+  local subject
+  subject=$(echo "$msg" | head -n 1)
+
   # Signature 1: the conventional-commit scope the closeout path always uses,
   # combined with a close verb in any form.
-  if echo "$msg" | grep -qE '^chore\(lanes\):[[:space:]]+clos(e|es|ed|ing)[[:space:]]' 2>/dev/null; then
+  if echo "$subject" | grep -qE '^chore\(lanes\):[[:space:]]+clos(e|es|ed|ing)[[:space:]]' 2>/dev/null; then
     return 0
   fi
 
   # Signature 2: the literal trailer phrase emitted by
-  # post-merge-lane-close.yml, independent of the subject line's shape.
-  if echo "$msg" | grep -qE 'lane closed, sync file removed' 2>/dev/null; then
+  # post-merge-lane-close.yml, for a subject whose scope or verb has drifted.
+  if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null; then
     return 0
   fi
 
   return 1
 }
 
-# Returns 0 (true) when the message carries an explicit opt-out. Kept separate
-# so the tripwire can distinguish "deliberately not closing" from "failed to
-# recognise a closeout".
+# Would this message have yielded close IDs if the opt-out filter were not
+# applied? Runs the three close-intent FORMS only, skipping suppression.
+#
+# This exists so the tripwire can distinguish the two reasons extraction can
+# come back empty:
+#   - the forms matched, and an opt-out removed the result   -> deliberate
+#   - no form matched at all                                 -> grammar drift
+extract_close_ids_ignoring_suppression() {
+  local msg="$1"
+  [ -z "$msg" ] && return 0
+
+  local inline trailer closeout
+  inline=$(echo "$msg" | grep -oiE '\b(closes|fixes|resolves)[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  trailer=$(echo "$msg" | grep -oE '^Linear-Close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  closeout=$(echo "$msg" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  printf '%s\n%s\n%s\n' "$inline" "$trailer" "$closeout" | sort -u | grep -v '^$' | tr '\n' ' ' | sed 's/ $//'
+}
+
+# Was extraction's empty result caused by a deliberate opt-out rather than by
+# the grammar failing to match?
+#
+# UTV2-1724: this replaced a predicate that grepped the message for the strings
+# "plan-only", "partial-fix" or "No-close:". That was a prose escape hatch, and
+# it silently disabled the tripwire — reproduced on THIS lane's own squash
+# merge, whose body merely *describes* the opt-out feature and thereby switched
+# off the control it was describing. A fail-open inside the fix for a fail-open.
+#
+# The reliable question is not "does the text mention an opt-out" but "did the
+# forms match at all". If they did and the result was filtered away, a human
+# opted out on purpose. If nothing matched, the grammar has drifted. Prose
+# cannot fake the first condition.
+#
+# Deliberately does NOT change extract_linear_close_ids()'s own opt-out
+# semantics, which are pre-existing and out of scope here.
 has_close_suppression_marker() {
   local msg
   if [ $# -gt 0 ]; then
@@ -191,13 +237,9 @@ has_close_suppression_marker() {
 
   [ -z "$msg" ] && return 1
 
-  if echo "$msg" | grep -qiE '\bplan-only\b|\bpartial-fix\b' 2>/dev/null; then
-    return 0
-  fi
-  if echo "$msg" | grep -qE 'No-close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null; then
-    return 0
-  fi
-
+  local raw
+  raw=$(extract_close_ids_ignoring_suppression "$msg")
+  [ -n "$raw" ] && return 0
   return 1
 }
 
@@ -264,8 +306,9 @@ resolve_authoritative_merge_sha() {
 # Is `sha` an ancestor of (or identical to) `push_sha` on the remote?
 #
 # The checkout is fetch-depth 1, so there is no local history to walk. Uses the
-# compare API, which reports "behind" or "identical" when the base is reachable
-# from the head.
+# compare API. With base=sha and head=push_sha it reports "ahead" when the base
+# is reachable from the head, or "identical" when they are the same commit;
+# those are the two statuses accepted below.
 #
 # Fails closed: any API error, missing token, or unrecognised status is treated
 # as NOT an ancestor. A completion that cannot be proven does not happen.
@@ -620,9 +663,24 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     "yes"
 
   assert_signature \
-    "trailer phrase alone carries the signature" \
-    $'chore(lanes): terminate UTV2-1614\n\nlane closed, sync file removed' \
+    "trailer phrase in a DRIFTED SUBJECT carries the signature" \
+    "chore(lanes): terminate UTV2-1614 — lane closed, sync file removed" \
     "yes"
+
+  # The signature is deliberately subject-only. An earlier revision scanned the
+  # whole message, and it misfired on this lane's own commits — they quote the
+  # closeout template to explain the defect, so a commit that merely DESCRIBES a
+  # closeout would have reddened main. The producer writes a single-line
+  # message, so body prose can never be a real signature.
+  assert_signature \
+    "trailer phrase in the BODY does not carry the signature" \
+    $'chore(lanes): terminate UTV2-1614\n\nlane closed, sync file removed' \
+    "no"
+
+  assert_signature \
+    "a commit that merely describes the closeout template carries no signature" \
+    $'fix(ci): explain the closeout grammar\n\nThe producer emits:\n  chore(lanes): close UTV2-1 — lane closed, sync file removed' \
+    "no"
 
   assert_signature \
     "past-tense closeout subject carries the signature" \
@@ -663,6 +721,20 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     pass=$((pass + 1))
   else
     echo "  FAIL  deliberate opt-out is distinguishable from drift"
+    fail=$((fail + 1))
+  fi
+
+  # The opt-out test asks "did the FORMS match", not "does the text mention an
+  # opt-out". An earlier revision grepped for the words plan-only / partial-fix
+  # / No-close, which meant any commit whose prose mentioned them silently
+  # disabled the tripwire — a fail-open inside the fix for a fail-open,
+  # reproduced on this lane's own squash merge.
+  prose_msg=$'chore(lanes): terminate UTV2-1614 — lane closed, sync file removed\n\nMentions plan-only and partial-fix in prose only.'
+  if has_lane_closeout_signature "$prose_msg" && ! has_close_suppression_marker "$prose_msg"; then
+    echo "  PASS  prose mentioning plan-only/partial-fix cannot silence the tripwire"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  prose mentioning plan-only/partial-fix cannot silence the tripwire"
     fail=$((fail + 1))
   fi
 

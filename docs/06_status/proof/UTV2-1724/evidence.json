@@ -59,12 +59,12 @@
   "static_proof": {
     "harness": {
       "command": "bash .github/workflows/linear-auto-close.test.sh",
-      "pass": 60,
+      "pass": 63,
       "fail": 0,
       "pre_existing_cases_still_green": 28,
       "sections": {
         "sanctioned closeout commits": 12,
-        "fail-closed tripwire": 7,
+        "fail-closed tripwire": 10,
         "full closeout decision path": 13
       }
     },
@@ -177,6 +177,7 @@
   ],
   "known_limitations": [
     "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1, the fail-closed requirement, and the completion-gate SHA-comparison P1. The replay is a post-merge acceptance phase: this issue must not be marked Done until the sanctioned replay produces three-way GitHub/manifest/Linear agreement and ORCH-MERGED-PR-LINEAR-DONE returns 0.",
+    "Two escape hatches in the tripwire itself were found by adversarial review of this lane and closed: a prose-grep opt-out test that any commit mentioning plan-only/partial-fix could silence, and a whole-message signature scan that fired on commits merely describing a closeout template. Both were reproduced on this lane own squash merge before being fixed.",
     "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
     "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
   ],

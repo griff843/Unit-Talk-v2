@@ -12,6 +12,9 @@ name: Linear Auto-Close
 #   - Fixes UTV2-NNN      (inline verb, case-insensitive on the verb)
 #   - Resolves UTV2-NNN   (inline verb, case-insensitive on the verb)
 #   - Linear-Close: UTV2-NNN   (commit trailer, anchored to line start)
+#   - chore(lanes): close UTV2-NNN   (the sanctioned closeout commit, anchored
+#     to line start; added UTV2-1724 because the closeout path emits the bare
+#     imperative, which none of the forms above match)
 #
 # Free-form mentions like "UTV2-NNN dispatch packet", "follow-up to UTV2-NNN",
 # file path literals, code examples, or "supersedes UTV2-NNN" wording are
@@ -29,8 +32,11 @@ name: Linear Auto-Close
 #   bash .github/workflows/linear-auto-close.test.sh
 #
 # Any change to the extraction regex MUST be accompanied by a test update in
-# the same PR. The harness runs 22 positive and negative cases covering the
-# full intended behavior, including the original false-positive incident.
+# the same PR. The harness covers the full intended behaviour — the original
+# false-positive incident, the sanctioned closeout form, the fail-closed
+# tripwire, and the complete completion-decision path. Run it for the current
+# count rather than trusting a number here; an earlier revision of this line
+# went stale and no longer matched the suite.
 #
 # Requirements:
 #   - Repo secret LINEAR_API_TOKEN with scope sufficient to read + update

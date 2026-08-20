@@ -25,7 +25,10 @@ ASSERTIONS:
 - [x] The existing `No-close:` / `plan-only` / `partial-fix` opt-out still suppresses the new form.
 - [x] The fail-closed control is validated **by execution on the condition it names**, not by presence: a drifted closeout template exits 1 with `reason=closeout_signature_unmatched`.
 - [x] The control does not fire on any legitimate case: sanctioned closeout, deliberate opt-out, and an ordinary commit all exit 0.
-- [x] Harness: **60 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] Harness: **63 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] The tripwire's own escape hatches are closed, both found by adversarial review of this lane:
+  - The opt-out test grepped the message for `plan-only` / `partial-fix` / `No-close:`. Any commit whose **prose** mentioned them silently disabled the tripwire — a fail-open inside the fix for a fail-open, reproduced on this lane's own squash merge. It now asks whether the close-intent **forms** matched and were filtered, which prose cannot fake.
+  - The signature scanned the whole message, so a commit that merely **described** a closeout template matched. It is now subject-line only, matching the single-line message the producer actually writes. Verified: this PR's own squash merge carries no signature and does not fire.
 - [x] The completion-gate defect reproduced against the **real merged `UTV2-1721` manifest** from `main`, not a fixture: a lane with `status: done`, `verdict: pass`, runner `ops:lane-close` and its receipt bound to the merge was refused, because `3ca047fa != 44068585`.
 - [x] `resolve_authoritative_merge_sha()` introduces no new contract: it reads `commit_sha` and the truth-check receipt's `merge_sha` — the two fields the gate already cross-checks — and resolves nothing when they disagree rather than picking a side.
 - [x] Non-closeout commits still resolve to the pushed SHA; behaviour on the ordinary merge path is unchanged.
@@ -169,10 +172,10 @@ The last two are a matched pair: identical manifest, identical commit, ancestry 
 ```text
 $ bash .github/workflows/linear-auto-close.test.sh
   === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     12 cases, all PASS
-  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===             7 cases, all PASS
+  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===            10 cases, all PASS
   === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     13 cases, all PASS
 
-  Results: 60 passed, 0 failed
+  Results: 63 passed, 0 failed
 ```
 
 ### 5. Reconciliation baseline
