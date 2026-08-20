@@ -80,7 +80,7 @@
         "fail": 0,
         "skipped": 0
       },
-      "detail": "submission-service.test.ts 76 -> 89 tests; absorbed the automated-boundary unit coverage with names preserved."
+      "detail": "submission-service.test.ts 73 -> 89 tests; absorbed the automated-boundary unit coverage with names preserved."
     },
     "wiring": {
       "command": "pnpm ops:automation-coverage-check",
@@ -204,18 +204,9 @@
     },
     "staging_execution_provenance": {
       "enforcement": "pnpm test:db runs against the approved staging project on EVERY pushed head of this lane, including the final head, as part of the required verify context. ci.yml downloads the receipt scoped to its own run (utv2-1630-db-proof-receipt-<run_id>-<run_attempt>) and validates it with scripts/ci/verify-db-proof-receipt.ts. verify never reads this evidence.json, so the staging guarantee for any head comes from CI at that head.",
-      "at_final_head": {
-        "run_id": 32380078496,
-        "job_id": 96460836194,
-        "head_sha": "81e50121cc804c9fbe839e8a6cf18e36e7bd7ab6",
-        "conclusion": "success",
-        "steps_succeeded": [
-          "Run writable DB proof against staging",
-          "Run the T1 live proof suites against staging"
-        ]
-      },
       "recorded_arrays_are_a_snapshot": "runtime_proof.queries and runtime_proof.row_counts were harvested from ONE historical run — 32330316960 at head 29d05ebc — so the evidence is legible inside the bundle. They are labelled with that run and no other. No merge authority rests on them; they are a readable record, not the enforcement mechanism.",
-      "implementation_unchanged_since_that_run": "git diff 29d05ebc HEAD touches no apps/** and no packages/** path. Stated as an independent fact about the code, not as the basis of the staging guarantee."
+      "implementation_unchanged_since_that_run": "git diff 29d05ebc HEAD touches no apps/** and no packages/** path. Stated as an independent fact about the code, not as the basis of the staging guarantee.",
+      "no_per_head_citation": "Deliberately absent. A bundle lives inside the head it describes, so a run id cited as 'this head' names the previous head as soon as it is committed. That drifted three times here before the citation was removed. The per-head result is read from the Writable DB proof (staging only) check, which is green on every head this lane has pushed."
     }
   },
   "acceptance_criteria_mapping": [

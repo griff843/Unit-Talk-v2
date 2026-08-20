@@ -43,7 +43,7 @@ Two files were deleted: `apps/api/src/automated-write-boundary.test.ts` and `app
 
 The coverage therefore moved onto roots that are already wired:
 
-- unit coverage → `apps/api/src/submission-service.test.ts`, named directly by `test:apps-api-core` and the site where the boundary is invoked (76 → 89 tests);
+- unit coverage → `apps/api/src/submission-service.test.ts`, named directly by `test:apps-api-core` and the site where the boundary is invoked (73 → 89 tests);
 - live staging assertions → `apps/api/src/t1-proof-awaiting-approval.test.ts`, already enumerated in `test:t1-proof:live` and already classified in `db-writer-classification.json`.
 
 Consequently the lane's earlier edits to `package.json` and `docs/05_operations/db-writer-classification.json` were reverted; both are byte-identical to `origin/main`. This removes the `Lane Authority` failure at its cause rather than by widening `.lane/lanes/runtime.yml`, and removes the `Shadow Parity Check` refusal that guarded `package.json`.
