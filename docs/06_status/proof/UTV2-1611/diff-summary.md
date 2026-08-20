@@ -1,54 +1,57 @@
-# UTV2-1611 Diff Summary
+# PROOF: UTV2-1611 — diff summary
 
-Generated at: 2026-08-16T16:27:02Z
-Issue: UTV2-1611
-Tier: T1
-Lane type: runtime
-Branch: codex/utv2-1611-automated-write-boundary
-PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1427
-Head SHA: 6b2c76747a368a45e42b9788cc665a852e525fca
-Merge SHA: N/A
-Diff base: 88c9a59e60df29659a45d143ac5ff60c0d042f78
-Diff target: 6b2c76747a368a45e42b9788cc665a852e525fca
+MERGE_SHA: pending merge
 
-## Git Diff Stat
-```
-.ops/sync/UTV2-1611.yml                           |  14 ++
- apps/api/src/automated-write-boundary.test.ts     | 178 +++++++++++++++++
- apps/api/src/automated-write-boundary.ts          | 227 ++++++++++++++++++++++
- apps/api/src/board-pick-writer.test.ts            |  57 ++++++
- apps/api/src/board-pick-writer.ts                 |  50 ++++-
- apps/api/src/candidate-pick-scanner.test.ts       |  34 +++-
- apps/api/src/candidate-pick-scanner.ts            |  35 +++-
- apps/api/src/submission-service.ts                |  26 ++-
- docs/06_status/lanes/UTV2-1611.json               |  51 +++++
- docs/06_status/proof/UTV2-1611/diff-summary.md    |  52 +++++
- docs/06_status/proof/UTV2-1611/evidence.json      | 199 +++++++++++++++++++
- docs/06_status/proof/UTV2-1611/model-routing.json |  14 ++
- docs/06_status/proof/UTV2-1611/verification.md    |  75 +++++++
- 13 files changed, 994 insertions(+), 18 deletions(-)
+## What changed
+
+18 files, +1722/-53. Every changed source path is runtime-compatible (`apps/api/src/**`); the remainder are the lane's own manifest, sync file and proof bundle.
+
+```text
+ .ops/sync/UTV2-1611.yml                              |  14 +
+ apps/api/src/automated-write-boundary.ts             | 321 +++++
+ apps/api/src/board-pick-writer.test.ts               |  91 ++-
+ apps/api/src/board-pick-writer.ts                    |  72 ++-
+ apps/api/src/candidate-pick-scanner.test.ts          |  31 +-
+ apps/api/src/candidate-pick-scanner.ts               |  35 +-
+ apps/api/src/controllers/submit-pick-controller.test.ts |  44 +-
+ apps/api/src/controllers/submit-pick-controller.ts   |  38 +-
+ apps/api/src/distribution-service.test.ts            |   9 +-
+ apps/api/src/distribution-service.ts                 |  19 +-
+ apps/api/src/submission-service.test.ts              | 449 +++++
+ apps/api/src/submission-service.ts                   |  26 +-
+ apps/api/src/t1-proof-awaiting-approval.test.ts      | 158 +++-
+ docs/06_status/lanes/UTV2-1611.json                  |  66 +
+ docs/06_status/proof/UTV2-1611/diff-summary.md       |  54 +
+ docs/06_status/proof/UTV2-1611/evidence.json         | 204 +++
+ docs/06_status/proof/UTV2-1611/model-routing.json    |  14 +
+ docs/06_status/proof/UTV2-1611/verification.md       | 130 +
 ```
 
-## Git Name Status
-```
-A	.ops/sync/UTV2-1611.yml
-A	apps/api/src/automated-write-boundary.test.ts
-A	apps/api/src/automated-write-boundary.ts
-M	apps/api/src/board-pick-writer.test.ts
-M	apps/api/src/board-pick-writer.ts
-M	apps/api/src/candidate-pick-scanner.test.ts
-M	apps/api/src/candidate-pick-scanner.ts
-M	apps/api/src/submission-service.ts
-A	docs/06_status/lanes/UTV2-1611.json
-A	docs/06_status/proof/UTV2-1611/diff-summary.md
-A	docs/06_status/proof/UTV2-1611/evidence.json
-A	docs/06_status/proof/UTV2-1611/model-routing.json
-A	docs/06_status/proof/UTV2-1611/verification.md
-```
+Two files were deleted: `apps/api/src/automated-write-boundary.test.ts` and `apps/api/src/t1-proof-utv2-1611-board-write-boundary.test.ts`. Their coverage was not dropped — it moved into already-wired roots (see below).
 
-## Manifest Files Changed
-- No files_changed entries recorded.
+## The five acceptance corrections
 
-## SHA Binding
-Head SHA: 6b2c76747a368a45e42b9788cc665a852e525fca
-Merge SHA: N/A
+1. **`board-construction` / no-marker bypass closed.** Admission is decided by `payload.source` through a three-valued policy (`boundary-required` / `boundary-when-marked` / `human-ingress`), not by `metadata.systemGenerated`. `board-construction` is `boundary-required`. Missing marker, producer identity or market evidence throws before persistence. A second layer adds `board-construction` to `GOVERNANCE_BRAKE_SOURCES`, and `assertEveryAutomatedSourceIsBraked()` runs at module load so the two mechanisms cannot drift apart again — that drift is what created the defect.
+2. **Controller no longer re-applies `awaiting_approval`** after atomic materialization. The unconditional second transition was FSM-forbidden (`awaiting_approval -> awaiting_approval`) and would have rejected correctly-governed submissions the moment `board-construction` joined the brake set. The brake is now state-aware; the audit row distinguishes `materialized_at_birth` from `transition`.
+3. **Fabricated midnight event start removed.** `readEventStartTime` no longer invents `T00:00:00Z` when a provider publishes no `starts_at`. That value fed the freshness gate and landed in pick metadata indistinguishable from real evidence, understating an evening start by up to a day and relaxing the gate exactly when it should tighten. Absent evidence now reads as absent.
+4. **Live-proof cleanup goes through the lifecycle FSM**, not a direct status `PATCH` that wrote the lifecycle column with no `pick_lifecycle` row.
+5. **Regressions for all four**, each failing before its fix.
+
+## Test-surface consolidation
+
+`scripts/ops/executable-wiring.ts` counts reachability from package scripts, workflows and non-test code imports only. A test importing another test is not reachable, which is why the boundary suite's wiring gap was invisible until it became a standalone module.
+
+The coverage therefore moved onto roots that are already wired:
+
+- unit coverage → `apps/api/src/submission-service.test.ts`, named directly by `test:apps-api-core` and the site where the boundary is invoked (76 → 89 tests);
+- live staging assertions → `apps/api/src/t1-proof-awaiting-approval.test.ts`, already enumerated in `test:t1-proof:live` and already classified in `db-writer-classification.json`.
+
+Consequently the lane's earlier edits to `package.json` and `docs/05_operations/db-writer-classification.json` were reverted; both are byte-identical to `origin/main`. This removes the `Lane Authority` failure at its cause rather than by widening `.lane/lanes/runtime.yml`, and removes the `Shadow Parity Check` refusal that guarded `package.json`.
+
+## Scope and authorization
+
+Six changed paths lie outside the `file_scope_lock` recorded in the manifest's first commit, which is the only version the file-scope guard trusts. A head-pinned `scope-override/v1` comment is required and **has not been posted**. The manifest records this truthfully and withdraws an earlier self-authored entry that claimed PM authorization which was never granted.
+
+## Blast radius
+
+Runtime write-path behaviour: automated board and scanner productions that previously could persist as `validated` now enter `awaiting_approval` or fail closed. Human/manual approval and downstream `validated` lifecycle behaviour are unchanged. No schema change, no migration, no dependency change, no production mutation.

@@ -7,15 +7,14 @@
   "status": "blocked_scope_expansion_required",
   "generated_at": "2026-08-16T16:27:02Z",
   "sha_binding": {
-    "verified_source_sha": "6b2c76747a368a45e42b9788cc665a852e525fca",
-    "base_sha": "88c9a59e60df29659a45d143ac5ff60c0d042f78",
-    "verified_source_note": "Rework implementation commit containing the exhaustive automated-producer policy, marker-universal future-producer boundary, board/scanner pre-write freshness checks, submission-service integration, and focused regression coverage.",
-    "rework_note": "The rejected epoch identified a source allowlist that could fail open for a future producer. This epoch binds the compile-time exhaustive policy and synthetic future-producer regression at 6b2c7674.",
+    "verified_source_sha": "0a1488cb7a253f9b63f4ff6af3f0b6306384e4ec",
+    "verified_source_note": "Substantive branch head after the five acceptance corrections and the test-surface consolidation, rebased onto current origin/main. Commits after this anchor are restricted to this lane's own proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": null,
-    "sha_type": "implementation_sha",
-    "bound_at": null
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
   },
   "verifier": {
     "identity": "codex-cli/utv2-1611-automated-write-boundary",
@@ -28,13 +27,18 @@
     "migration_change": false,
     "production_mutation_by_lane": false,
     "implementation_paths": [
-      "apps/api/src/automated-write-boundary.test.ts",
       "apps/api/src/automated-write-boundary.ts",
       "apps/api/src/board-pick-writer.test.ts",
       "apps/api/src/board-pick-writer.ts",
       "apps/api/src/candidate-pick-scanner.test.ts",
       "apps/api/src/candidate-pick-scanner.ts",
-      "apps/api/src/submission-service.ts"
+      "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/distribution-service.test.ts",
+      "apps/api/src/distribution-service.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/submission-service.ts",
+      "apps/api/src/t1-proof-awaiting-approval.test.ts"
     ],
     "proof_paths": [
       "docs/06_status/proof/UTV2-1611/diff-summary.md",
@@ -62,99 +66,41 @@
     "readiness_signal": "detectAutomatedDirectToValidatedWrite identifies the forbidden automated validated state and submission idempotency checks fail closed when it is observed."
   },
   "static_proof": {
-    "pnpm_verify_static": {
-      "command": "pnpm verify:static",
-      "status": "PASS",
-      "exit_code": 0,
-      "includes": [
-        "ci:db-client-boundary",
-        "ops:sync-check",
-        "ops:system-alignment-check",
-        "ops:automation-coverage-check",
-        "env:check",
-        "lint",
-        "type-check",
-        "build",
-        "test",
-        "smart-form verify",
-        "verify:commands"
-      ],
-      "excludes": [
-        "test:db",
-        "test:t1-proof:live"
-      ]
-    },
-    "focused_issue_tests": {
-      "command": "pnpm exec tsx --test 'apps/api/src/automated-write-boundary.test.ts' 'apps/api/src/board-pick-writer.test.ts' 'apps/api/src/candidate-pick-scanner.test.ts'",
-      "status": "PASS",
-      "tests": 39,
-      "pass": 39,
-      "fail": 0,
-      "skipped": 0
-    },
     "type_check": {
       "command": "pnpm type-check",
       "status": "PASS",
-      "exit_code": 0
+      "detail": "tsc -b tsconfig.json clean."
     },
     "lint": {
       "command": "pnpm lint",
       "status": "PASS",
-      "exit_code": 0
+      "detail": "eslint clean."
     },
-    "diff_check": {
-      "command": "git diff --check",
+    "unit_tests": {
+      "command": "pnpm test:apps-api-core",
       "status": "PASS",
-      "exit_code": 0
+      "totals": {
+        "tests": 444,
+        "pass": 444,
+        "fail": 0,
+        "skipped": 0
+      },
+      "detail": "submission-service.test.ts 76 -> 89 tests; absorbed the automated-boundary unit coverage with names preserved."
     },
-    "r_level": {
-      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+    "wiring": {
+      "command": "pnpm ops:automation-coverage-check",
       "status": "PASS",
-      "rules_matched": [
-        "lifecycle-fsm"
-      ],
-      "required": [
-        "R1",
-        "R2",
-        "R3",
-        "R4"
-      ],
-      "artifact_resolution": {
-        "r2-determinism": "artifacts/r2-determinism-utv2-845.json (existing repository artifact matched by the configured glob)",
-        "r3-shadow-report": "artifacts/shadow-report-utv2-845.json (existing repository artifact matched by the configured glob)",
-        "r4-fault-report": "missing and reported advisory because R4 is PM-gated"
-      }
+      "detail": "verdict=PASS fail=0; executable-wiring unwired=119 (baselined=119 new=0). Was verdict=FAIL new=1 naming apps/api/src/automated-write-boundary.test.ts before consolidation."
+    },
+    "registration_reverts": {
+      "status": "PASS",
+      "detail": "git diff origin/main -- package.json docs/05_operations/db-writer-classification.json is empty; no docs/05_operations/** or .lane/** path is touched."
     }
   },
   "runtime_proof": {
-    "environment": "Local in-memory repository execution in the isolated lane worktree; no API process, scheduler, or database connection was started.",
-    "mechanism": "Focused node:test integration coverage executes the real submission service with InMemory repositories plus board/scanner producer loops.",
-    "observations": [
-      "Automated board submissions are born awaiting_approval with boundary and lifecycle provenance.",
-      "Automated scanner submissions are born awaiting_approval; the existing governance-brake call observes already_gated and remains idempotent.",
-      "A synthetic future producer carrying metadata.systemGenerated=true is classified without source allowlist membership and is born awaiting_approval with provenance.",
-      "Missing or stale source evidence stops both producer loops before submission persistence.",
-      "Schedule flags control whether producers execute but cannot turn an automated pick into validated or approved lifecycle state.",
-      "Manual submissions remain validated.",
-      "The readiness detector reports a system-generated board/scanner pick observed in validated."
-    ],
-    "pnpm_test_db": {
-      "command": "pnpm test:db",
-      "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
-      "command_attempted_locally": true,
-      "executed_locally": false,
-      "reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
-      "observed_local_guard": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx; refused before writable tests because target identity could not be resolved from the local URL.",
-      "required_target_project_ref": "xskgrzbteyqdufktjrjx",
-      "authoritative_source": "staging-ci GitHub environment receipt on the exact PR head",
-      "production_project_ref": "zfzdnfwdarxucxtaojxm",
-      "production_targeted": false
-    },
-    "credential_transport": {
-      "method": "none",
-      "env_files_copied": false,
-      "production_credentials_used": false
-    }
+    "status": "PENDING_CI_RECEIPT",
+    "command": "pnpm test:db && pnpm test:t1-proof:live",
+    "detail": "Live staging assertions live in apps/api/src/t1-proof-awaiting-approval.test.ts, already enumerated in test:t1-proof:live. They require the staging project and cannot execute in this credential-contained environment; the passing receipt is harvested from the CI run on the pull request head and recorded here before the merge gate."
   },
   "acceptance_criteria_mapping": [
     {
@@ -196,9 +142,22 @@
   "known_limitations": [
     "The implementation lane cannot claim live Postgres behavior until staging-ci produces an exact-head receipt for xskgrzbteyqdufktjrjx.",
     "Proof Coverage Guard requires a live-DB proof test path, but no accepted T1 proof path is included in this lane's allowed file scope; scope must be expanded before the required proof case can be added.",
-    "Return Review Packet requires package-script wiring for the new automated-write-boundary.test.ts file, but package.json is outside this lane's allowed file scope; its suite is currently registered through candidate-pick-scanner.test.ts and passes in pnpm verify:static, while the mechanical wiring gate still fails.",
+    "Six changed paths lie outside the file_scope_lock recorded in the manifest's first commit, which is the only version the file-scope guard trusts. A head-pinned scope-override/v1 comment from an authorized reviewer is required before merge and has not been posted. The earlier limitation recorded here -- that Return Review Packet required package-script wiring for a new test file while package.json sat outside the lane's allowed scope -- no longer applies: the coverage was moved onto already-wired roots and the package.json edit was reverted, so ops:automation-coverage-check now reports verdict=PASS with new=0.",
     "Readiness detection is exposed as a shared helper and enforced during idempotent submission lookup; deployment of a broader operator query is outside this issue's allowed scope.",
     "Implementation readiness is not production readiness."
   ],
-  "verdict": "BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED"
+  "verdict": "BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED",
+  "scope_authorization": {
+    "trusted_first_commit_scope_paths": 7,
+    "paths_requiring_override": [
+      "apps/api/src/distribution-service.ts",
+      "apps/api/src/distribution-service.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/t1-proof-awaiting-approval.test.ts"
+    ],
+    "override_artifact_present": false,
+    "detail": "The file-scope guard trusts only the file_scope_lock recorded in the manifest's first commit. A head-pinned scope-override/v1 comment from an authorized reviewer is required and has not been posted. An earlier manifest entry asserting its own PM authorization was self-authored by an implementing agent and is withdrawn."
+  }
 }
