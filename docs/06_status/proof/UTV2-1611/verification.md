@@ -154,7 +154,13 @@ Investigated rather than dismissed. The finding describes real behaviour, but it
 - `submit-pick-controller.ts` applies the brake **by source**, before any distribution enqueue — no outbox row and no run is created from the transient state.
 - `detectAutomatedDirectToValidatedWrite` documents the choice deliberately: flagging an unmarked `boundary-when-marked` source by source alone would turn a lawful in-flight state into a hard failure on the idempotent re-submission path, and would fail closed on ratified fixtures carrying no producer identity or market evidence.
 
-Residual exposure, stated plainly: an asynchronous reader polling for `status = validated` could observe the row inside that window. Broader compile-time exhaustiveness hardening for `GOVERNANCE_BRAKE_SOURCES` is tracked separately, and this lane's issue explicitly directs that it not be re-scoped here.
+Residual exposure, stated plainly — and corrected after an adversarial review found the first statement of it too narrow:
+
+An earlier revision of this section said only that an asynchronous reader polling for `status = validated` could **observe** the row. That understates it. `enqueueDistributionWork`'s defense-in-depth check (`distribution-service.ts:226-228`) is **lifecycle-state-only, not source-aware** — it throws on `lifecycleState === 'awaiting_approval'` but does not consult `isGovernanceBrakeSource`. `requeue-controller.ts` (`POST /api/picks/:id/requeue`, operator-role gated) does not re-check the brake either; it gates on `promotion_status === 'qualified'`, non-terminal status, and no active outbox row. So an operator-authenticated caller who already knew the pick id could, inside that same synchronous window, **act on** the transient row and enqueue it for real distribution — not merely observe it.
+
+Bounding facts, none of which make it a non-issue: it requires operator-role authentication, which already carries broader override capability elsewhere; the window is a single synchronous database round-trip with no external trigger point at which the pick id becomes knowable beforehand; and `candidate-pick-scanner.ts`'s `resolveGovernanceBrakeAction` has a `void_advanced` fallback that catches and voids a pick advanced during it.
+
+This is **pre-existing and not introduced by this lane**, and is recorded here as a tracked follow-up rather than fixed, because narrowing `enqueueDistributionWork` to be source-aware touches the distribution path beyond this lane's authorized scope. Broader compile-time exhaustiveness hardening for `GOVERNANCE_BRAKE_SOURCES` is tracked separately, and this lane's issue explicitly directs that it not be re-scoped here.
 
 ## Stop Condition
 
