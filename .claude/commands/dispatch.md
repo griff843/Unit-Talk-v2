@@ -37,6 +37,10 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 Before resolving targets or routing any issue, run the live governor and reconciliation checks. Abort on any hard fail or block; do not proceed to Phase 1.
 
+This five-command gate sequence is **canonical** in composition and order: `/dispatch-board` and `/loop-dispatch` run the same five gates, in this order, and a copy that drops or reorders a gate is stale — fix the copy rather than following it.
+
+Parity governs which gates run, not their flags. `/loop-dispatch` deliberately invokes `pnpm ops:substrate-guard --check-linear` because it dispatches a whole board across repeated cycles, where Linear/manifest drift accumulates between cycles; that flag adds the Linear conflict check described below. **Do not remove `--check-linear` from `/loop-dispatch` in the name of parity** — it is an intentional loop-only addition, not divergence.
+
 ```bash
 pnpm ops:substrate-guard
 pnpm ops:merge-risk
@@ -237,7 +241,6 @@ Every Claude lane (T1 after plan approval, T2, T3) implements via a background `
 
 ```typescript
 Agent({
-  run_in_background: true,
   model: "sonnet",
   description: `Claude lane: ${issue_id}`,
   prompt: `Implement ${issue_id} in the pre-created lane worktree at ${worktree_path}. This worktree already exists — cd into that exact path and work there; do not create a new worktree or touch the main checkout.
@@ -304,7 +307,6 @@ Claude lanes are no longer single-threaded. Both executors run their implementat
 
 ```typescript
 Agent({
-  run_in_background: true,
   model: touchesTierC ? "opus" : "sonnet",  // tier C paths → opus critique
   subagent_type: "codex-return-reviewer",
   description: `Lane return review: ${issue_id}`,
@@ -332,14 +334,7 @@ Return: APPROVE or REJECT with findings.`
    ```
 
 **Monitoring long-running shell commands:**
-When running `pnpm build`, `pnpm test`, or other slow Bash commands in background, use the `Monitor` tool to stream stdout in real time rather than waiting blind:
-```typescript
-// Launch long build in background
-Bash({ command: "pnpm build", run_in_background: true })
-// Then stream its output
-Monitor({ /* process reference */ })
-```
-Do not poll with sleep loops — Monitor receives each stdout line as a notification.
+Run slow commands (`pnpm build`, `pnpm test`, long verify runs) with the Bash tool's `run_in_background: true` — the command keeps running across turns and the session is re-invoked automatically when it exits; no polling needed. For external state the harness cannot track (CI on a merge SHA, a remote queue), use the `Monitor` tool with an until-loop, or `ScheduleWakeup` with a delay matched to how fast that state actually changes. Never poll with bare `sleep` loops — the harness blocks sleep-then-check chains.
 
 ### Merge order declaration
 

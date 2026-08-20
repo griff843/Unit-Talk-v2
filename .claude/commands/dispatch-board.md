@@ -39,20 +39,23 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 
 ## Phase 0: Live safety gates
 
-Before reading the board, run the same live governor and reconciliation sequence as `/dispatch` and `/loop-dispatch`. Abort on any hard fail or block.
+Before reading the board, run the same live governor and reconciliation sequence as `/dispatch` and `/loop-dispatch`. Abort on any hard fail or block. This sequence is canonical in `/dispatch` Phase 0 — keep this copy identical to it.
 
 ```bash
+pnpm ops:substrate-guard
 pnpm ops:merge-risk
 pnpm ops:execution-state
 pnpm ops:lane-maximizer
 pnpm ops:orchestration-reconcile --current --json
 ```
 
+`ops:substrate-guard` runs FIRST and is fail-closed — it refuses board dispatch when the lane-execution substrate is unsafe (leases, merge-lock, missing worktrees, board hard-fail). Exit code 1 ⇒ HALT. See `/dispatch` Phase 0 for the full description.
+
 Use `ops:execution-state` as the concurrency authority for active lanes by executor, available slots, stale heartbeats, singleton blockers, merge mutex state, proof readiness, and recommended actions.
 
 Use `ops:lane-maximizer` as the dispatch recommendation authority. Executor limits, singleton classes, and forbidden combinations come from `docs/governance/CONCURRENCY_CONFIG.json`; policy rationale lives in `docs/governance/LANE_CONCURRENCY_POLICY.md`. Do not copy numeric executor caps into this command.
 
-If `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
+If `ops:substrate-guard`, `ops:merge-risk`, `ops:execution-state`, or `ops:lane-maximizer` reports a hard fail, block, no safe slot for the candidate executor, or an unsafe forbidden combination:
 
 ```
 [dispatch-board] HALTED — live governor blocked: {top condition}. Resolve the block before reading the board.
@@ -141,7 +144,7 @@ Parallel dispatch guard:
 
 ## Phase 5: Monitor → verify → close
 
-**Both executors run implementation as background agents; the orchestrator is control-plane only for either.** Claude lanes dispatch via the `Agent({run_in_background: true, ...})` call defined in `/dispatch` Phase 4 — one call per lane, in the worktree `ops:lane-start` already created. The orchestrator session never implements a lane directly (no editing lane files, no running the lane's own `pnpm verify`/tests, no pushing lane commits) for either executor. Dispatch, wait for the automatic completion notification, then run the same monitor → verify → close cycle below regardless of which executor produced the PR.
+**Both executors run implementation as background agents; the orchestrator is control-plane only for either.** Claude lanes dispatch via the background `Agent` call defined in `/dispatch` Phase 4 (subagents run in the background natively and notify on completion) — one call per lane, in the worktree `ops:lane-start` already created. The orchestrator session never implements a lane directly (no editing lane files, no running the lane's own `pnpm verify`/tests, no pushing lane commits) for either executor. Dispatch, wait for the automatic completion notification, then run the same monitor → verify → close cycle below regardless of which executor produced the PR.
 
 **Pre-merge verification is not `ops:truth-check`.** `ops:truth-check` is the **done-gate**: it requires a merged/Done lane and the merge SHA, so it cannot pass before merge. `ops:lane-close` runs it *after* merge. Pre-merge, validate merge-readiness with verification + proof-check + merge-ready + R-level; never call `ops:truth-check` to "pass" a branch before merge.
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # .claude/hooks/bash-safety-guard.sh
-# PreToolUse hook: warns on destructive bash commands.
-# Exit 0 = allow silently. Exit 2 = non-blocking warning shown to Claude.
+# PreToolUse hook: hard-blocks destructive bash commands.
+# Exit 0 = allow silently. Exit 2 = BLOCKS the tool call (PreToolUse semantics —
+# any non-zero exit denies the call and surfaces stderr to Claude). This is a
+# deliberate fail-closed block, not a warning: retrying the same command hits
+# the same block. The sanctioned exits are named in the stderr message.
 
 input=$(cat)
 command=$(echo "$input" | python3 -c "
@@ -32,8 +35,11 @@ if echo "$command" | grep -qi 'DELETE\s+FROM'; then
 fi
 
 if [ -n "$matched" ]; then
-  echo "SAFETY WARNING: Destructive pattern detected — $matched" >&2
-  echo "Confirm this is intentional before proceeding. Hook: bash-safety-guard." >&2
+  echo "SAFETY BLOCK: Destructive pattern blocked — $matched" >&2
+  echo "This call was denied (fail-closed). If the operation is genuinely required:" >&2
+  echo "  - use the sanctioned script for it (e.g. ops:lane-clean for worktree removal, ops:merge-wrapper for branch ops), or" >&2
+  echo "  - ask the operator to run or explicitly approve the exact command." >&2
+  echo "Do not retry the same command verbatim. Hook: bash-safety-guard." >&2
   exit 2
 fi
 

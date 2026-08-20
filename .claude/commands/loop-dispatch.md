@@ -25,7 +25,7 @@ Run the live governor and reconciliation checks before dispatching any issue. Ab
 
 ### Gate 0 — Lane substrate
 
-`/dispatch` runs the substrate guard before it starts a lane; the loop must do the same before it starts a *board* of lanes. Run it first:
+The gate sequence below (Gates 0–4) is canonical in `/dispatch` Phase 0 — keep the same gates in the same order there and here. One intentional difference: this loop runs `ops:substrate-guard --check-linear` where `/dispatch` and `/dispatch-board` run it bare, because the loop dispatches across repeated cycles and must catch Linear/manifest drift that accumulates between them. Keep the flag. `/dispatch` runs the substrate guard before it starts a lane; the loop must do the same before it starts a *board* of lanes. Run it first:
 
 ```bash
 pnpm ops:substrate-guard --check-linear
@@ -221,14 +221,18 @@ After `cycle_count` reaches `max_cycles`:
 ```
 [loop-dispatch] Cycle limit reached ({max_cycles}). Re-invoke /loop-dispatch to continue.
 ```
-Exit the loop and proceed to Phase 2.
+Exit the loop and proceed to Phase 2. If lanes are still executing in the background at the cycle limit, do not abandon them — remain available for their completion notifications and run the monitor → verify → close cycle (`/dispatch-board` Phase 5) for each before emitting the Phase 2 report. The cycle cap limits *new dispatch*, never the harvest obligation for work already in flight.
 
-### Inter-cycle pause
+### Inter-cycle pacing
 
-If neither exit condition nor circuit breaker has fired: wait 270 seconds before the next cycle. This keeps loop actions within the Claude cache window and prevents runaway dispatch. Log the pause:
+There is no fixed inter-cycle sleep. Pacing is event-driven:
+
+- If the previous cycle left lanes executing in the background, their completion notifications arrive automatically — act on each as it lands (harvest, review, merge, close) rather than polling or waiting a fixed interval.
+- If the loop is waiting on external state the harness cannot track (CI on a merge SHA, a Codex cloud run), use `ScheduleWakeup` with a delay matched to how fast that state actually changes, or a background `Monitor` until-loop. Never pause with bare `sleep` — the harness blocks sleep-then-check chains.
+- Start the next dispatch cycle as soon as there is actionable work (a free executor slot plus a dispatchable candidate). Do not start a cycle merely because time passed — cycles without actionable work only burn gate checks.
 
 ```
-[loop-dispatch] Cycle {cycle_count} complete. Pausing 270s before next cycle.
+[loop-dispatch] Cycle {cycle_count} complete. Waiting on: {lane completion notifications | ScheduleWakeup for {external state} | next actionable candidate}.
 ```
 
 ---
@@ -355,5 +359,5 @@ When invoked as `/loop-dispatch --dry-run`:
 - **Reconciliation gates bookend each cycle.** Start and end every cycle with `ops:orchestration-reconcile --current --json`; surface one repair command on drift.
 - **CONCURRENCY_CONFIG.json owns lane limits.** Do not duplicate numeric executor caps in this command prose.
 - **Executor slot caps pause, they do not abort.** The loop waits for a lane to close; it does not exit.
-- **270-second inter-cycle pause is fixed.** Do not reduce it to speed up throughput — it exists to stay within the cache window and to allow manual intervention between cycles.
+- **Pacing is event-driven, never sleep-based.** Act on background-lane completion notifications as they arrive; use `ScheduleWakeup` or a `Monitor` until-loop for external state the harness cannot track. No fixed sleeps between cycles, and no new cycle without actionable work (free slot + dispatchable candidate).
 - **This skill owns the loop control plane only.** All board reads, routing, lane lifecycle, and merge operations are delegated to `/dispatch-board`, `/dispatch`, and `/three-brain`. Never re-implement them here.
