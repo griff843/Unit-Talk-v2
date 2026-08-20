@@ -66,7 +66,28 @@
         "exit": 0,
         "decision": "no_close"
       }
-    ]
+    ],
+    "gate_commands": {
+      "pnpm type-check": "clean",
+      "pnpm test": {
+        "roots": 97,
+        "tests": 4855,
+        "pass": 4855,
+        "fail": 0,
+        "skipped": 0,
+        "exit": 0
+      },
+      "scripts/ci/r-level-check.ts": {
+        "verdict": "PASS",
+        "changed_files": 8,
+        "rules_matched": "none"
+      },
+      "pnpm verify": {
+        "static_stages": "all pass",
+        "exit": 1,
+        "attributable_to": "ci:assert-staging refused the credential-containment sentinel host=127.0.0.1; writable DB verification requires the approved staging project. The containment guard working, not a lane failure."
+      }
+    }
   },
   "reconcile_baseline": {
     "command": "pnpm ops:orchestration-reconcile --current --json",

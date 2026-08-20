@@ -1,5 +1,7 @@
 # UTV2-1724 — diff summary
 
+MERGE_SHA: N/A
+
 Two files, both under `.github/workflows/`. No runtime code, schema, migration, or dependency change.
 
 ## `.github/workflows/linear-auto-close.test.sh`

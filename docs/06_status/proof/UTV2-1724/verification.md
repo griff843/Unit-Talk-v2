@@ -24,10 +24,41 @@ ASSERTIONS:
 - [x] Harness: **47 passed, 0 failed** — all 28 pre-existing cases still green.
 - [x] `bash -n` clean on the test file; the workflow YAML parses.
 - [x] No runtime code, schema, migration, or dependency change. Two `.github/workflows/` files only.
+- [x] `pnpm type-check` clean.
+- [x] `pnpm test` — the full suite across all 97 node:test roots: **4855 tests, 4855 pass, 0 fail, 0 skipped**.
+- [x] `scripts/ci/r-level-check.ts` evaluated: verdict PASS, 8 changed files, no R-level artifacts required for this diff.
+- [x] `pnpm verify` runs green through every static stage and is refused only at `test:db`, by design, under credential containment. `ci:assert-staging` correctly refuses the containment sentinel `host=127.0.0.1` because writable DB verification requires the staging project. The staging result for this lane must therefore come from CI, exactly as for any governance lane on this workstation.
 
 ## Runtime Verification
 
 EVIDENCE:
+
+### 0. Gate commands executed, verbatim
+
+```text
+$ pnpm type-check
+  -> pnpm exec tsc -b tsconfig.json
+  -> clean, no output
+
+$ pnpm test
+  -> 97 node:test roots
+  -> # tests 4855 / # pass 4855 / # fail 0 / # skipped 0
+  -> exit 0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1724
+  Verdict: PASS
+  Changed files: 8
+  Rules matched: (none) — no R-level artifacts required for this diff
+
+$ pnpm verify
+  -> [lint-migrations] 6 migration file(s) checked — no findings
+  -> test:db -> ci:assert-staging
+     [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+     [assert-staging] REFUSED: target identity could not be resolved from its URL
+  -> exit 1, attributable solely to the containment refusal
+```
+
+The `pnpm verify` non-zero exit is the containment guard working, not a lane failure: every static stage passes and `ci:assert-staging` refuses to let a writable DB proof run against anything but the approved staging project. The CI-side staging result is the authority.
 
 ### 1. The defect, reproduced against the pre-fix grammar
 
