@@ -1,6 +1,6 @@
 # PROOF: UTV2-1721 — diff summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: a5d4ac5159da2944351fc3f3d16d840d3c31b1d5
 
 ## Summary
 
