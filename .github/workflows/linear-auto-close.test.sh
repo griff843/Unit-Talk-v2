@@ -198,10 +198,12 @@ has_lane_closeout_signature() {
   # the reverted subject verbatim, and since git 2.36 a revert-of-a-revert is
   # subjected "Reapply \"...\"". Matched case-insensitively and across the
   # conventional-commit variants, because every one of them reddened main.
-  case "$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')" in
-    'revert '*|'revert"'*|'revert:'*|'revert!'*|'reverts'*|'reapply '*|'reapply"'*|'reapply:'*)
-      return 1 ;;
-  esac
+  # Conventional-commit scopes too: revert(lanes): / reapply(ci): and friends.
+  # Enumerating literal prefixes missed those twice; a regex over the leading
+  # token covers the whole family.
+  if echo "$subject" | grep -qiE '^(revert|reapply)(s|ed|ing|ies)?(\([^)]*\))?[[:space:]!:\"]' 2>/dev/null; then
+    return 1
+  fi
 
   # Signature 1: the conventional-commit scope the closeout path always uses,
   # combined with a close verb in any form.
@@ -216,8 +218,17 @@ has_lane_closeout_signature() {
   # phrase is an unanchored substring, so a subject merely QUOTING the template
   # — e.g. a commit that changes the template — reddened main. A real closeout,
   # however its scope or verb drifts, always names the issue it closes.
+  # It must NOT additionally require an issue id. An earlier revision did, to
+  # stop a subject merely quoting the template from firing -- but that made the
+  # single most dangerous drift invisible: a template that stops emitting the id
+  # at all, leaving only the trailer phrase, strands every lane at once, and
+  # requiring an id assumes exactly what that drift breaks.
+  #
+  # The quotation case is excluded by looking at quoting, which is what actually
+  # separates the two: a commit that talks ABOUT the phrase puts it in quotes;
+  # a commit that IS a closeout does not.
   if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null \
-     && echo "$subject" | grep -qE 'UTV2-[0-9]+' 2>/dev/null; then
+     && ! echo "$subject" | grep -qE '["'"'"'][^"'"'"']*lane closed, sync file removed' 2>/dev/null; then
     return 0
   fi
 
@@ -425,6 +436,46 @@ sha_is_ancestor_of_push() {
   case "$status" in
     ahead|identical) return 0 ;;
     *) return 1 ;;
+  esac
+}
+
+# Should the tripwire fire for this commit?
+#
+# UTV2-1724 hatch 8. The workflow previously reached the tripwire only when the
+# extracted id set was EMPTY. That set is built from the WHOLE message, while
+# the signature is read from the SUBJECT, so an unrelated id anywhere in the
+# body made the tripwire unreachable:
+#
+#   chore(lanes): closing <A> — lane closed, sync file removed
+#
+#   Closes <B>
+#
+# extraction returns [<B>], the gate closes <B>, and <A>'s drifted closeout is
+# stranded in silence — drift undetected AND the wrong issue closed. It needs no
+# opt-out at all, so it is strictly more reachable than hatch 7.
+#
+# The right question was never "did we extract anything" but "did we extract the
+# id this subject says it is closing". A commit carrying a closeout signature
+# must yield ITS OWN subject id; anything else is drift, whatever else the body
+# happens to mention.
+should_fire_closeout_tripwire() {
+  local msg="$1"
+  local ids="$2"
+
+  has_lane_closeout_signature "$msg" || return 1
+  ! has_close_suppression_marker "$msg" || return 1
+
+  local subject subject_id
+  subject=$(echo "$msg" | head -n 1)
+  subject_id=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  # Drifted subject: no id of its own to look for. Fire.
+  [ -n "$subject_id" ] || return 0
+
+  # Well-formed subject: fire unless its own id actually got extracted.
+  case " $ids " in
+    *" $subject_id "*) return 1 ;;
+    *) return 0 ;;
   esac
 }
 
@@ -870,6 +921,52 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     echo "  FAIL  an explicit No-close naming the found ID still silences the tripwire"
     fail=$((fail + 1))
   fi
+
+  # Hatch 8: the tripwire must not be gated behind an empty id set. `ids` is
+  # whole-message while the signature is subject-scoped, so an unrelated id in
+  # the body used to make the tripwire unreachable AND close the wrong issue.
+  fire(){ local ids; ids=$(extract_linear_close_ids "$1"); should_fire_closeout_tripwire "$1" "$ids"; }
+
+  h8=$'chore(lanes): closing UTV2-1614 — lane closed, sync file removed\n\nCloses UTV2-9999'
+  if fire "$h8"; then
+    echo "  PASS  an unrelated id in the body cannot hide a drifted closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an unrelated id in the body cannot hide a drifted closeout"
+    fail=$((fail + 1))
+  fi
+
+  # The signature must NOT require an issue id in the subject. A template that
+  # stops emitting the id strands every lane at once; requiring an id assumes
+  # exactly what that drift breaks. An earlier revision made this case silent.
+  if fire 'chore(lanes): lane closed, sync file removed'; then
+    echo "  PASS  a closeout template that drops the issue id still fires"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  a closeout template that drops the issue id still fires"
+    fail=$((fail + 1))
+  fi
+
+  # A well-formed closeout that DID yield its own id must not fire.
+  if fire 'chore(lanes): close UTV2-1614 — lane closed, sync file removed'; then
+    echo "  FAIL  a well-formed closeout that yielded its own id does not fire"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  a well-formed closeout that yielded its own id does not fire"
+    pass=$((pass + 1))
+  fi
+
+  # Scoped conventional-commit revert forms are reverts too.
+  for rv in 'revert(lanes): chore(lanes): close UTV2-1614 — lane closed, sync file removed' \
+            'reapply(ci): chore(lanes): close UTV2-1614 — lane closed, sync file removed'; do
+    if fire "$rv"; then
+      echo "  FAIL  scoped revert/reapply form does not fire: ${rv:0:24}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  scoped revert/reapply form does not fire: ${rv:0:24}"
+      pass=$((pass + 1))
+    fi
+  done
 
   # Hatch 7: the opt-out must name the SUBJECT's closeout ID. An unrelated pair
   # in the body previously silenced a drifted subject, because the signature and

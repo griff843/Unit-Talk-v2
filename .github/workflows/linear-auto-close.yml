@@ -122,6 +122,18 @@ jobs:
 
           ids=$(extract_linear_close_ids "$COMMIT_MSG")
           subject=$(echo "$COMMIT_MSG" | head -n 1)
+
+          # UTV2-1724 hatch 8: the tripwire must be evaluated on its own terms,
+          # not gated behind an empty id set. `ids` is built from the whole
+          # message while the closeout signature is read from the subject, so a
+          # commit whose body mentions any unrelated issue used to make the
+          # tripwire unreachable — closing that unrelated issue while the real
+          # closeout drifted away in silence.
+          if should_fire_closeout_tripwire "$COMMIT_MSG" "$ids"; then
+            echo "::error title=linear-auto-close::decision=no_close reason=closeout_signature_unmatched commit=\"$subject\" — this commit carries a lane-closeout signature but did not yield its own issue id, so that lane will NOT transition. The closeout commit template has almost certainly drifted away from extract_linear_close_ids(). Fix the grammar in .github/workflows/linear-auto-close.test.sh and add a case for the new shape; do not hand-edit the Linear record."
+            exit 1
+          fi
+
           if [ -z "$ids" ]; then
             # UTV2-1724 fail-closed tripwire.
             #
@@ -139,11 +151,6 @@ jobs:
             #
             # An explicit opt-out (No-close:, plan-only, partial-fix) is a
             # deliberate decision, not drift, and stays a notice.
-            if has_lane_closeout_signature "$COMMIT_MSG" \
-               && ! has_close_suppression_marker "$COMMIT_MSG"; then
-              echo "::error title=linear-auto-close::decision=no_close reason=closeout_signature_unmatched commit=\"$subject\" — this commit carries a lane-closeout signature but matched no close-intent form, so its Linear issue will NOT transition. The closeout commit template has almost certainly drifted away from extract_linear_close_ids(). Fix the grammar in .github/workflows/linear-auto-close.test.sh and add a case for the new shape; do not hand-edit the Linear record."
-              exit 1
-            fi
             echo "::notice title=linear-auto-close::decision=no_close reason=no_close_intent commit=\"$subject\""
             echo "ids=" >> "$GITHUB_OUTPUT"
           else
