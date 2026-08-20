@@ -23,7 +23,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-08-20T13:01:12.900Z",
-  "heartbeat_at": "2026-08-20T13:08:38.307Z",
+  "heartbeat_at": "2026-08-20T13:08:46.494Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1724-auto-close-intent-grammar.json",
