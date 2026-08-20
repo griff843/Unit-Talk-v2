@@ -116,9 +116,45 @@ This lane's own live assertions live in `apps/api/src/t1-proof-awaiting-approval
 
 The bundle carries no author-written `verifier.identity`: schema-v2 forbids it, and exact-head provenance comes from CI.
 
-### 6. Scope and authorization status
+### 6. Scope and authorization — the six-path request
 
-The lane changes 18 files, all runtime-compatible (`apps/api/src/**`) plus its own lane manifest, sync file and proof bundle. Six paths lie outside the `file_scope_lock` recorded in the manifest's first commit, which is the only version the file-scope guard trusts. **No `scope-override/v1` artifact exists for them yet.** The manifest records this truthfully and withdraws an earlier entry that asserted its own PM authorization; that entry was self-authored by an implementing agent and no such authorization had been granted.
+The lane changes 18 files, all runtime-compatible (`apps/api/src/**`) plus its own lane manifest, sync file and proof bundle. Six changed paths lie outside the `file_scope_lock` recorded in the manifest's first commit, which is the only version the file-scope guard trusts — later manifest edits are ignored by design, so a lane cannot widen its own scope.
+
+**No `scope-override/v1` artifact exists for these paths.** The final request is exactly:
+
+```
+apps/api/src/distribution-service.ts
+apps/api/src/distribution-service.test.ts
+apps/api/src/controllers/submit-pick-controller.ts
+apps/api/src/controllers/submit-pick-controller.test.ts
+apps/api/src/submission-service.test.ts
+apps/api/src/t1-proof-awaiting-approval.test.ts
+```
+
+Why each is required, and why none is discretionary:
+
+- `distribution-service.ts` — carries `GOVERNANCE_BRAKE_SOURCES`. `board-construction` must join it for the source-keyed fallback brake; this file was explicitly authorized in the correction brief.
+- `controllers/submit-pick-controller.ts` — follows necessarily. Once `board-construction` is a brake source, the controller's unconditional re-application of `awaiting_approval` becomes an FSM-forbidden `awaiting_approval -> awaiting_approval` transition that would reject an already-correctly-governed submission.
+- `submission-service.test.ts` — hosts the automated-boundary unit coverage, because it is named directly by the `test:apps-api-core` package script. Reachability is counted only from package scripts, workflows and non-test code imports, so a test importing another test does not run.
+- `t1-proof-awaiting-approval.test.ts` — hosts the live staging assertions, because it is already enumerated in `test:t1-proof:live` and already classified in `db-writer-classification.json`.
+- The two `.test.ts` companions of the source files change only assertions that encoded the defect.
+
+Reusing those two already-wired roots is what let this lane drop its earlier edits to `package.json` and `docs/05_operations/db-writer-classification.json` entirely — both are now byte-identical to `origin/main`. That removed the `Lane authority` failure at its cause rather than by widening `.lane/lanes/runtime.yml`, and removed the `Shadow Parity Check` refusal that guarded `package.json`.
+
+The manifest records this truthfully and withdraws an earlier entry that asserted its own PM authorization; that entry was self-authored by an implementing agent and no such authorization had been granted.
+
+### 7. Out-of-scope finding: transient `validated` for boundary-when-marked sources
+
+An exact-head review observed that a `system-pick-scanner`, `alert-agent` or `model-driven` submission omitting `metadata.systemGenerated` is admitted as human-ingress, so `processSubmission` persists it as `validated` before the controller's source-keyed brake moves it to `awaiting_approval`.
+
+Investigated rather than dismissed. The finding describes real behaviour, but it is **not introduced by this lane and is not a defect this lane created**:
+
+- `git diff origin/main` shows no change to any scanner path in this lane.
+- The real producer stamps the marker at `candidate-pick-scanner.ts:250`, so it is admitted to the boundary and born in `awaiting_approval` with no transient state.
+- `submit-pick-controller.ts` applies the brake **by source**, before any distribution enqueue — no outbox row and no run is created from the transient state.
+- `detectAutomatedDirectToValidatedWrite` documents the choice deliberately: flagging an unmarked `boundary-when-marked` source by source alone would turn a lawful in-flight state into a hard failure on the idempotent re-submission path, and would fail closed on ratified fixtures carrying no producer identity or market evidence.
+
+Residual exposure, stated plainly: an asynchronous reader polling for `status = validated` could observe the row inside that window. Broader compile-time exhaustiveness hardening for `GOVERNANCE_BRAKE_SOURCES` is tracked separately, and this lane's issue explicitly directs that it not be re-scoped here.
 
 ## Stop Condition
 

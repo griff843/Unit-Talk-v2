@@ -236,8 +236,8 @@
     },
     {
       "criterion": "Writable Postgres proof exercises the exact change through the real pipeline.",
-      "status": "BLOCKED_DEFERRED_TO_STAGING_CI",
-      "evidence": "The local target identity is unparseable; the required staging project xskgrzbteyqdufktjrjx must supply the authoritative exact-head receipt through staging-ci."
+      "status": "PASS",
+      "evidence": "Satisfied by the staging-ci receipt, not deferred. pnpm test:db ran against the approved staging project xskgrzbteyqdufktjrjx on this branch (CI run 32330316960, job 96309632615) and passed. The receipt was harvested into runtime_proof.queries (7 entries, real table names) and runtime_proof.row_counts (8 entries) by scripts/ops/ci-db-proof-harvest.ts, which re-verifies the tamper-evident ci-db-proof-receipt/v2 artifact through verifyHarvestedReceipt rather than trusting its declared fields. The earlier BLOCKED_DEFERRED_TO_STAGING_CI status described the pre-receipt state and no longer holds."
     }
   ],
   "known_limitations": [
@@ -245,9 +245,10 @@
     "Proof Coverage Guard requires a live-DB proof test path, but no accepted T1 proof path is included in this lane's allowed file scope; scope must be expanded before the required proof case can be added.",
     "Six changed paths lie outside the file_scope_lock recorded in the manifest's first commit, which is the only version the file-scope guard trusts. A head-pinned scope-override/v1 comment from an authorized reviewer is required before merge and has not been posted. The earlier limitation recorded here -- that Return Review Packet required package-script wiring for a new test file while package.json sat outside the lane's allowed scope -- no longer applies: the coverage was moved onto already-wired roots and the package.json edit was reverted, so ops:automation-coverage-check now reports verdict=PASS with new=0.",
     "Readiness detection is exposed as a shared helper and enforced during idempotent submission lookup; deployment of a broader operator query is outside this issue's allowed scope.",
-    "Implementation readiness is not production readiness."
+    "Implementation readiness is not production readiness.",
+    "Transient validated state for boundary-when-marked sources (pre-existing, out of scope, NOT introduced by this lane). An exact-head review observed that a system-pick-scanner / alert-agent / model-driven submission omitting metadata.systemGenerated is admitted as human-ingress, so processSubmission persists it as validated before the controller's source-keyed Phase 7A brake moves it to awaiting_approval. Verified: this behaviour is unchanged by this lane (git diff origin/main shows no scanner-path change); the real producer stamps the marker at candidate-pick-scanner.ts:250 and is therefore born in awaiting_approval; and the controller applies the brake by source before any distribution enqueue, so no outbox row or run is created from the transient state. detectAutomatedDirectToValidatedWrite documents the choice deliberately: flagging an unmarked boundary-when-marked source by source alone would turn a lawful in-flight state into a hard failure on the idempotent re-submission path, and would fail closed on ratified fixtures that carry no producer identity or market evidence. The residual exposure is that an asynchronous reader polling for status=validated could observe the row inside that window. Broader compile-time exhaustiveness hardening for GOVERNANCE_BRAKE_SOURCES is tracked separately and this lane's issue explicitly directs that it not be re-scoped here."
   ],
-  "verdict": "BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED",
+  "verdict": "READY_FOR_REVIEW_PENDING_PM_SCOPE_OVERRIDE",
   "scope_authorization": {
     "trusted_first_commit_scope_paths": 7,
     "paths_requiring_override": [
@@ -261,5 +262,6 @@
     "override_artifact_present": false,
     "detail": "The file-scope guard trusts only the file_scope_lock recorded in the manifest's first commit. A head-pinned scope-override/v1 comment from an authorized reviewer is required and has not been posted. An earlier manifest entry asserting its own PM authorization was self-authored by an implementing agent and is withdrawn."
   },
-  "proof_profile": "app-runtime"
+  "proof_profile": "app-runtime",
+  "verdict_detail": "All seven acceptance criteria pass, including the writable-Postgres proof. The lane is not blocked on any work it can perform itself. Three checks remain red and none is within executor control: File scope lock awaits a head-pinned scope-override/v1 comment from an authorized reviewer for six runtime-compatible paths; Shadow Parity Check fails on pre-existing infrastructure debt (no mechanically read-only production credential is provisioned); Merge Gate awaits t1-approved and pm-verdict/v1. The earlier BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED verdict described the state before the staging receipt existed and before the lane dropped its package.json and db-writer-classification.json edits, and no longer holds."
 }
