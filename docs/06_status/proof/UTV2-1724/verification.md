@@ -8,7 +8,11 @@ Substantive anchor: `4444932205f34aa76058e36072f3aa171057d488`
 
 ## Summary
 
-The auto-close grammar recognized two close-intent forms. The sanctioned closeout path emits a third that neither matched, so every closeout commit it produced resolved to no issue IDs and the Linear transition silently never fired. The grammar is extended to the shape production actually emits, and — the more important half — a no-match on a commit carrying a lane-closeout signature now **fails the workflow** instead of logging a notice.
+Two independent fail-opens on the same path, either of which alone strands a merged lane.
+
+**First**, the grammar recognized two close-intent forms and the sanctioned closeout path emits a third, so every closeout commit resolved to no issue IDs.
+
+**Second — and this one survives the grammar fix** — the truth-gated completion gate compared the manifest's `commit_sha` against `github.sha`. On the closeout path `github.sha` is the closeout commit, created *after* the merge, so the comparison could never match. Fixing extraction alone converts a silent `no_close_intent` ghost into a silent `completion withheld` ghost: same stranded lane, different reason. Both are closed here, and a no-match on a commit carrying a lane-closeout signature now **fails the workflow** instead of logging a notice.
 
 ## Verification
 
@@ -21,7 +25,13 @@ ASSERTIONS:
 - [x] The existing `No-close:` / `plan-only` / `partial-fix` opt-out still suppresses the new form.
 - [x] The fail-closed control is validated **by execution on the condition it names**, not by presence: a drifted closeout template exits 1 with `reason=closeout_signature_unmatched`.
 - [x] The control does not fire on any legitimate case: sanctioned closeout, deliberate opt-out, and an ordinary commit all exit 0.
-- [x] Harness: **47 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] Harness: **60 passed, 0 failed** — all 28 pre-existing cases still green.
+- [x] The completion-gate defect reproduced against the **real merged `UTV2-1721` manifest** from `main`, not a fixture: a lane with `status: done`, `verdict: pass`, runner `ops:lane-close` and its receipt bound to the merge was refused, because `3ca047fa != 44068585`.
+- [x] `resolve_authoritative_merge_sha()` introduces no new contract: it reads `commit_sha` and the truth-check receipt's `merge_sha` — the two fields the gate already cross-checks — and resolves nothing when they disagree rather than picking a side.
+- [x] Non-closeout commits still resolve to the pushed SHA; behaviour on the ordinary merge path is unchanged.
+- [x] Because the resolver reads `commit_sha`, the SHA comparison is true by construction for a closeout. The guarantee is carried instead by an ancestry check — the claimed merge SHA must be reachable from the pushed commit — which fails closed on any API error or missing token.
+- [x] The completion decision was moved out of the workflow YAML into `evaluate_completion_block()` in the shared file, so the harness drives the **real** decision path rather than a paraphrase of it.
+- [x] End-to-end on the real manifest: the closeout commit extracts `UTV2-1721`, resolves to `3ca047fa`, and the gate returns no block — with the ancestry check running live against the API, not stubbed.
 - [x] `bash -n` clean on the test file; the workflow YAML parses.
 - [x] No runtime code, schema, migration, or dependency change. Two `.github/workflows/` files only.
 - [x] `pnpm type-check` clean.
@@ -98,14 +108,71 @@ ordinary commit                exit=0  ::notice decision=no_close
 
 The drift row is the control failing on the condition it names. `has_lane_closeout_signature()` is deliberately broader than the grammar that consumes it, so a future template change keeps matching the signature while the grammar stops — surfacing on the first drifted commit rather than accumulating silently.
 
+### 3a. The completion-gate fail-open, reproduced on real data
+
+The grammar fix makes the workflow *extract* the ID. The gate then decides whether to complete. It compared the manifest against the pushed commit:
+
+```text
+post-merge-lane-close.yml pushes, AFTER the merge:
+
+  3ca047fa  UTV2-1721: port bounded harness corrections (#1432)   <- the merge
+  44068585  chore(lanes): close UTV2-1721 — lane closed, ...      <- github.sha
+
+real merged manifest, docs/06_status/lanes/UTV2-1721.json on main:
+  status                     done
+  commit_sha                 3ca047fa8fcae2a8768d2ba63cace8019a5a76ca
+  truth_check_history[-1]    verdict pass · runner ops:lane-close
+                             merge_sha 3ca047fa8fcae2a8768d2ba63cace8019a5a76ca
+
+gate: [ "$m_sha" != "$MERGE_SHA" ]  ->  3ca047fa != 44068585  ->  ALWAYS BLOCKS
+      "manifest commit_sha X is not this merge SHA Y"
+```
+
+Nothing is wrong with that lane. It is the healthiest possible closeout, and it was refused.
+
+### 3b. After the fix, on the same real manifest
+
+Run against `git show origin/main:docs/06_status/lanes/UTV2-1721.json`, with the ancestry check live rather than stubbed:
+
+```text
+ids      : UTV2-1721
+resolved : 3ca047fa8fcae2a8768d2ba63cace8019a5a76ca
+gate     : COMPLETE (no block)
+```
+
+Resolution returns the implementation merge, not the closeout commit.
+
+### 3c. The decision path, proved case by case
+
+The gate now lives in `evaluate_completion_block()` in the shared file, so these drive the real code the workflow runs, over realistic manifests and closeout ancestry:
+
+```text
+pre-fix: healthy manifest vs pushed closeout SHA can never match      PASS
+sanctioned closeout on a healthy lane COMPLETES                       PASS
+resolver returns the implementation merge SHA, not the closeout SHA   PASS
+non-closeout commit still resolves to the pushed SHA (unchanged)      PASS
+closeout with no commit_sha fails closed                              PASS
+closeout whose receipt is bound to a different SHA fails closed       PASS
+closeout on a non-terminal lane is refused                            PASS
+closeout with a failing truth-check is refused                        PASS
+closeout with a non-canonical runner is refused                       PASS
+missing manifest is refused                                           PASS
+merge SHA that never landed on main is refused (ancestry fires)       PASS
+completes again once ancestry holds — ancestry the only variable      PASS
+end to end: same commit extracts an ID and passes the gate            PASS
+```
+
+The last two are a matched pair: identical manifest, identical commit, ancestry the only changed variable. That is the ancestry gate proved by making it fail on the condition it names, not by its presence.
+
 ### 4. Harness after the change
 
 ```text
 $ bash .github/workflows/linear-auto-close.test.sh
-  === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===   12 cases, all PASS
-  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===           7 cases, all PASS
+  === UTV2-1724: SANCTIONED CLOSEOUT COMMITS ===     12 cases, all PASS
+  === UTV2-1724: FAIL-CLOSED TRIPWIRE ===             7 cases, all PASS
+  === UTV2-1724: FULL CLOSEOUT DECISION PATH ===     13 cases, all PASS
 
-  Results: 47 passed, 0 failed
+  Results: 60 passed, 0 failed
 ```
 
 ### 5. Reconciliation baseline

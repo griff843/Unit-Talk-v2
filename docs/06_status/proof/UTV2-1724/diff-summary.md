@@ -20,6 +20,15 @@ Two files, both under `.github/workflows/`. No runtime code, schema, migration, 
 
 The extraction step's empty-`ids` branch previously emitted `::notice decision=no_close reason=no_close_intent` and exited 0 for *every* commit. It now checks the closeout signature first: a commit that carries one, without a suppression marker, emits `::error reason=closeout_signature_unmatched` and **exits 1**. Ordinary commits and deliberate opt-outs are unchanged.
 
+## `.github/workflows/linear-auto-close.yml` — the completion-gate P1
+
+`MERGE_SHA` is `github.sha`, the pushed commit. On the sanctioned closeout path that is the closeout commit, created *after* the merge, while the manifest's `commit_sha` is bound to the merge. The gate's `[ "$m_sha" != "$MERGE_SHA" ]` therefore compared two SHAs that can never be equal, refusing every sanctioned closeout with *"manifest commit_sha X is not this merge SHA Y"* — a second fail-open that survives the grammar fix.
+
+- `resolve_authoritative_merge_sha()` resolves the merge SHA the closeout already recorded, reading only fields the gate already cross-checks. Non-closeout commits still resolve to the pushed SHA.
+- `sha_is_ancestor_of_push()` restores the guarantee the broken comparison was reaching for: the claimed merge must actually be reachable from the pushed commit. Fails closed on any API error.
+- `evaluate_completion_block()` moves the decision out of YAML into the shared file, so the harness drives the real path.
+- The Linear comment now cites and links the implementation merge, keeping the closeout commit as a secondary reference; previously it recorded the bookkeeping commit as the change that shipped.
+
 ## Behavioural change
 
-Commits from the sanctioned closeout path now transition their Linear issue instead of silently resolving to nothing. A future drift in the closeout template fails the workflow on its first commit instead of stranding lanes. No other commit shape changes behaviour.
+Commits from the sanctioned closeout path now transition their Linear issue instead of silently resolving to nothing. A future drift in the closeout template fails the workflow on its first commit instead of stranding lanes. Completion is decided against the implementation merge SHA rather than the closeout commit, so a healthy closeout is no longer refused. No other commit shape changes behaviour.
