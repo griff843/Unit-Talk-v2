@@ -59,7 +59,7 @@
   "static_proof": {
     "harness": {
       "command": "bash .github/workflows/linear-auto-close.test.sh",
-      "pass": 70,
+      "pass": 75,
       "fail": 0,
       "pre_existing_cases_still_green": 28,
       "sections_note": "Per-section counts are not recorded: they shift when a case lands in one section rather than another, and two earlier revisions recorded a breakdown that did not match the suite. Run the harness for the current split."
@@ -148,7 +148,7 @@
     {
       "criterion": "Grammar fixed, with matching cases in the harness",
       "status": "PASS",
-      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 70 passed / 0 failed, with all 28 pre-existing cases still green."
+      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 75 passed / 0 failed, with all 28 pre-existing cases still green."
     },
     {
       "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",
@@ -173,7 +173,7 @@
   ],
   "known_limitations": [
     "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1, the fail-closed requirement, and the completion-gate SHA-comparison P1. The replay is a post-merge acceptance phase: this issue must not be marked Done until the sanctioned replay produces three-way GitHub/manifest/Linear agreement and ORCH-MERGED-PR-LINEAR-DONE returns 0.",
-    "Six escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed: a prose-grep opt-out test any commit mentioning plan-only/partial-fix could silence; a whole-message signature scan that fired on commits merely describing a closeout template; a revert of a closeout that reddened main; a scope asymmetry where extraction matched any column-0 line while the signature read only the subject; a third unaligned scope in the raw-form scan; and prose in a body silently voiding a valid closeout because extraction suppresses on prose while the tripwire read any form match as deliberate. Five of the six are the same class - two code paths disagreeing about which text they read or what counts as deliberate - which is why cases now assert all three form scopes agree and that only an explicit named No-close silences the tripwire.",
+    "Seven escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed. Six are one class - two code paths disagreeing about what text they read or which issue 'deliberate' applies to: a prose-grep opt-out any commit mentioning plan-only/partial-fix could silence; a whole-message signature that fired on commits merely describing a closeout; an incomplete revert guard that reddened main on Reapply/revert!/Reverts forms and on a subject merely quoting the template; a scope asymmetry where extraction matched any column-0 line while the signature read only the subject; a third unaligned scope in the raw-form scan; prose in a body silently voiding a valid closeout; and an opt-out naming an unrelated issue silencing a drifted closeout. Two were reproduced on this lane's own squash merge. Cases now assert all three form scopes agree and that only a No-close naming the subject's own closeout ID can silence the tripwire.",
     "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
     "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
   ],

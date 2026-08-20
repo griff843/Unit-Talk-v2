@@ -194,8 +194,13 @@ has_lane_closeout_signature() {
   # removed\"" carries both signatures while extracting nothing — the tripwire
   # would fire and redden main on a legitimate, correct revert. Undoing a
   # closeout is a deliberate act, not template drift.
-  case "$subject" in
-    'Revert "'*|'Revert: '*|'revert: '*) return 1 ;;
+  # Reverts and reapplies are deliberate acts, not template drift. git writes
+  # the reverted subject verbatim, and since git 2.36 a revert-of-a-revert is
+  # subjected "Reapply \"...\"". Matched case-insensitively and across the
+  # conventional-commit variants, because every one of them reddened main.
+  case "$(printf '%s' "$subject" | tr '[:upper:]' '[:lower:]')" in
+    'revert '*|'revert"'*|'revert:'*|'revert!'*|'reverts'*|'reapply '*|'reapply"'*|'reapply:'*)
+      return 1 ;;
   esac
 
   # Signature 1: the conventional-commit scope the closeout path always uses,
@@ -206,7 +211,13 @@ has_lane_closeout_signature() {
 
   # Signature 2: the literal trailer phrase emitted by
   # post-merge-lane-close.yml, for a subject whose scope or verb has drifted.
-  if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null; then
+  #
+  # UTV2-1724: additionally requires an issue id in the subject. Without it the
+  # phrase is an unanchored substring, so a subject merely QUOTING the template
+  # — e.g. a commit that changes the template — reddened main. A real closeout,
+  # however its scope or verb drifts, always names the issue it closes.
+  if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null \
+     && echo "$subject" | grep -qE 'UTV2-[0-9]+' 2>/dev/null; then
     return 0
   fi
 
@@ -288,20 +299,44 @@ has_close_suppression_marker() {
 
   [ -z "$msg" ] && return 1
 
+  # When the SUBJECT carries a closeout signature, the only opt-out that counts
+  # is one naming the ID in the subject's own closeout form.
+  #
+  # UTV2-1724, hatch 7: this previously accepted a No-close: naming ANY id the
+  # forms found anywhere, and the forms include inline verbs read from the body.
+  # So a drifted subject plus an unrelated body pair silenced the tripwire:
+  #
+  #   chore(lanes): closing UTV2-1614 — lane closed, sync file removed
+  #
+  #   Closes UTV2-9999
+  #   No-close: UTV2-9999
+  #
+  # signature came from the subject, the opt-out came from the body, and the two
+  # paths disagreed about WHICH issue "deliberate" applied to. Same class as
+  # hatches 5 and 6, one level further in.
+  local subject subject_id
+  subject=$(echo "$msg" | head -n 1)
+  subject_id=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  if has_lane_closeout_signature "$msg"; then
+    # A drifted subject yields no subject_id. Nothing in the body can make that
+    # deliberate — drift is drift.
+    [ -n "$subject_id" ] || return 1
+    echo "$msg" | grep -qE "No-close:[[:space:]]*${subject_id}([^0-9]|$)" 2>/dev/null && return 0
+    return 1
+  fi
+
+  # No closeout signature: fall back to "did the forms match and get filtered".
   local raw
   raw=$(extract_close_ids_ignoring_suppression "$msg")
   [ -n "$raw" ] || return 1
-
-  # An explicit No-close: naming one of the IDs the forms found.
-  local nc
+  local nc id ncid
   nc=$(echo "$msg" | grep -oE 'No-close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
-  local id ncid
   for id in $raw; do
     for ncid in $nc; do
       [ "$id" = "$ncid" ] && return 0
     done
   done
-
   return 1
 }
 
@@ -834,6 +869,43 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   else
     echo "  FAIL  an explicit No-close naming the found ID still silences the tripwire"
     fail=$((fail + 1))
+  fi
+
+  # Hatch 7: the opt-out must name the SUBJECT's closeout ID. An unrelated pair
+  # in the body previously silenced a drifted subject, because the signature and
+  # the opt-out disagreed about which issue "deliberate" applied to.
+  unrelated_optout=$'chore(lanes): closing UTV2-1614 — lane closed, sync file removed\n\nCloses UTV2-9999\nNo-close: UTV2-9999'
+  if has_lane_closeout_signature "$unrelated_optout" && ! has_close_suppression_marker "$unrelated_optout"; then
+    echo "  PASS  an opt-out for an unrelated ID cannot silence a drifted closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an opt-out for an unrelated ID cannot silence a drifted closeout"
+    fail=$((fail + 1))
+  fi
+
+  # git writes "Reapply \"...\"" when reverting a revert (>= 2.36); without this
+  # a correct re-application of a closeout reddened main.
+  for rv in 'Reapply "chore(lanes): close UTV2-1614 — lane closed, sync file removed"' \
+            'revert!: chore(lanes): close UTV2-1614 — lane closed, sync file removed' \
+            'Reverts: chore(lanes): close UTV2-1614 — lane closed, sync file removed'; do
+    if has_lane_closeout_signature "$rv"; then
+      echo "  FAIL  revert/reapply form carries no signature: ${rv:0:32}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  revert/reapply form carries no signature: ${rv:0:32}"
+      pass=$((pass + 1))
+    fi
+  done
+
+  # Signature 2 is an unanchored phrase match, so it also requires an issue id
+  # in the subject — otherwise a commit merely QUOTING the template reddens main.
+  quoting_msg='fix(ci): stop emitting "lane closed, sync file removed"'
+  if has_lane_closeout_signature "$quoting_msg"; then
+    echo "  FAIL  a subject merely quoting the template carries no signature"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  a subject merely quoting the template carries no signature"
+    pass=$((pass + 1))
   fi
 
   # A revert is a deliberate undo, not template drift. git revert prefixes the
