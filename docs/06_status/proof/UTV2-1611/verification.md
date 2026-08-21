@@ -1,6 +1,6 @@
 # PROOF: UTV2-1611
 
-MERGE_SHA: 5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c
+MERGE_SHA: a84506a326d80589b4dbbdbc30bc9291998e35a0
 
 Lane: board pick writer must not bypass the governance brake into `validated`.
 Tier: T1 · lane_type: runtime · executor: codex-cli

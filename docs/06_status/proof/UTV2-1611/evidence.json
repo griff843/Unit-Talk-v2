@@ -7,14 +7,16 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-20T04:10:00Z",
   "sha_binding": {
-    "verified_source_sha": "5bf6ccb4c59fa24054b6b9f9412d3586cff2c26c",
+    "verified_source_sha": "a84506a326d80589b4dbbdbc30bc9291998e35a0",
     "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation head because that refresh imported unrelated main content (the merged UTV2-1721 harness lane), so only proof paths change after this anchor. The implementation itself is unchanged: the substantive work was complete at 0a1488cb and every commit since has been proof-only or a main refresh. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-21T14:37:03.920Z"
   },
   "scope": {
     "runtime_change": true,
