@@ -76,16 +76,25 @@ export function resetDistributionTargetValidationStats(): void {
  * `submit-pick-controller` (primary enforcement) and used to reason about
  * defense-in-depth guards in `run-audit-service` and `enqueueDistributionWork`.
  *
- * NOTE: `board-construction` is intentionally NOT in this set. The governed
- * board path is already operator-triggered — it is not an autonomous producer
- * and must retain its existing queueing behavior. Phase 7A repo-truth
- * correction (PM, 2026-04-10) explicitly excludes board-construction from
- * the non-human brake bucket.
+ * UTV2-1611: `board-construction` is now IN this set. The earlier exclusion
+ * ("operator-triggered") did not match repo truth — `board-pick-writer` is a
+ * scheduled, autonomous producer, and scheduling flags only start it; they
+ * never authorize a release. Leaving the source out meant the only thing
+ * standing between a board production and `validated` was whether the producer
+ * remembered to stamp `metadata.systemGenerated`, so a single missing marker
+ * released an ungoverned pick. Source membership is the fallback brake that
+ * makes governance independent of producer discipline: even a submission that
+ * never reaches the automated write boundary cannot auto-enqueue.
+ *
+ * `automated-write-boundary.ts` asserts at module load that every source it
+ * classifies as automated is a member of this set, so the two mechanisms
+ * cannot silently drift apart.
  */
 export const GOVERNANCE_BRAKE_SOURCES: ReadonlySet<PickSource> = new Set<PickSource>([
   'system-pick-scanner',
   'alert-agent',
   'model-driven',
+  'board-construction',
 ]);
 
 export function isGovernanceBrakeSource(source: PickSource): boolean {
