@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1667",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1667-deployment-truth-phase1",
+  "branch": "codex/utv2-1667-deployment-truth-phase1",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/deploy.yml",
+    ".ops/sync/UTV2-1667.yml",
+    "docs/06_status/proof/UTV2-1667/verification.md",
+    "scripts/ops/readiness-refresh.test.ts",
+    "scripts/ops/readiness-refresh.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1667/evidence.json",
+    "docs/06_status/proof/UTV2-1667/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-21T14:39:58.517Z",
+  "heartbeat_at": "2026-08-21T14:39:58.517Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1667-deployment-truth-phase1.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1667-deployment-truth-phase1",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
