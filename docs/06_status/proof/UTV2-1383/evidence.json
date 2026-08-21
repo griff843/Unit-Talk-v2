@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1383",
+  "title": "Read-only audit of the NULL stake_units population",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "verified_source_sha": "825259a0b5279ab9c35508582ac1eedb5aa7398f",
+    "verified_source_note": "Audit commit. This lane is read-only: every database statement executed was a SELECT. No backfill, no constraint change, no migration, no production mutation. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "scope": {
+    "files_changed": [
+      "docs/06_status/proof/UTV2-1383/verification.md",
+      "docs/06_status/proof/UTV2-1383/evidence.json",
+      "docs/06_status/proof/UTV2-1383/model-routing.json",
+      "docs/06_status/proof/UTV2-1383/diff-summary.md",
+      ".ops/sync/UTV2-1383.yml",
+      "docs/06_status/lanes/UTV2-1383.json"
+    ],
+    "runtime_code_changed": false,
+    "schema_changed": false,
+    "dependency_changed": false,
+    "production_mutation": false
+  },
+  "audit_findings": {
+    "null_population": {
+      "rows": 2902,
+      "table_total": 107858,
+      "pct": 2.69,
+      "as_of": "2026-08-21T13:57:22Z",
+      "closed": "created 2026-04-22 to 2026-05-08; no NULL rows created since"
+    },
+    "derivability": "No stake evidence survives. No stakeUnitsSource on any row; no stake key in any submission payload examined; kellySizing JSON-null on 2891; settlement stake NULL on all 11 with settlement records. No segment is derive-from-evidence repairable.",
+    "attribution": "capper_id NULL on all 2902; 2872 carry systemGenerated true; zero rows human-attributable.",
+    "fixture_fraction": {
+      "fixture_rows": 18,
+      "pct": 0.62,
+      "note": "Inverse of the picks table overall, which is approximately 93 percent fixture."
+    },
+    "constraint": {
+      "name": "picks_stake_units_canonical_check",
+      "expression": "CHECK ((stake_units IS NOT NULL) AND (stake_units > 0))",
+      "convalidated": false,
+      "live_cost": "Any UPDATE re-evaluates the CHECK against the full row and rolls back, which forced the candidate_skipped_null_stake_units guard at apps/api/src/candidate-pick-scanner.ts:267-283 to break a 60s retry loop."
+    },
+    "stake_variance": "99.99 percent of the 104956 staked rows are exactly 1.00; five distinct stake values exist table-wide. This reframes the hazard: the risk is not corrupting varied stake history, it is writing a value without provenance."
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Recount the current NULL population",
+      "status": "PASS",
+      "evidence": "2902 of 107858 re-derived by SELECT as of 2026-08-21T13:57:22Z, not taken from the issue title."
+    },
+    {
+      "criterion": "Segment rows by source, lifecycle state, date range, capper",
+      "status": "PASS",
+      "evidence": "Six segments reported; 2874 in terminal dead states, 0 promoted; capper_id NULL on all rows."
+    },
+    {
+      "criterion": "Determine which segments are safely repairable",
+      "status": "PASS",
+      "evidence": "None are derive-from-evidence repairable; no stake evidence survives in any source."
+    },
+    {
+      "criterion": "Repair design produced, not executed",
+      "status": "PASS",
+      "evidence": "Per-segment disposition proposed with the PM authorization each would require. No disposition executed; this lane performed no mutation."
+    }
+  ],
+  "known_limitations": [
+    "This is the AUDIT PHASE ONLY. No repair, backfill, deletion, quarantine, or constraint validation is performed or authorized by this lane. Each proposed disposition requires separate PM authorization.",
+    "Two questions could not be resolved read-only and are stated rather than inferred: whether 11 phantom settlement profit/loss values originated in archived migration 202604250005 or in the live grading path (both coalesce to the same constant and are observationally identical), and whether validating the constraint would surface violations beyond NULL, since VALIDATE CONSTRAINT is DDL and was deliberately not run.",
+    "A live-path defect found during the audit is filed separately rather than fixed here: settlement fails closed on NULL stake while grading, attribution and the Discord results path each substitute 1."
+  ],
+  "verdict": "READY_FOR_REVIEW_AUDIT_PHASE_ONLY"
+}
