@@ -60,16 +60,32 @@ export async function submitPickController(
     !routingShadowEnabled && isGovernanceBrakeSource(result.pick.source);
 
   if (governanceBrakeApplied) {
-    const brakeTransition = await transitionPickLifecycle(
-      repositories.picks,
-      result.pick.id,
-      'awaiting_approval',
-      `governance brake: non-human source ${result.pick.source}`,
-      'promoter',
-    );
+    // UTV2-1611: the brake is STATE-AWARE. An automated production admitted by
+    // the automated write boundary is BORN in `awaiting_approval` — the state
+    // is materialized in the same atomic write as the pick and its birth
+    // lifecycle event, so there is no `validated` state to transition out of.
+    // Re-applying the brake here would attempt `awaiting_approval ->
+    // awaiting_approval`, which the FSM forbids (`pickLifecycleTransitions`
+    // allows only queued/voided out of awaiting_approval); the controller would
+    // throw InvalidTransitionError and reject a submission that is already
+    // correctly governed. The governed state is the goal, not the transition.
+    const alreadyGoverned = result.pick.lifecycleState === 'awaiting_approval';
+
+    const brakeEventId = alreadyGoverned
+      ? result.lifecycleEventRecord.id
+      : (
+          await transitionPickLifecycle(
+            repositories.picks,
+            result.pick.id,
+            'awaiting_approval',
+            `governance brake: non-human source ${result.pick.source}`,
+            'promoter',
+          )
+        ).lifecycleEvent.id;
+
     await repositories.audit.record({
       entityType: 'picks',
-      entityId: brakeTransition.lifecycleEvent.id,
+      entityId: brakeEventId,
       action: 'pick.governance_brake.applied',
       actor: 'submission',
       payload: {
@@ -77,8 +93,12 @@ export async function submitPickController(
         source: result.pick.source,
         promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
         promotionTarget: result.pick.promotionTarget ?? null,
-        fromState: 'validated',
+        fromState: alreadyGoverned ? null : 'validated',
         toState: 'awaiting_approval',
+        // `materialized_at_birth` means the automated write boundary produced
+        // the governed state atomically; no separate brake transition existed
+        // to record. `transition` means this controller braked a validated row.
+        brakeMechanism: alreadyGoverned ? 'materialized_at_birth' : 'transition',
       },
     });
 

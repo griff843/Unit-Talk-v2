@@ -70,12 +70,13 @@ test('isGovernanceBrakeSource: brakes autonomous non-human sources', () => {
   assert.equal(isGovernanceBrakeSource('system-pick-scanner'), true);
   assert.equal(isGovernanceBrakeSource('alert-agent'), true);
   assert.equal(isGovernanceBrakeSource('model-driven'), true);
+  // UTV2-1611: board-pick-writer is scheduled and autonomous. Scheduling flags
+  // only start it; they never authorize a release. Source membership is the
+  // marker-independent fallback brake behind the automated write boundary.
+  assert.equal(isGovernanceBrakeSource('board-construction'), true);
 });
 
-test('isGovernanceBrakeSource: does NOT brake operator-triggered or human-relayed sources', () => {
-  // board-construction is operator-triggered (governed board path) — NOT
-  // an autonomous producer. Must retain existing queueing behavior.
-  assert.equal(isGovernanceBrakeSource('board-construction'), false);
+test('isGovernanceBrakeSource: does NOT brake human-relayed sources', () => {
   assert.equal(isGovernanceBrakeSource('smart-form'), false);
   assert.equal(isGovernanceBrakeSource('api'), false);
   assert.equal(isGovernanceBrakeSource('discord-bot'), false);

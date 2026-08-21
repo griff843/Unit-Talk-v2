@@ -1,0 +1,276 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1611",
+  "title": "Board pick writer must not bypass governance brake into validated",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-20T04:10:00Z",
+  "sha_binding": {
+    "verified_source_sha": "a84506a326d80589b4dbbdbc30bc9291998e35a0",
+    "verified_source_note": "Sanctioned pr-update-branch commit that refreshed this branch onto current main. Re-anchored from the earlier implementation head because that refresh imported unrelated main content (the merged UTV2-1721 harness lane), so only proof paths change after this anchor. The implementation itself is unchanged: the substantive work was complete at 0a1488cb and every commit since has been proof-only or a main refresh. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-21T14:37:03.920Z"
+  },
+  "scope": {
+    "runtime_change": true,
+    "database_change": false,
+    "migration_change": false,
+    "production_mutation_by_lane": false,
+    "implementation_paths": [
+      "apps/api/src/automated-write-boundary.ts",
+      "apps/api/src/board-pick-writer.test.ts",
+      "apps/api/src/board-pick-writer.ts",
+      "apps/api/src/candidate-pick-scanner.test.ts",
+      "apps/api/src/candidate-pick-scanner.ts",
+      "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/distribution-service.test.ts",
+      "apps/api/src/distribution-service.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/submission-service.ts",
+      "apps/api/src/t1-proof-awaiting-approval.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1611/diff-summary.md",
+      "docs/06_status/proof/UTV2-1611/evidence.json",
+      "docs/06_status/proof/UTV2-1611/model-routing.json",
+      "docs/06_status/proof/UTV2-1611/verification.md"
+    ],
+    "does_not_claim": [
+      "No Supabase project was mutated by this lane.",
+      "No production API or scanner process was started.",
+      "No scanner enablement flag was changed.",
+      "No stranded awaiting_approval row was read or mutated for remediation.",
+      "No T1 PM approval, merge authorization, or production readiness verdict is claimed."
+    ]
+  },
+  "implemented_boundary": {
+    "classification": "Admission is keyed on payload.source through a three-valued policy: boundary-required (board-construction) is admitted unconditionally, with or without a marker; boundary-when-marked (system-pick-scanner, alert-agent, model-driven) is admitted only by an explicit metadata.systemGenerated=true marker and is otherwise governed by the source-keyed Phase 7A brake in distribution-service.ts; human-ingress (smart-form, feed, system, api, discord-bot) keeps the validated path. metadata.systemGenerated=true additionally admits any submission, including runtime source values outside PickSource. `as const satisfies Record<PickSource, AutomatedWriteBoundaryPolicy>` makes every current PickSource an explicit, exhaustive classification decision.",
+    "shared_enforcement_point": "apps/api/src/submission-service.ts calls prepareAutomatedSubmission before idempotency lookup and persistence",
+    "initial_lifecycle_state": "awaiting_approval",
+    "atomicity": "The requested initial lifecycle state is supplied to createCanonicalPickFromSubmission and persisted with the pick and birth lifecycle event; no validated-to-awaiting transition is used.",
+    "approval_dimension_note": "approval_status remains separate from picks.status; lifecycle awaiting_approval is the operator-review gate.",
+    "freshness_posture": "market-universe identity, provider market key, snapshot timestamp, provider key, and current freshness are required before any automated submission write.",
+    "provenance": "metadata.automatedWriteBoundary records producer, source, source snapshot time and age, transition actor, transition reason, and required state; the birth lifecycle event uses the same actor role and reason.",
+    "human_path_preserved": "The validated initial state is preserved only for sources classified human-ingress (smart-form, feed, system, api, discord-bot). board-construction is NOT one of them: it is boundary-required, so a board submission enters the boundary and is born in awaiting_approval whether or not it carries metadata.systemGenerated and whether or not an operator originated it. Omitting the marker does not create a human path; once admitted, a missing producer identity or missing market evidence fails closed before persistence.",
+    "readiness_signal": "detectAutomatedDirectToValidatedWrite identifies the forbidden automated validated state and submission idempotency checks fail closed when it is observed."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS",
+      "detail": "tsc -b tsconfig.json clean."
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS",
+      "detail": "eslint clean."
+    },
+    "unit_tests": {
+      "command": "pnpm test:apps-api-core",
+      "status": "PASS",
+      "totals": {
+        "tests": 444,
+        "pass": 444,
+        "fail": 0,
+        "skipped": 0
+      },
+      "detail": "submission-service.test.ts 73 -> 89 tests; absorbed the automated-boundary unit coverage with names preserved."
+    },
+    "wiring": {
+      "command": "pnpm ops:automation-coverage-check",
+      "status": "PASS",
+      "detail": "verdict=PASS fail=0; executable-wiring unwired=119 (baselined=119 new=0). Was verdict=FAIL new=1 naming apps/api/src/automated-write-boundary.test.ts before consolidation."
+    },
+    "registration_reverts": {
+      "status": "PASS",
+      "detail": "git diff origin/main -- package.json docs/05_operations/db-writer-classification.json is empty; no docs/05_operations/** or .lane/** path is touched."
+    }
+  },
+  "runtime_proof": {
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 17335.21ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 17257.95ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 18248.06ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 16777.32ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 138.84ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 17707.62ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 19013.94ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 0,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-20T04:03:43.064Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 32330316960, job 96309632615), which ran immediately before the smoke-test step in the same job, on head 29d05ebc8feab6f8f6bccccc07b5dea8e414d334. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 32330316960,
+      "run_attempt": 1,
+      "job_id": 96309632615,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32330316960/job/96309632615",
+      "target_head_sha": "29d05ebc8feab6f8f6bccccc07b5dea8e414d334",
+      "target_merge_sha": "29d05ebc8feab6f8f6bccccc07b5dea8e414d334",
+      "conclusion": "success",
+      "identity_source": "pr_head_run"
+    },
+    "status": "PASS",
+    "ci_receipt": {
+      "result": "PASS",
+      "workflow": "CI",
+      "job_name": "Writable DB proof (staging only)",
+      "run": 32330316960,
+      "job": 96309632615,
+      "run_attempt": 1,
+      "head": "29d05ebc8feab6f8f6bccccc07b5dea8e414d334",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/32330316960/job/96309632615",
+      "harvested_by": "scripts/ops/ci-db-proof-harvest.ts (receipt verified via verifyHarvestedReceipt; identity_source=pr_head_run)"
+    },
+    "lane_live_assertions": {
+      "test_file": "apps/api/src/t1-proof-awaiting-approval.test.ts",
+      "runner": "pnpm test:t1-proof:live",
+      "detail": "This lane's own live staging assertions were moved into the already-enumerated, already-classified T1 proof file. They void through the lifecycle FSM via transitionPickLifecycle(..., 'voided', 'operator_override') and assert exactly one pick_lifecycle row per fixture with from_state = 'awaiting_approval'. No direct status PATCH is used."
+    },
+    "staging_execution_provenance": {
+      "enforcement": "pnpm test:db runs against the approved staging project on EVERY pushed head of this lane, including the final head, as part of the required verify context. ci.yml downloads the receipt scoped to its own run (utv2-1630-db-proof-receipt-<run_id>-<run_attempt>) and validates it with scripts/ci/verify-db-proof-receipt.ts. verify never reads this evidence.json, so the staging guarantee for any head comes from CI at that head.",
+      "recorded_arrays_are_a_snapshot": "runtime_proof.queries and runtime_proof.row_counts were harvested from ONE historical run — 32330316960 at head 29d05ebc — so the evidence is legible inside the bundle. They are labelled with that run and no other. No merge authority rests on them; they are a readable record, not the enforcement mechanism.",
+      "implementation_unchanged_since_that_run": "git diff 29d05ebc HEAD touches no apps/** and no packages/** path. Stated as an independent fact about the code, not as the basis of the staging guarantee.",
+      "no_per_head_citation": "Deliberately absent, and so is any count of the branch's staging history. A run id cited as 'this head' names the previous head once committed. A history claim fares no better: 'green on every head' was false, and the quantified replacement ('two failures, three cancellations') was also false. The branch's earlier heads include both failed and cancelled staging runs, 5bf6ccb4 among the cancelled; their number is not recorded because it changes. The claim rests on the required verify gate at the head under review, which enforces the staging receipt for the head it runs on. Read the result from the checks list.",
+      "branch_position_not_stated": "Neither behind- nor ahead-count is recorded. Both move after this file is written — the ahead-count on any commit here, the behind-count on any commit to main including the [skip ci] readiness-ledger bot. Read them from the PR."
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Every automated board/scanner pick enters awaiting_approval without a transient validated state.",
+      "status": "PASS_STATIC_AND_IN_MEMORY",
+      "evidence": "Shared submission boundary selects awaiting_approval as the initial state and focused submission/producer tests assert the persisted pick and birth lifecycle event."
+    },
+    {
+      "criterion": "Scheduler and enablement flags decide execution only and cannot approve an automated write.",
+      "status": "PASS",
+      "evidence": "Board writer tests exercise enabled and override execution paths and assert awaiting_approval; submission-service enforcement is independent of scheduler flags."
+    },
+    {
+      "criterion": "Missing or stale evidence fails before write.",
+      "status": "PASS",
+      "evidence": "Boundary tests reject missing/stale evidence, while board/scanner tests verify missing re-reads and stale snapshots produce no submission."
+    },
+    {
+      "criterion": "Record producer provenance, transition actor, and reason.",
+      "status": "PASS",
+      "evidence": "automatedWriteBoundary metadata and the birth lifecycle event record the producer-derived actor and explicit operator-approval reason."
+    },
+    {
+      "criterion": "Readiness can mechanically detect any direct automated validated write.",
+      "status": "PASS",
+      "evidence": "detectAutomatedDirectToValidatedWrite and assertNoAutomatedDirectToValidatedWrite have positive and negative coverage, guard idempotent legacy observations, and detect a synthetic future producer marked systemGenerated."
+    },
+    {
+      "criterion": "Human/manual submission behavior remains unchanged for sources classified human-ingress.",
+      "status": "PASS",
+      "evidence": "apps/api/src/submission-service.test.ts, 'automated write boundary preserves the human/manual validated path', drives a smart-form submission through the real processSubmission path and asserts pick, pick record and birth lifecycle event all read validated. This criterion is scoped to human-ingress sources. It does NOT extend to board-construction: an earlier revision of this entry claimed a focused test confirmed an unmarked manual board-construction submission remains validated. No such test exists and that behaviour is the defect this lane closes — the test at that source is 'REGRESSION UTV2-1611: an unmarked board-construction production never persists as validated', which asserts awaiting_approval."
+    },
+    {
+      "criterion": "Writable Postgres proof exercises the exact change through the real pipeline.",
+      "status": "PASS",
+      "evidence": "Satisfied by the staging-ci receipt, not deferred. pnpm test:db ran against the approved staging project xskgrzbteyqdufktjrjx at branch head 29d05ebc8feab6f8f6bccccc07b5dea8e414d334 (CI run 32330316960, job 96309632615) and passed. That is not the head carrying this bundle; the binding is the diff, not co-location — git diff 29d05ebc HEAD touches no apps/** and no packages/** path, so the exercised code is byte-identical to the code under review. The receipt was harvested into runtime_proof.queries (7 entries, real table names) and runtime_proof.row_counts (8 entries) by scripts/ops/ci-db-proof-harvest.ts, which re-verifies the tamper-evident ci-db-proof-receipt/v2 artifact through verifyHarvestedReceipt rather than trusting its declared fields. The earlier BLOCKED_DEFERRED_TO_STAGING_CI status described the pre-receipt state and no longer holds."
+    }
+  ],
+  "known_limitations": [
+    "SUPERSEDED, retained as a record of what changed: this entry previously read 'The implementation lane cannot claim live Postgres behavior until staging-ci produces an exact-head receipt for xskgrzbteyqdufktjrjx.' That receipt now exists and is in this bundle. pnpm test:db ran against xskgrzbteyqdufktjrjx and passed (CI run 32330316960, job 96309632615, # tests 7 / # pass 7 / # fail 0). It was harvested into runtime_proof.queries and runtime_proof.row_counts by scripts/ops/ci-db-proof-harvest.ts, which independently re-verifies the tamper-evident ci-db-proof-receipt/v2 artifact through verifyHarvestedReceipt rather than trusting the receipt's declared fields. The limitation no longer holds.",
+    "SUPERSEDED, retained as a record of what changed: this entry previously read 'Proof Coverage Guard requires a live-DB proof test path, but no accepted T1 proof path is included in this lane's allowed file scope; scope must be expanded before the required proof case can be added.' That is no longer the lane's shape. The live staging assertions were moved into apps/api/src/t1-proof-awaiting-approval.test.ts, which is already enumerated in the test:t1-proof:live package script and already classified in docs/05_operations/db-writer-classification.json. No new proof path had to be accepted and no scope expansion was needed for this purpose; the lane's earlier edits to package.json and db-writer-classification.json were reverted and both files are byte-identical to origin/main. Proof Coverage Guard is green on the current head. The remaining scope request is the six runtime-compatible paths in entry [2], which is a separate matter from live-proof path acceptance.",
+    "Six changed paths lie outside the file_scope_lock recorded in the manifest's first commit, which is the only version the file-scope guard trusts. A head-pinned scope-override/v1 comment from an authorized reviewer is required before merge and has not been posted. The earlier limitation recorded here -- that Return Review Packet required package-script wiring for a new test file while package.json sat outside the lane's allowed scope -- no longer applies: the coverage was moved onto already-wired roots and the package.json edit was reverted, so ops:automation-coverage-check now reports verdict=PASS with new=0.",
+    "Readiness detection is exposed as a shared helper and enforced during idempotent submission lookup; deployment of a broader operator query is outside this issue's allowed scope.",
+    "Implementation readiness is not production readiness.",
+    "Transient validated state for boundary-when-marked sources (pre-existing, out of scope, NOT introduced by this lane). An exact-head review observed that a system-pick-scanner / alert-agent / model-driven submission omitting metadata.systemGenerated is not admitted to the write boundary (those sources are classified boundary-when-marked, not human-ingress), so processSubmission persists it as validated before the controller's source-keyed Phase 7A brake moves it to awaiting_approval. Verified: this behaviour is unchanged by this lane (git diff origin/main shows no scanner-path change); the real producer stamps the marker at candidate-pick-scanner.ts:250 and is therefore born in awaiting_approval; and the controller applies the brake by source before any distribution enqueue, so no outbox row or run is created from the transient state. detectAutomatedDirectToValidatedWrite documents the choice deliberately: flagging an unmarked boundary-when-marked source by source alone would turn a lawful in-flight state into a hard failure on the idempotent re-submission path, and would fail closed on ratified fixtures that carry no producer identity or market evidence. Residual exposure, corrected after adversarial review found the first statement too narrow: enqueueDistributionWork's defense-in-depth check (distribution-service.ts:238) is lifecycle-state-only, not source-aware, and requeue-controller.ts does not re-check isGovernanceBrakeSource. An operator-authenticated caller who already knew the pick id could therefore ACT ON the transient row inside that window and enqueue it for real distribution, not merely observe it. Bounded by operator-role auth, a single-round-trip window with no external point at which the id becomes knowable, and candidate-pick-scanner.ts's void_advanced fallback. Pre-existing, not introduced here, and recorded as a tracked follow-up because making enqueueDistributionWork source-aware touches the distribution path beyond this lane's authorized scope. Broader compile-time exhaustiveness hardening for GOVERNANCE_BRAKE_SOURCES is tracked separately and this lane's issue explicitly directs that it not be re-scoped here. This limitation is scoped strictly to boundary-when-marked sources and has no board-construction analogue: board-construction is boundary-required, so it is admitted by source and has no legal validated state, transient or resting."
+  ],
+  "verdict": "READY_FOR_REVIEW_PENDING_PM_SCOPE_OVERRIDE",
+  "scope_authorization": {
+    "trusted_first_commit_scope_paths": 7,
+    "paths_requiring_override": [
+      "apps/api/src/distribution-service.ts",
+      "apps/api/src/distribution-service.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/controllers/submit-pick-controller.test.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/t1-proof-awaiting-approval.test.ts"
+    ],
+    "override_artifact_present": false,
+    "detail": "The file-scope guard trusts only the file_scope_lock recorded in the manifest's first commit. A head-pinned scope-override/v1 comment from an authorized reviewer is required and has not been posted. An earlier manifest entry asserting its own PM authorization was self-authored by an implementing agent and is withdrawn."
+  },
+  "proof_profile": "app-runtime",
+  "verdict_detail": "All seven acceptance criteria pass, including the writable-Postgres proof. The lane is not blocked on any work it can perform itself. Three checks remain red and none is within executor control: File scope lock awaits a head-pinned scope-override/v1 comment from an authorized reviewer for six runtime-compatible paths; Shadow Parity Check fails on pre-existing infrastructure debt (no mechanically read-only production credential is provisioned); Merge Gate awaits t1-approved and pm-verdict/v1. The earlier BLOCKED_LIVE_DB_PROOF_SCOPE_EXPANSION_REQUIRED verdict described the state before the staging receipt existed and before the lane dropped its package.json and db-writer-classification.json edits, and no longer holds."
+}
