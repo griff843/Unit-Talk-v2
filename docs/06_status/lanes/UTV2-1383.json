@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1383-stake-units-readonly-audit",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1434",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1383.yml",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1383/evidence.json",
     "docs/06_status/proof/UTV2-1383/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-21T13:45:47.070Z",
-  "heartbeat_at": "2026-08-21T13:45:47.070Z",
+  "heartbeat_at": "2026-08-21T14:16:20.012Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1383-stake-units-readonly-audit.json",
