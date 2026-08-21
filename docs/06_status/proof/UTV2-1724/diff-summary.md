@@ -1,6 +1,6 @@
 # UTV2-1724 — diff summary
 
-MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
+MERGE_SHA: 50ff0d0c27876c586157a8004fd543e74e33d5ef
 
 That SHA is an anchor required by the executor-result validator, not a claim that nothing substantive followed it. The substantive commits are every `fix(ci)` entry in `git log --oneline origin/main..HEAD`; they are not listed by SHA here because the list grew across review rounds and a fixed enumeration went stale twice.
 

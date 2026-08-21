@@ -1,6 +1,6 @@
 # PROOF: UTV2-1724
 
-MERGE_SHA: 4444932205f34aa76058e36072f3aa171057d488
+MERGE_SHA: 50ff0d0c27876c586157a8004fd543e74e33d5ef
 
 Lane: auto-close intent grammar misses sanctioned closeout commits, stranding merged lanes as ghosts.
 Tier: T1 · lane_type: governance · proof profile: static
