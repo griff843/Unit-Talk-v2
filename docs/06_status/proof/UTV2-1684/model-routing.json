@@ -7,5 +7,11 @@
   "reasoning_effort": "high",
   "selected_by": "three-brain",
   "policy_version": "1.0.0",
-  "override_used": false
+  "override_used": false,
+  "closeout_binding": {
+    "sha_type": "merge_sha",
+    "merge_sha": "f044a2c465004d05aa2eca93e041d2f1e4b43b84",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1397",
+    "bound_at": "2026-08-21T23:16:41.726Z"
+  }
 }

@@ -11,8 +11,6 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1397",
   "files_changed": [
     ".github/workflows/post-merge-lane-close.yml",
-    ".ops/sync/UTV2-1684.yml",
-    "docs/06_status/lanes/UTV2-1684.json",
     "docs/06_status/proof/UTV2-1684/diff-summary.md",
     "docs/06_status/proof/UTV2-1684/model-routing.json",
     "docs/06_status/proof/UTV2-1684/verification.md",
@@ -32,12 +30,12 @@
     "docs/06_status/proof/UTV2-1684/verification.md",
     "docs/06_status/proof/UTV2-1684/model-routing.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-08-09T03:25:42.894Z",
-  "heartbeat_at": "2026-08-09T03:25:42.894Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-21T23:16:44.569Z",
+  "closed_at": "2026-08-21T23:16:44.569Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1684-post-merge-proof-binding.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
@@ -48,6 +46,13 @@
         "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1397 merged while manifest status was \"started\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
       ],
       "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-21T23:16:41.731Z",
+      "verdict": "pass",
+      "merge_sha": "f044a2c465004d05aa2eca93e041d2f1e4b43b84",
+      "failures": [],
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],
