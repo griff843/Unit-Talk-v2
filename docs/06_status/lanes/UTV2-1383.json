@@ -20,7 +20,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-08-21T13:45:47.070Z",
-  "heartbeat_at": "2026-08-21T14:16:20.012Z",
+  "heartbeat_at": "2026-08-21T14:16:24.105Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1383-stake-units-readonly-audit.json",
