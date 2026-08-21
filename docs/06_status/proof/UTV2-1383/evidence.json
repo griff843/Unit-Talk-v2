@@ -80,5 +80,33 @@
     "Two questions could not be resolved read-only and are stated rather than inferred: whether 11 phantom settlement profit/loss values originated in archived migration 202604250005 or in the live grading path (both coalesce to the same constant and are observationally identical), and whether validating the constraint would surface violations beyond NULL, since VALIDATE CONSTRAINT is DDL and was deliberately not run.",
     "A live-path defect found during the audit is filed separately rather than fixed here: settlement fails closed on NULL stake while grading, attribution and the Discord results path each substitute 1."
   ],
-  "verdict": "READY_FOR_REVIEW_AUDIT_PHASE_ONLY"
+  "verdict": "READY_FOR_REVIEW_AUDIT_PHASE_ONLY",
+  "static_proof": {
+    "gate_commands": {
+      "pnpm type-check": {
+        "result": "pass",
+        "note": "clean"
+      },
+      "pnpm test": {
+        "result": "pass",
+        "total_pass": 4855,
+        "total_fail": 0,
+        "note": "full suite, aggregated across all node:test TAP blocks"
+      },
+      "scripts/ci/r-level-check.ts": {
+        "result": "PASS",
+        "changed_files": 4,
+        "rules_matched": "none",
+        "exit": 0
+      },
+      "pnpm verify": {
+        "result": "did not pass",
+        "exit": 1,
+        "failed_at": "test:db -> ci:assert-staging",
+        "note": "Refused under credential containment, not a lane defect. ci:assert-staging correctly refuses the containment sentinel because writable DB verification requires the approved staging project. Recorded as a refusal rather than claimed as a pass. The static stages verify independently via pnpm type-check and pnpm test above."
+      }
+    },
+    "read_only_guarantee": "Every database statement executed during this audit was a SELECT. No INSERT, UPDATE, DELETE, DDL, VACUUM, ANALYZE, or VALIDATE CONSTRAINT was run. No migration was added. No production mutation occurred.",
+    "queries_recorded": "All audit SQL and results are reproduced verbatim in verification.md under Runtime Verification."
+  }
 }
