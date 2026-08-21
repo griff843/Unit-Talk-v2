@@ -210,9 +210,15 @@ test('candidate-pick-scanner: happy path — qualified+scored candidate becomes 
   const metadata = pick!.metadata as Record<string, unknown>;
   assert.equal(metadata['scoredCandidateId'], candidate.id);
   assert.equal(metadata['marketUniverseId'], universe.id);
+  const boundary = metadata['automatedWriteBoundary'] as Record<string, unknown>;
+  assert.equal(boundary['requiredState'], 'awaiting_approval');
+  assert.equal(boundary['transitionActor'], 'system:candidate-pick-scanner');
 });
 
-test('candidate-pick-scanner: stale market universe snapshot writes pick metadata data_freshness=stale', async () => {
+test('candidate-pick-scanner: stale market universe snapshot fails closed before write', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
   const eventStartsAt = isoMinutesFromNow(120);
   const universe = makeUniverseRow({
     id: 'universe-stale-snapshot',
@@ -225,13 +231,24 @@ test('candidate-pick-scanner: stale market universe snapshot writes pick metadat
     provenance: { event_starts_at: eventStartsAt },
   });
 
-  const pick = await scanSingleCandidatePick(universe, candidate);
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+  const result = await runCandidatePickScan({
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  });
 
-  const metadata = pick.metadata as Record<string, unknown>;
-  assert.equal(metadata['data_freshness'], 'stale');
-  assert.equal(metadata['snapshot_at'], universe.last_offer_snapshot_at);
-  assert.equal(metadata['proximity_tier'], 'game-day');
-  assert.equal(typeof metadata['snapshot_age_ms'], 'number');
+  assert.equal(result.submitted, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+  const [unchanged] = await repos.pickCandidates.findByStatus('qualified');
+  assert.equal(unchanged?.pick_id, null);
 });
 
 test('candidate-pick-scanner: fresh market universe snapshot writes pick metadata data_freshness=fresh', async () => {

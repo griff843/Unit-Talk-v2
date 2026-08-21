@@ -15,7 +15,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import type { IPickCandidateRepository, PickIdUpdate } from '@unit-talk/db';
-import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
+import {
+  readBoardEventStartTime,
+  runBoardPickWriter,
+  shouldScheduleBoardPickWriter,
+} from './board-pick-writer.js';
 import type {
   PickCandidateUpsertInput,
   MarketUniverseUpsertInput,
@@ -175,6 +179,11 @@ test('writes pick for a board candidate and links pick_id', async () => {
   const pick = await repos.picks.findPickById(pickId);
   assert.ok(pick, 'pick should exist');
   assert.equal(pick.source, 'board-construction');
+  assert.equal(
+    pick.status,
+    'awaiting_approval',
+    'automated board pick must never be persisted directly to validated',
+  );
   const meta = pick.metadata as Record<string, unknown>;
   assert.equal(meta['boardRunId'], boardRunId);
   assert.equal(meta['boardRank'], 1);
@@ -182,6 +191,11 @@ test('writes pick for a board candidate and links pick_id', async () => {
   assert.equal(meta['scoredCandidateId'], candidateId);
   assert.equal(typeof meta['marketUniverseId'], 'string');
   assert.equal(meta['governedBoardWrite'], true);
+  assert.equal(meta['data_freshness'], 'fresh');
+  const boundary = meta['automatedWriteBoundary'] as Record<string, unknown>;
+  assert.equal(boundary['requiredState'], 'awaiting_approval');
+  assert.equal(boundary['transitionActor'], 'system:board-construction');
+  assert.match(String(boundary['transitionReason']), /requires operator approval/);
 
   const [candidate] = await repos.pickCandidates.findByStatus('qualified');
   assert.equal(candidate!.pick_id, pickId, 'pick_id should be linked on candidate');
@@ -237,6 +251,38 @@ test('skips candidate with invalid odds', async () => {
   const result = await runBoardPickWriter(repos);
   assert.equal(result.written, 0);
   assert.equal(result.skipped, 1);
+});
+
+test('stale board snapshot fails closed before any pick write', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+  const candidateId = await seedBoardCandidate(repos, boardRunId, 1, {
+    last_offer_snapshot_at: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+  });
+
+  const result = await runBoardPickWriter(repos);
+
+  assert.equal(result.written, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.pickIds, []);
+  const candidates = await repos.pickCandidates.findByStatus('qualified');
+  assert.equal(candidates.find((row) => row.id === candidateId)?.pick_id, null);
+});
+
+test('missing board market snapshot fails closed before any pick write', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+  await seedBoardCandidate(repos, boardRunId, 1, {
+    last_offer_snapshot_at: '',
+  });
+
+  const result = await runBoardPickWriter(repos);
+
+  assert.equal(result.written, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+  assert.deepEqual(result.pickIds, []);
 });
 
 test('source attribution is board-construction on every written pick', async () => {
@@ -571,4 +617,47 @@ test('scheduler enablement can be forced on independently of the broader syndica
     }),
     true,
   );
+});
+
+test('scheduler flags grant execution only and cannot release an automated board pick', async () => {
+  const flags = {
+    SYNDICATE_MACHINE_ENABLED: 'true',
+    BOARD_PICK_WRITER_ENABLED: 'true',
+  };
+  assert.equal(shouldScheduleBoardPickWriter(flags), true);
+
+  const repos = createInMemoryRepositoryBundle();
+  await seedBoardCandidate(repos, crypto.randomUUID(), 1);
+  const result = await runBoardPickWriter(repos);
+  const pick = await repos.picks.findPickById(result.pickIds[0]!);
+
+  assert.equal(pick?.status, 'awaiting_approval');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1611 regression — no fabricated event start time
+// ---------------------------------------------------------------------------
+
+test('REGRESSION UTV2-1611: board event start time is never fabricated from a date at midnight', () => {
+  // A calendar date is not a kickoff time. Synthesising `<date>T00:00:00Z`
+  // invents an event start the provider never published, which then drives the
+  // freshness proximity tier and lands in pick metadata as if it were evidence.
+  assert.equal(
+    readBoardEventStartTime({ event_date: '2026-08-19', metadata: {} }),
+    null,
+    'a bare event_date must not be promoted into a fabricated midnight start time',
+  );
+  assert.equal(
+    readBoardEventStartTime({ event_date: '2026-08-19', metadata: { starts_at: '  ' } }),
+    null,
+  );
+  assert.equal(
+    readBoardEventStartTime({
+      event_date: '2026-08-19',
+      metadata: { starts_at: '2026-08-19T23:10:00Z' },
+    }),
+    '2026-08-19T23:10:00Z',
+    'a real provider-published start time is still used',
+  );
+  assert.equal(readBoardEventStartTime(null), null);
 });

@@ -37,6 +37,10 @@ import {
 } from './domain-analysis-service.js';
 import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
+import {
+  assertNoAutomatedDirectToValidatedWrite,
+  prepareAutomatedSubmission,
+} from './automated-write-boundary.js';
 
 const submissionServiceLogger = createLogger({
   service: 'api',
@@ -129,6 +133,8 @@ export async function processSubmission(
   },
 ): Promise<SubmissionProcessingResult> {
   payload = ensureMeasurableStakeUnits(payload);
+  const automatedWrite = prepareAutomatedSubmission(payload);
+  payload = automatedWrite.payload;
   const normalizedMarketKey = normalizeMarketKey(payload.market);
 
   // Idempotency check: compute key from normalized payload and check for existing pick.
@@ -138,6 +144,11 @@ export async function processSubmission(
   });
   const existingPick = await repositories.picks.findPickByIdempotencyKey(idempotencyKey);
   if (existingPick) {
+    assertNoAutomatedDirectToValidatedWrite({
+      source: existingPick.source as CanonicalPick['source'],
+      status: existingPick.status,
+      metadata: isRecord(existingPick.metadata) ? existingPick.metadata : null,
+    });
     // Return idempotent success — no new rows created.
     const submission = createValidatedSubmission(existingPick.submission_id ?? existingPick.id, {
       ...payload,
@@ -196,7 +207,20 @@ export async function processSubmission(
     ...payload,
     market: normalizedMarketKey,
   });
-  const materialized = createCanonicalPickFromSubmission(submission);
+  const materialized = createCanonicalPickFromSubmission(
+    submission,
+    automatedWrite.initialLifecycleState
+      ? { lifecycleState: automatedWrite.initialLifecycleState }
+      : undefined,
+  );
+  if (
+    automatedWrite.automated &&
+    automatedWrite.lifecycleWriterRole &&
+    automatedWrite.lifecycleReason
+  ) {
+    materialized.lifecycleEvent.writerRole = automatedWrite.lifecycleWriterRole;
+    materialized.lifecycleEvent.reason = automatedWrite.lifecycleReason;
+  }
 
   // Domain analysis enrichment: compute implied probability, edge, and Kelly
   // sizing from odds/confidence and store in pick metadata.

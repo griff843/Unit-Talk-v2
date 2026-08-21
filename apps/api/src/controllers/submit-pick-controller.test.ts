@@ -84,22 +84,52 @@ test('submit-pick-controller: alert-agent lands in awaiting_approval (governance
   assert.equal(result.body.data.outboxEnqueued, false);
 });
 
-test('submit-pick-controller: board-construction is NOT braked (operator-triggered governed path)', async () => {
-  // Phase 7A repo-truth correction (PM, 2026-04-10): board-construction is
-  // operator-triggered, not autonomous. It must retain existing queueing
-  // behavior and NOT be lumped into the non-human brake bucket.
+test('submit-pick-controller: board-construction IS braked (UTV2-1611)', async () => {
+  // Supersedes the Phase 7A repo-truth note (PM, 2026-04-10) that treated
+  // board-construction as operator-triggered. `board-pick-writer` is scheduled
+  // and autonomous; scheduling flags only start it, they never authorize a
+  // release. UTV2-1611 gives the source no direct-to-validated release class.
   const repositories = createInMemoryRepositoryBundle();
 
   const result = await submitPickController(
-    makePayload('board-construction'),
+    makePayload('board-construction', {
+      submittedBy: 'scheduler:board-pick-writer',
+      metadata: {
+        marketUniverseId: 'universe-controller-board-1',
+        providerKey: 'sgo',
+        providerMarketKey: 'points-all-game-ou',
+        snapshot_at: new Date().toISOString(),
+        sportKey: 'nba',
+      },
+    }),
     repositories,
   );
 
   assert.ok(result.body.ok);
   if (!result.body.ok) return;
 
-  assert.notEqual(result.body.data.lifecycleState, 'awaiting_approval');
-  assert.equal(result.body.data.governanceBrake, undefined);
+  assert.equal(result.body.data.lifecycleState, 'awaiting_approval');
+  assert.equal(result.body.data.governanceBrake, true);
+  assert.equal(result.body.data.outboxEnqueued, false);
+
+  const pick = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.ok(pick);
+  assert.equal(pick.status, 'awaiting_approval');
+
+  const outboxRows = await repositories.outbox.listByPickId(result.body.data.pickId);
+  assert.equal(outboxRows.length, 0, 'a board production must not have an outbox row');
+});
+
+test('submit-pick-controller: board-construction without market evidence fails closed (UTV2-1611)', async () => {
+  // A board submission that cannot produce a complete write-boundary record is
+  // not releasable in ANY state, so it is rejected before persistence rather
+  // than downgraded to the human `validated` path.
+  const repositories = createInMemoryRepositoryBundle();
+
+  await assert.rejects(
+    () => submitPickController(makePayload('board-construction'), repositories),
+    /Automated write boundary rejected submission/,
+  );
 });
 
 test('submit-pick-controller: smart-form path is NOT braked (regression guard)', async () => {
