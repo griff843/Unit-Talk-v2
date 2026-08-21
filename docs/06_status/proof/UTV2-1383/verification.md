@@ -120,7 +120,7 @@ path.
 
 **F4 — ROI/CLV blast radius is materially smaller than the row count suggests.**
 CLV never touches stake. Of 2,902 rows, 2,874 are in terminal dead states, 0 are promoted,
-and only 15 are settled-or-posted — all 15 authored by proof runners. The canonical ROI
+and only 15 are settled-or-posted. **Not all 15 are proof-runner output** — an earlier revision of this line said so and was wrong. Re-derived: 5 `posted` and 2 `settled` are `system:candidate-pick-scanner`, i.e. genuine non-fixture system output; 5 `settled` are `utv2-803-final-proof`; 3 `settled` carry no `submittedBy`. So **7 of 15 are real system rows**, not proof scaffolding. The canonical ROI
 surfaces either exclude NULL stake and disclose it, or ignore `stake_units` entirely in
 favour of a flat −110 assumption. 285 distinct NULL-stake picks do appear in
 `v_governed_pick_performance`, but that view selects no `stake_units` column and performs no
@@ -138,8 +138,12 @@ units arithmetic.
 
 Sequencing note: S1+S2 (2,865 rows) is the only segment pair large enough to matter for
 constraint validation, and it is also the only pair where a defensible value exists. If S3
-is deleted and S4+S5 are quarantined, the constraint can be validated with a `NOT VALID`
-carve-out or after quarantine relocation — but that plan should not be authored until F2 is
+is deleted and S4+S5 are quarantined, the constraint can be validated **only after every remaining row
+satisfies it**. An earlier revision of this note claimed validation could proceed with a `NOT VALID`
+carve-out; **no such mechanism exists.** `NOT VALID` exempts pre-existing rows only at constraint
+creation time; `VALIDATE CONSTRAINT` scans the whole table and will reject any row still holding NULL.
+Quarantine-by-leaving-NULL is therefore incompatible with validating the constraint — quarantined rows
+must be relocated out of `picks`, not left in place. That plan should not be authored until F2 is
 fixed, because repairing the data while three live paths still coalesce NULL to `1` would
 destroy the only signal that distinguishes reconstructed rows from observed ones.
 
@@ -152,10 +156,25 @@ constraint.** F3 should be tracked separately as data already damaged.
   the archived migration or partly by the live `grading-service` path. Distinguishing them
   would require write-side replay; both candidates coalesce to the same constant, so the
   values are observationally identical.
-- Whether validating `picks_stake_units_canonical_check` would surface additional violations
-  beyond the NULL population (e.g. `stake_units <= 0`). `VALIDATE CONSTRAINT` is DDL and was
-  not run. A read-only proxy was not attempted because it would not carry the same authority
-  as the validation itself.
+  (An earlier revision also listed the constraint's violation set as undeterminable read-only. That
+  was wrong: it conflated the DDL with the predicate. The predicate is a plain SELECT and has now
+  been evaluated — see V8. Only the act of validating is DDL.)
+
+### V8 — Constraint violation set, determined read-only
+
+The violation set is **exactly the 2,902 NULL rows and nothing more**. Evaluating the constraint's own
+predicate as a SELECT requires no DDL:
+
+```sql
+SELECT
+  (SELECT count(*) FROM picks WHERE stake_units IS NOT NULL AND stake_units <= 0) AS nonnull_violations,
+  (SELECT count(*) FROM picks WHERE stake_units IS NULL) AS null_rows;
+-- nonnull_violations = 0, null_rows = 2902
+```
+
+So no row violates the `stake_units > 0` half of the CHECK. Once the NULL population is dispositioned,
+nothing else stands between the constraint and validation. This removes an unknown from the repair lane's
+sequencing.
 
 ## Runtime Verification
 
@@ -517,8 +536,12 @@ d9b96f8d-7d57-4f70-adbd-260722cc70a5 | system-pick-scanner | settled     |  -122
 a3072fdc-c0f9-45e1-b10b-206f1f4c1f4b | system-pick-scanner | settled     | -4000 | win    | (null)                 | utv2-795-proof-runner | false
 ```
 
-Every settled NULL-stake pick was settled by a proof runner or by `grading-service` acting
-on a `canary-proof` row. **The ROI blast radius against genuine settled data is zero.**
+Correction: an earlier revision claimed every settled NULL-stake pick was settled by a proof runner or
+by `grading-service` acting on a `canary-proof` row, and concluded the ROI blast radius against genuine
+settled data is zero. **That conclusion was too strong.** Two `settled` and five `posted` rows are
+`system:candidate-pick-scanner` output with no fixture marker. The blast radius is small — 7 rows —
+but it is **not zero**, and the disposition for S1 must account for rows that reached a live lifecycle
+state rather than treating the settled-or-posted set as entirely scaffolding.
 
 ```sql
 SELECT sr.payload->>'profitLossUnits' AS profit_loss_units,

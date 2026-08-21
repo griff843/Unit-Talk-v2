@@ -49,9 +49,21 @@
       "name": "picks_stake_units_canonical_check",
       "expression": "CHECK ((stake_units IS NOT NULL) AND (stake_units > 0))",
       "convalidated": false,
-      "live_cost": "Any UPDATE re-evaluates the CHECK against the full row and rolls back, which forced the candidate_skipped_null_stake_units guard at apps/api/src/candidate-pick-scanner.ts:267-283 to break a 60s retry loop."
+      "live_cost": "Any UPDATE re-evaluates the CHECK against the full row and rolls back, which forced the candidate_skipped_null_stake_units guard at apps/api/src/candidate-pick-scanner.ts:267-283 to break a 60s retry loop.",
+      "violation_set": "Determined read-only: exactly the 2902 NULL rows and nothing more. count(*) FILTER (stake_units IS NOT NULL AND stake_units <= 0) = 0. An earlier revision listed this as undeterminable, conflating the DDL of VALIDATE CONSTRAINT with its predicate, which is a plain SELECT.",
+      "validation_sequencing": "VALIDATE CONSTRAINT scans the whole table and will reject any row still holding NULL. NOT VALID exempts pre-existing rows only at creation time; there is no carve-out at validation time. Quarantine-by-leaving-NULL is therefore incompatible with validating the constraint — quarantined rows must be relocated out of picks."
     },
-    "stake_variance": "99.99 percent of the 104956 staked rows are exactly 1.00; five distinct stake values exist table-wide. This reframes the hazard: the risk is not corrupting varied stake history, it is writing a value without provenance."
+    "stake_variance": "99.99 percent of the 104956 staked rows are exactly 1.00; five distinct stake values exist table-wide. This reframes the hazard: the risk is not corrupting varied stake history, it is writing a value without provenance.",
+    "settled_or_posted_attribution": {
+      "total": 15,
+      "breakdown": {
+        "system:candidate-pick-scanner posted": 5,
+        "system:candidate-pick-scanner settled": 2,
+        "utv2-803-final-proof settled": 5,
+        "no submittedBy, settled": 3
+      },
+      "correction": "An earlier revision stated all 15 were authored by proof runners and concluded the ROI blast radius against genuine settled data is zero. Both were wrong. 7 of 15 are genuine non-fixture system-pick-scanner output that reached a live lifecycle state. The blast radius is small but not zero, and the S1 disposition must account for it."
+    }
   },
   "acceptance_criteria_mapping": [
     {
@@ -77,7 +89,7 @@
   ],
   "known_limitations": [
     "This is the AUDIT PHASE ONLY. No repair, backfill, deletion, quarantine, or constraint validation is performed or authorized by this lane. Each proposed disposition requires separate PM authorization.",
-    "Two questions could not be resolved read-only and are stated rather than inferred: whether 11 phantom settlement profit/loss values originated in archived migration 202604250005 or in the live grading path (both coalesce to the same constant and are observationally identical), and whether validating the constraint would surface violations beyond NULL, since VALIDATE CONSTRAINT is DDL and was deliberately not run.",
+    "One question could not be resolved read-only and is stated rather than inferred: whether 11 phantom settlement profit/loss values originated in archived migration 202604250005 or in the live grading path, since both coalesce to the same constant and are observationally identical. A second item previously listed here — the constraint's violation set — was determinable read-only and has now been determined; see audit_findings.constraint.violation_set.",
     "A live-path defect found during the audit is filed separately rather than fixed here: settlement fails closed on NULL stake while grading, attribution and the Discord results path each substitute 1."
   ],
   "verdict": "READY_FOR_REVIEW_AUDIT_PHASE_ONLY",
