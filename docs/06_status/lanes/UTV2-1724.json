@@ -1,0 +1,48 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1724",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1724-auto-close-intent-grammar",
+  "branch": "claude/utv2-1724-auto-close-intent-grammar",
+  "base_branch": "main",
+  "commit_sha": "50ff0d0c27876c586157a8004fd543e74e33d5ef",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1433",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/linear-auto-close.test.sh",
+    ".github/workflows/linear-auto-close.yml",
+    ".ops/sync/UTV2-1724.yml",
+    "docs/06_status/proof/UTV2-1724/diff-summary.md",
+    "docs/06_status/proof/UTV2-1724/evidence.json",
+    "docs/06_status/proof/UTV2-1724/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1724/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-20T13:01:12.900Z",
+  "heartbeat_at": "2026-08-21T23:00:32.806Z",
+  "closed_at": "2026-08-21T23:00:32.806Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-21T23:00:30.695Z",
+      "verdict": "pass",
+      "merge_sha": "50ff0d0c27876c586157a8004fd543e74e33d5ef",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1724-auto-close-intent-grammar",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

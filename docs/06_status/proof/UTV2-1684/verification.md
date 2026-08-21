@@ -1,6 +1,6 @@
 # PROOF: UTV2-1684
 
-MERGE_SHA: 543271854f8beb548f094885153d060b49a19bce
+MERGE_SHA: f044a2c465004d05aa2eca93e041d2f1e4b43b84
 
 This is the approved implementation head. The post-merge close workflow rebinds these anchors to the authoritative PR merge SHA after merge; no pre-merge artifact claims that future SHA.
 

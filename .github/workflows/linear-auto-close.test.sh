@@ -65,9 +65,45 @@ extract_linear_close_ids() {
   local trailer_ids
   trailer_ids=$(echo "$msg" | grep -oE '^Linear-Close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
 
+  # Closeout form: ^chore(lanes): close UTV2-NNN  (anchored to line start)
+  #
+  # UTV2-1724: the sanctioned closeout path emits the BARE IMPERATIVE "close",
+  # which none of the forms above match:
+  #
+  #   post-merge-lane-close.yml:536
+  #     git commit -m "chore(lanes): close $ISSUE_ID — lane closed, sync file removed"
+  #
+  # So every commit the sanctioned closeout path produced fell through to
+  # decision=no_close, silently, for 24 days — 25 merged lanes were left as
+  # Linear ghosts. See has_lane_closeout_signature() below for the tripwire
+  # that makes a recurrence fail loudly instead of accumulating.
+  #
+  # Deliberately NOT added to the inline alternation above. Bare "close" is a
+  # common English word; matching it anywhere would close an issue on prose
+  # like "do not close UTV2-1", "close UTV2-1 was reverted", or a body line
+  # quoting an earlier commit. This form is anchored to line start AND
+  # requires the literal chore(lanes) scope, so it matches the sanctioned
+  # producer and nothing else. The other chore(lanes) commits — lane-start
+  # metadata, PR binding, truth-check result, auto-reconcile — do not carry
+  # the "close " verb and are unaffected.
+  #
+  # SUBJECT LINE ONLY, matching has_lane_closeout_signature().
+  #
+  # UTV2-1724: an earlier revision matched any line at column 0. Once the
+  # signature was narrowed to the subject, that left an asymmetry a commit
+  # could walk through: a body line at column 0 reading
+  # "chore(lanes): close UTV2-N ..." would CLOSE that issue while the tripwire,
+  # looking only at the subject, stayed structurally blind to it. Extraction
+  # and signature must see the same text or the control does not cover the
+  # behaviour. The producer writes a single-line message, so the subject is the
+  # correct scope for both.
+  local closeout_ids closeout_subject
+  closeout_subject=$(echo "$msg" | head -n 1)
+  closeout_ids=$(echo "$closeout_subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
   # Collect all candidate close IDs
   local all_ids
-  all_ids=$(printf '%s\n%s\n' "$inline_ids" "$trailer_ids" \
+  all_ids=$(printf '%s\n%s\n%s\n' "$inline_ids" "$trailer_ids" "$closeout_ids" \
     | sort -u \
     | grep -v '^$')
 
@@ -102,6 +138,421 @@ extract_linear_close_ids() {
   done
 
   echo "$filtered_ids" | xargs | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//'
+}
+
+# ---------------------------------------------------------------------------
+# Fail-closed tripwire (UTV2-1724)
+# ---------------------------------------------------------------------------
+#
+# Returns 0 (true) when the commit message carries a LANE-CLOSEOUT SIGNATURE:
+# it was produced by the sanctioned closeout path and therefore MUST resolve to
+# at least one close ID.
+#
+# Why this exists as a separate predicate rather than as part of extraction:
+# the original defect was not that extraction was wrong, but that being wrong
+# was INVISIBLE. A closeout commit that matched nothing logged
+# `decision=no_close reason=no_close_intent` as a ::notice — the same output a
+# perfectly ordinary non-closing commit produces. An aggregate green conflated
+# "nothing to close here" with "the one thing this workflow exists to do did
+# not happen". That is the evidence-conflation class already in KNOWN_DEBT.
+#
+# The signature is intentionally derived from the closeout path's OWN output
+# and is broader than the grammar that consumes it. If the closeout template
+# changes again, the signature keeps matching while the grammar stops — and the
+# workflow fails loudly on the very first drifted commit instead of quietly
+# stranding lanes for weeks.
+#
+# Suppression markers (No-close:, plan-only, partial-fix) are honoured: a
+# deliberate opt-out is not drift. The caller checks those before consulting
+# this predicate.
+has_lane_closeout_signature() {
+  local msg
+  if [ $# -gt 0 ]; then
+    msg="$1"
+  else
+    msg=$(cat)
+  fi
+
+  [ -z "$msg" ] && return 1
+
+  # SUBJECT LINE ONLY.
+  #
+  # UTV2-1724: this originally scanned the whole message. That made the
+  # signature prose-sensitive, and it misfired on this lane's own commits —
+  # which quote the closeout template in order to explain the defect. A commit
+  # that merely DESCRIBES a closeout would have reddened main.
+  #
+  # The producer writes a single-line commit message, so the signature lives in
+  # the subject and nowhere else. Restricting to the first line matches the
+  # producer exactly and makes body prose — explanations, quoted examples,
+  # changelogs — structurally incapable of triggering it.
+  local subject
+  subject=$(echo "$msg" | head -n 1)
+
+  # A revert is not a closeout. `git revert` prefixes the reverted subject
+  # verbatim, so "Revert \"chore(lanes): close UTV2-N — lane closed, sync file
+  # removed\"" carries both signatures while extracting nothing — the tripwire
+  # would fire and redden main on a legitimate, correct revert. Undoing a
+  # closeout is a deliberate act, not template drift.
+  # Reverts and reapplies are deliberate acts, not template drift. git writes
+  # the reverted subject verbatim, and since git 2.36 a revert-of-a-revert is
+  # subjected "Reapply \"...\"". Matched case-insensitively and across the
+  # conventional-commit variants, because every one of them reddened main.
+  # Conventional-commit scopes too: revert(lanes): / reapply(ci): and friends.
+  # Enumerating literal prefixes missed those twice; a regex over the leading
+  # token covers the whole family.
+  if echo "$subject" | grep -qiE '^(revert|reapply)(s|ed|ing|ies)?(\([^)]*\))?[[:space:]!:\"]' 2>/dev/null; then
+    return 1
+  fi
+
+  # Signature 1: the conventional-commit scope the closeout path always uses,
+  # combined with a close verb in any form.
+  if echo "$subject" | grep -qE '^chore\(lanes\):[[:space:]]+clos(e|es|ed|ing)[[:space:]]' 2>/dev/null; then
+    return 0
+  fi
+
+  # Signature 2: the literal trailer phrase emitted by
+  # post-merge-lane-close.yml, for a subject whose scope or verb has drifted.
+  #
+  # UTV2-1724: additionally requires an issue id in the subject. Without it the
+  # phrase is an unanchored substring, so a subject merely QUOTING the template
+  # — e.g. a commit that changes the template — reddened main. A real closeout,
+  # however its scope or verb drifts, always names the issue it closes.
+  # Signature 2 is anchored to the producer's SCOPE, not to a guess about
+  # punctuation.
+  #
+  # Two earlier revisions tried to separate "a closeout whose verb or scope
+  # drifted" from "a commit that merely talks about the phrase", and both were
+  # wrong in both directions:
+  #
+  #   - requiring an issue id silenced the id-dropping drift, which is the
+  #     shape most likely to strand every lane at once;
+  #   - excluding subjects containing a quote character silenced any drift whose
+  #     subject happened to contain an apostrophe, and fired on documentation
+  #     that quotes the phrase with backticks or asterisks, which is how this
+  #     repo actually writes markdown.
+  #
+  # Both were heuristics about how a human might punctuate. The producer has a
+  # structural property instead: it is a chore commit. `chore(` is stable across
+  # every drift this signature exists to catch — a changed verb, a dropped id, a
+  # renamed scope — and absent from the docs and template-editing commits that
+  # were reddening main.
+  #
+  # Residual, stated rather than hidden: a chore commit that quotes the phrase
+  # in its own subject still fires. That is the fail-closed direction and far
+  # rarer than the docs case, and signature 1 already covers the common drift.
+  if echo "$subject" | grep -qE 'lane closed, sync file removed' 2>/dev/null \
+     && echo "$subject" | grep -qE '^chore\(' 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Would this message have yielded close IDs if the opt-out filter were not
+# applied? Runs the three close-intent FORMS only, skipping suppression.
+#
+# This exists so the tripwire can distinguish the two reasons extraction can
+# come back empty:
+#   - the forms matched, and an opt-out removed the result   -> deliberate
+#   - no form matched at all                                 -> grammar drift
+extract_close_ids_ignoring_suppression() {
+  local msg="$1"
+  [ -z "$msg" ] && return 0
+
+  # Each form must be matched in the SAME SCOPE extract_linear_close_ids() uses
+  # for it, or this predicate answers a different question than the one the
+  # tripwire is asking.
+  #
+  # UTV2-1724: the closeout grep here read the whole message while extraction
+  # and the signature had both been narrowed to the subject. That third,
+  # unaligned scope reopened the hole twice already closed:
+  #
+  #   subject: chore(lanes): closing UTV2-9999 — lane closed, sync file removed
+  #   body:    chore(lanes): close UTV2-1234 — lane closed, sync file removed
+  #   -> ids=[]  signature=yes  suppression=yes  tripwire SILENT
+  #
+  # A drifted closeout was misclassified as a deliberate opt-out — the exact
+  # silent-ghost outcome this lane exists to abolish. Scope alignment is the
+  # invariant; it is asserted across all three functions by a case below.
+  local inline trailer closeout subject
+  subject=$(echo "$msg" | head -n 1)
+  inline=$(echo "$msg" | grep -oiE '\b(closes|fixes|resolves)[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  trailer=$(echo "$msg" | grep -oE '^Linear-Close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  closeout=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  printf '%s\n%s\n%s\n' "$inline" "$trailer" "$closeout" | sort -u | grep -v '^$' | tr '\n' ' ' | sed 's/ $//'
+}
+
+# Was extraction's empty result caused by a DELIBERATE, EXPLICIT opt-out rather
+# than by the grammar failing to match?
+#
+# UTV2-1724, first revision: this grepped the message for "plan-only",
+# "partial-fix" or "No-close:". That was a prose escape hatch — this lane's own
+# commit body, which merely describes the opt-out feature, switched off the
+# control it was describing.
+#
+# UTV2-1724, second revision: it asked only whether the close-intent FORMS
+# matched. That closed the prose hole for drifted subjects but opened a
+# narrower one, because extract_linear_close_ids() still suppresses on bare
+# prose:
+#
+#   chore(lanes): close UTV2-1614 — lane closed, sync file removed
+#
+#   this is not plan-only at all
+#   -> forms matched, extraction suppressed on the word "plan-only",
+#      tripwire read that as deliberate and stayed silent
+#
+# A well-formed sanctioned closeout was voided by one word in its body, with
+# nothing going red — the exact ghost this lane exists to abolish.
+#
+# So "deliberate" now requires an EXPLICIT No-close: trailer naming an ID the
+# forms actually found. Bare prose is not enough to silence the tripwire on a
+# commit that carries a closeout signature: if someone really means to suppress
+# a sanctioned closeout, they name it.
+#
+# extract_linear_close_ids()'s own opt-out semantics are pre-existing and
+# deliberately left untouched — it still suppresses on prose. The difference is
+# that doing so on a closeout commit is now LOUD instead of silent.
+has_close_suppression_marker() {
+  local msg
+  if [ $# -gt 0 ]; then
+    msg="$1"
+  else
+    msg=$(cat)
+  fi
+
+  [ -z "$msg" ] && return 1
+
+  # When the SUBJECT carries a closeout signature, the only opt-out that counts
+  # is one naming the ID in the subject's own closeout form.
+  #
+  # UTV2-1724, hatch 7: this previously accepted a No-close: naming ANY id the
+  # forms found anywhere, and the forms include inline verbs read from the body.
+  # So a drifted subject plus an unrelated body pair silenced the tripwire:
+  #
+  #   chore(lanes): closing UTV2-1614 — lane closed, sync file removed
+  #
+  #   Closes UTV2-9999
+  #   No-close: UTV2-9999
+  #
+  # signature came from the subject, the opt-out came from the body, and the two
+  # paths disagreed about WHICH issue "deliberate" applied to. Same class as
+  # hatches 5 and 6, one level further in.
+  local subject subject_id
+  subject=$(echo "$msg" | head -n 1)
+  subject_id=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  if has_lane_closeout_signature "$msg"; then
+    # A drifted subject yields no subject_id. Nothing in the body can make that
+    # deliberate — drift is drift.
+    [ -n "$subject_id" ] || return 1
+    echo "$msg" | grep -qE "No-close:[[:space:]]*${subject_id}([^0-9]|$)" 2>/dev/null && return 0
+    return 1
+  fi
+
+  # No closeout signature: fall back to "did the forms match and get filtered".
+  local raw
+  raw=$(extract_close_ids_ignoring_suppression "$msg")
+  [ -n "$raw" ] || return 1
+  local nc id ncid
+  nc=$(echo "$msg" | grep -oE 'No-close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+  for id in $raw; do
+    for ncid in $nc; do
+      [ "$id" = "$ncid" ] && return 0
+    done
+  done
+  return 1
+}
+
+
+# ---------------------------------------------------------------------------
+# Authoritative merge SHA resolution (UTV2-1724 P1)
+# ---------------------------------------------------------------------------
+#
+# `github.sha` on a push is the SHA of the PUSHED commit. For an ordinary
+# squash/merge to main that IS the implementation merge SHA, and comparing the
+# manifest against it is correct.
+#
+# For the sanctioned closeout path it is not. post-merge-lane-close.yml pushes
+# a SEPARATE commit AFTER the merge:
+#
+#   3ca047fa  UTV2-1721: port bounded harness corrections (#1432)   <- the merge
+#   44068585  chore(lanes): close UTV2-1721 — lane closed, ...      <- pushed later
+#
+# The manifest's commit_sha is bound to the merge (3ca047fa). github.sha on the
+# closeout push is 44068585. The completion gate's
+# `[ "$m_sha" != "$MERGE_SHA" ]` therefore compares two SHAs that can never be
+# equal, and every sanctioned closeout is refused with
+# "manifest commit_sha X is not this merge SHA Y".
+#
+# That is a second, independent fail-open on the same path as the grammar
+# defect: fixing extraction alone converts a silent `no_close_intent` ghost into
+# a silent `completion withheld` ghost. Same stranded lane, different reason.
+#
+# This resolver deliberately introduces NO new contract. The authoritative merge
+# SHA is the one the sanctioned closeout ALREADY recorded, in the two fields
+# that already exist and are already cross-checked by the gate below:
+#   manifest .commit_sha                          — the implementation merge
+#   manifest .truth_check_history[-1].merge_sha   — the receipt bound to it
+# The resolver reads them; it does not invent a third source of truth.
+#
+# Echoes the resolved SHA, or empty when it cannot be resolved. Empty on a
+# closeout commit is drift and MUST fail closed at the call site.
+resolve_authoritative_merge_sha() {
+  local commit_msg="$1"
+  local manifest_path="$2"
+  local push_sha="$3"
+
+  # Not a closeout commit: the pushed commit IS the merge. Unchanged behaviour.
+  if ! has_lane_closeout_signature "$commit_msg"; then
+    echo "$push_sha"
+    return 0
+  fi
+
+  # Closeout commit: the pushed SHA is the closeout, never the merge.
+  [ -f "$manifest_path" ] || { echo ""; return 0; }
+
+  local m_sha r_sha
+  m_sha=$(jq -r '.commit_sha // ""' "$manifest_path" 2>/dev/null)
+  r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path" 2>/dev/null)
+
+  # Both existing records must agree. If they disagree, the manifest is not a
+  # trustworthy source for the merge SHA and we resolve nothing rather than
+  # picking a side.
+  if [ -z "$m_sha" ] || [ "$m_sha" = "null" ]; then echo ""; return 0; fi
+  if [ "$r_sha" != "$m_sha" ]; then echo ""; return 0; fi
+
+  echo "$m_sha"
+}
+
+# Is `sha` an ancestor of (or identical to) `push_sha` on the remote?
+#
+# The checkout is fetch-depth 1, so there is no local history to walk. Uses the
+# compare API. With base=sha and head=push_sha it reports "ahead" when the base
+# is reachable from the head, or "identical" when they are the same commit;
+# those are the two statuses accepted below.
+#
+# Fails closed: any API error, missing token, or unrecognised status is treated
+# as NOT an ancestor. A completion that cannot be proven does not happen.
+sha_is_ancestor_of_push() {
+  local sha="$1"
+  local push_sha="$2"
+
+  [ -n "$sha" ] || return 1
+  [ -n "$push_sha" ] || return 1
+  [ "$sha" = "$push_sha" ] && return 0
+
+  local repo="${REPO:-griff843/Unit-Talk-v2}"
+  local status
+  status=$(gh api "repos/${repo}/compare/${sha}...${push_sha}" --jq '.status' 2>/dev/null) || return 1
+
+  case "$status" in
+    ahead|identical) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Should the tripwire fire for this commit?
+#
+# UTV2-1724 hatch 8. The workflow previously reached the tripwire only when the
+# extracted id set was EMPTY. That set is built from the WHOLE message, while
+# the signature is read from the SUBJECT, so an unrelated id anywhere in the
+# body made the tripwire unreachable:
+#
+#   chore(lanes): closing <A> — lane closed, sync file removed
+#
+#   Closes <B>
+#
+# extraction returns [<B>], the gate closes <B>, and <A>'s drifted closeout is
+# stranded in silence — drift undetected AND the wrong issue closed. It needs no
+# opt-out at all, so it is strictly more reachable than hatch 7.
+#
+# The right question was never "did we extract anything" but "did we extract the
+# id this subject says it is closing". A commit carrying a closeout signature
+# must yield ITS OWN subject id; anything else is drift, whatever else the body
+# happens to mention.
+should_fire_closeout_tripwire() {
+  local msg="$1"
+  local ids="$2"
+
+  has_lane_closeout_signature "$msg" || return 1
+  ! has_close_suppression_marker "$msg" || return 1
+
+  local subject subject_id
+  subject=$(echo "$msg" | head -n 1)
+  subject_id=$(echo "$subject" | grep -oE '^chore\(lanes\):[[:space:]]+close[[:space:]]+UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  # Drifted subject: no id of its own to look for. Fire.
+  [ -n "$subject_id" ] || return 0
+
+  # Well-formed subject: fire unless its own id actually got extracted.
+  case " $ids " in
+    *" $subject_id "*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Completion decision (UTV2-1724)
+# ---------------------------------------------------------------------------
+#
+# The truth-gated completion decision, moved out of the workflow YAML and into
+# the shared file so the TEST HARNESS EXERCISES THE REAL DECISION PATH rather
+# than a paraphrase of it. Testing ID extraction alone was how the SHA-comparison
+# defect below survived: the grammar could be fixed and fully green while the
+# gate that consumes its output still refused every sanctioned closeout.
+#
+# Echoes the reason completion is withheld, or empty when the issue may
+# complete. Never exits non-zero — the caller branches on the string.
+#
+# Args: identifier, manifest_path, commit_msg, push_sha
+evaluate_completion_block() {
+  local identifier="$1"
+  local manifest_path="$2"
+  local commit_msg="$3"
+  local push_sha="$4"
+
+  if [ ! -f "$manifest_path" ]; then
+    echo "no lane manifest at $manifest_path; a merge alone is not evidence of completion"
+    return 0
+  fi
+
+  local effective_merge_sha
+  effective_merge_sha=$(resolve_authoritative_merge_sha "$commit_msg" "$manifest_path" "$push_sha")
+
+  if has_lane_closeout_signature "$commit_msg" && [ -z "$effective_merge_sha" ]; then
+    echo "closeout commit but the manifest yields no agreed authoritative merge SHA (commit_sha absent, or truth-check receipt bound to a different SHA)"
+    return 0
+  fi
+
+  local m_status m_sha r_verdict r_sha r_runner
+  m_status=$(jq -r '.status // ""' "$manifest_path")
+  m_sha=$(jq -r '.commit_sha // ""' "$manifest_path")
+  r_verdict=$(jq -r '(.truth_check_history // []) | last | .verdict // ""' "$manifest_path")
+  r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path")
+  r_runner=$(jq -r '(.truth_check_history // []) | last | .runner // ""' "$manifest_path")
+
+  if [ "$m_status" != "done" ] && [ "$m_status" != "merged" ]; then
+    echo "lane status \"$m_status\" does not assert successful completion"
+  elif [ "$r_verdict" != "pass" ]; then
+    echo "latest truth-check verdict is \"$r_verdict\", not \"pass\""
+  elif [ "$r_runner" != "ops:lane-close" ] && [ "$r_runner" != "ops:reconcile" ]; then
+    echo "truth-check runner \"$r_runner\" is not a canonical runner"
+  elif [ -z "$m_sha" ] || [ "$m_sha" != "$effective_merge_sha" ]; then
+    echo "manifest commit_sha \"$m_sha\" is not the authoritative merge SHA $effective_merge_sha"
+  elif ! sha_is_ancestor_of_push "$effective_merge_sha" "$push_sha"; then
+    # For a closeout commit the comparison above is satisfied by construction,
+    # because the resolver reads commit_sha itself. THIS is the check that
+    # carries the real guarantee: the SHA the manifest claims as its merge must
+    # actually be an ancestor of the commit being pushed to main. A manifest
+    # naming a SHA that never landed cannot complete an issue.
+    echo "manifest merge SHA $effective_merge_sha is not an ancestor of the pushed commit $push_sha; it did not land on main"
+  elif [ "$r_sha" != "$m_sha" ]; then
+    echo "truth-check receipt is bound to $r_sha, not to the manifest's $m_sha"
+  else
+    echo ""
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -279,6 +730,512 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
     "Links reference alone — not close intent" \
     "feat: something. Links: UTV2-539" \
     ""
+
+  echo ""
+  echo "=== UTV2-1724: SANCTIONED CLOSEOUT COMMITS ==="
+
+  # The exact byte-for-byte string emitted by post-merge-lane-close.yml:536,
+  # em dash included. This is the case that failed for 24 days.
+  assert_match \
+    "sanctioned closeout commit (verbatim producer output)" \
+    "chore(lanes): close UTV2-1614 — lane closed, sync file removed" \
+    "UTV2-1614"
+
+  assert_match \
+    "sanctioned closeout, ASCII hyphen instead of em dash" \
+    "chore(lanes): close UTV2-1721 - lane closed, sync file removed" \
+    "UTV2-1721"
+
+  assert_match \
+    "sanctioned closeout with a body" \
+    $'chore(lanes): close UTV2-1590 — lane closed, sync file removed\n\n[skip ci]' \
+    "UTV2-1590"
+
+  # Other chore(lanes) producers MUST NOT close. Each string below is taken
+  # from a real commit template in this repo.
+  assert_match \
+    "lane-start manifest commit does not close (lane-start.ts:1380)" \
+    "chore(lanes): UTV2-1724 lane manifest and sync metadata" \
+    ""
+
+  assert_match \
+    "lane readmission commit does not close (lane-start.ts:1183)" \
+    "chore(lanes): UTV2-1724 existing branch readmission metadata" \
+    ""
+
+  assert_match \
+    "PR binding commit does not close (lane-pr-binding.yml:115)" \
+    "chore(lanes): bind UTV2-1724 to PR #1500" \
+    ""
+
+  assert_match \
+    "truth-check record commit does not close (lane-close.ts:1180)" \
+    "chore(lanes): UTV2-1724 record lane-close truth-check result" \
+    ""
+
+  assert_match \
+    "auto-reconcile commit does not close (reconcile-stale-lanes.yml:49)" \
+    "chore(lanes): auto-reconcile stale manifests" \
+    ""
+
+  # Bare "close" is only honoured under the anchored chore(lanes) scope.
+  assert_match \
+    "bare close verb in prose does not close" \
+    "fix: do not close UTV2-777 until the gate lands" \
+    ""
+
+  assert_match \
+    "bare close verb mid-line does not close" \
+    "chore: we will close UTV2-778 next week" \
+    ""
+
+  assert_match \
+    "closeout form must be anchored to line start" \
+    "see also: chore(lanes): close UTV2-779 — lane closed, sync file removed" \
+    ""
+
+  assert_match \
+    "closeout form honours No-close opt-out" \
+    $'chore(lanes): close UTV2-780 — lane closed, sync file removed\n\nNo-close: UTV2-780' \
+    ""
+
+  assert_match \
+    "closeout form is subject-only: a column-0 BODY line must not close" \
+    $'feat(api): unrelated change\n\nchore(lanes): close UTV2-1234 — lane closed, sync file removed' \
+    ""
+
+  assert_match \
+    "reverting a closeout does not close" \
+    'Revert "chore(lanes): close UTV2-1614 — lane closed, sync file removed"' \
+    ""
+
+  echo ""
+  echo "=== UTV2-1724: FAIL-CLOSED TRIPWIRE ==="
+
+  assert_signature() {
+    local label="$1"
+    local input="$2"
+    local expected="$3"
+    local actual
+    if has_lane_closeout_signature "$input"; then actual="yes"; else actual="no"; fi
+    if [ "$actual" = "$expected" ]; then
+      echo "  PASS  $label"
+      pass=$((pass + 1))
+    else
+      echo "  FAIL  $label"
+      echo "        input:    $(printf '%s' "$input" | head -c 100)"
+      echo "        expected: '$expected'"
+      echo "        actual:   '$actual'"
+      fail=$((fail + 1))
+    fi
+  }
+
+  assert_signature \
+    "sanctioned closeout carries the signature" \
+    "chore(lanes): close UTV2-1614 — lane closed, sync file removed" \
+    "yes"
+
+  assert_signature \
+    "trailer phrase in a DRIFTED SUBJECT carries the signature" \
+    "chore(lanes): terminate UTV2-1614 — lane closed, sync file removed" \
+    "yes"
+
+  # The signature is deliberately subject-only. An earlier revision scanned the
+  # whole message, and it misfired on this lane's own commits — they quote the
+  # closeout template to explain the defect, so a commit that merely DESCRIBES a
+  # closeout would have reddened main. The producer writes a single-line
+  # message, so body prose can never be a real signature.
+  assert_signature \
+    "trailer phrase in the BODY does not carry the signature" \
+    $'chore(lanes): terminate UTV2-1614\n\nlane closed, sync file removed' \
+    "no"
+
+  assert_signature \
+    "a commit that merely describes the closeout template carries no signature" \
+    $'fix(ci): explain the closeout grammar\n\nThe producer emits:\n  chore(lanes): close UTV2-1 — lane closed, sync file removed' \
+    "no"
+
+  assert_signature \
+    "past-tense closeout subject carries the signature" \
+    "chore(lanes): closed UTV2-1614" \
+    "yes"
+
+  assert_signature \
+    "lane-start metadata commit carries no signature" \
+    "chore(lanes): UTV2-1724 lane manifest and sync metadata" \
+    "no"
+
+  assert_signature \
+    "ordinary feature commit carries no signature" \
+    "feat: something. Closes UTV2-123." \
+    "no"
+
+  # The control proved by making it FAIL on the condition it names, not by
+  # presence plus a green run: a message that LOOKS like a closeout to the
+  # signature but that the grammar cannot extract from. This is the exact
+  # shape a future template drift would take, and it must be detectable.
+  drift_msg="chore(lanes): terminate UTV2-1614 — lane closed, sync file removed"
+  drift_ids=$(extract_linear_close_ids "$drift_msg")
+  if has_lane_closeout_signature "$drift_msg" && [ -z "$drift_ids" ]; then
+    echo "  PASS  drifted closeout template is detectable (signature yes, ids empty)"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  drifted closeout template is detectable (signature yes, ids empty)"
+    echo "        signature: $(has_lane_closeout_signature "$drift_msg" && echo yes || echo no)"
+    echo "        ids:       '$drift_ids'"
+    fail=$((fail + 1))
+  fi
+
+  # And the converse: a deliberate opt-out on a real closeout must NOT be
+  # reported as drift, or every intentional no-close would break the build.
+  optout_msg=$'chore(lanes): close UTV2-1614 — lane closed, sync file removed\n\nNo-close: UTV2-1614'
+  if has_close_suppression_marker "$optout_msg"; then
+    echo "  PASS  deliberate opt-out is distinguishable from drift"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  deliberate opt-out is distinguishable from drift"
+    fail=$((fail + 1))
+  fi
+
+  # The opt-out test asks "did the FORMS match", not "does the text mention an
+  # opt-out". An earlier revision grepped for the words plan-only / partial-fix
+  # / No-close, which meant any commit whose prose mentioned them silently
+  # disabled the tripwire — a fail-open inside the fix for a fail-open,
+  # reproduced on this lane's own squash merge.
+  prose_msg=$'chore(lanes): terminate UTV2-1614 — lane closed, sync file removed\n\nMentions plan-only and partial-fix in prose only.'
+  if has_lane_closeout_signature "$prose_msg" && ! has_close_suppression_marker "$prose_msg"; then
+    echo "  PASS  prose mentioning plan-only/partial-fix cannot silence the tripwire"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  prose mentioning plan-only/partial-fix cannot silence the tripwire"
+    fail=$((fail + 1))
+  fi
+
+  # Hatch 6: extract_linear_close_ids() suppresses on bare prose, so a
+  # well-formed sanctioned closeout could be voided by one word in its body
+  # while the tripwire read that as deliberate and stayed silent. Silencing now
+  # requires an explicit No-close: naming an ID the forms actually found.
+  prose_void_msg=$'chore(lanes): close UTV2-1614 — lane closed, sync file removed\n\nthis is not plan-only at all'
+  if [ -z "$(extract_linear_close_ids "$prose_void_msg")" ] \
+     && has_lane_closeout_signature "$prose_void_msg" \
+     && ! has_close_suppression_marker "$prose_void_msg"; then
+    echo "  PASS  prose cannot silently void a sanctioned closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  prose cannot silently void a sanctioned closeout"
+    fail=$((fail + 1))
+  fi
+
+  # ...but a real, named opt-out still is deliberate.
+  named_optout=$'chore(lanes): close UTV2-1614 — lane closed, sync file removed\n\nNo-close: UTV2-1614'
+  if has_close_suppression_marker "$named_optout"; then
+    echo "  PASS  an explicit No-close naming the found ID still silences the tripwire"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an explicit No-close naming the found ID still silences the tripwire"
+    fail=$((fail + 1))
+  fi
+
+  # Hatch 10: signature 2 is anchored to the producer's chore( scope, not to a
+  # guess about punctuation. Two earlier heuristics were wrong in BOTH
+  # directions — silencing real drift whose subject contained an apostrophe, and
+  # firing on documentation that quotes the phrase with backticks or asterisks.
+  # Both directions are asserted here so neither can regress silently.
+  for drift in 'chore(lanes): finalize "UTV2-1614" — lane closed, sync file removed' \
+               $'chore(lanes): don\'t finalize — lane closed, sync file removed' \
+               'chore(lane): terminate UTV2-1614 — lane closed, sync file removed' \
+               'chore(lanes): lane closed, sync file removed'; do
+    if has_lane_closeout_signature "$drift"; then
+      echo "  PASS  drift carries the signature: ${drift:0:40}"
+      pass=$((pass + 1))
+    else
+      echo "  FAIL  drift carries the signature: ${drift:0:40}"
+      fail=$((fail + 1))
+    fi
+  done
+
+  for talk in 'docs: describe the `lane closed, sync file removed` trailer' \
+              'docs: **lane closed, sync file removed** explained' \
+              'docs: the (lane closed, sync file removed) phrase' \
+              'fix(ci): stop emitting "lane closed, sync file removed"'; do
+    if has_lane_closeout_signature "$talk"; then
+      echo "  FAIL  a commit merely discussing the phrase stays silent: ${talk:0:40}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  a commit merely discussing the phrase stays silent: ${talk:0:40}"
+      pass=$((pass + 1))
+    fi
+  done
+
+  # Hatch 8: the tripwire must not be gated behind an empty id set. `ids` is
+  # whole-message while the signature is subject-scoped, so an unrelated id in
+  # the body used to make the tripwire unreachable AND close the wrong issue.
+  fire(){ local ids; ids=$(extract_linear_close_ids "$1"); should_fire_closeout_tripwire "$1" "$ids"; }
+
+  h8=$'chore(lanes): closing UTV2-1614 — lane closed, sync file removed\n\nCloses UTV2-9999'
+  if fire "$h8"; then
+    echo "  PASS  an unrelated id in the body cannot hide a drifted closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an unrelated id in the body cannot hide a drifted closeout"
+    fail=$((fail + 1))
+  fi
+
+  # The signature must NOT require an issue id in the subject. A template that
+  # stops emitting the id strands every lane at once; requiring an id assumes
+  # exactly what that drift breaks. An earlier revision made this case silent.
+  if fire 'chore(lanes): lane closed, sync file removed'; then
+    echo "  PASS  a closeout template that drops the issue id still fires"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  a closeout template that drops the issue id still fires"
+    fail=$((fail + 1))
+  fi
+
+  # A well-formed closeout that DID yield its own id must not fire.
+  if fire 'chore(lanes): close UTV2-1614 — lane closed, sync file removed'; then
+    echo "  FAIL  a well-formed closeout that yielded its own id does not fire"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  a well-formed closeout that yielded its own id does not fire"
+    pass=$((pass + 1))
+  fi
+
+  # Scoped conventional-commit revert forms are reverts too.
+  for rv in 'revert(lanes): chore(lanes): close UTV2-1614 — lane closed, sync file removed' \
+            'reapply(ci): chore(lanes): close UTV2-1614 — lane closed, sync file removed'; do
+    if fire "$rv"; then
+      echo "  FAIL  scoped revert/reapply form does not fire: ${rv:0:24}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  scoped revert/reapply form does not fire: ${rv:0:24}"
+      pass=$((pass + 1))
+    fi
+  done
+
+  # Hatch 7: the opt-out must name the SUBJECT's closeout ID. An unrelated pair
+  # in the body previously silenced a drifted subject, because the signature and
+  # the opt-out disagreed about which issue "deliberate" applied to.
+  unrelated_optout=$'chore(lanes): closing UTV2-1614 — lane closed, sync file removed\n\nCloses UTV2-9999\nNo-close: UTV2-9999'
+  if has_lane_closeout_signature "$unrelated_optout" && ! has_close_suppression_marker "$unrelated_optout"; then
+    echo "  PASS  an opt-out for an unrelated ID cannot silence a drifted closeout"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  an opt-out for an unrelated ID cannot silence a drifted closeout"
+    fail=$((fail + 1))
+  fi
+
+  # git writes "Reapply \"...\"" when reverting a revert (>= 2.36); without this
+  # a correct re-application of a closeout reddened main.
+  for rv in 'Reapply "chore(lanes): close UTV2-1614 — lane closed, sync file removed"' \
+            'revert!: chore(lanes): close UTV2-1614 — lane closed, sync file removed' \
+            'Reverts: chore(lanes): close UTV2-1614 — lane closed, sync file removed'; do
+    if has_lane_closeout_signature "$rv"; then
+      echo "  FAIL  revert/reapply form carries no signature: ${rv:0:32}"
+      fail=$((fail + 1))
+    else
+      echo "  PASS  revert/reapply form carries no signature: ${rv:0:32}"
+      pass=$((pass + 1))
+    fi
+  done
+
+  # Signature 2 is an unanchored phrase match, so it also requires an issue id
+  # in the subject — otherwise a commit merely QUOTING the template reddens main.
+  quoting_msg='fix(ci): stop emitting "lane closed, sync file removed"'
+  if has_lane_closeout_signature "$quoting_msg"; then
+    echo "  FAIL  a subject merely quoting the template carries no signature"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  a subject merely quoting the template carries no signature"
+    pass=$((pass + 1))
+  fi
+
+  # A revert is a deliberate undo, not template drift. git revert prefixes the
+  # reverted subject verbatim, so without this the tripwire would redden main on
+  # a correct revert.
+  revert_msg='Revert "chore(lanes): close UTV2-1614 — lane closed, sync file removed"'
+  if has_lane_closeout_signature "$revert_msg"; then
+    echo "  FAIL  reverting a closeout does not fire the tripwire"
+    fail=$((fail + 1))
+  else
+    echo "  PASS  reverting a closeout does not fire the tripwire"
+    pass=$((pass + 1))
+  fi
+
+  # Extraction and signature must see the same text, or a commit walks through
+  # the gap: a column-0 body line would close an issue the tripwire cannot see.
+  asym_msg=$'feat(api): unrelated change\n\nchore(lanes): close UTV2-1234 — lane closed, sync file removed'
+  asym_ids=$(extract_linear_close_ids "$asym_msg")
+  asym_raw=$(extract_close_ids_ignoring_suppression "$asym_msg")
+  if [ -z "$asym_ids" ] && [ -z "$asym_raw" ] && ! has_lane_closeout_signature "$asym_msg"; then
+    echo "  PASS  all three scopes agree — extraction, raw-form and signature"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  all three scopes agree — extraction, raw-form and signature"
+    echo "        ids='$asym_ids' raw='$asym_raw'"
+    fail=$((fail + 1))
+  fi
+
+  # The exploit a two-scope assertion could not catch: a DRIFTED subject whose
+  # body carries a well-formed closeout line. If the raw-form scan reads the
+  # body, it reports a form match, the tripwire reads that as a deliberate
+  # opt-out, and real drift passes in silence.
+  drift_body_msg=$'chore(lanes): closing UTV2-9999 — lane closed, sync file removed\nchore(lanes): close UTV2-1234 — lane closed, sync file removed'
+  if has_lane_closeout_signature "$drift_body_msg" \
+     && ! has_close_suppression_marker "$drift_body_msg" \
+     && [ -z "$(extract_linear_close_ids "$drift_body_msg")" ]; then
+    echo "  PASS  drifted subject is not silenced by a closeout line in the body"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  drifted subject is not silenced by a closeout line in the body"
+    fail=$((fail + 1))
+  fi
+
+  echo ""
+  echo "=== UTV2-1724: FULL CLOSEOUT DECISION PATH ==="
+
+  # These exercise extraction -> signature -> SHA resolution -> completion gate
+  # against real manifest shapes and real closeout-commit ancestry. Ancestry is
+  # stubbed so the suite stays hermetic; the stub is declared per-case so a case
+  # cannot silently inherit another's ancestry assumption.
+
+  _fixture_dir=$(mktemp -d)
+  trap 'rm -r "$_fixture_dir" 2>/dev/null || true' EXIT
+
+  MERGE="3ca047fa8fcae2a8768d2ba63cace8019a5a76ca"    # the implementation merge
+  CLOSEOUT="44068585d1d5092f41a7cdaa01909df9b2a4358a" # the later closeout commit
+  CLOSEOUT_MSG="chore(lanes): close UTV2-1721 — lane closed, sync file removed"
+
+  write_manifest() {
+    # $1 name, $2 status, $3 commit_sha, $4 verdict, $5 receipt_sha, $6 runner
+    mkdir -p "$_fixture_dir/docs/06_status/lanes"
+    jq -n --arg s "$2" --arg c "$3" --arg v "$4" --arg r "$5" --arg run "$6" \
+      '{status:$s, commit_sha:$c, truth_check_history:[{verdict:$v, merge_sha:$r, runner:$run}]}' \
+      > "$_fixture_dir/docs/06_status/lanes/$1.json"
+    echo "$_fixture_dir/docs/06_status/lanes/$1.json"
+  }
+
+  stub_ancestry_true() { sha_is_ancestor_of_push() { return 0; }; }
+  stub_ancestry_false() { sha_is_ancestor_of_push() { return 1; }; }
+
+  assert_decision() {
+    local label="$1" expected="$2" actual="$3"
+    if [ "$expected" = "COMPLETE" ] && [ -z "$actual" ]; then
+      echo "  PASS  $label"; pass=$((pass + 1)); return
+    fi
+    if [ "$expected" != "COMPLETE" ] && [ -n "$actual" ] && [[ "$actual" == *"$expected"* ]]; then
+      echo "  PASS  $label"; pass=$((pass + 1)); return
+    fi
+    echo "  FAIL  $label"
+    echo "        expected: '$expected'"
+    echo "        actual:   '$actual'"
+    fail=$((fail + 1))
+  }
+
+  # --- THE DEFECT, reproduced end to end -----------------------------------
+  # A perfectly healthy lane: status done, verdict pass, canonical runner,
+  # receipt bound to the merge. The ONLY thing wrong is that the pushed commit
+  # is the closeout, not the merge.
+  mf=$(write_manifest UTV2-1721 done "$MERGE" pass "$MERGE" ops:lane-close)
+  stub_ancestry_true
+
+  legacy_m_sha=$(jq -r '.commit_sha' "$mf")
+  if [ "$legacy_m_sha" != "$CLOSEOUT" ]; then
+    echo "  PASS  pre-fix: a healthy manifest compared against the pushed closeout SHA can never match"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  pre-fix: a healthy manifest compared against the pushed closeout SHA can never match"
+    fail=$((fail + 1))
+  fi
+
+  assert_decision \
+    "sanctioned closeout on a healthy lane COMPLETES" \
+    "COMPLETE" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Resolution is correct, not merely permissive -------------------------
+  resolved=$(resolve_authoritative_merge_sha "$CLOSEOUT_MSG" "$mf" "$CLOSEOUT")
+  if [ "$resolved" = "$MERGE" ]; then
+    echo "  PASS  resolver returns the implementation merge SHA, not the closeout SHA"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  resolver returns the implementation merge SHA, not the closeout SHA"
+    echo "        expected: $MERGE"
+    echo "        actual:   $resolved"
+    fail=$((fail + 1))
+  fi
+
+  ordinary=$(resolve_authoritative_merge_sha "feat: thing (#12). Closes UTV2-900." "$mf" "$CLOSEOUT")
+  if [ "$ordinary" = "$CLOSEOUT" ]; then
+    echo "  PASS  non-closeout commit still resolves to the pushed SHA (behaviour unchanged)"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  non-closeout commit still resolves to the pushed SHA (behaviour unchanged)"
+    fail=$((fail + 1))
+  fi
+
+  # --- Fail-closed cases ----------------------------------------------------
+  stub_ancestry_true
+
+  mf2=$(write_manifest UTV2-1731 done "" pass "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout with no commit_sha fails closed" \
+    "no agreed authoritative merge SHA" \
+    "$(evaluate_completion_block UTV2-1731 "$mf2" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf3=$(write_manifest UTV2-1732 done "$MERGE" pass "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef" ops:lane-close)
+  assert_decision \
+    "closeout whose receipt is bound to a different SHA fails closed" \
+    "no agreed authoritative merge SHA" \
+    "$(evaluate_completion_block UTV2-1732 "$mf3" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf4=$(write_manifest UTV2-1733 in_review "$MERGE" pass "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout on a non-terminal lane is refused" \
+    "does not assert successful completion" \
+    "$(evaluate_completion_block UTV2-1733 "$mf4" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf5=$(write_manifest UTV2-1734 done "$MERGE" fail "$MERGE" ops:lane-close)
+  assert_decision \
+    "closeout with a failing truth-check is refused" \
+    "not \"pass\"" \
+    "$(evaluate_completion_block UTV2-1734 "$mf5" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  mf6=$(write_manifest UTV2-1735 done "$MERGE" pass "$MERGE" some-agent)
+  assert_decision \
+    "closeout with a non-canonical runner is refused" \
+    "not a canonical runner" \
+    "$(evaluate_completion_block UTV2-1735 "$mf6" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  assert_decision \
+    "missing manifest is refused" \
+    "no lane manifest" \
+    "$(evaluate_completion_block UTV2-1736 "$_fixture_dir/docs/06_status/lanes/UTV2-1736.json" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Ancestry is load-bearing, proved by making it fail -------------------
+  stub_ancestry_false
+  assert_decision \
+    "a merge SHA that never landed on main is refused (ancestry gate fires)" \
+    "did not land on main" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  stub_ancestry_true
+  assert_decision \
+    "and completes again once ancestry holds — the only variable was ancestry" \
+    "COMPLETE" \
+    "$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")"
+
+  # --- Extraction and gate agree on the same commit -------------------------
+  ids=$(extract_linear_close_ids "$CLOSEOUT_MSG")
+  gate=$(evaluate_completion_block UTV2-1721 "$mf" "$CLOSEOUT_MSG" "$CLOSEOUT")
+  if [ "$ids" = "UTV2-1721" ] && [ -z "$gate" ]; then
+    echo "  PASS  end to end: the same closeout commit both extracts an ID and passes the gate"
+    pass=$((pass + 1))
+  else
+    echo "  FAIL  end to end: the same closeout commit both extracts an ID and passes the gate"
+    echo "        ids='$ids' gate='$gate'"
+    fail=$((fail + 1))
+  fi
 
   echo ""
   echo "Results: $pass passed, $fail failed"

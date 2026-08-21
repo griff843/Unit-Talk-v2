@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1724",
+  "title": "Auto-close intent grammar misses sanctioned closeout commits",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "verified_source_sha": "50ff0d0c27876c586157a8004fd543e74e33d5ef",
+    "verified_source_note": "Anchor required by the executor-result validator, which needs a single ancestor SHA. NOT a claim that nothing substantive followed it. The substantive commits are every fix(ci) entry in git log --oneline origin/main..HEAD; they are not enumerated here because the list grew across review rounds and a fixed enumeration went stale twice. An earlier revision claimed everything after the anchor was proof-only, which was false.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-21T23:00:29.496Z"
+  },
+  "scope": {
+    "files_changed": [
+      ".github/workflows/linear-auto-close.yml",
+      ".github/workflows/linear-auto-close.test.sh"
+    ],
+    "runtime_code_changed": false,
+    "schema_changed": false,
+    "dependency_changed": false
+  },
+  "defect": {
+    "defect_1_grammar": {
+      "producer": ".github/workflows/post-merge-lane-close.yml:536",
+      "producer_template": "chore(lanes): close $ISSUE_ID — lane closed, sync file removed",
+      "pre_fix_alternation": "(closes|fixes|resolves)",
+      "pre_fix_result_on_producer_output": "empty",
+      "pre_fix_harness_result": "28 passed, 0 failed"
+    },
+    "defect_2_completion_gate_sha_comparison": {
+      "summary": "The truth-gated completion gate compared manifest .commit_sha against MERGE_SHA (github.sha). On the sanctioned closeout path github.sha is the closeout commit, created after the merge, so the comparison can never match. This survives the grammar fix: fixing extraction alone turns a silent no_close_intent ghost into a silent completion-withheld ghost.",
+      "reproduced_on": "the real merged UTV2-1721 manifest on origin/main, not a fixture",
+      "implementation_merge_sha": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca",
+      "closeout_commit_sha": "44068585d1d5092f41a7cdaa01909df9b2a4358a",
+      "manifest_state_at_refusal": {
+        "status": "done",
+        "verdict": "pass",
+        "runner": "ops:lane-close",
+        "receipt_merge_sha": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca"
+      },
+      "refusal_message": "manifest commit_sha X is not this merge SHA Y",
+      "fix": "resolve_authoritative_merge_sha() reads the merge SHA the sanctioned closeout already recorded, from manifest .commit_sha and the truth-check receipt's .merge_sha — fields the gate already cross-checks — and resolves nothing when they disagree. No new contract. Non-closeout commits still resolve to the pushed SHA.",
+      "guarantee_restored_by": "An ancestry check: the claimed merge SHA must be reachable from the pushed commit. Fails closed on any API error or missing token. Proved by making it fail with ancestry as the only changed variable.",
+      "post_fix_on_real_manifest": {
+        "ids": "UTV2-1721",
+        "resolved": "3ca047fa8fcae2a8768d2ba63cace8019a5a76ca",
+        "gate": "COMPLETE (no block)",
+        "ancestry_check": "live, not stubbed"
+      }
+    },
+    "class": "evidence-conflation: an aggregate green that conflates 'nothing to do' with 'the thing this workflow exists to do did not happen'. Both defects are instances, on the same path."
+  },
+  "static_proof": {
+    "harness": {
+      "command": "bash .github/workflows/linear-auto-close.test.sh",
+      "pass": 88,
+      "fail": 0,
+      "pre_existing_cases_still_green": 28,
+      "sections_note": "Per-section counts are not recorded: they shift when a case lands in one section rather than another, and two earlier revisions recorded a breakdown that did not match the suite. Run the harness for the current split."
+    },
+    "syntax": {
+      "bash_n": "clean",
+      "yaml_parse": "ok"
+    },
+    "control_validated_by_execution": [
+      {
+        "case": "sanctioned closeout",
+        "exit": 0,
+        "decision": "will_close",
+        "ids": "UTV2-1614"
+      },
+      {
+        "case": "drifted closeout template",
+        "exit": 1,
+        "reason": "closeout_signature_unmatched"
+      },
+      {
+        "case": "deliberate opt-out",
+        "exit": 0,
+        "decision": "no_close"
+      },
+      {
+        "case": "ordinary commit",
+        "exit": 0,
+        "decision": "no_close"
+      }
+    ],
+    "gate_commands": {
+      "pnpm type-check": "clean",
+      "pnpm test": {
+        "roots": 97,
+        "tests": 4855,
+        "pass": 4855,
+        "fail": 0,
+        "skipped": 0,
+        "exit": 0
+      },
+      "scripts/ci/r-level-check.ts": {
+        "verdict": "PASS",
+        "changed_files": 7,
+        "rules_matched": "none"
+      },
+      "pnpm verify": {
+        "static_stages": "all pass",
+        "exit": 1,
+        "attributable_to": "ci:assert-staging refused the credential-containment sentinel host=127.0.0.1; writable DB verification requires the approved staging project. The containment guard working, not a lane failure."
+      }
+    },
+    "decision_path_tested": "The completion decision was moved out of the workflow YAML into evaluate_completion_block() in the shared file so the harness drives the real decision path — extraction, signature, SHA resolution, completion gate — over realistic manifests and closeout ancestry. Testing ID extraction alone is how the SHA-comparison defect survived."
+  },
+  "reconcile_baseline": {
+    "command": "pnpm ops:orchestration-reconcile --current --json",
+    "verdict": "FAIL",
+    "exit_code": 1,
+    "pass": 1113,
+    "warn": 169,
+    "fail": 52,
+    "fail_breakdown": {
+      "ORCH-MERGED-PR-LINEAR-DONE": 25,
+      "ORCH-OPEN-PR-MANIFEST-URL": 17,
+      "ORCH-LINEAR-ACTIVE-RECORD": 9,
+      "ORCH-LEASE-MANIFEST": 1
+    },
+    "merged_pr_linear_done_distinct_issues": [
+      "UTV2-1451",
+      "UTV2-1590",
+      "UTV2-1612",
+      "UTV2-1619",
+      "UTV2-1627",
+      "UTV2-1638",
+      "UTV2-1641",
+      "UTV2-1646",
+      "UTV2-1648",
+      "UTV2-1659",
+      "UTV2-1684",
+      "UTV2-1691",
+      "UTV2-1696",
+      "UTV2-1701"
+    ]
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Grammar fixed, with matching cases in the harness",
+      "status": "PASS",
+      "evidence": "Anchored subject-line closeout form added; sanctioned-closeout, tripwire and full-decision-path cases added; 88 passed / 0 failed, with all 28 pre-existing cases still green."
+    },
+    {
+      "criterion": "Fail-closed: a no-match on a closeout-signed commit surfaces as a failure",
+      "status": "PASS",
+      "evidence": "Validated by execution: a drifted template exits 1 with reason=closeout_signature_unmatched, while sanctioned closeout, deliberate opt-out and ordinary commits all exit 0. Separately, the completion gate's ancestry check is proved by making it fail with ancestry as the only changed variable."
+    },
+    {
+      "criterion": "Sanctioned replay of the 25-lane backlog",
+      "status": "NOT_STARTED",
+      "evidence": "Deliberately sequenced after this fix merges. Replaying while the grammar is still blind would re-emit commits that again match nothing. Baseline recorded in reconcile_baseline."
+    },
+    {
+      "criterion": "Three-way agreement proven by a clean ops:orchestration-reconcile run",
+      "status": "NOT_STARTED",
+      "evidence": "Follows the replay."
+    },
+    {
+      "criterion": "Zero merged-but-unclosed lanes (ORCH-MERGED-PR-LINEAR-DONE = 0)",
+      "status": "NOT_STARTED",
+      "evidence": "Currently 25. Follows the replay."
+    }
+  ],
+  "known_limitations": [
+    "Exit criteria 2, 3 and 4 (sanctioned replay, three-way agreement, zero ghosts) are NOT satisfied by this bundle. It covers exit criterion 1, the fail-closed requirement, and the completion-gate SHA-comparison P1. The replay is a post-merge acceptance phase: this issue must not be marked Done until the sanctioned replay produces three-way GitHub/manifest/Linear agreement and ORCH-MERGED-PR-LINEAR-DONE returns 0.",
+    "Ten escape hatches in the controls themselves were found by successive adversarial review of this lane and closed, each reproduced before being fixed. Nine are one class - two code paths disagreeing about what text they read, or about which issue 'deliberate' applies to. The most reachable was the last found: the workflow consulted the tripwire only when the extracted id set was empty, and that set is whole-message while the signature is subject-scoped, so a drifted closeout whose body merely said 'Closes <other>' closed the wrong issue and stranded its own lane silently. Two hatches were reproduced on this lane's own squash merge, and one was a regression introduced by an earlier fix in this same lane. Cases now assert all three form scopes agree, that only a No-close naming the subject's own closeout id silences the tripwire, and that the tripwire fires whenever a closeout signature fails to yield its own id. The last found was a discriminator problem rather than a scope problem: two successive attempts to separate a drifted closeout from a commit merely discussing the closeout phrase were each wrong in both directions, silencing real drift and reddening main on documentation. It is now anchored to the producer's chore( scope, a structural property, with both directions asserted by cases.",
+    "The reconciler emits no sanctioned repair action for ORCH-MERGED-PR-LINEAR-DONE. Its repair_plan contains 3 actions, all for open-PR-without-manifest and closed-branch-cleanup states. The replay path for these 25 rows is therefore a workflow_dispatch re-run of post-merge-lane-close.yml per affected PR, not an ops:manifest-repair invocation.",
+    "This lane may not produce its own t1-approved label or pm-verdict/v1 comment."
+  ],
+  "verdict": "READY_FOR_REVIEW_PARTIAL_EXIT_CRITERIA"
+}

@@ -12,6 +12,9 @@ name: Linear Auto-Close
 #   - Fixes UTV2-NNN      (inline verb, case-insensitive on the verb)
 #   - Resolves UTV2-NNN   (inline verb, case-insensitive on the verb)
 #   - Linear-Close: UTV2-NNN   (commit trailer, anchored to line start)
+#   - chore(lanes): close UTV2-NNN   (the sanctioned closeout commit, anchored
+#     to line start; added UTV2-1724 because the closeout path emits the bare
+#     imperative, which none of the forms above match)
 #
 # Free-form mentions like "UTV2-NNN dispatch packet", "follow-up to UTV2-NNN",
 # file path literals, code examples, or "supersedes UTV2-NNN" wording are
@@ -29,8 +32,11 @@ name: Linear Auto-Close
 #   bash .github/workflows/linear-auto-close.test.sh
 #
 # Any change to the extraction regex MUST be accompanied by a test update in
-# the same PR. The harness runs 22 positive and negative cases covering the
-# full intended behavior, including the original false-positive incident.
+# the same PR. The harness covers the full intended behaviour — the original
+# false-positive incident, the sanctioned closeout form, the fail-closed
+# tripwire, and the complete completion-decision path. Run it for the current
+# count rather than trusting a number here; an earlier revision of this line
+# went stale and no longer matched the suite.
 #
 # Requirements:
 #   - Repo secret LINEAR_API_TOKEN with scope sufficient to read + update
@@ -116,7 +122,35 @@ jobs:
 
           ids=$(extract_linear_close_ids "$COMMIT_MSG")
           subject=$(echo "$COMMIT_MSG" | head -n 1)
+
+          # UTV2-1724 hatch 8: the tripwire must be evaluated on its own terms,
+          # not gated behind an empty id set. `ids` is built from the whole
+          # message while the closeout signature is read from the subject, so a
+          # commit whose body mentions any unrelated issue used to make the
+          # tripwire unreachable — closing that unrelated issue while the real
+          # closeout drifted away in silence.
+          if should_fire_closeout_tripwire "$COMMIT_MSG" "$ids"; then
+            echo "::error title=linear-auto-close::decision=no_close reason=closeout_signature_unmatched commit=\"$subject\" — this commit carries a lane-closeout signature but did not yield its own issue id, so that lane will NOT transition. The closeout commit template has almost certainly drifted away from extract_linear_close_ids(). Fix the grammar in .github/workflows/linear-auto-close.test.sh and add a case for the new shape; do not hand-edit the Linear record."
+            exit 1
+          fi
+
           if [ -z "$ids" ]; then
+            # UTV2-1724 fail-closed tripwire.
+            #
+            # "No close intent" is the correct, quiet outcome for the vast
+            # majority of commits. It is the WRONG outcome for a commit the
+            # sanctioned closeout path produced — that commit exists precisely
+            # to close an issue, so a no-match means this workflow failed at
+            # its one job.
+            #
+            # Before this check both cases emitted the same ::notice and the
+            # job stayed green. 25 merged lanes were stranded as Linear ghosts
+            # over 24 days with nothing anywhere going red. An aggregate green
+            # that conflates "nothing to do" with "the thing I exist to do did
+            # not happen" is not a signal.
+            #
+            # An explicit opt-out (No-close:, plan-only, partial-fix) is a
+            # deliberate decision, not drift, and stays a notice.
             echo "::notice title=linear-auto-close::decision=no_close reason=no_close_intent commit=\"$subject\""
             echo "ids=" >> "$GITHUB_OUTPUT"
           else
@@ -132,8 +166,17 @@ jobs:
           MERGE_SHA: ${{ github.sha }}
           COMMIT_URL: ${{ github.event.head_commit.url }}
           COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+
+          # Same shared source as the extraction step, for
+          # has_lane_closeout_signature() and resolve_authoritative_merge_sha().
+          # Sourcing rather than duplicating keeps the workflow and the harness
+          # from drifting apart — the same reason extraction is shared.
+          # shellcheck disable=SC1091
+          source .github/workflows/linear-auto-close.test.sh
 
           # Fetch the Done state id for team unit-talk-v2 once
           # Use the team UUID, not the name slug. Linear's team(id:) requires UUID.
@@ -191,28 +234,15 @@ jobs:
             # truth-check receipt recorded against that same SHA. Anything else
             # leaves the issue open and says why. Absence of a manifest means
             # "not complete" -- the fail-closed direction, and precisely case 2.
+            # UTV2-1724: the truth-gated completion decision now lives in
+            # evaluate_completion_block() in the shared file, so the harness
+            # exercises the real decision path instead of a paraphrase. Testing
+            # ID extraction alone is how the SHA-comparison defect survived —
+            # the grammar could be fully green while the gate consuming it
+            # refused every sanctioned closeout.
             manifest_path="docs/06_status/lanes/${identifier}.json"
-            completion_block=""
-            if [ ! -f "$manifest_path" ]; then
-              completion_block="no lane manifest at $manifest_path; a merge alone is not evidence of completion"
-            else
-              m_status=$(jq -r '.status // ""' "$manifest_path")
-              m_sha=$(jq -r '.commit_sha // ""' "$manifest_path")
-              r_verdict=$(jq -r '(.truth_check_history // []) | last | .verdict // ""' "$manifest_path")
-              r_sha=$(jq -r '(.truth_check_history // []) | last | .merge_sha // ""' "$manifest_path")
-              r_runner=$(jq -r '(.truth_check_history // []) | last | .runner // ""' "$manifest_path")
-              if [ "$m_status" != "done" ] && [ "$m_status" != "merged" ]; then
-                completion_block="lane status \"$m_status\" does not assert successful completion"
-              elif [ "$r_verdict" != "pass" ]; then
-                completion_block="latest truth-check verdict is \"$r_verdict\", not \"pass\""
-              elif [ "$r_runner" != "ops:lane-close" ] && [ "$r_runner" != "ops:reconcile" ]; then
-                completion_block="truth-check runner \"$r_runner\" is not a canonical runner"
-              elif [ -z "$m_sha" ] || [ "$m_sha" != "$MERGE_SHA" ]; then
-                completion_block="manifest commit_sha \"$m_sha\" is not this merge SHA $MERGE_SHA"
-              elif [ "$r_sha" != "$m_sha" ]; then
-                completion_block="truth-check receipt is bound to $r_sha, not to the manifest's $m_sha"
-              fi
-            fi
+            effective_merge_sha=$(resolve_authoritative_merge_sha "$COMMIT_SUBJECT" "$manifest_path" "$MERGE_SHA")
+            completion_block=$(evaluate_completion_block "$identifier" "$manifest_path" "$COMMIT_SUBJECT" "$MERGE_SHA")
 
             if [ -n "$completion_block" ]; then
               echo "::notice title=Completion withheld::$identifier left open — $completion_block"
@@ -240,8 +270,19 @@ jobs:
               fi
             fi
 
-            # Post a comment with the merge SHA + commit URL
-            comment_body="Merged to main: [\`$short_sha\`]($COMMIT_URL) — $subject"
+            # Post a comment citing the AUTHORITATIVE merge SHA.
+            #
+            # UTV2-1724 P1: $short_sha is derived from github.sha, which on the
+            # sanctioned closeout path is the closeout commit rather than the
+            # merge. Attaching it recorded the wrong SHA against the issue — the
+            # bookkeeping commit, not the change that shipped. Prefer the
+            # resolved SHA and link it directly; fall back to the pushed commit
+            # only when nothing authoritative resolved.
+            if [ -n "$effective_merge_sha" ] && [ "$effective_merge_sha" != "$MERGE_SHA" ]; then
+              comment_body="Merged to main: [\`${effective_merge_sha:0:7}\`](https://github.com/${REPO}/commit/${effective_merge_sha}) — $subject (closeout commit: [\`$short_sha\`]($COMMIT_URL))"
+            else
+              comment_body="Merged to main: [\`$short_sha\`]($COMMIT_URL) — $subject"
+            fi
             comment_query=$(jq -n \
               --arg id "$issue_uuid" \
               --arg body "$comment_body" \
