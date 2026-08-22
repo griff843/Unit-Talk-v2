@@ -8,6 +8,7 @@ import {
   completeAlreadyClosedLaneCleanup,
   completeSuccessfulLaneClose,
   createRepairRollbackTransaction,
+  ensureAttestedPrHeadAvailable,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
@@ -875,14 +876,23 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
     };
     const executionSha = '825259a0b5279ab9c35508582ac1eedb5aa7398f';
     const approvedHeadSha = '4c11a36fabead489e40daecfb00aeee671a11cc2';
-    const isCommitReachable = (ancestor: string, descendant: string): boolean =>
-      (ancestor === manifest.commit_sha && descendant === 'origin/main') ||
-      (ancestor === executionSha && descendant === approvedHeadSha);
+    let attestedHeadAvailable = false;
+    const isCommitReachable = (ancestor: string, descendant: string): boolean => {
+      assert.strictEqual(attestedHeadAvailable, true, 'PR head must be materialized before ancestry checks');
+      return (ancestor === manifest.commit_sha && descendant === 'origin/main') ||
+        (ancestor === executionSha && descendant === approvedHeadSha);
+    };
+    const ensurePrHeadAvailable = (prNumber: number, headSha: string): void => {
+      assert.strictEqual(prNumber, 1434);
+      assert.strictEqual(headSha, approvedHeadSha);
+      attestedHeadAvailable = true;
+    };
 
     const outcomes = rebindRepairedLaneProof(manifest, {
       repoRoot,
       now: new Date('2026-08-21T20:00:00.000Z'),
       isCommitReachable,
+      ensurePrHeadAvailable,
       pr: {
         url: manifest.pr_url,
         number: 1434,
@@ -937,6 +947,7 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
       repoRoot,
       now: new Date('2026-08-21T21:00:00.000Z'),
       isCommitReachable,
+      ensurePrHeadAvailable,
       pr: {
         url: manifest.pr_url,
         number: 1434,
@@ -949,6 +960,99 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
       },
     });
     assert.ok(replay.every((outcome) => outcome.status === 'unchanged'));
+  });
+});
+
+test('ensureAttestedPrHeadAvailable fetches the immutable PR ref before accepting an absent attested head', () => {
+  const calls: string[][] = [];
+  let materialized = false;
+  const headSha = '4c11a36fabead489e40daecfb00aeee671a11cc2';
+
+  ensureAttestedPrHeadAvailable(1434, headSha, '/repo', (args, cwd) => {
+    assert.strictEqual(cwd, '/repo');
+    calls.push([...args]);
+    if (args[0] === 'fetch') {
+      materialized = true;
+      return;
+    }
+    if (!materialized) throw new Error('missing object');
+  });
+
+  assert.deepStrictEqual(calls, [
+    ['cat-file', '-e', `${headSha}^{commit}`],
+    ['fetch', '--no-tags', 'origin', 'refs/pull/1434/head'],
+    ['cat-file', '-e', `${headSha}^{commit}`],
+  ]);
+});
+
+test('rebindRepairedLaneProof keeps profileless evidence on the tolerant ordinary path even when PR truth is available', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({
+        schema_version: 1,
+        sha_binding: {
+          verified_source_sha: 'a'.repeat(40),
+          merge_sha: 'b'.repeat(40),
+          sha_type: 'merge_sha',
+        },
+      }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      ['MERGE_SHA: ' + 'b'.repeat(40), '', '## Merge SHA Binding', '', 'Merge SHA: ' + 'b'.repeat(40), ''].join('\n'),
+    );
+
+    let attestationPathUsed = false;
+    const mergeSha = 'c'.repeat(40);
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({ commit_sha: mergeSha }),
+      {
+        repoRoot,
+        pr: {
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1400',
+          number: 1400,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha,
+          headSha: 'd'.repeat(40),
+          baseRefName: 'main',
+        },
+        ensurePrHeadAvailable: () => { attestationPathUsed = true; },
+      },
+    );
+
+    assert.strictEqual(attestationPathUsed, false, 'profileless evidence must not enter structural re-attestation');
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated']);
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, mergeSha);
+  });
+});
+
+test('rebindRepairedLaneProof tolerates a lane with no canonical evidence bundle even when PR truth is available', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({ commit_sha: 'c'.repeat(40) }),
+      {
+        repoRoot,
+        pr: {
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1400',
+          number: 1400,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'c'.repeat(40),
+          headSha: 'd'.repeat(40),
+          baseRefName: 'main',
+        },
+        ensurePrHeadAvailable: () => assert.fail('optional bundle must not enter structural re-attestation'),
+      },
+    );
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['missing', 'missing']);
   });
 });
 

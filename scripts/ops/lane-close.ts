@@ -1019,6 +1019,96 @@ function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
   );
 }
 
+type LaneCloseGitRunner = (args: readonly string[], cwd: string) => void;
+
+const runLaneCloseGit: LaneCloseGitRunner = (args, cwd) => {
+  execFileSync('git', [...args], { cwd, stdio: 'ignore' });
+};
+
+/**
+ * Ensure the immutable GitHub PR-head object exists before local ancestry
+ * checks. Merged source branches may be deleted, while refs/pull/<n>/head is
+ * retained by GitHub. A second cat-file check prevents a successful-looking
+ * fetch from granting ancestry authority when it did not materialize the exact
+ * attested object.
+ */
+export function ensureAttestedPrHeadAvailable(
+  prNumber: number,
+  headSha: string,
+  repoRoot: string,
+  runGit: LaneCloseGitRunner = runLaneCloseGit,
+): void {
+  try {
+    runGit(['cat-file', '-e', `${headSha}^{commit}`], repoRoot);
+    return;
+  } catch {
+    // Fetch the immutable PR ref below.
+  }
+
+  try {
+    runGit(['fetch', '--no-tags', 'origin', `refs/pull/${prNumber}/head`], repoRoot);
+    runGit(['cat-file', '-e', `${headSha}^{commit}`], repoRoot);
+  } catch (error) {
+    throw new Error(
+      `GitHub-recorded PR #${prNumber} head ${headSha} is unavailable after immutable PR-head fetch: ${(error as Error).message}`,
+    );
+  }
+}
+
+interface ActiveStaticReattestationCandidate {
+  evidencePath: string;
+  verificationPath: string;
+  executionSha: string | null;
+  needsStructuralRepair: boolean;
+}
+
+/**
+ * Recognise only the exact two-omission shape emitted by the broken active
+ * schema-v2/static generator, or the canonical successor produced by repairing
+ * that shape so replay stays idempotent. Historical/profileless/optional
+ * bundles stay on the tolerant rebindMergeSha path and are never upgraded
+ * merely because a PR attestation is available.
+ */
+function activeStaticReattestationCandidate(
+  repoRoot: string,
+  issueId: string,
+): ActiveStaticReattestationCandidate | null {
+  const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId);
+  const evidencePath = safeRepoPath(repoRoot, path.posix.join(proofRoot, 'evidence.json'));
+  const verificationPath = safeRepoPath(repoRoot, path.posix.join(proofRoot, 'verification.md'));
+  if (!fs.existsSync(evidencePath) || !fs.existsSync(verificationPath)) return null;
+
+  let evidence: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    evidence = parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (evidence['schema_version'] !== 2 || evidence['proof_profile'] !== 'static') return null;
+
+  const binding = evidence['sha_binding'];
+  if (binding === null || typeof binding !== 'object' || Array.isArray(binding)) return null;
+  const verification = fs.readFileSync(verificationPath, 'utf8');
+  const hasMergeSlot = Object.prototype.hasOwnProperty.call(binding, 'merge_sha');
+  const hasBindingSection = /^## Merge SHA Binding\s*$/mu.test(verification);
+  const malformedGeneratorShape = !hasMergeSlot && !hasBindingSection && /^MERGE_SHA:\s*/mu.test(verification);
+  const repairedGeneratorShape = hasMergeSlot && hasBindingSection &&
+    /^Approved PR head:\s*/mu.test(verification) && /^Execution SHA:\s*/mu.test(verification);
+  if (!malformedGeneratorShape && !repairedGeneratorShape) return null;
+
+  const executionSha = typeof (binding as Record<string, unknown>)['verified_source_sha'] === 'string'
+    ? (binding as Record<string, unknown>)['verified_source_sha'] as string
+    : null;
+  return {
+    evidencePath,
+    verificationPath,
+    executionSha,
+    needsStructuralRepair: malformedGeneratorShape,
+  };
+}
+
 /**
  * Post-merge automation initially sees the repair PR's merge SHA, but
  * --repair-merged resolves the implementation PR recorded in manifest.pr_url.
@@ -1046,6 +1136,7 @@ export function rebindRepairedLaneProof(
     now?: Date;
     pr?: RepairMergedPrInfo | null;
     isCommitReachable?: (ancestor: string, descendant: string) => boolean;
+    ensurePrHeadAvailable?: (prNumber: number, headSha: string) => void;
   } = {},
 ): ShaRebindOutcome[] {
   const repoRoot = options.repoRoot ?? process.cwd();
@@ -1054,16 +1145,11 @@ export function rebindRepairedLaneProof(
   const modelRoutingPaths = modelRoutingSidecarPaths(manifest);
 
   let attestedShas: ShaSet | null = null;
-  if (mergeSha && options.pr) {
-    const evidencePath = safeRepoPath(
-      repoRoot,
-      path.posix.join('docs', '06_status', 'proof', manifest.issue_id, 'evidence.json'),
-    );
-    const evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')) as Record<string, unknown>;
-    const binding = evidence['sha_binding'] as Record<string, unknown> | undefined;
-    const executionSha = typeof binding?.['verified_source_sha'] === 'string'
-      ? binding['verified_source_sha']
-      : null;
+  const structuralCandidate = mergeSha && options.pr
+    ? activeStaticReattestationCandidate(repoRoot, manifest.issue_id)
+    : null;
+  if (mergeSha && options.pr && structuralCandidate) {
+    const executionSha = structuralCandidate.executionSha;
     const built = buildMergedPrAttestation({
       number: options.pr.number,
       headRefOid: options.pr.headSha,
@@ -1077,6 +1163,10 @@ export function rebindRepairedLaneProof(
       approved_head_sha: built.attestation.head_sha,
       execution_sha: executionSha,
     };
+    const ensurePrHeadAvailable = options.ensurePrHeadAvailable ?? ((prNumber: number, headSha: string): void => {
+      ensureAttestedPrHeadAvailable(prNumber, headSha, options.gitRoot ?? repoRoot);
+    });
+    ensurePrHeadAvailable(built.attestation.pr_number, built.attestation.head_sha);
     const reachable = options.isCommitReachable ?? ((ancestor: string, descendant: string): boolean => {
       try {
         execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
@@ -1131,11 +1221,11 @@ export function rebindRepairedLaneProof(
 
   let outcomes: ShaRebindOutcome[];
   if (mergeSha && attestedShas) {
-    const proofRoot = path.posix.join('docs', '06_status', 'proof', manifest.issue_id);
-    const files = ['evidence.json', 'verification.md'].map((name) => path.posix.join(proofRoot, name));
+    const files = [structuralCandidate!.evidencePath, structuralCandidate!.verificationPath]
+      .map((absolutePath) => path.relative(repoRoot, absolutePath).split(path.sep).join(path.posix.sep));
     const result = rebindProofBundle(
       { issueId: manifest.issue_id, shas: attestedShas, prUrl: manifest.pr_url, files, root: repoRoot },
-      { write: true, allowActiveSchemaStructuralRepair: true },
+      { write: true, allowActiveSchemaStructuralRepair: structuralCandidate!.needsStructuralRepair },
     );
     if (!result.ok) {
       throw new Error(`Merged-PR proof re-attestation refused: ${result.errors.join('; ')}`);
