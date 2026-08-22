@@ -56,6 +56,6 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1436
 Approved PR head: pending merge
 Execution SHA: 1ec0d81f7962389479698232decb7a612c2bac65
