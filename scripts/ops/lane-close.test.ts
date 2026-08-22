@@ -873,11 +873,16 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
       commit_sha: '92889b2d3a858345e99ca490cc11946f7293ca18',
       pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1434',
     };
+    const executionSha = '825259a0b5279ab9c35508582ac1eedb5aa7398f';
+    const approvedHeadSha = '4c11a36fabead489e40daecfb00aeee671a11cc2';
+    const isCommitReachable = (ancestor: string, descendant: string): boolean =>
+      (ancestor === manifest.commit_sha && descendant === 'origin/main') ||
+      (ancestor === executionSha && descendant === approvedHeadSha);
 
     const outcomes = rebindRepairedLaneProof(manifest, {
       repoRoot,
-      gitRoot: process.cwd(),
       now: new Date('2026-08-21T20:00:00.000Z'),
+      isCommitReachable,
       pr: {
         url: manifest.pr_url,
         number: 1434,
@@ -885,7 +890,7 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
         state: 'merged',
         merged: true,
         mergeSha: manifest.commit_sha,
-        headSha: '4c11a36fabead489e40daecfb00aeee671a11cc2',
+        headSha: approvedHeadSha,
         baseRefName: 'main',
       },
     });
@@ -893,13 +898,13 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
     assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
     assert.strictEqual(evidence.sha_binding.merge_sha, manifest.commit_sha);
-    assert.strictEqual(evidence.sha_binding.verified_source_sha, '825259a0b5279ab9c35508582ac1eedb5aa7398f');
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, executionSha);
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
     assert.match(verification, /## Merge SHA Binding/);
     assert.match(verification, new RegExp(`Merge SHA: ${manifest.commit_sha}`));
     const routing = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
     assert.strictEqual(routing.merge_sha, undefined, 'the branch SHA is no longer labelled as merge identity');
-    assert.strictEqual(routing.execution_sha, '825259a0b5279ab9c35508582ac1eedb5aa7398f');
+    assert.strictEqual(routing.execution_sha, executionSha);
     assert.strictEqual(routing.closeout_binding.merge_sha, manifest.commit_sha);
 
     const proofArtifacts = ['evidence.json', 'verification.md', 'model-routing.json'].map((name) => ({
@@ -920,7 +925,7 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
       linear_state: 'Done',
       pr_merged: true,
       pr_merge_sha: manifest.commit_sha,
-      pr_head_sha: '4c11a36fabead489e40daecfb00aeee671a11cc2',
+      pr_head_sha: approvedHeadSha,
       proof_artifacts: proofArtifacts,
       merge_timestamp_ms: 1_000,
       runtime_proof_required: false,
@@ -930,8 +935,8 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
 
     const replay = rebindRepairedLaneProof(manifest, {
       repoRoot,
-      gitRoot: process.cwd(),
       now: new Date('2026-08-21T21:00:00.000Z'),
+      isCommitReachable,
       pr: {
         url: manifest.pr_url,
         number: 1434,
@@ -939,7 +944,7 @@ test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bu
         state: 'merged',
         merged: true,
         mergeSha: manifest.commit_sha,
-        headSha: '4c11a36fabead489e40daecfb00aeee671a11cc2',
+        headSha: approvedHeadSha,
         baseRefName: 'main',
       },
     });

@@ -1040,7 +1040,13 @@ function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
  */
 export function rebindRepairedLaneProof(
   manifest: LaneManifest,
-  options: { repoRoot?: string; gitRoot?: string; now?: Date; pr?: RepairMergedPrInfo | null } = {},
+  options: {
+    repoRoot?: string;
+    gitRoot?: string;
+    now?: Date;
+    pr?: RepairMergedPrInfo | null;
+    isCommitReachable?: (ancestor: string, descendant: string) => boolean;
+  } = {},
 ): ShaRebindOutcome[] {
   const repoRoot = options.repoRoot ?? process.cwd();
   const generatedAt = (options.now ?? new Date()).toISOString();
@@ -1071,7 +1077,7 @@ export function rebindRepairedLaneProof(
       approved_head_sha: built.attestation.head_sha,
       execution_sha: executionSha,
     };
-    const reachable = (ancestor: string, descendant: string): boolean => {
+    const reachable = options.isCommitReachable ?? ((ancestor: string, descendant: string): boolean => {
       try {
         execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
           cwd: options.gitRoot ?? repoRoot,
@@ -1081,7 +1087,7 @@ export function rebindRepairedLaneProof(
       } catch {
         return false;
       }
-    };
+    });
     const identityErrors = validatePrIdentity(
       attestedShas,
       {
