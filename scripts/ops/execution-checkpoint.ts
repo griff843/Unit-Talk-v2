@@ -205,6 +205,8 @@ export interface ArchivedExecutionEpoch {
   completed_phases: CompletedPhase[];
   findings: ExecutionFinding[];
   pending_actions: string[];
+  correction_authority?: string | null;
+  corrections_recorded_at?: string | null;
   attempts: ExecutionAttempt[];
 }
 
@@ -233,6 +235,8 @@ export interface ExecutionCheckpoint {
   completed_phases: CompletedPhase[];
   findings: ExecutionFinding[];
   pending_actions: string[];
+  correction_authority?: string | null;
+  corrections_recorded_at?: string | null;
   attempts: ExecutionAttempt[];
   cancel_requested: boolean;
   cancel_reason: string | null;
@@ -689,6 +693,45 @@ export function buildResumeBrief(checkpoint: ExecutionCheckpoint | null): string
   return lines.join('\n');
 }
 
+export function hashExecutionCorrections(checkpoint: ExecutionCheckpoint): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      source_epoch_id: checkpoint.epoch.epoch_id,
+      findings: checkpoint.findings.map((finding) => ({
+        id: finding.id,
+        phase: finding.phase,
+        summary: finding.summary,
+      })),
+      required_corrections: checkpoint.pending_actions,
+      correction_authority: checkpoint.correction_authority ?? null,
+    }))
+    .digest('hex');
+}
+
+export function buildReworkBrief(checkpoint: ExecutionCheckpoint): string {
+  const lines = [
+    '## Execution checkpoint — REWORK EPOCH',
+    '',
+    'The original task contract remains immutable. This epoch starts from the reviewed head and must resolve every item below.',
+    '',
+    `Corrections hash: \`${hashExecutionCorrections(checkpoint)}\``,
+    `Authorized by: ${checkpoint.correction_authority ?? '(missing — rework must fail closed)'}`,
+    '',
+    '### Unresolved findings',
+    '',
+    ...(checkpoint.findings.length > 0
+      ? checkpoint.findings.map((finding) => `- [${finding.phase}] ${finding.summary}`)
+      : ['- (none recorded)']),
+    '',
+    '### Required corrections (exact operator brief)',
+    '',
+    ...(checkpoint.pending_actions.length > 0
+      ? checkpoint.pending_actions.map((action) => `- ${action}`)
+      : ['- (none recorded — rework must fail closed)']),
+  ];
+  return lines.join('\n');
+}
+
 // ── mutations ───────────────────────────────────────────────────────────────
 
 interface BeginAttemptCommon {
@@ -800,6 +843,8 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
             completed_phases: existing!.completed_phases,
             findings: existing!.findings,
             pending_actions: existing!.pending_actions,
+            correction_authority: existing!.correction_authority ?? null,
+            corrections_recorded_at: existing!.corrections_recorded_at ?? null,
             attempts: closeDanglingAttempts(existing!.attempts, existing!.phase, now, existing!.attempt + 1),
           },
         ]
@@ -865,6 +910,8 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     completed_phases: completedPhases,
     findings,
     pending_actions: pendingActions,
+    correction_authority: input.kind === 'rework' ? null : (existing?.correction_authority ?? null),
+    corrections_recorded_at: input.kind === 'rework' ? null : (existing?.corrections_recorded_at ?? null),
     attempts: [...priorAttempts, attemptRecord],
     cancel_requested: false,
     cancel_reason: null,
@@ -981,6 +1028,118 @@ export function recordPendingActions(
     pending_actions: actions,
     heartbeat_at: nowIso,
   }));
+}
+
+export interface RecordReworkCorrectionsResult {
+  ok: boolean;
+  code:
+    | 'execution_rework_corrections_recorded'
+    | 'execution_rework_corrections_unchanged'
+    | 'execution_rework_corrections_refused'
+    | 'execution_checkpoint_busy';
+  checkpoint: ExecutionCheckpoint | null;
+  reason: string;
+}
+
+/**
+ * Operator-only transition used after an attempt has closed. Executor child
+ * processes carry UNIT_TALK_EXECUTION_* identity and are forbidden from using
+ * this path, so they cannot rewrite their own acceptance/rework contract.
+ */
+export function recordReworkCorrections(
+  issueId: string,
+  corrections: string[],
+  options: { authority: string; dir?: string; now?: Date; env?: NodeJS.ProcessEnv },
+): RecordReworkCorrectionsResult {
+  const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const normalized = corrections.map((entry) => entry.trim()).filter(Boolean);
+  const env = options.env ?? process.env;
+  if (
+    env.UNIT_TALK_EXECUTION_EPOCH_ID ||
+    env.UNIT_TALK_EXECUTION_ATTEMPT ||
+    env.UNIT_TALK_EXECUTION_MINIMUM_REVISION
+  ) {
+    return {
+      ok: false,
+      code: 'execution_rework_corrections_refused',
+      checkpoint: null,
+      reason: 'executor identity is present; executors cannot rewrite their own task or correction contract',
+    };
+  }
+  if (!options.authority.trim() || normalized.length === 0) {
+    return {
+      ok: false,
+      code: 'execution_rework_corrections_refused',
+      checkpoint: null,
+      reason: 'an explicit correction authority and at least one exact correction are required',
+    };
+  }
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const checkpoint = state.checkpoint;
+      const openAttempt = checkpoint?.attempts.some((attempt) => attempt.ended_at === null) ?? false;
+      if (!state.ok || !checkpoint || checkpoint.status === 'in_progress' || openAttempt) {
+        return {
+          ok: false,
+          code: 'execution_rework_corrections_refused' as const,
+          checkpoint,
+          reason: checkpoint
+            ? 'corrections may be recorded only after the current attempt is closed'
+            : `validated checkpoint unavailable: ${state.reason}`,
+        };
+      }
+      if (checkpoint.corrections_recorded_at) {
+        const unchanged =
+          checkpoint.correction_authority === options.authority.trim() &&
+          JSON.stringify(checkpoint.pending_actions) === JSON.stringify(normalized);
+        return {
+          ok: unchanged,
+          code: unchanged
+            ? 'execution_rework_corrections_unchanged' as const
+            : 'execution_rework_corrections_refused' as const,
+          checkpoint,
+          reason: unchanged
+            ? 'the exact authorized correction brief is already recorded'
+            : 'an authorized correction brief is already sealed for this rejected epoch',
+        };
+      }
+      const nowIso = (options.now ?? new Date()).toISOString();
+      const next = touch({
+        ...checkpoint,
+        pending_actions: normalized,
+        correction_authority: options.authority.trim(),
+        corrections_recorded_at: nowIso,
+      }, nowIso);
+      writeCheckpoint(next, dir);
+      return {
+        ok: true,
+        code: 'execution_rework_corrections_recorded' as const,
+        checkpoint: next,
+        reason: 'authorized rework corrections recorded on the closed epoch',
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof CheckpointMutationLockedError)) throw error;
+    return {
+      ok: false,
+      code: 'execution_checkpoint_busy',
+      checkpoint: null,
+      reason: error.message,
+    };
+  }
+}
+
+export function buildExecutorCheckpointEnv(
+  checkpointDir: string,
+  identity: ExecutionStateIdentity,
+): NodeJS.ProcessEnv {
+  return {
+    UNIT_TALK_EXECUTION_CHECKPOINT_DIR: checkpointDir,
+    UNIT_TALK_EXECUTION_EPOCH_ID: identity.epoch_id,
+    UNIT_TALK_EXECUTION_ATTEMPT: String(identity.attempt),
+    UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(identity.minimum_revision),
+  };
 }
 
 export interface ClearCheckpointResult {
@@ -1212,7 +1371,10 @@ function requireMutationIdentity(flags: Map<string, string[]>): ExecutionStateId
 function runCli(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   const command = positionals[0] ?? 'status';
-  const dir = getFlag(flags, 'dir') ?? EXECUTION_CHECKPOINT_DIR;
+  const dir =
+    getFlag(flags, 'dir') ??
+    process.env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR ??
+    EXECUTION_CHECKPOINT_DIR;
 
   try {
     const issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
@@ -1294,6 +1456,21 @@ function runCli(): void {
         process.exitCode = checkpoint ? 0 : 1;
         return;
       }
+      case 'correction': {
+        const result = recordReworkCorrections(issueId, flags.get('correction') ?? [], {
+          authority: getFlag(flags, 'authority') ?? '',
+          dir,
+        });
+        emitJson({
+          ok: result.ok,
+          code: result.code,
+          issue_id: issueId,
+          corrections_hash: result.checkpoint ? hashExecutionCorrections(result.checkpoint) : null,
+          message: result.reason,
+        });
+        process.exitCode = result.ok ? 0 : 1;
+        return;
+      }
       case 'clear': {
         const result = clearCheckpoint(issueId, { dir });
         emitJson({
@@ -1319,7 +1496,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|correction|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--correction <exact text> --authority <operator>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
         );
     }
   } catch (error) {

@@ -8,7 +8,7 @@ import {
   resolveLaneCwd,
   transcriptPathForIssue,
 } from './claude-exec.js';
-import type { ExecutionPacket } from './execution-packet.js';
+import { buildTaskContract, type ExecutionPacket } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
 
 test('checkClaudeHealth accepts a working Claude CLI', () => {
@@ -59,6 +59,25 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
     allowed_file_scope: ['scripts/ops/claude-exec.ts'],
     tier_c_warnings: [],
     blockers: [],
+    task_contract: buildTaskContract(
+      {
+        identifier: 'UTV2-1200',
+        title: 'Execute the supplied work order',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1200',
+        description: [
+          '## Acceptance criteria',
+          '- Implement the requested change.',
+          '',
+          '## Guardrails',
+          '- Do not infer a different task.',
+          '',
+          '## Exit criteria',
+          '- Verification passes.',
+        ].join('\n'),
+      },
+      [],
+      '2026-05-25T00:00:00.000Z',
+    ),
     required_verification: ['pnpm verify'],
     expected_proof_paths: [],
     closeout_instructions: ['Open PR'],
@@ -74,6 +93,9 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
   const prompt = buildClaudePrompt(packet);
 
   assert.match(prompt, /Issue: UTV2-1200/);
+  assert.match(prompt, /Authoritative task contract/);
+  assert.match(prompt, /Execute the supplied work order/);
+  assert.match(prompt, /Implement the requested change/);
   assert.match(prompt, /cd "\.out\/worktrees\/claude__utv2-1200-governance"/);
   assert.match(prompt, /scripts\/ops\/claude-exec\.ts/);
   assert.match(prompt, /pnpm verify/);

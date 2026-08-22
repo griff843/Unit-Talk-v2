@@ -1,6 +1,8 @@
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   extractProjectRefFromUrl,
@@ -34,6 +36,7 @@ export interface ExecutionPacket {
   allowed_file_scope: string[];
   tier_c_warnings: string[];
   blockers: string[];
+  task_contract: TaskContract;
   required_verification: string[];
   verification_plan?: VerificationPlan;
   expected_proof_paths: string[];
@@ -45,6 +48,33 @@ export interface ExecutionPacket {
     manifest_path: string;
   };
   generated_at: string;
+}
+
+export interface LinearTaskSource {
+  identifier: string;
+  title: string;
+  url: string;
+  description: string;
+}
+
+export interface TaskContract {
+  schema_version: 1;
+  issue_id: string;
+  objective: string;
+  acceptance_criteria: string[];
+  guardrails: string[];
+  non_goals: string[];
+  required_evidence: string[];
+  exit_criteria: string[];
+  source: {
+    kind: 'linear-issue-snapshot';
+    issue_url: string;
+    title: string;
+    description: string;
+    captured_at: string;
+    description_sha256: string;
+  };
+  contract_hash: string;
 }
 
 export interface VerificationPlan {
@@ -74,11 +104,19 @@ const TIER_VERIFICATION_MAP: Record<string, string[]> = {
 export function generateExecutionPacket(
   manifest: LaneManifest,
   env: NodeJS.ProcessEnv = process.env,
+  suppliedTaskContract?: TaskContract,
 ): ExecutionPacket {
   const issueId = manifest.issue_id;
   const tier = manifest.tier ?? 'unknown';
   const expectedProofPaths = manifest.expected_proof_paths ?? [];
   const verificationPlan = buildVerificationPlan(manifest, env);
+  const taskContract = suppliedTaskContract ?? readTaskContract(issueId);
+  assertTaskContract(taskContract, issueId);
+  if (manifest.task_packet_hash && manifest.task_packet_hash !== taskContract.contract_hash) {
+    throw new Error(
+      `task contract hash does not match manifest task_packet_hash for ${issueId}; refusing mutable work-order drift`,
+    );
+  }
 
   return {
     issue_id: issueId,
@@ -103,6 +141,7 @@ export function generateExecutionPacket(
     allowed_file_scope: [...(manifest.file_scope_lock ?? [])],
     tier_c_warnings: collectTierCWarnings(manifest.file_scope_lock ?? []),
     blockers: [...(manifest.blocked_by ?? [])],
+    task_contract: taskContract,
     required_verification: buildRequiredVerification(tier, expectedProofPaths),
     verification_plan: verificationPlan,
     expected_proof_paths: [...expectedProofPaths],
@@ -119,6 +158,192 @@ export function generateExecutionPacket(
     },
     generated_at: packetTimestamp(),
   };
+}
+
+function normalizeHeading(value: string): string {
+  return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function sectionBody(markdown: string, headings: string[]): string {
+  const wanted = new Set(headings.map(normalizeHeading));
+  const lines = markdown.split(/\r?\n/);
+  let collecting = false;
+  const body: string[] = [];
+  for (const line of lines) {
+    const heading = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
+    if (heading) {
+      if (collecting) break;
+      collecting = wanted.has(normalizeHeading(heading[1] ?? ''));
+      continue;
+    }
+    if (collecting) body.push(line);
+  }
+  return body.join('\n').trim();
+}
+
+function sectionItems(markdown: string, headings: string[]): string[] {
+  const body = sectionBody(markdown, headings);
+  if (!body) return [];
+  const items: string[] = [];
+  let paragraph: string[] = [];
+  const flush = (): void => {
+    const value = paragraph.join(' ').trim();
+    if (value) items.push(value);
+    paragraph = [];
+  };
+  for (const line of body.split(/\r?\n/)) {
+    const listItem = /^\s*(?:[-*+] |\d+[.)]\s+)(.*)$/u.exec(line);
+    if (listItem) {
+      flush();
+      if (listItem[1]?.trim()) items.push(listItem[1].trim());
+    } else if (!line.trim()) {
+      flush();
+    } else {
+      paragraph.push(line.trim());
+    }
+  }
+  flush();
+  return items;
+}
+
+function taskContractHash(contract: Omit<TaskContract, 'contract_hash'>): string {
+  return createHash('sha256').update(JSON.stringify(contract)).digest('hex');
+}
+
+export function buildTaskContract(
+  source: LinearTaskSource,
+  expectedProofPaths: string[] = [],
+  capturedAt = packetTimestamp(),
+): TaskContract {
+  const issueId = source.identifier.trim().toUpperCase();
+  const description = source.description.trim();
+  const objectiveSection = sectionBody(description, ['objective', 'required outcome']);
+  const objective = objectiveSection || source.title.trim();
+  const acceptanceCriteria = sectionItems(description, ['acceptance criteria', 'acceptance criterion']);
+  const exitCriteria = sectionItems(description, ['exit criteria']);
+  const requiredOutcome = sectionItems(description, ['required outcome']);
+  const effectiveAcceptance = acceptanceCriteria.length > 0
+    ? acceptanceCriteria
+    : exitCriteria.length > 0
+      ? exitCriteria
+      : requiredOutcome;
+
+  if (!objective) {
+    throw new Error(`task contract for ${issueId || '(unknown issue)'} is missing an objective`);
+  }
+  if (effectiveAcceptance.length === 0) {
+    throw new Error(`task contract for ${issueId || '(unknown issue)'} is missing acceptance criteria`);
+  }
+
+  const guardrails = sectionItems(description, ['guardrails']);
+  const explicitNonGoals = sectionItems(description, ['non goals', 'non-goals', 'out of scope']);
+  const nonGoals = explicitNonGoals.length > 0
+    ? explicitNonGoals
+    : guardrails.filter((entry) => /\b(?:do not|must not|never|no direct)\b/iu.test(entry));
+  const explicitEvidence = sectionItems(description, ['required evidence', 'evidence']);
+  const requiredEvidence = [
+    ...explicitEvidence,
+    ...expectedProofPaths.map((proofPath) => `Produce and validate ${proofPath}`),
+  ];
+  if (requiredEvidence.length === 0) {
+    requiredEvidence.push(...effectiveAcceptance.filter((entry) => /\b(?:proof|evidence|test|review|verify|verification)\b/iu.test(entry)));
+  }
+
+  const content: Omit<TaskContract, 'contract_hash'> = {
+    schema_version: 1,
+    issue_id: issueId,
+    objective,
+    acceptance_criteria: effectiveAcceptance,
+    guardrails,
+    non_goals: nonGoals,
+    required_evidence: requiredEvidence,
+    exit_criteria: exitCriteria.length > 0 ? exitCriteria : effectiveAcceptance,
+    source: {
+      kind: 'linear-issue-snapshot',
+      issue_url: source.url,
+      title: source.title.trim(),
+      description,
+      captured_at: capturedAt,
+      description_sha256: createHash('sha256').update(description).digest('hex'),
+    },
+  };
+  return { ...content, contract_hash: taskContractHash(content) };
+}
+
+export function assertTaskContract(contract: TaskContract, issueId = contract.issue_id): void {
+  if (contract.schema_version !== 1 || contract.issue_id !== issueId) {
+    throw new Error(`task contract identity mismatch for ${issueId}`);
+  }
+  if (!contract.objective.trim()) {
+    throw new Error(`task contract for ${issueId} is missing an objective`);
+  }
+  if (!Array.isArray(contract.acceptance_criteria) || contract.acceptance_criteria.length === 0) {
+    throw new Error(`task contract for ${issueId} is missing acceptance criteria`);
+  }
+  const { contract_hash: contractHash, ...content } = contract;
+  if (!/^[0-9a-f]{64}$/iu.test(contractHash) || taskContractHash(content) !== contractHash) {
+    throw new Error(`task contract hash verification failed for ${issueId}`);
+  }
+}
+
+export function buildSyncYmlWithTaskContract(issueId: string, contract: TaskContract): string {
+  assertTaskContract(contract, issueId);
+  return stringifyYaml({
+    version: 1,
+    approval: {
+      allow_multiple_issues: false,
+      skip_sync_required: false,
+    },
+    entities: {
+      issues: [issueId],
+      findings: [],
+      controls: [],
+      proofs: [],
+    },
+    task_contract: contract,
+  });
+}
+
+export function readTaskContract(issueId: string, root: string = ROOT): TaskContract {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (!fs.existsSync(syncPath)) {
+    throw new Error(`task contract is absent: sync record not found at ${syncPath}`);
+  }
+  const parsed = parseYaml(fs.readFileSync(syncPath, 'utf8')) as { task_contract?: TaskContract } | null;
+  if (!parsed?.task_contract) {
+    throw new Error(`task contract is absent from ${syncPath}; refusing to dispatch an executor without a work order`);
+  }
+  assertTaskContract(parsed.task_contract, issueId);
+  return parsed.task_contract;
+}
+
+export function renderTaskContract(contract: TaskContract): string {
+  assertTaskContract(contract);
+  const render = (values: string[]): string =>
+    values.length > 0 ? values.map((value) => `- ${value}`).join('\n') : '- (none declared)';
+  return [
+    `## Authoritative task contract (immutable; hash ${contract.contract_hash})`,
+    '',
+    '### Objective',
+    contract.objective,
+    '',
+    '### Acceptance criteria',
+    render(contract.acceptance_criteria),
+    '',
+    '### Guardrails',
+    render(contract.guardrails),
+    '',
+    '### Non-goals',
+    render(contract.non_goals),
+    '',
+    '### Required evidence',
+    render(contract.required_evidence),
+    '',
+    '### Exit criteria',
+    render(contract.exit_criteria),
+    '',
+    'The contract above was captured before execution. Do not replace it by inferring from the branch, file scope, PR body, repo brief, or a later Linear query.',
+  ].join('\n');
 }
 
 function buildVerificationPlan(

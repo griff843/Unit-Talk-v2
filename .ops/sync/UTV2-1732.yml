@@ -8,3 +8,170 @@ entities:
   findings: []
   controls: []
   proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1732
+  objective: >-
+    Every dispatched executor receives a complete, authoritative work order
+    containing:
+
+
+    * objective
+
+    * acceptance criteria
+
+    * guardrails
+
+    * non-goals
+
+    * required evidence
+
+    * exit criteria
+
+    * **during rework:** the exact unresolved findings and required corrections
+
+
+    The task contract must be **captured before execution**, **immutable**,
+    **epoch-bound**, consumed identically by Claude and Codex, and **fail closed
+    when absent**.
+
+
+    Linear may supply source material during orchestration, but **executor
+    success must not depend on the executor voluntarily querying Linear.**
+  acceptance_criteria: &a1
+    - A fresh dispatch prompt contains the complete task contract.
+    - Dispatch **fails before spawning** if objective or acceptance criteria are
+      missing.
+    - A rework after a completed or rejected epoch contains the original task
+      **plus** the exact corrections.
+    - Task and correction content are **hash-bound** to the execution epoch.
+    - Both Claude and Codex consume the same contract.
+    - An end-to-end
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)
+      re-dispatch produces **substantive changes to**
+      `scripts/ops/truth-check-lib.ts` **and**
+      `.github/workflows/executor-result-validator.yml` — the two files three
+      blind epochs never touched.
+    - "[UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producin\
+      g-contract-is-broken-repair-the-canonical-generator-so) then passes fresh
+      independent review, recovers
+      [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-un\
+      its-backfill-and-constraint-validation-repair-2902-legacy), and
+      regenerates
+      [UTV2-1667](https://linear.app/unit-talk-v2/issue/UTV2-1667/phase-1-imple\
+      mentation-deployment-truth-evidence-host-journal) before its merge."
+    - "Criterion 6 is the real test: it is falsifiable, and it is exactly what
+      every previous round failed."
+  guardrails:
+    - No direct-`main` work.
+    - No inference from branch name, file scope, PR body, or the repo-global
+      brief.
+    - Executors cannot rewrite their own task or acceptance contract.
+    - Closed checkpoints must still accept an authorized rework correction brief.
+    - Preserve production containment; no SGO-dependent work.
+    - Independent adversarial review is mandatory.
+    - "**Do not fold**
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding
+      implementation into this lane.**
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so) and its rejected
+      history are preserved."
+  non_goals:
+    - No direct-`main` work.
+    - "**Do not fold**
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding
+      implementation into this lane.**
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so) and its rejected
+      history are preserved."
+  required_evidence:
+    - Produce and validate docs/06_status/proof/UTV2-1732/evidence.json
+    - Produce and validate docs/06_status/proof/UTV2-1732/verification.md
+    - Produce and validate docs/06_status/proof/UTV2-1732/diff-summary.md
+    - Produce and validate docs/06_status/proof/UTV2-1732/model-routing.json
+  exit_criteria: *a1
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1732/executors-receive-no-task-contract-repair-the-autonomous-execution
+    title: "Executors receive no task contract: repair the autonomous execution work
+      order"
+    description: |-
+      ## Defect
+
+      **A dispatched executor is never told what to do.** It infers the task from file scope, branch name, and the state of an existing PR.
+
+      `buildCodexPrompt()` (`scripts/ops/codex-exec.ts:528`) assembles exactly four things:
+
+      ```
+      ## Allowed file scope        ← manifest.file_scope_lock
+      ## Required verification     ← derived from tier
+      ## Closeout instructions     ← derived
+      ## Repo brief                ← .claude/agent-brief.md (repo-global, identical for every lane)
+      ```
+
+      `generateExecutionPacket(manifest)` (`scripts/ops/execution-packet.ts:103-114`) builds the packet from the **lane manifest**. The `ExecutionPacket` type has no objective, no acceptance criteria, no guardrails, no non-goals, no exit criteria. `grep -c comment scripts/ops/execution-packet.ts` returns 0, and the only `description` reference is a string about PR titles.
+
+      So the work order that reaches an executor contains **no statement of the work**.
+
+      ## Why this is a fail-open rather than an inconvenience
+
+      A fresh lane usually succeeds, because scope plus branch name make the task inferable. The failure appears on **correction rounds**, where the executor must do something different from what the repository already shows — and there the packet says nothing, the PR looks green, and the run reports success.
+
+      Observed on [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) across three consecutive epochs:
+
+      | Round | Channel used for the brief | Result |
+      | -- | -- | -- |
+      | 1 | issue description (rewritten before dispatch) | good work, incomplete |
+      | 2 | Linear **comment** | never read — packet ingests no comments. Run reported *"PR is ready for review… blocked only on the PM verdict"*. `truth-check-lib.ts` untouched |
+      | 3 | issue **description** (`# ROUND 2 — REQUIRED CORRECTIONS`) | `ROUND 2` appears **0 times** in the run. Codex called `linear.get_issue` via its own MCP only at the **end**, after concluding the PR was done. Gate files untouched |
+
+      Three epochs, roughly two hours of executor time, and the actual correction was never attempted — while every run produced polished proof artifacts and reported success. Polished proof kept returning because proof is what the packet *does* describe.
+
+      The checkpoint findings channel is real but unusable between runs: `buildResumeBrief()` injects *"Established findings (do not re-derive)"* and *"Pending actions carried forward"* into the prompt, but `recordPendingActions` refuses a closed checkpoint with `execution_checkpoint_missing`, so a rejected epoch cannot be given corrections.
+
+      ## Required outcome
+
+      Every dispatched executor receives a complete, authoritative work order containing:
+
+      * objective
+      * acceptance criteria
+      * guardrails
+      * non-goals
+      * required evidence
+      * exit criteria
+      * **during rework:** the exact unresolved findings and required corrections
+
+      The task contract must be **captured before execution**, **immutable**, **epoch-bound**, consumed identically by Claude and Codex, and **fail closed when absent**.
+
+      Linear may supply source material during orchestration, but **executor success must not depend on the executor voluntarily querying Linear.**
+
+      ## Guardrails
+
+      * No direct-`main` work.
+      * No inference from branch name, file scope, PR body, or the repo-global brief.
+      * Executors cannot rewrite their own task or acceptance contract.
+      * Closed checkpoints must still accept an authorized rework correction brief.
+      * Preserve production containment; no SGO-dependent work.
+      * Independent adversarial review is mandatory.
+      * **Do not fold** [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding implementation into this lane.** [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) and its rejected history are preserved.
+
+      ## Exit criteria
+
+      1. A fresh dispatch prompt contains the complete task contract.
+      2. Dispatch **fails before spawning** if objective or acceptance criteria are missing.
+      3. A rework after a completed or rejected epoch contains the original task **plus** the exact corrections.
+      4. Task and correction content are **hash-bound** to the execution epoch.
+      5. Both Claude and Codex consume the same contract.
+      6. An end-to-end [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) re-dispatch produces **substantive changes to** `scripts/ops/truth-check-lib.ts` **and** `.github/workflows/executor-result-validator.yml` — the two files three blind epochs never touched.
+      7. [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) then passes fresh independent review, recovers [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy), and regenerates [UTV2-1667](https://linear.app/unit-talk-v2/issue/UTV2-1667/phase-1-implementation-deployment-truth-evidence-host-journal) before its merge.
+
+      Criterion 6 is the real test: it is falsifiable, and it is exactly what every previous round failed.
+
+      ## Sequencing
+
+      This is fixed **before** further autonomy tuning. It caps what autonomous dispatch can achieve on any corrective round, and it explains the [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) failure pattern.
+    captured_at: 2026-08-22T05:39:33.705Z
+    description_sha256: 62e45563e4d41da0b1b10a44393dd12c6f0e484845d4f1312378d20bf1f8349e
+  contract_hash: 9a40c92c5aae9545e7231b24ecfb8a09155c203c136bd4a5466f4d6a3cd0c702

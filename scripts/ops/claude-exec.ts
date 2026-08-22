@@ -22,6 +22,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
   ROOT,
+  currentHeadSha,
   emitJson,
   ensureDir,
   getFlag,
@@ -32,9 +33,20 @@ import {
   writeManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import { generateExecutionPacket, renderTaskContract, type ExecutionPacket } from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import { defaultLeaseOwner, heartbeatLease } from './lease-registry.js';
+import {
+  beginAttempt,
+  buildExecutorCheckpointEnv,
+  buildReworkBrief,
+  buildResumeBrief,
+  EXECUTION_CHECKPOINT_DIR,
+  finishAttempt,
+  hashExecutionCorrections,
+  readCheckpointState,
+  resolveExecutionTimeout,
+} from './execution-checkpoint.js';
 
 export interface ClaudeExecResult {
   ok: boolean;
@@ -82,7 +94,7 @@ export function checkClaudeHealth(
   };
 }
 
-export function buildClaudePrompt(packet: ExecutionPacket): string {
+export function buildClaudePrompt(packet: ExecutionPacket, resumeBrief?: string): string {
   return [
     '# Unit Talk V2 - Claude Lane Execution Packet',
     '',
@@ -91,6 +103,8 @@ export function buildClaudePrompt(packet: ExecutionPacket): string {
     `Lane type: ${packet.lane_type}`,
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
+    '',
+    renderTaskContract(packet.task_contract),
     '',
     'You are executing inside a dedicated lane worktree. Do not switch branches in the main checkout.',
     '',
@@ -105,6 +119,7 @@ export function buildClaudePrompt(packet: ExecutionPacket): string {
     '',
     '## Closeout instructions',
     packet.closeout_instructions.map((step) => `- ${step}`).join('\n'),
+    ...(resumeBrief ? ['', resumeBrief] : []),
     '',
     '## Repo brief',
     packet.repo_brief,
@@ -204,6 +219,7 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
   const { flags, bools } = parseArgs(argv);
   const issueId = getFlag(flags, 'issue') ?? '';
   const dryRun = bools.has('dry-run');
+  const rework = bools.has('rework');
   const permissionMode = getFlag(flags, 'permission-mode') ?? 'default';
   const model = getFlag(flags, 'model') ?? null;
 
@@ -263,9 +279,71 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
     return 2;
   }
 
-  const packet = generateExecutionPacket(manifest);
-  const prompt = buildClaudePrompt(packet);
+  const existingState = readCheckpointState(issueId);
+  const existingCheckpoint = existingState.checkpoint;
+  if (rework && !existingCheckpoint) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `cannot start rework without validated rejected-epoch state: ${existingState.reason}`,
+    } satisfies ClaudeExecResult);
+    return 2;
+  }
+  if (
+    rework &&
+    (!existingCheckpoint!.correction_authority || existingCheckpoint!.pending_actions.length === 0)
+  ) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        'cannot start rework without an authorized exact correction brief; record it with ops:exec-checkpoint correction after the rejected attempt closes',
+    } satisfies ClaudeExecResult);
+    return 2;
+  }
+
+  let packet: ExecutionPacket;
+  try {
+    packet = generateExecutionPacket(manifest);
+  } catch (error) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: error instanceof Error ? error.message : String(error),
+    } satisfies ClaudeExecResult);
+    return 2;
+  }
+  if (
+    existingCheckpoint &&
+    existingCheckpoint.epoch.objective_identity !== packet.task_contract.contract_hash
+  ) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        'checkpoint epoch is not bound to the current immutable task contract hash; refusing to resume or rework',
+    } satisfies ClaudeExecResult);
+    return 2;
+  }
+  const resumeBrief = rework
+    ? buildReworkBrief(existingCheckpoint!)
+    : buildResumeBrief(existingCheckpoint);
+  const prompt = buildClaudePrompt(packet, resumeBrief);
   const transcriptPath = transcriptPathForIssue(issueId);
+  const plannedHead = currentHeadSha(cwd);
+  const timeoutPolicy = resolveExecutionTimeout({
+    tier: manifest.tier,
+    reasoningEffort: 'high',
+    phase: rework ? 'orient' : (existingCheckpoint?.phase ?? 'orient'),
+  });
 
   if (dryRun) {
     printDryRun(
@@ -320,10 +398,37 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
   }
 
   const claudeArgs = buildClaudeArgs(prompt, { permissionMode, model });
+  const commonAttempt = {
+    issueId,
+    branch: manifest.branch,
+    worktree: cwd,
+    timeoutPolicy,
+  };
+  const attemptStart = rework
+    ? beginAttempt({
+        ...commonAttempt,
+        kind: 'rework',
+        rejectedHeadSha: plannedHead,
+        objectiveIdentity: packet.task_contract.contract_hash,
+        findingsIdentity: hashExecutionCorrections(existingCheckpoint!),
+        authority: 'claude-exec',
+      })
+    : existingCheckpoint
+      ? beginAttempt({ ...commonAttempt, kind: 'resume', attemptStartSha: plannedHead })
+      : beginAttempt({
+          ...commonAttempt,
+          kind: 'fresh',
+          currentHeadSha: plannedHead,
+          objectiveIdentity: packet.task_contract.contract_hash,
+          authority: 'claude-exec',
+        });
   const result = runner('claude', claudeArgs, {
     cwd,
     timeout: 60 * 60 * 1000,
-    env: process.env,
+    env: {
+      ...process.env,
+      ...buildExecutorCheckpointEnv(EXECUTION_CHECKPOINT_DIR, attemptStart.identity),
+    },
   });
   writeTranscript(transcriptPath, {
     issueId,
@@ -335,6 +440,12 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
   touchManifestHeartbeat(manifest);
 
   if (result.error || result.status !== 0) {
+    finishAttempt({
+      issueId,
+      outcome: 'failed',
+      reason: `claude exited with status ${result.status ?? 1}: ${result.error?.message ?? 'non-zero exit'}`,
+      identity: attemptStart.identity,
+    });
     emitJson({
       ok: false,
       code: 'EXECUTION_FAILED',
@@ -346,6 +457,13 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
     } satisfies ClaudeExecResult);
     return 1;
   }
+
+  finishAttempt({
+    issueId,
+    outcome: 'completed',
+    reason: 'claude exited 0',
+    identity: attemptStart.identity,
+  });
 
   emitJson({
     ok: true,

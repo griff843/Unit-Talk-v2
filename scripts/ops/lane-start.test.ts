@@ -3,14 +3,133 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { buildSyncYmlWithTaskContract } from './execution-packet.js';
 import { ROOT } from './shared.js';
 import {
+  captureOrReadTaskContract,
   type ExistingBranchReadmissionToken,
+  fetchLinearTaskSource,
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
+
+test('lane-start captures the Linear task source without exposing task discovery to the executor', () => {
+  const source = fetchLinearTaskSource('UTV2-1732', 'token-fixture', ((_command, args) => {
+    assert.equal(args.includes('https://api.linear.app/graphql'), true);
+    return {
+      status: 0,
+      stdout: JSON.stringify({
+        data: {
+          issue: {
+            identifier: 'UTV2-1732',
+            title: 'Repair the work order',
+            url: 'https://linear.app/unit-talk-v2/issue/UTV2-1732',
+            description: '## Acceptance criteria\n- Prompt contains the task.\n\n## Exit criteria\n- Test passes.',
+          },
+        },
+      }),
+      stderr: '',
+      error: undefined,
+    };
+  }) as typeof import('node:child_process')['spawnSync']);
+
+  assert.equal(source.identifier, 'UTV2-1732');
+  assert.equal(source.title, 'Repair the work order');
+});
+
+test('lane-start reuses a contract only after the manifest binds its immutable hash', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1732-lane-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const original = captureOrReadTaskContract(
+    'UTV2-1732',
+    ['proof.md'],
+    'token-fixture',
+    root,
+    ((_command, _args) => ({
+      status: 0,
+      stdout: JSON.stringify({
+        data: {
+          issue: {
+            identifier: 'UTV2-1732',
+            title: 'Original objective',
+            url: 'https://linear.app/unit-talk-v2/issue/UTV2-1732',
+            description: '## Acceptance criteria\n- Original criterion.\n\n## Exit criteria\n- Original exit.',
+          },
+        },
+      }),
+      stderr: '',
+      error: undefined,
+    })) as typeof import('node:child_process')['spawnSync'],
+  );
+  fs.writeFileSync(path.join(syncDir, 'UTV2-1732.yml'), buildSyncYmlWithTaskContract('UTV2-1732', original));
+
+  let called = false;
+  const reused = captureOrReadTaskContract(
+    'UTV2-1732',
+    ['different-proof.md'],
+    'token-fixture',
+    root,
+    ((_command, _args) => {
+      called = true;
+      throw new Error('must not recapture');
+    }) as typeof import('node:child_process')['spawnSync'],
+    original.contract_hash,
+  );
+  assert.equal(called, false);
+  assert.equal(reused.contract_hash, original.contract_hash);
+});
+
+test('lane-start recaptures Linear instead of trusting an unbound sync contract', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1732-unbound-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const stale = captureOrReadTaskContract(
+    'UTV2-1732',
+    [],
+    'token-fixture',
+    root,
+    ((_command, _args) => ({
+      status: 0,
+      stdout: JSON.stringify({
+        data: { issue: {
+          identifier: 'UTV2-1732',
+          title: 'Stale objective',
+          url: 'https://linear.app/unit-talk-v2/issue/UTV2-1732',
+          description: '## Acceptance criteria\n- Stale criterion.',
+        } },
+      }),
+      stderr: '',
+      error: undefined,
+    })) as typeof import('node:child_process')['spawnSync'],
+  );
+  fs.writeFileSync(path.join(syncDir, 'UTV2-1732.yml'), buildSyncYmlWithTaskContract('UTV2-1732', stale));
+
+  const captured = captureOrReadTaskContract(
+    'UTV2-1732',
+    [],
+    'token-fixture',
+    root,
+    ((_command, _args) => ({
+      status: 0,
+      stdout: JSON.stringify({
+        data: { issue: {
+          identifier: 'UTV2-1732',
+          title: 'Current objective',
+          url: 'https://linear.app/unit-talk-v2/issue/UTV2-1732',
+          description: '## Acceptance criteria\n- Current criterion.',
+        } },
+      }),
+      stderr: '',
+      error: undefined,
+    })) as typeof import('node:child_process')['spawnSync'],
+  );
+
+  assert.equal(captured.objective, 'Current objective');
+  assert.notEqual(captured.contract_hash, stale.contract_hash);
+});
 
 function readmissionToken(): ExistingBranchReadmissionToken {
   return {

@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
 import {
   assertExecutionPacketCwd,
-  generateExecutionPacket,
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  generateExecutionPacket as generateExecutionPacketRaw,
+  readTaskContract,
 } from './execution-packet.js';
 import { type LaneManifest } from './shared.js';
 
@@ -36,6 +42,88 @@ function createTestManifest(
     ...overrides,
   };
 }
+
+function testTaskContract(issueId = 'UTV2-969') {
+  return buildTaskContract(
+    {
+      identifier: issueId,
+      title: 'Repair executor work orders',
+      url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      description: [
+        '## Objective',
+        'Give every executor the authoritative task.',
+        '',
+        '## Acceptance criteria',
+        '- Prompt contains the task contract.',
+        '- Missing contracts fail before spawn.',
+        '',
+        '## Guardrails',
+        '- Do not infer work from the branch name.',
+        '',
+        '## Required evidence',
+        '- Focused tests pass.',
+        '',
+        '## Exit criteria',
+        '- Both executors consume the same contract.',
+      ].join('\n'),
+    },
+    [],
+    '2000-01-01T00:00:00.000Z',
+  );
+}
+
+function generateExecutionPacket(
+  manifest: LaneManifest,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return generateExecutionPacketRaw(manifest, env, testTaskContract(manifest.issue_id));
+}
+
+test('task contract captures every required work-order field and is hash stable', () => {
+  const contract = testTaskContract();
+
+  assert.equal(contract.objective, 'Give every executor the authoritative task.');
+  assert.deepEqual(contract.acceptance_criteria, [
+    'Prompt contains the task contract.',
+    'Missing contracts fail before spawn.',
+  ]);
+  assert.deepEqual(contract.non_goals, ['Do not infer work from the branch name.']);
+  assert.equal(contract.required_evidence[0], 'Focused tests pass.');
+  assert.match(contract.contract_hash, /^[0-9a-f]{64}$/u);
+  assert.equal(testTaskContract().contract_hash, contract.contract_hash);
+});
+
+test('task contract fails closed when objective or acceptance criteria are absent', () => {
+  assert.throws(
+    () => buildTaskContract({ identifier: 'UTV2-969', title: '', url: '', description: '## Acceptance criteria\n- one' }),
+    /missing an objective/,
+  );
+  assert.throws(
+    () => buildTaskContract({ identifier: 'UTV2-969', title: 'objective', url: '', description: 'unstructured prose only' }),
+    /missing acceptance criteria/,
+  );
+});
+
+test('sync record round-trips the immutable contract and rejects tampering', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1732-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const contract = testTaskContract();
+  const syncPath = path.join(syncDir, 'UTV2-969.yml');
+  fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract('UTV2-969', contract), 'utf8');
+  assert.deepEqual(readTaskContract('UTV2-969', root), contract);
+
+  fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract('UTV2-969', contract).replace('authoritative task', 'different task'), 'utf8');
+  assert.throws(() => readTaskContract('UTV2-969', root), /hash verification failed/);
+});
+
+test('execution packet refuses to generate when its task contract is absent', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1732-missing-contract-'));
+  assert.throws(
+    () => readTaskContract('UTV2-969', root),
+    /task contract is absent/,
+  );
+});
 
 test('generateExecutionPacket is deterministic in test mode', () => {
   process.env.UNIT_TALK_TEST_MODE = '1';

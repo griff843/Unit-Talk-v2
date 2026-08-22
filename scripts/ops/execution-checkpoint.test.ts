@@ -15,6 +15,8 @@ import {
   EXECUTION_TIMEOUT_HARD_CAP_MS,
   EXECUTION_TIMEOUT_POLICY_ID,
   beginAttempt,
+  buildExecutorCheckpointEnv,
+  buildReworkBrief,
   buildResumeBrief,
   buildResumePlan,
   checkpointMutationLockPath,
@@ -24,12 +26,14 @@ import {
   clearCheckpoint,
   failVisiblyAndRelease as failVisiblyAndReleaseWithIdentity,
   finishAttempt as finishAttemptWithIdentity,
+  hashExecutionCorrections,
   nextPhaseAfter,
   readCheckpoint,
   readCheckpointState,
   recordFinding as recordFindingWithIdentity,
   recordHeartbeat as recordHeartbeatWithIdentity,
   recordPendingActions as recordPendingActionsWithIdentity,
+  recordReworkCorrections,
   recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
@@ -38,6 +42,89 @@ import {
   type ExecutionStateIdentity,
   type FinishAttemptInput,
 } from './execution-checkpoint.js';
+
+test('closed checkpoints accept one authorized immutable correction brief and bind it to rework', () => {
+  const dir = tmpDir();
+  const issueId = 'UTV2-1732';
+  const timeoutPolicy = resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'orient' });
+  const fresh = beginAttempt({
+    issueId,
+    kind: 'fresh',
+    currentHeadSha: 'a'.repeat(40),
+    objectiveIdentity: 'task-contract-hash',
+    authority: 'codex-exec',
+    timeoutPolicy,
+    dir,
+  });
+  recordFindingWithIdentity(
+    issueId,
+    { phase: 'verify', summary: 'truth-check-lib.ts was untouched' },
+    { dir, identity: fresh.identity },
+  );
+  finishAttemptWithIdentity({
+    issueId,
+    outcome: 'failed',
+    reason: 'independent review rejected the epoch',
+    identity: fresh.identity,
+    dir,
+  });
+
+  const denied = recordReworkCorrections(issueId, ['Change truth-check-lib.ts'], {
+    authority: 'pm-review',
+    dir,
+    env: { UNIT_TALK_EXECUTION_EPOCH_ID: fresh.identity.epoch_id },
+  });
+  assert.equal(denied.ok, false);
+  assert.match(denied.reason, /executors cannot rewrite/);
+
+  const recorded = recordReworkCorrections(
+    issueId,
+    [
+      'Change scripts/ops/truth-check-lib.ts substantively.',
+      'Change .github/workflows/executor-result-validator.yml substantively.',
+    ],
+    { authority: 'pm-review', dir, env: {}, now: new Date('2026-08-22T06:00:00.000Z') },
+  );
+  assert.equal(recorded.ok, true);
+  assert.equal(recorded.checkpoint?.correction_authority, 'pm-review');
+  const brief = buildReworkBrief(recorded.checkpoint!);
+  assert.match(brief, /truth-check-lib\.ts substantively/);
+  assert.match(brief, /executor-result-validator\.yml substantively/);
+
+  const rewritten = recordReworkCorrections(issueId, ['replace the accepted brief'], {
+    authority: 'pm-review',
+    dir,
+    env: {},
+  });
+  assert.equal(rewritten.ok, false);
+  assert.match(rewritten.reason, /already sealed/);
+
+  const correctionsHash = hashExecutionCorrections(recorded.checkpoint!);
+  const rework = beginAttempt({
+    issueId,
+    kind: 'rework',
+    rejectedHeadSha: 'b'.repeat(40),
+    objectiveIdentity: 'task-contract-hash',
+    findingsIdentity: correctionsHash,
+    authority: 'codex-exec',
+    timeoutPolicy,
+    dir,
+  });
+  assert.equal(rework.checkpoint.epoch.objective_identity, 'task-contract-hash');
+  assert.equal(rework.checkpoint.epoch.findings_identity, correctionsHash);
+});
+
+test('executor checkpoint environment carries the control-plane checkpoint directory', () => {
+  const env = buildExecutorCheckpointEnv('/control/.out/ops/execution-checkpoints', {
+    epoch_id: 'epoch-1',
+    attempt: 2,
+    minimum_revision: 7,
+  });
+  assert.equal(env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR, '/control/.out/ops/execution-checkpoints');
+  assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
+  assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
+  assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+});
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1594-checkpoint-'));

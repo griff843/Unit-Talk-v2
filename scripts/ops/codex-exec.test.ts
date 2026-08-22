@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
+import { buildTaskContract } from './execution-packet.js';
 import {
   buildCodexChildEnv,
   buildCodexPrompt,
@@ -138,6 +139,7 @@ test('Codex child environment carries the originating checkpoint identity', () =
     assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
     assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
     assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+    assert.match(env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR ?? '', /execution-checkpoints$/u);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -620,6 +622,16 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
     tier: 'T1',
     branch: 'codex/utv2-1594',
     cwd: '/tmp/worktree',
+    task_contract: buildTaskContract(
+      {
+        identifier: 'UTV2-1594',
+        title: 'Resume the bound task',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1594',
+        description: '## Acceptance criteria\n- Keep the original task.\n\n## Exit criteria\n- Resume succeeds.',
+      },
+      [],
+      '2000-01-01T00:00:00.000Z',
+    ),
     allowed_file_scope: ['scripts/ops/verify-semaphore.ts'],
     required_verification: ['pnpm verify'],
     closeout_instructions: ['open a PR'],

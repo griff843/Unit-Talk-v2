@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnvironment } from '@unit-talk/config';
 import {
   prepareLaneExecutionDirectory,
   validateExecutionCwd,
@@ -49,6 +50,13 @@ import {
 } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import {
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  readTaskContract,
+  type LinearTaskSource,
+  type TaskContract,
+} from './execution-packet.js';
 // checkConcurrencyLimits() is the real, fail-closed mechanical authority for lane
 // admission -- it lives in concurrency-rules.ts (not here) so that lane-maximizer.ts's
 // advisory wave planner can import and call the exact same implementation instead of
@@ -201,20 +209,90 @@ function writeSyncFile(issueId: string, content: string): void {
   fs.writeFileSync(path.join(syncDir, `${issueId}.yml`), content, 'utf8');
 }
 
-function buildSyncYml(issueId: string): string {
-  return [
-    'version: 1',
-    'approval:',
-    '  allow_multiple_issues: false',
-    '  skip_sync_required: false',
-    'entities:',
-    '  issues:',
-    `    - ${issueId}`,
-    '  findings: []',
-    '  controls: []',
-    '  proofs: []',
-    '',
-  ].join('\n');
+type LinearFetchRunner = typeof spawnSync;
+
+export function fetchLinearTaskSource(
+  issueId: string,
+  token: string,
+  runner: LinearFetchRunner = spawnSync,
+): LinearTaskSource {
+  if (!token.trim()) {
+    throw new Error(`LINEAR_API_TOKEN is required to capture the authoritative task contract for ${issueId}`);
+  }
+  const query = `
+    query LaneTaskContract($id: String!) {
+      issue(id: $id) { identifier title url description }
+    }
+  `;
+  const result = runner(
+    'curl',
+    [
+      '--fail-with-body',
+      '--silent',
+      '--show-error',
+      '--request',
+      'POST',
+      'https://api.linear.app/graphql',
+      '--header',
+      `Authorization: ${token}`,
+      '--header',
+      'Content-Type: application/json',
+      '--data-binary',
+      JSON.stringify({ query, variables: { id: issueId } }),
+    ],
+    { cwd: ROOT, encoding: 'utf8', stdio: 'pipe', timeout: 15_000 },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `failed to capture Linear task contract for ${issueId}: ${result.error?.message ?? result.stderr ?? `curl exit ${result.status}`}`,
+    );
+  }
+  const payload = JSON.parse(String(result.stdout ?? '{}')) as {
+    data?: { issue?: LinearTaskSource | null };
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(
+      `failed to capture Linear task contract for ${issueId}: ${payload.errors.map((entry) => entry.message ?? 'unknown Linear error').join('; ')}`,
+    );
+  }
+  const issue = payload.data?.issue;
+  if (!issue || issue.identifier.toUpperCase() !== issueId) {
+    throw new Error(`failed to capture Linear task contract for ${issueId}: issue identity mismatch or missing issue`);
+  }
+  return {
+    identifier: issue.identifier.toUpperCase(),
+    title: issue.title ?? '',
+    url: issue.url ?? '',
+    description: issue.description ?? '',
+  };
+}
+
+export function captureOrReadTaskContract(
+  issueId: string,
+  expectedProofPaths: string[],
+  token: string,
+  root: string = ROOT,
+  runner: LinearFetchRunner = spawnSync,
+  expectedContractHash?: string,
+): TaskContract {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (expectedContractHash) {
+    if (!fs.existsSync(syncPath) || !/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(fs.readFileSync(syncPath, 'utf8'))) {
+      throw new Error(`task contract for ${issueId} was removed after its immutable hash was bound to the manifest`);
+    }
+    const contract = readTaskContract(issueId, root);
+    if (contract.contract_hash !== expectedContractHash) {
+      throw new Error(`task contract hash does not match the immutable manifest binding for ${issueId}`);
+    }
+    return contract;
+  }
+
+  // A sync record without a manifest binding is not authority. It may be a
+  // legacy placeholder or mutable residue from an abandoned admission. A new
+  // epoch always captures Linear again, then seals the resulting hash into the
+  // manifest before an executor can start.
+  return buildTaskContract(fetchLinearTaskSource(issueId, token, runner), expectedProofPaths);
 }
 
 export function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
@@ -914,6 +992,15 @@ function main(): void {
         throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
       }
 
+      const taskContract = captureOrReadTaskContract(
+        issueId,
+        manifest.expected_proof_paths,
+        loadEnvironment().LINEAR_API_TOKEN?.trim() ?? '',
+        ROOT,
+        spawnSync,
+        manifest.task_packet_hash,
+      );
+
       const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
       const lease = reserveLease({
         issue_id: issueId,
@@ -933,8 +1020,14 @@ function main(): void {
         manifest.status = 'in_progress';
         manifest.blocked_by = [];
       }
+      manifest.task_packet_hash = taskContract.contract_hash;
       manifest.execution_location = setup.execution_location;
       writeManifest(manifest);
+      const syncContent = buildSyncYmlWithTaskContract(issueId, taskContract);
+      writeSyncFile(issueId, syncContent);
+      const worktreeSyncPath = path.join(worktreePath, '.ops', 'sync', `${issueId}.yml`);
+      fs.mkdirSync(path.dirname(worktreeSyncPath), { recursive: true });
+      fs.writeFileSync(worktreeSyncPath, syncContent, 'utf8');
       emitJson({
         ok: true,
         code: 'lane_resumed',
@@ -990,6 +1083,20 @@ function main(): void {
       }
       modelRouting = resolution.model_routing!;
     }
+
+    // UTV2-1732: freeze the authoritative work order before any executor can
+    // start. The exact snapshot is written into the per-issue sync record and
+    // its hash is bound into the manifest/checkpoint epoch. Later Linear edits
+    // cannot silently rewrite an already-dispatched lane.
+    const expectedProofPaths = defaultProofPaths(issueId, tier);
+    if (isCodexExecutor) {
+      expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
+    }
+    const taskContract = captureOrReadTaskContract(
+      issueId,
+      expectedProofPaths,
+      loadEnvironment().LINEAR_API_TOKEN?.trim() ?? '',
+    );
 
     if (readmitExistingBranch) {
       if (!branchContainsExactIssue(branch, issueId)) {
@@ -1073,11 +1180,6 @@ function main(): void {
         );
       }
 
-      const expectedProofPaths = defaultProofPaths(issueId, tier);
-      if (isCodexExecutor) {
-        expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
-      }
-
       const syncPath = path.join(ROOT, '.ops', 'sync', `${issueId}.yml`);
       const manifestSnapshot = snapshotFile(manifestPath);
       const syncSnapshot = snapshotFile(syncPath);
@@ -1131,6 +1233,7 @@ function main(): void {
           ...(verificationTargetFlag ? { verification_target: verificationTargetFlag } : {}),
         });
         manifest.execution_location = setup.execution_location;
+        manifest.task_packet_hash = taskContract.contract_hash;
         manifest.notes =
           `existing-branch readmission; previous_lane_type=${token.previous_lane_type ?? 'unknown'}; ` +
           `new_lane_type=${canonicalLaneType}; preserved_head=${branchState.sha}; open_pr=${pullRequest.number}`;
@@ -1138,7 +1241,7 @@ function main(): void {
           throw new Error(`T1 lane ${issueId} has no expected_proof_paths declared`);
         }
         writeManifest(manifest);
-        writeSyncFile(issueId, buildSyncYml(issueId));
+        writeSyncFile(issueId, buildSyncYmlWithTaskContract(issueId, taskContract));
 
         if (git(['branch', '--show-current']).stdout !== 'main') {
           throw new Error('root checkout changed branches during readmission');
@@ -1259,11 +1362,6 @@ function main(): void {
     // sidecar codex-exec.ts writes and commits (PM review finding #4) -- declaring it
     // here means the path is already in the lane's own scope; docs/06_status/proof/**
     // is exempt from the file-scope existence check (it's an intent declaration).
-    const expectedProofPaths = defaultProofPaths(issueId, tier);
-    if (isCodexExecutor) {
-      expectedProofPaths.push(`docs/06_status/proof/${issueId}/model-routing.json`);
-    }
-
     const manifest = createManifest({
       issue_id: issueId,
       tier,
@@ -1296,8 +1394,9 @@ function main(): void {
     }
 
     manifest.execution_location = setup.execution_location;
+    manifest.task_packet_hash = taskContract.contract_hash;
     writeManifest(manifest);
-    writeSyncFile(issueId, buildSyncYml(issueId));
+    writeSyncFile(issueId, buildSyncYmlWithTaskContract(issueId, taskContract));
 
     // The empty proof directory (UTV2-1492) is scaffolded directly inside
     // the lane worktree below, alongside the manifest/sync mirror — not in
