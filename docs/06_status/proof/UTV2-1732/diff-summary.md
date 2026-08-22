@@ -1,8 +1,11 @@
 # UTV2-1732 Diff Summary
 
-Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`  
-Base: `origin/main` at `efdbd298`  
-PR: https://github.com/griff843/Unit-Talk-v2/pull/1437  
+Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`
+
+Base: `origin/main` at `efdbd298`
+
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1437
+
 Generated: 2026-08-22T06:06:39Z
 
 ## Implementation

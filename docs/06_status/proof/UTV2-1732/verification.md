@@ -1,10 +1,15 @@
 # UTV2-1732 Verification
 
-Issue: UTV2-1732  
-Tier: T1  
-Lane type: governance  
-PR: https://github.com/griff843/Unit-Talk-v2/pull/1437  
-Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`  
+Issue: UTV2-1732
+
+Tier: T1
+
+Lane type: governance
+
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1437
+
+Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`
+
 Generated: 2026-08-22T06:06:39Z
 
 ## Verification
@@ -53,5 +58,6 @@ Independent adversarial review remains mandatory and is intentionally not self-a
 
 ## SHA Binding
 
-Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`  
+Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`
+
 Merge SHA: not available pre-merge; post-merge closeout must rebind this artifact.
