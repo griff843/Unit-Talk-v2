@@ -27,6 +27,12 @@
         "result": "pass",
         "tests": 409,
         "failures": 0
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "summary": "No R-level rules matched; no R-level artifacts required for this diff"
       }
     ],
     "test_db": {

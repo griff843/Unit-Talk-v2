@@ -30,6 +30,10 @@ $ pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/model-routi
 # tests 409
 # pass 409
 # fail 0
+
+$ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
 ## Verification
@@ -38,6 +42,7 @@ $ pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/model-routi
 - [x] `pnpm test`: passed inside `pnpm verify:static`.
 - [x] `pnpm verify:static`: passed with exit code 0.
 - [x] Focused issue suite: 409 tests passed, 0 failed.
+- [x] R-level compliance: PASS; no lifecycle, domain, strategy, or operator UI rule matched.
 - [x] Evidence bundle: schema-v2 static proof generated with distinct execution and merge identities.
 - [x] Model-routing evidence: records `execution_sha`; no top-level `merge_sha` is present.
 - [x] Runtime proof: not applicable to this governance-only tooling change.
