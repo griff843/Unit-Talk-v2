@@ -926,7 +926,7 @@ test('liveness describes the attempt in flight, not an older dangling one', () =
 // Both dispatch and clear refuse such a lane, so it could neither run nor be
 // reset. These fixtures pin that recovery.
 
-function writeLegacyStuckCheckpoint(dir: string): void {
+function writeLegacyStuckCheckpoint(dir: string, overrides: Record<string, unknown> = {}): void {
   const now = '2026-08-22T05:13:25.000Z';
   const checkpoint = {
     schema_version: EXECUTION_CHECKPOINT_SCHEMA_VERSION,
@@ -972,7 +972,7 @@ function writeLegacyStuckCheckpoint(dir: string): void {
       },
     ],
   } as never;
-  writeCheckpoint(checkpoint, dir);
+  writeCheckpoint({ ...(checkpoint as object), ...overrides } as never, dir);
 }
 
 test('UTV2-1732 R1: clear refuses the real stuck UTV2-1729 shape (the trap)', () => {
@@ -1048,4 +1048,55 @@ test('UTV2-1732 R1: retiring requires a named operator authority', () => {
   assert.equal(refused.ok, false);
   assert.equal(refused.code, 'execution_checkpoint_retire_refused');
   assert.match(refused.reason, /requires --authority/u);
+});
+
+// ── UTV2-1732 round 3: retire must not disable the gate or carry stale work ──
+
+test('round3: a retired epoch is never resumed, so retired_at cannot permanently disable the gate', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const cp = readCheckpoint('UTV2-1729', dir)!;
+
+  // beginAttempt kind 'resume' reused epoch verbatim, so retired_at survived
+  // forever and every later dispatch bypassed the contract-hash check — for
+  // exactly the population the migration retires.
+  const plan = buildResumePlan(cp);
+  assert.equal(plan.resumed, false, 'a retired epoch must plan as fresh, never resume');
+  assert.equal(plan.resume_from_phase, EXECUTION_PHASES[0]);
+  assert.throws(
+    () =>
+      beginAttempt({
+        kind: 'resume',
+        issueId: 'UTV2-1729',
+        dir,
+        attemptStartSha: 'b'.repeat(40),
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'orient' }),
+      } as never),
+    /was retired by/u,
+    'resuming a retired epoch must be refused outright',
+  );
+});
+
+test('round3: retire archives the retired objective conclusions instead of presenting them as authoritative', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir, {
+    completed_phases: [
+      { epoch_id: '200c0838-0000-4000-8000-000000000000', phase: 'orient', completed_at: '2026-08-22T05:13:25.000Z', attempt: 1, summary: 'OLD OBJECTIVE: mapped the wrong task' },
+    ],
+    findings: [
+      { id: 'f1', epoch_id: '200c0838-0000-4000-8000-000000000000', source_epoch_id: null, phase: 'orient', summary: 'OLD OBJECTIVE finding', recorded_at: '2026-08-22T05:13:25.000Z', attempt: 1 },
+    ],
+  });
+
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const after = readCheckpoint('UTV2-1729', dir)!;
+
+  assert.equal(after.completed_phases.length, 0, 'phases of the retired objective must not carry forward');
+  assert.equal(after.findings.length, 0, 'findings of the retired objective must not carry forward');
+  assert.equal(after.prior_epochs.length, 1, 'they are archived, not discarded');
+  // The resume brief calls completed phases "authoritative"; presenting work
+  // done against a superseded objective that way is the failure this lane exists
+  // to eliminate.
+  assert.doesNotMatch(buildResumeBrief(after), /OLD OBJECTIVE/u);
 });

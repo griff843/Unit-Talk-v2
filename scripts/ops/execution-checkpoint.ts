@@ -665,6 +665,21 @@ export function buildResumePlan(checkpoint: ExecutionCheckpoint | null): ResumeP
       prior_attempts: [],
     };
   }
+  // A retired epoch carries the conclusions of an objective that no longer
+  // applies. Resuming into it would replay those conclusions as authoritative
+  // and would also inherit `retired_at`, permanently disabling the
+  // contract-hash gate. A retired epoch therefore always plans as fresh.
+  if (isRetiredEpoch(checkpoint.epoch)) {
+    return {
+      resumed: false,
+      resume_from_phase: EXECUTION_PHASES[0],
+      completed_phases: [],
+      skipped_phases: [],
+      carried_findings: [],
+      pending_actions: [],
+      prior_attempts: checkpoint.attempts,
+    };
+  }
   const completed = checkpoint.completed_phases.map((entry) => entry.phase);
   return {
     resumed: checkpoint.attempts.length > 0,
@@ -849,9 +864,17 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     const existingState = readCheckpointState(input.issueId, dir);
     const existing = existingState.checkpoint;
 
-  if (input.kind === 'fresh' && existing) {
+  if (input.kind === 'fresh' && existing && !isRetiredEpoch(existing.epoch)) {
     throw new Error(
       `execution state already exists for ${input.issueId}; use resume or an explicit rework epoch instead of replacing it`,
+    );
+  }
+  // Retiring ends an epoch. The next dispatch must mint a new one bound to the
+  // current contract, so a retired epoch is never resumed or reworked in place.
+  if ((input.kind === 'resume' || input.kind === 'rework') && existing && isRetiredEpoch(existing.epoch)) {
+    throw new Error(
+      `epoch ${existing.epoch.epoch_id} for ${input.issueId} was retired by ` +
+        `${existing.epoch.retired_by ?? 'an operator'}; start a fresh epoch rather than ${input.kind}`,
     );
   }
   if ((input.kind === 'resume' || input.kind === 'rework') && !existing) {
@@ -1297,6 +1320,27 @@ export function retireCheckpointEpoch(
       checkpoint.epoch.retired_by = options.authority.trim();
       checkpoint.epoch.retired_reason =
         options.reason?.trim() || 'epoch superseded; retired by operator';
+      // The completed phases and findings belong to the objective being
+      // retired. The resume brief presents them as "already finished and their
+      // conclusions are authoritative", so carrying them into a new objective
+      // would hand the next executor conclusions drawn against the wrong task —
+      // the precise failure this lane exists to eliminate. They are archived on
+      // the epoch record, not silently dropped.
+      const retiredPhases = checkpoint.completed_phases.length;
+      const retiredFindings = checkpoint.findings.length;
+      checkpoint.prior_epochs = [
+        ...checkpoint.prior_epochs,
+        {
+          epoch: { ...checkpoint.epoch },
+          archived_at: retiredAt,
+          completed_phases: [...checkpoint.completed_phases],
+          findings: [...checkpoint.findings],
+        } as never,
+      ];
+      checkpoint.completed_phases = [];
+      checkpoint.findings = [];
+      checkpoint.pending_actions = [];
+      checkpoint.phase = EXECUTION_PHASES[0];
       checkpoint.status = 'failed';
       checkpoint.updated_at = retiredAt;
       checkpoint.last_activity_at = retiredAt;
@@ -1309,7 +1353,8 @@ export function retireCheckpointEpoch(
         ok: true,
         code: 'execution_checkpoint_retired' as const,
         reason:
-          `retired epoch ${checkpoint.epoch.epoch_id} (objective identity ` +
+          `retired epoch ${checkpoint.epoch.epoch_id} (archived ${retiredPhases} completed phase(s) and ` +
+          `${retiredFindings} finding(s); objective identity ` +
           `"${checkpoint.epoch.objective_identity}"), closing ${closed} abandoned attempt(s); ` +
           `${issueId} is now dispatchable — the retired epoch no longer binds`,
       };

@@ -31,13 +31,18 @@ task_contract:
     * **during rework:** the exact unresolved findings and required corrections
 
 
-    The task contract must be **captured before execution**, **immutable**,
-    **epoch-bound**, consumed identically by Claude and Codex, and **fail closed
-    when absent**.
+    The task contract must be **captured before execution**, **integrity-checked
+    and epoch-bound**, consumed identically by Claude and Codex, and **fail
+    closed when absent**. The binding hash detects drift and corruption between
+    the sync record and the manifest; it is not tamper-resistance, because it is
+    re-derived from the record it validates.
 
 
     Linear may supply source material during orchestration, but **executor
     success must not depend on the executor voluntarily querying Linear.**
+  extraction:
+    objective_source: heading:objective
+    acceptance_source: heading:exit-criteria
   acceptance_criteria: &a1
     - A fresh dispatch prompt contains the complete task contract.
     - Dispatch **fails before spawning** if objective or acceptance criteria are
@@ -72,8 +77,8 @@ task_contract:
     - Independent adversarial review is mandatory.
     - "**Do not fold**
       [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
-      ng-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding
-      implementation into this lane.**
+      ng-contract-is-broken-repair-the-canonical-generator-so)'s proof-binding
+      implementation into this lane.
       [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
       ng-contract-is-broken-repair-the-canonical-generator-so) and its rejected
       history are preserved."
@@ -81,15 +86,13 @@ task_contract:
     - No direct-`main` work.
     - "**Do not fold**
       [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
-      ng-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding
-      implementation into this lane.**
+      ng-contract-is-broken-repair-the-canonical-generator-so)'s proof-binding
+      implementation into this lane.
       [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
       ng-contract-is-broken-repair-the-canonical-generator-so) and its rejected
       history are preserved."
   required_evidence:
     - Produce and validate docs/06_status/proof/UTV2-1732/evidence.json
-    - Produce and validate docs/06_status/proof/UTV2-1732/verification.md
-    - Produce and validate docs/06_status/proof/UTV2-1732/diff-summary.md
     - Produce and validate docs/06_status/proof/UTV2-1732/model-routing.json
   exit_criteria: *a1
   source:
@@ -98,6 +101,61 @@ task_contract:
     title: "Executors receive no task contract: repair the autonomous execution work
       order"
     description: |-
+      # ROUND 2 — REQUIRED CORRECTIONS (two independent reviews: REJECT / RISK HIGH)
+
+      PR #1437 round 1 built the right core: `task_contract` in `.ops/sync`, `renderTaskContract()` in both prompts, `contract_hash` bound to `epoch.objective_identity`, three fail-closed refusals, 126 tests green. Verified by execution: the prompt carries the contract; the refusal fires on an EMPTY `acceptance_criteria`, not merely a missing file; a closed checkpoint accepts a correction brief; both executors share one renderer; scope is exactly as declared. **Do not restart — correct in place.**
+
+      Two blockers make it unmergeable as-is.
+
+      ## R1 BLOCKER — existing checkpoints have no migration, and become doubly stuck
+
+      Verified live: `.out/ops/execution-checkpoints/UTV2-1729.json` has `status: in_progress`, `epoch.objective_identity: "UTV2-1729:codex/utv2-1729-proof-producing-contract"` (the OLD scheme) and **1 open attempt**.
+
+      Post-merge that lane is refused twice over:
+
+      * `codex-exec.ts` / `claude-exec.ts` refuse it — `objective_identity !== contract_hash`
+      * `clearCheckpoint` also refuses it — the open-attempt guard
+
+      No recovery tooling ships in this PR. **Required:** a migration/backfill for existing checkpoints, or a reset command able to retire an open-but-abandoned attempt. Prove it by executing the recovery against the real `UTV2-1729` checkpoint and showing it dispatchable afterwards.
+
+      ## R2 BLOCKER — lane-start now hard-depends on a live Linear fetch and a heading format
+
+      `fetchLinearTaskSource` reads only `issue.description` (never comments), and `buildTaskContract` throws `missing acceptance criteria` unless an `Objective` / `Acceptance Criteria` / `Exit Criteria` / `Required Outcome` heading parses non-empty.
+
+      Verified: `UTV2-1667`'s real description carries only `Authority`, `Ownership`, `Scope — Phase 1 ONLY`, `Explicitly EXCLUDED`, `Required test coverage`, `Review budget`, `Guardrails`, `Expected file scope`. So `pnpm ops:lane-start UTV2-1667` **hard-fails after merge** — the exact lane being held for regeneration. Separately, any Linear outage now blocks every lane-start repo-wide (15s curl timeout, no degraded path).
+
+      **Required:** a fallback deriving the contract from the raw description/title when no recognized heading exists, or a one-time migration; and dispatch must not brick when Linear is unavailable.
+
+      ## R3 — codex-exec breaks its own JSON contract on the new failure mode
+
+      `codex-exec.ts:704` calls `generateExecutionPacket` unwrapped. `claude-exec.ts:310` wraps it and emits `{ok:false, code:'PRECONDITION_FAILED'}`. On a task-contract failure Codex dies with a raw stderr string and no parseable `CodexExecResult`, breaking every JSON-parsing caller — on precisely the scenario this PR introduces. Wrap it to match.
+
+      ## R4 — the rework-correction identity guard is bypassable
+
+      `recordReworkCorrections` refuses only when `UNIT_TALK_EXECUTION_EPOCH_ID` / `_ATTEMPT` / `_MINIMUM_REVISION` are present; stripping them in a subshell (`env -u ...`) defeats it, and `--authority` is unverified free text. The only test covers the case where the vars ARE present. Either strengthen the boundary or document it explicitly as detective-only, and add a test for the stripped-env case.
+
+      ## R5 — `contract_hash` is self-consistency, not tamper-resistance
+
+      `assertTaskContract` re-derives the hash from the same file it validates, and no CI gate re-derives from an independent source; consistent edits to `.ops/sync/<id>.yml` plus the manifest `task_packet_hash` satisfy every check. Either add independent re-verification, or remove the "immutable"/tamper-proof language from the PR body and `renderTaskContract` output so the claim matches what is enforced.
+
+      ## R6 — integration coverage is missing for exactly what failed
+
+      Every current fixture is hand-authored with the new headings already applied. Add tests driving: a **real legacy** Linear description (use `UTV2-1667`'s actual body) through `lane-start` `main()`; an existing checkpoint carrying the old `objective_identity` through `codex-exec` `main()`; and a Linear API timeout during dispatch.
+
+      ## R7 — dead code
+
+      `buildSyncYml()` in `lane-start.ts` is unused; every call site now uses `buildSyncYmlWithTaskContract`. Remove it.
+
+      ## R8 — spec doc is OUT of scope
+
+      `docs/05_operations/LANE_MANIFEST_SPEC.md` lacks the new `LaneManifest.task_packet_hash` field. **Do not edit that file** — it is outside this lane's `file_scope_lock`. Record it as a follow-up in the proof bundle.
+
+      ## Board note (not this lane's work)
+
+      `merge-risk.ts` currently reports three `hard_fail` conditions: `TIER_C_CONFLICT` [UTV2-1667](https://linear.app/unit-talk-v2/issue/UTV2-1667/phase-1-implementation-deployment-truth-evidence-host-journal)↔[UTV2-1732](https://linear.app/unit-talk-v2/issue/UTV2-1732/executors-receive-no-task-contract-repair-the-autonomous-execution) and [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)↔[UTV2-1732](https://linear.app/unit-talk-v2/issue/UTV2-1732/executors-receive-no-task-contract-repair-the-autonomous-execution) over `scripts/ops/lane-start.ts`, plus `MERGED_PR_ACTIVE_LANE` for [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy). These are board-state reconciliation items for the orchestrator, not code defects to fix here.
+
+      ---
+
       ## Defect
 
       **A dispatched executor is never told what to do.** It infers the task from file scope, branch name, and the state of an existing PR.
@@ -143,7 +201,7 @@ task_contract:
       * exit criteria
       * **during rework:** the exact unresolved findings and required corrections
 
-      The task contract must be **captured before execution**, **immutable**, **epoch-bound**, consumed identically by Claude and Codex, and **fail closed when absent**.
+      The task contract must be **captured before execution**, **integrity-checked and epoch-bound**, consumed identically by Claude and Codex, and **fail closed when absent**. The binding hash detects drift and corruption between the sync record and the manifest; it is not tamper-resistance, because it is re-derived from the record it validates.
 
       Linear may supply source material during orchestration, but **executor success must not depend on the executor voluntarily querying Linear.**
 
@@ -155,7 +213,7 @@ task_contract:
       * Closed checkpoints must still accept an authorized rework correction brief.
       * Preserve production containment; no SGO-dependent work.
       * Independent adversarial review is mandatory.
-      * **Do not fold** [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)**'s proof-binding implementation into this lane.** [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) and its rejected history are preserved.
+      * **Do not fold** [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s proof-binding implementation into this lane. [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) and its rejected history are preserved.
 
       ## Exit criteria
 
@@ -172,6 +230,6 @@ task_contract:
       ## Sequencing
 
       This is fixed **before** further autonomy tuning. It caps what autonomous dispatch can achieve on any corrective round, and it explains the [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) failure pattern.
-    captured_at: 2026-08-22T05:39:33.705Z
-    description_sha256: 62e45563e4d41da0b1b10a44393dd12c6f0e484845d4f1312378d20bf1f8349e
-  contract_hash: 9a40c92c5aae9545e7231b24ecfb8a09155c203c136bd4a5466f4d6a3cd0c702
+    captured_at: 2026-08-22T15:25:17.512Z
+    description_sha256: a9973cab4551948159f627a3810323f55d13627134ebc4482016247d901e8ae2
+  contract_hash: 6c035c356d59ddfda2ab79862ce72d1236b19c8c3d43668727f6b58bc6828324

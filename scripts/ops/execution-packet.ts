@@ -180,26 +180,76 @@ function normalizeHeading(value: string): string {
   return value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function sectionBody(markdown: string, headings: string[]): string {
-  const wanted = new Set(headings.map(normalizeHeading));
+/**
+ * One markdown scanner shared by both extraction paths.
+ *
+ * Heading detection and fence tracking previously lived only in the derived
+ * path, so `## Acceptance Criteria` — the path most issues actually use — still
+ * ingested fenced code-block bodies, and a `#` comment inside a fence was read
+ * as a heading and silently TERMINATED the section, dropping every criterion
+ * after it. A silently truncated work order is the failure this lane exists to
+ * eliminate, so both paths now walk the document through here.
+ *
+ * Emits one record per content line, already annotated with the section it
+ * belongs to and whether it sits inside a fence.
+ */
+interface ScannedLine {
+  text: string;
+  heading: string | null;
+  isListItem: boolean;
+  listBody: string;
+}
+
+function scanMarkdown(markdown: string): ScannedLine[] {
   const lines = markdown.split(/\r?\n/);
-  let collecting = false;
-  const body: string[] = [];
-  for (const line of lines) {
-    const heading = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
-    if (heading) {
-      if (collecting) break;
-      collecting = wanted.has(normalizeHeading(heading[1] ?? ''));
+  const out: ScannedLine[] = [];
+  let fence: string | null = null;
+  let heading: string | null = null;
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const raw = lines[i] ?? '';
+    const line = raw.trim();
+
+    // Track fences by their exact opening marker so nested or longer runs
+    // (```` vs ```) cannot flip a boolean back open.
+    const fenceMatch = /^(`{3,}|~{3,})/u.exec(line);
+    if (fenceMatch) {
+      const marker = fenceMatch[1] ?? '';
+      if (fence === null) fence = marker[0] === '`' ? '`' : '~';
+      else if (marker[0] === fence) fence = null;
       continue;
     }
-    if (collecting) body.push(line);
+    if (fence !== null) continue; // inside a fence: never content, never a heading
+
+    const atx = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
+    if (atx) {
+      heading = (atx[1] ?? '').replace(/[*_`]/gu, '').trim();
+      continue;
+    }
+    // Setext headings: a text line underlined by === or ---.
+    const next = (lines[i + 1] ?? '').trim();
+    if (line && /^(?:={2,}|-{2,})$/u.test(next)) {
+      heading = line.replace(/[*_`]/gu, '').trim();
+      i += 1;
+      continue;
+    }
+    if (!line) {
+      out.push({ text: '', heading, isListItem: false, listBody: '' });
+      continue;
+    }
+    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+    out.push({
+      text: line,
+      heading,
+      isListItem: Boolean(listItem),
+      listBody: (listItem?.[1] ?? '').trim(),
+    });
   }
-  return body.join('\n').trim();
+  return out;
 }
 
 function sectionItems(markdown: string, headings: string[]): string[] {
-  const body = sectionBody(markdown, headings);
-  if (!body) return [];
+  const wanted = new Set(headings.map(normalizeHeading));
   const items: string[] = [];
   let paragraph: string[] = [];
   const flush = (): void => {
@@ -207,84 +257,119 @@ function sectionItems(markdown: string, headings: string[]): string[] {
     if (value) items.push(value);
     paragraph = [];
   };
-  for (const line of body.split(/\r?\n/)) {
-    const listItem = /^\s*(?:[-*+] |\d+[.)]\s+)(.*)$/u.exec(line);
-    if (listItem) {
+  for (const line of scanMarkdown(markdown)) {
+    if (!line.heading || !wanted.has(normalizeHeading(line.heading))) {
       flush();
-      if (listItem[1]?.trim()) items.push(listItem[1].trim());
-    } else if (!line.trim()) {
+      continue;
+    }
+    if (line.isListItem) {
+      flush();
+      if (line.listBody) items.push(line.listBody);
+    } else if (!line.text) {
       flush();
     } else {
-      paragraph.push(line.trim());
+      paragraph.push(line.text);
     }
   }
   flush();
   return items;
 }
 
+function sectionBody(markdown: string, headings: string[]): string {
+  const wanted = new Set(headings.map(normalizeHeading));
+  return scanMarkdown(markdown)
+    .filter((line) => line.heading && wanted.has(normalizeHeading(line.heading)))
+    .map((line) => line.text)
+    .join('\n')
+    .trim();
+}
+
 /**
  * Requirement-bearing lines from the WHOLE description, used when a lane's
  * issue predates the heading convention (UTV2-1732 R2).
  *
- * Heading-based extraction is a convenience, not a contract: the great majority
- * of existing issues were written before `## Acceptance Criteria` was expected,
- * and refusing them would make every pre-existing lane undispatchable. This
- * derives the same material structurally — list items and sentences carrying an
- * obligation verb — so the contract is real content from the issue rather than
- * a fabricated placeholder.
+ * Heading-based extraction is a convenience, not a contract: most existing
+ * issues were written before `## Acceptance Criteria` was expected, and
+ * refusing them would make every pre-existing lane undispatchable. This derives
+ * the same material structurally, sharing `scanMarkdown` with the heading path
+ * so fences and headings cannot be handled two different ways.
  *
- * It deliberately does NOT invent criteria: an issue with no obligations at all
- * yields an empty array and the caller still fails closed.
+ * It does not invent criteria: an issue with no obligations yields an empty
+ * array and the caller still fails closed. It also must not mis-file them —
+ * promoting an item out of "Explicitly EXCLUDED" into acceptance inverts its
+ * meaning, so those sections are skipped, and the skip is STICKY across
+ * subheadings (`### Reviewers` under `## Ownership` stays skipped).
  */
+const EXCLUDED_SECTION =
+  /^(?:explicitly\s+)?(?:excluded|out of scope|non[- ]goals?|scope\s*[—-]\s*excluded)\b/iu;
+const METADATA_SECTION =
+  /^(?:ownership|authority|review budget|sequencing|provenance|tier|links?|references?)\b/iu;
+const OBLIGATION =
+  /\b(?:must|must not|shall|required|require[sd]?|cannot|may not|do not|never|ensure|verify|prove)\b/iu;
+const REFERENCE_ONLY =
+  /^(?:\[[^\]]*\]\([^)]*\)|@[\w-]+|UTV2-\d+|https?:\/\/\S+)[.,;]?$/iu;
+const CODE_FRAGMENT = /^[`~]|[;{}]\s*$|^(?:const|let|var|function|import|export|return)\s/u;
+/**
+ * Layout and commentary, not obligations: table rows, HTML comments, thematic
+ * breaks, and blockquotes. A blockquote is someone's aside about the work — it
+ * frequently contains an obligation verb while asserting the opposite of a
+ * requirement, so it must never become a criterion.
+ */
+const NON_PROSE = /^(?:\||<!--|>|-{3,}$|={3,}$)/u;
+
+function isSkippedSection(heading: string | null, headingDepthSkipped: boolean): boolean {
+  if (heading === null) return false;
+  if (EXCLUDED_SECTION.test(heading) || METADATA_SECTION.test(heading)) return true;
+  return headingDepthSkipped;
+}
+
 function deriveRequirementLines(markdown: string): string[] {
-  const OBLIGATION = /\b(?:must|must not|shall|required|require[sd]?|cannot|may not|do not|never|ensure|verify|prove)\b/iu;
-  /**
-   * Sections whose contents are explicitly NOT the work. Promoting an item from
-   * "Explicitly EXCLUDED" into acceptance criteria inverts its meaning, so these
-   * are skipped entirely rather than mined.
-   */
-  const EXCLUDED_SECTION =
-    /^(?:explicitly\s+)?(?:excluded|out of scope|non[- ]goals?|scope\s*[—-]\s*excluded)\b/iu;
-  /** Ownership/metadata sections describe who, not what must be true. */
-  const METADATA_SECTION = /^(?:ownership|authority|review budget|sequencing|provenance|tier)\b/iu;
-  /** An item that is only a link, mention, issue ref, or code fragment is not an obligation. */
-  const REFERENCE_ONLY = /^(?:\[[^\]]*\]\([^)]*\)|@[\w-]+|UTV2-\d+|https?:\/\/\S+)[.,;]?$/iu;
-  const CODE_FRAGMENT = /^[`~]|[;{}]\s*$|^(?:const|let|var|function|import|export|return)\s/u;
-
+  const scanned = scanMarkdown(markdown);
   const derived: string[] = [];
-  let inFence = false;
-  let skipSection = false;
+  let paragraph: string[] = [];
+  let skipping = false;
+  let lastHeading: string | null = null;
 
-  for (const rawLine of markdown.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    // Fenced blocks are examples, diffs and command transcripts — never criteria.
-    // Track the whole block, not just the fence lines.
-    if (/^(?:```|~~~)/u.test(line)) {
-      inFence = !inFence;
+  const flush = (): void => {
+    // Join a wrapped sentence before judging it, so "The dispatcher must" and
+    // its continuation are one obligation rather than a fragment plus an orphan.
+    const value = paragraph.join(' ').replace(/\s+/gu, ' ').trim();
+    paragraph = [];
+    if (!value || !OBLIGATION.test(value)) return;
+    const bare = value.replace(/[*_`]/gu, '').trim();
+    if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(value) || NON_PROSE.test(value)) return;
+    if (!derived.includes(value)) derived.push(value);
+  };
+
+  for (const line of scanned) {
+    if (line.heading !== lastHeading) {
+      flush();
+      // A top-level heading resets the decision; a deeper one inherits it.
+      const isTopLevel = !EXCLUDED_SECTION.test(line.heading ?? '') && !METADATA_SECTION.test(line.heading ?? '');
+      skipping = isSkippedSection(line.heading, skipping && isTopLevel === false);
+      if (line.heading && (EXCLUDED_SECTION.test(line.heading) || METADATA_SECTION.test(line.heading))) {
+        skipping = true;
+      }
+      lastHeading = line.heading;
+    }
+    if (skipping) { paragraph = []; continue; }
+
+    if (!line.text) { flush(); continue; }
+    if (line.isListItem) {
+      flush();
+      const candidate = line.listBody.replace(/\s+/gu, ' ').trim();
+      if (!candidate) continue;
+      const bare = candidate.replace(/[*_`]/gu, '').trim();
+      if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(candidate) || NON_PROSE.test(candidate)) continue;
+      // A "Label: value" item without an obligation verb is metadata.
+      if (/^[A-Z][\w .-]{0,28}:\s/u.test(bare) && !OBLIGATION.test(candidate)) continue;
+      if (!derived.includes(candidate)) derived.push(candidate);
       continue;
     }
-    if (inFence || !line) continue;
-
-    const heading = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
-    if (heading) {
-      const title = (heading[1] ?? '').replace(/[*_`]/gu, '').trim();
-      skipSection = EXCLUDED_SECTION.test(title) || METADATA_SECTION.test(title);
-      continue;
-    }
-    if (skipSection) continue;
-
-    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
-    const candidate = (listItem?.[1] ?? line).replace(/\s+/gu, ' ').trim();
-    if (!candidate) continue;
-
-    const bare = candidate.replace(/[*_`]/gu, '').trim();
-    if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(candidate)) continue;
-    // A bare list item reads as a requirement in context; prose needs a verb.
-    if (!listItem && !OBLIGATION.test(candidate)) continue;
-    // A list item that is only a "Label: value" pair is metadata, not an obligation.
-    if (listItem && /^[A-Z][\w .-]{0,28}:\s*\S+$/u.test(bare) && !OBLIGATION.test(candidate)) continue;
-    if (!derived.includes(candidate)) derived.push(candidate);
+    if (NON_PROSE.test(line.text)) { flush(); continue; }
+    paragraph.push(line.text);
   }
+  flush();
   return derived;
 }
 
@@ -395,6 +480,21 @@ export function assertTaskContract(contract: TaskContract, issueId = contract.is
   }
   if (!Array.isArray(contract.acceptance_criteria) || contract.acceptance_criteria.length === 0) {
     throw new Error(`task contract for ${issueId} is missing acceptance criteria`);
+  }
+  // `extraction` became required when provenance was added. A contract stored
+  // before that carries none, passes the hash check (the hash was computed over
+  // the old shape), and then crashes `renderTaskContract`. Validate it here so
+  // the failure lands inside the caller's try/catch as a structured refusal
+  // instead of an uncaught TypeError at render time.
+  if (
+    !contract.extraction ||
+    typeof contract.extraction.objective_source !== 'string' ||
+    typeof contract.extraction.acceptance_source !== 'string'
+  ) {
+    throw new Error(
+      `task contract for ${issueId} predates extraction provenance; ` +
+        're-run `pnpm ops:lane-start` to recapture it',
+    );
   }
   const { contract_hash: contractHash, ...content } = contract;
   if (!/^[0-9a-f]{64}$/iu.test(contractHash) || taskContractHash(content) !== contractHash) {

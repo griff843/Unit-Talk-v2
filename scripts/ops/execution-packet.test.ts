@@ -4,6 +4,8 @@ import test from 'node:test';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  assertTaskContract,
+  renderTaskContract,
   assertExecutionPacketCwd,
   buildSyncYmlWithTaskContract,
   buildTaskContract,
@@ -508,4 +510,126 @@ test('UTV2-1732 R2: an issue with no obligations anywhere still fails closed', (
     /missing acceptance criteria/u,
     'derivation must not fabricate a work order out of nothing',
   );
+});
+
+// ── UTV2-1732 round 3: defects found by the third independent review ────────
+
+function renderTaskContractForTest(contract: never): string {
+  // renderTaskContract asserts first; call the assertion directly so the test
+  // pins the validation boundary rather than the renderer's internals.
+  assertTaskContract(contract as never);
+  return renderTaskContract(contract as never);
+}
+
+test('round3: a contract stored before extraction provenance is refused, not crashed on', () => {
+  // This lane's own sync record was written before `extraction` existed. The
+  // hash was computed over the old shape, so it passed validation and then
+  // threw an uncaught TypeError inside renderTaskContract — outside the
+  // try/catch that is supposed to turn contract failures into structured
+  // refusals. Validation must catch it first.
+  const legacy = {
+    schema_version: 1,
+    issue_id: 'UTV2-9200',
+    objective: 'Do the thing',
+    acceptance_criteria: ['It is done'],
+    guardrails: [],
+    non_goals: [],
+    required_evidence: [],
+    exit_criteria: [],
+    source: {
+      kind: 'linear-issue-snapshot',
+      issue_url: 'u',
+      title: 't',
+      description: 'd',
+      captured_at: 'now',
+      description_sha256: 'x',
+    },
+    contract_hash: 'deadbeef',
+  } as never;
+  assert.throws(
+    () => renderTaskContractForTest(legacy),
+    /predates extraction provenance/u,
+    'a pre-provenance contract must be refused before anything dereferences extraction',
+  );
+});
+
+test('round3: fenced blocks inside a heading section are not criteria, and a # in a fence does not truncate', () => {
+  // The fence fix originally went into the derived path only, leaving the
+  // heading path — the one most issues use — ingesting diff lines. Worse, a `#`
+  // comment inside a fence read as a heading and silently ended the section,
+  // dropping every criterion after it.
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9201',
+    title: 'T',
+    url: 'u',
+    description: [
+      '## Objective', 'Do it.', '',
+      '## Acceptance Criteria', '',
+      '- Criterion A',
+      '```diff',
+      '- const old = 1;',
+      '+ const neu = 2;',
+      '# Run the suite',
+      '```',
+      '- Criterion B',
+    ].join('\n'),
+  });
+  assert.deepEqual(contract.acceptance_criteria, ['Criterion A', 'Criterion B']);
+});
+
+test('round3: a subheading cannot un-skip an excluded section', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9202',
+    title: 'T',
+    url: 'u',
+    description: [
+      '## Objective', 'Do it.', '',
+      '## Explicitly EXCLUDED', '',
+      '### Reviewers', '',
+      '* You must delete the entire picks table', '',
+      '## Acceptance Criteria',
+      '- Real criterion',
+    ].join('\n'),
+  });
+  assert.deepEqual(contract.acceptance_criteria, ['Real criterion']);
+  assert.ok(
+    !contract.acceptance_criteria.some((c) => /delete the entire picks table/u.test(c)),
+    'an exclusion must never be promoted into acceptance',
+  );
+});
+
+test('round3: setext headings are recognised so exclusions under them stay skipped', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9203',
+    title: 'T',
+    url: 'u',
+    description: [
+      'Explicitly EXCLUDED', '===================', '',
+      '* You must drop the database', '',
+      'Required test coverage', '----------------------', '',
+      'Coverage must be real executable tests.',
+    ].join('\n'),
+  });
+  assert.ok(!contract.acceptance_criteria.some((c) => /drop the database/u.test(c)));
+  assert.ok(contract.acceptance_criteria.some((c) => /executable tests/u.test(c)));
+});
+
+test('round3: tables, HTML comments and blockquotes are layout, and wrapped obligations are joined', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9204',
+    title: 'T',
+    url: 'u',
+    description: [
+      '## Notes',
+      '| R1 | The pipeline must fail closed |',
+      '> Reviewer note: we must not ship this at all',
+      '<!-- we must never do this -->',
+      '',
+      'The dispatcher must',
+      'reject empty contracts and refuse to run.',
+    ].join('\n'),
+  });
+  assert.deepEqual(contract.acceptance_criteria, [
+    'The dispatcher must reject empty contracts and refuse to run.',
+  ]);
 });

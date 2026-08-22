@@ -724,7 +724,18 @@ test('UTV2-1732 R3: packet generation really throws when the task contract is ab
  * agreed code in BOTH executors. It is weaker than an invocation and is not
  * offered as proof of runtime behaviour — the throw is covered above.
  */
-test('UTV2-1732 R3: both executors wrap packet generation and emit the same code', () => {
+/**
+ * STRUCTURAL CHECK — NOT PROOF OF RUNTIME BEHAVIOUR.
+ *
+ * This greps source text. It cannot see a wrong emitted code, a wrong exit
+ * status, or a throw that escapes a few lines past the try/catch it inspects —
+ * and it was in fact green while exactly such an escape was live
+ * (renderTaskContract crashed outside the wrapper on a contract missing
+ * `extraction`). The behavioural coverage is the assertTaskContract refusal
+ * tests in execution-packet.test.ts; this only pins that both executors keep
+ * the same shape.
+ */
+test('UTV2-1732 R3: both executors wrap packet generation and emit the same code (structural)', () => {
   const codex = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
   const claude = fs.readFileSync(new URL('./claude-exec.ts', import.meta.url), 'utf8');
   for (const [name, src] of [['codex-exec', codex], ['claude-exec', claude]] as const) {

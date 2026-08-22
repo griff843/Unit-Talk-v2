@@ -53,5 +53,6 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "task_packet_hash": "6c035c356d59ddfda2ab79862ce72d1236b19c8c3d43668727f6b58bc6828324"
 }
