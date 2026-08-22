@@ -26,6 +26,7 @@ Generated: 2026-08-22T06:06:39Z
   # tests 126
   # pass 126
   # fail 0
+  # skipped 0
   ```
 
 - PASS — `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
