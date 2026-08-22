@@ -1100,3 +1100,63 @@ test('round3: retire archives the retired objective conclusions instead of prese
   // to eliminate.
   assert.doesNotMatch(buildResumeBrief(after), /OLD OBJECTIVE/u);
 });
+
+// ── UTV2-1732 round 4: retire must not create a new permanent-stuck state ───
+
+test('round4: the correction seal does not survive retire, so the next epoch can still be reworked', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir, {
+    correction_authority: 'griff',
+    corrections_recorded_at: '2026-08-22T15:34:54.683Z',
+  });
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const after = readCheckpoint('UTV2-1729', dir)! as Record<string, unknown>;
+  // Carrying the seal forward made the NEXT epoch permanently un-reworkable:
+  // corrections were refused as already sealed, while both executors refuse
+  // --rework with no pending actions. Same shape as the retired flag, one field
+  // over.
+  assert.equal(after.correction_authority, undefined);
+  assert.equal(after.corrections_recorded_at, undefined);
+});
+
+test('round4: retire is idempotent — a second retire is refused, not appended', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const first = retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  assert.equal(first.ok, true);
+  const second = retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  assert.equal(second.ok, false, 'retiring twice must not append a duplicate archive');
+  assert.equal(second.code, 'execution_checkpoint_retire_refused');
+  assert.match(second.reason, /already retired/u);
+  assert.equal(readCheckpoint('UTV2-1729', dir)!.prior_epochs.length, 1);
+});
+
+test('round4: the archive carries the whole record, including pending actions and attempts', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir, { pending_actions: ['do the thing'] });
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const archived = readCheckpoint('UTV2-1729', dir)!.prior_epochs[0] as Record<string, unknown>;
+  // An `as never` cast previously silenced the type error and dropped
+  // pending_actions and attempts, contradicting both the comment above it and
+  // the proof bundle. Claiming preservation requires actually preserving.
+  for (const key of ['epoch', 'archived_at', 'completed_phases', 'findings', 'pending_actions', 'attempts']) {
+    assert.ok(key in archived, `archive must retain ${key}`);
+  }
+  assert.deepEqual(archived.pending_actions, ['do the thing']);
+  assert.equal((archived.attempts as unknown[]).length, 1);
+});
+
+test('round4: clearCheckpoint refuses an executor, like retire and corrections already did', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  // This became load-bearing when the checkpoint dir started resolving to the
+  // shared checkout: before that an executor running clear from its worktree
+  // hit an empty directory. Afterwards the same command reaches real
+  // control-plane state, and clear deletes rather than annotates.
+  const asExecutor = clearCheckpoint('UTV2-1729', { dir, env: { UNIT_TALK_EXECUTION_EPOCH_ID: 'e1' } });
+  assert.equal(asExecutor.ok, false);
+  assert.match(asExecutor.reason, /executors do not clear their own execution state/u);
+  const asOperator = clearCheckpoint('UTV2-1729', { dir, env: {} });
+  assert.equal(asOperator.ok, false, 'still refused while an attempt is open');
+  assert.equal(asOperator.code, 'execution_checkpoint_active');
+});

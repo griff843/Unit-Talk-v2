@@ -1300,6 +1300,17 @@ export function retireCheckpointEpoch(
           reason: `no execution checkpoint exists for ${issueId}`,
         };
       }
+      if (isRetiredEpoch(checkpoint.epoch)) {
+        return {
+          ...base,
+          ok: false,
+          code: 'execution_checkpoint_retire_refused' as const,
+          retired_epoch_id: checkpoint.epoch.epoch_id,
+          reason:
+            `epoch ${checkpoint.epoch.epoch_id} was already retired at ${checkpoint.epoch.retired_at} ` +
+            `by ${checkpoint.epoch.retired_by ?? 'an operator'}; retiring again would append a duplicate archive`,
+        };
+      }
       const retiredAt = (options.now ?? new Date()).toISOString();
       let closed = 0;
       for (const attempt of checkpoint.attempts) {
@@ -1328,6 +1339,10 @@ export function retireCheckpointEpoch(
       // the epoch record, not silently dropped.
       const retiredPhases = checkpoint.completed_phases.length;
       const retiredFindings = checkpoint.findings.length;
+      // Archive the WHOLE shape. An earlier version cast this `as never`, which
+      // silenced the type error and silently dropped pending_actions and
+      // attempts — contradicting the comment directly above it and the proof
+      // bundle. If it is worth saying the record is preserved, it has to be.
       checkpoint.prior_epochs = [
         ...checkpoint.prior_epochs,
         {
@@ -1335,11 +1350,21 @@ export function retireCheckpointEpoch(
           archived_at: retiredAt,
           completed_phases: [...checkpoint.completed_phases],
           findings: [...checkpoint.findings],
-        } as never,
+          pending_actions: [...checkpoint.pending_actions],
+          attempts: checkpoint.attempts.map((attempt) => ({ ...attempt })),
+        },
       ];
       checkpoint.completed_phases = [];
       checkpoint.findings = [];
       checkpoint.pending_actions = [];
+      // The correction seal belongs to the retired objective. Carrying it into
+      // the next epoch made that epoch permanently un-reworkable: corrections
+      // were refused as "already sealed" while both executors refuse --rework
+      // with no pending actions. Same "one retire disables X forever" shape as
+      // the retired flag, one field over.
+      delete (checkpoint as { correction_authority?: string }).correction_authority;
+      delete (checkpoint as { corrections_recorded_at?: string }).corrections_recorded_at;
+      delete (checkpoint as { rework_corrections?: unknown }).rework_corrections;
       checkpoint.phase = EXECUTION_PHASES[0];
       checkpoint.status = 'failed';
       checkpoint.updated_at = retiredAt;
@@ -1383,9 +1408,30 @@ export function retireCheckpointEpoch(
  */
 export function clearCheckpoint(
   issueId: string,
-  options: { dir?: string } = {},
+  options: { dir?: string; env?: NodeJS.ProcessEnv } = {},
 ): ClearCheckpointResult {
   const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  // Operator-only, on the same grounds as retire and corrections. This became
+  // load-bearing when the checkpoint directory started resolving to the shared
+  // checkout: before that an executor running `clear` from its worktree hit an
+  // empty directory, so the missing guard was invisible. Afterwards the same
+  // command reaches real control-plane state, and clear is the one mutation
+  // that deletes rather than annotates. Hygiene guard, not a trust boundary —
+  // an executor can strip these vars — but it must not be the only one of the
+  // three without it.
+  const env = options.env ?? process.env;
+  if (
+    env.UNIT_TALK_EXECUTION_EPOCH_ID ||
+    env.UNIT_TALK_EXECUTION_ATTEMPT ||
+    env.UNIT_TALK_EXECUTION_MINIMUM_REVISION
+  ) {
+    return {
+      ok: false,
+      code: 'execution_checkpoint_active',
+      removed: [],
+      reason: 'executor identity is present; executors do not clear their own execution state',
+    };
+  }
   try {
     return withCheckpointMutationLock(issueId, dir, () => {
       const state = readCheckpointState(issueId, dir);

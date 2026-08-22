@@ -198,178 +198,277 @@ interface ScannedLine {
   heading: string | null;
   isListItem: boolean;
   listBody: string;
+  indent: number;
+  isHeading: boolean;
+  headingDepth?: number;
 }
 
 function scanMarkdown(markdown: string): ScannedLine[] {
   const lines = markdown.split(/\r?\n/);
   const out: ScannedLine[] = [];
-  let fence: string | null = null;
+  let fenceChar: string | null = null;
+  let fenceLen = 0;
+  let fenceOpenedAt = -1;
+  let htmlBlock = false;
+  let htmlTag = '';
   let heading: string | null = null;
+  let lastWasListItem = false;
+  let lastWasParagraph = false;
+  let headingDepth = 0;
 
   for (let i = 0; i < lines.length; i += 1) {
     const raw = lines[i] ?? '';
     const line = raw.trim();
+    const indent = raw.length - raw.trimStart().length;
 
-    // Track fences by their exact opening marker so nested or longer runs
-    // (```` vs ```) cannot flip a boolean back open.
+    // ── fences ──────────────────────────────────────────────────────────────
+    // Closing requires the SAME character and a run at least as long as the
+    // opener. Tracking only the character let a ``` close a ```` fence, which
+    // reopened the document mid-code-block: junk was ingested and everything
+    // after was dropped.
     const fenceMatch = /^(`{3,}|~{3,})/u.exec(line);
     if (fenceMatch) {
       const marker = fenceMatch[1] ?? '';
-      if (fence === null) fence = marker[0] === '`' ? '`' : '~';
-      else if (marker[0] === fence) fence = null;
+      const char = marker[0] ?? '';
+      const len = marker.length;
+      if (fenceChar === null) {
+        fenceChar = char;
+        fenceLen = len;
+        fenceOpenedAt = i + 1;
+      } else if (char === fenceChar && len >= fenceLen) {
+        fenceChar = null;
+        fenceLen = 0;
+        fenceOpenedAt = -1;
+      }
       continue;
     }
-    if (fence !== null) continue; // inside a fence: never content, never a heading
+    if (fenceChar !== null) continue;
 
+    // ── HTML blocks ─────────────────────────────────────────────────────────
+    // A `## heading` inside <details> is markup, not a section boundary.
+    // Treating it as one terminated the section and dropped every criterion
+    // after it.
+    if (!htmlBlock) {
+      const open = /^<([a-zA-Z][\w-]*)(?:\s[^>]*)?>/u.exec(line);
+      // Paired block tags are tracked to their closing tag, NOT to the next
+      // blank line. CommonMark ends an HTML block at a blank line, which makes
+      // a `## heading` inside <details> a real heading — it then terminates the
+      // surrounding section and silently orphans every criterion after the
+      // block. For a work order, losing a criterion is worse than being
+      // slightly stricter than CommonMark.
+      if (open && !/^<!--/u.test(line)) {
+        htmlBlock = true;
+        htmlTag = (open[1] ?? '').toLowerCase();
+      }
+    }
+    if (htmlBlock) {
+      if (new RegExp(`^</${htmlTag}\\s*>`, 'iu').test(line)) {
+        htmlBlock = false;
+        htmlTag = '';
+      }
+      continue;
+    }
+    if (/^<!--/u.test(line)) continue;
+
+    // ── indented code ───────────────────────────────────────────────────────
+    // Four-space blocks are code unless they continue a list item.
+    const isListItem = /^(?:[-*+] |\d+[.)]\s+)/u.test(line);
+    if (indent >= 4 && !isListItem && !lastWasParagraph) continue;
+
+    // ── headings ────────────────────────────────────────────────────────────
     const atx = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
     if (atx) {
       heading = (atx[1] ?? '').replace(/[*_`]/gu, '').trim();
+      headingDepth = (/^(#{1,6})/u.exec(line)?.[1] ?? '#').length;
+      lastWasParagraph = false;
+      out.push({ text: '', heading, isListItem: false, listBody: '', indent: 0, isHeading: true, headingDepth });
       continue;
     }
-    // Setext headings: a text line underlined by === or ---.
+    // Setext only promotes a PARAGRAPH line. A `---` after a list item is a
+    // thematic break; treating it as an underline consumed the item.
     const next = (lines[i + 1] ?? '').trim();
-    if (line && /^(?:={2,}|-{2,})$/u.test(next)) {
+    // Setext underlines a paragraph line. Requiring a PRECEDING paragraph was
+    // too strict — a setext heading opening a document has none — while
+    // allowing it after a list item made `---` swallow the last item. The right
+    // guard is: this line is not a list item, and neither was the one before.
+    if (line && !isListItem && !lastWasListItem && /^(?:={2,}|-{2,})$/u.test(next)) {
       heading = line.replace(/[*_`]/gu, '').trim();
+      headingDepth = next.startsWith('=') ? 1 : 2;
+      lastWasParagraph = false;
       i += 1;
+      out.push({ text: '', heading, isListItem: false, listBody: '', indent: 0, isHeading: true, headingDepth });
       continue;
     }
-    if (!line) {
-      out.push({ text: '', heading, isListItem: false, listBody: '' });
+    if (!line || /^(?:-{3,}|={3,}|\*{3,})$/u.test(line)) {
+      lastWasParagraph = false;
+      lastWasListItem = false;
+      out.push({ text: '', heading, isListItem: false, listBody: '', indent, isHeading: false, headingDepth });
       continue;
     }
-    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+
+    const listMatch = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+    lastWasParagraph = !listMatch;
+    lastWasListItem = Boolean(listMatch);
     out.push({
       text: line,
       heading,
-      isListItem: Boolean(listItem),
-      listBody: (listItem?.[1] ?? '').trim(),
+      isListItem: Boolean(listMatch),
+      listBody: (listMatch?.[1] ?? '').trim(),
+      indent,
+      isHeading: false,
+      headingDepth,
     });
+  }
+
+  // An unterminated fence silently swallows the rest of the document. Refusing
+  // is the only safe outcome: a truncated work order is indistinguishable from
+  // a complete one to the executor that receives it.
+  if (fenceChar !== null) {
+    throw new Error(
+      `unterminated code fence opened at line ${fenceOpenedAt}; ` +
+        'refusing to derive a task contract from a document that cannot be parsed unambiguously',
+    );
   }
   return out;
 }
 
-function sectionItems(markdown: string, headings: string[]): string[] {
-  const wanted = new Set(headings.map(normalizeHeading));
+/**
+ * Collect items from named sections.
+ *
+ * A list item may wrap onto following lines, and a nested item under a parent
+ * ending in `:` belongs to that parent — flattening `- Do not:` and
+ * `  - delete the outbox table` into two independent criteria inverts the
+ * second one's meaning.
+ */
+function collectItems(lines: ScannedLine[], accept: (line: ScannedLine) => boolean): string[] {
   const items: string[] = [];
   let paragraph: string[] = [];
-  const flush = (): void => {
-    const value = paragraph.join(' ').trim();
-    if (value) items.push(value);
+  let current: { text: string; indent: number } | null = null;
+
+  const flushParagraph = (): void => {
+    const value = paragraph.join(' ').replace(/\s+/gu, ' ').trim();
     paragraph = [];
+    if (value && !NON_PROSE.test(value)) items.push(value);
   };
-  for (const line of scanMarkdown(markdown)) {
-    if (!line.heading || !wanted.has(normalizeHeading(line.heading))) {
-      flush();
+  const flushItem = (): void => {
+    if (current && current.text.trim()) items.push(current.text.replace(/\s+/gu, ' ').trim());
+    current = null;
+  };
+
+  for (const line of lines) {
+    if (line.isHeading || !accept(line)) {
+      flushParagraph();
+      flushItem();
+      continue;
+    }
+    if (!line.text) {
+      flushParagraph();
+      flushItem();
+      continue;
+    }
+    if (NON_PROSE.test(line.text)) {
+      // A table row or a quoted aside ends the current thought rather than
+      // merging into it — a "> note: NOT a requirement" must never be glued
+      // onto a real criterion.
+      flushParagraph();
+      flushItem();
       continue;
     }
     if (line.isListItem) {
-      flush();
-      if (line.listBody) items.push(line.listBody);
-    } else if (!line.text) {
-      flush();
-    } else {
-      paragraph.push(line.text);
+      flushParagraph();
+      if (current && line.indent > current.indent && /:$/u.test(current.text.trim())) {
+        current.text = `${current.text} ${line.listBody}`;
+        continue;
+      }
+      flushItem();
+      current = { text: line.listBody, indent: line.indent };
+      continue;
     }
+    if (current && line.indent > current.indent) {
+      current.text = `${current.text} ${line.text}`; // wrapped continuation
+      continue;
+    }
+    flushItem();
+    paragraph.push(line.text);
   }
-  flush();
-  return items;
+  flushParagraph();
+  flushItem();
+  return items.filter(Boolean);
+}
+
+function sectionItems(markdown: string, headings: string[]): string[] {
+  const wanted = new Set(headings.map(normalizeHeading));
+  return collectItems(
+    scanMarkdown(markdown),
+    (line) => Boolean(line.heading) && wanted.has(normalizeHeading(line.heading ?? '')),
+  );
 }
 
 function sectionBody(markdown: string, headings: string[]): string {
   const wanted = new Set(headings.map(normalizeHeading));
   return scanMarkdown(markdown)
-    .filter((line) => line.heading && wanted.has(normalizeHeading(line.heading)))
+    .filter((line) => !line.isHeading && line.heading && wanted.has(normalizeHeading(line.heading)))
     .map((line) => line.text)
+    .filter(Boolean)
     .join('\n')
     .trim();
 }
 
 /**
- * Requirement-bearing lines from the WHOLE description, used when a lane's
- * issue predates the heading convention (UTV2-1732 R2).
- *
- * Heading-based extraction is a convenience, not a contract: most existing
- * issues were written before `## Acceptance Criteria` was expected, and
- * refusing them would make every pre-existing lane undispatchable. This derives
- * the same material structurally, sharing `scanMarkdown` with the heading path
- * so fences and headings cannot be handled two different ways.
- *
- * It does not invent criteria: an issue with no obligations yields an empty
- * array and the caller still fails closed. It also must not mis-file them —
- * promoting an item out of "Explicitly EXCLUDED" into acceptance inverts its
- * meaning, so those sections are skipped, and the skip is STICKY across
- * subheadings (`### Reviewers` under `## Ownership` stays skipped).
+ * Layout and commentary, never obligations: table rows, HTML comments,
+ * thematic breaks, and blockquotes. A blockquote is an aside about the work and
+ * frequently contains an obligation verb while asserting the opposite of a
+ * requirement.
  */
+const NON_PROSE = /^(?:\||<!--|>|-{3,}$|={3,}$)/u;
 const EXCLUDED_SECTION =
-  /^(?:explicitly\s+)?(?:excluded|out of scope|non[- ]goals?|scope\s*[—-]\s*excluded)\b/iu;
+  /^(?:explicitly\s+)?(?:excluded|out of scope|non[- ]goals?|scope\s*[—-]\s*excluded|also excluded)\b/iu;
 const METADATA_SECTION =
-  /^(?:ownership|authority|review budget|sequencing|provenance|tier|links?|references?)\b/iu;
+  /^(?:ownership|authority|review budget|sequencing|provenance|tier|links?|references?|reviewers?)\b/iu;
 const OBLIGATION =
   /\b(?:must|must not|shall|required|require[sd]?|cannot|may not|do not|never|ensure|verify|prove)\b/iu;
 const REFERENCE_ONLY =
   /^(?:\[[^\]]*\]\([^)]*\)|@[\w-]+|UTV2-\d+|https?:\/\/\S+)[.,;]?$/iu;
 const CODE_FRAGMENT = /^[`~]|[;{}]\s*$|^(?:const|let|var|function|import|export|return)\s/u;
+
 /**
- * Layout and commentary, not obligations: table rows, HTML comments, thematic
- * breaks, and blockquotes. A blockquote is someone's aside about the work — it
- * frequently contains an obligation verb while asserting the opposite of a
- * requirement, so it must never become a criterion.
+ * Requirement-bearing lines from the WHOLE description, for issues that predate
+ * the heading convention.
+ *
+ * Exclusion skipping is genuinely sticky: `scanMarkdown` reports heading depth,
+ * so `### Also excluded` under `## Explicitly EXCLUDED` stays skipped. An
+ * earlier version computed stickiness from the new heading's own text, which
+ * made it always false and promoted exclusions into acceptance — inverting
+ * their meaning, which is exactly what the comment claimed could not happen.
  */
-const NON_PROSE = /^(?:\||<!--|>|-{3,}$|={3,}$)/u;
-
-function isSkippedSection(heading: string | null, headingDepthSkipped: boolean): boolean {
-  if (heading === null) return false;
-  if (EXCLUDED_SECTION.test(heading) || METADATA_SECTION.test(heading)) return true;
-  return headingDepthSkipped;
-}
-
 function deriveRequirementLines(markdown: string): string[] {
   const scanned = scanMarkdown(markdown);
-  const derived: string[] = [];
-  let paragraph: string[] = [];
-  let skipping = false;
-  let lastHeading: string | null = null;
-
-  const flush = (): void => {
-    // Join a wrapped sentence before judging it, so "The dispatcher must" and
-    // its continuation are one obligation rather than a fragment plus an orphan.
-    const value = paragraph.join(' ').replace(/\s+/gu, ' ').trim();
-    paragraph = [];
-    if (!value || !OBLIGATION.test(value)) return;
-    const bare = value.replace(/[*_`]/gu, '').trim();
-    if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(value) || NON_PROSE.test(value)) return;
-    if (!derived.includes(value)) derived.push(value);
-  };
-
+  const skipped = new Set<string>();
+  let excludedDepth: number | null = null;
   for (const line of scanned) {
-    if (line.heading !== lastHeading) {
-      flush();
-      // A top-level heading resets the decision; a deeper one inherits it.
-      const isTopLevel = !EXCLUDED_SECTION.test(line.heading ?? '') && !METADATA_SECTION.test(line.heading ?? '');
-      skipping = isSkippedSection(line.heading, skipping && isTopLevel === false);
-      if (line.heading && (EXCLUDED_SECTION.test(line.heading) || METADATA_SECTION.test(line.heading))) {
-        skipping = true;
-      }
-      lastHeading = line.heading;
-    }
-    if (skipping) { paragraph = []; continue; }
-
-    if (!line.text) { flush(); continue; }
-    if (line.isListItem) {
-      flush();
-      const candidate = line.listBody.replace(/\s+/gu, ' ').trim();
-      if (!candidate) continue;
-      const bare = candidate.replace(/[*_`]/gu, '').trim();
-      if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(candidate) || NON_PROSE.test(candidate)) continue;
-      // A "Label: value" item without an obligation verb is metadata.
-      if (/^[A-Z][\w .-]{0,28}:\s/u.test(bare) && !OBLIGATION.test(candidate)) continue;
-      if (!derived.includes(candidate)) derived.push(candidate);
+    if (!line.isHeading || !line.heading) continue;
+    const depth = line.headingDepth ?? 1;
+    if (excludedDepth !== null && depth > excludedDepth) {
+      // Deeper than the excluded heading: still inside it.
+      skipped.add(line.heading);
       continue;
     }
-    if (NON_PROSE.test(line.text)) { flush(); continue; }
-    paragraph.push(line.text);
+    excludedDepth = null;
+    if (EXCLUDED_SECTION.test(line.heading) || METADATA_SECTION.test(line.heading)) {
+      skipped.add(line.heading);
+      excludedDepth = depth;
+    }
   }
-  flush();
+
+  const items = collectItems(scanned, (line) => !line.heading || !skipped.has(line.heading));
+  const derived: string[] = [];
+  for (const value of items) {
+    if (!OBLIGATION.test(value)) continue;
+    const bare = value.replace(/[*_`]/gu, '').trim();
+    if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(value) || NON_PROSE.test(value)) continue;
+    if (/^[A-Z][\w .-]{0,28}:\s/u.test(bare) && !OBLIGATION.test(bare.split(':').slice(1).join(':'))) continue;
+    if (!derived.includes(value)) derived.push(value);
+  }
   return derived;
 }
 
@@ -486,6 +585,18 @@ export function assertTaskContract(contract: TaskContract, issueId = contract.is
   // the old shape), and then crashes `renderTaskContract`. Validate it here so
   // the failure lands inside the caller's try/catch as a structured refusal
   // instead of an uncaught TypeError at render time.
+  // Every field the renderer dereferences must be validated here, not just the
+  // one a reviewer happened to name. `extraction` was validated in isolation
+  // while guardrails, non_goals, required_evidence, exit_criteria and source
+  // were still dereferenced unchecked — a byte-identical crash one field over.
+  for (const field of ['guardrails', 'non_goals', 'required_evidence', 'exit_criteria'] as const) {
+    if (!Array.isArray(contract[field])) {
+      throw new Error(`task contract for ${issueId} is missing the ${field} array; re-run \`pnpm ops:lane-start\` to recapture it`);
+    }
+  }
+  if (!contract.source || typeof contract.source.issue_url !== 'string' || typeof contract.source.description !== 'string') {
+    throw new Error(`task contract for ${issueId} is missing its Linear source snapshot; re-run \`pnpm ops:lane-start\` to recapture it`);
+  }
   if (
     !contract.extraction ||
     typeof contract.extraction.objective_source !== 'string' ||

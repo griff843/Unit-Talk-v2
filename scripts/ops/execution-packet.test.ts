@@ -604,9 +604,13 @@ test('round3: setext headings are recognised so exclusions under them stay skipp
     title: 'T',
     url: 'u',
     description: [
+      // Both headings are setext h1 (===). The earlier version underlined the
+      // second with ---, making it an h2 and therefore structurally NESTED
+      // inside the excluded h1 — so asserting it survived was asserting
+      // something markdown does not say. Siblings are what this test means.
       'Explicitly EXCLUDED', '===================', '',
       '* You must drop the database', '',
-      'Required test coverage', '----------------------', '',
+      'Required test coverage', '======================', '',
       'Coverage must be real executable tests.',
     ].join('\n'),
   });
@@ -632,4 +636,104 @@ test('round3: tables, HTML comments and blockquotes are layout, and wrapped obli
   assert.deepEqual(contract.acceptance_criteria, [
     'The dispatcher must reject empty contracts and refuse to run.',
   ]);
+});
+
+// ── UTV2-1732 round 4: silent truncation and meaning inversion ──────────────
+//
+// Round 3 fixed the one example a reviewer gave (`#` inside a plain fence) and
+// left the same defect live in every other markdown container. These pin the
+// class, not the instance. A dropped criterion is worse than an ingested one:
+// the executor cannot tell a truncated work order from a complete one.
+
+const ACC = '## Objective\nDo it.\n\n## Acceptance Criteria\n\n';
+const crit = (d: string): string[] =>
+  buildTaskContract({ identifier: 'UTV2-9300', title: 'T', url: 'u', description: d }).acceptance_criteria;
+
+test('round4: a longer fence is not closed by a shorter run inside it', () => {
+  assert.deepEqual(
+    crit(`${ACC}- criterion one must hold\n\`\`\`\`\n\`\`\`\nconst junk = 1;\n\`\`\`\n\`\`\`\`\n- criterion two must hold\n- criterion three must hold\n`),
+    ['criterion one must hold', 'criterion two must hold', 'criterion three must hold'],
+  );
+});
+
+test('round4: an unterminated fence is refused rather than silently swallowing the rest', () => {
+  assert.throws(
+    () => crit(`${ACC}- criterion one must hold\n\`\`\`\nconst x = 1;\n- criterion two must hold\n`),
+    /unterminated code fence/u,
+  );
+});
+
+test('round4: a heading inside a paired HTML block does not terminate the section', () => {
+  assert.deepEqual(
+    crit(`${ACC}- criterion one must hold\n<details>\n<summary>x</summary>\n\n## Buried heading\n\n</details>\n\n- criterion two must hold\n`),
+    ['criterion one must hold', 'criterion two must hold'],
+  );
+});
+
+test('round4: a thematic break after a list item is not a setext heading', () => {
+  assert.deepEqual(
+    crit(`${ACC}- criterion one must hold\n- criterion two must hold\n---\n`),
+    ['criterion one must hold', 'criterion two must hold'],
+  );
+});
+
+test('round4: indented code under a criteria heading is not a criterion', () => {
+  assert.deepEqual(
+    crit(`${ACC}- criterion one must hold\n\n    const x = 1;\n    pnpm exec tsx --test foo.ts\n`),
+    ['criterion one must hold'],
+  );
+});
+
+test('round4: a quoted non-requirement is never merged into a real criterion', () => {
+  const out = crit(`${ACC}- criterion one must hold\n\n| a | b |\n> note: this is NOT a requirement\n`);
+  assert.deepEqual(out, ['criterion one must hold']);
+  assert.ok(!out.some((c) => /NOT a requirement/u.test(c)));
+});
+
+test('round4: a wrapped list item stays one criterion instead of splitting into an orphan', () => {
+  assert.deepEqual(
+    crit(`${ACC}- the dispatcher must reject\n  empty contracts entirely\n`),
+    ['the dispatcher must reject empty contracts entirely'],
+  );
+});
+
+test('round4: a nested item under a "Do not:" parent keeps its parent, not the inverse meaning', () => {
+  assert.deepEqual(crit(`${ACC}- Do not:\n  - delete the outbox table\n`), ['Do not: delete the outbox table']);
+});
+
+test('round4: exclusion skipping is sticky across nested subheadings', () => {
+  const excluded = crit(
+    '## Objective\nDo it.\n\n## Explicitly EXCLUDED\n\n### Also excluded\n\n* The scheduler must be rewritten\n\n## Real work\n\n* The gate must refuse empty contracts\n',
+  );
+  assert.deepEqual(excluded, ['The gate must refuse empty contracts']);
+
+  const ownership = crit(
+    '## Objective\nDo it.\n\n## Ownership\n\n### Reviewers\n\n* Reviewer must sign off in Linear\n\n## Real work\n\n* The gate must refuse empty contracts\n',
+  );
+  assert.deepEqual(ownership, ['The gate must refuse empty contracts']);
+});
+
+test('round4: every field the renderer dereferences is validated, not just extraction', () => {
+  const base = {
+    schema_version: 1,
+    issue_id: 'UTV2-9301',
+    objective: 'o',
+    extraction: { objective_source: 'issue-title', acceptance_source: 'derived:description-obligations' },
+    acceptance_criteria: ['a'],
+    guardrails: [],
+    non_goals: [],
+    required_evidence: [],
+    exit_criteria: [],
+    source: { kind: 'linear-issue-snapshot', issue_url: 'u', title: 't', description: 'd', captured_at: 'c', description_sha256: 'x' },
+    contract_hash: 'z',
+  } as Record<string, unknown>;
+  for (const field of ['guardrails', 'non_goals', 'required_evidence', 'exit_criteria', 'source']) {
+    const broken = { ...base };
+    delete broken[field];
+    assert.throws(
+      () => assertTaskContract(broken as never),
+      new RegExp(field === 'source' ? 'Linear source snapshot' : field, 'u'),
+      `${field} must be validated before the renderer dereferences it`,
+    );
+  }
 });
