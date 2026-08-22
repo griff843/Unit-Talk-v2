@@ -37,6 +37,7 @@ import {
   recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
+  retireCheckpointEpoch,
   writeCheckpoint,
   type ExecutionPhase,
   type ExecutionStateIdentity,
@@ -909,4 +910,116 @@ test('liveness describes the attempt in flight, not an older dangling one', () =
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── UTV2-1732 R1/R6: the real doubly-stuck lane ─────────────────────────────
+//
+// This is the exact state UTV2-1729 was in when the task contract landed, read
+// off .out/ops/execution-checkpoints/UTV2-1729.json:
+//
+//   status: 'in_progress'
+//   epoch.objective_identity: 'UTV2-1729:codex/utv2-1729-proof-producing-contract'  (pre-contract scheme)
+//   one attempt with ended_at: null                                                 (killed, never closed)
+//
+// Both dispatch and clear refuse such a lane, so it could neither run nor be
+// reset. These fixtures pin that recovery.
+
+function writeLegacyStuckCheckpoint(dir: string): void {
+  const now = '2026-08-22T05:13:25.000Z';
+  const checkpoint = {
+    schema_version: EXECUTION_CHECKPOINT_SCHEMA_VERSION,
+    issue_id: 'UTV2-1729',
+    branch: 'codex/utv2-1729-proof-producing-contract',
+    worktree: '/tmp/utv2-1729',
+    state_revision: 5,
+    epoch: {
+      epoch_id: '200c0838-0000-4000-8000-000000000000',
+      mode: 'fresh',
+      implementation_baseline_sha: 'a'.repeat(40),
+      // The pre-contract identity scheme — never equal to a 64-hex contract hash.
+      objective_identity: 'UTV2-1729:codex/utv2-1729-proof-producing-contract',
+      findings_identity: 'none',
+      created_at: now,
+      authority: 'codex-exec',
+    },
+    prior_epochs: [],
+    status: 'in_progress',
+    phase: 'orient',
+    attempt: 1,
+    created_at: now,
+    updated_at: now,
+    last_activity_at: now,
+    heartbeat_at: now,
+    heartbeat_interval_ms: 60000,
+    completed_phases: [],
+    findings: [],
+    pending_actions: [],
+    attempts: [
+      {
+        epoch_id: '200c0838-0000-4000-8000-000000000000',
+        attempt: 1,
+        started_at: now,
+        ended_at: null,
+        outcome: null,
+        reason: null,
+        phase_at_start: 'orient',
+        phase_at_end: null,
+        timeout_ms: 4050000,
+        attempt_start_sha: 'a'.repeat(40),
+        released_resources: [],
+      },
+    ],
+  } as never;
+  writeCheckpoint(checkpoint, dir);
+}
+
+test('UTV2-1732 R1: clear refuses the real stuck UTV2-1729 shape (the trap)', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const cleared = clearCheckpoint('UTV2-1729', { dir });
+  assert.equal(cleared.ok, false);
+  assert.equal(cleared.code, 'execution_checkpoint_active');
+});
+
+test('UTV2-1732 R1: retire closes the abandoned attempt and unblocks the lane', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+
+  const retired = retireCheckpointEpoch('UTV2-1729', {
+    authority: 'griff843',
+    reason: 'epoch predates task contracts; attempt killed during orchestration',
+    dir,
+    env: {},
+  });
+  assert.equal(retired.ok, true, retired.reason);
+  assert.equal(retired.code, 'execution_checkpoint_retired');
+  assert.equal(retired.closed_attempts, 1);
+  assert.equal(retired.retired_epoch_id, '200c0838-0000-4000-8000-000000000000');
+
+  // The whole point: clear now succeeds where it previously refused.
+  const cleared = clearCheckpoint('UTV2-1729', { dir });
+  assert.equal(cleared.ok, true, cleared.reason);
+  assert.equal(cleared.code, 'execution_checkpoint_cleared');
+});
+
+test('UTV2-1732 R1/R4: an executor cannot retire its own epoch', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const refused = retireCheckpointEpoch('UTV2-1729', {
+    authority: 'griff843',
+    dir,
+    env: { UNIT_TALK_EXECUTION_EPOCH_ID: '200c0838-0000-4000-8000-000000000000' },
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'execution_checkpoint_retire_refused');
+  assert.match(refused.reason, /executors cannot retire their own execution epoch/u);
+});
+
+test('UTV2-1732 R1: retiring requires a named operator authority', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const refused = retireCheckpointEpoch('UTV2-1729', { authority: '   ', dir, env: {} });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'execution_checkpoint_retire_refused');
+  assert.match(refused.reason, /requires --authority/u);
 });

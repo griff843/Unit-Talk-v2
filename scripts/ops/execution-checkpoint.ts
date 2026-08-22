@@ -26,6 +26,7 @@
 
 import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -33,7 +34,39 @@ import { ROOT, emitJson, getFlag, parseArgs, requireIssueId, type LaneTier } fro
 import { reapVerifySlots, type ReapRecord } from './verify-semaphore.js';
 
 export const EXECUTION_CHECKPOINT_SCHEMA_VERSION = 2 as const;
-export const EXECUTION_CHECKPOINT_DIR = path.join(ROOT, '.out', 'ops', 'execution-checkpoints');
+/**
+ * Checkpoint state belongs to the lane, not to whichever checkout is reading it
+ * (UTV2-1732 R4). `ROOT` resolves to the current worktree, so an operator
+ * running a correction or retire from a lane worktree would address a different
+ * (empty) directory than the dispatcher does from the main checkout — the
+ * command appeared to work while writing nowhere useful.
+ *
+ * `git rev-parse --git-common-dir` returns the shared `.git` for every worktree,
+ * so its parent is the one checkout all of them agree on. Falls back to `ROOT`
+ * when git is unavailable, and `--dir` / UNIT_TALK_EXECUTION_CHECKPOINT_DIR
+ * still override both.
+ */
+function sharedCheckoutRoot(): string {
+  try {
+    const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!commonDir) return ROOT;
+    const absolute = path.isAbsolute(commonDir) ? commonDir : path.resolve(ROOT, commonDir);
+    return path.dirname(absolute);
+  } catch {
+    return ROOT;
+  }
+}
+
+export const EXECUTION_CHECKPOINT_DIR = path.join(
+  sharedCheckoutRoot(),
+  '.out',
+  'ops',
+  'execution-checkpoints',
+);
 
 export const EXECUTION_PHASES = ['orient', 'plan', 'implement', 'verify', 'closeout'] as const;
 export type ExecutionPhase = (typeof EXECUTION_PHASES)[number];
@@ -1149,6 +1182,120 @@ export interface ClearCheckpointResult {
   reason: string;
 }
 
+export interface RetireCheckpointResult {
+  ok: boolean;
+  code:
+    | 'execution_checkpoint_retired'
+    | 'execution_checkpoint_missing'
+    | 'execution_checkpoint_busy'
+    | 'execution_checkpoint_retire_refused';
+  issue_id: string;
+  retired_epoch_id: string | null;
+  closed_attempts: number;
+  reason: string;
+}
+
+/**
+ * Retire a superseded epoch so a lane can be re-dispatched (UTV2-1732 R1).
+ *
+ * Two real states strand a lane and neither had a recovery path:
+ *
+ *  1. The epoch predates task contracts, so `epoch.objective_identity` holds the
+ *     old `<issue>:<branch>` scheme and never equals a contract hash. Every
+ *     dispatch is refused.
+ *  2. An attempt was killed rather than completed, leaving `ended_at: null`, so
+ *     `clearCheckpoint` also refuses.
+ *
+ * A lane in both states — UTV2-1729 was, exactly — cannot resume, rework, or
+ * clear. This closes the abandoned attempts, records why, and marks the epoch
+ * retired, leaving the history readable instead of deleting it.
+ *
+ * Operator-only: refuses when executor identity is present, on the same grounds
+ * as `recordReworkCorrections` — an executor must not be able to retire the
+ * epoch that binds it to its own work order.
+ */
+export function retireCheckpointEpoch(
+  issueId: string,
+  options: { authority: string; reason?: string; dir?: string; now?: Date; env?: NodeJS.ProcessEnv },
+): RetireCheckpointResult {
+  const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const env = options.env ?? process.env;
+  const base: Omit<RetireCheckpointResult, 'ok' | 'code' | 'reason'> = {
+    issue_id: issueId,
+    retired_epoch_id: null,
+    closed_attempts: 0,
+  };
+  if (
+    env.UNIT_TALK_EXECUTION_EPOCH_ID ||
+    env.UNIT_TALK_EXECUTION_ATTEMPT ||
+    env.UNIT_TALK_EXECUTION_MINIMUM_REVISION
+  ) {
+    return {
+      ...base,
+      ok: false,
+      code: 'execution_checkpoint_retire_refused',
+      reason: 'executor identity is present; executors cannot retire their own execution epoch',
+    };
+  }
+  if (!options.authority.trim()) {
+    return {
+      ...base,
+      ok: false,
+      code: 'execution_checkpoint_retire_refused',
+      reason: 'retiring an epoch requires --authority naming the operator',
+    };
+  }
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const checkpoint = state.checkpoint;
+      if (!checkpoint) {
+        return {
+          ...base,
+          ok: false,
+          code: 'execution_checkpoint_missing' as const,
+          reason: `no execution checkpoint exists for ${issueId}`,
+        };
+      }
+      const retiredAt = (options.now ?? new Date()).toISOString();
+      let closed = 0;
+      for (const attempt of checkpoint.attempts) {
+        if (attempt.ended_at === null) {
+          attempt.ended_at = retiredAt;
+          attempt.outcome = 'failed';
+          attempt.reason =
+            options.reason?.trim() ||
+            `attempt abandoned; epoch retired by ${options.authority.trim()}`;
+          closed += 1;
+        }
+      }
+      checkpoint.status = 'failed';
+      checkpoint.updated_at = retiredAt;
+      checkpoint.last_activity_at = retiredAt;
+      checkpoint.state_revision += 1;
+      writeCheckpoint(checkpoint, dir);
+      return {
+        issue_id: issueId,
+        retired_epoch_id: checkpoint.epoch.epoch_id,
+        closed_attempts: closed,
+        ok: true,
+        code: 'execution_checkpoint_retired' as const,
+        reason:
+          `retired epoch ${checkpoint.epoch.epoch_id} (objective identity ` +
+          `"${checkpoint.epoch.objective_identity}"), closing ${closed} abandoned attempt(s); ` +
+          `${issueId} can now be cleared or re-dispatched`,
+      };
+    });
+  } catch {
+    return {
+      ...base,
+      ok: false,
+      code: 'execution_checkpoint_busy',
+      reason: `checkpoint for ${issueId} is locked by another mutation`,
+    };
+  }
+}
+
 /**
  * Clearing state is an operator transition, not an unlink shortcut. An active
  * attempt owns the epoch, so a concurrent clear is refused. If an external
@@ -1456,6 +1603,16 @@ function runCli(): void {
         process.exitCode = checkpoint ? 0 : 1;
         return;
       }
+      case 'retire': {
+        const result = retireCheckpointEpoch(issueId, {
+          authority: getFlag(flags, 'authority') ?? '',
+          reason: getFlag(flags, 'reason'),
+          dir,
+        });
+        emitJson(result);
+        process.exitCode = result.ok ? 0 : 1;
+        return;
+      }
       case 'correction': {
         const result = recordReworkCorrections(issueId, flags.get('correction') ?? [], {
           authority: getFlag(flags, 'authority') ?? '',
@@ -1496,7 +1653,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|correction|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--correction <exact text> --authority <operator>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|correction|retire|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--correction <exact text> --authority <operator>] [--dir <checkpoint dir>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
         );
     }
   } catch (error) {

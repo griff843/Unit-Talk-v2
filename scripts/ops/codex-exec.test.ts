@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
-import { buildTaskContract } from './execution-packet.js';
+import { buildTaskContract, renderTaskContract } from './execution-packet.js';
 import {
   buildCodexChildEnv,
   buildCodexPrompt,
@@ -701,4 +701,49 @@ test('operator cancellation is honoured before any codex process is spawned', ()
   assert.ok(cancelIndex >= 0, 'codex-exec must honour a cancellation request');
   assert.ok(cancelIndex < spawnIndex, 'cancellation must be checked before the spawn');
   assert.match(source.slice(cancelIndex, cancelIndex + 600), /EXECUTION_CANCELLED/);
+});
+
+// ── UTV2-1732 R3/R5: fail legibly, and claim only what is enforced ──────────
+
+test('UTV2-1732 R3: packet generation failure is wrapped, not left to the top-level catch', () => {
+  const source = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
+  const call = source.indexOf('packet = generateExecutionPacket(manifest);');
+  assert.ok(call > 0, 'generateExecutionPacket call must exist');
+  // The call must sit inside a try whose catch emits the structured result, so
+  // a task-contract failure is parseable by callers instead of a bare stderr
+  // string. claude-exec.ts already did this; the two must fail identically.
+  const preceding = source.slice(Math.max(0, call - 400), call);
+  assert.match(preceding, /try\s*\{/u, 'the call must be inside a try block');
+  const following = source.slice(call, call + 700);
+  assert.match(following, /catch\s*\(/u, 'the call must have a catch');
+  assert.match(following, /task contract unavailable/u);
+  assert.match(following, /PRECONDITION_FAILED/u);
+});
+
+test('UTV2-1732 R1: the stale-epoch refusal names the sanctioned recovery command', () => {
+  const source = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
+  const idx = source.indexOf('checkpoint epoch is not bound to the current task contract hash');
+  assert.ok(idx > 0, 'the stale-epoch refusal must exist');
+  // A refusal that does not say how to recover is how UTV2-1729 sat stuck.
+  assert.match(source.slice(idx, idx + 400), /ops:exec-checkpoint retire/u);
+});
+
+test('UTV2-1732 R5: the rendered contract claims integrity, not immutability', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9003',
+    title: 'Claim check',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9003',
+    description: '## Objective\n\nShip it.\n\n## Acceptance Criteria\n\n- It ships\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.match(rendered, /integrity hash/u);
+  assert.doesNotMatch(
+    rendered,
+    /immutable/iu,
+    'the hash is drift detection, not tamper-proofing — do not overclaim',
+  );
+  // The prompt must also forbid inferring the task from surroundings, which is
+  // exactly what three blind epochs did.
+  assert.match(rendered, /Do not infer the task from the branch name/u);
+  assert.match(rendered, /acceptance source:/u);
 });

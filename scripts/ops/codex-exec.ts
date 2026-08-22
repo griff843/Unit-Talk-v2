@@ -701,7 +701,23 @@ async function main(): Promise<void> {
   const resumeBrief = rework
     ? buildReworkBrief(existingCheckpoint!)
     : buildResumeBrief(existingCheckpoint);
-  const packet = generateExecutionPacket(manifest);
+  // UTV2-1732 R3: a task-contract failure is the failure mode this lane
+  // introduces, so it must surface as a parseable CodexExecResult rather than a
+  // bare stderr string from the top-level catch. claude-exec.ts already does
+  // this; the two executors must fail identically.
+  let packet: ExecutionPacket;
+  try {
+    packet = generateExecutionPacket(manifest);
+  } catch (error) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `task contract unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
   if (
     existingCheckpoint &&
     existingCheckpoint.epoch.objective_identity !== packet.task_contract.contract_hash
@@ -712,7 +728,9 @@ async function main(): Promise<void> {
       issue_id: issueId,
       branch: manifest.branch,
       message:
-        'checkpoint epoch is not bound to the current immutable task contract hash; refusing to resume or rework',
+        'checkpoint epoch is not bound to the current task contract hash; ' +
+        `run \`pnpm ops:exec-checkpoint retire --issue ${issueId} --authority <operator>\` to retire the ` +
+        'superseded epoch, then re-dispatch',
     } satisfies CodexExecResult);
     process.exit(2);
   }

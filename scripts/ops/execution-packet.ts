@@ -57,10 +57,26 @@ export interface LinearTaskSource {
   description: string;
 }
 
+/**
+ * How each part of the contract was obtained. Recorded so a reader can tell a
+ * criterion lifted from an explicit `## Acceptance Criteria` heading from one
+ * derived structurally out of a legacy description (UTV2-1732 R2). Both are
+ * real issue content; they differ in how confidently they were labelled.
+ */
+export interface TaskContractExtraction {
+  objective_source: 'heading:objective' | 'issue-title';
+  acceptance_source:
+    | 'heading:acceptance-criteria'
+    | 'heading:exit-criteria'
+    | 'heading:required-outcome'
+    | 'derived:description-obligations';
+}
+
 export interface TaskContract {
   schema_version: 1;
   issue_id: string;
   objective: string;
+  extraction: TaskContractExtraction;
   acceptance_criteria: string[];
   guardrails: string[];
   non_goals: string[];
@@ -206,6 +222,38 @@ function sectionItems(markdown: string, headings: string[]): string[] {
   return items;
 }
 
+/**
+ * Requirement-bearing lines from the WHOLE description, used when a lane's
+ * issue predates the heading convention (UTV2-1732 R2).
+ *
+ * Heading-based extraction is a convenience, not a contract: the great majority
+ * of existing issues were written before `## Acceptance Criteria` was expected,
+ * and refusing them would make every pre-existing lane undispatchable. This
+ * derives the same material structurally — list items and sentences carrying an
+ * obligation verb — so the contract is real content from the issue rather than
+ * a fabricated placeholder.
+ *
+ * It deliberately does NOT invent criteria: an issue with no obligations at all
+ * yields an empty array and the caller still fails closed.
+ */
+function deriveRequirementLines(markdown: string): string[] {
+  const OBLIGATION = /\b(?:must|must not|shall|required|require[sd]?|cannot|may not|do not|never|ensure|verify|prove)\b/iu;
+  const derived: string[] = [];
+  for (const rawLine of markdown.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || /^#{1,6}\s/u.test(line) || /^```/u.test(line)) continue;
+    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+    const candidate = (listItem?.[1] ?? line).trim();
+    if (!candidate) continue;
+    // A bare list item is a requirement in context; prose needs an obligation verb.
+    if (listItem || OBLIGATION.test(candidate)) {
+      const flattened = candidate.replace(/\s+/gu, ' ').trim();
+      if (flattened && !derived.includes(flattened)) derived.push(flattened);
+    }
+  }
+  return derived;
+}
+
 function taskContractHash(contract: Omit<TaskContract, 'contract_hash'>): string {
   return createHash('sha256').update(JSON.stringify(contract)).digest('hex');
 }
@@ -222,17 +270,39 @@ export function buildTaskContract(
   const acceptanceCriteria = sectionItems(description, ['acceptance criteria', 'acceptance criterion']);
   const exitCriteria = sectionItems(description, ['exit criteria']);
   const requiredOutcome = sectionItems(description, ['required outcome']);
-  const effectiveAcceptance = acceptanceCriteria.length > 0
+  const headingAcceptance = acceptanceCriteria.length > 0
     ? acceptanceCriteria
     : exitCriteria.length > 0
       ? exitCriteria
       : requiredOutcome;
 
+  // UTV2-1732 R2: heading conventions are optional. When none matched, derive
+  // the obligations structurally from the description rather than refusing a
+  // lane whose issue predates the convention.
+  const derivedAcceptance = headingAcceptance.length > 0 ? [] : deriveRequirementLines(description);
+  const effectiveAcceptance = headingAcceptance.length > 0 ? headingAcceptance : derivedAcceptance;
+
+  const acceptanceSource: TaskContractExtraction['acceptance_source'] =
+    acceptanceCriteria.length > 0
+      ? 'heading:acceptance-criteria'
+      : exitCriteria.length > 0
+        ? 'heading:exit-criteria'
+        : requiredOutcome.length > 0
+          ? 'heading:required-outcome'
+          : 'derived:description-obligations';
+  const objectiveSource: TaskContractExtraction['objective_source'] =
+    objectiveSection ? 'heading:objective' : 'issue-title';
+
   if (!objective) {
     throw new Error(`task contract for ${issueId || '(unknown issue)'} is missing an objective`);
   }
+  // Still fails closed: an issue carrying no obligations anywhere yields nothing
+  // to derive, and no executor may be dispatched against an empty work order.
   if (effectiveAcceptance.length === 0) {
-    throw new Error(`task contract for ${issueId || '(unknown issue)'} is missing acceptance criteria`);
+    throw new Error(
+      `task contract for ${issueId || '(unknown issue)'} is missing acceptance criteria: ` +
+        'no acceptance/exit/required-outcome section and no requirement lines in the description',
+    );
   }
 
   const guardrails = sectionItems(description, ['guardrails']);
@@ -253,6 +323,7 @@ export function buildTaskContract(
     schema_version: 1,
     issue_id: issueId,
     objective,
+    extraction: { objective_source: objectiveSource, acceptance_source: acceptanceSource },
     acceptance_criteria: effectiveAcceptance,
     guardrails,
     non_goals: nonGoals,
@@ -270,6 +341,17 @@ export function buildTaskContract(
   return { ...content, contract_hash: taskContractHash(content) };
 }
 
+/**
+ * Integrity/drift check — NOT tamper-resistance (UTV2-1732 R5).
+ *
+ * The hash is re-derived from the same record it validates, so it detects
+ * corruption, partial writes, and accidental drift between the sync record and
+ * the manifest. It does not defend against a deliberate editor: anyone who can
+ * rewrite `.ops/sync/<issue>.yml` can also recompute the hash and update
+ * `task_packet_hash`. Executor tampering is bounded by the identity refusal in
+ * `recordReworkCorrections` and by review of `.ops/sync/*` in the PR diff, not
+ * by this function. Do not describe it as immutable.
+ */
 export function assertTaskContract(contract: TaskContract, issueId = contract.issue_id): void {
   if (contract.schema_version !== 1 || contract.issue_id !== issueId) {
     throw new Error(`task contract identity mismatch for ${issueId}`);
@@ -322,7 +404,14 @@ export function renderTaskContract(contract: TaskContract): string {
   const render = (values: string[]): string =>
     values.length > 0 ? values.map((value) => `- ${value}`).join('\n') : '- (none declared)';
   return [
-    `## Authoritative task contract (immutable; hash ${contract.contract_hash})`,
+    `## Authoritative task contract (integrity hash ${contract.contract_hash})`,
+    '',
+    'This is your work order. Do not infer the task from the branch name, the',
+    'file scope, an existing PR, or the repo brief. If this contract and the',
+    'repository disagree, this contract wins. You may not rewrite it.',
+    '',
+    `Objective source: ${contract.extraction.objective_source}; ` +
+      `acceptance source: ${contract.extraction.acceptance_source}.`,
     '',
     '### Objective',
     contract.objective,

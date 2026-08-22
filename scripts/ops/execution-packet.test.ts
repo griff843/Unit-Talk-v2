@@ -425,3 +425,87 @@ test('packet permits canonical production only as guarded read-only observation'
     false,
   );
 });
+
+// ── UTV2-1732 R2/R6: legacy issues must stay dispatchable ───────────────────
+//
+// Every fixture in this file was hand-written with the new headings already
+// applied, which is why the regression below was invisible until a reviewer
+// ran the real thing. This is the ACTUAL shape of UTV2-1667's Linear
+// description — a lane that was open and held when the contract landed. It has
+// no Objective, no Acceptance Criteria and no Exit Criteria heading.
+
+const UTV2_1667_REAL_DESCRIPTION = `## Authority
+
+\`docs/05_operations/DEPLOYMENT_TRUTH_DESIGN.md\` as merged on \`main\` is **immutable implementation authority** for this lane.
+
+Do not redesign it. Do not extend it.
+
+## Ownership
+
+* **Orchestrator:** Sonnet
+* **Implementation owner:** Sol (\`codex-sol-high\`)
+
+## Scope — Phase 1 ONLY
+
+* §3.5 — operation identity \`(run_id, run_attempt, stage, operation_id)\`
+* §5.5 — durable append-only host journal
+* §13 — fail-closed three-way classification
+
+## Explicitly EXCLUDED
+
+* **§12b — live Docker daemon inspection is NOT pre-authorized**
+
+## Required test coverage
+
+Every applicable Phase 1 row of the 42-row regression matrix must have executable coverage. Coverage must be real executable tests, not narrative assertions.
+
+## Guardrails
+
+* No production mutation, activation, rollback, restart, queue replay, or secret change.
+* Do not weaken any already-landed invariant.
+`;
+
+test('UTV2-1732 R2: a legacy description with no recognized heading still yields a contract', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-1667',
+    title: 'Phase 1 implementation — deployment-truth evidence',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667',
+    description: UTV2_1667_REAL_DESCRIPTION,
+  });
+
+  assert.equal(contract.issue_id, 'UTV2-1667');
+  assert.ok(contract.acceptance_criteria.length > 0, 'legacy issue must not be refused');
+  assert.equal(contract.extraction.acceptance_source, 'derived:description-obligations');
+  assert.equal(contract.extraction.objective_source, 'issue-title');
+  // Derived content is real issue text, never invented filler.
+  assert.ok(
+    contract.acceptance_criteria.some((entry) => entry.includes('regression matrix')),
+    'derived criteria must come from the description body',
+  );
+});
+
+test('UTV2-1732 R2: heading-derived criteria are still labelled as such', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9001',
+    title: 'Structured issue',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9001',
+    description: '## Objective\n\nDo the thing.\n\n## Acceptance Criteria\n\n- It is done\n',
+  });
+  assert.equal(contract.extraction.acceptance_source, 'heading:acceptance-criteria');
+  assert.equal(contract.extraction.objective_source, 'heading:objective');
+  assert.deepEqual(contract.acceptance_criteria, ['It is done']);
+});
+
+test('UTV2-1732 R2: an issue with no obligations anywhere still fails closed', () => {
+  assert.throws(
+    () =>
+      buildTaskContract({
+        identifier: 'UTV2-9002',
+        title: 'Empty',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-9002',
+        description: 'Some background prose with no obligations and no list items.',
+      }),
+    /missing acceptance criteria/u,
+    'derivation must not fabricate a work order out of nothing',
+  );
+});
