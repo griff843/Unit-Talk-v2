@@ -1,5 +1,9 @@
 # UTV2-1732 Diff Summary
 
+MERGE_SHA: b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321
+
+> Pre-merge this anchor is the verified substantive implementation SHA. Post-merge closeout must rebind it to the authoritative merge SHA.
+
 Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`
 
 Base: `origin/main` at `efdbd298`

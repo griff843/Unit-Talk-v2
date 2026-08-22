@@ -1,4 +1,8 @@
-# UTV2-1732 Verification
+# PROOF: UTV2-1732
+
+MERGE_SHA: b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321
+
+> Pre-merge this anchor is the verified substantive implementation SHA. Post-merge closeout must rebind it to the authoritative merge SHA.
 
 Issue: UTV2-1732
 
@@ -11,6 +15,8 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1437
 Verified source SHA: `b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321`
 
 Generated: 2026-08-22T06:06:39Z
+
+## EVIDENCE:
 
 ## Verification
 
@@ -39,7 +45,7 @@ Generated: 2026-08-22T06:06:39Z
 
 - DEFERRED — `pnpm test:db` / writable live-DB proof. Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
 
-## Contract Assertions
+## ASSERTIONS:
 
 - PASS — lane admission captures objective, acceptance criteria, guardrails, non-goals, required evidence, exit criteria, and the exact Linear source snapshot before executor spawn.
 - PASS — missing objective or acceptance criteria fails task-contract construction; missing or tampered contracts fail packet generation.
