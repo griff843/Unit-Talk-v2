@@ -7,7 +7,7 @@ Issue: UTV2-1729
 Tier: T1
 Lane type: governance
 Branch: codex/utv2-1729-proof-producing-contract
-Execution SHA: 7d7347df7f252e7318a0dc19c1e1cb1a545a3d05
+Execution SHA: 1ec0d81f7962389479698232decb7a612c2bac65
 result: pass
 
 ## ASSERTIONS:
@@ -53,4 +53,4 @@ $ pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/model-routi
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 7d7347df7f252e7318a0dc19c1e1cb1a545a3d05
+Execution SHA: 1ec0d81f7962389479698232decb7a612c2bac65

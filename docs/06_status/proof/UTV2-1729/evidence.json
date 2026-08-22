@@ -7,13 +7,13 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "7d7347df7f252e7318a0dc19c1e1cb1a545a3d05",
+    "verified_source_sha": "1ec0d81f7962389479698232decb7a612c2bac65",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "verified_at": "2026-08-22T01:07:00Z",
+    "verified_at": "2026-08-22T01:13:18Z",
     "commands": [
       {
         "command": "pnpm verify:static",

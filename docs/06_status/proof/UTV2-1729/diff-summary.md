@@ -6,10 +6,10 @@ Tier: T1
 Lane type: governance
 Branch: codex/utv2-1729-proof-producing-contract
 PR URL: N/A
-Head SHA: 7d7347df7f252e7318a0dc19c1e1cb1a545a3d05
+Head SHA: 1ec0d81f7962389479698232decb7a612c2bac65
 Merge SHA: N/A
 Diff base: 92889b2d3a858345e99ca490cc11946f7293ca18
-Diff target: 7d7347df7f252e7318a0dc19c1e1cb1a545a3d05
+Diff target: 1ec0d81f7962389479698232decb7a612c2bac65
 
 ## Git Diff Stat
 ```
@@ -54,5 +54,5 @@ M	scripts/ops/proof-schema.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 7d7347df7f252e7318a0dc19c1e1cb1a545a3d05
+Head SHA: 1ec0d81f7962389479698232decb7a612c2bac65
 Merge SHA: N/A
