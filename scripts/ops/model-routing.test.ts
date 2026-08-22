@@ -10,6 +10,7 @@ import {
   resolveModelProfile,
   validateOverride,
   validatePersistedModelRouting,
+  validatePreMergeModelRoutingEvidence,
   type ModelRoutingPolicy,
 } from './model-routing.js';
 
@@ -314,4 +315,43 @@ test('loadModelRoutingPolicy rejects a profile whose reasoning_effort is outside
   } finally {
     fs.rmSync(tmpPath, { force: true });
   }
+});
+
+test('pre-merge sidecar contract rejects the real #1434/#1435 branch-SHA-as-merge shape', () => {
+  for (const [issueId, branchSha] of [
+    ['UTV2-1383', '825259a0b5279ab9c35508582ac1eedb5aa7398f'],
+    ['UTV2-1667', '8856a4c1a089638e88fa12f251c2d1541afaad39'],
+  ] as const) {
+    const result = validatePreMergeModelRoutingEvidence({
+      issue_id: issueId,
+      merge_sha: branchSha,
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      override_used: false,
+    }, { expectedIssueId: issueId });
+    assert.equal(result.valid, false);
+    assert.ok(result.violations.some((violation) => /top-level merge_sha is forbidden/.test(violation)));
+  }
+});
+
+test('pre-merge sidecar contract accepts execution identity without claiming merge authority', () => {
+  const result = validatePreMergeModelRoutingEvidence({
+    issue_id: 'UTV2-1729',
+    execution_sha: 'a'.repeat(40),
+    model_profile: 'codex-sol-high',
+    model: 'gpt-5.6-sol',
+    reasoning_effort: 'high',
+    policy_version: '1.0.0',
+    override_used: false,
+  }, {
+    expectedIssueId: 'UTV2-1729',
+    manifestRouting: {
+      profile: 'codex-sol-high',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      selected_by: 'three-brain',
+      policy_version: '1.0.0',
+    },
+  });
+  assert.deepEqual(result, { valid: true, violations: [] });
 });

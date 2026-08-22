@@ -165,12 +165,14 @@ test('generated verification.md carries a 40-hex SHA anchor, never a placeholder
   assert.doesNotMatch(content, /^MERGE_SHA:\s*N\/A\s*$/m, 'MERGE_SHA must not be a placeholder');
 });
 
-test('pre-merge, the SHA anchor falls back to the head SHA rather than N/A', () => {
-  // The pre-merge case failed every lane: proof-generate ran before a merge SHA
-  // existed and emitted a placeholder, which fails runtime-verifier-gate outright.
+test('pre-merge, merge fields stay placeholders and the branch SHA is execution identity only', () => {
   const preMerge = { ...input(), gitTruth: gitTruth({ merge_sha: null }) };
   const content = buildRuntimeVerification(preMerge);
-  assert.match(content, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
+  assert.match(content, /^MERGE_SHA: pending merge$/m);
+  assert.match(content, /^## Merge SHA Binding$/m);
+  assert.match(content, /^Merge SHA: pending merge$/m);
+  assert.match(content, /^Execution SHA: 1111111111111111111111111111111111111111$/m);
+  assert.doesNotMatch(content, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
 });
 
 test('generated verification.md satisfies Runtime Verifier and Proof Auditor section checks', () => {
@@ -239,7 +241,7 @@ test('unchanged artifacts are not rewritten', () => {
   }
 });
 
-test('pre-merge artifacts bind head SHA and use N/A for merge SHA', () => {
+test('pre-merge artifacts keep merge authority empty while recording the execution head', () => {
   const preMergeInput = {
     ...input({ commit_sha: null }),
     gitTruth: gitTruth({ merge_sha: null, diff_base_ref: 'base-sha', diff_target_ref: HEAD_SHA }),
@@ -251,7 +253,95 @@ test('pre-merge artifacts bind head SHA and use N/A for merge SHA', () => {
   assert.match(diffContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
   assert.match(diffContent, /Merge SHA: N\/A/);
   assert.match(verificationContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
-  assert.match(verificationContent, /Merge SHA: N\/A/);
+  assert.match(verificationContent, /^MERGE_SHA: pending merge$/m);
+  assert.match(verificationContent, /^Merge SHA: pending merge$/m);
+  assert.match(verificationContent, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'm'));
+});
+
+test('UTV2-1729: pre-merge generation makes a broken #1435-shaped bundle bindable by construction', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-premerge-bindable-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'evidence.json'), `${JSON.stringify({
+      schema_version: 2,
+      issue_id: 'UTV2-1170',
+      tier: 'T2',
+      lane_type: 'verification',
+      proof_profile: 'static',
+      status: 'READY_FOR_REVIEW',
+      sha_binding: {
+        verified_source_sha: HEAD_SHA,
+        evidence_commit_sha: 'set-by-ci',
+        current_pr_head_sha: 'set-by-ci',
+      },
+      static_proof: { pnpm_verify: 'pass' },
+    }, null, 2)}\n`);
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      `# PROOF: UTV2-1170\n\nMERGE_SHA: ${HEAD_SHA}\n\n## Verification\n\nNarrative is preserved.\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'model-routing.json'),
+      preMergeModelRoutingJson({ merge_sha: HEAD_SHA }),
+    );
+
+    generateProofArtifacts(
+      {
+        ...input({
+          commit_sha: null,
+          expected_proof_paths: [
+            'docs/06_status/proof/UTV2-1170/evidence.json',
+            'docs/06_status/proof/UTV2-1170/model-routing.json',
+          ],
+        }),
+        gitTruth: gitTruth({ merge_sha: null, diff_target_ref: HEAD_SHA }),
+      },
+      { root },
+    );
+
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, null);
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, HEAD_SHA);
+    const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(verification, /^MERGE_SHA: pending merge$/m);
+    assert.match(verification, /## Merge SHA Binding/);
+    assert.match(verification, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'm'));
+    assert.match(verification, /Narrative is preserved\./);
+    const routing = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(routing.merge_sha, undefined);
+    assert.strictEqual(routing.execution_sha, HEAD_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1729: missing pre-merge evidence is generated with a reserved null merge slot', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-premerge-skeleton-'));
+  try {
+    const proofDir = path.join(root, 'docs/06_status/proof/UTV2-1170');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(path.join(proofDir, 'model-routing.json'), preMergeModelRoutingJson());
+    generateProofArtifacts(
+      {
+        ...input({
+          commit_sha: null,
+          expected_proof_paths: [
+            'docs/06_status/proof/UTV2-1170/evidence.json',
+            'docs/06_status/proof/UTV2-1170/model-routing.json',
+          ],
+        }),
+        gitTruth: gitTruth({ merge_sha: null, diff_target_ref: HEAD_SHA }),
+      },
+      { root },
+    );
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.schema_version, 2);
+    assert.strictEqual(evidence.sha_binding.merge_sha, null);
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, HEAD_SHA);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('manifest overrides bind proof artifacts to the current branch and PR', () => {
@@ -337,6 +427,7 @@ function preMergeEvidenceJson(overrides: Record<string, unknown> = {}): string {
       static_proof: { pnpm_verify: 'pass' },
       runtime_proof: { pnpm_test_db: 'pass' },
       sha_binding: {
+        merge_sha: null,
         verified_source_sha: HEAD_SHA,
         sha_type: 'branch_head',
         bound_at: '2026-05-25T10:00:00.000Z',
@@ -403,7 +494,8 @@ test('rebindEvidenceJsonSha rewrites sha_binding to the merge SHA and flips pre-
     assert.strictEqual(outcome.status, 'updated');
 
     const rewritten = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
-    assert.strictEqual(rewritten.sha_binding.verified_source_sha, MERGE_SHA);
+    assert.strictEqual(rewritten.sha_binding.verified_source_sha, HEAD_SHA);
+    assert.strictEqual(rewritten.sha_binding.merge_sha, MERGE_SHA);
     assert.strictEqual(rewritten.sha_binding.sha_type, 'merge_sha');
     assert.strictEqual(rewritten.sha_binding.bound_at, '2026-05-26T00:00:00.000Z');
     assert.strictEqual(rewritten.status, 'merged');
@@ -591,6 +683,35 @@ test('rebindModelRoutingJsonSha rejects a legacy top-level merge_sha that confli
       (error) => error instanceof ModelRoutingRebindError && error.code === 'legacy_binding_conflict',
     );
     assert.strictEqual(fs.readFileSync(routingPath, 'utf8'), content, 'no proof mutation on legacy conflict');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1729: attested recovery relabels the real broken branch-SHA field as execution identity', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-rebind-attested-routing-'));
+  try {
+    const routingPath = path.join(root, 'model-routing.json');
+    const executionSha = '825259a0b5279ab9c35508582ac1eedb5aa7398f';
+    fs.writeFileSync(routingPath, preMergeModelRoutingJson({ merge_sha: executionSha }), 'utf8');
+
+    const outcome = rebindModelRoutingJsonSha(
+      routingPath,
+      '92889b2d3a858345e99ca490cc11946f7293ca18',
+      '2026-08-21T20:00:00.000Z',
+      'https://github.com/griff843/Unit-Talk-v2/pull/1434',
+      {
+        required: true,
+        allowLegacyExecutionReattestation: true,
+        executionSha,
+      },
+    );
+
+    assert.strictEqual(outcome.status, 'updated');
+    const rebound = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
+    assert.strictEqual(rebound.merge_sha, undefined);
+    assert.strictEqual(rebound.execution_sha, executionSha);
+    assert.strictEqual(rebound.closeout_binding.merge_sha, '92889b2d3a858345e99ca490cc11946f7293ca18');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1570,7 +1691,8 @@ test('generateProofArtifacts rebinds evidence.json and verification.md when a me
     assert.deepStrictEqual(result.stale_paths_replaced, []);
 
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
-    assert.strictEqual(evidence.sha_binding.verified_source_sha, MERGE_SHA);
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, HEAD_SHA);
+    assert.strictEqual(evidence.sha_binding.merge_sha, MERGE_SHA);
     assert.strictEqual(evidence.sha_binding.sha_type, 'merge_sha');
 
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
@@ -1789,13 +1911,13 @@ test('UTV2-1631: measured evidence.json keeps queries, row_counts, verifier.iden
     // not a merge-SHA-bearing field and must NOT be rewritten to the merge SHA.
     assert.strictEqual(after.implementation_sha, before.implementation_sha);
 
-    // Only the merge-SHA-bearing fields (and bound_at) differ.
-    assert.strictEqual(after.sha_binding.verified_source_sha, MERGE_SHA);
+    // verified_source_sha remains the execution identity; only merge authority moves.
+    assert.strictEqual(after.sha_binding.verified_source_sha, PRIOR_MERGE_SHA);
     assert.strictEqual(after.sha_binding.merge_sha, MERGE_SHA);
     assert.strictEqual(after.sha_binding.sha_type, 'merge_sha');
     assert.notStrictEqual(after.sha_binding.bound_at, before.sha_binding.bound_at);
 
-    const volatile = new Set(['verified_source_sha', 'merge_sha', 'sha_type', 'bound_at']);
+    const volatile = new Set(['merge_sha', 'sha_type', 'bound_at']);
     for (const key of Object.keys(before.sha_binding)) {
       if (!volatile.has(key)) {
         assert.deepStrictEqual(after.sha_binding[key], before.sha_binding[key], `sha_binding.${key} changed`);
@@ -1811,7 +1933,7 @@ test('UTV2-1631: measured evidence.json keeps queries, row_counts, verifier.iden
   }
 });
 
-test('UTV2-1631: a sibling sha_binding.merge_sha is rebound too, so the bundle cannot assert two merge identities', () => {
+test('UTV2-1631: merge authority is rebound without erasing the distinct execution identity', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-sibling-sha-'));
   try {
     const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
@@ -1819,8 +1941,8 @@ test('UTV2-1631: a sibling sha_binding.merge_sha is rebound too, so the bundle c
     generateProofArtifacts(input(), { root });
 
     const after = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
-    assert.strictEqual(after.sha_binding.verified_source_sha, after.sha_binding.merge_sha);
-    assert.ok(!JSON.stringify(after.sha_binding).includes(PRIOR_MERGE_SHA));
+    assert.strictEqual(after.sha_binding.verified_source_sha, PRIOR_MERGE_SHA);
+    assert.strictEqual(after.sha_binding.merge_sha, MERGE_SHA);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -1887,7 +2009,7 @@ test('UTV2-1631: an authored artifact with no merge-SHA anchor fails loudly and 
   }
 });
 
-test('UTV2-1631: a pre-merge run never touches an authored bundle', () => {
+test('pre-merge generation upgrades authored Markdown to the bindable contract without replacing narrative evidence', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1630-premerge-'));
   try {
     const proofDir = seedMeasuredBundle(root, PRIOR_MERGE_SHA);
@@ -1899,7 +2021,13 @@ test('UTV2-1631: a pre-merge run never touches an authored bundle', () => {
     };
     const result = generateProofArtifacts(preMergeInput, { root });
 
-    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), before);
+    const after = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(after, /^MERGE_SHA: pending merge$/m);
+    assert.match(after, /^## Merge SHA Binding$/m);
+    assert.match(after, /^Execution SHA: 1111111111111111111111111111111111111111$/m);
+    assert.ok(after.includes('1390221'));
+    assert.ok(after.includes('93 call sites collapsed to 1 constructor'));
+    assert.notStrictEqual(after, before);
     assert.deepStrictEqual(result.generated_paths, []);
     assert.deepStrictEqual(result.stale_paths_replaced, []);
   } finally {

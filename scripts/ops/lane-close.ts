@@ -24,6 +24,12 @@ import {
   type ShaRebindOutcome,
 } from './proof-generate.js';
 import {
+  buildMergedPrAttestation,
+  rebindProofBundle,
+  validatePrIdentity,
+  type ShaSet,
+} from './proof-rebind.js';
+import {
   acquireMergeLock,
   defaultMergeLockOwner,
   MERGE_LOCK_PATH,
@@ -98,6 +104,7 @@ export interface RepairMergedPrInfo {
   state: string | null;
   merged: boolean;
   mergeSha: string | null;
+  headSha?: string | null;
   headRefName?: string | null;
   baseRefName?: string | null;
   title?: string | null;
@@ -1033,12 +1040,65 @@ function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
  */
 export function rebindRepairedLaneProof(
   manifest: LaneManifest,
-  options: { repoRoot?: string; now?: Date } = {},
+  options: { repoRoot?: string; gitRoot?: string; now?: Date; pr?: RepairMergedPrInfo | null } = {},
 ): ShaRebindOutcome[] {
   const repoRoot = options.repoRoot ?? process.cwd();
   const generatedAt = (options.now ?? new Date()).toISOString();
   const mergeSha = manifest.commit_sha;
   const modelRoutingPaths = modelRoutingSidecarPaths(manifest);
+
+  let attestedShas: ShaSet | null = null;
+  if (mergeSha && options.pr) {
+    const evidencePath = safeRepoPath(
+      repoRoot,
+      path.posix.join('docs', '06_status', 'proof', manifest.issue_id, 'evidence.json'),
+    );
+    const evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8')) as Record<string, unknown>;
+    const binding = evidence['sha_binding'] as Record<string, unknown> | undefined;
+    const executionSha = typeof binding?.['verified_source_sha'] === 'string'
+      ? binding['verified_source_sha']
+      : null;
+    const built = buildMergedPrAttestation({
+      number: options.pr.number,
+      headRefOid: options.pr.headSha,
+      mergeCommitOid: options.pr.mergeSha,
+    });
+    if (!built.attestation) {
+      throw new Error(`Merged-PR re-attestation refused: ${built.errors.join('; ')}`);
+    }
+    attestedShas = {
+      merge_sha: mergeSha,
+      approved_head_sha: built.attestation.head_sha,
+      execution_sha: executionSha,
+    };
+    const reachable = (ancestor: string, descendant: string): boolean => {
+      try {
+        execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
+          cwd: options.gitRoot ?? repoRoot,
+          stdio: 'ignore',
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const identityErrors = validatePrIdentity(
+      attestedShas,
+      {
+        attestation: built.attestation,
+        state: options.pr.merged ? 'MERGED' : options.pr.state ?? 'UNKNOWN',
+        base_ref: options.pr.baseRefName ?? 'main',
+        merge_sha_on_base: reachable(mergeSha, `origin/${options.pr.baseRefName ?? 'main'}`),
+      },
+      {
+        executionShaOnBranch:
+          executionSha === null ? true : reachable(executionSha, built.attestation.head_sha),
+      },
+    );
+    if (identityErrors.length > 0) {
+      throw new Error(`Merged-PR re-attestation refused: ${identityErrors.join('; ')}`);
+    }
+  }
 
   if (mergeSha) {
     // Validate-only pass first: throws ModelRoutingRebindError before any
@@ -1056,12 +1116,31 @@ export function rebindRepairedLaneProof(
           relPath: modelRoutingPath,
           expectedIssueId: manifest.issue_id,
           manifestModelRouting: manifest.model_routing,
+          allowLegacyExecutionReattestation: attestedShas !== null,
+          executionSha: attestedShas?.execution_sha,
         },
       );
     }
   }
 
-  const outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+  let outcomes: ShaRebindOutcome[];
+  if (mergeSha && attestedShas) {
+    const proofRoot = path.posix.join('docs', '06_status', 'proof', manifest.issue_id);
+    const files = ['evidence.json', 'verification.md'].map((name) => path.posix.join(proofRoot, name));
+    const result = rebindProofBundle(
+      { issueId: manifest.issue_id, shas: attestedShas, prUrl: manifest.pr_url, files, root: repoRoot },
+      { write: true, allowActiveSchemaStructuralRepair: true },
+    );
+    if (!result.ok) {
+      throw new Error(`Merged-PR proof re-attestation refused: ${result.errors.join('; ')}`);
+    }
+    outcomes = result.checksums.map((checksum) => ({
+      path: checksum.file,
+      status: checksum.changed ? 'updated' : 'unchanged',
+    }));
+  } else {
+    outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+  }
 
   if (mergeSha) {
     for (const modelRoutingPath of modelRoutingPaths) {
@@ -1077,6 +1156,8 @@ export function rebindRepairedLaneProof(
             relPath: modelRoutingPath,
             expectedIssueId: manifest.issue_id,
             manifestModelRouting: manifest.model_routing,
+            allowLegacyExecutionReattestation: attestedShas !== null,
+            executionSha: attestedShas?.execution_sha,
           },
         ),
       );
@@ -2151,7 +2232,7 @@ async function main(): Promise<void> {
       repairedManifest = repair.manifest;
       repairChangedFields = repair.changed_fields;
       mergeBinding = repair.merge_binding ?? null;
-      rebindRepairedLaneProof(manifest);
+      rebindRepairedLaneProof(manifest, { pr: repair.pr ?? validatedPr });
     }
 
     requireCloseCommitSha(manifest);
@@ -2433,7 +2514,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
       '--repo',
       TRUSTED_POST_MERGE_REPOSITORY,
       '--json',
-      'url,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
+      'url,state,mergedAt,mergeCommit,headRefOid,headRefName,baseRefName,title',
     ],
     {
       encoding: 'utf8',
@@ -2461,6 +2542,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     state?: string | null;
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
+    headRefOid?: string | null;
     headRefName?: string | null;
     baseRefName?: string | null;
     title?: string | null;
@@ -2473,6 +2555,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     state,
     merged: state === 'merged' || Boolean(parsed.mergedAt),
     mergeSha: parsed.mergeCommit?.oid ?? null,
+    headSha: parsed.headRefOid ?? null,
     headRefName: parsed.headRefName ?? null,
     baseRefName: parsed.baseRefName ?? null,
     title: parsed.title ?? null,
