@@ -31,6 +31,7 @@ import {
   planEvidenceRebind,
   planVerificationRebind,
   rebindProofBundle,
+  repairActiveSchemaV2Structure,
   sha256,
   undeclaredLineChangeError,
   validateShaSet,
@@ -1187,6 +1188,36 @@ test('REAL BUNDLE: UTV2-1592 remains refused', () => {
     `expected the canonical-section refusal, got: ${errors.join('|')}`,
   );
   assert.ok(!(errors.length === 0 && changes.length > 0), 'must never report a partial success');
+
+  // UTV2-1729 real active-schema fixture: unlike the legacy bundle above,
+  // this one is eligible for the explicit attested structural repair path.
+  const evidenceRel = 'docs/06_status/proof/UTV2-1383/evidence.json';
+  const verificationRel = 'docs/06_status/proof/UTV2-1383/verification.md';
+  const evidence = readRealBundle(evidenceRel);
+  const verification = readRealBundle(verificationRel);
+  const shas: ShaSet = {
+    merge_sha: '92889b2d3a858345e99ca490cc11946f7293ca18',
+    approved_head_sha: '4c11a36fabead489e40daecfb00aeee671a11cc2',
+    execution_sha: '825259a0b5279ab9c35508582ac1eedb5aa7398f',
+  };
+  assert.ok(planEvidenceRebind(evidenceRel, evidence, shas).errors.some((error) => /merge_sha.*absent/.test(error)));
+  assert.ok(planVerificationRebind(verificationRel, verification, shas, 'https://github.com/griff843/Unit-Talk-v2/pull/1434').errors.some((error) => /section is absent/.test(error)));
+
+  const repairedEvidence = repairActiveSchemaV2Structure(evidenceRel, evidence, shas);
+  const repairedVerification = repairActiveSchemaV2Structure(verificationRel, verification, shas);
+  assert.deepStrictEqual([...repairedEvidence.errors, ...repairedVerification.errors], []);
+  assert.strictEqual(repairedEvidence.repairs.length, 1);
+  assert.strictEqual(repairedVerification.repairs.length, 1);
+  assert.deepStrictEqual(planEvidenceRebind(evidenceRel, repairedEvidence.next, shas).errors, []);
+  assert.deepStrictEqual(
+    planVerificationRebind(
+      verificationRel,
+      repairedVerification.next,
+      shas,
+      'https://github.com/griff843/Unit-Talk-v2/pull/1434',
+    ).errors,
+    [],
+  );
 });
 
 test('REAL BUNDLE: UTV2-1612 rebinds exactly five fields and moves no other byte', () => {

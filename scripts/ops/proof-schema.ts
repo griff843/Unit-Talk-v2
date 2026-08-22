@@ -100,6 +100,9 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'legacy_v1_not_allowed_pre_merge'
     | 'sha_binding_missing'
     | 'sha_binding_invalid'
+    | 'sha_binding_merge_slot_missing'
+    | 'sha_binding_premature_merge_sha'
+    | 'legacy_merge_sha_forbidden'
     | 'proof_profile_missing'
     | 'proof_profile_unknown'
     | 'proof_profile_mismatch'
@@ -636,7 +639,18 @@ export function verifyExternalVerifierProvenanceBinding(input: {
 function validateV2Binding(
   bundle: Record<string, unknown>,
   failures: EvidenceContractFailure[],
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
 ): void {
+  if (Object.prototype.hasOwnProperty.call(bundle, 'merge_sha')) {
+    failures.push({
+      code: 'legacy_merge_sha_forbidden',
+      field: 'merge_sha',
+      message:
+        'schema-v2 evidence forbids legacy top-level merge_sha; merge authority lives only at sha_binding.merge_sha',
+    });
+  }
+
   const rawBinding = bundle['sha_binding'];
   if (!isPopulatedRecord(rawBinding)) {
     failures.push({
@@ -648,6 +662,37 @@ function validateV2Binding(
   }
 
   const binding = rawBinding;
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
+    // Migration receipts have a separate, older merged-PR attestation contract
+    // that binds verified_source_sha to GitHub truth. Keep those historical
+    // receipts readable while the general/static/app-runtime generator adopts
+    // the reserved merge slot. The pre-merge binding validator still requires
+    // newly generated non-migration bundles to carry the slot.
+    if (context.gate === 'pre-merge' && profileHint !== 'migration') {
+      failures.push({
+        code: 'sha_binding_merge_slot_missing',
+        field: 'sha_binding.merge_sha',
+        message:
+          'schema-v2 evidence must declare sha_binding.merge_sha (null before merge, authoritative SHA after merge)',
+      });
+    }
+  } else if (context.gate === 'pre-merge') {
+    if (binding['merge_sha'] !== null) {
+      failures.push({
+        code: 'sha_binding_premature_merge_sha',
+        field: 'sha_binding.merge_sha',
+        message:
+          'pre-merge evidence requires sha_binding.merge_sha to be null; a branch SHA must never be represented as a merge SHA',
+      });
+    }
+  } else if (typeof binding['merge_sha'] !== 'string' || !SHA_RE.test(binding['merge_sha'])) {
+    failures.push({
+      code: 'sha_binding_invalid',
+      field: 'sha_binding.merge_sha',
+      message: 'post-merge evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
+    });
+  }
+
   if (typeof binding['verified_source_sha'] !== 'string' || !SHA_RE.test(binding['verified_source_sha'])) {
     failures.push({
       code: 'sha_binding_invalid',
@@ -886,11 +931,15 @@ export function validateEvidenceBundleContract(
     };
   }
 
-  const failures: EvidenceContractFailure[] = [];
-  validateV2Binding(bundle, failures);
-
   const declaredProfile = declaredProfileForLaneType(context.laneType);
   const authoredProfile = bundle['proof_profile'];
+  const profileHint = declaredProfile ??
+    (typeof authoredProfile === 'string' && AUTHORABLE_PROFILES.has(authoredProfile as EvidenceProofProfile)
+      ? authoredProfile as EvidenceProofProfile
+      : null);
+  const failures: EvidenceContractFailure[] = [];
+  validateV2Binding(bundle, failures, context, profileHint);
+
   let profile: EvidenceProofProfile | null = null;
   let profileSource: EvidenceContractResult['profileSource'] = null;
 

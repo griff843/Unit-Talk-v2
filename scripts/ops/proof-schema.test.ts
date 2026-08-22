@@ -12,7 +12,10 @@ import {
   verifyExternalVerifierProvenanceBinding,
   type ProofSchemaV2,
 } from './proof-schema.js';
-import { validateBindingEvidenceContract } from '../ci/proof-binding-validator.js';
+import {
+  validateBindingEvidenceContract,
+  validatePreMergeVerificationBinding,
+} from '../ci/proof-binding-validator.js';
 
 const VALID_SHA = 'a'.repeat(40);
 const OTHER_SHA = 'b'.repeat(40);
@@ -138,6 +141,7 @@ function migrationEvidence() {
     schema_version: 2,
     issue_id: 'UTV2-9000',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
@@ -187,6 +191,32 @@ test('schema-v2 evidence fails without valid sha_binding', () => {
   assert.ok(result.failures.some((failure) => failure.code === 'sha_binding_missing'));
 });
 
+test('schema-v2 evidence requires a nullable merge slot before merge and forbids branch SHAs in it', () => {
+  const missing = migrationEvidence();
+  (missing as { proof_profile: string }).proof_profile = 'static';
+  Reflect.deleteProperty(missing.sha_binding, 'merge_sha');
+  const missingResult = validateEvidenceBundleContract(missing, { gate: 'pre-merge', laneType: 'governance' });
+  assert.ok(missingResult.failures.some((failure) => failure.code === 'sha_binding_merge_slot_missing'));
+
+  const premature = migrationEvidence();
+  (premature as { proof_profile: string }).proof_profile = 'static';
+  premature.sha_binding.merge_sha = OTHER_SHA;
+  const prematureResult = validateEvidenceBundleContract(premature, { gate: 'pre-merge', laneType: 'governance' });
+  assert.ok(prematureResult.failures.some((failure) => failure.code === 'sha_binding_premature_merge_sha'));
+});
+
+test('schema-v2 evidence has one merge authority and requires a concrete post-merge binding', () => {
+  const legacy = migrationEvidence() as ReturnType<typeof migrationEvidence> & { merge_sha?: string };
+  legacy.merge_sha = VALID_SHA;
+  const legacyResult = validateEvidenceBundleContract(legacy, { gate: 'pre-merge', laneType: 'migration' });
+  assert.ok(legacyResult.failures.some((failure) => failure.code === 'legacy_merge_sha_forbidden'));
+
+  const rebound = migrationEvidence();
+  rebound.sha_binding.merge_sha = OTHER_SHA;
+  const reboundResult = validateEvidenceBundleContract(rebound, { gate: 'post-merge-read', laneType: 'migration' });
+  assert.ok(!reboundResult.failures.some((failure) => failure.field === 'sha_binding.merge_sha'));
+});
+
 test('app-runtime profile fails closed without queries and row_counts', () => {
   const evidence = {
     ...migrationEvidence(),
@@ -233,6 +263,7 @@ function bindingMigrationBundle() {
     schema_version: 2,
     issue_id: 'UTV2-1718',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
@@ -276,6 +307,40 @@ describe('proof-binding-validator', () => {
     assert.equal(result.valid, false);
     assert.equal(result.profile, 'legacy-v1');
     assert.ok(result.failures.some((failure) => failure.code === 'legacy_v1_not_allowed_pre_merge'));
+  });
+
+  test('bindability gate rejects the real #1434/#1435 Markdown shape before merge', () => {
+    for (const branchSha of [
+      'a6bc5c99cc58166321f35d1e0e2aa751450056a8',
+      'fb4aa9d90152e0a2dadc6bf0a2013eaf630fbe8a',
+    ]) {
+      const violations = validatePreMergeVerificationBinding(
+        `# PROOF: lane\n\nMERGE_SHA: ${branchSha}\n\n## Verification\n\nmeasured\n`,
+      );
+      assert.ok(violations.some((violation) => /branch SHAs are execution identity only/.test(violation)));
+      assert.ok(violations.some((violation) => /Merge SHA Binding/.test(violation)));
+    }
+  });
+
+  test('bindability gate accepts the canonical generated Markdown contract', () => {
+    const content = [
+      '# PROOF: UTV2-1729',
+      '',
+      'MERGE_SHA: pending merge',
+      '',
+      '## Verification',
+      '',
+      'measured',
+      '',
+      '## Merge SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending',
+      'Approved PR head: pending merge',
+      `Execution SHA: ${VALID_SHA}`,
+      '',
+    ].join('\n');
+    assert.deepEqual(validatePreMergeVerificationBinding(content), []);
   });
 });
 
@@ -366,6 +431,7 @@ function createReceiptBindingRepo(): {
 function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
   const evidence = migrationEvidence();
   evidence.sha_binding.verified_source_sha = verifiedSourceSha;
+  evidence.sha_binding.merge_sha = verifiedSourceSha;
   evidence.runtime_proof.head = receiptHead;
   return evidence;
 }
@@ -1035,6 +1101,7 @@ test('governance evidence remains on the static proof profile', () => {
     issue_id: 'UTV2-9000',
     proof_profile: 'static',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',

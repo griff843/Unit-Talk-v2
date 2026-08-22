@@ -8,6 +8,7 @@ import {
   completeAlreadyClosedLaneCleanup,
   completeSuccessfulLaneClose,
   createRepairRollbackTransaction,
+  ensureAttestedPrHeadAvailable,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
   guardRepairAgainstMainCheckout,
@@ -818,6 +819,7 @@ test('repair mode rebinds proof from the repair PR SHA to the implementation PR 
         status: 'merged',
         sha_binding: {
           verified_source_sha: 'repair-pr-merge-sha',
+          merge_sha: 'repair-pr-merge-sha',
           sha_type: 'merge_sha',
           bound_at: '2026-05-26T03:00:00.000Z',
         },
@@ -848,10 +850,209 @@ test('repair mode rebinds proof from the repair PR SHA to the implementation PR 
     const evidence = fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8');
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
     assert.match(evidence, /implementation-pr-merge-sha/);
-    assert.doesNotMatch(evidence, /repair-pr-merge-sha/);
+    assert.match(evidence, /repair-pr-merge-sha/, 'execution identity is preserved separately');
     assert.match(verification, /implementation-pr-merge-sha/);
     assert.match(verification, /pull\/1291/);
     assert.doesNotMatch(verification, /repair-pr-merge-sha|pull\/1296/);
+  });
+});
+
+test('UTV2-1729: GitHub-attested recovery repairs the real PR #1434 schema-v2 bundle end to end', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1383';
+    const sourceProofDir = path.join(process.cwd(), 'docs', '06_status', 'proof', issueId);
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
+    fs.mkdirSync(proofDir, { recursive: true });
+    for (const name of ['evidence.json', 'verification.md', 'model-routing.json']) {
+      fs.copyFileSync(path.join(sourceProofDir, name), path.join(proofDir, name));
+    }
+    const sourceManifest = JSON.parse(
+      fs.readFileSync(path.join(process.cwd(), 'docs', '06_status', 'lanes', `${issueId}.json`), 'utf8'),
+    );
+    const manifest = {
+      ...sourceManifest,
+      commit_sha: '92889b2d3a858345e99ca490cc11946f7293ca18',
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1434',
+    };
+    const executionSha = '825259a0b5279ab9c35508582ac1eedb5aa7398f';
+    const approvedHeadSha = '4c11a36fabead489e40daecfb00aeee671a11cc2';
+    let attestedHeadAvailable = false;
+    const isCommitReachable = (ancestor: string, descendant: string): boolean => {
+      assert.strictEqual(attestedHeadAvailable, true, 'PR head must be materialized before ancestry checks');
+      return (ancestor === manifest.commit_sha && descendant === 'origin/main') ||
+        (ancestor === executionSha && descendant === approvedHeadSha);
+    };
+    const ensurePrHeadAvailable = (prNumber: number, headSha: string): void => {
+      assert.strictEqual(prNumber, 1434);
+      assert.strictEqual(headSha, approvedHeadSha);
+      attestedHeadAvailable = true;
+    };
+
+    const outcomes = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-08-21T20:00:00.000Z'),
+      isCommitReachable,
+      ensurePrHeadAvailable,
+      pr: {
+        url: manifest.pr_url,
+        number: 1434,
+        repository: 'griff843/Unit-Talk-v2',
+        state: 'merged',
+        merged: true,
+        mergeSha: manifest.commit_sha,
+        headSha: approvedHeadSha,
+        baseRefName: 'main',
+      },
+    });
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, manifest.commit_sha);
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, executionSha);
+    const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(verification, /## Merge SHA Binding/);
+    assert.match(verification, new RegExp(`Merge SHA: ${manifest.commit_sha}`));
+    const routing = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(routing.merge_sha, undefined, 'the branch SHA is no longer labelled as merge identity');
+    assert.strictEqual(routing.execution_sha, executionSha);
+    assert.strictEqual(routing.closeout_binding.merge_sha, manifest.commit_sha);
+
+    const proofArtifacts = ['evidence.json', 'verification.md', 'model-routing.json'].map((name) => ({
+      path: path.join(proofDir, name),
+      content: fs.readFileSync(path.join(proofDir, name), 'utf8'),
+      mtime_ms: 2_000,
+    }));
+    const closeoutFailures = evaluateCloseoutTruthGate({
+      manifest: {
+        issue_id: issueId,
+        status: 'merged',
+        commit_sha: manifest.commit_sha,
+        pr_url: manifest.pr_url,
+        files_changed: [],
+        expected_proof_paths: manifest.expected_proof_paths,
+        created_by: 'codex-cli',
+      },
+      linear_state: 'Done',
+      pr_merged: true,
+      pr_merge_sha: manifest.commit_sha,
+      pr_head_sha: approvedHeadSha,
+      proof_artifacts: proofArtifacts,
+      merge_timestamp_ms: 1_000,
+      runtime_proof_required: false,
+      transition_age_ms: 0,
+    }).filter((check) => check.status === 'fail').map((check) => check.id);
+    assert.deepStrictEqual(closeoutFailures, []);
+
+    const replay = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-08-21T21:00:00.000Z'),
+      isCommitReachable,
+      ensurePrHeadAvailable,
+      pr: {
+        url: manifest.pr_url,
+        number: 1434,
+        repository: 'griff843/Unit-Talk-v2',
+        state: 'merged',
+        merged: true,
+        mergeSha: manifest.commit_sha,
+        headSha: approvedHeadSha,
+        baseRefName: 'main',
+      },
+    });
+    assert.ok(replay.every((outcome) => outcome.status === 'unchanged'));
+  });
+});
+
+test('ensureAttestedPrHeadAvailable fetches the immutable PR ref before accepting an absent attested head', () => {
+  const calls: string[][] = [];
+  let materialized = false;
+  const headSha = '4c11a36fabead489e40daecfb00aeee671a11cc2';
+
+  ensureAttestedPrHeadAvailable(1434, headSha, '/repo', (args, cwd) => {
+    assert.strictEqual(cwd, '/repo');
+    calls.push([...args]);
+    if (args[0] === 'fetch') {
+      materialized = true;
+      return;
+    }
+    if (!materialized) throw new Error('missing object');
+  });
+
+  assert.deepStrictEqual(calls, [
+    ['cat-file', '-e', `${headSha}^{commit}`],
+    ['fetch', '--no-tags', 'origin', 'refs/pull/1434/head'],
+    ['cat-file', '-e', `${headSha}^{commit}`],
+  ]);
+});
+
+test('rebindRepairedLaneProof keeps profileless evidence on the tolerant ordinary path even when PR truth is available', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({
+        schema_version: 1,
+        sha_binding: {
+          verified_source_sha: 'a'.repeat(40),
+          merge_sha: 'b'.repeat(40),
+          sha_type: 'merge_sha',
+        },
+      }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      ['MERGE_SHA: ' + 'b'.repeat(40), '', '## Merge SHA Binding', '', 'Merge SHA: ' + 'b'.repeat(40), ''].join('\n'),
+    );
+
+    let attestationPathUsed = false;
+    const mergeSha = 'c'.repeat(40);
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({ commit_sha: mergeSha }),
+      {
+        repoRoot,
+        pr: {
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1400',
+          number: 1400,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha,
+          headSha: 'd'.repeat(40),
+          baseRefName: 'main',
+        },
+        ensurePrHeadAvailable: () => { attestationPathUsed = true; },
+      },
+    );
+
+    assert.strictEqual(attestationPathUsed, false, 'profileless evidence must not enter structural re-attestation');
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated']);
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, mergeSha);
+  });
+});
+
+test('rebindRepairedLaneProof tolerates a lane with no canonical evidence bundle even when PR truth is available', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({ commit_sha: 'c'.repeat(40) }),
+      {
+        repoRoot,
+        pr: {
+          url: 'https://github.com/griff843/Unit-Talk-v2/pull/1400',
+          number: 1400,
+          repository: 'griff843/Unit-Talk-v2',
+          state: 'merged',
+          merged: true,
+          mergeSha: 'c'.repeat(40),
+          headSha: 'd'.repeat(40),
+          baseRefName: 'main',
+        },
+        ensurePrHeadAvailable: () => assert.fail('optional bundle must not enter structural re-attestation'),
+      },
+    );
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['missing', 'missing']);
   });
 });
 
@@ -893,7 +1094,7 @@ test('rebindRepairedLaneProof binds a declared model-routing.json sidecar in add
       path.join(proofDir, 'evidence.json'),
       `${JSON.stringify({
         status: 'merged',
-        sha_binding: { verified_source_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
+        sha_binding: { verified_source_sha: 'stale', merge_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
       }, null, 2)}\n`,
     );
     fs.writeFileSync(
@@ -1221,7 +1422,7 @@ test('rebindRepairedLaneProof is unaffected for a lane with no required model-ro
       path.join(proofDir, 'evidence.json'),
       `${JSON.stringify({
         status: 'merged',
-        sha_binding: { verified_source_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
+        sha_binding: { verified_source_sha: 'stale', merge_sha: 'stale', sha_type: 'merge_sha', bound_at: '2026-07-01T00:00:00.000Z' },
       }, null, 2)}\n`,
     );
 
@@ -1240,7 +1441,8 @@ test('rebindRepairedLaneProof is unaffected for a lane with no required model-ro
     // all since expected_proof_paths declares no such sidecar.
     assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'missing']);
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
-    assert.strictEqual(evidence.sha_binding.verified_source_sha, 'ordinary-merge-sha');
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, 'stale');
+    assert.strictEqual(evidence.sha_binding.merge_sha, 'ordinary-merge-sha');
   });
 });
 
@@ -2470,7 +2672,7 @@ test('UTV2-1590 done push remains skipped while explicit workflow dispatch reach
   assert.match(statusStep, /echo "closeable=false" >> "\$GITHUB_OUTPUT"/u);
 });
 
-test('UTV2-1684 workflow_dispatch binds proof from resolved merge SHA authority', () => {
+test('UTV2-1729 workflow_dispatch reaches attested lane-close before any proof binding', () => {
   const workflow = fs.readFileSync(
     path.join(process.cwd(), '.github', 'workflows', 'post-merge-lane-close.yml'),
     'utf8',
@@ -2481,6 +2683,11 @@ test('UTV2-1684 workflow_dispatch binds proof from resolved merge SHA authority'
   assert.ok(bindStepIfLine, 'expected an `if:` condition immediately following the step name');
   assert.match(bindStepIfLine[1], /steps\.resolve_sha\.outputs\.merge_sha != ''/u);
   assert.doesNotMatch(bindStepIfLine[1], /github\.event_name/u);
+  const nextStepIndex = workflow.indexOf('\n      - name:', bindStepIndex + 1);
+  const stepBody = workflow.slice(bindStepIndex, nextStepIndex);
+  assert.match(stepBody, /EVENT_NAME: \$\{\{ github\.event_name \}\}/u);
+  assert.match(stepBody, /if \[ "\$EVENT_NAME" = "workflow_dispatch" \]; then/u);
+  assert.match(stepBody, /Deferring proof mutation to GitHub-attested lane-close repair/u);
 });
 
 test('UTV2-1684 "Bind proof artifacts to merge SHA" fails closed on a mismatched receipt', () => {

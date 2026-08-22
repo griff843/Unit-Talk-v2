@@ -55,6 +55,71 @@ export interface ModelRoutingBlock {
   override?: ModelRoutingOverride;
 }
 
+export interface ModelRoutingEvidenceContractResult {
+  valid: boolean;
+  violations: string[];
+}
+
+/**
+ * Pre-merge sidecar contract. Execution provenance may name a branch commit;
+ * merge authority cannot exist until GitHub attests a merged PR. The sole
+ * canonical post-merge authority is closeout_binding.
+ */
+export function validatePreMergeModelRoutingEvidence(
+  candidate: unknown,
+  options: { expectedIssueId?: string; manifestRouting?: ModelRoutingBlock | null } = {},
+): ModelRoutingEvidenceContractResult {
+  const violations: string[] = [];
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return { valid: false, violations: ['model-routing sidecar must be a JSON object'] };
+  }
+  const evidence = candidate as Record<string, unknown>;
+  if (options.expectedIssueId && String(evidence['issue_id'] ?? '').toUpperCase() !== options.expectedIssueId.toUpperCase()) {
+    violations.push(`issue_id does not match ${options.expectedIssueId}`);
+  }
+  for (const field of ['model', 'reasoning_effort'] as const) {
+    if (typeof evidence[field] !== 'string' || evidence[field].trim() === '') {
+      violations.push(`${field} is required and must be non-empty`);
+    }
+  }
+  if (typeof evidence['override_used'] !== 'boolean') {
+    violations.push('override_used must be a boolean');
+  }
+  if (Object.prototype.hasOwnProperty.call(evidence, 'merge_sha')) {
+    violations.push('top-level merge_sha is forbidden before merge; a branch SHA is execution identity, never merge authority');
+  }
+  if (Object.prototype.hasOwnProperty.call(evidence, 'closeout_binding')) {
+    violations.push('closeout_binding is forbidden before authoritative merged-PR attestation');
+  }
+  if (
+    evidence['execution_sha'] !== undefined &&
+    (typeof evidence['execution_sha'] !== 'string' || !/^[0-9a-f]{40}$/.test(evidence['execution_sha']))
+  ) {
+    violations.push('execution_sha must be a full 40-character Git SHA when present');
+  }
+  const manifest = options.manifestRouting;
+  if (manifest) {
+    const comparisons: Array<[string, unknown]> = [
+      ['model', manifest.model],
+      ['reasoning_effort', manifest.reasoning_effort],
+      ['model_profile', manifest.profile],
+      ['policy_version', manifest.policy_version],
+    ];
+    for (const [field, expected] of comparisons) {
+      if (evidence[field] !== undefined && evidence[field] !== expected) {
+        violations.push(`${field} does not match manifest model_routing`);
+      }
+    }
+    if (
+      typeof evidence['override_used'] === 'boolean' &&
+      evidence['override_used'] !== (manifest.selected_by === 'manual-override')
+    ) {
+      violations.push('override_used does not match manifest model_routing.selected_by');
+    }
+  }
+  return { valid: violations.length === 0, violations };
+}
+
 export type ModelRoutingResultCode =
   | 'OK'
   | 'POLICY_LOAD_FAILED'

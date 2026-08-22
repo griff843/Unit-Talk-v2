@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1729",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "941a33c2ea54720895611804922072789ac7617b",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "pass",
+    "verified_at": "2026-08-22T05:19:31Z",
+    "commands": [
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "summary": "env, lint, type-check, build, root test aggregate, smart-form verification, and command checks passed"
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/model-routing.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-rebind.test.ts scripts/ops/proof-schema.test.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "tests": 412,
+        "failures": 0
+      },
+      {
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "summary": "No R-level rules matched; no R-level artifacts required for this diff"
+      }
+    ],
+    "test_db": {
+      "status": "blocked_deferred",
+      "reason": "target identity could not be resolved from its URL (host=unparseable)",
+      "required_staging_project": "xskgrzbteyqdufktjrjx",
+      "execution_environment": "staging-ci GitHub environment with CI_SUPABASE_* credentials"
+    },
+    "runtime_proof": {
+      "status": "not_applicable",
+      "reason": "governance-only proof tooling change; no application runtime or database write path changed"
+    }
+  }
+}
