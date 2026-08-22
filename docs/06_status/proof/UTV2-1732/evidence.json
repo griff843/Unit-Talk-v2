@@ -2,8 +2,8 @@
   "schema_version": 2,
   "issue_id": "UTV2-1732",
   "pr_number": 1437,
-  "source_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
-  "reviewed_head_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
+  "source_sha": "ca1723b5c337643dd3e1dd6ec32b15d5323d322c",
+  "reviewed_head_sha": "ca1723b5c337643dd3e1dd6ec32b15d5323d322c",
   "evidence_commit_sha": null,
   "current_head_sha": null,
   "merge_sha": null,
@@ -14,8 +14,8 @@
   "status": "static_complete_writable_db_deferred_pending_independent_review",
   "generated_at": "2026-08-22T06:06:39Z",
   "sha_binding": {
-    "verified_source_sha": "5c4d187f11d7e88785afc9148b82b34a99426c95",
-    "verified_source_note": "Substantive implementation spans three commits, not one: b9e7f33c (round 1, Codex-authored), d9eea96b (round-2 review corrections, orchestrator-authored bootstrap exception, +514) and 5c4d187f (round-2 blocker corrections, +168). An earlier revision of this bundle named b9e7f33c and asserted later commits were proof-only; that was false and is corrected here. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_sha": "ca1723b5c337643dd3e1dd6ec32b15d5323d322c",
+    "verified_source_note": "Substantive implementation spans five commits ending at ca1723b5: b9e7f33c (round 1, Codex-authored), d9eea96b (round-2 review corrections), 5c4d187f (round-2 blockers), b23fa070 (bundle corrections) and ca1723b5 (round-3 review corrections). Every figure in this bundle was computed at ca1723b5. The proof commit that carries this file follows it and contains only these four artifacts. Two earlier revisions were wrong: the first named b9e7f33c and asserted later commits were proof-only; the second corrected only this field while verification.md, diff-summary.md and source_sha still named b9e7f33c. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "source_sha",
@@ -56,8 +56,8 @@
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts scripts/ops/execution-packet.test.ts scripts/ops/lane-start.test.ts",
       "status": "PASS",
-      "tests": 126,
-      "pass": 126,
+      "tests": 144,
+      "pass": 144,
       "fail": 0
     },
     "type_check": {
@@ -67,7 +67,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "Changed files: 13; rules matched: none; no R-level artifacts required."
+      "detail": "Changed files: 16; rules matched: none; no R-level artifacts required."
     }
   },
   "gate_results": [
@@ -79,7 +79,7 @@
     {
       "gate": "focused issue tests",
       "verdict": "PASS",
-      "detail": "126 tests passed with zero failures."
+      "detail": "144 tests passed with zero failures."
     },
     {
       "gate": "R-level compliance",
@@ -95,7 +95,7 @@
   "runtime_proof": {
     "executor_contract_harness": {
       "status": "PASS",
-      "tests": 126,
+      "tests": 144,
       "detail": "In-process behavioral coverage proves capture, refusal, prompt parity, correction admission, correction immutability, and epoch bindings for both executor implementations."
     },
     "writable_db": {
