@@ -1074,6 +1074,15 @@ jobs:
               echo "::error::docker-inspect image mismatch for $svc: container reports '$inspect_image', requested '$expected_image'."
               exit 1
             fi
+            # UTV2-1667: keep each service's verified running image so the
+            # runtime-mode receipt below can carry container identity, not just
+            # environment values -- readiness must be able to say WHICH container
+            # reported the parked values it is trusting.
+            case "$svc" in
+              api) API_RUNNING_IMAGE="$inspect_image" ;;
+              ingestor) INGESTOR_RUNNING_IMAGE="$inspect_image" ;;
+              worker) WORKER_RUNNING_IMAGE="$inspect_image" ;;
+            esac
 
             if inspect_env=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
               "docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' '$cid'" 2>&1); then
@@ -1129,6 +1138,56 @@ jobs:
 
           printf '{"service":"deploy","event":"syndicate_machine_mode.confirmed","stage":"production","mode":"%s","requestedValue":"%s","runtimeValue":"%s","ingestorAutorun":"%s","ingestorScheduling":"%s","workerAutorun":"%s","enabledTargets":"%s","releaseTag":"%s","killSwitchEngaged":true}\n' \
             "$SYNDICATE_MACHINE_MODE" "$REQUESTED_VALUE" "$VALUE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" "$RELEASE_TAG"
+
+          # 7. UTV2-1667: publish the proof this step has just finished making
+          # as a machine-readable receipt. `scripts/ops/readiness-refresh.ts`
+          # cannot read SYNDICATE_MACHINE_ENABLED (a protected production
+          # secret) and must never infer the desired mode, so without this
+          # receipt readiness has no declaration to evaluate services against
+          # and scores every service `unreadable`. Every value below was
+          # already proved above -- this step invents nothing.
+          #
+          # It is written only after every assertion above has passed, so the
+          # write's own loss window only ever fails closed: a lost receipt
+          # degrades readiness to `unreadable`, never to a false
+          # `parked_verified`.
+          #
+          # The write is guarded on the Actions run identity, because that
+          # identity is what binds the receipt to (run_id, run_attempt, stage):
+          # a downstream-only rerun advances run_attempt without re-deploying,
+          # so an unbound receipt could be read as another operation's proof.
+          # With no identity there is nothing to bind to, so nothing is written
+          # and readiness reports the desired runtime mode `unreadable`. The
+          # guard also keeps this step side-effect-free when its script is
+          # executed outside Actions -- scripts/ci/deploy-parked-mode.test.ts
+          # runs it under bash to prove its failure classifiers are reachable.
+          if [ -z "${GITHUB_RUN_ID:-}" ] || [ -z "${GITHUB_RUN_ATTEMPT:-}" ] || [ -z "${GITHUB_SHA:-}" ]; then
+            echo "::warning::runtime-mode receipt not written: GITHUB_RUN_ID/GITHUB_RUN_ATTEMPT/GITHUB_SHA absent, so the receipt could not be bound to this operation. Readiness will report the desired runtime mode as unreadable."
+          else
+            printf '{"schema":"runtime-mode-receipt/v1","run_id":%s,"run_attempt":%s,"stage":"promote","declared_mode":"%s","source_sha":"%s","deployed_tag":"%s","compose_project":"%s","observed_at":"%s","services":[{"service":"api","image":"%s","env":{"SYNDICATE_MACHINE_ENABLED":"%s"}},{"service":"ingestor","image":"%s","env":{"UNIT_TALK_INGESTOR_AUTORUN":"%s","UNIT_TALK_INGESTOR_SCHEDULING_ENABLED":"%s"}},{"service":"worker","image":"%s","env":{"UNIT_TALK_WORKER_AUTORUN":"%s","UNIT_TALK_ENABLED_TARGETS":"%s"}}],"kill_switch":%s}\n' \
+              "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$SYNDICATE_MACHINE_MODE" "$GITHUB_SHA" "$RELEASE_TAG" "$EXPECTED_PROJECT" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+              "$API_RUNNING_IMAGE" "$VALUE" \
+              "$INGESTOR_RUNNING_IMAGE" "$INGESTOR_AUTORUN_VALUE" "$INGESTOR_SCHEDULING_VALUE" \
+              "$WORKER_RUNNING_IMAGE" "$WORKER_AUTORUN_VALUE" "$ENABLED_TARGETS_VALUE" \
+              "$KILL_SWITCH_JSON" \
+              > runtime-mode-receipt.json
+          fi
+
+      # UTV2-1667: the readiness ledger reads this artifact to learn the
+      # declared, independently verified desired runtime mode of every service.
+      # `if-no-files-found: ignore` is deliberate: a promote that never reached
+      # the confirmation step must publish NO receipt, so readiness reports
+      # `unreadable` instead of reading a stale or partial one. Retention
+      # matches the smoke-result artifact and is the horizon readiness enforces
+      # as its observation SLA.
+      - name: Upload runtime mode receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-mode-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: runtime-mode-receipt.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   smoke:
     name: Post-deploy functional smoke

@@ -1,0 +1,89 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1667",
+  "title": "Parked-state readiness semantics (transferred requirement from the superseded UTV2-1660 attempt)",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "verified_source_sha": "8856a4c1a089638e88fa12f251c2d1541afaad39",
+    "verified_source_note": "Implementation commit. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "scope": {
+    "files_changed": [
+      "scripts/ops/readiness-refresh.ts",
+      "scripts/ops/readiness-refresh.test.ts",
+      ".github/workflows/deploy.yml"
+    ],
+    "runtime_code_changed": true,
+    "schema_changed": false,
+    "dependency_changed": false,
+    "production_mutation": false
+  },
+  "implemented": {
+    "dimension": "service_runtime_mode (new, blocking) over api, ingestor, worker",
+    "declared_mode_source": "A runtime-mode-receipt/v1 artifact published by deploy.yml's promote job, bound to (run_id, run_attempt, stage). The desired mode is DECLARED and independently verified, never inferred: the promote job already proves per service the compose project, exact image tag, effective process env via compose exec AND an independent docker inspect, and re-reads the public kill switches.",
+    "six_states": {
+      "active_healthy": "declared active, env contract verified, activity current",
+      "active_degraded": "verified but short, e.g. declared active while a public kill switch is still engaged",
+      "active_failed": "declared active and contract or core activity dead; stale ingestor cycles and worker heartbeats remain hard failures at the unchanged 30m thresholds",
+      "parked_verified": "declared parked, values verified, provably silent since; evidence reads PARKED_VERIFIED (not active health)",
+      "parked_drift": "hard failure on any cycle, merged provider cycle, heartbeat, queue claim or public delivery after the parked deployment, a disengaged public kill switch, or a parked env value differing from the declared contract",
+      "unreadable": "no receipt, in-flight deploy, malformed receipt, receipt bound to another run identity, unreadable DB, or observation past the SLA; never scored as passing"
+    },
+    "deliberately_not_collapsed": [
+      "Ingestion that stopped BEFORE the parked deployment is surfaced as its own finding under parked_verified: parked mode explains the silence since, not the stoppage before it.",
+      "Outbox rows stuck mid-flight fail in EVERY mode, including parked_verified."
+    ]
+  },
+  "controls_proved_by_inversion": [
+    "parked-drift detection removed -> 4 drift tests fail",
+    "unreadable mode silently assumed active -> 'an unassessed mode is never treated as active' fails",
+    "observation SLA removed -> 'an observation past the SLA is not published as parked_verified' fails",
+    "malformed-newest-receipt fall-through re-enabled -> 'fails closed instead of falling through' fails",
+    "discovery re-scoped to branch main -> 'discovery is never scoped to a branch' fails",
+    "stuck rows excused by parking, and the pre-park stoppage note dropped -> both corresponding tests fail"
+  ],
+  "producer_consumer_test": "Executable, not a hand fixture: the test lifts the receipt block out of deploy.yml, runs it under bash -euo pipefail, and feeds the bytes it writes to this reader's parser. It also asserts the fail-closed branch: with no Actions run identity, no file is written and a ::warning:: is emitted.",
+  "static_proof": {
+    "gate_commands": {
+      "pnpm type-check": {
+        "result": "pass",
+        "exit": 0
+      },
+      "pnpm test": {
+        "result": "pass",
+        "exit": 0
+      },
+      "scripts/ci/r-level-check.ts": {
+        "result": "PASS",
+        "exit": 0,
+        "note": "one advisory PM-gated r4-fault-report missing"
+      },
+      "pnpm verify": {
+        "result": "did not pass",
+        "exit": 1,
+        "failed_at": "ci:assert-staging",
+        "note": "verify:static fully green, summed across every TAP group: tests=4991 pass=4991 fail=0 skipped=0. The failure is solely ci:assert-staging refusing host=127.0.0.1 before any DB test runs. The T1 DB gate is unsatisfied locally and must run through staging-ci on the merge SHA."
+      }
+    },
+    "landed_invariants_unweakened": "scripts/ci/deploy-parked-mode.test.ts (25 tests) still passes unmodified.",
+    "live_generator_read": "Read-only, written outside the repo: verdict stays RED and service_runtime_mode is unreadable with the exact gh error quoted. Nothing was turned green."
+  },
+  "known_limitations": [
+    "Scope is the transferred parked-readiness requirement ONLY. No host journal, no journal_sequence, no 12a observer, no change to deploy_sha_alignment.",
+    "12a host provisioning was NOT authorized, so no observer account, forced-command wrapper, pinned host key or credential exists. Consequences are printed in the dimension's evidence on EVERY run, never implicit: current-instant container state is unprovable, so an out-of-band container replacement after observed_at is undetectable - the design doc's own accepted phase-1 limitation, matrix row 16 - and an observation past the artifact-retention horizon reports unreadable rather than parked_verified.",
+    "Design tension requiring a PM call: section 1 says the Actions-artifact channel is a COPY of the host-side fact and never the sole source of truth, and 12a exists so the copy is never the only channel. For this new dimension the artifact currently IS the only channel. It is never treated as proof of current state (SLA -> unreadable, limitation printed every run), but full section 1 compliance requires 12a.",
+    "The design declares phase 1 'required together, not separable' and says section 12's PM sign-off cannot be deferred past phase 1. Phase 1 as the document defines it is therefore not completable until 12a provisioning is authorized. That is a governance decision, not an implementation gap.",
+    "readiness-refresh.yml needs an actions: read permission for gh run download to reach the receipt artifact. That file is outside this lane's declared file scope and was deliberately not modified; filed as bounded follow-up. Until it lands the dimension reports unreadable, which is fail-closed and legible - the gh error is quoted into unreadable_reason.",
+    "probeDeploySha still passes branch: 'main', which is pre-existing and contradicts design section 2, but belongs to deploy_sha_alignment's own phase-1 work. Left untouched rather than half-changed."
+  ],
+  "verdict": "READY_FOR_REVIEW_PARKED_READINESS_SLICE"
+}
