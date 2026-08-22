@@ -14,8 +14,8 @@
   "status": "static_complete_writable_db_deferred_pending_independent_review",
   "generated_at": "2026-08-22T06:06:39Z",
   "sha_binding": {
-    "verified_source_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
-    "verified_source_note": "Substantive implementation commit; later commits are proof-only. Post-merge closeout must rebind to the authoritative merge SHA.",
+    "verified_source_sha": "5c4d187f11d7e88785afc9148b82b34a99426c95",
+    "verified_source_note": "Substantive implementation spans three commits, not one: b9e7f33c (round 1, Codex-authored), d9eea96b (round-2 review corrections, orchestrator-authored bootstrap exception, +514) and 5c4d187f (round-2 blocker corrections, +168). An earlier revision of this bundle named b9e7f33c and asserted later commits were proof-only; that was false and is corrected here. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "source_sha",
@@ -27,7 +27,7 @@
     "contract_hash": "9a40c92c5aae9545e7231b24ecfb8a09155c203c136bd4a5466f4d6a3cd0c702",
     "source_description_sha256": "62e45563e4d41da0b1b10a44393dd12c6f0e484845d4f1312378d20bf1f8349e",
     "source": "Linear issue snapshot captured before execution",
-    "immutable_manifest_binding": true
+    "manifest_binding_integrity_checked": true
   },
   "scope": {
     "runtime_change": false,
@@ -119,7 +119,7 @@
     {
       "criterion": "Rework contains the original task plus exact corrections after a closed epoch.",
       "status": "PASS",
-      "evidence": "recordReworkCorrections accepts one operator brief only after closure; buildReworkBrief renders exact findings and corrections beside the immutable task contract."
+      "evidence": "recordReworkCorrections accepts one operator brief only after closure; buildReworkBrief renders exact findings and corrections beside the unchanged task contract."
     },
     {
       "criterion": "Task and correction content are hash-bound to the execution epoch.",

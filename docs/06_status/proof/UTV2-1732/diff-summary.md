@@ -14,11 +14,11 @@ Generated: 2026-08-22T06:06:39Z
 
 ## Implementation
 
-- `execution-packet.ts` defines and validates the complete immutable task contract, preserves the exact Linear snapshot, and refuses missing, mismatched, or tampered contracts.
+- `execution-packet.ts` defines and validates the complete task contract, preserves the exact Linear snapshot, and refuses missing, mismatched, or malformed contracts. The contract hash is integrity/drift detection, not tamper-resistance: it is re-derived from the record it validates, so a consistent edit to both the sync record and the manifest satisfies it.
 - `lane-start.ts` captures fresh Linear authority before executor spawn, seals its hash into the lane manifest, and reuses a contract only when that manifest binding already exists.
 - `codex-exec.ts` and `claude-exec.ts` consume the same rendered contract, bind its hash to fresh/rework epochs, reject identity drift, and pass the control-plane checkpoint location to child processes.
-- `execution-checkpoint.ts` permits one authorized correction brief after a checkpoint closes, makes it immutable, renders exact findings/corrections, and binds their hash to the rework epoch.
-- Five focused test files cover the shared prompt contract, fail-closed boundaries, immutable correction flow, hash binding, and control-plane checkpoint transport.
+- `execution-checkpoint.ts` permits one authorized correction brief after a checkpoint closes, seals it against later edits, renders exact findings/corrections, binds their hash to the rework epoch, and adds `retire` so a superseded epoch stops binding dispatch without deleting its record.
+- Five focused test files cover the shared prompt contract, fail-closed boundaries, the sealed correction flow, hash binding, and control-plane checkpoint transport.
 
 ## Git Diff Stat
 
