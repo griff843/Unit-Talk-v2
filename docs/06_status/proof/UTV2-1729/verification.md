@@ -7,7 +7,7 @@ Issue: UTV2-1729
 Tier: T1
 Lane type: governance
 Branch: codex/utv2-1729-proof-producing-contract
-Execution SHA: 1ec0d81f7962389479698232decb7a612c2bac65
+Execution SHA: 391fad90e4fbaeb3e8a0e4d6af852b34778b8532
 result: pass
 
 ## ASSERTIONS:
@@ -58,4 +58,4 @@ Rules matched: (none) — no R-level artifacts required for this diff
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1436
 Approved PR head: pending merge
-Execution SHA: 1ec0d81f7962389479698232decb7a612c2bac65
+Execution SHA: 391fad90e4fbaeb3e8a0e4d6af852b34778b8532
