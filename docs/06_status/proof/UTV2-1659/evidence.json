@@ -6,17 +6,18 @@
   "status": "ci_staging_proof_pending",
   "generated_at": "2026-08-01T17:46:24Z",
   "sha_binding": {
-    "verified_source_sha": "6019d32254264be6c2fa33cc59bc724c51d96d20",
+    "merge_sha": "64ac40ab0593f67fe848fa61d8a006f09d6e6a8e",
+    "verified_source_sha": "64ac40ab0593f67fe848fa61d8a006f09d6e6a8e",
     "verified_source_note": "Substantive implementation commit. Post-merge closeout automation rebinds this field to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-08-01T17:46:24Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-02T07:10:42.041Z",
     "pr_number": null,
     "approved_head_sha": null
   },
   "verifier": {
-    "identity": "codex/utv2-1659-executable-wiring-canonical-files",
+    "identity": "claude/utv2-1659-proof-repair",
     "role": "implementation-lane",
     "independence_note": "Executor-produced mechanical evidence; this is not PM approval or independent certification."
   },
@@ -70,16 +71,55 @@
     }
   },
   "runtime_proof": {
-    "status": "PENDING_CI_STAGING",
-    "classification": "Governance tooling only; no production runtime, database, deployment, secret, branch-protection, or worktree mutation is part of this lane.",
-    "production_mutation_by_lane": false,
-    "pnpm_test_db": {
-      "command": "pnpm test:db",
-      "status": "PENDING_CI_STAGING",
-      "local_result": "REFUSED_NON_STAGING_TARGET"
-    },
-    "queries": [],
-    "row_counts": []
+    "command": "pnpm test:db (apps/api/src/database-smoke.test.ts)",
+    "supabase_project": "staging (xskgrzbteyqdufktjrjx)",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks",
+        "description": "insert/select/delete a real pick row during submission+settlement lifecycle test"
+      },
+      {
+        "table": "submissions",
+        "description": "insert/select/delete a real submission row paired with the pick above"
+      },
+      {
+        "table": "pick_lifecycle",
+        "description": "select lifecycle event rows to assert atomic enqueue/delivery/settlement rollback wrote none on invalid input (UTV2-920)"
+      },
+      {
+        "table": "distribution_outbox",
+        "description": "select outbox rows to assert no row was written on invalid atomic delivery confirmation (UTV2-920)"
+      },
+      {
+        "table": "distribution_receipts",
+        "description": "select receipt rows to assert none written on invalid atomic delivery confirmation (UTV2-920)"
+      },
+      {
+        "table": "audit_log",
+        "description": "select audit rows to assert none written on invalid atomic settlement (UTV2-920)"
+      },
+      {
+        "table": "settlement_records",
+        "description": "select settlement rows to assert correction chain is additive, original row not mutated (UTV2-996)"
+      },
+      {
+        "table": "participants",
+        "description": "select to assert no duplicate participants for the same external_id and sport (UTV2-883)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "database-smoke.test.ts subtests",
+        "count": 7,
+        "status": "all passed (7/7), 0 failed"
+      }
+    ],
+    "row_counts_captured_at": "2026-08-01T21:31:05Z",
+    "row_counts_note": "This is genuine evidence extracted from the real, already-completed push-triggered CI run (griff843/Unit-Talk-v2 run 30719244269, job 'Writable DB proof (staging only)' id 91420127834), which ran directly on merge SHA 64ac40ab0593f67fe848fa61d8a006f09d6e6a8e -- the exact commit UTV2-1659's manifest binds to. Not re-run locally: pnpm test:db is gated to the staging-ci GitHub environment (UTV2-1630 isolation) and refuses to run against a local checkout's non-staging Supabase target (`ci:assert-staging` REFUSED locally with host=unparseable). The automated harvest path (ops:proof-generate --merge-sha) that would normally pull this evidence automatically hits a separate, newly-discovered bug (UTV2-1664: locateCiDbProofRun resolves runs via the PR's pre-merge head SHA, which only surfaces the pull_request-triggered run whose receipt embeds GitHub's ephemeral merge-preview commit SHA, not this push-triggered run's own exact-match receipt) -- this governed proof-repair path is the sanctioned way to add real evidence when automated harvest cannot. The CI job itself wrote and hashed its own receipt: '[ci:db-smoke] receipt written to .out/ci-db-proof-receipt.json (sha256=3ac03f27ca57bcce0bd589b5f3ee2feb9f39be13ceb895d0d5ccd618c85d9cd0)' and printed '[ci:db-smoke] DB smoke passed'."
   },
   "acceptance_criteria_mapping": [
     {
