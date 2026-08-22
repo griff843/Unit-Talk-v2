@@ -11,6 +11,7 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1436",
   "files_changed": [],
   "file_scope_lock": [
+    ".github/workflows/executor-result-validator.yml",
     ".github/workflows/post-merge-lane-close.yml",
     ".ops/sync/UTV2-1729.yml",
     "docs/06_status/proof/UTV2-1729/diff-summary.md",
@@ -27,7 +28,9 @@
     "scripts/ops/proof-rebind.test.ts",
     "scripts/ops/proof-rebind.ts",
     "scripts/ops/proof-schema.test.ts",
-    "scripts/ops/proof-schema.ts"
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1729/evidence.json",
