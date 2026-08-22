@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1732",
+  "pr_number": 1437,
+  "source_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
+  "reviewed_head_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
+  "evidence_commit_sha": null,
+  "current_head_sha": null,
+  "merge_sha": null,
+  "title": "Executors receive no task contract: repair the autonomous execution work order",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "static_complete_writable_db_deferred_pending_independent_review",
+  "generated_at": "2026-08-22T06:06:39Z",
+  "sha_binding": {
+    "verified_source_sha": "b9e7f33ca7ee0f01fb511bf9198d3dc7b03ae321",
+    "verified_source_note": "Substantive implementation commit; later commits are proof-only. Post-merge closeout must rebind to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "source_sha",
+    "merge_sha": null,
+    "pr_number": 1437,
+    "bound_at": "2026-08-22T06:06:39Z"
+  },
+  "task_contract": {
+    "contract_hash": "9a40c92c5aae9545e7231b24ecfb8a09155c203c136bd4a5466f4d6a3cd0c702",
+    "source_description_sha256": "62e45563e4d41da0b1b10a44393dd12c6f0e484845d4f1312378d20bf1f8349e",
+    "source": "Linear issue snapshot captured before execution",
+    "immutable_manifest_binding": true
+  },
+  "scope": {
+    "runtime_change": false,
+    "database_change": false,
+    "migration_change": false,
+    "workflow_change": false,
+    "implementation_paths": [
+      "scripts/ops/claude-exec.ts",
+      "scripts/ops/codex-exec.ts",
+      "scripts/ops/execution-checkpoint.ts",
+      "scripts/ops/execution-packet.ts",
+      "scripts/ops/lane-start.ts"
+    ],
+    "deliberately_out_of_scope": [
+      "scripts/ops/truth-check-lib.ts",
+      ".github/workflows/executor-result-validator.yml",
+      "UTV2-1729 proof-binding implementation and rejected history"
+    ]
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Environment, lint, type-check, build, root tests, package verification, command manifest, and migration lint all exited 0."
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts scripts/ops/execution-checkpoint.test.ts scripts/ops/execution-packet.test.ts scripts/ops/lane-start.test.ts",
+      "status": "PASS",
+      "tests": 126,
+      "pass": 126,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Changed files: 13; rules matched: none; no R-level artifacts required."
+    }
+  },
+  "gate_results": [
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "Static verification exited 0."
+    },
+    {
+      "gate": "focused issue tests",
+      "verdict": "PASS",
+      "detail": "126 tests passed with zero failures."
+    },
+    {
+      "gate": "R-level compliance",
+      "verdict": "PASS",
+      "detail": "No R-level rules matched this governance/ops diff."
+    },
+    {
+      "gate": "writable staging DB proof",
+      "verdict": "SKIP",
+      "detail": "Deferred to staging-ci because the local target identity is unparseable; required project is xskgrzbteyqdufktjrjx."
+    }
+  ],
+  "runtime_proof": {
+    "executor_contract_harness": {
+      "status": "PASS",
+      "tests": 126,
+      "detail": "In-process behavioral coverage proves capture, refusal, prompt parity, correction admission, correction immutability, and epoch bindings for both executor implementations."
+    },
+    "writable_db": {
+      "status": "DEFERRED_STAGING_CI",
+      "command": "pnpm test:db",
+      "required_project": "xskgrzbteyqdufktjrjx",
+      "detail": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    }
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Fresh dispatch prompt contains the complete task contract.",
+      "status": "PASS",
+      "evidence": "Shared renderTaskContract output is included by both prompt builders and is covered by focused tests."
+    },
+    {
+      "criterion": "Dispatch fails before spawning if objective or acceptance criteria are missing.",
+      "status": "PASS",
+      "evidence": "buildTaskContract and packet validation fail closed; lane-start captures before worktree/executor setup; missing-field and missing-contract regressions pass."
+    },
+    {
+      "criterion": "Rework contains the original task plus exact corrections after a closed epoch.",
+      "status": "PASS",
+      "evidence": "recordReworkCorrections accepts one operator brief only after closure; buildReworkBrief renders exact findings and corrections beside the immutable task contract."
+    },
+    {
+      "criterion": "Task and correction content are hash-bound to the execution epoch.",
+      "status": "PASS",
+      "evidence": "The task contract hash is epoch.objective_identity and the sealed correction hash is epoch.findings_identity; mismatch paths refuse."
+    },
+    {
+      "criterion": "Claude and Codex consume the same contract.",
+      "status": "PASS",
+      "evidence": "Both executors call the same renderTaskContract function over ExecutionPacket.task_contract."
+    },
+    {
+      "criterion": "UTV2-1729 re-dispatch substantively changes truth-check-lib.ts and executor-result-validator.yml.",
+      "status": "PENDING_POST_MERGE",
+      "evidence": "This falsifiable system test is sequenced after UTV2-1732 merges and targets files explicitly outside this lane."
+    },
+    {
+      "criterion": "UTV2-1729 passes independent review, recovers UTV2-1383, and regenerates UTV2-1667.",
+      "status": "PENDING_POST_MERGE",
+      "evidence": "Downstream orchestration actions are not claimed by this authoring lane."
+    }
+  ],
+  "independent_review": {
+    "status": "PENDING",
+    "self_attested": false,
+    "detail": "Independent exact-head review is mandatory for T1 and must be supplied outside this author evidence."
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "writable_db_status": "DEFERRED_STAGING_CI",
+    "ready_for_independent_review": true,
+    "ready_for_merge": false
+  }
+}
