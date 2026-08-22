@@ -2,12 +2,12 @@
 
 MERGE_SHA: pending merge
 
-Generated at: 2026-08-22T01:07:49.862Z
+Generated at: 2026-08-22T05:19:31Z
 Issue: UTV2-1729
 Tier: T1
 Lane type: governance
 Branch: codex/utv2-1729-proof-producing-contract
-Execution SHA: 391fad90e4fbaeb3e8a0e4d6af852b34778b8532
+Execution SHA: 941a33c2ea54720895611804922072789ac7617b
 result: pass
 
 ## ASSERTIONS:
@@ -17,6 +17,8 @@ result: pass
 - [x] Pre-merge binding validation rejects the malformed PR #1434/#1435 evidence, Markdown, and model-routing shapes.
 - [x] The default rebind remains fail-closed for legacy, pre-schema, malformed, and non-static bundles.
 - [x] GitHub-attested recovery repairs the real PR #1434 bundle, preserves execution provenance, passes post-merge truth evaluation, and replays idempotently.
+- [x] Structural re-attestation is restricted to the known malformed schema-v2/static shape (or its canonical repaired successor); profileless and optional bundles retain tolerant ordinary rebinding.
+- [x] A missing GitHub-recorded PR head is fetched from immutable `refs/pull/<n>/head` and verified before any ancestry decision.
 - [x] Manual workflow replay defers all proof mutation until the trusted PR-attested lane-close path.
 
 ## EVIDENCE:
@@ -26,9 +28,9 @@ $ pnpm verify:static
 exit 0
 
 $ pnpm exec tsx --test 'scripts/ops/lane-close.test.ts' 'scripts/ops/model-routing.test.ts' 'scripts/ops/proof-generate.test.ts' 'scripts/ops/proof-rebind.test.ts' 'scripts/ops/proof-schema.test.ts'
-1..389
-# tests 409
-# pass 409
+1..392
+# tests 412
+# pass 412
 # fail 0
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -41,7 +43,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 - [x] `pnpm type-check`: passed as a standalone check and inside `pnpm verify:static`.
 - [x] `pnpm test`: passed inside `pnpm verify:static`.
 - [x] `pnpm verify:static`: passed with exit code 0.
-- [x] Focused issue suite: 409 tests passed, 0 failed.
+- [x] Focused issue suite: 412 tests passed, 0 failed.
 - [x] R-level compliance: PASS; no lifecycle, domain, strategy, or operator UI rule matched.
 - [x] Evidence bundle: schema-v2 static proof generated with distinct execution and merge identities.
 - [x] Model-routing evidence: records `execution_sha`; no top-level `merge_sha` is present.
@@ -58,4 +60,4 @@ Rules matched: (none) — no R-level artifacts required for this diff
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1436
 Approved PR head: pending merge
-Execution SHA: 391fad90e4fbaeb3e8a0e4d6af852b34778b8532
+Execution SHA: 941a33c2ea54720895611804922072789ac7617b

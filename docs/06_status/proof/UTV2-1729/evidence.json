@@ -7,13 +7,13 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "391fad90e4fbaeb3e8a0e4d6af852b34778b8532",
+    "verified_source_sha": "941a33c2ea54720895611804922072789ac7617b",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
   "static_proof": {
     "status": "pass",
-    "verified_at": "2026-08-22T04:48:53Z",
+    "verified_at": "2026-08-22T05:19:31Z",
     "commands": [
       {
         "command": "pnpm verify:static",
@@ -25,7 +25,7 @@
         "command": "pnpm exec tsx --test scripts/ops/lane-close.test.ts scripts/ops/model-routing.test.ts scripts/ops/proof-generate.test.ts scripts/ops/proof-rebind.test.ts scripts/ops/proof-schema.test.ts",
         "exit_code": 0,
         "result": "pass",
-        "tests": 409,
+        "tests": 412,
         "failures": 0
       },
       {
