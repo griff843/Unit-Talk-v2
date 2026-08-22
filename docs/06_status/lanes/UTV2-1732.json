@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1732",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1732-executor-task-contract",
+  "branch": "codex/utv2-1732-executor-task-contract",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1732.yml",
+    "docs/06_status/proof/UTV2-1732/diff-summary.md",
+    "docs/06_status/proof/UTV2-1732/evidence.json",
+    "docs/06_status/proof/UTV2-1732/model-routing.json",
+    "docs/06_status/proof/UTV2-1732/verification.md",
+    "scripts/ops/claude-exec.test.ts",
+    "scripts/ops/claude-exec.ts",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/execution-checkpoint.test.ts",
+    "scripts/ops/execution-checkpoint.ts",
+    "scripts/ops/execution-packet.test.ts",
+    "scripts/ops/execution-packet.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1732/evidence.json",
+    "docs/06_status/proof/UTV2-1732/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-22T05:39:14.115Z",
+  "heartbeat_at": "2026-08-22T05:39:14.115Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1732-executor-task-contract.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1732-executor-task-contract",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
