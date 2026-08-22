@@ -215,6 +215,18 @@ test('schema-v2 evidence has one merge authority and requires a concrete post-me
   rebound.sha_binding.merge_sha = OTHER_SHA;
   const reboundResult = validateEvidenceBundleContract(rebound, { gate: 'post-merge-read', laneType: 'migration' });
   assert.ok(!reboundResult.failures.some((failure) => failure.field === 'sha_binding.merge_sha'));
+
+  const missingStatic = migrationEvidence();
+  (missingStatic as { proof_profile: string }).proof_profile = 'static';
+  Reflect.deleteProperty(missingStatic.sha_binding, 'merge_sha');
+  const missingStaticResult = validateEvidenceBundleContract(
+    missingStatic,
+    { gate: 'post-merge-read', laneType: 'governance' },
+  );
+  assert.ok(
+    missingStaticResult.failures.some((failure) => failure.code === 'sha_binding_merge_slot_missing'),
+    'post-merge non-migration evidence cannot omit its authoritative merge slot',
+  );
 });
 
 test('app-runtime profile fails closed without queries and row_counts', () => {
@@ -338,6 +350,28 @@ describe('proof-binding-validator', () => {
       'PR: pending',
       'Approved PR head: pending merge',
       `Execution SHA: ${VALID_SHA}`,
+      '',
+    ].join('\n');
+    assert.deepEqual(validatePreMergeVerificationBinding(content), []);
+  });
+
+  test('bindability gate ignores MERGE_SHA-looking rows inside fenced command evidence', () => {
+    const content = [
+      '# PROOF: UTV2-1729',
+      '',
+      'MERGE_SHA: pending merge',
+      '',
+      '## Verification',
+      '',
+      '```text',
+      `MERGE_SHA: ${OTHER_SHA}`,
+      '## Merge SHA Binding',
+      '```',
+      '',
+      '## Merge SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending',
       '',
     ].join('\n');
     assert.deepEqual(validatePreMergeVerificationBinding(content), []);

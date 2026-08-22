@@ -957,7 +957,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
         '--limit',
         '20',
         '--json',
-        'url,number,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
+        'url,number,state,mergedAt,mergeCommit,headRefOid,headRefName,baseRefName,title',
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -971,6 +971,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
     state?: string | null;
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
+    headRefOid?: string | null;
     headRefName?: string | null;
     baseRefName?: string | null;
     title?: string | null;
@@ -990,6 +991,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
       state,
       merged: state === 'merged' || Boolean(entry.mergedAt),
       mergeSha: entry.mergeCommit?.oid ?? null,
+      headSha: entry.headRefOid ?? null,
       headRefName: entry.headRefName ?? null,
       baseRefName: entry.baseRefName ?? null,
       title: entry.title ?? null,

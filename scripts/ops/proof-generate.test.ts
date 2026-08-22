@@ -14,6 +14,8 @@ import {
   collectProofGitTruth,
   detectCurrentProofContext,
   generateProofArtifacts,
+  normalizePreMergeEvidenceJson,
+  normalizePreMergeVerificationMarkdown,
   rebindEvidenceJsonSha,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
@@ -342,6 +344,63 @@ test('UTV2-1729: missing pre-merge evidence is generated with a reserved null me
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('UTV2-1729: evidence normalization surgically inserts only the reserved merge slot', () => {
+  const before = [
+    '{',
+    '    "schema_version": 2,',
+    '    "issue_id": "UTV2-1170",',
+    '    "proof_profile": "static",',
+    '    "note": "escaped \\u2014 narrative stays escaped",',
+    '    "sha_binding": {',
+    `        "verified_source_sha": "${HEAD_SHA}",`,
+    '        "evidence_commit_sha": "set-by-ci",',
+    '        "current_pr_head_sha": "set-by-ci"',
+    '    }',
+    '}',
+    '',
+  ].join('\n');
+  const after = normalizePreMergeEvidenceJson(before, 'evidence.json', 'UTV2-1170');
+  assert.strictEqual(
+    after,
+    before.replace('    "sha_binding": {\n', '    "sha_binding": {\n        "merge_sha": null,\n'),
+  );
+  assert.match(after, /escaped \\u2014 narrative stays escaped/u);
+});
+
+test('UTV2-1729: evidence normalization refuses duplicate binding keys without rewriting authored bytes', () => {
+  const duplicate = [
+    '{',
+    '  "schema_version": 2,',
+    '  "issue_id": "UTV2-1170",',
+    '  "proof_profile": "static",',
+    `  "sha_binding": { "verified_source_sha": "${HEAD_SHA}" },`,
+    `  "sha_binding": { "verified_source_sha": "${MERGE_SHA}" }`,
+    '}',
+    '',
+  ].join('\n');
+  assert.throws(
+    () => normalizePreMergeEvidenceJson(duplicate, 'evidence.json', 'UTV2-1170'),
+    /duplicate binding key "sha_binding"/u,
+  );
+});
+
+test('UTV2-1729: verification normalization ignores fenced MERGE_SHA rows and preserves them byte-for-byte', () => {
+  const before = [
+    '# PROOF: UTV2-1170',
+    '',
+    `MERGE_SHA: ${HEAD_SHA}`,
+    '',
+    '```text',
+    `MERGE_SHA: ${MERGE_SHA}`,
+    '```',
+    '',
+  ].join('\n');
+  const after = normalizePreMergeVerificationMarkdown(before, 'verification.md', HEAD_SHA, null);
+  assert.match(after, /^MERGE_SHA: pending merge$/mu);
+  assert.match(after, new RegExp(`^MERGE_SHA: ${MERGE_SHA}$`, 'mu'));
+  assert.match(after, /## Merge SHA Binding/u);
 });
 
 test('manifest overrides bind proof artifacts to the current branch and PR', () => {

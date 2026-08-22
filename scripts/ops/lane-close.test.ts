@@ -3293,6 +3293,15 @@ test('UTV2-1613: a merged PR is inferred from the lane branch when pr_url is nul
   });
 });
 
+test('UTV2-1729: inferred merged-PR lookup requests and persists the GitHub head SHA', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-close.ts'), 'utf8');
+  const start = source.indexOf('function inferMergedPrForBranch');
+  const end = source.indexOf('export interface RepairRequiredViaPrResult', start);
+  const implementation = source.slice(start, end);
+  assert.match(implementation, /headRefOid/u);
+  assert.match(implementation, /headSha:\s*entry\.headRefOid/u);
+});
+
 test('UTV2-1613: a null pr_url with no inferable merged PR is refused, never guessed', () => {
   withTempRepairState(({ repoRoot, artifactRoot, tokenPath }) => {
     const repair = repairMergedLaneManifest(

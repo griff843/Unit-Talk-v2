@@ -32,6 +32,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  markdownFencedLineIndexes,
   validateEvidenceBundleContract,
   type EvidenceContractResult,
 } from '../ops/proof-schema.js';
@@ -89,23 +90,25 @@ interface ManifestBindingContext {
 
 export function validatePreMergeVerificationBinding(content: string): string[] {
   const violations: string[] = [];
-  const top = [...content.matchAll(/^MERGE_SHA:\s*(.*)$/gm)];
+  const lines = content.split(/\r?\n/u);
+  const fenced = markdownFencedLineIndexes(content);
+  const activeLines = lines.map((line, index) => fenced.has(index) ? '' : line);
+  const top = activeLines.map((line) => line.match(/^MERGE_SHA:\s*(.*)$/u)).filter((match) => match !== null);
   if (top.length !== 1) {
     violations.push(`verification.md must contain exactly one top-level MERGE_SHA: row (found ${top.length})`);
   } else if (top[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
     violations.push('verification.md MERGE_SHA must be "pending merge" before merge; branch SHAs are execution identity only');
   }
-  const headings = [...content.matchAll(/^## Merge SHA Binding\s*$/gm)];
-  if (headings.length !== 1) {
-    violations.push(`verification.md must contain exactly one "## Merge SHA Binding" section (found ${headings.length})`);
+  const headingIndexes = activeLines.flatMap((line, index) => /^## Merge SHA Binding\s*$/u.test(line) ? [index] : []);
+  if (headingIndexes.length !== 1) {
+    violations.push(`verification.md must contain exactly one "## Merge SHA Binding" section (found ${headingIndexes.length})`);
     return violations;
   }
-  const start = headings[0]!.index! + headings[0]![0].length;
-  const rest = content.slice(start);
-  const nextHeading = rest.search(/^##\s+/m);
-  const section = nextHeading === -1 ? rest : rest.slice(0, nextHeading);
-  const mergeRows = [...section.matchAll(/^Merge SHA:\s*(.*)$/gm)];
-  const prRows = [...section.matchAll(/^PR:\s*(.*)$/gm)];
+  const start = headingIndexes[0]! + 1;
+  const endOffset = activeLines.slice(start).findIndex((line) => /^##\s+/u.test(line));
+  const section = activeLines.slice(start, endOffset === -1 ? undefined : start + endOffset);
+  const mergeRows = section.map((line) => line.match(/^Merge SHA:\s*(.*)$/u)).filter((match) => match !== null);
+  const prRows = section.map((line) => line.match(/^PR:\s*(.*)$/u)).filter((match) => match !== null);
   if (mergeRows.length !== 1 || mergeRows[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
     violations.push('Merge SHA Binding section requires exactly one "Merge SHA: pending merge" row before merge');
   }

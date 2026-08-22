@@ -165,6 +165,31 @@ export interface EvidenceContractResult {
   bundle: Record<string, unknown> | null;
 }
 
+/** Line indexes that are part of CommonMark fenced code blocks, including fences. */
+export function markdownFencedLineIndexes(content: string): Set<number> {
+  const fenced = new Set<number>();
+  const lines = content.split(/\r?\n/u);
+  let active: { char: '`' | '~'; length: number } | null = null;
+
+  for (const [index, line] of lines.entries()) {
+    if (active) {
+      fenced.add(index);
+      const closing = line.match(/^[ \t]{0,3}(`+|~+)[ \t]*$/u);
+      if (closing && closing[1]?.[0] === active.char && closing[1].length >= active.length) {
+        active = null;
+      }
+      continue;
+    }
+
+    const opening = line.match(/^[ \t]{0,3}(`{3,}|~{3,}).*$/u);
+    if (!opening) continue;
+    const run = opening[1]!;
+    active = { char: run[0] as '`' | '~', length: run.length };
+    fenced.add(index);
+  }
+  return fenced;
+}
+
 // Ratified T1 precedent treats modeling/analytics and canonical-data lanes as
 // decision/data truth: they require the same live queries + row counts as
 // application runtime lanes and cannot self-select the static profile.
@@ -668,7 +693,7 @@ function validateV2Binding(
     // receipts readable while the general/static/app-runtime generator adopts
     // the reserved merge slot. The pre-merge binding validator still requires
     // newly generated non-migration bundles to carry the slot.
-    if (context.gate === 'pre-merge' && profileHint !== 'migration') {
+    if (profileHint !== 'migration') {
       failures.push({
         code: 'sha_binding_merge_slot_missing',
         field: 'sha_binding.merge_sha',

@@ -21,7 +21,8 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { validatePreMergeModelRoutingEvidence, type ModelRoutingBlock } from './model-routing.js';
-import { declaredProfileForLaneType } from './proof-schema.js';
+import { declaredProfileForLaneType, markdownFencedLineIndexes } from './proof-schema.js';
+import { duplicateKeysInSameObject } from './proof-rebind.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -274,8 +275,35 @@ export function normalizePreMergeEvidenceJson(
   if (!isJsonObject(binding)) {
     throw new ProofPreservationError('unbindable_proof_artifact', relPath, `Evidence is missing sha_binding: ${relPath}`);
   }
+  for (const key of ['sha_binding', 'merge_sha', 'verified_source_sha', 'evidence_commit_sha', 'current_pr_head_sha']) {
+    if (duplicateKeysInSameObject(content, key) > 1) {
+      throw new ProofPreservationError(
+        'unbindable_proof_artifact',
+        relPath,
+        `Evidence carries a duplicate binding key ${JSON.stringify(key)} and cannot be normalized safely: ${relPath}`,
+      );
+    }
+  }
   if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
-    binding['merge_sha'] = null;
+    const eol = content.includes('\r\n') ? '\r\n' : '\n';
+    const lines = content.split(/\r?\n/u);
+    const openings = lines.flatMap((line, index) => {
+      const match = line.match(/^(\s*)"sha_binding"\s*:\s*\{\s*$/u);
+      return match ? [{ index, indent: match[1] ?? '' }] : [];
+    });
+    if (openings.length !== 1) {
+      throw new ProofPreservationError(
+        'unbindable_proof_artifact',
+        relPath,
+        `Evidence sha_binding must use one expanded JSON object before surgical merge-slot insertion: ${relPath}`,
+      );
+    }
+    const opening = openings[0]!;
+    const childIndent = lines.slice(opening.index + 1)
+      .map((line) => line.match(/^(\s+)"/u)?.[1] ?? null)
+      .find((indent) => indent !== null && indent.length > opening.indent.length) ?? `${opening.indent}  `;
+    lines.splice(opening.index + 1, 0, `${childIndent}"merge_sha": null,`);
+    return lines.join(eol);
   } else if (binding['merge_sha'] !== null) {
     throw new ProofPreservationError(
       'unbindable_proof_artifact',
@@ -283,7 +311,7 @@ export function normalizePreMergeEvidenceJson(
       `Pre-merge sha_binding.merge_sha must be null; branch identity belongs in verified_source_sha: ${relPath}`,
     );
   }
-  return `${JSON.stringify(parsed, null, 2)}\n`;
+  return content;
 }
 
 export function normalizePreMergeVerificationMarkdown(
@@ -292,7 +320,10 @@ export function normalizePreMergeVerificationMarkdown(
   executionSha: string | null,
   prUrl: string | null,
 ): string {
-  const matches = [...content.matchAll(/^MERGE_SHA:\s*(.*)$/gm)];
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const lines = content.split(/\r?\n/u);
+  const fenced = markdownFencedLineIndexes(content);
+  const matches = lines.flatMap((line, index) => !fenced.has(index) && /^MERGE_SHA:\s*(.*)$/u.test(line) ? [index] : []);
   if (matches.length !== 1) {
     throw new ProofPreservationError(
       'unbindable_proof_artifact',
@@ -300,13 +331,16 @@ export function normalizePreMergeVerificationMarkdown(
       `${relPath} must contain exactly one top-level MERGE_SHA: row before merge`,
     );
   }
-  let next = content.replace(/^MERGE_SHA:\s*.*$/m, 'MERGE_SHA: pending merge');
-  const headings = [...next.matchAll(/^## Merge SHA Binding\s*$/gm)];
+  lines[matches[0]!] = 'MERGE_SHA: pending merge';
+  let next = lines.join(eol);
+  const nextFenced = markdownFencedLineIndexes(next);
+  const headings = next.split(/\r?\n/u).flatMap(
+    (line, index) => !nextFenced.has(index) && /^## Merge SHA Binding\s*$/u.test(line) ? [index] : [],
+  );
   if (headings.length > 1) {
     throw new ProofPreservationError('unbindable_proof_artifact', relPath, `${relPath} has duplicate Merge SHA Binding sections`);
   }
   if (headings.length === 0) {
-    const eol = next.includes('\r\n') ? '\r\n' : '\n';
     const suffix = [
       '## Merge SHA Binding',
       '',
