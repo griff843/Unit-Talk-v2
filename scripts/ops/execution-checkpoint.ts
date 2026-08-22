@@ -26,6 +26,7 @@
 
 import fs from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -33,7 +34,39 @@ import { ROOT, emitJson, getFlag, parseArgs, requireIssueId, type LaneTier } fro
 import { reapVerifySlots, type ReapRecord } from './verify-semaphore.js';
 
 export const EXECUTION_CHECKPOINT_SCHEMA_VERSION = 2 as const;
-export const EXECUTION_CHECKPOINT_DIR = path.join(ROOT, '.out', 'ops', 'execution-checkpoints');
+/**
+ * Checkpoint state belongs to the lane, not to whichever checkout is reading it
+ * (UTV2-1732 R4). `ROOT` resolves to the current worktree, so an operator
+ * running a correction or retire from a lane worktree would address a different
+ * (empty) directory than the dispatcher does from the main checkout — the
+ * command appeared to work while writing nowhere useful.
+ *
+ * `git rev-parse --git-common-dir` returns the shared `.git` for every worktree,
+ * so its parent is the one checkout all of them agree on. Falls back to `ROOT`
+ * when git is unavailable, and `--dir` / UNIT_TALK_EXECUTION_CHECKPOINT_DIR
+ * still override both.
+ */
+function sharedCheckoutRoot(): string {
+  try {
+    const commonDir = execFileSync('git', ['rev-parse', '--git-common-dir'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!commonDir) return ROOT;
+    const absolute = path.isAbsolute(commonDir) ? commonDir : path.resolve(ROOT, commonDir);
+    return path.dirname(absolute);
+  } catch {
+    return ROOT;
+  }
+}
+
+export const EXECUTION_CHECKPOINT_DIR = path.join(
+  sharedCheckoutRoot(),
+  '.out',
+  'ops',
+  'execution-checkpoints',
+);
 
 export const EXECUTION_PHASES = ['orient', 'plan', 'implement', 'verify', 'closeout'] as const;
 export type ExecutionPhase = (typeof EXECUTION_PHASES)[number];
@@ -197,6 +230,24 @@ export interface ExecutionEpoch {
   findings_identity: string;
   created_at: string;
   authority: string;
+  /**
+   * Set when an operator retires this epoch. A retired epoch no longer binds
+   * dispatch: its `objective_identity` is deliberately left intact so the
+   * history stays readable, and consumers key on this field instead of
+   * comparing a superseded identity they can never satisfy.
+   */
+  retired_at?: string;
+  retired_by?: string;
+  retired_reason?: string;
+}
+
+/**
+ * True when an epoch has been retired by an operator and must no longer gate
+ * dispatch. Exported so `codex-exec` and `claude-exec` share one definition
+ * rather than each re-deriving it (UTV2-1732).
+ */
+export function isRetiredEpoch(epoch: ExecutionEpoch | undefined | null): boolean {
+  return Boolean(epoch?.retired_at);
 }
 
 export interface ArchivedExecutionEpoch {
@@ -205,6 +256,8 @@ export interface ArchivedExecutionEpoch {
   completed_phases: CompletedPhase[];
   findings: ExecutionFinding[];
   pending_actions: string[];
+  correction_authority?: string | null;
+  corrections_recorded_at?: string | null;
   attempts: ExecutionAttempt[];
 }
 
@@ -233,6 +286,8 @@ export interface ExecutionCheckpoint {
   completed_phases: CompletedPhase[];
   findings: ExecutionFinding[];
   pending_actions: string[];
+  correction_authority?: string | null;
+  corrections_recorded_at?: string | null;
   attempts: ExecutionAttempt[];
   cancel_requested: boolean;
   cancel_reason: string | null;
@@ -610,6 +665,21 @@ export function buildResumePlan(checkpoint: ExecutionCheckpoint | null): ResumeP
       prior_attempts: [],
     };
   }
+  // A retired epoch carries the conclusions of an objective that no longer
+  // applies. Resuming into it would replay those conclusions as authoritative
+  // and would also inherit `retired_at`, permanently disabling the
+  // contract-hash gate. A retired epoch therefore always plans as fresh.
+  if (isRetiredEpoch(checkpoint.epoch)) {
+    return {
+      resumed: false,
+      resume_from_phase: EXECUTION_PHASES[0],
+      completed_phases: [],
+      skipped_phases: [],
+      carried_findings: [],
+      pending_actions: [],
+      prior_attempts: checkpoint.attempts,
+    };
+  }
   const completed = checkpoint.completed_phases.map((entry) => entry.phase);
   return {
     resumed: checkpoint.attempts.length > 0,
@@ -689,6 +759,45 @@ export function buildResumeBrief(checkpoint: ExecutionCheckpoint | null): string
   return lines.join('\n');
 }
 
+export function hashExecutionCorrections(checkpoint: ExecutionCheckpoint): string {
+  return createHash('sha256')
+    .update(JSON.stringify({
+      source_epoch_id: checkpoint.epoch.epoch_id,
+      findings: checkpoint.findings.map((finding) => ({
+        id: finding.id,
+        phase: finding.phase,
+        summary: finding.summary,
+      })),
+      required_corrections: checkpoint.pending_actions,
+      correction_authority: checkpoint.correction_authority ?? null,
+    }))
+    .digest('hex');
+}
+
+export function buildReworkBrief(checkpoint: ExecutionCheckpoint): string {
+  const lines = [
+    '## Execution checkpoint — REWORK EPOCH',
+    '',
+    'The original task contract is unchanged and still governs. This epoch starts from the reviewed head and must resolve every item below.',
+    '',
+    `Corrections hash: \`${hashExecutionCorrections(checkpoint)}\``,
+    `Authorized by: ${checkpoint.correction_authority ?? '(missing — rework must fail closed)'}`,
+    '',
+    '### Unresolved findings',
+    '',
+    ...(checkpoint.findings.length > 0
+      ? checkpoint.findings.map((finding) => `- [${finding.phase}] ${finding.summary}`)
+      : ['- (none recorded)']),
+    '',
+    '### Required corrections (exact operator brief)',
+    '',
+    ...(checkpoint.pending_actions.length > 0
+      ? checkpoint.pending_actions.map((action) => `- ${action}`)
+      : ['- (none recorded — rework must fail closed)']),
+  ];
+  return lines.join('\n');
+}
+
 // ── mutations ───────────────────────────────────────────────────────────────
 
 interface BeginAttemptCommon {
@@ -755,9 +864,17 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     const existingState = readCheckpointState(input.issueId, dir);
     const existing = existingState.checkpoint;
 
-  if (input.kind === 'fresh' && existing) {
+  if (input.kind === 'fresh' && existing && !isRetiredEpoch(existing.epoch)) {
     throw new Error(
       `execution state already exists for ${input.issueId}; use resume or an explicit rework epoch instead of replacing it`,
+    );
+  }
+  // Retiring ends an epoch. The next dispatch must mint a new one bound to the
+  // current contract, so a retired epoch is never resumed or reworked in place.
+  if ((input.kind === 'resume' || input.kind === 'rework') && existing && isRetiredEpoch(existing.epoch)) {
+    throw new Error(
+      `epoch ${existing.epoch.epoch_id} for ${input.issueId} was retired by ` +
+        `${existing.epoch.retired_by ?? 'an operator'}; start a fresh epoch rather than ${input.kind}`,
     );
   }
   if ((input.kind === 'resume' || input.kind === 'rework') && !existing) {
@@ -800,6 +917,8 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
             completed_phases: existing!.completed_phases,
             findings: existing!.findings,
             pending_actions: existing!.pending_actions,
+            correction_authority: existing!.correction_authority ?? null,
+            corrections_recorded_at: existing!.corrections_recorded_at ?? null,
             attempts: closeDanglingAttempts(existing!.attempts, existing!.phase, now, existing!.attempt + 1),
           },
         ]
@@ -865,6 +984,8 @@ export function beginAttempt(input: BeginAttemptInput): BeginAttemptResult {
     completed_phases: completedPhases,
     findings,
     pending_actions: pendingActions,
+    correction_authority: input.kind === 'rework' ? null : (existing?.correction_authority ?? null),
+    corrections_recorded_at: input.kind === 'rework' ? null : (existing?.corrections_recorded_at ?? null),
     attempts: [...priorAttempts, attemptRecord],
     cancel_requested: false,
     cancel_reason: null,
@@ -983,11 +1104,275 @@ export function recordPendingActions(
   }));
 }
 
+export interface RecordReworkCorrectionsResult {
+  ok: boolean;
+  code:
+    | 'execution_rework_corrections_recorded'
+    | 'execution_rework_corrections_unchanged'
+    | 'execution_rework_corrections_refused'
+    | 'execution_checkpoint_busy';
+  checkpoint: ExecutionCheckpoint | null;
+  reason: string;
+}
+
+/**
+ * Operator-only transition used after an attempt has closed. Executor child
+ * processes carry UNIT_TALK_EXECUTION_* identity and are forbidden from using
+ * this path, so they cannot rewrite their own acceptance/rework contract.
+ */
+export function recordReworkCorrections(
+  issueId: string,
+  corrections: string[],
+  options: { authority: string; dir?: string; now?: Date; env?: NodeJS.ProcessEnv },
+): RecordReworkCorrectionsResult {
+  const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const normalized = corrections.map((entry) => entry.trim()).filter(Boolean);
+  const env = options.env ?? process.env;
+  if (
+    env.UNIT_TALK_EXECUTION_EPOCH_ID ||
+    env.UNIT_TALK_EXECUTION_ATTEMPT ||
+    env.UNIT_TALK_EXECUTION_MINIMUM_REVISION
+  ) {
+    return {
+      ok: false,
+      code: 'execution_rework_corrections_refused',
+      checkpoint: null,
+      reason: 'executor identity is present; executors do not rewrite their own task or correction contract',
+    };
+  }
+  if (!options.authority.trim() || normalized.length === 0) {
+    return {
+      ok: false,
+      code: 'execution_rework_corrections_refused',
+      checkpoint: null,
+      reason: 'an explicit correction authority and at least one exact correction are required',
+    };
+  }
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const checkpoint = state.checkpoint;
+      const openAttempt = checkpoint?.attempts.some((attempt) => attempt.ended_at === null) ?? false;
+      if (!state.ok || !checkpoint || checkpoint.status === 'in_progress' || openAttempt) {
+        return {
+          ok: false,
+          code: 'execution_rework_corrections_refused' as const,
+          checkpoint,
+          reason: checkpoint
+            ? 'corrections may be recorded only after the current attempt is closed'
+            : `validated checkpoint unavailable: ${state.reason}`,
+        };
+      }
+      if (checkpoint.corrections_recorded_at) {
+        const unchanged =
+          checkpoint.correction_authority === options.authority.trim() &&
+          JSON.stringify(checkpoint.pending_actions) === JSON.stringify(normalized);
+        return {
+          ok: unchanged,
+          code: unchanged
+            ? 'execution_rework_corrections_unchanged' as const
+            : 'execution_rework_corrections_refused' as const,
+          checkpoint,
+          reason: unchanged
+            ? 'the exact authorized correction brief is already recorded'
+            : 'an authorized correction brief is already sealed for this rejected epoch',
+        };
+      }
+      const nowIso = (options.now ?? new Date()).toISOString();
+      const next = touch({
+        ...checkpoint,
+        pending_actions: normalized,
+        correction_authority: options.authority.trim(),
+        corrections_recorded_at: nowIso,
+      }, nowIso);
+      writeCheckpoint(next, dir);
+      return {
+        ok: true,
+        code: 'execution_rework_corrections_recorded' as const,
+        checkpoint: next,
+        reason: 'authorized rework corrections recorded on the closed epoch',
+      };
+    });
+  } catch (error) {
+    if (!(error instanceof CheckpointMutationLockedError)) throw error;
+    return {
+      ok: false,
+      code: 'execution_checkpoint_busy',
+      checkpoint: null,
+      reason: error.message,
+    };
+  }
+}
+
+export function buildExecutorCheckpointEnv(
+  checkpointDir: string,
+  identity: ExecutionStateIdentity,
+): NodeJS.ProcessEnv {
+  return {
+    UNIT_TALK_EXECUTION_CHECKPOINT_DIR: checkpointDir,
+    UNIT_TALK_EXECUTION_EPOCH_ID: identity.epoch_id,
+    UNIT_TALK_EXECUTION_ATTEMPT: String(identity.attempt),
+    UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(identity.minimum_revision),
+  };
+}
+
 export interface ClearCheckpointResult {
   ok: boolean;
   code: 'execution_checkpoint_cleared' | 'execution_checkpoint_active' | 'execution_checkpoint_busy';
   removed: string[];
   reason: string;
+}
+
+export interface RetireCheckpointResult {
+  ok: boolean;
+  code:
+    | 'execution_checkpoint_retired'
+    | 'execution_checkpoint_missing'
+    | 'execution_checkpoint_busy'
+    | 'execution_checkpoint_retire_refused';
+  issue_id: string;
+  retired_epoch_id: string | null;
+  closed_attempts: number;
+  reason: string;
+}
+
+/**
+ * Retire a superseded epoch so a lane can be re-dispatched (UTV2-1732 R1).
+ *
+ * Two real states strand a lane and neither had a recovery path:
+ *
+ *  1. The epoch predates task contracts, so `epoch.objective_identity` holds the
+ *     old `<issue>:<branch>` scheme and never equals a contract hash. Every
+ *     dispatch is refused.
+ *  2. An attempt was killed rather than completed, leaving `ended_at: null`, so
+ *     `clearCheckpoint` also refuses.
+ *
+ * A lane in both states — UTV2-1729 was, exactly — cannot resume, rework, or
+ * clear. This closes the abandoned attempts, records why, and marks the epoch
+ * retired, leaving the history readable instead of deleting it.
+ *
+ * Operator-hygiene guard, not a trust boundary: it refuses when executor
+ * identity env vars are present, on the same grounds as
+ * `recordReworkCorrections`. An executor with a shell can strip those vars
+ * (`env -u ...`), so this catches accident and convention drift, not a
+ * determined executor. Real containment is review of the resulting diff.
+ */
+export function retireCheckpointEpoch(
+  issueId: string,
+  options: { authority: string; reason?: string; dir?: string; now?: Date; env?: NodeJS.ProcessEnv },
+): RetireCheckpointResult {
+  const dir = options.dir ?? EXECUTION_CHECKPOINT_DIR;
+  const env = options.env ?? process.env;
+  const base: Omit<RetireCheckpointResult, 'ok' | 'code' | 'reason'> = {
+    issue_id: issueId,
+    retired_epoch_id: null,
+    closed_attempts: 0,
+  };
+  if (
+    env.UNIT_TALK_EXECUTION_EPOCH_ID ||
+    env.UNIT_TALK_EXECUTION_ATTEMPT ||
+    env.UNIT_TALK_EXECUTION_MINIMUM_REVISION
+  ) {
+    return {
+      ...base,
+      ok: false,
+      code: 'execution_checkpoint_retire_refused',
+      reason: 'executor identity is present; executors cannot retire their own execution epoch',
+    };
+  }
+  if (!options.authority.trim()) {
+    return {
+      ...base,
+      ok: false,
+      code: 'execution_checkpoint_retire_refused',
+      reason: 'retiring an epoch requires --authority naming the operator',
+    };
+  }
+  try {
+    return withCheckpointMutationLock(issueId, dir, () => {
+      const state = readCheckpointState(issueId, dir);
+      const checkpoint = state.checkpoint;
+      if (!checkpoint) {
+        return {
+          ...base,
+          ok: false,
+          code: 'execution_checkpoint_missing' as const,
+          reason: `no execution checkpoint exists for ${issueId}`,
+        };
+      }
+      const retiredAt = (options.now ?? new Date()).toISOString();
+      let closed = 0;
+      for (const attempt of checkpoint.attempts) {
+        if (attempt.ended_at === null) {
+          attempt.ended_at = retiredAt;
+          attempt.outcome = 'failed';
+          attempt.reason =
+            options.reason?.trim() ||
+            `attempt abandoned; epoch retired by ${options.authority.trim()}`;
+          closed += 1;
+        }
+      }
+      // Mark the epoch itself retired. Leaving objective_identity intact keeps
+      // the history readable; consumers gate on retired_at instead, so a lane
+      // whose epoch predates task contracts becomes dispatchable again without
+      // deleting its record (UTV2-1732, round-2 review finding 2).
+      checkpoint.epoch.retired_at = retiredAt;
+      checkpoint.epoch.retired_by = options.authority.trim();
+      checkpoint.epoch.retired_reason =
+        options.reason?.trim() || 'epoch superseded; retired by operator';
+      // The completed phases and findings belong to the objective being
+      // retired. The resume brief presents them as "already finished and their
+      // conclusions are authoritative", so carrying them into a new objective
+      // would hand the next executor conclusions drawn against the wrong task —
+      // the precise failure this lane exists to eliminate. They are archived on
+      // the epoch record, not silently dropped.
+      const retiredPhases = checkpoint.completed_phases.length;
+      const retiredFindings = checkpoint.findings.length;
+      checkpoint.prior_epochs = [
+        ...checkpoint.prior_epochs,
+        {
+          epoch: { ...checkpoint.epoch },
+          archived_at: retiredAt,
+          completed_phases: [...checkpoint.completed_phases],
+          findings: [...checkpoint.findings],
+        } as never,
+      ];
+      checkpoint.completed_phases = [];
+      checkpoint.findings = [];
+      checkpoint.pending_actions = [];
+      checkpoint.phase = EXECUTION_PHASES[0];
+      checkpoint.status = 'failed';
+      checkpoint.updated_at = retiredAt;
+      checkpoint.last_activity_at = retiredAt;
+      checkpoint.state_revision += 1;
+      writeCheckpoint(checkpoint, dir);
+      return {
+        issue_id: issueId,
+        retired_epoch_id: checkpoint.epoch.epoch_id,
+        closed_attempts: closed,
+        ok: true,
+        code: 'execution_checkpoint_retired' as const,
+        reason:
+          `retired epoch ${checkpoint.epoch.epoch_id} (archived ${retiredPhases} completed phase(s) and ` +
+          `${retiredFindings} finding(s); objective identity ` +
+          `"${checkpoint.epoch.objective_identity}"), closing ${closed} abandoned attempt(s); ` +
+          `${issueId} is now dispatchable — the retired epoch no longer binds`,
+      };
+    });
+  } catch (error) {
+    // Only lock contention is "busy". Reporting EACCES or a corrupt checkpoint
+    // as contention sends an operator chasing a race that is not happening.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/lock|EEXIST|contention/iu.test(message)) {
+      return {
+        ...base,
+        ok: false,
+        code: 'execution_checkpoint_busy',
+        reason: `checkpoint for ${issueId} is locked by another mutation`,
+      };
+    }
+    throw error;
+  }
 }
 
 /**
@@ -1212,7 +1597,10 @@ function requireMutationIdentity(flags: Map<string, string[]>): ExecutionStateId
 function runCli(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   const command = positionals[0] ?? 'status';
-  const dir = getFlag(flags, 'dir') ?? EXECUTION_CHECKPOINT_DIR;
+  const dir =
+    getFlag(flags, 'dir') ??
+    process.env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR ??
+    EXECUTION_CHECKPOINT_DIR;
 
   try {
     const issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
@@ -1294,6 +1682,31 @@ function runCli(): void {
         process.exitCode = checkpoint ? 0 : 1;
         return;
       }
+      case 'retire': {
+        const result = retireCheckpointEpoch(issueId, {
+          authority: getFlag(flags, 'authority') ?? '',
+          reason: getFlag(flags, 'reason'),
+          dir,
+        });
+        emitJson(result);
+        process.exitCode = result.ok ? 0 : 1;
+        return;
+      }
+      case 'correction': {
+        const result = recordReworkCorrections(issueId, flags.get('correction') ?? [], {
+          authority: getFlag(flags, 'authority') ?? '',
+          dir,
+        });
+        emitJson({
+          ok: result.ok,
+          code: result.code,
+          issue_id: issueId,
+          corrections_hash: result.checkpoint ? hashExecutionCorrections(result.checkpoint) : null,
+          message: result.reason,
+        });
+        process.exitCode = result.ok ? 0 : 1;
+        return;
+      }
       case 'clear': {
         const result = clearCheckpoint(issueId, { dir });
         emitJson({
@@ -1319,7 +1732,7 @@ function runCli(): void {
       }
       default:
         throw new Error(
-          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
+          'Usage: pnpm ops:exec-checkpoint <status|resume-brief|heartbeat|phase-complete|finding|pending|correction|retire|clear|cancel> --issue UTV2-### [--phase <phase>] [--summary <text>] [--reason <text>] [--action <text>] [--correction <exact text> --authority <operator>] [--dir <checkpoint dir>] [--epoch-id <id> --attempt <n> --minimum-revision <n>]',
         );
     }
   } catch (error) {

@@ -15,6 +15,8 @@ import {
   EXECUTION_TIMEOUT_HARD_CAP_MS,
   EXECUTION_TIMEOUT_POLICY_ID,
   beginAttempt,
+  buildExecutorCheckpointEnv,
+  buildReworkBrief,
   buildResumeBrief,
   buildResumePlan,
   checkpointMutationLockPath,
@@ -24,20 +26,108 @@ import {
   clearCheckpoint,
   failVisiblyAndRelease as failVisiblyAndReleaseWithIdentity,
   finishAttempt as finishAttemptWithIdentity,
+  hashExecutionCorrections,
   nextPhaseAfter,
   readCheckpoint,
   readCheckpointState,
   recordFinding as recordFindingWithIdentity,
   recordHeartbeat as recordHeartbeatWithIdentity,
   recordPendingActions as recordPendingActionsWithIdentity,
+  recordReworkCorrections,
   recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
+  isRetiredEpoch,
+  readCheckpoint,
+  retireCheckpointEpoch,
   writeCheckpoint,
   type ExecutionPhase,
   type ExecutionStateIdentity,
   type FinishAttemptInput,
 } from './execution-checkpoint.js';
+
+test('closed checkpoints accept one authorized immutable correction brief and bind it to rework', () => {
+  const dir = tmpDir();
+  const issueId = 'UTV2-1732';
+  const timeoutPolicy = resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'orient' });
+  const fresh = beginAttempt({
+    issueId,
+    kind: 'fresh',
+    currentHeadSha: 'a'.repeat(40),
+    objectiveIdentity: 'task-contract-hash',
+    authority: 'codex-exec',
+    timeoutPolicy,
+    dir,
+  });
+  recordFindingWithIdentity(
+    issueId,
+    { phase: 'verify', summary: 'truth-check-lib.ts was untouched' },
+    { dir, identity: fresh.identity },
+  );
+  finishAttemptWithIdentity({
+    issueId,
+    outcome: 'failed',
+    reason: 'independent review rejected the epoch',
+    identity: fresh.identity,
+    dir,
+  });
+
+  const denied = recordReworkCorrections(issueId, ['Change truth-check-lib.ts'], {
+    authority: 'pm-review',
+    dir,
+    env: { UNIT_TALK_EXECUTION_EPOCH_ID: fresh.identity.epoch_id },
+  });
+  assert.equal(denied.ok, false);
+  assert.match(denied.reason, /executors do not rewrite/);
+
+  const recorded = recordReworkCorrections(
+    issueId,
+    [
+      'Change scripts/ops/truth-check-lib.ts substantively.',
+      'Change .github/workflows/executor-result-validator.yml substantively.',
+    ],
+    { authority: 'pm-review', dir, env: {}, now: new Date('2026-08-22T06:00:00.000Z') },
+  );
+  assert.equal(recorded.ok, true);
+  assert.equal(recorded.checkpoint?.correction_authority, 'pm-review');
+  const brief = buildReworkBrief(recorded.checkpoint!);
+  assert.match(brief, /truth-check-lib\.ts substantively/);
+  assert.match(brief, /executor-result-validator\.yml substantively/);
+
+  const rewritten = recordReworkCorrections(issueId, ['replace the accepted brief'], {
+    authority: 'pm-review',
+    dir,
+    env: {},
+  });
+  assert.equal(rewritten.ok, false);
+  assert.match(rewritten.reason, /already sealed/);
+
+  const correctionsHash = hashExecutionCorrections(recorded.checkpoint!);
+  const rework = beginAttempt({
+    issueId,
+    kind: 'rework',
+    rejectedHeadSha: 'b'.repeat(40),
+    objectiveIdentity: 'task-contract-hash',
+    findingsIdentity: correctionsHash,
+    authority: 'codex-exec',
+    timeoutPolicy,
+    dir,
+  });
+  assert.equal(rework.checkpoint.epoch.objective_identity, 'task-contract-hash');
+  assert.equal(rework.checkpoint.epoch.findings_identity, correctionsHash);
+});
+
+test('executor checkpoint environment carries the control-plane checkpoint directory', () => {
+  const env = buildExecutorCheckpointEnv('/control/.out/ops/execution-checkpoints', {
+    epoch_id: 'epoch-1',
+    attempt: 2,
+    minimum_revision: 7,
+  });
+  assert.equal(env.UNIT_TALK_EXECUTION_CHECKPOINT_DIR, '/control/.out/ops/execution-checkpoints');
+  assert.equal(env.UNIT_TALK_EXECUTION_EPOCH_ID, 'epoch-1');
+  assert.equal(env.UNIT_TALK_EXECUTION_ATTEMPT, '2');
+  assert.equal(env.UNIT_TALK_EXECUTION_MINIMUM_REVISION, '7');
+});
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1594-checkpoint-'));
@@ -822,4 +912,191 @@ test('liveness describes the attempt in flight, not an older dangling one', () =
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ── UTV2-1732 R1/R6: the real doubly-stuck lane ─────────────────────────────
+//
+// This is the exact state UTV2-1729 was in when the task contract landed, read
+// off .out/ops/execution-checkpoints/UTV2-1729.json:
+//
+//   status: 'in_progress'
+//   epoch.objective_identity: 'UTV2-1729:codex/utv2-1729-proof-producing-contract'  (pre-contract scheme)
+//   one attempt with ended_at: null                                                 (killed, never closed)
+//
+// Both dispatch and clear refuse such a lane, so it could neither run nor be
+// reset. These fixtures pin that recovery.
+
+function writeLegacyStuckCheckpoint(dir: string, overrides: Record<string, unknown> = {}): void {
+  const now = '2026-08-22T05:13:25.000Z';
+  const checkpoint = {
+    schema_version: EXECUTION_CHECKPOINT_SCHEMA_VERSION,
+    issue_id: 'UTV2-1729',
+    branch: 'codex/utv2-1729-proof-producing-contract',
+    worktree: '/tmp/utv2-1729',
+    state_revision: 5,
+    epoch: {
+      epoch_id: '200c0838-0000-4000-8000-000000000000',
+      mode: 'fresh',
+      implementation_baseline_sha: 'a'.repeat(40),
+      // The pre-contract identity scheme — never equal to a 64-hex contract hash.
+      objective_identity: 'UTV2-1729:codex/utv2-1729-proof-producing-contract',
+      findings_identity: 'none',
+      created_at: now,
+      authority: 'codex-exec',
+    },
+    prior_epochs: [],
+    status: 'in_progress',
+    phase: 'orient',
+    attempt: 1,
+    created_at: now,
+    updated_at: now,
+    last_activity_at: now,
+    heartbeat_at: now,
+    heartbeat_interval_ms: 60000,
+    completed_phases: [],
+    findings: [],
+    pending_actions: [],
+    attempts: [
+      {
+        epoch_id: '200c0838-0000-4000-8000-000000000000',
+        attempt: 1,
+        started_at: now,
+        ended_at: null,
+        outcome: null,
+        reason: null,
+        phase_at_start: 'orient',
+        phase_at_end: null,
+        timeout_ms: 4050000,
+        attempt_start_sha: 'a'.repeat(40),
+        released_resources: [],
+      },
+    ],
+  } as never;
+  writeCheckpoint({ ...(checkpoint as object), ...overrides } as never, dir);
+}
+
+test('UTV2-1732 R1: clear refuses the real stuck UTV2-1729 shape (the trap)', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const cleared = clearCheckpoint('UTV2-1729', { dir });
+  assert.equal(cleared.ok, false);
+  assert.equal(cleared.code, 'execution_checkpoint_active');
+});
+
+test('UTV2-1732 R1: retire clears the dispatch refusal itself, not merely clear()', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const CONTRACT_HASH = 'f'.repeat(64);
+  // This is the exact predicate codex-exec.ts / claude-exec.ts gate dispatch on.
+  // The earlier version of this test asserted only that clearCheckpoint()
+  // succeeded, which let a retire that never unblocked dispatch pass as green.
+  const dispatchRefused = (): boolean => {
+    const cp = readCheckpoint('UTV2-1729', dir);
+    return Boolean(cp) && !isRetiredEpoch(cp!.epoch) && cp!.epoch.objective_identity !== CONTRACT_HASH;
+  };
+
+  assert.equal(dispatchRefused(), true, 'precondition: the stale epoch blocks dispatch');
+  const retired = retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  assert.equal(retired.ok, true, retired.reason);
+  assert.equal(dispatchRefused(), false, 'retire must actually unblock dispatch');
+
+  const after = readCheckpoint('UTV2-1729', dir)!;
+  // History stays readable: the superseded identity is preserved, not erased.
+  assert.equal(after.epoch.objective_identity, 'UTV2-1729:codex/utv2-1729-proof-producing-contract');
+  assert.ok(after.epoch.retired_at, 'the epoch records when it was retired');
+  assert.equal(after.epoch.retired_by, 'griff843');
+});
+
+test('UTV2-1732 R1: retire closes the abandoned attempt and unblocks the lane', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+
+  const retired = retireCheckpointEpoch('UTV2-1729', {
+    authority: 'griff843',
+    reason: 'epoch predates task contracts; attempt killed during orchestration',
+    dir,
+    env: {},
+  });
+  assert.equal(retired.ok, true, retired.reason);
+  assert.equal(retired.code, 'execution_checkpoint_retired');
+  assert.equal(retired.closed_attempts, 1);
+  assert.equal(retired.retired_epoch_id, '200c0838-0000-4000-8000-000000000000');
+
+  // The whole point: clear now succeeds where it previously refused.
+  const cleared = clearCheckpoint('UTV2-1729', { dir });
+  assert.equal(cleared.ok, true, cleared.reason);
+  assert.equal(cleared.code, 'execution_checkpoint_cleared');
+});
+
+test('UTV2-1732 R1/R4: an executor cannot retire its own epoch', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const refused = retireCheckpointEpoch('UTV2-1729', {
+    authority: 'griff843',
+    dir,
+    env: { UNIT_TALK_EXECUTION_EPOCH_ID: '200c0838-0000-4000-8000-000000000000' },
+  });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'execution_checkpoint_retire_refused');
+  assert.match(refused.reason, /executors cannot retire their own execution epoch/u);
+});
+
+test('UTV2-1732 R1: retiring requires a named operator authority', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const refused = retireCheckpointEpoch('UTV2-1729', { authority: '   ', dir, env: {} });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, 'execution_checkpoint_retire_refused');
+  assert.match(refused.reason, /requires --authority/u);
+});
+
+// ── UTV2-1732 round 3: retire must not disable the gate or carry stale work ──
+
+test('round3: a retired epoch is never resumed, so retired_at cannot permanently disable the gate', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const cp = readCheckpoint('UTV2-1729', dir)!;
+
+  // beginAttempt kind 'resume' reused epoch verbatim, so retired_at survived
+  // forever and every later dispatch bypassed the contract-hash check — for
+  // exactly the population the migration retires.
+  const plan = buildResumePlan(cp);
+  assert.equal(plan.resumed, false, 'a retired epoch must plan as fresh, never resume');
+  assert.equal(plan.resume_from_phase, EXECUTION_PHASES[0]);
+  assert.throws(
+    () =>
+      beginAttempt({
+        kind: 'resume',
+        issueId: 'UTV2-1729',
+        dir,
+        attemptStartSha: 'b'.repeat(40),
+        timeoutPolicy: resolveExecutionTimeout({ tier: 'T1', reasoningEffort: 'high', phase: 'orient' }),
+      } as never),
+    /was retired by/u,
+    'resuming a retired epoch must be refused outright',
+  );
+});
+
+test('round3: retire archives the retired objective conclusions instead of presenting them as authoritative', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir, {
+    completed_phases: [
+      { epoch_id: '200c0838-0000-4000-8000-000000000000', phase: 'orient', completed_at: '2026-08-22T05:13:25.000Z', attempt: 1, summary: 'OLD OBJECTIVE: mapped the wrong task' },
+    ],
+    findings: [
+      { id: 'f1', epoch_id: '200c0838-0000-4000-8000-000000000000', source_epoch_id: null, phase: 'orient', summary: 'OLD OBJECTIVE finding', recorded_at: '2026-08-22T05:13:25.000Z', attempt: 1 },
+    ],
+  });
+
+  retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  const after = readCheckpoint('UTV2-1729', dir)!;
+
+  assert.equal(after.completed_phases.length, 0, 'phases of the retired objective must not carry forward');
+  assert.equal(after.findings.length, 0, 'findings of the retired objective must not carry forward');
+  assert.equal(after.prior_epochs.length, 1, 'they are archived, not discarded');
+  // The resume brief calls completed phases "authoritative"; presenting work
+  // done against a superseded objective that way is the failure this lane exists
+  // to eliminate.
+  assert.doesNotMatch(buildResumeBrief(after), /OLD OBJECTIVE/u);
 });

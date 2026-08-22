@@ -21,7 +21,6 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -35,7 +34,7 @@ import {
   readManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import { generateExecutionPacket, renderTaskContract, type ExecutionPacket } from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import {
   buildCodexModelArgs,
@@ -45,12 +44,17 @@ import {
 } from './model-routing.js';
 import {
   beginAttempt,
+  buildExecutorCheckpointEnv,
+  buildReworkBrief,
   buildResumeBrief,
   buildResumePlan,
+  EXECUTION_CHECKPOINT_DIR,
   checkpointPath,
   classifyCheckpointLiveness,
   failVisiblyAndRelease,
   finishAttempt,
+  hashExecutionCorrections,
+  isRetiredEpoch,
   readCheckpointState,
   resolveExecutionTimeout,
   type ExecutionCheckpoint,
@@ -272,15 +276,6 @@ export function evaluateExecutionTruth(input: {
   };
 }
 
-function findingsIdentity(checkpoint: ExecutionCheckpoint): string {
-  const payload = checkpoint.findings.map((finding) => ({
-    id: finding.id,
-    phase: finding.phase,
-    summary: finding.summary,
-  }));
-  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-}
-
 function buildExecutionSummary(
   checkpoint: ExecutionCheckpoint,
   resume: ResumePlan,
@@ -462,7 +457,11 @@ export function commitAndPushEvidence(cwd: string, relativeEvidencePath: string,
   return { ok: true, step: 'push', detail: 'committed and pushed' };
 }
 
-export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIdentity): NodeJS.ProcessEnv {
+export function buildCodexChildEnv(
+  cwd: string,
+  stateIdentity: ExecutionStateIdentity,
+  checkpointDir = EXECUTION_CHECKPOINT_DIR,
+): NodeJS.ProcessEnv {
   const stateRoot = path.join(cwd, '.out', 'codex-pnpm-state');
   const dirs = {
     home: path.join(stateRoot, 'home'),
@@ -486,9 +485,7 @@ export function buildCodexChildEnv(cwd: string, stateIdentity: ExecutionStateIde
     npm_config_cache: dirs.cache,
     npm_config_store_dir: dirs.store,
     npm_config_state_dir: dirs.state,
-    UNIT_TALK_EXECUTION_EPOCH_ID: stateIdentity.epoch_id,
-    UNIT_TALK_EXECUTION_ATTEMPT: String(stateIdentity.attempt),
-    UNIT_TALK_EXECUTION_MINIMUM_REVISION: String(stateIdentity.minimum_revision),
+    ...buildExecutorCheckpointEnv(checkpointDir, stateIdentity),
   };
 }
 
@@ -533,6 +530,8 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
     `Tier: ${packet.tier}`,
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
+    ``,
+    renderTaskContract(packet.task_contract),
     ``,
     `## Allowed file scope`,
     packet.allowed_file_scope.map(f => `- ${f}`).join('\n'),
@@ -672,6 +671,20 @@ async function main(): Promise<void> {
     } satisfies CodexExecResult);
     process.exit(1);
   }
+  if (
+    rework &&
+    (!existingCheckpoint!.correction_authority || existingCheckpoint!.pending_actions.length === 0)
+  ) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        'cannot start rework without an authorized exact correction brief; record it with ops:exec-checkpoint correction after the rejected attempt closes',
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
 
   const resumePlan = rework
     ? {
@@ -687,14 +700,42 @@ async function main(): Promise<void> {
   });
 
   const resumeBrief = rework
-    ? [
-        '## Execution checkpoint — REWORK EPOCH',
-        '',
-        'A new rework epoch will bind the current reviewed head as its immutable baseline.',
-        'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
-      ].join('\n')
+    ? buildReworkBrief(existingCheckpoint!)
     : buildResumeBrief(existingCheckpoint);
-  const packet = generateExecutionPacket(manifest);
+  // UTV2-1732 R3: a task-contract failure is the failure mode this lane
+  // introduces, so it must surface as a parseable CodexExecResult rather than a
+  // bare stderr string from the top-level catch. claude-exec.ts already does
+  // this; the two executors must fail identically.
+  let packet: ExecutionPacket;
+  try {
+    packet = generateExecutionPacket(manifest);
+  } catch (error) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `task contract unavailable: ${error instanceof Error ? error.message : String(error)}`,
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
+  if (
+    existingCheckpoint &&
+    !isRetiredEpoch(existingCheckpoint.epoch) &&
+    existingCheckpoint.epoch.objective_identity !== packet.task_contract.contract_hash
+  ) {
+    emitJson({
+      ok: false,
+      code: 'PRECONDITION_FAILED',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message:
+        'checkpoint epoch is not bound to the current task contract hash; ' +
+        `run \`pnpm ops:exec-checkpoint retire --issue ${issueId} --authority <operator>\` to retire the ` +
+        'superseded epoch, then re-dispatch',
+    } satisfies CodexExecResult);
+    process.exit(2);
+  }
   const prompt = buildCodexPrompt(packet, resumeBrief);
   const plannedHead = currentHeadSha(resolvedCwd);
   if (!plannedHead) {
@@ -810,8 +851,8 @@ async function main(): Promise<void> {
         ...commonAttempt,
         kind: 'rework',
         rejectedHeadSha: plannedHead,
-        objectiveIdentity: `${issueId}:${manifest.branch}`,
-        findingsIdentity: findingsIdentity(existingCheckpoint!),
+        objectiveIdentity: packet.task_contract.contract_hash,
+        findingsIdentity: hashExecutionCorrections(existingCheckpoint!),
         authority: 'codex-exec',
       })
     : existingCheckpoint
@@ -820,7 +861,7 @@ async function main(): Promise<void> {
           ...commonAttempt,
           kind: 'fresh',
           currentHeadSha: plannedHead,
-          objectiveIdentity: `${issueId}:${manifest.branch}`,
+          objectiveIdentity: packet.task_contract.contract_hash,
           authority: 'codex-exec',
         });
   const executionSummary = buildExecutionSummary(
