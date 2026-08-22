@@ -37,6 +37,8 @@ import {
   recordPhaseComplete as recordPhaseCompleteWithIdentity,
   requestCancel,
   resolveExecutionTimeout,
+  isRetiredEpoch,
+  readCheckpoint,
   retireCheckpointEpoch,
   writeCheckpoint,
   type ExecutionPhase,
@@ -76,7 +78,7 @@ test('closed checkpoints accept one authorized immutable correction brief and bi
     env: { UNIT_TALK_EXECUTION_EPOCH_ID: fresh.identity.epoch_id },
   });
   assert.equal(denied.ok, false);
-  assert.match(denied.reason, /executors cannot rewrite/);
+  assert.match(denied.reason, /executors do not rewrite/);
 
   const recorded = recordReworkCorrections(
     issueId,
@@ -979,6 +981,30 @@ test('UTV2-1732 R1: clear refuses the real stuck UTV2-1729 shape (the trap)', ()
   const cleared = clearCheckpoint('UTV2-1729', { dir });
   assert.equal(cleared.ok, false);
   assert.equal(cleared.code, 'execution_checkpoint_active');
+});
+
+test('UTV2-1732 R1: retire clears the dispatch refusal itself, not merely clear()', () => {
+  const dir = tmpDir();
+  writeLegacyStuckCheckpoint(dir);
+  const CONTRACT_HASH = 'f'.repeat(64);
+  // This is the exact predicate codex-exec.ts / claude-exec.ts gate dispatch on.
+  // The earlier version of this test asserted only that clearCheckpoint()
+  // succeeded, which let a retire that never unblocked dispatch pass as green.
+  const dispatchRefused = (): boolean => {
+    const cp = readCheckpoint('UTV2-1729', dir);
+    return Boolean(cp) && !isRetiredEpoch(cp!.epoch) && cp!.epoch.objective_identity !== CONTRACT_HASH;
+  };
+
+  assert.equal(dispatchRefused(), true, 'precondition: the stale epoch blocks dispatch');
+  const retired = retireCheckpointEpoch('UTV2-1729', { authority: 'griff843', dir, env: {} });
+  assert.equal(retired.ok, true, retired.reason);
+  assert.equal(dispatchRefused(), false, 'retire must actually unblock dispatch');
+
+  const after = readCheckpoint('UTV2-1729', dir)!;
+  // History stays readable: the superseded identity is preserved, not erased.
+  assert.equal(after.epoch.objective_identity, 'UTV2-1729:codex/utv2-1729-proof-producing-contract');
+  assert.ok(after.epoch.retired_at, 'the epoch records when it was retired');
+  assert.equal(after.epoch.retired_by, 'griff843');
 });
 
 test('UTV2-1732 R1: retire closes the abandoned attempt and unblocks the lane', () => {

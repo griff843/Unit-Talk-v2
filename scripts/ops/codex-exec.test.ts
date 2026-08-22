@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { buildCodexModelArgs, loadModelRoutingPolicy } from './model-routing.js';
-import { buildTaskContract, renderTaskContract } from './execution-packet.js';
+import { buildTaskContract, readTaskContract, renderTaskContract } from './execution-packet.js';
 import {
   buildCodexChildEnv,
   buildCodexPrompt,
@@ -705,27 +705,36 @@ test('operator cancellation is honoured before any codex process is spawned', ()
 
 // ── UTV2-1732 R3/R5: fail legibly, and claim only what is enforced ──────────
 
-test('UTV2-1732 R3: packet generation failure is wrapped, not left to the top-level catch', () => {
-  const source = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
-  const call = source.indexOf('packet = generateExecutionPacket(manifest);');
-  assert.ok(call > 0, 'generateExecutionPacket call must exist');
-  // The call must sit inside a try whose catch emits the structured result, so
-  // a task-contract failure is parseable by callers instead of a bare stderr
-  // string. claude-exec.ts already did this; the two must fail identically.
-  const preceding = source.slice(Math.max(0, call - 400), call);
-  assert.match(preceding, /try\s*\{/u, 'the call must be inside a try block');
-  const following = source.slice(call, call + 700);
-  assert.match(following, /catch\s*\(/u, 'the call must have a catch');
-  assert.match(following, /task contract unavailable/u);
-  assert.match(following, /PRECONDITION_FAILED/u);
+test('UTV2-1732 R3: packet generation really throws when the task contract is absent', () => {
+  // The behavioural half: this is the throw codex-exec must catch. Driving the
+  // whole binary end-to-end is not viable here — several unrelated
+  // preconditions (manifest presence, executor kind, cwd) fail first, so the
+  // test would assert on whichever guard happens to be ordered first.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1732-r3-'));
+  fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+  assert.throws(
+    () => readTaskContract('UTV2-9100', dir),
+    /task contract is absent/u,
+    'an absent contract must throw, so the wrapper has something to catch',
+  );
 });
 
-test('UTV2-1732 R1: the stale-epoch refusal names the sanctioned recovery command', () => {
-  const source = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
-  const idx = source.indexOf('checkpoint epoch is not bound to the current task contract hash');
-  assert.ok(idx > 0, 'the stale-epoch refusal must exist');
-  // A refusal that does not say how to recover is how UTV2-1729 sat stuck.
-  assert.match(source.slice(idx, idx + 400), /ops:exec-checkpoint retire/u);
+/**
+ * Structural check, stated as such: it asserts the catch exists and emits the
+ * agreed code in BOTH executors. It is weaker than an invocation and is not
+ * offered as proof of runtime behaviour — the throw is covered above.
+ */
+test('UTV2-1732 R3: both executors wrap packet generation and emit the same code', () => {
+  const codex = fs.readFileSync(new URL('./codex-exec.ts', import.meta.url), 'utf8');
+  const claude = fs.readFileSync(new URL('./claude-exec.ts', import.meta.url), 'utf8');
+  for (const [name, src] of [['codex-exec', codex], ['claude-exec', claude]] as const) {
+    const call = src.indexOf('generateExecutionPacket(manifest');
+    assert.ok(call > 0, `${name} must generate a packet`);
+    const window = src.slice(Math.max(0, call - 500), call + 800);
+    assert.match(window, /try\s*\{/u, `${name} must wrap packet generation`);
+    assert.match(window, /catch\s*\(/u, `${name} must catch it`);
+    assert.match(window, /PRECONDITION_FAILED/u, `${name} must emit the agreed code`);
+  }
 });
 
 test('UTV2-1732 R5: the rendered contract claims integrity, not immutability', () => {
@@ -735,13 +744,23 @@ test('UTV2-1732 R5: the rendered contract claims integrity, not immutability', (
     url: 'https://linear.app/unit-talk-v2/issue/UTV2-9003',
     description: '## Objective\n\nShip it.\n\n## Acceptance Criteria\n\n- It ships\n',
   });
+  // Assert every executor-facing surface that feeds buildCodexPrompt, not just
+  // renderTaskContract. Scoping this to one renderer let buildReworkBrief's
+  // "remains immutable" survive into the prompt the executor actually reads.
   const rendered = renderTaskContract(contract);
   assert.match(rendered, /integrity hash/u);
+  assert.doesNotMatch(rendered, /immutable/iu, 'the contract render must not claim immutability');
+
+  const source = fs.readFileSync(new URL('./execution-checkpoint.ts', import.meta.url), 'utf8');
+  const briefStart = source.indexOf('function buildReworkBrief');
+  assert.ok(briefStart > 0);
+  const briefBody = source.slice(briefStart, briefStart + 2000);
   assert.doesNotMatch(
-    rendered,
+    briefBody,
     /immutable/iu,
-    'the hash is drift detection, not tamper-proofing — do not overclaim',
+    'the rework brief is rendered straight into the prompt and must not claim immutability either',
   );
+
   // The prompt must also forbid inferring the task from surroundings, which is
   // exactly what three blind epochs did.
   assert.match(rendered, /Do not infer the task from the branch name/u);

@@ -238,18 +238,52 @@ function sectionItems(markdown: string, headings: string[]): string[] {
  */
 function deriveRequirementLines(markdown: string): string[] {
   const OBLIGATION = /\b(?:must|must not|shall|required|require[sd]?|cannot|may not|do not|never|ensure|verify|prove)\b/iu;
+  /**
+   * Sections whose contents are explicitly NOT the work. Promoting an item from
+   * "Explicitly EXCLUDED" into acceptance criteria inverts its meaning, so these
+   * are skipped entirely rather than mined.
+   */
+  const EXCLUDED_SECTION =
+    /^(?:explicitly\s+)?(?:excluded|out of scope|non[- ]goals?|scope\s*[—-]\s*excluded)\b/iu;
+  /** Ownership/metadata sections describe who, not what must be true. */
+  const METADATA_SECTION = /^(?:ownership|authority|review budget|sequencing|provenance|tier)\b/iu;
+  /** An item that is only a link, mention, issue ref, or code fragment is not an obligation. */
+  const REFERENCE_ONLY = /^(?:\[[^\]]*\]\([^)]*\)|@[\w-]+|UTV2-\d+|https?:\/\/\S+)[.,;]?$/iu;
+  const CODE_FRAGMENT = /^[`~]|[;{}]\s*$|^(?:const|let|var|function|import|export|return)\s/u;
+
   const derived: string[] = [];
+  let inFence = false;
+  let skipSection = false;
+
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trim();
-    if (!line || /^#{1,6}\s/u.test(line) || /^```/u.test(line)) continue;
-    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
-    const candidate = (listItem?.[1] ?? line).trim();
-    if (!candidate) continue;
-    // A bare list item is a requirement in context; prose needs an obligation verb.
-    if (listItem || OBLIGATION.test(candidate)) {
-      const flattened = candidate.replace(/\s+/gu, ' ').trim();
-      if (flattened && !derived.includes(flattened)) derived.push(flattened);
+    // Fenced blocks are examples, diffs and command transcripts — never criteria.
+    // Track the whole block, not just the fence lines.
+    if (/^(?:```|~~~)/u.test(line)) {
+      inFence = !inFence;
+      continue;
     }
+    if (inFence || !line) continue;
+
+    const heading = /^#{1,6}\s+(.+?)\s*$/u.exec(line);
+    if (heading) {
+      const title = (heading[1] ?? '').replace(/[*_`]/gu, '').trim();
+      skipSection = EXCLUDED_SECTION.test(title) || METADATA_SECTION.test(title);
+      continue;
+    }
+    if (skipSection) continue;
+
+    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+    const candidate = (listItem?.[1] ?? line).replace(/\s+/gu, ' ').trim();
+    if (!candidate) continue;
+
+    const bare = candidate.replace(/[*_`]/gu, '').trim();
+    if (!bare || REFERENCE_ONLY.test(bare) || CODE_FRAGMENT.test(candidate)) continue;
+    // A bare list item reads as a requirement in context; prose needs a verb.
+    if (!listItem && !OBLIGATION.test(candidate)) continue;
+    // A list item that is only a "Label: value" pair is metadata, not an obligation.
+    if (listItem && /^[A-Z][\w .-]{0,28}:\s*\S+$/u.test(bare) && !OBLIGATION.test(candidate)) continue;
+    if (!derived.includes(candidate)) derived.push(candidate);
   }
   return derived;
 }
@@ -316,7 +350,7 @@ export function buildTaskContract(
     ...expectedProofPaths.map((proofPath) => `Produce and validate ${proofPath}`),
   ];
   if (requiredEvidence.length === 0) {
-    requiredEvidence.push(...effectiveAcceptance.filter((entry) => /\b(?:proof|evidence|test|review|verify|verification)\b/iu.test(entry)));
+    requiredEvidence.push(...effectiveAcceptance.filter((entry) => /\b(?:proofs?|evidence|tests?|reviews?|verif(?:y|ies|ied|ication)|coverage|regression)\b/iu.test(entry)));
   }
 
   const content: Omit<TaskContract, 'contract_hash'> = {

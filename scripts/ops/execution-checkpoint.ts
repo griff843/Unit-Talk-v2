@@ -230,6 +230,24 @@ export interface ExecutionEpoch {
   findings_identity: string;
   created_at: string;
   authority: string;
+  /**
+   * Set when an operator retires this epoch. A retired epoch no longer binds
+   * dispatch: its `objective_identity` is deliberately left intact so the
+   * history stays readable, and consumers key on this field instead of
+   * comparing a superseded identity they can never satisfy.
+   */
+  retired_at?: string;
+  retired_by?: string;
+  retired_reason?: string;
+}
+
+/**
+ * True when an epoch has been retired by an operator and must no longer gate
+ * dispatch. Exported so `codex-exec` and `claude-exec` share one definition
+ * rather than each re-deriving it (UTV2-1732).
+ */
+export function isRetiredEpoch(epoch: ExecutionEpoch | undefined | null): boolean {
+  return Boolean(epoch?.retired_at);
 }
 
 export interface ArchivedExecutionEpoch {
@@ -745,7 +763,7 @@ export function buildReworkBrief(checkpoint: ExecutionCheckpoint): string {
   const lines = [
     '## Execution checkpoint — REWORK EPOCH',
     '',
-    'The original task contract remains immutable. This epoch starts from the reviewed head and must resolve every item below.',
+    'The original task contract is unchanged and still governs. This epoch starts from the reviewed head and must resolve every item below.',
     '',
     `Corrections hash: \`${hashExecutionCorrections(checkpoint)}\``,
     `Authorized by: ${checkpoint.correction_authority ?? '(missing — rework must fail closed)'}`,
@@ -1096,7 +1114,7 @@ export function recordReworkCorrections(
       ok: false,
       code: 'execution_rework_corrections_refused',
       checkpoint: null,
-      reason: 'executor identity is present; executors cannot rewrite their own task or correction contract',
+      reason: 'executor identity is present; executors do not rewrite their own task or correction contract',
     };
   }
   if (!options.authority.trim() || normalized.length === 0) {
@@ -1210,9 +1228,11 @@ export interface RetireCheckpointResult {
  * clear. This closes the abandoned attempts, records why, and marks the epoch
  * retired, leaving the history readable instead of deleting it.
  *
- * Operator-only: refuses when executor identity is present, on the same grounds
- * as `recordReworkCorrections` — an executor must not be able to retire the
- * epoch that binds it to its own work order.
+ * Operator-hygiene guard, not a trust boundary: it refuses when executor
+ * identity env vars are present, on the same grounds as
+ * `recordReworkCorrections`. An executor with a shell can strip those vars
+ * (`env -u ...`), so this catches accident and convention drift, not a
+ * determined executor. Real containment is review of the resulting diff.
  */
 export function retireCheckpointEpoch(
   issueId: string,
@@ -1269,6 +1289,14 @@ export function retireCheckpointEpoch(
           closed += 1;
         }
       }
+      // Mark the epoch itself retired. Leaving objective_identity intact keeps
+      // the history readable; consumers gate on retired_at instead, so a lane
+      // whose epoch predates task contracts becomes dispatchable again without
+      // deleting its record (UTV2-1732, round-2 review finding 2).
+      checkpoint.epoch.retired_at = retiredAt;
+      checkpoint.epoch.retired_by = options.authority.trim();
+      checkpoint.epoch.retired_reason =
+        options.reason?.trim() || 'epoch superseded; retired by operator';
       checkpoint.status = 'failed';
       checkpoint.updated_at = retiredAt;
       checkpoint.last_activity_at = retiredAt;
@@ -1283,16 +1311,22 @@ export function retireCheckpointEpoch(
         reason:
           `retired epoch ${checkpoint.epoch.epoch_id} (objective identity ` +
           `"${checkpoint.epoch.objective_identity}"), closing ${closed} abandoned attempt(s); ` +
-          `${issueId} can now be cleared or re-dispatched`,
+          `${issueId} is now dispatchable — the retired epoch no longer binds`,
       };
     });
-  } catch {
-    return {
-      ...base,
-      ok: false,
-      code: 'execution_checkpoint_busy',
-      reason: `checkpoint for ${issueId} is locked by another mutation`,
-    };
+  } catch (error) {
+    // Only lock contention is "busy". Reporting EACCES or a corrupt checkpoint
+    // as contention sends an operator chasing a race that is not happening.
+    const message = error instanceof Error ? error.message : String(error);
+    if (/lock|EEXIST|contention/iu.test(message)) {
+      return {
+        ...base,
+        ok: false,
+        code: 'execution_checkpoint_busy',
+        reason: `checkpoint for ${issueId} is locked by another mutation`,
+      };
+    }
+    throw error;
   }
 }
 

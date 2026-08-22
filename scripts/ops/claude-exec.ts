@@ -44,6 +44,7 @@ import {
   EXECUTION_CHECKPOINT_DIR,
   finishAttempt,
   hashExecutionCorrections,
+  isRetiredEpoch,
   readCheckpointState,
   resolveExecutionTimeout,
 } from './execution-checkpoint.js';
@@ -321,6 +322,7 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
   }
   if (
     existingCheckpoint &&
+    !isRetiredEpoch(existingCheckpoint.epoch) &&
     existingCheckpoint.epoch.objective_identity !== packet.task_contract.contract_hash
   ) {
     emitJson({
@@ -329,7 +331,9 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
       issue_id: issueId,
       branch: manifest.branch,
       message:
-        'checkpoint epoch is not bound to the current immutable task contract hash; refusing to resume or rework',
+        'checkpoint epoch is not bound to the current task contract hash; ' +
+        `run \`pnpm ops:exec-checkpoint retire --issue ${issueId} --authority <operator>\` to retire the ` +
+        'superseded epoch, then re-dispatch',
     } satisfies ClaudeExecResult);
     return 2;
   }

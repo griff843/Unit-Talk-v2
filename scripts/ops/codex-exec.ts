@@ -54,6 +54,7 @@ import {
   failVisiblyAndRelease,
   finishAttempt,
   hashExecutionCorrections,
+  isRetiredEpoch,
   readCheckpointState,
   resolveExecutionTimeout,
   type ExecutionCheckpoint,
@@ -720,6 +721,7 @@ async function main(): Promise<void> {
   }
   if (
     existingCheckpoint &&
+    !isRetiredEpoch(existingCheckpoint.epoch) &&
     existingCheckpoint.epoch.objective_identity !== packet.task_contract.contract_hash
   ) {
     emitJson({

@@ -279,11 +279,11 @@ export function captureOrReadTaskContract(
   const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
   if (expectedContractHash) {
     if (!fs.existsSync(syncPath) || !/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(fs.readFileSync(syncPath, 'utf8'))) {
-      throw new Error(`task contract for ${issueId} was removed after its immutable hash was bound to the manifest`);
+      throw new Error(`task contract for ${issueId} was removed after its hash was bound to the manifest`);
     }
     const contract = readTaskContract(issueId, root);
     if (contract.contract_hash !== expectedContractHash) {
-      throw new Error(`task contract hash does not match the immutable manifest binding for ${issueId}`);
+      throw new Error(`task contract hash does not match the manifest binding for ${issueId}`);
     }
     return contract;
   }
