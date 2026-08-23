@@ -1,4 +1,17 @@
-# UTV2-1734 Executor Work-Order Verification
+# PROOF: UTV2-1734 Executor Work-Order Verification
+MERGE_SHA: pending
+
+ASSERTIONS:
+- [x] Claude and Codex receive the same integrity-bound Linear task contract.
+- [x] Missing or malformed contracts fail closed at both executor boundaries with structured JSON, exit code 2, and no executor continuation.
+- [x] Pre-contract lanes capture, persist, render, and dispatch through the sanctioned compatibility path.
+- [x] Linear credentials are excluded from child-process arguments.
+- [x] Required static, focused, runtime, and R-level checks pass; writable DB proof is explicitly deferred as directed.
+
+EVIDENCE:
+- Focused executor suite: 95 passed, 0 failed.
+- Static gate, type-check, root tests, dry-run runtime proof, and R-level check: PASS.
+- Evidence sidecars: `evidence.json` and `model-routing.json`.
 
 ## Verification
 
@@ -7,6 +20,7 @@
 - `pnpm verify:static` — PASS (exit 0): DB-client boundary, sync, system alignment, automation coverage, env, lint, type-check, build, root test suite, smart-form verification, command manifest, and migration lint all passed.
 - `pnpm exec tsx --test 'scripts/ops/claude-exec.test.ts' 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-packet.test.ts' 'scripts/ops/lane-start.test.ts'` — PASS: 95 tests, 95 passed, 0 failed.
 - `pnpm ops:codex-exec -- --issue UTV2-1734 --dry-run` — PASS (exit 0); the sanctioned entry point generated a Codex invocation and showed the authoritative task-contract hash and Objective section before the repo brief.
+- `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — PASS; no R-level rules matched the changed paths.
 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
 
