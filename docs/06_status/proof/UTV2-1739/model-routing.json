@@ -3,5 +3,7 @@
   "executor": "claude",
   "model": "claude-opus-5",
   "lane_type": "runtime",
-  "tier": "T1"
+  "tier": "T1",
+  "override_used": false,
+  "routing_note": "Manifest-selected routing; no model override was applied."
 }

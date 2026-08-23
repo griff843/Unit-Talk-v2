@@ -41,10 +41,15 @@
       "pass": 20,
       "fail": 0
     },
-    "type_check_scope_caveat": "scripts/ is outside every tsconfig project reference, so pnpm type-check does not enforce types in this file. The regression guard for the retry column is the test and the live schema assertion below, not the compiler."
+    "type_check_scope_caveat": "scripts/ is outside every tsconfig project reference, so pnpm type-check does not enforce types in this file. The regression guard for the retry column is the test and the live schema assertion below, not the compiler.",
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "10 changed files; rules matched: (none) — no R-level artifacts required for this diff"
+    }
   },
   "runtime_proof": {
-    "status": "READ_ONLY_PRODUCTION_PASS_WRITABLE_STAGING_PENDING_CI",
+    "status": "PASS",
     "target": "zfzdnfwdarxucxtaojxm (production, READ-ONLY)",
     "queries": [
       {
@@ -91,9 +96,9 @@
     },
     "writable_staging_proof": {
       "command": "pnpm test:db",
-      "status": "PENDING_CI_STAGING",
+      "status": "PASS_IN_CI",
       "required_project_ref": "xskgrzbteyqdufktjrjx",
-      "note": "Writable proof runs only in the governed staging-ci environment with CI_SUPABASE_* credentials. It is not claimed here and must be green on the exact final head before this lane closes."
+      "evidence": "CI checks \"Writable DB proof (staging only)\" and \"Require live-DB proof for runtime changes\" both succeeded on this head. Produced by CI in the governed staging-ci environment, not asserted by the executor."
     },
     "production_mutation_performed": false,
     "fabricated_queries_or_row_counts": false
@@ -106,10 +111,9 @@
   },
   "sign_off": {
     "static_proof_status": "PASS",
-    "runtime_proof_status": "READ_ONLY_PRODUCTION_PASS_WRITABLE_STAGING_PENDING_CI",
+    "runtime_proof_status": "PASS",
     "ready_for_pm_review": false,
     "pending": [
-      "writable staging proof green on the exact final head",
       "one durable independent review bound to the exact final head"
     ]
   }

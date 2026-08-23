@@ -26,8 +26,8 @@ That classification waived the runtime proof requirement. This bundle is
 - [x] Production thresholds clamp to a 60-minute floor matching the measured
   scheduler cadence, and the floor honours larger operator values.
 - [x] Delivery stays canary-only; system picks, SGO and ingestion stay disabled.
-- [ ] Writable staging proof (`pnpm test:db`) green on the exact final head —
-  **pending CI**, not claimed here.
+- [x] Writable staging proof green in CI on this head — produced by CI's
+  `Writable DB proof (staging only)` job, not asserted by the executor.
 - [ ] One durable independent review bound to the exact final head — **pending**.
 
 ## EVIDENCE:
@@ -36,7 +36,8 @@ That classification waived the runtime proof requirement. This bundle is
 verify:static: PASS (exit 0)
 focused runtime: PASS (20 tests, 0 failed)
 runtime proof: READ-ONLY production queries PASS
-writable staging proof: PENDING_CI (xskgrzbteyqdufktjrjx)
+writable staging proof: PASS in CI (staging-ci)
+r-level check: PASS (10 changed files, no rules matched)
 ```
 
 ## Verification
@@ -46,7 +47,8 @@ writable staging proof: PENDING_CI (xskgrzbteyqdufktjrjx)
 | `pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'` | PASS | 20 tests passed, 0 failed. |
 | `pnpm verify:static` | PASS | Exit 0. |
 | Live schema assertion | PASS | 7 of 8 read columns present; `provider_offers.updated_at` ABSENT as expected. |
-| `pnpm test:db` (writable, staging) | PENDING_CI | Runs only in the governed `staging-ci` environment. Not claimed here. |
+| `pnpm test:db` (writable, staging) | PASS (CI) | `Writable DB proof (staging only)` and `Require live-DB proof for runtime changes` both succeeded in CI on this head. Produced by CI, not asserted by the executor. |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 10 changed files. Rules matched: (none) — no R-level artifacts required for this diff. |
 
 ### Runtime proof — read-only, against production
 
@@ -99,5 +101,4 @@ scripts/ingestor-alert-check.ts                | 807 ++++++++++++++++++++-----
 
 ### Pending external evidence
 
-- Writable `pnpm test:db` in `staging-ci` on the exact final head.
-- One durable independent review bound to that head. One correction cycle maximum.
+- One durable independent review bound to the exact final head. One correction cycle maximum.
