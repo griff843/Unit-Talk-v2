@@ -37,7 +37,7 @@ verify:static: PASS (exit 0)
 focused runtime: PASS (20 tests, 0 failed)
 runtime proof: READ-ONLY production queries PASS
 writable staging proof: PASS in CI (staging-ci)
-r-level check: PASS (10 changed files, no rules matched)
+r-level check: PASS (9 changed files, no rules matched)
 ```
 
 ## Verification
@@ -48,7 +48,7 @@ r-level check: PASS (10 changed files, no rules matched)
 | `pnpm verify:static` | PASS | Exit 0. |
 | Live schema assertion | PASS | 7 of 8 read columns present; `provider_offers.updated_at` ABSENT as expected. |
 | `pnpm test:db` (writable, staging) | PASS (CI) | `Writable DB proof (staging only)` and `Require live-DB proof for runtime changes` both succeeded in CI on this head. Produced by CI, not asserted by the executor. |
-| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 10 changed files. Rules matched: (none) — no R-level artifacts required for this diff. |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 9 changed files. Rules matched: (none) — no R-level artifacts required for this diff. |
 
 ### Runtime proof — read-only, against production
 

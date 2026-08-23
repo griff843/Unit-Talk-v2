@@ -30,8 +30,9 @@
       "scripts/ingestor-alert-check.ts",
       "scripts/ingestor-alert-check.test.ts"
     ],
-    "changed_files": 6,
-    "substantive_diff_stat": "3 files changed, 1279 insertions(+), 163 deletions(-)"
+    "changed_files": 9,
+    "substantive_diff_stat": "3 files changed, 1279 insertions(+), 163 deletions(-)",
+    "changed_files_note": "Count at this head. An earlier revision recorded 6, which was the count at verified_source_sha before the proof artifacts were added, and 10, which was the count before the redundant proof-directory placeholder was removed. Both are superseded."
   },
   "static_proof": {
     "verify_static": "PASS (exit 0)",
@@ -45,7 +46,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "detail": "10 changed files; rules matched: (none) — no R-level artifacts required for this diff"
+      "detail": "9 changed files; rules matched: (none) — no R-level artifacts required for this diff"
     }
   },
   "runtime_proof": {
