@@ -10,7 +10,7 @@ Pre-merge this anchor identifies the complete committed lane source after PR bin
 
 ## ASSERTIONS:
 
-- [x] A scheduled live-mode detection and notification pass executes every five minutes while autonomous system picks remain disabled.
+- [x] A scheduled live-mode detection and notification pass is configured on a five-minute cron (`*/5`) while autonomous system picks remain disabled. **Measured effective cadence is roughly 28 minutes** — GitHub Actions does not honour a five-minute schedule under load (observed gaps of 20/29/36/49/18/24/21 minutes across the last eight runs). Detection latency against a 53-day outage is unaffected, but the `offers` and `cycle` checks clamp to a five-minute threshold under `--production-cadence`, so a real ~28-minute cadence will produce routine false CRITICALs once ingestion resumes. That clamp is pre-existing on `main`, not introduced here, and is recorded as a follow-up rather than silently tuned inside this lane.
 - [x] An independent `always()` monitor treats stale ingestion, alerting silence, failed notification runs, and unreachable monitoring state as critical.
 - [x] The focused runtime proof induces and observes detection persistence, canary notification, and successful detection/notification run receipts.
 - [x] Static repository verification passes; writable DB proof is truthfully deferred to governed staging CI.
@@ -101,6 +101,8 @@ ELIFECYCLE Command failed with exit code 1.
 ### Safety posture
 
 The workflow explicitly keeps `SYSTEM_PICKS_ENABLED=false`. It restores real Discord delivery with `ALERT_DRY_RUN=false` without enabling autonomous system-pick submission. The workflow does not add or activate any blocked Discord target.
+
+**Member-facing fan-out — disclosed, not blocked.** `ALERT_MIN_TIER` is unset, so it defaults to `watch`, and `resolveChannels` fans an `alert-worthy` signal to `discord:canary` **and `discord:trader-insights`**, which is a live VIP+ member-facing channel. No delivery can occur while ingestion is dead, but this path becomes live the moment ingestion resumes. The targets are sanctioned rather than blocked, so this is a disclosure and a merge-timing consideration, not a safety violation. An earlier revision of this section named only canary and omitted the member-facing target; that omission is corrected here. Setting `ALERT_MIN_TIER` to a higher threshold would confine delivery to canary if the PM prefers that until unpark.
 
 ### Pending external evidence
 
