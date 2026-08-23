@@ -359,7 +359,7 @@ test('undelivered detections are retried without duplicating delivered ones', ()
     created_at: new Date(now.getTime() - minutesAgo * 60_000).toISOString(),
     baseline_snapshot_at: new Date(now.getTime() - minutesAgo * 60_000).toISOString(),
     current_snapshot_at: new Date(now.getTime() - minutesAgo * 60_000).toISOString(),
-    bookmaker_key: null,
+    bookmaker_key: 'draftkings',
     cooldown_expires_at: null,
     direction: 'up',
     event_id: 'evt',
@@ -412,6 +412,15 @@ test('production threshold floor raises low values without disabling the env kno
   // both of these knobs dead.
   assert.equal(at('120', '90').offers, 120);
   assert.equal(at('120', '90').cycle, 90);
+});
+
+test('the scheduled workflow pins the self-monitor threshold to the observed cadence', () => {
+  const workflow = readFileSync('.github/workflows/ingestor-staleness-alert.yml', 'utf8');
+  // 15 would mark a healthy system stale: the runs this threshold watches are
+  // produced by the same throttled scheduler (~28 min effective cadence).
+  assert.match(workflow, /ALERT_SYSTEM_STALE_MINUTES: \$\{\{ vars\.ALERT_SYSTEM_STALE_MINUTES \|\| '60' \}\}/u);
+  // Member-facing delivery must stay off by default.
+  assert.match(workflow, /ALERT_MEMBER_CHANNELS_ENABLED: 'false'/u);
 });
 
 test('member targets are stripped from the resolvable map unless activated', () => {
@@ -520,5 +529,52 @@ test('an alert-worthy pass delivers to canary, refuses the member channel, and i
     else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
     if (originalActivation === undefined) delete process.env[MEMBER_CHANNELS_ENABLED_ENV];
     else process.env[MEMBER_CHANNELS_ENABLED_ENV] = originalActivation;
+  }
+});
+
+test('the scheduled pass restores the global target map it mutated', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'utv2-1735-induced-event',
+    sportId: 'NBA',
+    eventName: 'UTV2-1735 Env Restore',
+    eventDate: '2026-08-23',
+    status: 'scheduled',
+    metadata: { proofIssue: 'UTV2-1735' },
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOffer('4.5', '2026-08-23T10:00:00.000Z', 'restore-baseline'),
+    makeOffer('9.0', '2026-08-23T10:30:00.000Z', 'restore-current'),
+  ]);
+
+  const originalBotToken = process.env.DISCORD_BOT_TOKEN;
+  const originalTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  // apps/api and apps/worker read this variable directly from process.env, so a
+  // canary-only map left behind would silently stop their Discord delivery.
+  const supplied = JSON.stringify({
+    'discord:canary': '1296531122234327100',
+    'discord:trader-insights': '1296531122234327999',
+    'discord:best-bets': '1296531122234327888',
+  });
+  process.env.DISCORD_BOT_TOKEN = 'utv2-1735-test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = supplied;
+
+  try {
+    await runScheduledAlertPass(repositories, {
+      environment: {
+        ALERT_AGENT_ENABLED: 'true',
+        ALERT_DRY_RUN: 'false',
+        ALERT_MIN_TIER: 'notable',
+      },
+      now: new Date('2026-08-23T10:35:00.000Z'),
+      fetchImpl: async () => new Response('{}', { status: 200 }),
+      sleepImpl: async () => {},
+    });
+    assert.equal(process.env.UNIT_TALK_DISCORD_TARGET_MAP, supplied);
+  } finally {
+    if (originalBotToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = originalBotToken;
+    if (originalTargetMap === undefined) delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
   }
 });

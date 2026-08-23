@@ -192,8 +192,14 @@ export function buildChannelGuardedFetch(
  * never repeated.
  */
 /**
- * Removes every non-canary Discord target from the resolvable target map unless
- * member-facing delivery has been explicitly activated.
+ * Reduces the resolvable Discord target map to canary only, unless member-facing
+ * delivery has been explicitly activated.
+ *
+ * Note the exact behaviour: this is a canary-only allowlist, not a member-only
+ * strip. Every non-canary target is removed, including non-member ones such as
+ * `discord:best-bets`. That is deliberate for this scheduled alerting pass,
+ * which only ever delivers to canary, and it fails closed for any target added
+ * to the map later.
  *
  * This is the primary enforcement point. The delivery loop skips any channel
  * that `resolveDiscordChannelId` cannot resolve (`continue`, no attempt, no
@@ -445,7 +451,12 @@ export async function runScheduledAlertPass(
   let submittedSignals = detection.persistedSignals;
   let retriedCount = 0;
   try {
-    const recent = await repositories.alertDetections.listRecent(200, undefined);
+    // listRecent orders by current_snapshot_at DESC with no `notified` filter, so
+    // the limit truncates BEFORE the age cutoff is applied. Too small a limit
+    // would silently drop an undelivered alert behind newer delivered ones --
+    // the same failure mode as reading a column that does not exist. Production
+    // currently holds 176 undelivered rows, so 200 was uncomfortably close.
+    const recent = await repositories.alertDetections.listRecent(2000, undefined);
     const merged = mergeUndeliveredDetections(detection.persistedSignals, recent, now, 240);
     retriedCount = merged.length - detection.persistedSignals.length;
     submittedSignals = merged;
@@ -456,8 +467,17 @@ export async function runScheduledAlertPass(
   // Primary enforcement: make member targets unresolvable so the delivery loop
   // skips them for free. resolveDiscordChannelId reads process.env directly, so
   // the policy must be applied there for production to be covered.
+  // The mutation is global and must be undone: apps/api and apps/worker read
+  // process.env.UNIT_TALK_DISCORD_TARGET_MAP directly, so leaving a canary-only
+  // map behind would silently stop their Discord delivery if this ever runs
+  // inside a long-lived process rather than this one-shot CI job.
+  const originalTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
   const memberPolicy = applyMemberChannelPolicy(process.env);
   if (environment !== process.env) applyMemberChannelPolicy(environment);
+  const restoreTargetMap = (): void => {
+    if (originalTargetMap === undefined) delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
+  };
   // Defence in depth. Counts DISTINCT refused channels, not retry attempts, so
   // the recorded number matches what a reader would expect.
   const blockedChannels = new Set<string>();
@@ -489,6 +509,7 @@ export async function runScheduledAlertPass(
       },
     );
   } catch (error: unknown) {
+    restoreTargetMap();
     await repositories.runs.completeRun({
       runId: notificationRun.id,
       status: 'failed',
@@ -496,6 +517,7 @@ export async function runScheduledAlertPass(
     });
     throw error;
   }
+  restoreTargetMap();
   await repositories.runs.completeRun({
     runId: notificationRun.id,
     status: notification.failed > 0 ? 'failed' : 'succeeded',
