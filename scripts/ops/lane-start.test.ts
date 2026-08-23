@@ -3,14 +3,111 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ROOT } from './shared.js';
 import {
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  generateDispatchExecutionPacketResult,
+  readTaskContract,
+  renderTaskContract,
+} from './execution-packet.js';
+import { ROOT, type LaneManifest } from './shared.js';
+import {
+  captureOrReadTaskContract,
   type ExistingBranchReadmissionToken,
+  fetchLinearTaskSource,
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
+
+test('lane-start captures Linear truth without exposing its token in process arguments', () => {
+  const token = 'token-fixture';
+  const source = fetchLinearTaskSource('UTV2-1734', token, ((_command, args, options) => {
+    assert.equal(args.includes('https://api.linear.app/graphql'), true);
+    assert.equal(args.includes('--config'), true);
+    assert.equal(args.join(' ').includes(token), false);
+    assert.match(String(options?.input), /Authorization: token-fixture/u);
+    return {
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: {
+        identifier: 'UTV2-1734',
+        title: 'Deliver the task contract',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1734',
+        description: '## Acceptance criteria\n- Prompt contains the work order.',
+      } } }),
+      stderr: '',
+      error: undefined,
+    };
+  }) as typeof import('node:child_process')['spawnSync']);
+
+  assert.equal(source.identifier, 'UTV2-1734');
+  assert.equal(source.title, 'Deliver the task contract');
+});
+
+test('a sanctioned executor dispatch captures, persists, and renders a legacy lane contract', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-legacy-lane-contract-'));
+  const laneRoot = path.join(root, 'lane-worktree');
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  fs.mkdirSync(laneRoot, { recursive: true });
+  fs.writeFileSync(path.join(syncDir, 'UTV2-1667.yml'), 'version: 1\nentities:\n  issues:\n    - UTV2-1667\n', 'utf8');
+
+  const description = '## Scope\n- Preserve this legacy lane without a bulk migration.';
+  const manifest = {
+    issue_id: 'UTV2-1667', branch: 'codex/utv2-1667-legacy-lane', tier: 'T2',
+    lane_type: 'governance', executor: 'codex-cli', worktree_path: laneRoot,
+    file_scope_lock: ['scripts/ops/codex-exec.ts'], expected_proof_paths: [], blocked_by: [],
+  } as LaneManifest;
+  const result = generateDispatchExecutionPacketResult(manifest, {}, {
+    root,
+    linearToken: 'token-fixture',
+    runner: ((_command, _args) => ({
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: {
+        identifier: 'UTV2-1667', title: 'Legacy objective',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667', description,
+      } } }),
+      stderr: '', error: undefined,
+    })) as typeof import('node:child_process')['spawnSync'],
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.packet.task_contract.objective, 'Legacy objective');
+  assert.deepEqual(result.packet.task_contract.acceptance_criteria, [description]);
+  assert.match(renderTaskContract(result.packet.task_contract), /Preserve this legacy lane/u);
+  assert.deepEqual(readTaskContract('UTV2-1667', root), result.packet.task_contract);
+  assert.deepEqual(readTaskContract('UTV2-1667', laneRoot), result.packet.task_contract);
+});
+
+test('lane-start reuses a valid contract and fails closed on an invalid one', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-existing-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const contract = buildTaskContract({
+    identifier: 'UTV2-1734', title: 'Objective',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1734',
+    description: '## Acceptance criteria\n- Criterion.',
+  }, '2000-01-01T00:00:00.000Z');
+  const syncPath = path.join(syncDir, 'UTV2-1734.yml');
+  fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract('UTV2-1734', contract), 'utf8');
+
+  let fetched = false;
+  const runner = ((_command: string, _args: readonly string[]) => {
+    fetched = true;
+    throw new Error('must not fetch');
+  }) as typeof import('node:child_process')['spawnSync'];
+  assert.deepEqual(captureOrReadTaskContract('UTV2-1734', 'token-fixture', root, runner), contract);
+  assert.equal(fetched, false);
+
+  fs.writeFileSync(syncPath, fs.readFileSync(syncPath, 'utf8').replace('Criterion.', 'Changed.'), 'utf8');
+  assert.throws(
+    () => captureOrReadTaskContract('UTV2-1734', 'token-fixture', root, runner),
+    /hash verification failed/u,
+  );
+  assert.equal(fetched, false);
+});
 
 function readmissionToken(): ExistingBranchReadmissionToken {
   return {

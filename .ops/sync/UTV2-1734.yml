@@ -8,3 +8,108 @@ entities:
   findings: []
   controls: []
   proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1734
+  objective: |-
+    Every dispatched executor must receive the actual work order. Today it receives none: `buildCodexPrompt` assembles file scope, tier-derived verification, closeout instructions and a repo-global brief, and `ExecutionPacket` carries no objective, acceptance criteria, guardrails, non-goals, evidence requirements or exit criteria. Executors infer the task from the branch name and the state of an existing PR, which works on a fresh lane and fails silently on every correction round.
+    This is the narrowly scoped successor to [UTV2-1732](https://linear.app/unit-talk-v2/issue/UTV2-1732/executors-receive-no-task-contract-repair-the-autonomous-execution), which is preserved unmerged after four adversarial reviews. Take **only** the proven core from that branch.
+  acceptance_criteria:
+    - A dispatched prompt contains the objective, acceptance criteria,
+      guardrails, non-goals, required evidence and exit criteria for that issue.
+    - Claude and Codex consume the contract through **one shared renderer**, not
+      two implementations.
+    - A missing or invalid contract fails closed with a **structured** error — a
+      parseable executor result, never a bare stack trace.
+    - Existing lanes remain dispatchable. No bulk migration of the 471
+      contract-less sync records.
+    - "`pnpm verify:static` green; focused suites green; every control proved by
+      inversion."
+  guardrails:
+    - No direct-`main` work.
+    - No bulk mutation of orchestration state.
+    - Draw from the preserved branch `codex/utv2-1732-executor-task-contract` at
+      `eec7cb63`; do not re-derive from scratch.
+    - Production containment stays in force. No SGO call, no ingestion restart,
+      no delivery unpark, no production read or mutation.
+    - One independent adversarial review. Findings are classified **blocker /
+      follow-up / won't-fix** by the orchestrator, not by the reviewer.
+    - At most **one** correction cycle. A second rejection closes and re-scopes
+      this lane.
+  non_goals:
+    - Checkpoint epoch retirement and the resume/rework gating around it
+    - Markdown-parser hardening beyond what acceptance criterion 1 needs
+    - Migration tooling for pre-contract sync records or checkpoints
+    - Correction-channel improvements, seals, and archive semantics
+    - Contract hash binding beyond a plain integrity check
+    - The prior lane grew all of these from reviewer findings treated as
+      requirements. They are real, and they are not this lane.
+  required_evidence:
+    - Proof must be **complete, reproducible and true**, and nothing more. Every
+      figure recomputed at the head it names. No aesthetic passes.
+  exit_criteria:
+    - A fresh dispatch prompt demonstrably contains the full work order — shown,
+      not asserted.
+    - Dispatch refuses, with a structured error, when the contract is absent or
+      malformed — proved by inversion.
+    - Both executors render from the same code path — proved by reading one
+      shared function.
+    - An existing pre-contract lane still dispatches.
+    - One adversarial review, findings classified, at most one correction cycle.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1734/executor-work-order-deliver-the-task-contract-to-the-prompt-fail
+    title: "Executor work order: deliver the task contract to the prompt, fail
+      closed without it"
+    description: |-
+      ## Objective
+
+      Every dispatched executor must receive the actual work order. Today it receives none: `buildCodexPrompt` assembles file scope, tier-derived verification, closeout instructions and a repo-global brief, and `ExecutionPacket` carries no objective, acceptance criteria, guardrails, non-goals, evidence requirements or exit criteria. Executors infer the task from the branch name and the state of an existing PR, which works on a fresh lane and fails silently on every correction round.
+
+      This is the narrowly scoped successor to [UTV2-1732](https://linear.app/unit-talk-v2/issue/UTV2-1732/executors-receive-no-task-contract-repair-the-autonomous-execution), which is preserved unmerged after four adversarial reviews. Take **only** the proven core from that branch.
+
+      ## Acceptance criteria
+
+      1. A dispatched prompt contains the objective, acceptance criteria, guardrails, non-goals, required evidence and exit criteria for that issue.
+      2. Claude and Codex consume the contract through **one shared renderer**, not two implementations.
+      3. A missing or invalid contract fails closed with a **structured** error — a parseable executor result, never a bare stack trace.
+      4. Existing lanes remain dispatchable. No bulk migration of the 471 contract-less sync records.
+      5. `pnpm verify:static` green; focused suites green; every control proved by inversion.
+
+      ## Explicitly out of scope — follow-ups unless strictly necessary for the core
+
+      * Checkpoint epoch retirement and the resume/rework gating around it
+      * Markdown-parser hardening beyond what acceptance criterion 1 needs
+      * Migration tooling for pre-contract sync records or checkpoints
+      * Correction-channel improvements, seals, and archive semantics
+      * Contract hash binding beyond a plain integrity check
+
+      The prior lane grew all of these from reviewer findings treated as requirements. They are real, and they are not this lane.
+
+      ## Guardrails
+
+      * No direct-`main` work.
+      * No bulk mutation of orchestration state.
+      * Draw from the preserved branch `codex/utv2-1732-executor-task-contract` at `eec7cb63`; do not re-derive from scratch.
+      * Production containment stays in force. No SGO call, no ingestion restart, no delivery unpark, no production read or mutation.
+      * One independent adversarial review. Findings are classified **blocker / follow-up / won't-fix** by the orchestrator, not by the reviewer.
+      * At most **one** correction cycle. A second rejection closes and re-scopes this lane.
+
+      ## Blocker definition
+
+      Only these are blockers: false proof, security or authorization failure, silent degradation, data corruption, or failure of an acceptance criterion above. Unrelated hardening and speculative parser cases are follow-ups.
+
+      ## Required evidence
+
+      Proof must be **complete, reproducible and true**, and nothing more. Every figure recomputed at the head it names. No aesthetic passes.
+
+      ## Exit criteria
+
+      1. A fresh dispatch prompt demonstrably contains the full work order — shown, not asserted.
+      2. Dispatch refuses, with a structured error, when the contract is absent or malformed — proved by inversion.
+      3. Both executors render from the same code path — proved by reading one shared function.
+      4. An existing pre-contract lane still dispatches.
+      5. One adversarial review, findings classified, at most one correction cycle.
+    captured_at: 2026-08-22T23:59:30.631Z
+    description_sha256: 78258e629f95308d33262168cb073748d9429142d3536196558e4f323b143e44
+  contract_hash: 0f1fa3a8b04b9de38e5cf5e8d40d9f8f6a24d7748a248a485289d89e2fdc4712

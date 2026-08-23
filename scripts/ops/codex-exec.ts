@@ -35,7 +35,12 @@ import {
   readManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import {
+  generateDispatchExecutionPacketResult,
+  renderTaskContract,
+  type ExecutionPacket,
+  type ExecutionPacketResult,
+} from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import {
   buildCodexModelArgs,
@@ -65,6 +70,7 @@ interface CodexExecResult {
     | 'SUCCESS'
     | 'CODEX_UNAVAILABLE'
     | 'PRECONDITION_FAILED'
+    | 'EXECUTION_PACKET_INVALID'
     | 'MODEL_ROUTING_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
@@ -94,6 +100,23 @@ interface CodexExecResult {
   execution?: ExecutionSummary;
   source_files_changed?: number;
   checkpoint_provenance?: string;
+}
+
+type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
+
+export function resolveCodexExecutionPacket(
+  manifest: LaneManifest,
+  onReady: (packet: ExecutionPacket) => void,
+  emit: (value: unknown) => void = emitJson,
+  loader: PacketResultLoader = generateDispatchExecutionPacketResult,
+): number {
+  const result = loader(manifest);
+  if (!result.ok) {
+    emit(result);
+    return 2;
+  }
+  onReady(result.packet);
+  return 0;
 }
 
 /**
@@ -534,6 +557,8 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
     ``,
+    renderTaskContract(packet.task_contract),
+    ``,
     `## Allowed file scope`,
     packet.allowed_file_scope.map(f => `- ${f}`).join('\n'),
     ``,
@@ -694,7 +719,11 @@ async function main(): Promise<void> {
         'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
       ].join('\n')
     : buildResumeBrief(existingCheckpoint);
-  const packet = generateExecutionPacket(manifest);
+  let packet!: ExecutionPacket;
+  const packetExit = resolveCodexExecutionPacket(manifest, ready => {
+    packet = ready;
+  });
+  if (packetExit !== 0) process.exit(packetExit);
   const prompt = buildCodexPrompt(packet, resumeBrief);
   const plannedHead = currentHeadSha(resolvedCwd);
   if (!plannedHead) {

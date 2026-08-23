@@ -33,6 +33,7 @@ import {
   resolveActiveLaneManifests,
   type ActiveLaneDiscovery,
   readManifest,
+  readConfiguredEnvValue,
   relativeToRoot,
   requireIssueId,
   requireVerificationTarget,
@@ -58,6 +59,12 @@ import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js'
 export { checkConcurrencyLimits } from './concurrency-rules.js';
 export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rules.js';
 import { checkConcurrencyLimits } from './concurrency-rules.js';
+import {
+  buildSyncYmlWithTaskContract,
+  captureOrReadTaskContract,
+  type TaskContract,
+} from './execution-packet.js';
+export { captureOrReadTaskContract, fetchLinearTaskSource } from './execution-packet.js';
 import {
   BOOTSTRAP_AUTHORIZATIONS_PATH,
   buildBootstrapAdmissionReceipt,
@@ -201,20 +208,18 @@ function writeSyncFile(issueId: string, content: string): void {
   fs.writeFileSync(path.join(syncDir, `${issueId}.yml`), content, 'utf8');
 }
 
-function buildSyncYml(issueId: string): string {
-  return [
-    'version: 1',
-    'approval:',
-    '  allow_multiple_issues: false',
-    '  skip_sync_required: false',
-    'entities:',
-    '  issues:',
-    `    - ${issueId}`,
-    '  findings: []',
-    '  controls: []',
-    '  proofs: []',
-    '',
-  ].join('\n');
+function linearTaskToken(): string {
+  return (
+    readConfiguredEnvValue('LINEAR_API_TOKEN') ||
+    readConfiguredEnvValue('LINEAR_API_KEY') ||
+    ''
+  );
+}
+
+function syncContentWithTaskContract(issueId: string, contract: TaskContract): string {
+  const syncPath = path.join(ROOT, '.ops', 'sync', `${issueId}.yml`);
+  const existing = fs.existsSync(syncPath) ? fs.readFileSync(syncPath, 'utf8') : undefined;
+  return buildSyncYmlWithTaskContract(issueId, contract, existing);
 }
 
 export function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
@@ -914,6 +919,9 @@ function main(): void {
         throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
       }
 
+      const taskContract = captureOrReadTaskContract(issueId, linearTaskToken());
+      const syncContent = syncContentWithTaskContract(issueId, taskContract);
+
       const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
       const lease = reserveLease({
         issue_id: issueId,
@@ -935,6 +943,10 @@ function main(): void {
       }
       manifest.execution_location = setup.execution_location;
       writeManifest(manifest);
+      writeSyncFile(issueId, syncContent);
+      const worktreeSyncPath = path.join(worktreePath, '.ops', 'sync', `${issueId}.yml`);
+      fs.mkdirSync(path.dirname(worktreeSyncPath), { recursive: true });
+      fs.writeFileSync(worktreeSyncPath, syncContent, 'utf8');
       emitJson({
         ok: true,
         code: 'lane_resumed',
@@ -990,6 +1002,9 @@ function main(): void {
       }
       modelRouting = resolution.model_routing!;
     }
+
+    const taskContract = captureOrReadTaskContract(issueId, linearTaskToken());
+    const syncContent = syncContentWithTaskContract(issueId, taskContract);
 
     if (readmitExistingBranch) {
       if (!branchContainsExactIssue(branch, issueId)) {
@@ -1138,7 +1153,7 @@ function main(): void {
           throw new Error(`T1 lane ${issueId} has no expected_proof_paths declared`);
         }
         writeManifest(manifest);
-        writeSyncFile(issueId, buildSyncYml(issueId));
+        writeSyncFile(issueId, syncContent);
 
         if (git(['branch', '--show-current']).stdout !== 'main') {
           throw new Error('root checkout changed branches during readmission');
@@ -1297,7 +1312,7 @@ function main(): void {
 
     manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
-    writeSyncFile(issueId, buildSyncYml(issueId));
+    writeSyncFile(issueId, syncContent);
 
     // The empty proof directory (UTV2-1492) is scaffolded directly inside
     // the lane worktree below, alongside the manifest/sync mirror — not in
