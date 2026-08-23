@@ -719,11 +719,33 @@ async function main(): Promise<void> {
         'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
       ].join('\n')
     : buildResumeBrief(existingCheckpoint);
+  // A preview must not mutate. Resolving the packet persists the sync record in
+  // both roots and, for a pre-contract lane, makes a live Linear call — all
+  // before the dry-run branch below, while the emitted message says "without
+  // mutating state during this preview". Under --dry-run the packet is read
+  // without capture or persistence, so the claim matches the behaviour.
   let packet!: ExecutionPacket;
-  const packetExit = resolveCodexExecutionPacket(manifest, ready => {
-    packet = ready;
-  });
-  if (packetExit !== 0) process.exit(packetExit);
+  if (dryRun) {
+    try {
+      packet = generateExecutionPacket(manifest);
+    } catch (error) {
+      emitJson({
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        issue_id: issueId,
+        branch: manifest.branch,
+        message:
+          `dry run cannot preview ${issueId}: ${error instanceof Error ? error.message : String(error)}. ` +
+          'Run without --dry-run to capture the contract.',
+      } satisfies CodexExecResult);
+      process.exit(2);
+    }
+  } else {
+    const packetExit = resolveCodexExecutionPacket(manifest, ready => {
+      packet = ready;
+    });
+    if (packetExit !== 0) process.exit(packetExit);
+  }
   const prompt = buildCodexPrompt(packet, resumeBrief);
   const plannedHead = currentHeadSha(resolvedCwd);
   if (!plannedHead) {
