@@ -1,10 +1,10 @@
 # PROOF: UTV2-1735
 
-MERGE_SHA: 18bbba652743cac726751ae83d79f1e4f774b6b4
+MERGE_SHA: 88d252b6655f0276e41cf3a47b35499d63b25d93
 
-Verified source SHA: `18bbba652743cac726751ae83d79f1e4f774b6b4`
+Verified source SHA: `88d252b6655f0276e41cf3a47b35499d63b25d93`
 
-Substantive implementation SHA: `18bbba652743cac726751ae83d79f1e4f774b6b4`
+Substantive implementation SHA: `88d252b6655f0276e41cf3a47b35499d63b25d93`
 
 Pre-merge this anchor identifies the complete committed lane source. The substantive implementation and the verified source are the same commit at this revision. The two earlier correction commits (`118bbd6e`, `3b9dfd4b`) were rewritten into this one: a commit message referenced a second issue, which the branch-discipline gate refuses, and a new commit could not clear it because the gate scans every commit in the PR. No content was dropped in the rewrite. Later commits in this lane are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.
 

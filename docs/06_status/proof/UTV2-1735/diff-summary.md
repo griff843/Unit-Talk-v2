@@ -1,13 +1,13 @@
 # UTV2-1735 Diff Summary
 
-MERGE_SHA: 18bbba652743cac726751ae83d79f1e4f774b6b4
+MERGE_SHA: 88d252b6655f0276e41cf3a47b35499d63b25d93
 
 Generated at: 2026-08-23T14:02:04Z
 Issue: UTV2-1735
 Tier: T1
 Lane type: governance
 Branch: codex/utv2-1735-restore-alerting
-Substantive SHA: 18bbba652743cac726751ae83d79f1e4f774b6b4
+Substantive SHA: 88d252b6655f0276e41cf3a47b35499d63b25d93
 
 ## Implementation
 
@@ -31,8 +31,8 @@ Substantive SHA: 18bbba652743cac726751ae83d79f1e4f774b6b4
 ```text
 .github/workflows/ingestor-staleness-alert.yml |  60 +-
 scripts/ingestor-alert-check.test.ts           | 575 +++++++++++++++++-
-scripts/ingestor-alert-check.ts                | 803 ++++++++++++++++++++-----
-3 files changed, 1275 insertions(+), 163 deletions(-)
+scripts/ingestor-alert-check.ts                | 807 ++++++++++++++++++++-----
+3 files changed, 1279 insertions(+), 163 deletions(-)
 ```
 
 ## Scope notes
