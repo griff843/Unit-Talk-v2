@@ -32,7 +32,12 @@ import {
   writeManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import {
+  generateDispatchExecutionPacketResult,
+  renderTaskContract,
+  type ExecutionPacket,
+  type ExecutionPacketResult,
+} from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import { defaultLeaseOwner, heartbeatLease } from './lease-registry.js';
 
@@ -42,6 +47,7 @@ export interface ClaudeExecResult {
     | 'SUCCESS'
     | 'CLAUDE_UNAVAILABLE'
     | 'PRECONDITION_FAILED'
+    | 'EXECUTION_PACKET_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
     | 'DRY_RUN';
@@ -51,6 +57,23 @@ export interface ClaudeExecResult {
   claude_exit_code?: number;
   transcript_path?: string;
   dry_run?: boolean;
+}
+
+type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
+
+export function resolveClaudeExecutionPacket(
+  manifest: LaneManifest,
+  onReady: (packet: ExecutionPacket) => void,
+  emit: (value: unknown) => void = emitJson,
+  loader: PacketResultLoader = generateDispatchExecutionPacketResult,
+): number {
+  const result = loader(manifest);
+  if (!result.ok) {
+    emit(result);
+    return 2;
+  }
+  onReady(result.packet);
+  return 0;
 }
 
 type CommandRunner = (
@@ -91,6 +114,8 @@ export function buildClaudePrompt(packet: ExecutionPacket): string {
     `Lane type: ${packet.lane_type}`,
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
+    '',
+    renderTaskContract(packet.task_contract),
     '',
     'You are executing inside a dedicated lane worktree. Do not switch branches in the main checkout.',
     '',
@@ -263,7 +288,11 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
     return 2;
   }
 
-  const packet = generateExecutionPacket(manifest);
+  let packet!: ExecutionPacket;
+  const packetExit = resolveClaudeExecutionPacket(manifest, ready => {
+    packet = ready;
+  });
+  if (packetExit !== 0) return packetExit;
   const prompt = buildClaudePrompt(packet);
   const transcriptPath = transcriptPathForIssue(issueId);
 

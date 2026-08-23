@@ -5,10 +5,11 @@ import path from 'node:path';
 import {
   buildClaudePrompt,
   checkClaudeHealth,
+  resolveClaudeExecutionPacket,
   resolveLaneCwd,
   transcriptPathForIssue,
 } from './claude-exec.js';
-import type { ExecutionPacket } from './execution-packet.js';
+import { buildTaskContract, renderTaskContract, type ExecutionPacket } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
 
 test('checkClaudeHealth accepts a working Claude CLI', () => {
@@ -59,6 +60,19 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
     allowed_file_scope: ['scripts/ops/claude-exec.ts'],
     tier_c_warnings: [],
     blockers: [],
+    task_contract: buildTaskContract({
+      identifier: 'UTV2-1200',
+      title: 'Execute the supplied work order',
+      url: 'https://linear.app/unit-talk-v2/issue/UTV2-1200',
+      description: [
+        '## Acceptance criteria',
+        '- Implement the requested change.',
+        '## Guardrails',
+        '- Do not infer a different task.',
+        '## Exit criteria',
+        '- Verification passes.',
+      ].join('\n'),
+    }, '2026-05-25T00:00:00.000Z'),
     required_verification: ['pnpm verify'],
     expected_proof_paths: [],
     closeout_instructions: ['Open PR'],
@@ -74,10 +88,43 @@ test('buildClaudePrompt includes lane cwd, allowed scope, verification, and clos
   const prompt = buildClaudePrompt(packet);
 
   assert.match(prompt, /Issue: UTV2-1200/);
+  assert.match(prompt, /Authoritative task contract/);
+  assert.match(prompt, /Execute the supplied work order/);
+  assert.match(prompt, /Implement the requested change/);
   assert.match(prompt, /cd "\.out\/worktrees\/claude__utv2-1200-governance"/);
   assert.match(prompt, /scripts\/ops\/claude-exec\.ts/);
   assert.match(prompt, /pnpm verify/);
   assert.match(prompt, /Open PR/);
+  assert.ok(prompt.includes(renderTaskContract(packet.task_contract)));
+});
+
+test('claude-exec refuses an invalid packet with JSON and never continues to spawn', () => {
+  const manifest = { issue_id: 'UTV2-1734', branch: 'claude/utv2-1734' } as LaneManifest;
+  const emitted: string[] = [];
+  let continuedToSpawn = false;
+  const exitCode = resolveClaudeExecutionPacket(
+    manifest,
+    () => { continuedToSpawn = true; },
+    value => { emitted.push(JSON.stringify(value)); },
+    () => ({
+      ok: false,
+      code: 'EXECUTION_PACKET_INVALID',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message: 'Execution packet refused: task contract is malformed',
+    }),
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(continuedToSpawn, false);
+  assert.equal(emitted.length, 1);
+  assert.deepEqual(JSON.parse(emitted[0]!), {
+    ok: false,
+    code: 'EXECUTION_PACKET_INVALID',
+    issue_id: 'UTV2-1734',
+    branch: 'claude/utv2-1734',
+    message: 'Execution packet refused: task contract is malformed',
+  });
 });
 
 test('resolveLaneCwd prefers manifest execution location', () => {

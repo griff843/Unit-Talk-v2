@@ -11,6 +11,7 @@ import {
   buildModelRoutingEvidence,
   commitAndPushEvidence,
   evaluateExecutionTruth,
+  resolveCodexExecutionPacket,
   resolveExecModelRouting,
 } from './codex-exec.js';
 import {
@@ -22,7 +23,8 @@ import {
   resolveExecutionTimeout,
   type ExecutionStateIdentity,
 } from './execution-checkpoint.js';
-import { ROOT } from './shared.js';
+import { ROOT, type LaneManifest } from './shared.js';
+import { buildTaskContract, renderTaskContract } from './execution-packet.js';
 
 // codex-exec.ts is an executable entry point — its `main()` process/spawn flow is
 // exercised via integration (pnpm ops:codex-exec --dry-run, which requires a live Codex
@@ -615,6 +617,12 @@ test('codex-exec resumes from the checkpoint before it builds the prompt', () =>
 });
 
 test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
+  const taskContract = buildTaskContract({
+    identifier: 'UTV2-1594',
+    title: 'Resume the supplied work order',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1594',
+    description: '## Acceptance criteria\n- Preserve completed work.',
+  }, '2026-05-25T00:00:00.000Z');
   const packet = {
     issue_id: 'UTV2-1594',
     tier: 'T1',
@@ -624,11 +632,13 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
     required_verification: ['pnpm verify'],
     closeout_instructions: ['open a PR'],
     repo_brief: 'REPO BRIEF BODY',
+    task_contract: taskContract,
   } as unknown as Parameters<typeof buildCodexPrompt>[0];
 
   const withoutResume = buildCodexPrompt(packet);
   assert.doesNotMatch(withoutResume, /RESUMED RUN/);
   assert.match(withoutResume, /REPO BRIEF BODY/);
+  assert.ok(withoutResume.includes(renderTaskContract(taskContract)));
 
   const withResume = buildCodexPrompt(packet, '## Execution checkpoint — RESUMED RUN\n\nprior findings here');
   assert.ok(
@@ -636,6 +646,35 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
     'a resumed run must read what is already settled before it reads the full repo brief',
   );
   assert.match(withResume, /prior findings here/);
+});
+
+test('codex-exec refuses an invalid packet with JSON and never continues to spawn', () => {
+  const manifest = { issue_id: 'UTV2-1734', branch: 'codex/utv2-1734' } as LaneManifest;
+  const emitted: string[] = [];
+  let continuedToSpawn = false;
+  const exitCode = resolveCodexExecutionPacket(
+    manifest,
+    () => { continuedToSpawn = true; },
+    value => { emitted.push(JSON.stringify(value)); },
+    () => ({
+      ok: false,
+      code: 'EXECUTION_PACKET_INVALID',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message: 'Execution packet refused: task contract is missing',
+    }),
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(continuedToSpawn, false);
+  assert.equal(emitted.length, 1);
+  assert.deepEqual(JSON.parse(emitted[0]!), {
+    ok: false,
+    code: 'EXECUTION_PACKET_INVALID',
+    issue_id: 'UTV2-1734',
+    branch: 'codex/utv2-1734',
+    message: 'Execution packet refused: task contract is missing',
+  });
 });
 
 test('codex-exec opens a durable attempt immediately before the spawn', () => {
