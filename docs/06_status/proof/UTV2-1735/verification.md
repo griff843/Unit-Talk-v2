@@ -1,10 +1,28 @@
 # PROOF: UTV2-1735
 
-Verified source SHA: `f98eb1e981070b4a21e669238d7a0449901d619f`
+MERGE_SHA: 060f4c5cea97614b0bb1cd1b2b3dd84ad0ff196b
+
+Verified source SHA: `060f4c5cea97614b0bb1cd1b2b3dd84ad0ff196b`
 
 Substantive implementation SHA: `af9c95d01a51847e44a5df351956eadf02c8a9f7`
 
-Pre-merge this anchor identifies the substantive implementation commit. Later commits are restricted to proof and lane-control artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.
+Pre-merge this anchor identifies the complete committed lane source after PR binding; the substantive implementation commit is listed separately. Later commits are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.
+
+## ASSERTIONS:
+
+- [x] A scheduled live-mode detection and notification pass executes every five minutes while autonomous system picks remain disabled.
+- [x] An independent `always()` monitor treats stale ingestion, alerting silence, failed notification runs, and unreachable monitoring state as critical.
+- [x] The focused runtime proof induces and observes detection persistence, canary notification, and successful detection/notification run receipts.
+- [x] Static repository verification passes; writable DB proof is truthfully deferred to governed staging CI.
+
+## EVIDENCE:
+
+```text
+focused runtime: PASS (10 tests, 0 failed)
+pnpm verify:static: PASS
+proof binding: PASS at the rebound source plus proof-only successor commit
+writable DB: BLOCKED_DEFERRED locally; staging CI required
+```
 
 ## Verification
 

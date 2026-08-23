@@ -1,5 +1,7 @@
 # UTV2-1735 Diff Summary
 
+MERGE_SHA: 060f4c5cea97614b0bb1cd1b2b3dd84ad0ff196b
+
 Generated at: 2026-08-23T14:02:04Z
 Issue: UTV2-1735
 Tier: T1
