@@ -1,0 +1,7 @@
+{
+  "issue_id": "UTV2-1739",
+  "executor": "claude",
+  "model": "claude-opus-5",
+  "lane_type": "runtime",
+  "tier": "T1"
+}

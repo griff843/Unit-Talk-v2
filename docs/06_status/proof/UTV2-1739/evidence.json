@@ -1,0 +1,116 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1739",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "title": "Restore alert detection and notification as a runtime lane",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-23T22:12:35Z",
+  "supersedes": {
+    "issue_id": "UTV2-1735",
+    "note": "Implementation ported from PR #1439 head 039a5bf54a6a59aefd2d41ba5e94bf60b46cfbab. That PR remains open and preserved. Its evidence narrative is deliberately NOT carried forward; this bundle is built from commands run against this lane at this head.",
+    "reason": "The superseded lane ran as lane_type governance with proof_profile static while the issue is kind:runtime, which waived the runtime proof requirement this bundle satisfies."
+  },
+  "sha_binding": {
+    "verified_source_sha": "2d80ffcadd9c172c5fa09334de9210ca7baeec5c",
+    "verified_source_note": "Commit carrying the three ported implementation surfaces. Later commits in this lane are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-23T22:12:35Z"
+  },
+  "scope": {
+    "ported_surfaces": [
+      ".github/workflows/ingestor-staleness-alert.yml",
+      "scripts/ingestor-alert-check.ts",
+      "scripts/ingestor-alert-check.test.ts"
+    ],
+    "changed_files": 6,
+    "substantive_diff_stat": "3 files changed, 1279 insertions(+), 163 deletions(-)"
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ingestor-alert-check.test.ts",
+      "tests": 20,
+      "pass": 20,
+      "fail": 0
+    },
+    "type_check_scope_caveat": "scripts/ is outside every tsconfig project reference, so pnpm type-check does not enforce types in this file. The regression guard for the retry column is the test and the live schema assertion below, not the compiler."
+  },
+  "runtime_proof": {
+    "status": "READ_ONLY_PRODUCTION_PASS_WRITABLE_STAGING_PENDING_CI",
+    "target": "zfzdnfwdarxucxtaojxm (production, READ-ONLY)",
+    "queries": [
+      {
+        "name": "schema assertion for every column the implementation reads",
+        "sql": "information_schema.columns left-joined against the exact (table, column) pairs the monitor and alert path read",
+        "result": "7 of 8 present; provider_offers.updated_at ABSENT",
+        "significance": "This is the check the superseded static profile waived. The original defect was a monitor querying provider_offers.updated_at, which does not exist, so the monitor threw and its silence read as health. Every column this implementation reads is asserted present against the live schema."
+      },
+      {
+        "name": "alerting and ingestion freshness state",
+        "sql": "aggregates over alert_detections, system_runs, provider_cycle_status, game_results",
+        "result": "alerting last ran 2026-04-28; ingestion last cycle 2026-06-30",
+        "significance": "Confirms the outage this lane addresses is real and still current, and that the freshness sources the implementation now reads return data."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "alert_detections total",
+        "value": 176
+      },
+      {
+        "probe": "alert_detections undelivered (notified = false)",
+        "value": 176
+      },
+      {
+        "probe": "columns read by implementation, present",
+        "value": 7
+      },
+      {
+        "probe": "columns read by implementation, absent",
+        "value": 0
+      },
+      {
+        "probe": "provider_offers.updated_at present",
+        "value": 0
+      }
+    ],
+    "observed_timestamps": {
+      "alert_detections_max_created_at": "2026-04-28 14:44:23.504829+00",
+      "system_runs_last_alert_detection": "2026-04-28 17:26:12.238063+00",
+      "system_runs_last_alert_notification": "2026-04-28 14:44:24.943864+00",
+      "provider_cycle_status_max_updated_at": "2026-06-30 12:54:53.948148+00",
+      "game_results_max_created_at": "2026-06-30 07:27:28.089891+00"
+    },
+    "writable_staging_proof": {
+      "command": "pnpm test:db",
+      "status": "PENDING_CI_STAGING",
+      "required_project_ref": "xskgrzbteyqdufktjrjx",
+      "note": "Writable proof runs only in the governed staging-ci environment with CI_SUPABASE_* credentials. It is not claimed here and must be green on the exact final head before this lane closes."
+    },
+    "production_mutation_performed": false,
+    "fabricated_queries_or_row_counts": false
+  },
+  "safety_posture": {
+    "member_delivery": "UNAUTHORIZED by default. ALERT_MEMBER_CHANNELS_ENABLED is pinned to false in the workflow. Two enforcement layers: member targets withheld from the resolvable map, and the transport refuses any non-canary channel.",
+    "system_picks": "SYSTEM_PICKS_ENABLED false",
+    "sgo_and_ingestion": "disabled; the workflow contains zero SGO or ingestion triggers",
+    "production": "otherwise parked; the only production access in this lane was read-only SQL"
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "READ_ONLY_PRODUCTION_PASS_WRITABLE_STAGING_PENDING_CI",
+    "ready_for_pm_review": false,
+    "pending": [
+      "writable staging proof green on the exact final head",
+      "one durable independent review bound to the exact final head"
+    ]
+  }
+}
