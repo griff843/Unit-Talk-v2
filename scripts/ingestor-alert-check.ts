@@ -472,11 +472,16 @@ export async function runScheduledAlertPass(
   // map behind would silently stop their Discord delivery if this ever runs
   // inside a long-lived process rather than this one-shot CI job.
   const originalTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const originalInjectedMap = environment.UNIT_TALK_DISCORD_TARGET_MAP;
   const memberPolicy = applyMemberChannelPolicy(process.env);
   if (environment !== process.env) applyMemberChannelPolicy(environment);
   const restoreTargetMap = (): void => {
     if (originalTargetMap === undefined) delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
     else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
+    if (environment !== process.env) {
+      if (originalInjectedMap === undefined) delete environment.UNIT_TALK_DISCORD_TARGET_MAP;
+      else environment.UNIT_TALK_DISCORD_TARGET_MAP = originalInjectedMap;
+    }
   };
   // Defence in depth. Counts DISTINCT refused channels, not retry attempts, so
   // the recorded number matches what a reader would expect.
@@ -487,6 +492,11 @@ export async function runScheduledAlertPass(
     (channelId) => { blockedChannels.add(channelId); },
   );
 
+  // Everything from here down runs inside try/finally: startRun itself is an
+  // await that can throw (a Supabase blip on the system_runs insert), and a
+  // throw there would otherwise skip the restore and leave a canary-only map
+  // behind for the rest of the process.
+  try {
   const notificationRun = await repositories.runs.startRun({
     runType: 'alert.notification',
     details: {
@@ -509,7 +519,6 @@ export async function runScheduledAlertPass(
       },
     );
   } catch (error: unknown) {
-    restoreTargetMap();
     await repositories.runs.completeRun({
       runId: notificationRun.id,
       status: 'failed',
@@ -517,7 +526,6 @@ export async function runScheduledAlertPass(
     });
     throw error;
   }
-  restoreTargetMap();
   await repositories.runs.completeRun({
     runId: notificationRun.id,
     status: notification.failed > 0 ? 'failed' : 'succeeded',
@@ -537,6 +545,9 @@ export async function runScheduledAlertPass(
   }
 
   return { detection, notification };
+  } finally {
+    restoreTargetMap();
+  }
 }
 
 function emit(finding: AlertFinding) {

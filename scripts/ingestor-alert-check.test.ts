@@ -578,3 +578,58 @@ test('the scheduled pass restores the global target map it mutated', async () =>
     else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
   }
 });
+
+test('the target map is restored even when startRun throws before delivery', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'utv2-1735-induced-event',
+    sportId: 'NBA',
+    eventName: 'UTV2-1735 Restore On Throw',
+    eventDate: '2026-08-23',
+    status: 'scheduled',
+    metadata: { proofIssue: 'UTV2-1735' },
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOffer('4.5', '2026-08-23T10:00:00.000Z', 'throw-baseline'),
+    makeOffer('9.0', '2026-08-23T10:30:00.000Z', 'throw-current'),
+  ]);
+
+  // startRun is an await between the env mutation and the restore. A Supabase
+  // blip on the system_runs insert must not leave a canary-only map behind.
+  const realStartRun = repositories.runs.startRun.bind(repositories.runs);
+  repositories.runs.startRun = (async (input: { runType: string }) => {
+    if (input.runType === 'alert.notification') throw new Error('simulated system_runs failure');
+    return realStartRun(input as never);
+  }) as typeof repositories.runs.startRun;
+
+  const originalBotToken = process.env.DISCORD_BOT_TOKEN;
+  const originalTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const supplied = JSON.stringify({
+    'discord:canary': '1296531122234327100',
+    'discord:trader-insights': '1296531122234327999',
+  });
+  process.env.DISCORD_BOT_TOKEN = 'utv2-1735-test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = supplied;
+
+  try {
+    await assert.rejects(
+      runScheduledAlertPass(repositories, {
+        environment: {
+          ALERT_AGENT_ENABLED: 'true',
+          ALERT_DRY_RUN: 'false',
+          ALERT_MIN_TIER: 'notable',
+        },
+        now: new Date('2026-08-23T10:35:00.000Z'),
+        fetchImpl: async () => new Response('{}', { status: 200 }),
+        sleepImpl: async () => {},
+      }),
+      /simulated system_runs failure/u,
+    );
+    assert.equal(process.env.UNIT_TALK_DISCORD_TARGET_MAP, supplied);
+  } finally {
+    if (originalBotToken === undefined) delete process.env.DISCORD_BOT_TOKEN;
+    else process.env.DISCORD_BOT_TOKEN = originalBotToken;
+    if (originalTargetMap === undefined) delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
+  }
+});
