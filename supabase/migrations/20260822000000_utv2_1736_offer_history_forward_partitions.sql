@@ -1,0 +1,3 @@
+-- UTV2-1736: forward partition provisioning for provider_offer_history.
+-- Placeholder created at lane admission; implemented in-lane.
+-- Must be reversible. No DEFAULT partition (PM decision).
