@@ -1,10 +1,10 @@
 # PROOF: UTV2-1735
 
-MERGE_SHA: da0255d1ef225f4d4473920e631b71ac49659baa
+MERGE_SHA: 18bbba652743cac726751ae83d79f1e4f774b6b4
 
-Verified source SHA: `da0255d1ef225f4d4473920e631b71ac49659baa`
+Verified source SHA: `18bbba652743cac726751ae83d79f1e4f774b6b4`
 
-Substantive implementation SHA: `da0255d1ef225f4d4473920e631b71ac49659baa`
+Substantive implementation SHA: `18bbba652743cac726751ae83d79f1e4f774b6b4`
 
 Pre-merge this anchor identifies the complete committed lane source. The substantive implementation and the verified source are the same commit at this revision. The two earlier correction commits (`118bbd6e`, `3b9dfd4b`) were rewritten into this one: a commit message referenced a second issue, which the branch-discipline gate refuses, and a new commit could not clear it because the gate scans every commit in the PR. No content was dropped in the rewrite. Later commits in this lane are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.
 
@@ -21,7 +21,7 @@ Pre-merge this anchor identifies the complete committed lane source. The substan
 ## EVIDENCE:
 
 ```text
-focused runtime: PASS (19 tests, 0 failed)
+focused runtime: PASS (20 tests, 0 failed)
 pnpm verify:static: PASS
 proof binding: PASS at the rebound source plus proof-only successor commit
 writable DB: BLOCKED_DEFERRED locally; staging CI required
@@ -31,7 +31,7 @@ writable DB: BLOCKED_DEFERRED locally; staging CI required
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'` | PASS | 19 tests passed, 0 failed. |
+| `pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'` | PASS | 20 tests passed, 0 failed. |
 | `pnpm type-check` | PASS | Exit 0. |
 | `pnpm lint` | PASS | Exit 0. |
 | `pnpm verify:static` | PASS | Environment, policy, lint, type-check, build, aggregate `pnpm test`, Smart Form, and command checks passed. |
@@ -73,8 +73,8 @@ Disabling only the transport guard (`buildChannelGuardedFetch` returns `inner`):
 ```text
 not ok 11 - member-facing discord channels are refused unless explicitly activated
 not ok 12 - channel guard fails closed when the target map cannot be resolved
-# tests 19
-# pass 17
+# tests 20
+# pass 18
 # fail 2
 ```
 
@@ -87,22 +87,22 @@ not ok 12 - channel guard fails closed when the target map cannot be resolved
 not ok 17 - member targets are stripped from the resolvable map unless activated
 not ok 18 - an alert-worthy pass delivers to canary, refuses the member channel, and is not a failure
   error: 'member channel was contacted: https://discord.com/api/v10/channels/1296531122234327100/messages, https://discord.com/api/v10/channels/1296531122234327999/messages'
-# tests 19
-# pass 15
+# tests 20
+# pass 16
 # fail 4
 ```
 
-Restoring both layers returns the suite to 19 passed, 0 failed. The guard is
+Restoring both layers returns the suite to 20 passed, 0 failed. The guard is
 additionally fail-closed: when the target map cannot be resolved, no channel is
 permitted.
 
 Focused command trailer:
 
 ```text
-1..19
-# tests 19
+1..20
+# tests 20
 # suites 0
-# pass 19
+# pass 20
 # fail 0
 # cancelled 0
 # skipped 0

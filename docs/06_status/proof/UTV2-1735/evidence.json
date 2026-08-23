@@ -8,7 +8,7 @@
   "status": "STATIC_COMPLETE_STAGING_DB_PENDING",
   "generated_at": "2026-08-23T14:02:04Z",
   "sha_binding": {
-    "verified_source_sha": "da0255d1ef225f4d4473920e631b71ac49659baa",
+    "verified_source_sha": "18bbba652743cac726751ae83d79f1e4f774b6b4",
     "verified_source_note": "Exact committed lane source after refreshing the branch to origin/main (behind=0). Carries the five PM-required corrections and the fixes for every defect found by two independent adversarial reviews. Post-merge closeout rebinds the proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -40,10 +40,10 @@
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'",
       "status": "PASS",
-      "tests": 19,
-      "pass": 19,
+      "tests": 20,
+      "pass": 20,
       "fail": 0,
-      "detail": "17 node:test cases: line-movement detection and persistence, live-mode canary notification, alerting silence, stale ingestion, failed delivery, unknown monitor state, workflow posture, observed-cadence threshold calibration in both directions, the production threshold floor honouring operator values above it, member-target withholding, transport-level member refusal, fail-closed behaviour on an unresolvable target map, non-message requests passing through, undelivered-detection retry built from a real alert_detections row shape, and an end-to-end alert-worthy pass proving canary delivery with the member channel withheld. Also covers the workflow pinning ALERT_SYSTEM_STALE_MINUTES to 60 and the member flag to false, and that the pass restores the global UNIT_TALK_DISCORD_TARGET_MAP it mutated."
+      "detail": "20 node:test cases: line-movement detection and persistence, live-mode canary notification, alerting silence, stale ingestion, failed delivery, unknown monitor state, workflow posture, observed-cadence threshold calibration in both directions, the production threshold floor honouring operator values above it, member-target withholding, transport-level member refusal, fail-closed behaviour on an unresolvable target map, non-message requests passing through, undelivered-detection retry built from a real alert_detections row shape, and an end-to-end alert-worthy pass proving canary delivery with the member channel withheld. Also covers the workflow pinning ALERT_SYSTEM_STALE_MINUTES to 60 and the member flag to false, and that the pass restores the global UNIT_TALK_DISCORD_TARGET_MAP it mutated. Two further cases assert the pass restores the global target map it mutated, including when startRun throws before delivery."
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -128,7 +128,7 @@
       "cost_defect_corrected": "An earlier revision enforced this only at the transport. A refused channel then burned the full retry ladder — four attempts and seven seconds of real sleep per detection — so roughly 86 alert-worthy detections would exhaust timeout-minutes: 10. The counter also counted attempts rather than distinct channels, reading 4x high.",
       "activation_path_verified": "With ALERT_MEMBER_CHANNELS_ENABLED=true the map is left untouched and a full pass delivers to both canary and discord:trader-insights, so the activation decision genuinely reaches member channels rather than being inert.",
       "exact_behaviour": "applyMemberChannelPolicy is a canary-only allowlist, not a member-only strip: every non-canary target is removed, including non-member ones such as discord:best-bets. That is correct for this pass, which only ever delivers to canary, and it fails closed for any target added to the map later.",
-      "global_env_mutation": "The policy rewrites process.env.UNIT_TALK_DISCORD_TARGET_MAP, which apps/api and apps/worker read directly. It is now restored on both the success and error paths, with a test asserting the supplied map survives a full pass."
+      "global_env_mutation": "The policy rewrites process.env.UNIT_TALK_DISCORD_TARGET_MAP, which apps/api and apps/worker read directly. Everything from the startRun await down is wrapped in try/finally, so the map is restored on every exit path -- success, a delivery failure, and a throw on the system_runs insert itself. The injected environment object is restored too. An earlier revision placed the restore after startRun, where a Supabase blip on that insert would skip it; two tests now cover both paths and removing the finally fails both."
     },
     "undelivered_retry": {
       "status": "PASS",
@@ -140,10 +140,10 @@
         "a detection outside the four-hour retry window is not resent",
         "a retry-lookup failure cannot suppress the current pass's own alerts"
       ],
-      "corrected_defect": "An earlier revision filtered on a `detected_at` field. `alert_detections` has no such column (verified against packages/db/src/database.types.ts: the row exposes created_at, current_snapshot_at, baseline_snapshot_at). Every candidate therefore failed Date.parse and the retry silently returned zero. It now reads `created_at` with no cast, so the type system enforces the field, and the test fixture is built from a real AlertDetectionRecord instead of a hand-written shape.",
+      "corrected_defect": "An earlier revision filtered on a `detected_at` field. `alert_detections` has no such column (verified against packages/db/src/database.types.ts: the row exposes created_at, current_snapshot_at, baseline_snapshot_at). Every candidate therefore failed Date.parse and the retry silently returned zero. It now reads `created_at` with no cast, and the test fixture is built from a real AlertDetectionRecord instead of a hand-written shape.",
       "runtime_measurement": "A probe persisted one genuinely undelivered alert-worthy detection via saveDetection and called the shipped function: rows=1, has created_at=true, notified=false, RETRIED COUNT = 1. The same probe measured 0 before this correction.",
       "lookup_window": "listRecent orders by current_snapshot_at with no notified filter, so its limit truncates BEFORE the age cutoff is applied. The limit is 2000; production currently holds 176 undelivered rows, so the earlier limit of 200 was uncomfortably close to silently dropping retries behind newer rows.",
-      "backlog_safety": "All 176 undelivered production rows were created 2026-04-28, roughly 117 days old, so the four-hour cutoff prevents the first live run from delivering a 176-alert backlog."
+      "backlog_safety": "All 176 undelivered production rows were created between 2026-04-26 17:55 and 2026-04-28 14:44 UTC (77 of them on 04-28), roughly 117 days old, so the four-hour cutoff prevents the first live run from delivering the backlog. Measured directly against zfzdnfwdarxucxtaojxm."
     },
     "threshold_calibration": {
       "status": "PASS",
@@ -214,9 +214,10 @@
       "persisted-but-undelivered alerts are retried without duplicating successful deliveries, reading the real created_at column (measured RETRIED COUNT = 1 against a persisted row; it was 0 before)",
       "thresholds calibrated to the observed scheduler cadence as a floor that does not disable operator knobs, including the workflow's ALERT_SYSTEM_STALE_MINUTES default, now covered by a test",
       "self-monitor described accurately, including its same-run tautology; UTV2-1738 owns external scheduler-death detection",
-      "proof, diff stat (1209/163 over 3 files), test count (19), changed-file count (9), and both inversion transcripts recomputed from the commands at this head after refreshing to origin/main"
+      "proof, diff stat (1275/163 over 3 files), test count (20), changed-file count (9), and both inversion transcripts recomputed from the commands at this head"
     ],
     "independent_review_defects_fixed": "An independent adversarial review at the preceding head 3b9dfd4b (since rewritten) returned CHANGES_REQUIRED with five blockers. All five are fixed at this head: the dead retry column, its self-confirming test fixture, the workflow pinning the self-monitor threshold to 15, the un-recomputed evidence counts, and a stale contradictory Safety posture section. Two follow-ups (the constant threshold expression and the retry-ladder cost) are also fixed; the alert-agent entry point and lane classification are disclosed as known limitations.",
-    "second_review_defects_fixed": "A second independent adversarial review confirmed the implementation fixes all seven prior items and returned CHANGES_REQUIRED on the proof bundle only: a stale diff stat asserted as recomputed, a non-reproducible inversion transcript, and a blockedMemberDeliveries claim contradicted by the code. All three are corrected here from measured output. Its code follow-ups are also fixed: the unrestored global env mutation, the retry lookup window truncating before the age cutoff, the untested workflow default, and a fixture field that violated a NOT NULL column type."
+    "second_review_defects_fixed": "A second independent adversarial review confirmed the implementation fixes all seven prior items and returned CHANGES_REQUIRED on the proof bundle only: a stale diff stat asserted as recomputed, a non-reproducible inversion transcript, and a blockedMemberDeliveries claim contradicted by the code. All three are corrected here from measured output. Its code follow-ups are also fixed: the unrestored global env mutation, the retry lookup window truncating before the age cutoff, the untested workflow default, and a fixture field that violated a NOT NULL column type.",
+    "third_review_defects_fixed": "A third independent adversarial review confirmed all three prior proof blockers genuinely fixed and found four residual text defects plus one code leak. Fixed here: a re-assertion of the withdrawn type-system claim that survived elsewhere in the file, a stale '17 node:test cases' string beside a tests:19 field, a measured DB date stated as a single day when the range is 04-26 to 04-28, and the restore being reachable only after startRun rather than in a finally."
   }
 }
