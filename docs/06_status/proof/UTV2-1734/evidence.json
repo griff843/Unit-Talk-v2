@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1734",
+  "pr_number": 1438,
+  "source_sha": "804203fda1a929303fc027951a66b0df454656c1",
+  "reviewed_head_sha": "804203fda1a929303fc027951a66b0df454656c1",
+  "evidence_commit_sha": null,
+  "current_head_sha": "804203fda1a929303fc027951a66b0df454656c1",
+  "merge_sha": null,
+  "gate_results": [
+    {
+      "gate": "verify-static",
+      "verdict": "PASS",
+      "detail": "pnpm verify:static completed with exit code 0"
+    },
+    {
+      "gate": "focused-issue-tests",
+      "verdict": "PASS",
+      "detail": "95 tests passed; 0 failed"
+    },
+    {
+      "gate": "writable-live-db",
+      "verdict": "SKIP",
+      "detail": "Blocked/deferred to staging-ci because the local target is not provably the authorized staging project"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "title": "Executor work order: deliver the task contract to the prompt, fail closed without it",
+  "tier": "T1",
+  "status": "evidence_complete_pending_pm_approval",
+  "generated_at": "2026-08-23T02:53:49Z",
+  "sha_binding": {
+    "verified_source_sha": "804203fda1a929303fc027951a66b0df454656c1",
+    "verified_source_note": "Verified implementation plus the automated PR-binding metadata commit; subsequent commits are proof-path only until review",
+    "merge_sha": null,
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "head_sha",
+    "bound_at": "2026-08-23T02:53:49Z"
+  },
+  "static_proof": {
+    "verify_static": { "command": "pnpm verify:static", "status": "PASS", "exit_code": 0 },
+    "type_check": { "command": "pnpm type-check", "status": "PASS", "exit_code": 0 },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ops/claude-exec.test.ts' 'scripts/ops/codex-exec.test.ts' 'scripts/ops/execution-packet.test.ts' 'scripts/ops/lane-start.test.ts'",
+      "status": "PASS",
+      "tests": 95,
+      "pass": 95,
+      "fail": 0
+    }
+  },
+  "runtime_proof": {
+    "dispatch_dry_run": {
+      "command": "pnpm ops:codex-exec -- --issue UTV2-1734 --dry-run",
+      "status": "PASS",
+      "exit_code": 0,
+      "observed": "Sanctioned Codex dispatch rendered the integrity-bound authoritative task contract before the repo brief."
+    },
+    "writable_live_db": {
+      "status": "BLOCKED_DEFERRED",
+      "reason": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    },
+    "queries": [],
+    "row_counts": []
+  },
+  "acceptance_criteria": {
+    "linear_contract_captured_at_launch": "PASS",
+    "claude_and_codex_share_rendered_contract": "PASS",
+    "missing_or_malformed_contract_refuses_before_spawn": "PASS",
+    "pre_contract_lane_dispatch_compatibility": "PASS",
+    "controls_proved_by_inversion": "PASS"
+  },
+  "adversarial_review": {
+    "count": 1,
+    "mode": "independent_read_only",
+    "blockers_found": 3,
+    "correction_cycles": 1,
+    "resolved": [
+      "Linear token removed from curl argv",
+      "behavioral executor-boundary refusal tests added",
+      "legacy capture and persistence made reachable from sanctioned executors"
+    ]
+  },
+  "verdict": "PASS_PENDING_STAGING_DB_AND_PM_APPROVAL"
+}
