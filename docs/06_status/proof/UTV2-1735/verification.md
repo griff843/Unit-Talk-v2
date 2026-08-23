@@ -1,6 +1,8 @@
 # PROOF: UTV2-1735
 
-Verified implementation SHA: `af9c95d01a51847e44a5df351956eadf02c8a9f7`
+Verified source SHA: `f98eb1e981070b4a21e669238d7a0449901d619f`
+
+Substantive implementation SHA: `af9c95d01a51847e44a5df351956eadf02c8a9f7`
 
 Pre-merge this anchor identifies the substantive implementation commit. Later commits are restricted to proof and lane-control artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.
 
@@ -14,6 +16,7 @@ Pre-merge this anchor identifies the substantive implementation commit. Later co
 | `pnpm verify:static` | PASS | Environment, policy, lint, type-check, build, aggregate `pnpm test`, Smart Form, and command checks passed. |
 | `pnpm verify` | BLOCKED/DEFERRED | The static stage passed; the writable DB stage refused the non-staging workstation target before DB tests ran. |
 | `pnpm test:db` | BLOCKED/DEFERRED | Must run in the governed `staging-ci` environment against `xskgrzbteyqdufktjrjx`. |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 10 changed files; no R-level rules matched. |
 
 ### Focused runtime proof
 
