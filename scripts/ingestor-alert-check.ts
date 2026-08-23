@@ -6,6 +6,7 @@ import {
   type RepositoryBundle,
   type SystemRunRecord,
   type SystemRunRepository,
+  type AlertDetectionRecord,
 } from '@unit-talk/db';
 import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
 import {
@@ -15,6 +16,7 @@ import {
   type AlertNotificationPassOptions,
   type AlertNotificationPassResult,
   type RunAlertDetectionPassResult,
+  resolveDiscordChannelId,
 } from '@unit-talk/alert-runtime';
 
 export type IngestorAlertCheck =
@@ -111,12 +113,143 @@ export function resolveIngestorAlertThresholds(
     productionCadence ? 5 : 30,
   );
 
+  // The workflow is scheduled `*/5`, but GitHub Actions does not honour that
+  // under load: measured gaps across eight consecutive runs were
+  // 20/29/36/49/18/24/21 minutes, an effective cadence near 28. Clamping the
+  // thresholds to 5 would mark a perfectly healthy system CRITICAL on almost
+  // every pass once ingestion resumes, and a monitor that cries wolf is how the
+  // last outage stayed invisible for 116 days. The floor is set above the
+  // observed worst gap with margin; detection latency against a multi-day
+  // outage is unaffected.
+  const OBSERVED_SCHEDULER_CADENCE_FLOOR_MINUTES = 60;
   return {
-    offers: productionCadence ? Math.min(offers, 5) : offers,
+    // Math.max(offers, FLOOR), not Math.max(Math.min(offers, 5), FLOOR): the
+    // latter is always exactly FLOOR, which silently disabled the env knob.
+    offers: productionCadence ? Math.max(offers, OBSERVED_SCHEDULER_CADENCE_FLOOR_MINUTES) : offers,
     results: parseThreshold(environment.INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES, 60),
-    cycle: productionCadence ? Math.min(cycle, 5) : cycle,
-    alertSystem: parseThreshold(environment.ALERT_SYSTEM_STALE_MINUTES, 15),
+    cycle: productionCadence ? Math.max(cycle, OBSERVED_SCHEDULER_CADENCE_FLOOR_MINUTES) : cycle,
+    alertSystem: parseThreshold(environment.ALERT_SYSTEM_STALE_MINUTES, 60),
   };
+}
+
+/**
+ * Member-facing delivery is opt-in (review thread, PR #1439).
+ *
+ * `resolveChannels` fans an `alert-worthy` detection to `discord:canary` AND
+ * `discord:trader-insights`, a live VIP+ member channel. Enabling real delivery
+ * on this scheduled pass therefore turned on member-facing alerts implicitly,
+ * as a side effect of restoring monitoring. Member delivery is a separate
+ * activation decision and is not authorized.
+ *
+ * `resolveChannels` lives outside this lane's scope, so the gate is enforced at
+ * the delivery boundary the script owns: any Discord message POST to a channel
+ * that is not the allow-listed canary target is refused. Fail-closed — an
+ * unresolvable canary id blocks every channel rather than defaulting open.
+ */
+export const MEMBER_CHANNELS_ENABLED_ENV = 'ALERT_MEMBER_CHANNELS_ENABLED';
+export const CANARY_TARGET = 'discord:canary';
+
+export function buildChannelGuardedFetch(
+  inner: typeof fetch,
+  environment: NodeJS.ProcessEnv,
+  onBlocked?: (channelId: string) => void,
+): typeof fetch {
+  if (environment[MEMBER_CHANNELS_ENABLED_ENV] === 'true') return inner;
+  const canaryId = resolveDiscordChannelId(CANARY_TARGET, environment);
+  const allowed = new Set<string>(canaryId ? [canaryId] : []);
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const url = typeof input === 'string' ? input : String((input as { url?: string }).url ?? input);
+    const match = /discord\.com\/api\/v\d+\/channels\/(\d+)\/messages/u.exec(url);
+    if (match) {
+      const channelId = match[1] ?? '';
+      if (!allowed.has(channelId)) {
+        onBlocked?.(channelId);
+        // Refused, not silently dropped: surfaces as a delivery failure the
+        // notification pass records, so the block is visible rather than
+        // looking like a successful send.
+        throw new Error(
+          `member-facing delivery is not authorized: refused Discord channel ${channelId}. ` +
+            `Set ${MEMBER_CHANNELS_ENABLED_ENV}=true only after a separate activation decision.`,
+        );
+      }
+    }
+    return inner(input, init);
+  }) as typeof fetch;
+}
+
+/**
+ * Detections persisted but never delivered must be retried (review thread).
+ *
+ * When every Discord attempt fails in a pass, the detection stays persisted
+ * with `notified=false`. Later passes re-detect the same movement, collide with
+ * its idempotency key, and count it as a duplicate — so it never appears in
+ * `persistedSignals` again and is never retried once Discord recovers. The
+ * alert is lost permanently, silently.
+ *
+ * Undelivered detections inside the lookback are merged back into each pass,
+ * de-duplicated by id so a signal already in this pass is not submitted twice.
+ * Only `notified === false` records are retried, so successful deliveries are
+ * never repeated.
+ */
+/**
+ * Removes every non-canary Discord target from the resolvable target map unless
+ * member-facing delivery has been explicitly activated.
+ *
+ * This is the primary enforcement point. The delivery loop skips any channel
+ * that `resolveDiscordChannelId` cannot resolve (`continue`, no attempt, no
+ * retry, no audit row), so making the member target unresolvable costs nothing,
+ * whereas refusing it at the transport burns the full retry ladder — four
+ * attempts and seven seconds of real sleep per detection — against a channel
+ * that can never succeed. With `timeout-minutes: 10`, that is roughly 86
+ * alert-worthy detections before the job is killed.
+ *
+ * `buildChannelGuardedFetch` remains as defence in depth for any path that
+ * resolves a channel some other way.
+ */
+export function applyMemberChannelPolicy(environment: NodeJS.ProcessEnv): {
+  removedTargets: string[];
+} {
+  if (environment[MEMBER_CHANNELS_ENABLED_ENV] === 'true') return { removedTargets: [] };
+  const raw = environment.UNIT_TALK_DISCORD_TARGET_MAP?.trim();
+  if (!raw) return { removedTargets: [] };
+  let parsed: Record<string, string>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, string>;
+  } catch {
+    // Unparseable map: resolveDiscordChannelId already resolves nothing, which
+    // is fail-closed. Leave it untouched rather than inventing a map.
+    return { removedTargets: [] };
+  }
+  if (parsed === null || typeof parsed !== 'object') return { removedTargets: [] };
+  const removedTargets = Object.keys(parsed).filter((key) => key !== CANARY_TARGET);
+  if (removedTargets.length === 0) return { removedTargets: [] };
+  const canaryOnly: Record<string, string> = {};
+  const canaryValue = parsed[CANARY_TARGET];
+  if (canaryValue !== undefined) canaryOnly[CANARY_TARGET] = canaryValue;
+  environment.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify(canaryOnly);
+  return { removedTargets };
+}
+
+export function mergeUndeliveredDetections(
+  fresh: AlertDetectionRecord[],
+  recent: AlertDetectionRecord[],
+  now: Date,
+  lookbackMinutes: number,
+): AlertDetectionRecord[] {
+  const seen = new Set(fresh.map((entry) => entry.id));
+  const cutoff = now.getTime() - lookbackMinutes * 60_000;
+  const retries = recent.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    if (entry.notified) return false;
+    // `created_at` is when the detection row was persisted, which is the age
+    // that matters for "how long has this been sitting undelivered". There is
+    // deliberately no cast here: `alert_detections` has no `detected_at`
+    // column, and an earlier revision of this function read one, which made
+    // every candidate fail Date.parse and silently retried nothing.
+    const persistedAt = Date.parse(entry.created_at);
+    return Number.isFinite(persistedAt) && persistedAt >= cutoff;
+  });
+  return [...fresh, ...retries];
 }
 
 function timestampAgeMinutes(isoTimestamp: string, now: Date): number | null {
@@ -308,19 +441,49 @@ export async function runScheduledAlertPass(
     enabled: true,
     now: now.toISOString(),
   });
+  // Retry anything persisted but never delivered, then gate delivery to canary.
+  let submittedSignals = detection.persistedSignals;
+  let retriedCount = 0;
+  try {
+    const recent = await repositories.alertDetections.listRecent(200, undefined);
+    const merged = mergeUndeliveredDetections(detection.persistedSignals, recent, now, 240);
+    retriedCount = merged.length - detection.persistedSignals.length;
+    submittedSignals = merged;
+  } catch {
+    // A retry-lookup failure must never suppress this pass's own alerts.
+    submittedSignals = detection.persistedSignals;
+  }
+  // Primary enforcement: make member targets unresolvable so the delivery loop
+  // skips them for free. resolveDiscordChannelId reads process.env directly, so
+  // the policy must be applied there for production to be covered.
+  const memberPolicy = applyMemberChannelPolicy(process.env);
+  if (environment !== process.env) applyMemberChannelPolicy(environment);
+  // Defence in depth. Counts DISTINCT refused channels, not retry attempts, so
+  // the recorded number matches what a reader would expect.
+  const blockedChannels = new Set<string>();
+  const guardedFetch = buildChannelGuardedFetch(
+    options.fetchImpl ?? fetch,
+    process.env,
+    (channelId) => { blockedChannels.add(channelId); },
+  );
+
   const notificationRun = await repositories.runs.startRun({
     runType: 'alert.notification',
-    details: { signalCount: detection.persistedSignals.length },
+    details: {
+      signalCount: submittedSignals.length,
+      freshCount: detection.persistedSignals.length,
+      retriedUndelivered: retriedCount,
+    },
   });
   let notification: AlertNotificationPassResult;
   try {
     notification = await runners.notification(
-      detection.persistedSignals,
+      submittedSignals,
       repositories.alertDetections,
       {
         dryRun: config.dryRun,
         now,
-        fetchImpl: options.fetchImpl,
+        fetchImpl: guardedFetch,
         sleepImpl: options.sleepImpl,
         audit: repositories.audit,
       },
@@ -336,7 +499,15 @@ export async function runScheduledAlertPass(
   await repositories.runs.completeRun({
     runId: notificationRun.id,
     status: notification.failed > 0 ? 'failed' : 'succeeded',
-    details: notification,
+    // Refused member-facing deliveries are recorded so the policy leaves a
+    // durable trace rather than only an audit row per retry attempt.
+    details: {
+      ...notification,
+      // Member targets removed from the resolvable map before delivery.
+      memberTargetsWithheld: memberPolicy.removedTargets,
+      // Non-zero only if something resolved a member channel another way.
+      blockedMemberChannels: blockedChannels.size,
+    },
   });
 
   if (notification.failed > 0) {

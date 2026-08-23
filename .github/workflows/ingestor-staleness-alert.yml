@@ -41,6 +41,11 @@ jobs:
           SYSTEM_PICKS_ENABLED: 'false'
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}
+          # Member-facing alert delivery is NOT authorized. The alert-worthy tier
+          # would otherwise fan out to discord:trader-insights via resolveChannels().
+          # This scheduled pass is canary-only; flipping this to 'true' is a
+          # separate activation decision, not a config tidy-up.
+          ALERT_MEMBER_CHANNELS_ENABLED: 'false'
 
   monitor:
     name: Check ingestion and alert-system freshness
@@ -70,7 +75,10 @@ jobs:
           UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES: ${{ vars.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES || '30' }}
           INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES: ${{ vars.INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES || '30' }}
           INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES: ${{ vars.INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES || '60' }}
-          ALERT_SYSTEM_STALE_MINUTES: ${{ vars.ALERT_SYSTEM_STALE_MINUTES || '15' }}
+          # 60, not 15: the alert.detection/alert.notification runs this threshold
+          # watches are produced by this same throttled scheduler (measured ~28 min
+          # effective cadence against a */5 cron), so 15 marks a healthy system stale.
+          ALERT_SYSTEM_STALE_MINUTES: ${{ vars.ALERT_SYSTEM_STALE_MINUTES || '60' }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}

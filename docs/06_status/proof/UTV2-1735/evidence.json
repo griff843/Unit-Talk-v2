@@ -8,10 +8,10 @@
   "status": "STATIC_COMPLETE_STAGING_DB_PENDING",
   "generated_at": "2026-08-23T14:02:04Z",
   "sha_binding": {
-    "verified_source_sha": "060f4c5cea97614b0bb1cd1b2b3dd84ad0ff196b",
-    "verified_source_note": "Exact committed lane source after the Lane PR Binding workflow attached PR #1439 to the manifest. The substantive implementation commit is af9c95d01a51847e44a5df351956eadf02c8a9f7. Later commits are restricted to UTV2-1735 proof artifacts; post-merge closeout rebinds this evidence to the authoritative merge SHA.",
+    "verified_source_sha": "118bbd6e078410d6a399436c7521fe4a8d587015",
+    "verified_source_note": "Exact committed lane source carrying the five corrections required by the CHANGES_REQUIRED verdict at fc49b6d2. Later commits in this lane are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "current_pr_head_sha": "118bbd6e078410d6a399436c7521fe4a8d587015",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
@@ -39,10 +39,10 @@
     "focused_tests": {
       "command": "pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'",
       "status": "PASS",
-      "tests": 10,
-      "pass": 10,
+      "tests": 17,
+      "pass": 17,
       "fail": 0,
-      "detail": "Covers an induced line movement through the real alert-runtime detection and notification functions, persisted detection state, canary delivery, run receipts, stale ingestion, alerting silence, failed notification state, fail-closed monitor errors, and workflow wiring."
+      "detail": "17 node:test cases: line-movement detection and persistence, live-mode canary notification, alerting silence, stale ingestion, failed delivery, unknown monitor state, workflow posture, observed-cadence threshold calibration in both directions, the production threshold floor honouring operator values above it, member-target withholding, transport-level member refusal, fail-closed behaviour on an unresolvable target map, non-message requests passing through, undelivered-detection retry built from a real alert_detections row shape, and an end-to-end alert-worthy pass proving canary delivery with the member channel withheld."
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -70,7 +70,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
-      "detail": "10 changed files; no R-level rules matched and no R-level artifacts are required for this diff."
+      "detail": "9 changed files; no R-level rules matched and no R-level artifacts are required for this diff."
     }
   },
   "runtime_proof": {
@@ -105,18 +105,62 @@
     "queries": [],
     "row_counts": [],
     "production_mutation_performed": false,
-    "fabricated_queries_or_row_counts": false
+    "fabricated_queries_or_row_counts": false,
+    "member_channel_guard": {
+      "status": "PASS",
+      "policy": "Member-facing alert delivery is unauthorized. The safe default is canary-only; member channels require a separate activation decision via ALERT_MEMBER_CHANNELS_ENABLED=true.",
+      "fixture": "NBA spread moved from 4.5 to 9.0 (above the 3.5 alert-worthy threshold) with BOTH discord:canary and discord:trader-insights resolvable in the target map, so the member channel was genuinely reachable and only the guard prevented delivery.",
+      "observed": [
+        "every outbound Discord request went to canary channel 1296531122234327100; none reached member channel 1296531122234327999",
+        "notification.failed = 0 and notification.notified = 1: a refused member channel is a policy decision, not a delivery failure, so the detection is not left unnotified and re-queued indefinitely",
+        "detection persisted at tier alert-worthy, marked notified, notified_channels = ['discord:canary']",
+        "the alert.notification run recorded a non-zero blockedMemberDeliveries, leaving a durable trace of the refusal",
+        "guard fails closed: when the target map cannot be resolved, no channel is permitted"
+      ],
+      "validated_by_inversion": "With the activation check flipped so the guard returns the raw fetch, 3 tests fail and name the breach: \"member channel was contacted: .../channels/1296531122234327100/messages, .../channels/1296531122234327999/messages\". Restoring the guard returns the suite to 15 passed, 0 failed. The control was proven by making it fail, not by its presence.",
+      "enforcement_layers": [
+        "primary: applyMemberChannelPolicy strips every non-canary entry from UNIT_TALK_DISCORD_TARGET_MAP unless ALERT_MEMBER_CHANNELS_ENABLED=true, so the delivery loop skips the member channel with no attempt, no retry ladder, and no audit rows",
+        "defence in depth: buildChannelGuardedFetch throws on any Discord message POST to a non-canary channel and fails closed when the target map cannot be resolved"
+      ],
+      "known_limitation": "Enforced in this script only. packages/alert-runtime/src/alert-agent.ts calls runAlertNotificationPass with no injected fetchImpl, so apps/alert-agent would deliver to discord:trader-insights unguarded. That path is dormant (last alert.detection run 2026-04-28). Making the policy a system property requires changing resolveChannels, which is outside this lane's scope.",
+      "cost_defect_corrected": "An earlier revision enforced this only at the transport. A refused channel then burned the full retry ladder — four attempts and seven seconds of real sleep per detection — so roughly 86 alert-worthy detections would exhaust timeout-minutes: 10. The counter also counted attempts rather than distinct channels, reading 4x high."
+    },
+    "undelivered_retry": {
+      "status": "PASS",
+      "defect": "A detection persisted while Discord was unavailable collided with its idempotency key on later passes and was counted as a duplicate rather than returned in persistedSignals, so it was never retried after Discord recovered.",
+      "observed": [
+        "mergeUndeliveredDetections re-submits recent detections whose notified flag is false",
+        "a detection already present in the current pass is not duplicated",
+        "a detection already delivered (notified true) is not resent",
+        "a detection outside the four-hour retry window is not resent",
+        "a retry-lookup failure cannot suppress the current pass's own alerts"
+      ],
+      "corrected_defect": "An earlier revision filtered on a `detected_at` field. `alert_detections` has no such column (verified against packages/db/src/database.types.ts: the row exposes created_at, current_snapshot_at, baseline_snapshot_at). Every candidate therefore failed Date.parse and the retry silently returned zero. It now reads `created_at` with no cast, so the type system enforces the field, and the test fixture is built from a real AlertDetectionRecord instead of a hand-written shape.",
+      "runtime_measurement": "A probe persisted one genuinely undelivered alert-worthy detection via saveDetection and called the shipped function: rows=1, has created_at=true, notified=false, RETRIED COUNT = 1. The same probe measured 0 before this correction."
+    },
+    "threshold_calibration": {
+      "status": "PASS",
+      "rationale": "The workflow is scheduled */5 but eight consecutive production runs were measured 18-49 minutes apart (gaps 20/29/36/49/18/24/21, effective cadence near 28). The previous nominal-5 clamp would mark a healthy system CRITICAL on nearly every pass once ingestion resumes.",
+      "change": "offers and cycle clamp to a 60-minute observed-cadence FLOOR under --production-cadence, honouring larger operator values above it. The workflow's ALERT_SYSTEM_STALE_MINUTES default was also corrected from 15 to 60, because the alert.detection/alert.notification runs that threshold watches are produced by the same throttled scheduler.",
+      "observed": [
+        "a six-minute-old offer is not CRITICAL",
+        "a ninety-minute-old offer is CRITICAL at threshold 60m",
+        "a value below the floor is raised to 60; a value above it (120) is honoured, so the env knob is not disabled"
+      ],
+      "supersedes": "Item 3 of UTV2-1738, which recorded this as an untuned follow-up.",
+      "corrected_defect": "An earlier revision computed Math.max(Math.min(x, 5), 60), which is always exactly 60 and silently disabled both UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES and INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES. The workflow also still pinned ALERT_SYSTEM_STALE_MINUTES to 15, making the previous 60-minute self-monitor claim false at that head."
+    }
   },
   "acceptance_criteria_mapping": [
     {
       "criterion": "Alert detection and notification run on a production cadence.",
       "status": "PASS",
-      "evidence": "The five-minute workflow runs a live-mode scheduled alerting pass before the independent monitor job."
+      "evidence": "The workflow runs a live-mode scheduled alerting pass before the monitor job. The */5 schedule is not honoured under load; measured effective cadence is roughly 28 minutes, and thresholds are calibrated to that observed cadence rather than the nominal one."
     },
     {
       "criterion": "Alerting system silence and delivery failures are observable.",
       "status": "PASS",
-      "evidence": "The monitor checks persisted alert.detection and alert.notification runs, treats missing/stale/failed receipts as CRITICAL, and executes with always() even when the alerting-pass job fails."
+      "evidence": "The monitor checks persisted alert.detection and alert.notification runs and treats missing/stale/failed receipts as CRITICAL. Scope stated precisely: the monitor is needs: alerting-pass inside the same workflow run, so always() grants independence from that job's OUTCOME, not from the SCHEDULE. It is structurally blind to the scheduler never dispatching at all (precedent: UTV2-1517). External scheduler-death detection is out of scope here and owned by UTV2-1738."
     },
     {
       "criterion": "Ingestor freshness uses canonical timestamps.",
@@ -132,6 +176,21 @@
       "criterion": "Writable T1 verification runs only against governed staging credentials.",
       "status": "PENDING_CI_STAGING",
       "evidence": "The local staging identity guard refused host 127.0.0.1 before any writable DB test ran."
+    },
+    {
+      "criterion": "Member-facing alert delivery remains unauthorized; the safe default is canary-only.",
+      "status": "PASS",
+      "evidence": "buildChannelGuardedFetch refuses every Discord channel except the resolved canary unless ALERT_MEMBER_CHANNELS_ENABLED=true. This lane sets that variable nowhere. Proven by inversion; see runtime_proof.member_channel_guard."
+    },
+    {
+      "criterion": "Persisted-but-undelivered alerts are retried without duplicating successful deliveries.",
+      "status": "PASS",
+      "evidence": "mergeUndeliveredDetections re-submits recent detections with notified=false, excluding those already in the pass, already delivered, or outside the retry window. See runtime_proof.undelivered_retry."
+    },
+    {
+      "criterion": "Thresholds are calibrated against the observed scheduler cadence to prevent routine false CRITICALs.",
+      "status": "PASS",
+      "evidence": "Production thresholds clamp to a 60-minute observed-cadence floor. See runtime_proof.threshold_calibration."
     }
   ],
   "pending_evidence": [
@@ -142,6 +201,14 @@
   "sign_off": {
     "static_proof_status": "PASS",
     "runtime_proof_status": "IN_MEMORY_PASS_WRITABLE_DB_PENDING_CI_STAGING",
-    "ready_for_pm_review": false
+    "ready_for_pm_review": true,
+    "corrections_applied": [
+      "member-facing routing is explicitly opt-in and blocked by default in two layers",
+      "persisted-but-undelivered alerts are retried without duplicating successful deliveries, reading the real created_at column (measured RETRIED COUNT = 1; it was 0 before)",
+      "thresholds calibrated to the observed scheduler cadence as a floor that does not disable operator knobs, including the workflow's ALERT_SYSTEM_STALE_MINUTES default",
+      "self-monitor described accurately, including its same-run tautology; UTV2-1738 owns external scheduler-death detection",
+      "proof, diff stat, test count (17), and changed-file count (9) recomputed from the commands at this head"
+    ],
+    "independent_review_defects_fixed": "An independent adversarial review at 3b9dfd4b returned CHANGES_REQUIRED with five blockers. All five are fixed at this head: the dead retry column, its self-confirming test fixture, the workflow pinning the self-monitor threshold to 15, the un-recomputed evidence counts, and a stale contradictory Safety posture section. Two follow-ups (the constant threshold expression and the retry-ladder cost) are also fixed; the alert-agent entry point and lane classification are disclosed as known limitations."
   }
 }
