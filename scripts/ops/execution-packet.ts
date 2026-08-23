@@ -68,6 +68,11 @@ export interface TaskContract {
   non_goals: string[];
   required_evidence: string[];
   exit_criteria: string[];
+  /**
+   * Description sections no whitelist consumed. Carried so the prompt can show
+   * the complete issue rather than silently discarding the remainder.
+   */
+  unmapped_sections: string[];
   source: {
     kind: 'linear-issue-snapshot';
     issue_url: string;
@@ -243,6 +248,7 @@ function sectionLines(
   sections: Map<string, string[]>,
   headings: string[],
   prefix = false,
+  matched?: string[],
 ): string[] {
   const wanted = headings.map(normalizeHeading);
   for (const [heading, lines] of sections) {
@@ -251,10 +257,45 @@ function sectionLines(
         (value) => heading === value || (prefix && heading.startsWith(value)),
       )
     ) {
+      matched?.push(heading);
       return lines;
     }
   }
   return [];
+}
+
+/**
+ * Sections the whitelists did not consume (UTV2-1734 review finding B1).
+ *
+ * Once a description carries an exact `## Acceptance criteria` heading, only
+ * the six recognised headings were kept and everything else was discarded with
+ * no residue. Measured across the live board, 14 of 18 sectioned descriptions
+ * lost more than a fifth of their content and one lost 77% — including, on
+ * UTV2-1383, the single line forbidding a blanket UPDATE against production.
+ *
+ * The prompt then rendered `(none declared)` for the missing fields, which is
+ * an affirmative false claim rather than an omission, while instructing the
+ * executor not to go and read the issue. That is a safety reduction against
+ * today's behaviour, where an executor with no contract reads the issue itself.
+ *
+ * Nothing from the description is dropped now: unrecognised sections travel
+ * with the contract and are rendered verbatim.
+ */
+function unmappedSections(
+  sections: Map<string, string[]>,
+  consumed: string[][],
+): Array<{ heading: string; lines: string[] }> {
+  const taken = new Set<string>();
+  for (const group of consumed) {
+    for (const heading of group) taken.add(heading);
+  }
+  const out: Array<{ heading: string; lines: string[] }> = [];
+  for (const [heading, lines] of sections) {
+    if (taken.has(heading)) continue;
+    if (lines.every((line) => !line.trim())) continue;
+    out.push({ heading, lines });
+  }
+  return out;
 }
 
 function sectionItems(lines: string[]): string[] {
@@ -299,17 +340,18 @@ export function buildTaskContract(
   const title = source.title.trim();
   const description = source.description.trim();
   const sections = parseSections(description);
+  const consumed: string[] = [];
   const objectiveItems = sectionItems(
-    sectionLines(sections, ['objective', 'required outcome']),
+    sectionLines(sections, ['objective', 'required outcome'], false, consumed),
   );
   const objective = objectiveItems.join('\n') || title;
   const explicitAcceptance = sectionItems(
-    sectionLines(sections, ['acceptance criteria', 'acceptance criterion']),
+    sectionLines(sections, ['acceptance criteria', 'acceptance criterion'], false, consumed),
   );
   const hasAcceptanceHeading = [...sections.keys()].some((heading) =>
     ['acceptance criteria', 'acceptance criterion'].includes(heading),
   );
-  const exitCriteria = sectionItems(sectionLines(sections, ['exit criteria']));
+  const exitCriteria = sectionItems(sectionLines(sections, ['exit criteria'], false, consumed));
 
   // Existing issues predate the heading convention. Preserve their complete
   // work order verbatim instead of inventing criteria or bulk-migrating state.
@@ -339,18 +381,22 @@ export function buildTaskContract(
     issue_id: issueId,
     objective,
     acceptance_criteria: acceptanceCriteria,
-    guardrails: sectionItems(sectionLines(sections, ['guardrails'])),
+    guardrails: sectionItems(sectionLines(sections, ['guardrails'], false, consumed)),
     non_goals: sectionItems(
       sectionLines(
         sections,
         ['non goals', 'non-goals', 'out of scope', 'explicitly out of scope'],
         true,
+        consumed,
       ),
     ),
     required_evidence: sectionItems(
-      sectionLines(sections, ['required evidence', 'evidence']),
+      sectionLines(sections, ['required evidence', 'evidence'], false, consumed),
     ),
     exit_criteria: exitCriteria,
+    unmapped_sections: unmappedSections(sections, [consumed]).map(
+      (entry) => `${entry.heading}: ${entry.lines.join(' ').replace(/\s+/gu, ' ').trim()}`,
+    ),
     source: {
       kind: 'linear-issue-snapshot',
       issue_url: source.url.trim(),
@@ -634,10 +680,17 @@ export function readTaskContract(
 
 export function renderTaskContract(contract: TaskContract): string {
   assertTaskContract(contract);
+  const hasUnmapped = contract.unmapped_sections.length > 0;
+  // "(none declared)" is an assertion, not an omission. When the description
+  // carried sections no whitelist consumed, the honest statement is that the
+  // field was not extracted — and the content itself is rendered below, so the
+  // executor is never told a guardrail does not exist when one does.
   const render = (values: string[]): string =>
     values.length > 0
       ? values.map((value) => `- ${value}`).join('\n')
-      : '- (none declared)';
+      : hasUnmapped
+        ? '- (not extracted — see "Additional issue content" below)'
+        : '- (none declared)';
   return [
     `## Authoritative task contract (integrity hash ${contract.contract_hash})`,
     '',
@@ -660,6 +713,19 @@ export function renderTaskContract(contract: TaskContract): string {
     '',
     '### Exit criteria',
     render(contract.exit_criteria),
+    // Everything the whitelists did not classify, verbatim. Without this the
+    // prompt asserted a complete work order while having dropped up to 77% of
+    // the description — including, on one live lane, the only line forbidding
+    // a production mutation.
+    ...(contract.unmapped_sections.length > 0
+      ? [
+          '',
+          '### Additional issue content (not classified)',
+          'These sections were not mapped to a field above. They are part of the work order.',
+          '',
+          ...contract.unmapped_sections.map((entry) => `- ${entry}`),
+        ]
+      : []),
   ].join('\n');
 }
 

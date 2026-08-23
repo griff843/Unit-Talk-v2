@@ -481,3 +481,67 @@ test('packet permits canonical production only as guarded read-only observation'
     false,
   );
 });
+
+// ── UTV2-1734 review finding B1: nothing from the issue may be discarded ────
+//
+// Once a description carried an exact `## Acceptance criteria` heading, only
+// six whitelisted headings survived and the remainder was dropped silently,
+// while the prompt rendered "(none declared)" — an affirmative false claim —
+// and told the executor not to go read the issue. Measured on the live board,
+// 14 of 18 sectioned descriptions lost over a fifth of their content.
+
+const SECTIONED = [
+  '## Objective', 'Repair the rows.', '',
+  '## Acceptance criteria', '- Rows are repaired', '',
+  '## Production gate',
+  'No production write is authorized. Do not run a blanket UPDATE picks SET stake_units = 1.', '',
+  '## Rollback', 'Restore from the pre-change snapshot.',
+].join('\n');
+
+test('B1: sections outside the whitelist survive into the contract', () => {
+  const c = buildTaskContract({
+    identifier: 'UTV2-9400', title: 'T', url: 'u', description: SECTIONED,
+  });
+  assert.ok(c.unmapped_sections.length >= 2, 'unrecognised sections must be captured');
+  assert.ok(
+    c.unmapped_sections.some((s) => /blanket UPDATE/u.test(s)),
+    'a production-mutation guardrail must never be dropped',
+  );
+});
+
+test('B1: the rendered prompt contains the unmapped content verbatim', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({ identifier: 'UTV2-9401', title: 'T', url: 'u', description: SECTIONED }),
+  );
+  assert.match(rendered, /Additional issue content/u);
+  assert.match(rendered, /blanket UPDATE/u);
+  assert.match(rendered, /Restore from the pre-change snapshot/u);
+});
+
+test('B1: an empty field never claims "none declared" while content went unmapped', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({ identifier: 'UTV2-9402', title: 'T', url: 'u', description: SECTIONED }),
+  );
+  // The description declares no Guardrails heading, but it does carry unmapped
+  // sections — so the honest statement is "not extracted", never "none declared".
+  assert.doesNotMatch(rendered, /none declared/u);
+  assert.match(rendered, /not extracted — see "Additional issue content" below/u);
+});
+
+test('B1: a fully-mapped description still says "none declared" truthfully', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({
+      identifier: 'UTV2-9403', title: 'T', url: 'u',
+      description: '## Objective\nDo it.\n\n## Acceptance criteria\n- It is done\n',
+    }),
+  );
+  assert.match(rendered, /none declared/u, 'with nothing unmapped, the claim is true');
+});
+
+test('B1: no vocabulary is lost between description and rendered prompt', () => {
+  const c = buildTaskContract({ identifier: 'UTV2-9404', title: 'T', url: 'u', description: SECTIONED });
+  const rendered = renderTaskContract(c);
+  const words = (t: string): Set<string> => new Set(t.toLowerCase().match(/[a-z0-9_]{4,}/gu) ?? []);
+  const missing = [...words(SECTIONED)].filter((w) => !words(rendered).has(w));
+  assert.deepEqual(missing, [], `these words were dropped from the work order: ${missing.join(', ')}`);
+});
