@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1735",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Restore alert detection and notification, and monitor the alerting system itself",
+  "status": "STATIC_COMPLETE_STAGING_DB_PENDING",
+  "generated_at": "2026-08-23T14:02:04Z",
+  "sha_binding": {
+    "verified_source_sha": "af9c95d01a51847e44a5df351956eadf02c8a9f7",
+    "verified_source_note": "Exact substantive implementation commit. Later commits are restricted to UTV2-1735 proof and lane-control artifacts; post-merge closeout rebinds this evidence to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-23T14:02:04Z"
+  },
+  "scope": {
+    "implementation_paths": [
+      ".github/workflows/ingestor-staleness-alert.yml",
+      "scripts/ingestor-alert-check.ts",
+      "scripts/ingestor-alert-check.test.ts"
+    ],
+    "proof_paths": [
+      "docs/06_status/proof/UTV2-1735/evidence.json",
+      "docs/06_status/proof/UTV2-1735/model-routing.json",
+      "docs/06_status/proof/UTV2-1735/verification.md",
+      "docs/06_status/proof/UTV2-1735/diff-summary.md"
+    ],
+    "workflow_change": true,
+    "database_change": false,
+    "production_mutation_by_lane": false
+  },
+  "static_proof": {
+    "focused_tests": {
+      "command": "pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'",
+      "status": "PASS",
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "detail": "Covers an induced line movement through the real alert-runtime detection and notification functions, persisted detection state, canary delivery, run receipts, stale ingestion, alerting silence, failed notification state, fail-closed monitor errors, and workflow wiring."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "status": "PASS"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "status": "PASS"
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Environment checks, policy checks, lint, type-check, build, aggregate tests, Smart Form verification, and command verification passed."
+    },
+    "pnpm_verify": {
+      "command": "pnpm verify",
+      "status": "BLOCKED_DEFERRED_AT_STAGING_IDENTITY_GUARD",
+      "exit_code": 1,
+      "detail": "The full static stage passed. The final writable DB stage refused the workstation loopback target before executing DB tests, as required for a T1 lane."
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "status": "PASS"
+    }
+  },
+  "runtime_proof": {
+    "status": "IN_MEMORY_PASS_WRITABLE_DB_PENDING_CI_STAGING",
+    "induced_alert_path": {
+      "status": "PASS",
+      "fixture": "NBA spread moved from 4.5 to 6.5 across two provider-offer snapshots",
+      "observed": [
+        "one alert detection persisted",
+        "one live-mode notification dispatched to discord:canary through a stubbed HTTP transport",
+        "detection marked notified with discord:canary recorded",
+        "alert.detection and alert.notification system runs both recorded succeeded"
+      ]
+    },
+    "monitor_fault_injection": {
+      "status": "PASS",
+      "observed": [
+        "stale cycle and merged-offer timestamps produced CRITICAL findings delivered to the operations sink",
+        "stale or missing alert run receipts produced CRITICAL alerting-silence findings",
+        "a monitor query failure produced an UNKNOWN/CRITICAL finding and paged instead of reporting healthy"
+      ]
+    },
+    "writable_db_proof": {
+      "command": "pnpm test:db",
+      "status": "BLOCKED_DEFERRED",
+      "configured_host": "127.0.0.1",
+      "resolved_project_ref": "unidentified",
+      "required_project_ref": "xskgrzbteyqdufktjrjx",
+      "packet_required_record": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "observed_refusal": "[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+    },
+    "queries": [],
+    "row_counts": [],
+    "production_mutation_performed": false,
+    "fabricated_queries_or_row_counts": false
+  },
+  "acceptance_criteria_mapping": [
+    {
+      "criterion": "Alert detection and notification run on a production cadence.",
+      "status": "PASS",
+      "evidence": "The five-minute workflow runs a live-mode scheduled alerting pass before the independent monitor job."
+    },
+    {
+      "criterion": "Alerting system silence and delivery failures are observable.",
+      "status": "PASS",
+      "evidence": "The monitor checks persisted alert.detection and alert.notification runs, treats missing/stale/failed receipts as CRITICAL, and executes with always() even when the alerting-pass job fails."
+    },
+    {
+      "criterion": "Ingestor freshness uses canonical timestamps.",
+      "status": "PASS",
+      "evidence": "Merged offer freshness reads provider_cycle_status.updated_at; result freshness reads game_results.created_at; no provider_offers.updated_at query remains in the workflow script."
+    },
+    {
+      "criterion": "The repaired alert path is executable without enabling autonomous system picks.",
+      "status": "PASS",
+      "evidence": "ALERT_DRY_RUN is false for delivery, SYSTEM_PICKS_ENABLED remains false, and the focused test observes persisted detection and notification behavior."
+    },
+    {
+      "criterion": "Writable T1 verification runs only against governed staging credentials.",
+      "status": "PENDING_CI_STAGING",
+      "evidence": "The local staging identity guard refused host 127.0.0.1 before any writable DB test ran."
+    }
+  ],
+  "pending_evidence": [
+    "staging-ci writable DB proof against xskgrzbteyqdufktjrjx",
+    "external exact-head required-check provenance",
+    "post-merge proof rebind"
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "IN_MEMORY_PASS_WRITABLE_DB_PENDING_CI_STAGING",
+    "ready_for_pm_review": false
+  }
+}
