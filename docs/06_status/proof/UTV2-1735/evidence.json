@@ -8,10 +8,10 @@
   "status": "STATIC_COMPLETE_STAGING_DB_PENDING",
   "generated_at": "2026-08-23T14:02:04Z",
   "sha_binding": {
-    "verified_source_sha": "118bbd6e078410d6a399436c7521fe4a8d587015",
-    "verified_source_note": "Exact committed lane source carrying the five corrections required by the CHANGES_REQUIRED verdict at fc49b6d2. Later commits in this lane are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.",
+    "verified_source_sha": "62734e919af457b8ac19576ebd89051e69c32321",
+    "verified_source_note": "Exact committed lane source carrying the five PM-required corrections and the fixes for the defects an independent adversarial review found in the first attempt at them. The two earlier correction commits were rewritten into this one because a commit message referenced a second issue, which branch discipline refuses. Later commits are restricted to proof artifacts. Post-merge closeout rebinds the proof to the authoritative merge SHA.",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "118bbd6e078410d6a399436c7521fe4a8d587015",
+    "current_pr_head_sha": "62734e919af457b8ac19576ebd89051e69c32321",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
@@ -209,6 +209,6 @@
       "self-monitor described accurately, including its same-run tautology; UTV2-1738 owns external scheduler-death detection",
       "proof, diff stat, test count (17), and changed-file count (9) recomputed from the commands at this head"
     ],
-    "independent_review_defects_fixed": "An independent adversarial review at 3b9dfd4b returned CHANGES_REQUIRED with five blockers. All five are fixed at this head: the dead retry column, its self-confirming test fixture, the workflow pinning the self-monitor threshold to 15, the un-recomputed evidence counts, and a stale contradictory Safety posture section. Two follow-ups (the constant threshold expression and the retry-ladder cost) are also fixed; the alert-agent entry point and lane classification are disclosed as known limitations."
+    "independent_review_defects_fixed": "An independent adversarial review at the preceding head 3b9dfd4b (since rewritten) returned CHANGES_REQUIRED with five blockers. All five are fixed at this head: the dead retry column, its self-confirming test fixture, the workflow pinning the self-monitor threshold to 15, the un-recomputed evidence counts, and a stale contradictory Safety posture section. Two follow-ups (the constant threshold expression and the retry-ladder cost) are also fixed; the alert-agent entry point and lane classification are disclosed as known limitations."
   }
 }
