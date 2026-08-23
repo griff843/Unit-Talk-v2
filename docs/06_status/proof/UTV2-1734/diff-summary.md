@@ -1,5 +1,7 @@
 # UTV2-1734 Diff Summary
 
+MERGE_SHA: pending
+
 ## Summary
 
 - Captures the authoritative Linear issue snapshot into `.ops/sync/UTV2-1734.yml` with an integrity-bound task contract.
