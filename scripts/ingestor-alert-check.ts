@@ -474,7 +474,6 @@ export async function runScheduledAlertPass(
   const originalTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
   const originalInjectedMap = environment.UNIT_TALK_DISCORD_TARGET_MAP;
   const memberPolicy = applyMemberChannelPolicy(process.env);
-  if (environment !== process.env) applyMemberChannelPolicy(environment);
   const restoreTargetMap = (): void => {
     if (originalTargetMap === undefined) delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
     else process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalTargetMap;
@@ -497,6 +496,11 @@ export async function runScheduledAlertPass(
   // throw there would otherwise skip the restore and leave a canary-only map
   // behind for the rest of the process.
   try {
+  // Inside the try: a caller-injected environment object can be frozen, sealed
+  // or proxied, so this write can throw. Before the try it would have leaked the
+  // already-mutated process.env map. Unreachable in production -- main() passes
+  // no options.environment -- but the restore should not depend on that.
+  if (environment !== process.env) applyMemberChannelPolicy(environment);
   const notificationRun = await repositories.runs.startRun({
     runType: 'alert.notification',
     details: {
