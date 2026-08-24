@@ -16,7 +16,8 @@
  *       see delegation-state.ts)
  */
 
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import {
+  generateExecutionPacket, spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -288,11 +289,35 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
     return 2;
   }
 
+  // A preview must not mutate. Resolving the packet persists the sync record in
+  // both roots and, for a pre-contract lane, makes a live Linear call -- all
+  // before the dry-run branch below. codex-exec already guards this; claude-exec
+  // did not, so `--dry-run` wrote a git-tracked sync file in the shared control
+  // checkout and fired an outbound call, including while delegation is
+  // suspended. Under --dry-run the packet is now read without capture or
+  // persistence, so the preview claim matches the behaviour.
   let packet!: ExecutionPacket;
-  const packetExit = resolveClaudeExecutionPacket(manifest, ready => {
-    packet = ready;
-  });
-  if (packetExit !== 0) return packetExit;
+  if (dryRun) {
+    try {
+      packet = generateExecutionPacket(manifest);
+    } catch (error) {
+      printDryRun({
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        issue_id: issueId,
+        branch: manifest.branch,
+        message:
+          `dry run cannot preview ${issueId}: ${error instanceof Error ? error.message : String(error)}. ` +
+          'Run without --dry-run to capture the contract.',
+      } as never);
+      return 2;
+    }
+  } else {
+    const packetExit = resolveClaudeExecutionPacket(manifest, ready => {
+      packet = ready;
+    });
+    if (packetExit !== 0) return packetExit;
+  }
   const prompt = buildClaudePrompt(packet);
   const transcriptPath = transcriptPathForIssue(issueId);
 

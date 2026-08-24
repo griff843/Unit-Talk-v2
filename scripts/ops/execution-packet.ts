@@ -235,7 +235,7 @@ function normalizeHeading(value: string): string {
  * Deliberately not a valid markdown heading, so a real `## ...` in an issue can
  * never collide with it and no whitelist can accidentally consume it.
  */
-export const PREAMBLE_KEY = '\u0000preamble';
+export const PREAMBLE_KEY = '(description preamble)';
 
 function parseSections(markdown: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
@@ -310,7 +310,13 @@ function unmappedSections(
   const out: Array<{ heading: string; lines: string[] }> = [];
   for (const [heading, lines] of sections) {
     if (taken.has(heading)) continue;
-    if (lines.every((line) => !line.trim())) continue;
+    // A section with an empty body still carries meaning in its HEADING --
+    // "## DO NOT TOUCH PRODUCTION" followed only by a subheading used to vanish
+    // entirely, taking the prohibition with it. Keep the heading as residue.
+    if (lines.every((line) => !line.trim())) {
+      out.push({ heading, lines: [] });
+      continue;
+    }
     out.push({ heading, lines });
   }
   return out;
@@ -729,9 +735,30 @@ export function readTaskContract(
   return parsed.task_contract;
 }
 
+/**
+ * Control characters must never reach the rendered prompt. The prompt is passed
+ * as an argv element to `spawnSync`, and Node rejects an argument containing a
+ * NUL byte with a bare TypeError -- crashing the dispatch instead of dropping a
+ * line, which is strictly worse than the content loss this module exists to
+ * prevent. An earlier revision used a NUL-prefixed sentinel and did exactly
+ * that. Stripped defensively here so no future sentinel or pasted issue content
+ * can reintroduce it.
+ */
+function stripControlChars(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, '');
+}
+
 export function renderTaskContract(contract: TaskContract): string {
   assertTaskContract(contract);
   const hasUnmapped = contract.unmapped_sections.length > 0;
+  // Provenance, so the executor can judge staleness. A cached contract is served
+  // without re-fetching, and the prompt tells the executor not to infer the task
+  // elsewhere -- without these lines it has no way to know the snapshot is old.
+  const provenance = [
+    `Source issue: ${contract.source.issue_url}`,
+    `Captured at: ${contract.source.captured_at}`,
+  ].join('\n');
   // "(none declared)" is an assertion, not an omission. When the description
   // carried sections no whitelist consumed, the honest statement is that the
   // field was not extracted — and the content itself is rendered below, so the
@@ -742,10 +769,12 @@ export function renderTaskContract(contract: TaskContract): string {
       : hasUnmapped
         ? '- (not extracted — see "Additional issue content" below)'
         : '- (none declared)';
-  return [
+  return stripControlChars([
     `## Authoritative task contract (integrity hash ${contract.contract_hash})`,
     '',
     'This is the captured work order. Do not infer a replacement task from the branch name, file scope, an existing PR, or the repo brief.',
+    '',
+    provenance,
     '',
     '### Objective',
     contract.objective,
@@ -777,7 +806,7 @@ export function renderTaskContract(contract: TaskContract): string {
           ...contract.unmapped_sections.map((entry) => `- ${entry}`),
         ]
       : []),
-  ].join('\n');
+  ].join('\n'));
 }
 
 function buildVerificationPlan(

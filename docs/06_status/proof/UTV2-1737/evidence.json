@@ -35,7 +35,7 @@
       "de50d5897f3b98ce547f53b6e4fd4c654520e440",
       "ead2e0f598da9583fada2b59dac0b1ee57bf3954"
     ],
-    "tree_equivalence": "All eight implementation files are byte-identical to the old head, verified by git blob hash. Nothing was re-derived or re-typed.",
+    "tree_equivalence": "Seven of the eight implementation files are byte-identical to the pre-rewrite head, verified by git blob hash. scripts/ops/execution-packet.ts differs by the 51 authored insertions. An earlier revision said all eight, which was wrong and is withdrawn.",
     "excluded_deliberately": [
       "docs/06_status/lanes/UTV2-1734.json",
       "docs/06_status/proof/UTV2-1734/** (5 files)",
@@ -158,7 +158,11 @@
     "fabricated_queries_or_row_counts": false
   },
   "non_blocking_followups": [
-    "unmapped_sections joins lines with a space, collapsing list structure in the rendered residue. Content is retained (normalized comparison shows zero loss) but formatting degrades. Observed, deliberately NOT implemented — outside this lane accepted contract."
+    "unmapped_sections joins lines with a space, collapsing list structure. Content retained; formatting degrades.",
+    "A cached contract is still not re-fetched and compared against the live issue. Provenance is now rendered so staleness is visible, but detection is manual. Recorded for a follow-up lane.",
+    "ops:lane-start now hard-depends on Linear; an outage or a containment environment with no token blocks every new lane start.",
+    "Verbatim Linear descriptions are now committed into git-tracked .ops/sync/*.yml. A secret pasted into an issue description would be committed. Warrants a redaction or scanning policy.",
+    "assertTaskContract called without expectedIssueId performs no identity check. Safe today because every caller supplies one."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
@@ -167,5 +171,17 @@
     "pending": [
       "one independent adversarial review of the complete diff"
     ]
+  },
+  "review_corrections": {
+    "reviewer_verdict": "CHANGES_REQUIRED — nine findings, consolidated into one correction cycle",
+    "B1_nul_byte": "CRITICAL. The preamble sentinel was \\u0000preamble, which rendered a NUL byte into the prompt. The prompt is an argv element, so spawnSync throws ERR_INVALID_ARG_VALUE and dispatch crashes rather than dropping a line — strictly worse than the bug being fixed, and affecting the 5 of 60 live issues with pre-heading content. Sentinel is now a plain reserved string, and renderTaskContract strips control characters defensively so no future sentinel or pasted issue content can reintroduce one.",
+    "B2_claude_dry_run": "claude-exec --dry-run resolved the packet before its dry-run branch, making a live Linear call and writing a git-tracked sync file in the shared control checkout — including while delegation is suspended. codex-exec already guarded this; claude-exec did not. Now guarded identically.",
+    "B3_sha_binding": "Proof declared a MERGE_SHA at which neither correction exists. Set to N/A pre-merge; CI rebinds post-merge.",
+    "B4_vacuous_tests": "Neither authored correction had a test. Removing either left the suite green. Five regression guards added; mutation-proven: removing preamble capture fails test 30, removing unmapped_sections validation fails test 33, removing empty-heading residue fails test 32.",
+    "B5_dry_run_overclaim": "The unqualified dry-run purity claim measured only codex-exec. Scoped and the Claude path fixed.",
+    "B6_empty_heading": "A section whose body was empty was discarded entirely, taking its heading text with it — \"## DO NOT TOUCH PRODUCTION\" followed by a subheading lost the prohibition vocabulary. The heading is now carried as residue.",
+    "B7_stale_cache": "A persisted contract was served without revalidation, so a PM correction posted as a description edit was invisible forever, while the prompt told the executor not to look elsewhere. The render now carries Source issue and Captured at so staleness is visible. Full re-fetch-and-compare is recorded as a follow-up rather than widened into this lane.",
+    "B8_byte_identity": "Corrected: 7 of 8 files byte-identical, not 8.",
+    "B9_branch_name": "Corrected to claude/utv2-1737-clean."
   }
 }

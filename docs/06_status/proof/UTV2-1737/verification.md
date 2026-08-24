@@ -1,8 +1,8 @@
 # PROOF: UTV2-1737
 
-MERGE_SHA: de50d5897f3b98ce547f53b6e4fd4c654520e440
+MERGE_SHA: N/A
 
-Verified source SHA: `de50d5897f3b98ce547f53b6e4fd4c654520e440`
+Verified source SHA: `set-at-push` (see evidence.json sha_binding)
 
 Repairs the executor packet transport so a lane's full Linear work order reaches
 the executor prompt. Without it, a dispatched Codex lane receives a file list and
@@ -46,7 +46,7 @@ lane is its blocker, and no production path touched.
 - [x] Stale contracts refuse structurally, never as a bare `TypeError`.
 - [x] Malformed, identity-mismatched and hash-mismatched contracts all refuse structurally.
 - [x] Contract-less lanes capture fresh from Linear with **no bulk migration and no silent degradation**.
-- [x] Dry-run launches no executor and mutates no lane state.
+- [x] Dry-run launches no executor and mutates no lane state, for **both** executors. An earlier revision fixed only the Codex path and claimed this unqualified; the Claude path resolved the packet — a live Linear call plus a git-tracked sync write — before its dry-run branch. Now guarded identically.
 - [x] UTV2-1736's rendered packet carries its objective, constraints, proof contract and production-DDL stop boundary.
 
 ## EVIDENCE:

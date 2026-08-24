@@ -5,12 +5,14 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   assertExecutionPacketCwd,
+  assertTaskContract,
   buildSyncYmlWithTaskContract,
   buildTaskContract,
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
   readTaskContract,
   renderTaskContract,
+  TaskContractError,
 } from './execution-packet.js';
 import { type LaneManifest } from './shared.js';
 
@@ -544,4 +546,86 @@ test('B1: no vocabulary is lost between description and rendered prompt', () => 
   const words = (t: string): Set<string> => new Set(t.toLowerCase().match(/[a-z0-9_]{4,}/gu) ?? []);
   const missing = [...words(SECTIONED)].filter((w) => !words(rendered).has(w));
   assert.deepEqual(missing, [], `these words were dropped from the work order: ${missing.join(', ')}`);
+});
+
+// ── UTV2-1737 authored corrections: regression guards ────────────────────────
+// Both corrections previously had no test. Removing either left the suite green,
+// which is exactly how a safety control rots. Each of these fails if its
+// correction is reverted.
+
+test('preamble before the first heading survives into the rendered prompt', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'preamble guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description:
+      'Do not run a blanket UPDATE against production.\n\n## Objective\nx\n\n## Acceptance criteria\n- y\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.ok(
+    rendered.includes('Do not run a blanket UPDATE against production.'),
+    'a prohibition stated before the first heading must reach the executor',
+  );
+});
+
+test('the rendered prompt contains no control characters', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'control char guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description: 'Preamble line.\n\n## Objective\nx\n\n## Acceptance criteria\n- y\n',
+  });
+  const rendered = renderTaskContract(contract);
+  // The prompt is passed as an argv element; a NUL byte makes spawnSync throw a
+  // bare TypeError and crashes dispatch instead of dropping a line.
+  // eslint-disable-next-line no-control-regex
+  assert.doesNotMatch(rendered, /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u);
+});
+
+test('a section heading with an empty body is still carried as residue', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'empty section guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description:
+      '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n### Details\n- ok\n',
+  });
+  const rendered = renderTaskContract(contract).toLowerCase();
+  for (const token of ['touch', 'production'])
+    assert.ok(rendered.includes(token), `heading vocabulary "${token}" must not be dropped`);
+});
+
+test('a contract predating unmapped_sections refuses structurally, not with a TypeError', () => {
+  const stale = JSON.parse(
+    JSON.stringify(
+      buildTaskContract({
+        identifier: 'UTV2-9999',
+        title: 'stale guard',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+        description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
+      }),
+    ),
+  ) as Record<string, unknown>;
+  delete stale['unmapped_sections'];
+  let caught: unknown;
+  try {
+    assertTaskContract(stale, 'UTV2-9999');
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof TaskContractError, 'must be a structured TaskContractError');
+  assert.equal((caught as TaskContractError).code, 'stale_contract_missing_unmapped_sections');
+  assert.notEqual((caught as Error).constructor.name, 'TypeError');
+});
+
+test('the rendered prompt carries source provenance so staleness is visible', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'provenance guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.match(rendered, /Source issue: /u);
+  assert.match(rendered, /Captured at: /u);
 });

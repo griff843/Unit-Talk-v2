@@ -1,11 +1,11 @@
 # UTV2-1737 Diff Summary
 
-MERGE_SHA: de50d5897f3b98ce547f53b6e4fd4c654520e440
+MERGE_SHA: N/A
 
 Issue: UTV2-1737
 Tier: T1
 Lane type: governance
-Branch: claude/utv2-1737-executor-packet
+Branch: claude/utv2-1737-clean
 
 ## Authored here (51 insertions, 1 file, 0 deletions)
 
