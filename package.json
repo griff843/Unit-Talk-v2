@@ -195,7 +195,9 @@
     "ci:db-client-boundary": "tsx scripts/ci/privileged-db-client-guard.ts",
     "ci:db-client-inventory": "tsx scripts/ci/rebuild-privileged-db-client-inventory.ts",
     "ci:assert-unmodified": "tsx scripts/ci/assert-unmodified-vs-base.ts",
-    "verify:local": "pnpm verify:static"
+    "verify:local": "pnpm verify:static",
+    "ops:proof-verify-figures": "tsx scripts/ops/proof-verify-figures.ts",
+    "ops:mutation-gate": "tsx scripts/ops/mutation-gate.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",
