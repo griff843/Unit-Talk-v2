@@ -498,8 +498,10 @@ export async function runScheduledAlertPass(
   try {
   // Inside the try: a caller-injected environment object can be frozen, sealed
   // or proxied, so this write can throw. Before the try it would have leaked the
-  // already-mutated process.env map. Unreachable in production -- main() passes
-  // no options.environment -- but the restore should not depend on that.
+  // already-mutated process.env map. This branch IS live in production now that
+  // main() passes an environment -- an earlier revision of this comment said it
+  // was unreachable, which stopped being true when that call site was fixed. It
+  // fails closed to canary-only and is restored in the finally.
   if (environment !== process.env) applyMemberChannelPolicy(environment);
   const notificationRun = await repositories.runs.startRun({
     runType: 'alert.notification',
@@ -721,7 +723,16 @@ async function main() {
     // and detection still ran and wrote to the database. The documented way to
     // disable the agent must actually disable it.
     const result = await runScheduledAlertPass(repositories, {
-      environment: environment as unknown as NodeJS.ProcessEnv,
+      // Merge, do not substitute. loadEnvironment() returns an allow-list object,
+      // so 20 of the 22 keys loadAlertAgentConfig and loadAlertThresholds read --
+      // ALERT_MIN_TIER, ALERT_LOOKBACK_MINUTES and the ALERT_THRESHOLD_* family --
+      // are absent from it. Passing it alone would silently fall those knobs back
+      // to hardcoded defaults, so a documented setting would be ignored: the same
+      // fault as the fail-open this call site is fixing, just quieter.
+      // readEnvValue already gives process.env precedence for declared keys, so
+      // file-loaded values still win where they are declared. Line 699 applies the
+      // same workaround for ALERT_SYSTEM_STALE_MINUTES.
+      environment: { ...process.env, ...environment } as unknown as NodeJS.ProcessEnv,
     });
     console.log(
       JSON.stringify({
