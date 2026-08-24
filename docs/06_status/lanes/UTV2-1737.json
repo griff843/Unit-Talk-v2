@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1737",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": ".out/worktrees/rewrite__utv2-1737",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": false
+  },
+  "worktree_path": ".out/worktrees/rewrite__utv2-1737",
+  "branch": "claude/utv2-1737-clean",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1737.yml",
+    "docs/06_status/proof/UTV2-1737/diff-summary.md",
+    "docs/06_status/proof/UTV2-1737/evidence.json",
+    "docs/06_status/proof/UTV2-1737/model-routing.json",
+    "docs/06_status/proof/UTV2-1737/verification.md",
+    "scripts/ops/claude-exec.test.ts",
+    "scripts/ops/claude-exec.ts",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/execution-packet.test.ts",
+    "scripts/ops/execution-packet.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1737/evidence.json",
+    "docs/06_status/proof/UTV2-1737/verification.md",
+    "docs/06_status/proof/UTV2-1737/diff-summary.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-08-24T20:05:44Z",
+  "heartbeat_at": "2026-08-24T20:20:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "bootstrap-override-pm-authorized",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": null
+}

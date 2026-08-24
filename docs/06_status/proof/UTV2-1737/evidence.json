@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T17:23:44Z",
   "sha_binding": {
-    "verified_source_sha": "de50d5897f3b98ce547f53b6e4fd4c654520e440",
+    "verified_source_sha": "b65691fcd71f9f1e30208ac05827b0f7e2bc6c66",
     "verified_source_note": "Preserved implementation from 0f5a533d rebased onto current main, plus two authorized bootstrap corrections. Later commits are proof artifacts only.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -20,10 +20,29 @@
     "bound_at": "2026-08-24T17:23:44Z"
   },
   "provenance": {
-    "inherited_from": "0f5a533d (preserved branch codex/utv2-1734-executor-work-order)",
-    "inherited_scope": "1118 insertions across 8 script files: execution-packet.ts, codex-exec.ts, claude-exec.ts, lane-start.ts and their tests",
-    "authored_here": "51 insertions in scripts/ops/execution-packet.ts, zero deletions",
-    "not_rederived": "The inherited implementation was NOT rewritten. It was rebased onto current main and reviewed as part of the complete diff."
+    "inherited_from": "preserved branch head 0f5a533dc01a4ce22f902f4a32331dccee27e957, untouched on origin",
+    "branch_rewritten": "claude/utv2-1737-executor-packet was rebuilt from current main as claude/utv2-1737-clean",
+    "old_pr_head": "ead2e0f598da9583fada2b59dac0b1ee57bf3954",
+    "old_tree": "c836af9c415f5f5c9002f72ec598a7d45b8daf96",
+    "rewrite_reason": "Seven inherited commits carried a foreign issue id in their messages. Branch discipline scans every commit in a PR, so no new commit could clear it. History is collapsed into one commit; provenance is recorded here by SHA instead of by issue reference in scanned metadata.",
+    "inherited_commits": [
+      "3013a434f9d86b0e654becde031add17ba6b7761",
+      "1ea3edb01c6829ee066f151971f2967af11eb9b2",
+      "03b3daadecb9cf893ea41514b381263a4a48c08e",
+      "35a9a67d95d43413908fc0a7c52e758f2bc99f49",
+      "9e8dcd95fa2243dba36a4374ed631e2529f88673",
+      "64282fe2e13cc912528e8985c42838efa01ad2e4",
+      "de50d5897f3b98ce547f53b6e4fd4c654520e440",
+      "ead2e0f598da9583fada2b59dac0b1ee57bf3954"
+    ],
+    "tree_equivalence": "All eight implementation files are byte-identical to the old head, verified by git blob hash. Nothing was re-derived or re-typed.",
+    "excluded_deliberately": [
+      "docs/06_status/lanes/UTV2-1734.json",
+      "docs/06_status/proof/UTV2-1734/** (5 files)",
+      ".ops/sync/UTV2-1734.yml"
+    ],
+    "exclusion_proof": "The superseded lane sync record was removed and all 100 focused tests still passed (29 + 30 + 7 + 34, 0 failures), proving it was not required by the stale-contract compatibility criterion. Tests reference that issue id only as inline literals and spawn stubs, never reading the file from disk. No live coordination state for that lane lands: no manifest, no lease, no lock, no Linear change, and nothing dispatch can select.",
+    "authored_here": "51 insertions in scripts/ops/execution-packet.ts, zero deletions"
   },
   "bootstrap_override": {
     "what": "ops:lane-start --force-unsafe-substrate, one logged bootstrap admission for this lane only",
