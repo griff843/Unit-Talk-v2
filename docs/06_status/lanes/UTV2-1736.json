@@ -1,0 +1,50 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1736",
+  "lane_type": "migration",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1736-offer-history-partitions",
+  "branch": "codex/utv2-1736-offer-history-partitions",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1736.yml",
+    "docs/06_status/proof/UTV2-1736/diff-summary.md",
+    "docs/06_status/proof/UTV2-1736/evidence.json",
+    "docs/06_status/proof/UTV2-1736/model-routing.json",
+    "docs/06_status/proof/UTV2-1736/verification.md",
+    "scripts/ops/partition-provisioner.test.ts",
+    "scripts/ops/partition-provisioner.ts",
+    "supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1736/evidence.json",
+    "docs/06_status/proof/UTV2-1736/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-24T12:56:35.350Z",
+  "heartbeat_at": "2026-08-24T12:56:35.350Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1736-offer-history-partitions.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1736-offer-history-partitions",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
