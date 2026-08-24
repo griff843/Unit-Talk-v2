@@ -729,3 +729,78 @@ test('operator cancellation is honoured before any codex process is spawned', ()
   assert.ok(cancelIndex < spawnIndex, 'cancellation must be checked before the spawn');
   assert.match(source.slice(cancelIndex, cancelIndex + 600), /EXECUTION_CANCELLED/);
 });
+
+// ── UTV2-1737: EXECUTING dry-run regression coverage for the Codex entrypoint ─
+// main() calls process.exit on its failure paths, so the executing assertion
+// here is that the dry run REACHES its DRY_RUN emit without throwing an
+// unstructured error -- which a wrong-module or missing import would cause.
+
+test('codex-exec dry run reaches structured output and launches nothing', async () => {
+  const { main: codexMain } = await import('./codex-exec.js');
+  const issueId = 'UTV2-999996';
+  const lanePath = path.join(ROOT, 'docs', '06_status', 'lanes', `${issueId}.json`);
+
+  const chunks: string[] = [];
+  const originalWrite = process.stdout.write.bind(process.stdout);
+  const originalExit = process.exit.bind(process);
+  let exitCode: number | undefined;
+  (process.stdout as unknown as { write: unknown }).write = ((chunk: unknown) => {
+    chunks.push(String(chunk));
+    return true;
+  }) as typeof process.stdout.write;
+  (process as unknown as { exit: unknown }).exit = ((code?: number) => {
+    exitCode = code ?? 0;
+    throw new Error('__EXIT__');
+  }) as never;
+
+  let unstructured: unknown;
+  try {
+    await codexMain(['--issue', issueId, '--dry-run']);
+  } catch (error) {
+    if ((error as Error).message !== '__EXIT__') unstructured = error;
+  } finally {
+    (process.stdout as unknown as { write: unknown }).write = originalWrite;
+    (process as unknown as { exit: unknown }).exit = originalExit;
+    fs.rmSync(lanePath, { force: true });
+  }
+
+  // A wrong-module or missing import surfaces here as a raw TypeError rather
+  // than a structured refusal.
+  assert.equal(unstructured, undefined,
+    `codex dry run must not throw an unstructured error: ${String(unstructured)}`);
+  const out = chunks.join('');
+  assert.ok(out.includes('{'), 'codex dry run must emit structured JSON');
+  const parsed = JSON.parse(out.slice(0, out.lastIndexOf('}') + 1)) as Record<string, unknown>;
+  assert.equal(typeof parsed['code'], 'string', 'structured output must carry a code');
+  assert.equal(typeof exitCode, 'number', 'the entrypoint must set an exit code');
+});
+
+test('executor modules resolve every imported symbol (narrow compile smoke)', () => {
+  // Narrow compile control, scoped to the two executor entrypoints only -- it
+  // does not pull the scripts tree into project references.
+  //
+  // Why it exists: `scripts/` is in no tsconfig project, so `pnpm verify:static`
+  // exits 0 while a symbol imported from the wrong module, or not imported at
+  // all, sits in the file. Both shipped past a green 105-test suite. Executing
+  // tests catch it only on code paths they actually reach; this catches it
+  // wherever it is.
+  //
+  // Deliberately asserts ONLY on unresolved-symbol diagnostics (TS2304 "Cannot
+  // find name", TS2305 "has no exported member"), so pre-existing module-format
+  // noise in the wider tree cannot make it flap.
+  const result = spawnSync(
+    'npx',
+    ['tsc', '--noEmit', '--module', 'nodenext', '--moduleResolution', 'nodenext',
+     '--target', 'es2022', '--skipLibCheck',
+     path.join(ROOT, 'scripts', 'ops', 'claude-exec.ts'),
+     path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts')],
+    { cwd: ROOT, encoding: 'utf8', timeout: 240_000 },
+  );
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  const unresolved = output
+    .split(/\r?\n/u)
+    .filter((line) => /scripts[\\/]ops[\\/](claude|codex)-exec\.ts/u.test(line))
+    .filter((line) => /error TS2304|error TS2305/u.test(line));
+  assert.deepEqual(unresolved, [],
+    `executor entrypoints have unresolved imports:\n${unresolved.join('\n')}`);
+});

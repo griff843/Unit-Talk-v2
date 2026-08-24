@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T17:23:44Z",
   "sha_binding": {
-    "verified_source_sha": "b65691fcd71f9f1e30208ac05827b0f7e2bc6c66",
-    "verified_source_note": "Preserved implementation from 0f5a533d rebased onto current main, plus two authorized bootstrap corrections. Later commits are proof artifacts only.",
+    "verified_source_sha": "set-at-final-head",
+    "verified_source_note": "Recomputed at the final head after the second correction cycle. Earlier revisions bound this to a commit predating the corrections; that was wrong twice and is withdrawn. CI rebinds post-merge.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -35,14 +35,14 @@
       "de50d5897f3b98ce547f53b6e4fd4c654520e440",
       "ead2e0f598da9583fada2b59dac0b1ee57bf3954"
     ],
-    "tree_equivalence": "Seven of the eight implementation files are byte-identical to the pre-rewrite head, verified by git blob hash. scripts/ops/execution-packet.ts differs by the 51 authored insertions. An earlier revision said all eight, which was wrong and is withdrawn.",
+    "tree_equivalence": "Two of the eight implementation files remain byte-identical to the preserved head (lane-start.ts and its test). Six differ: execution-packet.ts, claude-exec.ts, codex-exec.ts and their three test files. Earlier revisions claimed eight, then seven; both were wrong and are withdrawn. Measured by git blob hash at the final head.",
     "excluded_deliberately": [
       "docs/06_status/lanes/UTV2-1734.json",
       "docs/06_status/proof/UTV2-1734/** (5 files)",
       ".ops/sync/UTV2-1734.yml"
     ],
     "exclusion_proof": "The superseded lane sync record was removed and all 100 focused tests still passed (29 + 30 + 7 + 34, 0 failures), proving it was not required by the stale-contract compatibility criterion. Tests reference that issue id only as inline literals and spawn stubs, never reading the file from disk. No live coordination state for that lane lands: no manifest, no lease, no lock, no Linear change, and nothing dispatch can select.",
-    "authored_here": "51 insertions in scripts/ops/execution-packet.ts, zero deletions"
+    "authored_here": "469 insertions and 11 deletions across 6 files, measured against the preserved head"
   },
   "bootstrap_override": {
     "what": "ops:lane-start --force-unsafe-substrate, one logged bootstrap admission for this lane only",
@@ -78,11 +78,11 @@
   "static_proof": {
     "verify_static": "PASS (exit 0)",
     "focused_tests": {
-      "execution-packet": 29,
-      "codex-exec": 30,
-      "claude-exec": 7,
+      "execution-packet": 34,
+      "codex-exec": 32,
+      "claude-exec": 11,
       "lane-start": 34,
-      "total": 100,
+      "total": 111,
       "fail": 0
     },
     "type_check": {
@@ -94,6 +94,10 @@
       "command": "pnpm test",
       "result": "PASS",
       "via": "stage of pnpm verify:static"
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "result": "Verdict: PASS Changed files: 14"
     }
   },
   "runtime_proof": {
@@ -110,15 +114,9 @@
       "inverted": "reverting preamble capture yields 5 lossy issues and UTV2-1577 loses a prohibition"
     },
     "dry_run_purity": {
-      "lease": "UNCHANGED",
-      "manifest": "UNCHANGED",
-      "worktree_head": "UNCHANGED",
-      "dirty_files": "0 -> 0",
-      "worktree_count": "45 -> 45",
-      "codex_exec_artifacts": "0 -> 0",
-      "linear_state": "In Codex -> In Codex",
-      "real_codex_processes": 0,
-      "method": "per-PID verification, not raw grep counts"
+      "claude_exec": "EXECUTING test reaches code DRY_RUN on a fixture lane; sync record and manifest byte-unchanged; executor never launched.",
+      "codex_exec": "EXECUTING test runs main() with injected argv, asserts structured output and an exit code, and that no unstructured error escapes.",
+      "previous_overclaim": "An earlier revision claimed both executors were guarded while measuring only the Codex path, and the Claude path was in fact completely broken. The claim is now backed by executing tests for both, each mutation-proven."
     },
     "structured_refusals": {
       "null": "structured",
@@ -158,11 +156,12 @@
     "fabricated_queries_or_row_counts": false
   },
   "non_blocking_followups": [
+    "scripts/ is in no tsconfig project, so pnpm verify:static cannot catch a type error there. The narrow compile smoke control covers only the two executor entrypoints. Bringing the wider scripts tree under type checking is deferred debt.",
+    "A pre-existing typing defect at claude-exec lease handling (LeaseReserveResult has no `message`) is visible only under the narrow compile run. Untouched by this lane; part of the same deferred debt.",
     "unmapped_sections joins lines with a space, collapsing list structure. Content retained; formatting degrades.",
-    "A cached contract is still not re-fetched and compared against the live issue. Provenance is now rendered so staleness is visible, but detection is manual. Recorded for a follow-up lane.",
-    "ops:lane-start now hard-depends on Linear; an outage or a containment environment with no token blocks every new lane start.",
-    "Verbatim Linear descriptions are now committed into git-tracked .ops/sync/*.yml. A secret pasted into an issue description would be committed. Warrants a redaction or scanning policy.",
-    "assertTaskContract called without expectedIssueId performs no identity check. Safe today because every caller supplies one."
+    "A cached contract is still not re-fetched and compared against the live issue. Provenance is rendered so staleness is visible, but detection is manual.",
+    "ops:lane-start now hard-depends on Linear; an outage or a token-less environment blocks every new lane start.",
+    "Verbatim Linear descriptions are committed into git-tracked .ops/sync/*.yml. A secret pasted into an issue description would be committed."
   ],
   "sign_off": {
     "static_proof_status": "PASS",
@@ -182,6 +181,16 @@
     "B6_empty_heading": "A section whose body was empty was discarded entirely, taking its heading text with it — \"## DO NOT TOUCH PRODUCTION\" followed by a subheading lost the prohibition vocabulary. The heading is now carried as residue.",
     "B7_stale_cache": "A persisted contract was served without revalidation, so a PM correction posted as a description edit was invisible forever, while the prompt told the executor not to look elsewhere. The render now carries Source issue and Captured at so staleness is visible. Full re-fetch-and-compare is recorded as a follow-up rather than widened into this lane.",
     "B8_byte_identity": "Corrected: 7 of 8 files byte-identical, not 8.",
-    "B9_branch_name": "Corrected to claude/utv2-1737-clean."
+    "B9_branch_name": "Corrected to claude/utv2-1737-clean.",
+    "second_cycle": {
+      "B2_regression": "The first correction imported generateExecutionPacket from node:child_process instead of ./execution-packet.js, so claude-exec --dry-run threw immediately, and its error handler threw too because printDryRun was called with one argument where it takes two, hidden by an `as never` cast. codex-exec called the function with no import at all, inherited from the preserved head. Both fixed; tsc confirms zero unresolved-symbol diagnostics on either entrypoint.",
+      "executing_coverage": "Both entrypoints are now exported and covered by tests that EXECUTE the dry-run control flow. Mutation-proven: reintroducing the wrong-module import fails the DRY_RUN test with \"got PRECONDITION_FAILED\"; reintroducing the wrong-arity call fails the failure-path test; removing either import fails the narrow compile smoke control.",
+      "compile_smoke": "A narrow compile control runs tsc over only the two executor entrypoints and asserts zero TS2304/TS2305 diagnostics. It does not pull the scripts tree into project references. Scoped to unresolved-symbol errors so pre-existing module-format noise cannot make it flap.",
+      "vacuous_tests_found_and_fixed": "Two tests written during this cycle were themselves vacuous -- they exited before the packet path and passed under mutation. Both were replaced with tests that reach the code path. Recorded because the failure class recurred inside its own fix."
+    }
+  },
+  "scope": {
+    "changed_files": 14,
+    "diff_stat_vs_main": "14 files changed, 1985 insertions(+), 27 deletions(-)"
   }
 }

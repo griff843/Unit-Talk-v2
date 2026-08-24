@@ -37,6 +37,7 @@ import {
 } from './shared.js';
 import {
   generateDispatchExecutionPacketResult,
+  generateExecutionPacket,
   renderTaskContract,
   type ExecutionPacket,
   type ExecutionPacketResult,
@@ -577,8 +578,12 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
   ].join('\n');
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+/**
+ * Exported, and argv is injectable, so regression tests can EXECUTE the dry-run
+ * control flow instead of asserting on source text.
+ */
+export async function main(argv = process.argv.slice(2)): Promise<void> {
+  const args = parseArgs(argv);
   const issueId = getFlag(args.flags, 'issue');
   const dryRun = args.bools.has('dry-run');
   const rework = args.bools.has('rework');

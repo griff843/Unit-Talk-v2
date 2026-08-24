@@ -53,7 +53,7 @@ lane is its blocker, and no production path touched.
 
 ```text
 verify:static: PASS (exit 0)
-focused suites: 100 passed, 0 failed (29 + 30 + 7 + 34)
+focused suites: 111 passed, 0 failed (34 + 32 + 11 + 34)
 live sweep: INSPECTED=60 ZERO_LOSS=60 REFUSED=0 LOSSY=0
   UTV2-1577 prohibitions 2/2   UTV2-1578 prohibitions 2/2
 inverted (preamble reverted): LOSSY=5, UTV2-1577 loses a prohibition
@@ -115,6 +115,6 @@ outside this lane's accepted contract. Recorded for a future lane.
 | `pnpm verify:static` | PASS | Exit 0. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static`. |
 | `pnpm test` | PASS | Stage of `pnpm verify:static`. |
-| Focused suites | PASS | 100 passed, 0 failed. |
+| Focused suites | PASS | 111 passed, 0 failed (34 + 32 + 11 + 34). |
 | Live description sweep | PASS | 60/60 zero loss. |
 | `pnpm test:db` | N/A | No runtime or database path is touched. |
