@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1743",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Parked lanes must not hold Tier C contention",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-24T13:47:20Z",
+  "sha_binding": {
+    "verified_source_sha": "9cbf52cc0c562f2fdff9dfca32ba679da738d5fe",
+    "verified_source_note": "Commit carrying the one-call-site change and its tests. Later commits are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-24T13:47:20Z"
+  },
+  "scope": {
+    "changed_files": 5,
+    "substantive_diff_stat": "2 files changed, 95 insertions(+), 2 deletions(-)",
+    "call_sites_changed": 1,
+    "call_sites_left_unchanged": 11,
+    "note": "executingLanesOnly() is used at exactly one site: the Tier C conflict calculation. The other 11 uses of activeLanesOnly are untouched, so parked is not removed from lifecycle accounting generally."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/merge-risk.test.ts",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "5 changed files; rules matched: (none)"
+    },
+    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and resume-into-conflict. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused."
+  },
+  "defect": {
+    "root_cause": "ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts:408) contains parked, and the Tier C conflict calculation filtered on that set, so preserved non-executing work counted as live contention.",
+    "live_evidence": "ops:substrate-guard returned 3 x board_hard_fail:TIER_C_CONFLICT. Every one involved UTV2-1667, which is already parked with a closed unmerged PR, and UTV2-1729, which is unstaffed. Neither executes. /dispatch halted at gate 1 and no production lane could be admitted.",
+    "semantics": "The lock meaning of parked is correct and unchanged: a parked lane still owns its branch, worktree and file-scope reservation. Tier C contention asks whether two lanes are concurrently changing sensitive paths; a preserved lane changes nothing.",
+    "resumption_safety": "No lane-start change was required. A parked lane can only become executing through ops:lane-start, which reruns the substrate guard and therefore this calculation. A test asserts the same lane is admissible while parked and refused once resumed beside an executing Tier C lane."
+  },
+  "tier_rationale": "T2, not T1. The documented verification table assigns T1 to changes requiring test:db plus runtime proof. This change alters a pure in-memory predicate in an ops script: no runtime path, no database access, no deployment, no migration, no customer-facing behaviour. It touches a Tier C PATH (scripts/ops/merge-risk.ts matches the merge- pattern), which raises review scrutiny, but Tier C path sensitivity and tier T1/T2/T3 are independent axes. Recorded explicitly because retiering changes who approves: this is stated for PM visibility, not applied silently.",
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "guard_note": "Two executing Tier C lanes still hard-fail. Only preserved, non-executing work stops being counted as contention."
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "N/A — no runtime path touched",
+    "ready_for_pm_review": true,
+    "pending": []
+  }
+}
