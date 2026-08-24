@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import test from 'node:test';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   assertExecutionPacketCwd,
-  generateExecutionPacket,
+  assertTaskContract,
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  generateExecutionPacket as generateExecutionPacketRaw,
+  generateExecutionPacketResult,
+  PREAMBLE_KEY,
+  readTaskContract,
+  renderTaskContract,
+  TaskContractError,
 } from './execution-packet.js';
 import { type LaneManifest } from './shared.js';
 
@@ -36,6 +48,142 @@ function createTestManifest(
     ...overrides,
   };
 }
+
+function testTaskContract(issueId = 'UTV2-969') {
+  return buildTaskContract(
+    {
+      identifier: issueId,
+      title: 'Deliver executor work orders',
+      url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      description: [
+        '## Objective',
+        'Give every executor the authoritative task.',
+        '',
+        '## Acceptance criteria',
+        '1. Prompt contains the task contract.',
+        '2. Missing contracts fail before spawn.',
+        '',
+        '## Guardrails',
+        '- Do not infer work from the branch name.',
+        '',
+        '## Explicitly out of scope — follow-ups',
+        '- Bulk migration of old sync records.',
+        '',
+        '## Required evidence',
+        'Focused tests pass.',
+        '',
+        '## Exit criteria',
+        '1. Both executors consume one shared renderer.',
+      ].join('\n'),
+    },
+    '2000-01-01T00:00:00.000Z',
+  );
+}
+
+function generateExecutionPacket(
+  manifest: LaneManifest,
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  return generateExecutionPacketRaw(manifest, env, testTaskContract(manifest.issue_id));
+}
+
+test('task contract captures and renders every required work-order field', () => {
+  const contract = testTaskContract();
+  const rendered = renderTaskContract(contract);
+
+  assert.equal(contract.objective, 'Give every executor the authoritative task.');
+  assert.deepEqual(contract.acceptance_criteria, [
+    'Prompt contains the task contract.',
+    'Missing contracts fail before spawn.',
+  ]);
+  assert.deepEqual(contract.guardrails, ['Do not infer work from the branch name.']);
+  assert.deepEqual(contract.non_goals, ['Bulk migration of old sync records.']);
+  assert.deepEqual(contract.required_evidence, ['Focused tests pass.']);
+  assert.deepEqual(contract.exit_criteria, ['Both executors consume one shared renderer.']);
+  for (const expected of [
+    'Give every executor the authoritative task.',
+    'Prompt contains the task contract.',
+    'Do not infer work from the branch name.',
+    'Bulk migration of old sync records.',
+    'Focused tests pass.',
+    'Both executors consume one shared renderer.',
+  ]) {
+    assert.match(rendered, new RegExp(expected.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'u'));
+  }
+  assert.match(contract.contract_hash, /^[0-9a-f]{64}$/u);
+});
+
+test('legacy issue descriptions remain dispatchable without a bulk migration', () => {
+  const description = '## Scope\n- Preserve this complete legacy work order.\n\nNo modern acceptance heading exists.';
+  const contract = buildTaskContract({
+    identifier: 'UTV2-1667',
+    title: 'Legacy lane objective',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667',
+    description,
+  }, '2000-01-01T00:00:00.000Z');
+
+  assert.equal(contract.objective, 'Legacy lane objective');
+  assert.deepEqual(contract.acceptance_criteria, [description]);
+});
+
+test('a present but empty acceptance section fails closed instead of using the legacy fallback', () => {
+  assert.throws(
+    () => buildTaskContract({
+      identifier: 'UTV2-1668',
+      title: 'Malformed modern issue',
+      url: 'https://linear.app/unit-talk-v2/issue/UTV2-1668',
+      description: 'Background text.\n\n## Acceptance criteria\n\n## Guardrails\n- Keep scope narrow.',
+    }),
+    /missing acceptance criteria/u,
+  );
+});
+
+test('sync record preserves existing entities and rejects contract tampering', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const contract = testTaskContract();
+  const existing = [
+    'version: 1',
+    'entities:',
+    '  issues:',
+    '    - UTV2-969',
+    '  findings:',
+    '    - F-1',
+    '',
+  ].join('\n');
+  const syncPath = path.join(syncDir, 'UTV2-969.yml');
+  const content = buildSyncYmlWithTaskContract('UTV2-969', contract, existing);
+  fs.writeFileSync(syncPath, content, 'utf8');
+
+  assert.match(content, /F-1/u);
+  assert.deepEqual(readTaskContract('UTV2-969', root), contract);
+  fs.writeFileSync(syncPath, content.replace('authoritative task', 'different task'), 'utf8');
+  assert.throws(() => readTaskContract('UTV2-969', root), /hash verification failed/u);
+});
+
+test('missing and invalid contracts return parseable structured executor failures', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-contract-failure-'));
+  const manifest = createTestManifest();
+  const missing = generateExecutionPacketResult(manifest, {}, undefined, root);
+  assert.deepEqual(JSON.parse(JSON.stringify(missing)), missing);
+  assert.equal(missing.ok, false);
+  if (!missing.ok) {
+    assert.equal(missing.code, 'EXECUTION_PACKET_INVALID');
+    assert.match(missing.message, /task contract is absent/u);
+  }
+
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(syncDir, 'UTV2-969.yml'),
+    'version: 1\ntask_contract:\n  schema_version: 1\n  issue_id: UTV2-969\n',
+    'utf8',
+  );
+  const invalid = generateExecutionPacketResult(manifest, {}, undefined, root);
+  assert.equal(invalid.ok, false);
+  if (!invalid.ok) assert.match(invalid.message, /missing an objective/u);
+});
 
 test('generateExecutionPacket is deterministic in test mode', () => {
   process.env.UNIT_TALK_TEST_MODE = '1';
@@ -336,4 +484,193 @@ test('packet permits canonical production only as guarded read-only observation'
     ),
     false,
   );
+});
+
+// ── UTV2-1734 review finding B1: nothing from the issue may be discarded ────
+//
+// Once a description carried an exact `## Acceptance criteria` heading, only
+// six whitelisted headings survived and the remainder was dropped silently,
+// while the prompt rendered "(none declared)" — an affirmative false claim —
+// and told the executor not to go read the issue. Measured on the live board,
+// 14 of 18 sectioned descriptions lost over a fifth of their content.
+
+const SECTIONED = [
+  '## Objective', 'Repair the rows.', '',
+  '## Acceptance criteria', '- Rows are repaired', '',
+  '## Production gate',
+  'No production write is authorized. Do not run a blanket UPDATE picks SET stake_units = 1.', '',
+  '## Rollback', 'Restore from the pre-change snapshot.',
+].join('\n');
+
+test('B1: sections outside the whitelist survive into the contract', () => {
+  const c = buildTaskContract({
+    identifier: 'UTV2-9400', title: 'T', url: 'u', description: SECTIONED,
+  });
+  assert.ok(c.unmapped_sections.length >= 2, 'unrecognised sections must be captured');
+  assert.ok(
+    c.unmapped_sections.some((s) => /blanket UPDATE/u.test(s)),
+    'a production-mutation guardrail must never be dropped',
+  );
+});
+
+test('B1: the rendered prompt contains the unmapped content verbatim', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({ identifier: 'UTV2-9401', title: 'T', url: 'u', description: SECTIONED }),
+  );
+  assert.match(rendered, /Additional issue content/u);
+  assert.match(rendered, /blanket UPDATE/u);
+  assert.match(rendered, /Restore from the pre-change snapshot/u);
+});
+
+test('B1: an empty field never claims "none declared" while content went unmapped', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({ identifier: 'UTV2-9402', title: 'T', url: 'u', description: SECTIONED }),
+  );
+  // The description declares no Guardrails heading, but it does carry unmapped
+  // sections — so the honest statement is "not extracted", never "none declared".
+  assert.doesNotMatch(rendered, /none declared/u);
+  assert.match(rendered, /not extracted — see "Additional issue content" below/u);
+});
+
+test('B1: a fully-mapped description still says "none declared" truthfully', () => {
+  const rendered = renderTaskContract(
+    buildTaskContract({
+      identifier: 'UTV2-9403', title: 'T', url: 'u',
+      description: '## Objective\nDo it.\n\n## Acceptance criteria\n- It is done\n',
+    }),
+  );
+  assert.match(rendered, /none declared/u, 'with nothing unmapped, the claim is true');
+});
+
+test('B1: no vocabulary is lost between description and rendered prompt', () => {
+  const c = buildTaskContract({ identifier: 'UTV2-9404', title: 'T', url: 'u', description: SECTIONED });
+  const rendered = renderTaskContract(c);
+  const words = (t: string): Set<string> => new Set(t.toLowerCase().match(/[a-z0-9_]{4,}/gu) ?? []);
+  const missing = [...words(SECTIONED)].filter((w) => !words(rendered).has(w));
+  assert.deepEqual(missing, [], `these words were dropped from the work order: ${missing.join(', ')}`);
+});
+
+// ── UTV2-1737 authored corrections: regression guards ────────────────────────
+// Both corrections previously had no test. Removing either left the suite green,
+// which is exactly how a safety control rots. Each of these fails if its
+// correction is reverted.
+
+test('preamble before the first heading survives into the rendered prompt', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'preamble guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description:
+      'Do not run a blanket UPDATE against production.\n\n## Objective\nx\n\n## Acceptance criteria\n- y\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.ok(
+    rendered.includes('Do not run a blanket UPDATE against production.'),
+    'a prohibition stated before the first heading must reach the executor',
+  );
+});
+
+// Shared by the two tests below. Declared once so the fixture check and the
+// output check cannot drift apart.
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
+
+test('PREAMBLE_KEY is safe to pass as a process argument', () => {
+  // The rendered prompt becomes an argv element. Node rejects an argument
+  // containing a NUL byte with a bare TypeError, crashing dispatch rather than
+  // dropping a line -- strictly worse than the content loss this module exists
+  // to prevent. An earlier revision used a NUL-prefixed sentinel and did exactly
+  // that. Asserted on the constant itself, so the guarantee does not depend on
+  // stripControlChars still being applied somewhere downstream: with only the
+  // rendered-output test below, reverting this constant went undetected.
+  assert.doesNotMatch(PREAMBLE_KEY, CONTROL_CHARS,
+    'PREAMBLE_KEY must not contain a control character');
+  const probe = spawnSync(process.execPath, ['-e', 'process.exit(0)', PREAMBLE_KEY], {
+    encoding: 'utf8',
+  });
+  assert.equal(probe.error, undefined,
+    `PREAMBLE_KEY must survive as an argv element: ${String(probe.error)}`);
+});
+
+test('control characters in the issue description never reach the rendered prompt', () => {
+  // The fixture must actually CONTAIN control characters. The previous version
+  // of this test used a clean description, so its assertion held whether or not
+  // any stripping was applied -- deleting stripControlChars left it green.
+  const hostile = [
+    'Preamble\u0007line.',
+    '',
+    '## Objective',
+    'Ship it\u0000 now.',
+    '',
+    '## Acceptance criteria',
+    '- keep \u001B[31mcolour\u001B[0m codes out',
+  ].join('\n');
+  assert.match(hostile, CONTROL_CHARS,
+    'the fixture itself must carry control characters, or this test proves nothing');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'control char guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description: hostile,
+  });
+  const rendered = renderTaskContract(contract);
+  assert.doesNotMatch(rendered, CONTROL_CHARS,
+    'control characters from the issue body must be stripped before the prompt is built');
+
+  // The surviving text must be spawn-safe as a real argv element, which is the
+  // exact failure this strip exists to prevent.
+  const probe = spawnSync(process.execPath, ['-e', 'process.exit(0)', rendered], {
+    encoding: 'utf8',
+  });
+  assert.equal(probe.error, undefined,
+    `the rendered prompt must survive as an argv element: ${String(probe.error)}`);
+});
+
+test('a section heading with an empty body is still carried as residue', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'empty section guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description:
+      '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n### Details\n- ok\n',
+  });
+  const rendered = renderTaskContract(contract).toLowerCase();
+  for (const token of ['touch', 'production'])
+    assert.ok(rendered.includes(token), `heading vocabulary "${token}" must not be dropped`);
+});
+
+test('a contract predating unmapped_sections refuses structurally, not with a TypeError', () => {
+  const stale = JSON.parse(
+    JSON.stringify(
+      buildTaskContract({
+        identifier: 'UTV2-9999',
+        title: 'stale guard',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+        description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
+      }),
+    ),
+  ) as Record<string, unknown>;
+  delete stale['unmapped_sections'];
+  let caught: unknown;
+  try {
+    assertTaskContract(stale, 'UTV2-9999');
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof TaskContractError, 'must be a structured TaskContractError');
+  assert.equal((caught as TaskContractError).code, 'stale_contract_missing_unmapped_sections');
+  assert.notEqual((caught as Error).constructor.name, 'TypeError');
+});
+
+test('the rendered prompt carries source provenance so staleness is visible', () => {
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'provenance guard',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description: '## Objective\nx\n\n## Acceptance criteria\n- y\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.match(rendered, /Source issue: /u);
+  assert.match(rendered, /Captured at: /u);
 });
