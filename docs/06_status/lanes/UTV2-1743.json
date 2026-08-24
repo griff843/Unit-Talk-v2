@@ -20,7 +20,9 @@
     "scripts/ops/merge-risk.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1743/evidence.json"
+    "docs/06_status/proof/UTV2-1743/evidence.json",
+    "docs/06_status/proof/UTV2-1743/verification.md",
+    "docs/06_status/proof/UTV2-1743/diff-summary.md"
   ],
   "status": "in_review",
   "started_at": "2026-08-24T13:32:58.202Z",
