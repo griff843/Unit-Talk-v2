@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1747",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Executor packet transport: executing dry-run coverage for both entrypoints",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-24T23:55:00Z",
+  "sha_binding": {
+    "verified_source_sha": "f4cc222cd4a51249dc358c657e5d38e72b43e4a6",
+    "verified_source_note": "Single implementation commit on this branch; the tree at this SHA contains the inherited packet fixes and all new tests. Later commits are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-24T23:55:00Z"
+  },
+  "scope": {
+    "changed_files": 9,
+    "substantive_diff_stat": "6 files changed, 1852 insertions(+), 14 deletions(-)",
+    "production_files_modified_by_this_lane": 0,
+    "note": "The three non-test source files carry fixes inherited byte-identically from the preserved commit 581af41bf145f17dea8cfae4966c799f58077748. This lane authored no new production change: the isolation requirement was met without adding a test-only root parameter, because getRepoRoot() already derives ROOT from process.cwd()."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally by design (assert-staging requires the staging-ci environment and CI_SUPABASE_* credentials). Not required for this lane.",
+    "repo_test_suite": {
+      "command": "pnpm test",
+      "tests": 5036,
+      "pass": 5036,
+      "fail": 0,
+      "via": "stage of pnpm verify:static (exit 0)"
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts",
+      "tests": 81,
+      "pass": 81,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "result": "PASS",
+      "detail": "0 errors, 0 warnings on the three changed test files"
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "9 changed files; rules matched: (none)"
+    },
+    "mutation_testing": "Eight defect classes reintroduced one at a time; each makes a named test fail; each source file restored and verified byte-identical by SHA-256. M5 (NUL sentinel) and M6 (strip removed) were NOT detected on the first run - the inherited control-character test used a fixture with no control characters, so its assertion held either way. That test was replaced; both are detected now."
+  },
+  "premise_verification": {
+    "claim": "The replaced codex dry-run test could not observe the packet layer.",
+    "method": "Restored the replaced test verbatim from 581af41bf145f17dea8cfae4966c799f58077748, applied the M1 defect (dry run takes the capturing path), ran the suite.",
+    "result": "The replaced test PASSED with the defect present, while both new mutation-sensitive tests FAILED.",
+    "why": "It named an issue with no manifest on disk, so main() exited at the manifestExists guard; a 'no manifest found' refusal satisfies every one of its assertions."
+  },
+  "isolation": {
+    "mechanism": "getRepoRoot() (scripts/ops/shared.ts:463) runs `git rev-parse --show-toplevel` with no cwd option, inheriting process.cwd(). Executing an entrypoint as a child process with cwd inside a git-initialised fixture directory rebinds ROOT to it for the whole run.",
+    "production_change_required": false,
+    "live_checkout_writes": 0,
+    "network_calls": 0,
+    "paid_model_calls": 0,
+    "offline_mechanism": "Stub codex/claude CLIs on PATH satisfy the health checks; the stub bin directory is kept outside the fixture git repository so it is not untracked content.",
+    "verified": "docs/06_status/lanes and .ops/sync in the live checkout contain no UTV2-9999xx fixture after the full suite runs."
+  },
+  "defect": {
+    "root_cause": "execution-packet.ts is reached only through two entrypoints whose main() functions were effectively untested. codex-exec.ts calls process.exit() at 19 sites and shells out to the real codex CLI for its health check, so an in-process test could neither survive it nor run it offline; the existing test avoided both by never getting far enough to matter.",
+    "second_defect": "The two claude dry-run tests did reach packet generation, but wrote their lane manifest and sync record into the live checkout at ROOT. An interrupted run leaves those behind, and the concurrency governor reads a stray manifest in docs/06_status/lanes as a real active lane.",
+    "third_defect": "The inherited control-character test asserted a property that held trivially for its own fixture."
+  },
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "parser_expanded": false,
+    "guard_note": "No guard was relaxed. Three vacuous or live-mutating tests were replaced with executing ones, and one inherited vacuous assertion was made non-vacuous."
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "N/A - no runtime path touched",
+    "ready_for_pm_review": true,
+    "pending": []
+  },
+  "known_limitations": [
+    "The fixture helpers are duplicated across claude-exec.test.ts and codex-exec.test.ts rather than shared. This lane may not add a file, and importing a helper from another test module would re-register that module's tests in both runs. Recorded as a visible decision, not an oversight.",
+    "The codex dry-run prompt preview is truncated before the objective renders, so the codex test ties the prompt to the on-disk contract by integrity hash instead of matching the objective text directly. The claude preview does include the objective and is asserted directly.",
+    "Each executing test spawns a tsx child process and costs roughly 0.8s; the three executor suites run in about 6s total."
+  ]
+}
