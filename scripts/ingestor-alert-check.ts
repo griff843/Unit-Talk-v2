@@ -729,9 +729,12 @@ async function main() {
       // are absent from it. Passing it alone would silently fall those knobs back
       // to hardcoded defaults, so a documented setting would be ignored: the same
       // fault as the fail-open this call site is fixing, just quieter.
-      // readEnvValue already gives process.env precedence for declared keys, so
-      // file-loaded values still win where they are declared. Line 699 applies the
-      // same workaround for ALERT_SYSTEM_STALE_MINUTES.
+      // Precedence, stated exactly: readEnvValue reads process.env FIRST for
+      // declared keys, so for those keys process.env wins and loadEnvironment()
+      // has already resolved them before this spread. The merge therefore changes
+      // nothing for declared keys; what it restores is the undeclared ones, which
+      // the allow-list would otherwise drop. Line 699 applies the same workaround
+      // for ALERT_SYSTEM_STALE_MINUTES.
       environment: { ...process.env, ...environment } as unknown as NodeJS.ProcessEnv,
     });
     console.log(

@@ -714,16 +714,20 @@ test('a disabled agent performs zero writes and zero delivery attempts', async (
   assert.equal((await repositories.runs.listByType('alert.notification', 5)).length, 0);
 });
 
-test('the loaded configuration wins over process.env when the two disagree', async () => {
+test('the pass honours a disabled flag from its injected configuration, whatever the ambient process says', async () => {
   const { repositories, writes } = countingRepositories();
   await seedMovement(repositories, 'precedence');
 
   const originalEnabled = process.env.ALERT_AGENT_ENABLED;
-  // The ambient process says enabled -- as the scheduled workflow sets it --
-  // while the loaded configuration says disabled. Before the fix, main() omitted
-  // the loaded environment and the pass read process.env, so the operator's
-  // file-configured disable was ignored and detection still wrote to the
-  // database. The loaded configuration must win.
+  // Scope of this test, stated precisely: it injects a configuration object
+  // directly, so it proves runScheduledAlertPass honours what it is GIVEN even
+  // when the ambient process disagrees. It does NOT prove that a file-configured
+  // disable beats process.env end to end -- it cannot, because it bypasses
+  // loadEnvironment() and the call-site merge. For declared keys readEnvValue
+  // reads process.env first, so in the scheduled workflow -- which sets
+  // ALERT_AGENT_ENABLED='true' explicitly -- a file-configured false does not
+  // override it. The fix closes the operator path where the variable is absent
+  // from the process, which is the local and server case.
   process.env.ALERT_AGENT_ENABLED = 'true';
   try {
     await assert.rejects(
