@@ -1,0 +1,10 @@
+{
+  "issue_id": "UTV2-1737",
+  "executor": "claude",
+  "model": "claude-opus-5",
+  "reasoning_effort": "high",
+  "override_used": true,
+  "override_reason": "PM-authorized one-time bootstrap: the dispatcher defect prevents Codex from receiving this lane own objective, so Claude implemented the two accepted corrections on the preserved branch. Exception ends when this lane merges.",
+  "lane_type": "governance",
+  "tier": "T1"
+}
