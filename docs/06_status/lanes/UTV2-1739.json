@@ -23,7 +23,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1739/evidence.json"
   ],
-  "status": "in_review",
+  "status": "superseded",
   "started_at": "2026-08-23T22:05:14.611Z",
   "heartbeat_at": "2026-08-23T22:17:14.171Z",
   "closed_at": null,
@@ -38,5 +38,8 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "superseded_by": "UTV2-1740",
+  "superseded_reason": "T1 approval refused: fail-open defect — main() loads the environment but calls runScheduledAlertPass without it, so file-configured ALERT_AGENT_ENABLED=false and ALERT_DRY_RUN are ignored and the pass still writes and delivers. Plus two unresolved actionable review threads, a proof bundle claiming the review was still pending after it completed, and Linear state disagreeing with this manifest.",
+  "preserved_artifacts": "PR #1440 remains OPEN at head 17102922c4679856f67ba4b270a8569938768c14. Nothing rejected or discarded."
 }
