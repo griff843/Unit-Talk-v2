@@ -13,7 +13,7 @@
     "reason": "T1 approval refused for a fail-open defect: main() loaded the environment then called runScheduledAlertPass without it, so the pass read process.env and a file-configured ALERT_AGENT_ENABLED=false was ignored while detection still wrote to the database. Three evidence contradictions were also correct: two unresolved actionable review threads, a proof claiming a pending review after it had completed, and Linear state disagreeing with the manifest."
   },
   "sha_binding": {
-    "verified_source_sha": "10c3f82dbf06aa95cbdd352d061ad20b645bc436",
+    "verified_source_sha": "934fdb1d7acfc90c0d55120bd7b6e72eeea871a4",
     "verified_source_note": "Commit carrying the three ported surfaces plus the fix. Later commits in this lane are proof artifacts only.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -21,8 +21,8 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-08-24T03:26:37Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-24T10:04:11.722Z"
   },
   "scope": {
     "ported_surfaces": [
