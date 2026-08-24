@@ -229,6 +229,14 @@ function normalizeHeading(value: string): string {
     .trim();
 }
 
+/**
+ * Sentinel key for description content that appears BEFORE the first heading.
+ *
+ * Deliberately not a valid markdown heading, so a real `## ...` in an issue can
+ * never collide with it and no whitelist can accidentally consume it.
+ */
+export const PREAMBLE_KEY = '\u0000preamble';
+
 function parseSections(markdown: string): Map<string, string[]> {
   const sections = new Map<string, string[]>();
   let current: string | null = null;
@@ -239,7 +247,17 @@ function parseSections(markdown: string): Map<string, string[]> {
       if (!sections.has(current)) sections.set(current, []);
       continue;
     }
+    // Content before the first heading used to be discarded outright: `current`
+    // was null, so the line was dropped with no residue. Issues routinely open
+    // with the load-bearing sentence -- the objective, or a prohibition --
+    // before any `##`, and that text never reached the executor. It is now
+    // captured under a sentinel key and travels as residue like any other
+    // unconsumed section.
     if (current) sections.get(current)!.push(rawLine);
+    else {
+      if (!sections.has(PREAMBLE_KEY)) sections.set(PREAMBLE_KEY, []);
+      sections.get(PREAMBLE_KEY)!.push(rawLine);
+    }
   }
   return sections;
 }
@@ -417,6 +435,24 @@ function isStringArray(value: unknown): value is string[] {
   );
 }
 
+/**
+ * Structured refusal for task-contract defects.
+ *
+ * Carries a machine-readable `code` and the issue id so a caller can act on the
+ * failure instead of parsing a message string, and so a stale contract never
+ * surfaces as an anonymous TypeError.
+ */
+export class TaskContractError extends Error {
+  readonly code: string;
+  readonly issueId: string;
+  constructor(code: string, issueId: string, message: string) {
+    super(message);
+    this.name = 'TaskContractError';
+    this.code = code;
+    this.issueId = issueId;
+  }
+}
+
 export function assertTaskContract(
   contract: unknown,
   expectedIssueId?: string,
@@ -438,6 +474,21 @@ export function assertTaskContract(
   ) {
     throw new Error(
       `task contract for ${issueId} is missing acceptance criteria`,
+    );
+  }
+  // A contract generated before unmapped_sections existed passes every check
+  // above and then dies on `contract.unmapped_sections.length` inside
+  // renderTaskContract -- a bare TypeError with no issue id and no remedy. That
+  // is fail-open followed by an unstructured crash. Refuse it here instead,
+  // structurally, naming the issue and the fix.
+  if (
+    !isStringArray(value.unmapped_sections)
+  ) {
+    throw new TaskContractError(
+      'stale_contract_missing_unmapped_sections',
+      issueId,
+      `task contract for ${issueId} predates unmapped_sections and is stale; ` +
+        `regenerate it with ops:lane-start so no description content is dropped`,
     );
   }
   for (const field of [

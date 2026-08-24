@@ -1,0 +1,152 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1737",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Executor packet transport: full work order reaches the executor prompt",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-24T17:23:44Z",
+  "sha_binding": {
+    "verified_source_sha": "de50d5897f3b98ce547f53b6e4fd4c654520e440",
+    "verified_source_note": "Preserved implementation from 0f5a533d rebased onto current main, plus two authorized bootstrap corrections. Later commits are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-24T17:23:44Z"
+  },
+  "provenance": {
+    "inherited_from": "0f5a533d (preserved branch codex/utv2-1734-executor-work-order)",
+    "inherited_scope": "1118 insertions across 8 script files: execution-packet.ts, codex-exec.ts, claude-exec.ts, lane-start.ts and their tests",
+    "authored_here": "51 insertions in scripts/ops/execution-packet.ts, zero deletions",
+    "not_rederived": "The inherited implementation was NOT rewritten. It was rebased onto current main and reviewed as part of the complete diff."
+  },
+  "bootstrap_override": {
+    "what": "ops:lane-start --force-unsafe-substrate, one logged bootstrap admission for this lane only",
+    "why": "This lane repairs the packet transport that makes governed Codex dispatch possible. The dispatcher defect prevents Codex from receiving this lane own objective, so Claude implemented the two remaining corrections on the preserved branch under an explicit PM exception. The exception ends when this lane merges; Claude does not become the normal implementation path.",
+    "guard_refusal_verbatim": [
+      "board_hard_fail:MERGED_PR_ACTIVE_LANE lanes=[\"UTV2-1743\"] — Branch \"claude/utv2-1743-parked-tier-c\" already has a merged PR but lane remains in_review",
+      "board_hard_fail:TIER_C_CONFLICT lanes=[\"UTV2-1729\",\"UTV2-1743\"] — Both executing lanes touch Tier C paths (.github/workflows/post-merge-lane-close.yml, scripts/ops/lane-close.ts, scripts/ops/merge-risk.ts)"
+    ],
+    "preconditions_verified": [
+      "P1 UTV2-1743 merged (PR #1442, 2c12abdf ancestor of main), 0 processes",
+      "P2 UTV2-1729 preserved (c3a6de03 on preserve/utv2-1729-unpushed-work), lease stale_reclaim_required, 0 processes",
+      "P3 UTV2-1736 admitted, lease active, 0 codex processes, 0 codex-exec artifacts",
+      "P4 UTV2-1737 file scope intersects UTV2-1736 in NOTHING",
+      "P5 overlap with UTV2-1729 expected — this lane is its explicit blocker and 1729 will not execute",
+      "P6 no production runtime, database, deployment, ingestion or delivery path touched"
+    ],
+    "process_count_caveat": "Raw grep process counts returned non-zero four times during this lane; every instance was the grep pipeline matching itself. All execution claims here were verified per-PID."
+  },
+  "corrections_authored": [
+    {
+      "id": "preamble capture",
+      "defect": "parseSections appended lines only while a heading was open, so all content before the first ## was discarded with no residue. Issues routinely open with the objective or a prohibition there.",
+      "fix": "Captured under a PREAMBLE_KEY sentinel that no real markdown heading can collide with; travels as residue like any other unconsumed section.",
+      "proof": "Live sweep with the fix reverted: 5 lossy issues and UTV2-1577 loses a prohibition line. Restored: 60/60 zero loss."
+    },
+    {
+      "id": "unmapped_sections validation with structured refusal",
+      "defect": "assertTaskContract never validated unmapped_sections. A pre-UTV2-1737 contract passed every check then died on contract.unmapped_sections.length inside renderTaskContract — fail-open followed by an anonymous TypeError.",
+      "fix": "Structured TaskContractError carrying code and issueId, naming the remedy.",
+      "proof": "Reverted: generic Error, code undefined. Restored: TaskContractError code stale_contract_missing_unmapped_sections."
+    }
+  ],
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "focused_tests": {
+      "execution-packet": 29,
+      "codex-exec": 30,
+      "claude-exec": 7,
+      "lane-start": 34,
+      "total": 100,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static"
+    },
+    "repo_test_suite": {
+      "command": "pnpm test",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static"
+    }
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "live_description_sweep": {
+      "inspected": 60,
+      "zero_loss": 60,
+      "refused": 0,
+      "lossy": 0,
+      "prohibition_retention": {
+        "UTV2-1577": "2/2",
+        "UTV2-1578": "2/2"
+      },
+      "inverted": "reverting preamble capture yields 5 lossy issues and UTV2-1577 loses a prohibition"
+    },
+    "dry_run_purity": {
+      "lease": "UNCHANGED",
+      "manifest": "UNCHANGED",
+      "worktree_head": "UNCHANGED",
+      "dirty_files": "0 -> 0",
+      "worktree_count": "45 -> 45",
+      "codex_exec_artifacts": "0 -> 0",
+      "linear_state": "In Codex -> In Codex",
+      "real_codex_processes": 0,
+      "method": "per-PID verification, not raw grep counts"
+    },
+    "structured_refusals": {
+      "null": "structured",
+      "string": "structured",
+      "empty_object": "structured",
+      "missing_acceptance_criteria": "structured",
+      "blank_objective": "structured",
+      "identity_mismatch": "task contract identity mismatch",
+      "source_hash_mismatch": "source hash verification failed",
+      "stale_unmapped_sections": "TaskContractError code stale_contract_missing_unmapped_sections",
+      "none_were_bare_TypeError": true
+    },
+    "contract_less_compatibility": {
+      "captures_fresh_from_linear": true,
+      "preamble_prohibition_retained": true,
+      "legacy_sync_file_byte_unchanged": true,
+      "no_other_file_created": true,
+      "bulk_migration": false
+    },
+    "utv2_1736_rendered_packet": {
+      "objective": "PRESENT",
+      "production_critical_rationale": "PRESENT",
+      "measured_evidence": "PRESENT",
+      "forward_horizon": "PRESENT",
+      "idempotent_provisioning": "PRESENT",
+      "reversible_migration": "PRESENT",
+      "pre_expiry_alert": "PRESENT",
+      "no_DEFAULT_partition": "PRESENT",
+      "no_retention_deletion": "PRESENT",
+      "production_ddl_stop_boundary": "PRESENT",
+      "decision_to_surface": "PRESENT",
+      "issue_identity": "PRESENT in packet header (Issue: UTV2-1736)",
+      "rendered_chars": 7531,
+      "source_sha256_bound": "7da80ee629c0a15f"
+    },
+    "production_mutation_performed": false,
+    "fabricated_queries_or_row_counts": false
+  },
+  "non_blocking_followups": [
+    "unmapped_sections joins lines with a space, collapsing list structure in the rendered residue. Content is retained (normalized comparison shows zero loss) but formatting degrades. Observed, deliberately NOT implemented — outside this lane accepted contract."
+  ],
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "ready_for_pm_review": true,
+    "pending": [
+      "one independent adversarial review of the complete diff"
+    ]
+  }
+}
