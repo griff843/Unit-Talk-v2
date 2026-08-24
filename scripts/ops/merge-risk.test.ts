@@ -251,16 +251,17 @@ test('UTV2-1743: resuming a parked lane into a live Tier C conflict is refused',
   // Parked beside executing: admissible.
   assert.deepEqual(detectTierCConflict([parked, executing]), []);
 
-  // The same lane resumed into an executing status is refused. A parked lane can
-  // only become executing through ops:lane-start, which reruns the substrate
-  // guard and therefore this calculation -- so resumption is gated, not silent.
+  // The same lane counted as executing conflicts again. Note the real mechanism:
+  // ops:lane-start does not run this calculation (includeMergeRisk: false) and
+  // refuses to resume a parked lane at all. The property is that a manifest must
+  // leave `parked` before it can execute, and from that moment it is counted.
   const resumed = { ...parked, status: 'started' as LaneManifest['status'] };
   const afterResume = detectTierCConflict([resumed, executing]);
   assert.equal(afterResume.length, 1);
   assert.equal(afterResume[0]?.severity, 'hard_fail');
 });
 
-test('UTV2-1743: parking preserves branch, scope and proof references', () => {
+test('UTV2-1743: a parked lane retains its reservation fields and is not counted', () => {
   const parked = createLane({
     issue_id: 'UTV2-1729',
     status: 'parked',

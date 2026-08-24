@@ -4,15 +4,33 @@ MERGE_SHA: 9cbf52cc0c562f2fdff9dfca32ba679da738d5fe
 
 Verified source SHA: `9cbf52cc0c562f2fdff9dfca32ba679da738d5fe`
 
-Production-unblocking lifecycle repair. `/dispatch` halted at Gate 1 and no
-production lane could be admitted beside the active migration lane.
+Partial lifecycle repair on the path to restoring dispatch. Measured effect,
+against the live manifests from the root checkout where the guard actually runs:
+
+```text
+pre-fix, now                      6 hard fails
+post-fix, now                     3   (1729<->1736, 1729<->1743, 1736<->1743)
+post-fix, this lane closed        1   (1729<->1736)
+post-fix + UTV2-1729 parked       0
+```
+
+An earlier revision of this bundle claimed the change unblocks dispatch
+outright. That was asserted without measurement and is withdrawn. This change
+removes exactly the pairs involving the genuinely parked lane; one hard fail
+survives because the other lane's status is `started` -- stalled and unstaffed,
+but "unstaffed" is not a status this filter acts on. Restoring dispatch requires
+reconciling that lane as well.
 
 ## ASSERTIONS:
 
 - [x] `parked` lanes no longer count as Tier C contention.
 - [x] The lock meaning of `parked` is unchanged — one call site altered, 11 left alone.
 - [x] Two executing Tier C lanes still hard-fail.
-- [x] Resuming a parked lane into a live Tier C conflict is refused.
+- [x] A manifest must leave `parked` before it can execute, and is counted again
+  from that moment. Note the real mechanism: `ops:lane-start` does **not** run
+  this calculation (`includeMergeRisk: false`) and refuses to resume a parked
+  lane at all (`resumableStatuses` omits it). An earlier revision claimed
+  lane-start reruns the guard on resume; that was false and is withdrawn.
 - [x] Parked work, branches and proof references are preserved.
 - [x] No production runtime, deployment, ingestion, delivery or database behaviour changed.
 
