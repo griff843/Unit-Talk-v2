@@ -8,6 +8,7 @@ import {
   detectFileOverlap,
   detectPrNoLane,
   detectStaleHeartbeat,
+  detectTierCConflict,
 } from './merge-risk.js';
 
 function createLane(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -206,4 +207,72 @@ test('buildMergeConflictForecast recommends independent merge when no conflicts 
 
   assert.deepStrictEqual(forecast.conditions, []);
   assert.equal(forecast.merge_order_recommendation, 'No active lane or main-drift conflicts forecast.');
+});
+
+/**
+ * UTV2-1743 — parked lanes preserve work but do not execute, so they must not
+ * hold Tier C contention. Counting them blocked the dispatcher from admitting
+ * any new production lane beside legitimately executing work.
+ */
+const tierCLane = (issue: string, status: LaneManifest['status'], file: string): LaneManifest =>
+  createLane({ issue_id: issue, status, file_scope_lock: [file], branch: `codex/${issue.toLowerCase()}` });
+
+test('UTV2-1743: a parked Tier C lane does not conflict with an executing Tier C lane', () => {
+  const conditions = detectTierCConflict([
+    tierCLane('UTV2-1667', 'parked', '.github/workflows/deploy.yml'),
+    tierCLane('UTV2-1736', 'started', 'supabase/migrations/20260824000000_x.sql'),
+  ]);
+  assert.deepEqual(conditions, [], 'preserved, non-executing work must not block an executing lane');
+});
+
+test('UTV2-1743: two parked Tier C lanes do not conflict with each other', () => {
+  const conditions = detectTierCConflict([
+    tierCLane('UTV2-1667', 'parked', '.github/workflows/deploy.yml'),
+    tierCLane('UTV2-1729', 'parked', 'scripts/ops/lane-close.ts'),
+  ]);
+  assert.deepEqual(conditions, []);
+});
+
+test('UTV2-1743: two EXECUTING Tier C lanes still hard-fail', () => {
+  const conditions = detectTierCConflict([
+    tierCLane('UTV2-1736', 'started', 'supabase/migrations/20260824000000_x.sql'),
+    tierCLane('UTV2-1743', 'in_review', 'scripts/ops/merge-risk.ts'),
+  ]);
+  assert.equal(conditions.length, 1, 'real concurrent Tier C work must still be refused');
+  assert.equal(conditions[0]?.code, 'TIER_C_CONFLICT');
+  assert.equal(conditions[0]?.severity, 'hard_fail');
+  assert.deepEqual(conditions[0]?.lanes, ['UTV2-1736', 'UTV2-1743']);
+});
+
+test('UTV2-1743: resuming a parked lane into a live Tier C conflict is refused', () => {
+  const executing = tierCLane('UTV2-1736', 'started', 'supabase/migrations/20260824000000_x.sql');
+  const parked = tierCLane('UTV2-1667', 'parked', '.github/workflows/deploy.yml');
+
+  // Parked beside executing: admissible.
+  assert.deepEqual(detectTierCConflict([parked, executing]), []);
+
+  // The same lane resumed into an executing status is refused. A parked lane can
+  // only become executing through ops:lane-start, which reruns the substrate
+  // guard and therefore this calculation -- so resumption is gated, not silent.
+  const resumed = { ...parked, status: 'started' as LaneManifest['status'] };
+  const afterResume = detectTierCConflict([resumed, executing]);
+  assert.equal(afterResume.length, 1);
+  assert.equal(afterResume[0]?.severity, 'hard_fail');
+});
+
+test('UTV2-1743: parking preserves branch, scope and proof references', () => {
+  const parked = createLane({
+    issue_id: 'UTV2-1729',
+    status: 'parked',
+    branch: 'codex/utv2-1729-proof-producing-contract',
+    file_scope_lock: ['scripts/ops/lane-close.ts'],
+    expected_proof_paths: ['docs/06_status/proof/UTV2-1729/evidence.json'],
+  });
+  // Excluding a parked lane from Tier C contention must not erase what parking
+  // is for: the branch, the declared scope and the proof references survive.
+  assert.equal(parked.branch, 'codex/utv2-1729-proof-producing-contract');
+  assert.deepEqual(parked.file_scope_lock, ['scripts/ops/lane-close.ts']);
+  assert.deepEqual(parked.expected_proof_paths, ['docs/06_status/proof/UTV2-1729/evidence.json']);
+  assert.equal(parked.status, 'parked');
+  assert.deepEqual(detectTierCConflict([parked]), []);
 });

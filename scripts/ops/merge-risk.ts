@@ -97,6 +97,30 @@ function activeLanesOnly(lanes: LaneManifest[]): LaneManifest[] {
   return lanes.filter((lane) => ACTIVE_LOCK_STATUSES.has(lane.status));
 }
 
+/**
+ * Lanes that are actually EXECUTING, for contention that only real execution can
+ * cause.
+ *
+ * `parked` is in ACTIVE_LOCK_STATUSES because a parked lane still owns its
+ * branch, worktree and file-scope reservation -- that lock meaning is correct
+ * and is deliberately left unchanged everywhere else in this file.
+ *
+ * Tier C *contention* is a different question: it asks whether two lanes are
+ * concurrently changing sensitive paths. A parked lane is preserved, not
+ * running, so it cannot contend. Counting it as contention meant preserved work
+ * blocked the dispatcher from admitting any new production lane, which is what
+ * this narrowly scoped repair fixes.
+ *
+ * Resumption safety is unaffected: a parked lane can only become executing
+ * through `ops:lane-start`, which reruns the substrate guard -- and therefore
+ * this conflict calculation -- with the lane in an executing status. A parked
+ * lane sitting beside an executing Tier C lane is refused at that point, which
+ * is asserted directly in the tests.
+ */
+function executingLanesOnly(lanes: LaneManifest[]): LaneManifest[] {
+  return activeLanesOnly(lanes).filter((lane) => manifestStatus(lane) !== 'parked');
+}
+
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
@@ -336,7 +360,7 @@ export function detectDispatchSaturation(lanes: LaneManifest[]): MergeRiskCondit
 }
 
 export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[] {
-  const activeTierCLanes = activeLanesOnly(lanes).filter((lane) => touchesTierC(lane));
+  const activeTierCLanes = executingLanesOnly(lanes).filter((lane) => touchesTierC(lane));
   const conditions: MergeRiskCondition[] = [];
 
   for (let index = 0; index < activeTierCLanes.length; index += 1) {
@@ -350,7 +374,7 @@ export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[]
         code: 'TIER_C_CONFLICT',
         severity: 'hard_fail',
         lanes: [left.issue_id, right.issue_id],
-        detail: `Both active lanes touch Tier C paths (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
+        detail: `Both executing lanes touch Tier C paths (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
       });
     }
   }
