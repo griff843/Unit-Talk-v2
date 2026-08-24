@@ -1,0 +1,158 @@
+{
+  "generated_from": "ops:orchestration-reconcile --current --json",
+  "unique_issue_ids": 17,
+  "failing_check_rows": 33,
+  "issues": [
+    {
+      "issue_id": "UTV2-1383",
+      "failing_checks": 2,
+      "distinct_reasons": [
+        "Active lease has no active lane manifest",
+        "Merged PR is 3493m old but Linear state is Blocked Internal"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1451",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Merged PR is 23630m old but Linear state is Blocked Internal"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1543",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1550",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1612",
+      "failing_checks": 2,
+      "distinct_reasons": [
+        "Merged PR is 38709m old but Linear state is Blocked Internal",
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1619",
+      "failing_checks": 9,
+      "distinct_reasons": [
+        "Merged PR is 18731m old but Linear state is Blocked Internal",
+        "Merged PR is 24241m old but Linear state is Blocked Internal",
+        "Merged PR is 24267m old but Linear state is Blocked Internal",
+        "Merged PR is 25600m old but Linear state is Blocked Internal",
+        "Merged PR is 26140m old but Linear state is Blocked Internal",
+        "Merged PR is 26930m old but Linear state is Blocked Internal",
+        "Merged PR is 27219m old but Linear state is Blocked Internal",
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1627",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Merged PR is 22441m old but Linear state is Ready to Close"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1641",
+      "failing_checks": 2,
+      "distinct_reasons": [
+        "Merged PR is 32836m old but Linear state is Ready to Close",
+        "Merged PR is 32895m old but Linear state is Ready to Close"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1646",
+      "failing_checks": 2,
+      "distinct_reasons": [
+        "Merged PR is 32847m old but Linear state is Blocked Internal",
+        "Merged PR is 32860m old but Linear state is Blocked Internal"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1648",
+      "failing_checks": 2,
+      "distinct_reasons": [
+        "Merged PR is 32730m old but Linear state is Blocked Internal",
+        "Merged PR is 32775m old but Linear state is Blocked Internal"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1651",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Linear In Codex has no active lease or lane manifest"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1652",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Open PR exists but the matching lane manifest is missing"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1659",
+      "failing_checks": 4,
+      "distinct_reasons": [
+        "Linear In Claude has no active lease or lane manifest",
+        "Merged PR is 32343m old but Linear state is In Claude",
+        "Merged PR is 32458m old but Linear state is In Claude",
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1691",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    },
+    {
+      "issue_id": "UTV2-1701",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Merged PR is 16068m old but Linear state is Ready to Close"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1724",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Active lease has no active lane manifest"
+      ],
+      "reconcile_safe_to_apply": true
+    },
+    {
+      "issue_id": "UTV2-1729",
+      "failing_checks": 1,
+      "distinct_reasons": [
+        "Open PR exists but lane manifest is missing the matching PR URL"
+      ],
+      "reconcile_safe_to_apply": false
+    }
+  ]
+}
