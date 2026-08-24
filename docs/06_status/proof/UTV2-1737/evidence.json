@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T17:23:44Z",
   "sha_binding": {
-    "verified_source_sha": "set-at-final-head",
-    "verified_source_note": "Recomputed at the final head after the second correction cycle. Earlier revisions bound this to a commit predating the corrections; that was wrong twice and is withdrawn. CI rebinds post-merge.",
+    "verified_source_sha": "581af41bf145f17dea8cfae4966c799f58077748",
+    "verified_source_note": "The commit carrying the corrected executor imports, the arity fix and the executing dry-run coverage. Later commits in this lane are proof artifacts only. Two earlier revisions bound this to commits predating the corrections; both were wrong and are withdrawn. A sentinel is not accepted here -- the schema requires a full 40-character SHA for this field, unlike evidence_commit_sha and current_pr_head_sha.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
