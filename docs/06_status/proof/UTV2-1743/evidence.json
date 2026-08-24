@@ -39,7 +39,17 @@
       "verdict": "PASS",
       "detail": "5 changed files; rules matched: (none)"
     },
-    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and resume-into-conflict. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused."
+    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and resume-into-conflict. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused.",
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    },
+    "repo_test_suite": {
+      "command": "pnpm test",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    }
   },
   "defect": {
     "root_cause": "ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts:408) contains parked, and the Tier C conflict calculation filtered on that set, so preserved non-executing work counted as live contention.",

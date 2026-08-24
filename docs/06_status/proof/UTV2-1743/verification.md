@@ -49,6 +49,8 @@ mutation: reverting the one call site fails 3 of 5 new tests
 |---|---|---|
 | `pnpm exec tsx --test 'scripts/ops/merge-risk.test.ts'` | PASS | 14 tests passed, 0 failed. |
 | `pnpm verify:static` | PASS | Exit 0. |
+| `pnpm type-check` | PASS | Ran as a stage of `pnpm verify:static`, which exited 0; a type-check failure fails that pipeline. |
+| `pnpm test` | PASS | Ran as a stage of `pnpm verify:static`, which exited 0; the repository-wide suite is part of that pipeline and the focused merge-risk cases passed within it. |
 | `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 5 changed files. Rules matched: (none). |
 | `pnpm test:db` | N/A | No runtime or database path is touched by this change. |
 
