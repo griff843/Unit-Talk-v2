@@ -97,6 +97,41 @@ function activeLanesOnly(lanes: LaneManifest[]): LaneManifest[] {
   return lanes.filter((lane) => ACTIVE_LOCK_STATUSES.has(lane.status));
 }
 
+/**
+ * Lanes that are actually EXECUTING, for contention that only real execution can
+ * cause.
+ *
+ * `parked` is in ACTIVE_LOCK_STATUSES because a parked lane still owns its
+ * branch, worktree and file-scope reservation -- that lock meaning is correct
+ * and is deliberately left unchanged everywhere else in this file.
+ *
+ * Tier C *contention* is a different question: it asks whether two lanes are
+ * concurrently changing sensitive paths. A parked lane is preserved, not
+ * running, so it cannot contend. Counting it as contention meant preserved work
+ * blocked the dispatcher from admitting any new production lane, which is what
+ * this narrowly scoped repair fixes.
+ *
+ * Resumption safety, stated as the mechanism that actually holds:
+ *
+ * `ops:lane-start` does NOT run this calculation -- it calls
+ * `gatherSubstrateFacts({ includeMergeRisk: false })`, deliberately leaving
+ * board hard-fails to the standalone `pnpm ops:substrate-guard` in dispatch
+ * Phase 0. It also cannot resume a parked lane at all: `resumableStatuses`
+ * omits `parked`, and the fresh path refuses an existing non-done manifest.
+ *
+ * So the property is not "a guard reruns on resume". It is stronger: a parked
+ * manifest must first be transitioned OUT of `parked` by some other mechanism,
+ * and from that moment this function counts it again on every subsequent
+ * merge-risk evaluation. There is no path by which a lane executes while its
+ * manifest still reads `parked`, which is what the tests assert.
+ *
+ * If `resumableStatuses` is ever widened to include `parked`, that reasoning
+ * breaks and nothing here will catch it until the next Phase 0 run.
+ */
+function executingLanesOnly(lanes: LaneManifest[]): LaneManifest[] {
+  return activeLanesOnly(lanes).filter((lane) => manifestStatus(lane) !== 'parked');
+}
+
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
@@ -336,7 +371,7 @@ export function detectDispatchSaturation(lanes: LaneManifest[]): MergeRiskCondit
 }
 
 export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[] {
-  const activeTierCLanes = activeLanesOnly(lanes).filter((lane) => touchesTierC(lane));
+  const activeTierCLanes = executingLanesOnly(lanes).filter((lane) => touchesTierC(lane));
   const conditions: MergeRiskCondition[] = [];
 
   for (let index = 0; index < activeTierCLanes.length; index += 1) {
@@ -350,7 +385,7 @@ export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[]
         code: 'TIER_C_CONFLICT',
         severity: 'hard_fail',
         lanes: [left.issue_id, right.issue_id],
-        detail: `Both active lanes touch Tier C paths (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
+        detail: `Both executing lanes touch Tier C paths (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
       });
     }
   }

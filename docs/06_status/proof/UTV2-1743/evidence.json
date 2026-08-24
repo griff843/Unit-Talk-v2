@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1743",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Parked lanes must not hold Tier C contention",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-24T13:47:20Z",
+  "sha_binding": {
+    "verified_source_sha": "9cbf52cc0c562f2fdff9dfca32ba679da738d5fe",
+    "verified_source_note": "PR-binding commit; the tree at this SHA contains the one-call-site change and its tests. The change itself was authored in an earlier commit on this branch. Later commits are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-24T13:47:20Z"
+  },
+  "scope": {
+    "changed_files": 5,
+    "substantive_diff_stat": "2 files changed, 95 insertions(+), 2 deletions(-)",
+    "call_sites_changed": 1,
+    "call_sites_left_unchanged": 11,
+    "note": "executingLanesOnly() is used at exactly one site: the Tier C conflict calculation. The other 11 uses of activeLanesOnly are untouched, so parked is not removed from lifecycle accounting generally."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/merge-risk.test.ts",
+      "tests": 14,
+      "pass": 14,
+      "fail": 0
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "5 changed files; rules matched: (none)"
+    },
+    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and resume-into-conflict. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused.",
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    },
+    "repo_test_suite": {
+      "command": "pnpm test",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    }
+  },
+  "defect": {
+    "root_cause": "ACTIVE_LOCK_STATUSES (scripts/ops/shared.ts:408) contains parked, and the Tier C conflict calculation filtered on that set, so preserved non-executing work counted as live contention.",
+    "live_evidence": "ops:substrate-guard returned 3 x board_hard_fail:TIER_C_CONFLICT. Every one involved UTV2-1667, which is already parked with a closed unmerged PR, and UTV2-1729, which is unstaffed. Neither executes. /dispatch halted at gate 1 and no production lane could be admitted.",
+    "semantics": "The lock meaning of parked is correct and unchanged: a parked lane still owns its branch, worktree and file-scope reservation. Tier C contention asks whether two lanes are concurrently changing sensitive paths; a preserved lane changes nothing.",
+    "resumption_safety": "Stated as the mechanism that actually holds. ops:lane-start does NOT run this calculation -- it calls gatherSubstrateFacts({ includeMergeRisk: false }), deliberately leaving board hard-fails to the standalone ops:substrate-guard in dispatch Phase 0 -- and it cannot resume a parked lane at all, because resumableStatuses (lane-start.ts:902) omits parked and the fresh path refuses an existing non-done manifest. The property is therefore stronger than a guard rerun: a manifest must first leave parked by some other mechanism, and from that moment this function counts it again. An earlier revision of this bundle and of the source comment claimed lane-start reruns the guard on resume. That was false and is withdrawn."
+  },
+  "tier_rationale": "T2, not T1. The documented verification table assigns T1 to changes requiring test:db plus runtime proof. This change alters a pure in-memory predicate in an ops script: no runtime path, no database access, no deployment, no migration, no customer-facing behaviour. It touches a Tier C PATH (scripts/ops/merge-risk.ts matches the merge- pattern), which raises review scrutiny, but Tier C path sensitivity and tier T1/T2/T3 are independent axes. Recorded explicitly because retiering changes who approves: this is stated for PM visibility, not applied silently.",
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "guard_note": "Two executing Tier C lanes still hard-fail. Only preserved, non-executing work stops being counted as contention."
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "N/A — no runtime path touched",
+    "ready_for_pm_review": true,
+    "pending": []
+  },
+  "effect_measured": {
+    "method": "detectTierCConflict run against the live manifests from the root checkout, where ops:substrate-guard actually runs",
+    "pre_fix_now": 6,
+    "pre_fix_pairs": [
+      "1667<->1729",
+      "1667<->1736",
+      "1667<->1743",
+      "1729<->1736",
+      "1729<->1743",
+      "1736<->1743"
+    ],
+    "post_fix_now": 3,
+    "post_fix_pairs": [
+      "1729<->1736",
+      "1729<->1743",
+      "1736<->1743"
+    ],
+    "post_fix_this_lane_closed": 1,
+    "post_fix_this_lane_closed_pairs": [
+      "1729<->1736"
+    ],
+    "post_fix_plus_1729_parked": 0,
+    "conclusion": "This change is a necessary but PARTIAL repair. It removes exactly the pairs involving the genuinely parked lane. One hard fail survives after this lane closes, because UTV2-1729 status is \"started\" -- stalled and unstaffed, but \"unstaffed\" is not a status this filter acts on. Full restoration of dispatch requires reconciling UTV2-1729 as well. An earlier revision of this bundle claimed the change unblocks dispatch outright; that was asserted without measurement and is withdrawn.",
+    "note_1736_1743": "The 1736<->1743 pair is a correct result while both execute: two executing Tier C lanes must hard-fail. It disappears when this lane closes."
+  },
+  "known_limitations": [
+    "Only `parked` is excluded. `blocked` is also non-executing but remains counted, which is deliberate minimalism for a production-unblocking repair rather than an implicit judgement that blocked lanes contend. Recorded so the inconsistency under a function named \"executing\" is a visible decision, not an oversight."
+  ]
+}
