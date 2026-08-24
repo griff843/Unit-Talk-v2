@@ -30,9 +30,10 @@
       "scripts/ingestor-alert-check.ts",
       "scripts/ingestor-alert-check.test.ts"
     ],
-    "changed_files": 6,
+    "changed_files": 9,
     "substantive_diff_stat": "3 files changed, 1430 insertions(+), 162 deletions(-)",
-    "port_fidelity": "Workflow byte-identical to the superseded head. Implementation differs by the call site plus comment corrections. Tests are a pure append."
+    "port_fidelity": "Workflow byte-identical to the superseded head. Implementation differs by the call site plus comment corrections. Tests are a pure append.",
+    "changed_files_note": "Count at this head. An earlier revision recorded 6, the count before the proof artifacts were added and the proof-directory placeholder removed. Superseded."
   },
   "static_proof": {
     "verify_static": "PASS (exit 0)",
@@ -45,7 +46,7 @@
     "r_level_check": {
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "detail": "6 changed files; rules matched: (none)"
+      "detail": "9 changed files; rules matched: (none)"
     },
     "type_check_scope_caveat": "scripts/ is outside every tsconfig project reference, so pnpm type-check does not enforce types in this file. The regression guards are the focused suite and the wiring guard, not the compiler."
   },

@@ -50,7 +50,7 @@ verify:static: PASS (exit 0)
 focused runtime: PASS (23 tests, 0 failed)
 disabled path: 0 writes, 0 delivery attempts
 mutations killed: 3 of 3
-r-level check: PASS (6 changed files, no rules matched)
+r-level check: PASS (9 changed files, no rules matched)
 ```
 
 ## Verification
@@ -59,7 +59,7 @@ r-level check: PASS (6 changed files, no rules matched)
 |---|---|---|
 | `pnpm exec tsx --test 'scripts/ingestor-alert-check.test.ts'` | PASS | 23 tests passed, 0 failed. |
 | `pnpm verify:static` | PASS | Exit 0. |
-| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 6 changed files. Rules matched: (none). |
+| `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Verdict: PASS. 9 changed files. Rules matched: (none). |
 | Disabled-path write audit | PASS | detections 0, notified 0, runsStarted 0, runsCompleted 0, fetch 0. |
 | `pnpm test:db` (writable, staging) | CI | Runs in the governed `staging-ci` environment; credited to CI, not asserted here. |
 
