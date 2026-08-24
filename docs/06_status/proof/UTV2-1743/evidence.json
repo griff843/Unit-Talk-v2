@@ -39,7 +39,7 @@
       "verdict": "PASS",
       "detail": "5 changed files; rules matched: (none)"
     },
-    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and resume-into-conflict. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused.",
+    "mutation_testing": "Reverting the single call site from executingLanesOnly to activeLanesOnly fails 3 of the 5 new tests: parked-vs-executing, parked-vs-parked, and counted-once-it-leaves-parked. The two-executing-lanes hard fail passes either way, which is the intended result -- real concurrent Tier C work is still refused.",
     "type_check": {
       "command": "pnpm type-check",
       "result": "PASS",
@@ -98,5 +98,10 @@
   },
   "known_limitations": [
     "Only `parked` is excluded. `blocked` is also non-executing but remains counted, which is deliberate minimalism for a production-unblocking repair rather than an implicit judgement that blocked lanes contend. Recorded so the inconsistency under a function named \"executing\" is a visible decision, not an oversight."
-  ]
+  ],
+  "not_delivered": {
+    "governed_readmission": "Not implemented. No explicit parked -> admissible transition, no guard rerun on readmission, no lease or ownership reacquisition, no refusal path under a live Tier C conflict.",
+    "readmission_safety_untested": "The test formerly named \"resuming a parked lane into a live Tier C conflict is refused\" flips a status in memory and asserts the conflict calculation counts it. It exercises no readmission code path because none exists. Renamed to describe what it actually asserts.",
+    "delivered_scope": "Parked lanes no longer participate in Tier C execution contention, and parked lanes cannot resume through ordinary ops:lane-start (resumableStatuses omits parked)."
+  }
 }

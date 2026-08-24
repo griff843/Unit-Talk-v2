@@ -244,17 +244,22 @@ test('UTV2-1743: two EXECUTING Tier C lanes still hard-fail', () => {
   assert.deepEqual(conditions[0]?.lanes, ['UTV2-1736', 'UTV2-1743']);
 });
 
-test('UTV2-1743: resuming a parked lane into a live Tier C conflict is refused', () => {
+test('UTV2-1743: a manifest is counted again as soon as it leaves parked', () => {
   const executing = tierCLane('UTV2-1736', 'started', 'supabase/migrations/20260824000000_x.sql');
   const parked = tierCLane('UTV2-1667', 'parked', '.github/workflows/deploy.yml');
 
   // Parked beside executing: admissible.
   assert.deepEqual(detectTierCConflict([parked, executing]), []);
 
-  // The same lane counted as executing conflicts again. Note the real mechanism:
-  // ops:lane-start does not run this calculation (includeMergeRisk: false) and
-  // refuses to resume a parked lane at all. The property is that a manifest must
-  // leave `parked` before it can execute, and from that moment it is counted.
+  // Scope of this test, stated precisely: it flips a status in memory and asserts
+  // the conflict calculation counts it. It does NOT exercise readmission -- no
+  // readmission path exists. ops:lane-start does not run this calculation
+  // (includeMergeRisk: false) and cannot resume a parked lane at all
+  // (resumableStatuses omits it), so today a parked lane simply cannot re-enter
+  // execution by the ordinary route. Governed readmission -- an explicit
+  // parked -> admissible transition that reruns this guard, reacquires the lease
+  // and refuses under a live conflict -- is NOT delivered here and is tracked
+  // separately.
   const resumed = { ...parked, status: 'started' as LaneManifest['status'] };
   const afterResume = detectTierCConflict([resumed, executing]);
   assert.equal(afterResume.length, 1);
