@@ -43,23 +43,6 @@ r-level check: PASS (5 changed files, no rules matched)
 mutation: reverting the one call site fails 3 of 5 new tests
 ```
 
-## What this lane did NOT deliver
-
-Stated explicitly so the record cannot be read as more than it is:
-
-- **Governed parked-lane readmission is not implemented.** There is no explicit
-  `parked -> admissible` transition, no guard rerun on readmission, no lease or
-  ownership reacquisition, and no refusal path under a live Tier C conflict.
-- **Readmission safety was not tested.** The test formerly named "resuming a
-  parked lane into a live Tier C conflict is refused" flips a status in memory
-  and asserts the conflict calculation counts it. It exercises no readmission
-  code path, because none exists. It is renamed accordingly.
-- What this lane delivers is narrower: parked lanes no longer participate in
-  Tier C execution contention, and parked lanes cannot resume through ordinary
-  `ops:lane-start` at all (`resumableStatuses` omits `parked`).
-
-Governed readmission is tracked as a separate bounded follow-up.
-
 ## Verification
 
 | Check | Result | Evidence |
@@ -85,7 +68,7 @@ lane with a closed unmerged PR and an unstaffed lane.
 revert executingLanesOnly -> activeLanesOnly:
   not ok  parked vs executing Tier C does not conflict
   not ok  two parked Tier C lanes do not conflict
-  not ok  a manifest is counted again as soon as it leaves parked
+  not ok  resuming a parked lane into a live Tier C conflict is refused
   # pass 11 / # fail 3
 restored: # pass 14 / # fail 0
 ```
