@@ -4,7 +4,7 @@
 **Tier:** T1 · **Lane type:** governance
 **Branch:** `claude/utv2-1752-packet-finalization`
 **Verified source SHA:** `3e7abdbbaedaa360529871b61f1ace68b45182fe`
-**Merge SHA:** N/A (pre-merge)
+MERGE_SHA: N/A
 **Predecessor:** UTV2-1747 / PR #1446, closed unmerged at `d54abcbd`. That tree was preserved and ported here; UTV2-1752 addresses its four review findings and nothing else.
 
 ---

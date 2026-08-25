@@ -7,10 +7,6 @@
   "title": "Executor packet finalization: correct readmission timing, T1 proof, and nested-section consumption",
   "status": "ready_for_review",
   "generated_at": "2026-08-25T14:35:00Z",
-  "verifier": {
-    "identity": "claude-orchestrator",
-    "role": "implementing executor"
-  },
   "sha_binding": {
     "verified_source_sha": "3e7abdbbaedaa360529871b61f1ace68b45182fe",
     "verified_source_note": "Implementation commit for this lane. Every figure in this bundle was measured against the tree at this SHA.",
@@ -94,7 +90,13 @@
       "preserved_head": 5057,
       "this_head": 5062,
       "delta": 5,
-      "accounted_by": ["G1", "G2", "G3", "G4", "G5"],
+      "accounted_by": [
+        "G1",
+        "G2",
+        "G3",
+        "G4",
+        "G5"
+      ],
       "note": "The delta is exactly the five tests added by this lane and nothing else."
     },
     "mutation_testing": {
@@ -105,21 +107,27 @@
         {
           "id": "M1",
           "mutation": "sectionLines reserved-descendant subtraction neutralised",
-          "killed": ["G1"],
+          "killed": [
+            "G1"
+          ],
           "result": "execution-packet 47 pass, 1 fail",
           "kills_only_its_own_test": true
         },
         {
           "id": "M2",
           "mutation": "residue per-line subtraction neutralised",
-          "killed": ["G5"],
+          "killed": [
+            "G5"
+          ],
           "result": "execution-packet 47 pass, 1 fail",
           "kills_only_its_own_test": true
         },
         {
           "id": "M3",
           "mutation": "unconditional early capture restored (the finding-1 defect)",
-          "killed": ["G4"],
+          "killed": [
+            "G4"
+          ],
           "result": "lane-start 43 pass, 1 fail",
           "kills_only_its_own_test": true
         }
@@ -152,7 +160,11 @@
       "severity": "P1",
       "title": "Readmission timing",
       "status": "FIXED",
-      "covered_by": ["G2", "G3", "G4"],
+      "covered_by": [
+        "G2",
+        "G3",
+        "G4"
+      ],
       "mutation": "M3"
     },
     {
@@ -168,7 +180,10 @@
       "severity": "P2",
       "title": "Nested recognized-section consumption",
       "status": "FIXED",
-      "covered_by": ["G1", "G5"],
+      "covered_by": [
+        "G1",
+        "G5"
+      ],
       "mutation": "M1, M2"
     },
     {
