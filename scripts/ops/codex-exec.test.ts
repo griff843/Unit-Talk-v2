@@ -1010,7 +1010,13 @@ test('executor modules resolve every imported symbol (narrow compile smoke)', ()
     ['tsc', '--noEmit', '--module', 'nodenext', '--moduleResolution', 'nodenext',
      '--target', 'es2022', '--skipLibCheck',
      path.join(ROOT, 'scripts', 'ops', 'claude-exec.ts'),
-     path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts')],
+     path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'),
+     // lane-start.ts is a Tier C path every lane start depends on, and
+     // execution-packet.ts is the module both entrypoints resolve through.
+     // `scripts/` is in no tsconfig project, so without these two entries an
+     // unresolved symbol in either file ships past a fully green suite.
+     path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'),
+     path.join(ROOT, 'scripts', 'ops', 'execution-packet.ts')],
     { cwd: ROOT, encoding: 'utf8', timeout: 240_000 },
   );
   // A filtered-diagnostics assertion is vacuously true whenever the compiler
@@ -1033,7 +1039,8 @@ test('executor modules resolve every imported symbol (narrow compile smoke)', ()
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   const unresolved = output
     .split(/\r?\n/u)
-    .filter((line) => /scripts[\\/]ops[\\/](claude|codex)-exec\.ts/u.test(line))
+    .filter((line) =>
+      /scripts[\\/]ops[\\/](?:claude-exec|codex-exec|lane-start|execution-packet)\.ts/u.test(line))
     .filter((line) => /error TS2304|error TS2305/u.test(line));
   assert.deepEqual(unresolved, [],
     `executor entrypoints have unresolved imports:\n${unresolved.join('\n')}`);

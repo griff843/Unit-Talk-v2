@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "953dae38f178df9d28b4ac88c103a7f147282697",
+    "verified_source_sha": "PENDING",
     "verified_source_note": "Bounce-1 correction commit; the tree at this SHA contains the contract lifecycle, the three review-finding fixes, and all tests.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -21,7 +21,7 @@
   },
   "scope": {
     "changed_files": 13,
-    "substantive_diff_stat": "8 script files changed; whole diff 13 files, 3168 insertions(+), 38 deletions(-)",
+    "substantive_diff_stat": "8 script files; whole diff 13 files changed, 3241 insertions(+), 38 deletions(-)",
     "production_files_modified_by_this_lane": 2,
     "note": "execution-packet.ts and lane-start.ts are deliberately changed beyond the preserved head, per PM direction to treat 581af41b as a source artifact rather than architectural authority. claude-exec.ts and codex-exec.ts remain byte-identical to it."
   },
@@ -30,15 +30,16 @@
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally by design (assert-staging requires the staging-ci environment and CI_SUPABASE_* credentials). Not required for this lane.",
     "repo_test_suite": {
       "command": "pnpm test",
-      "tests": 5048,
-      "pass": 5048,
+      "tests": 4934,
+      "pass": 4934,
       "fail": 0,
-      "via": "stage of pnpm verify:static (exit 0)"
+      "exit_code": 0,
+      "note": "pnpm verify:static totals 5048 because it also runs the smart-form package suite (114 tests). An earlier revision mislabelled that pipeline total as pnpm test."
     },
     "focused_tests": {
-      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts",
-      "tests": 81,
-      "pass": 81,
+      "command": "pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts",
+      "tests": 85,
+      "pass": 85,
       "fail": 0
     },
     "type_check": {
@@ -56,7 +57,14 @@
       "verdict": "PASS",
       "detail": "13 changed files; rules matched: (none)"
     },
-    "mutation_testing": "Thirteen defect classes, each reintroduced alone; ALL THIRTEEN detected; each source file restored and verified byte-identical by SHA-256. M9 is now detected on BOTH lane-start capture call sites via child-process execution of main(), which the previous bounce could not claim. M8 regressed during this bounce -- the nesting fix made its empty-body fixture non-empty, so it silently stopped exercising its own branch -- and was caught by the battery and repaired."
+    "mutation_testing": "Thirteen defect classes, each reintroduced alone; ALL THIRTEEN detected; each source file restored and verified byte-identical by SHA-256. M9 is now detected on BOTH lane-start capture call sites via child-process execution of main(), which the previous bounce could not claim. M8 regressed during this bounce -- the nesting fix made its empty-body fixture non-empty, so it silently stopped exercising its own branch -- and was caught by the battery and repaired.",
+    "lane_start_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
+      "tests": 39,
+      "pass": 39,
+      "fail": 0
+    },
+    "compile_smoke": "Widened to cover lane-start.ts and execution-packet.ts. Previously scripts/ was in no tsconfig project and the smoke listed only the two exec entrypoints, so an unresolved symbol in the Tier C lane-start file shipped past a fully green suite. Verified by inversion: injecting an undefined call into lane-start.ts now fails the smoke."
   },
   "premise_verification": {
     "claim": "The replaced codex dry-run test could not observe the packet layer.",
@@ -88,7 +96,12 @@
       "Linear is no longer a dependency of every lane start and resume; only a first capture needs it.",
       "The resume path no longer merges a lane worktree write against the control checkout's record, so branch-accumulated entities are preserved."
     ],
-    "residual": "A first capture for a lane with no contract anywhere still requires a reachable Linear and a valid token. That is intended: there is no work order to proceed from."
+    "residual": "A first capture for a lane with no contract anywhere still requires a reachable Linear and a valid token. That is intended: there is no work order to proceed from.",
+    "correction": "An earlier revision of this bundle carried a Tier C section describing both risks as disclosed-not-fixed and naming captureOrReadTaskContract, syncContentWithTaskContract and a line number that do not exist at this head. That text described the pre-bounce design, contradicted the Option B section of the same document, and is withdrawn.",
+    "recorded_not_fixed": [
+      "The readmission path still copies the control checkout's sync record into the worktree, so readmit can overwrite branch-accumulated entities. Pre-existing on main; the fix in this lane is scoped to resume.",
+      "generateDispatchExecutionPacketResult's LINEAR_API_KEY fallback is unreachable because readConfiguredEnvValue returns '' rather than a nullish value. Pre-existing; lane-start.ts uses || and handles both."
+    ]
   },
   "sign_off": {
     "static_proof_status": "PASS",
@@ -99,16 +112,14 @@
   "known_limitations": [
     "The packet parser's heading whitelist still does not cover '## Deliverables' or '## Hard constraints', which UTV2-1736 uses. No content is lost and no field falsely claims 'none declared'; residue now preserves line structure. Widening the whitelist was explicitly out of scope for this lane.",
     "Fixture helpers are duplicated across the two exec test files rather than shared: this lane may not add a file, and importing a helper from another test module would re-register that module's tests in both runs.",
-    "The fresh-lane path's post-capture persistence is asserted through the resume path; a fresh lane's own worktree creation runs an isolated pnpm install that a fixture cannot satisfy offline. The fresh capture call site itself is covered (M9b)."
+    "The fresh-lane path's post-capture persistence is asserted through the resume path; a fresh lane's own worktree creation runs an isolated pnpm install that a fixture cannot satisfy offline. The fresh capture call site itself is covered (M9b).",
+    "One lane-start test (offline resume completes without corrupting the contract) survives the M9a mutation. It was renamed to state what it actually observes; the capture wiring itself is proved by the conflict and capture-failure tests, which is where M9a is detected."
   ],
   "carry_forward_audit": {
     "scope": "All eight script files from rejected PR #1445, compared by SHA-256 against current main, preserved head 581af41b, and this worktree.",
     "ported_byte_identical": [
       "scripts/ops/claude-exec.ts",
-      "scripts/ops/codex-exec.ts",
-      "scripts/ops/execution-packet.ts",
-      "scripts/ops/lane-start.ts",
-      "scripts/ops/lane-start.test.ts"
+      "scripts/ops/codex-exec.ts"
     ],
     "rewritten_by_this_lane": [
       "scripts/ops/claude-exec.test.ts",
@@ -124,7 +135,22 @@
     "finding": "lane-start.ts and lane-start.test.ts were accidentally omitted. They are the capture step: on main, lane-start writes a sync record with no task_contract, and readTaskContract throws 'task contract is absent' for every real lane.",
     "precision_correction": "Capture is NOT absent altogether. The exec-time path (generateDispatchExecutionPacketResult) still captures and persists at dispatch. The omission specifically breaks the DRY-RUN path, which deliberately never captures - so without lane-start-time capture, every --dry-run on a real lane refuses. That is the exact path this lane's new tests exercise.",
     "clean_port_verified": "main has not moved on either file since merge-base e4f32988, so the port applied with no reconciliation.",
-    "tier_c_consequence": "lane-start.ts matches the Tier C pattern ^scripts/ops/(lane|merge|tier)-[^/]+(?<!\\.test)\\.ts$, so this lane is now Tier C. Measured board state: the two existing hard fails (UTV2-1729<->UTV2-1743 Tier C conflict, and UTV2-1743 merged-but-in_review) predate this change and involve neither UTV2-1747 nor UTV2-1736. Tier C contention gates /dispatch admission, not PR merge."
+    "tier_c_consequence": "lane-start.ts matches the Tier C pattern ^scripts/ops/(lane|merge|tier)-[^/]+(?<!\\.test)\\.ts$, so this lane is now Tier C. Measured board state: the two existing hard fails (UTV2-1729<->UTV2-1743 Tier C conflict, and UTV2-1743 merged-but-in_review) predate this change and involve neither UTV2-1747 nor UTV2-1736. Tier C contention gates /dispatch admission, not PR merge.",
+    "ported_then_rewritten_in_bounce_1": [
+      "scripts/ops/execution-packet.ts",
+      "scripts/ops/lane-start.ts"
+    ],
+    "ported_then_extended": [
+      "scripts/ops/lane-start.test.ts"
+    ],
+    "measured_sha256_prefixes_at_head": {
+      "claude-exec.ts": "7b1577a3 (== 581af41b)",
+      "codex-exec.ts": "927868f5 (== 581af41b)",
+      "execution-packet.ts": "3de57483 (581af41b was 9fd72abc)",
+      "lane-start.ts": "b368855f (581af41b was 9a7e519b)",
+      "lane-start.test.ts": "0bd36c96 (581af41b was 2b2b69d8)"
+    },
+    "correction": "An earlier revision of this bundle listed execution-packet.ts and lane-start.ts as ported byte-identical. Both were rewritten during bounce 1, so those entries were false and are corrected here."
   },
   "end_to_end_proof_utv2_1736": {
     "method": "Real read-only Linear fetch for UTV2-1736, then build, persist, re-read and render, all against an isolated root. The live UTV2-1736 lane was never written.",

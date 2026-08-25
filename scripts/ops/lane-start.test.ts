@@ -952,7 +952,7 @@ function laneJson(out: string): Record<string, unknown> {
   return JSON.parse(out.slice(start, end + 1)) as Record<string, unknown>;
 }
 
-test('lane-start main() resumes from the lane contract with no token and no network', () => {
+test('lane-start main() completes an offline resume without corrupting the lane contract', () => {
   const f = seedLaneFixture('UTV2-999801', { withWorktree: true });
   const seeded = seedContractAt(f.worktree, f.issueId,
     '## Objective\nResume must reuse this contract.\n\n## Acceptance criteria\n- no refetch');
@@ -962,8 +962,11 @@ test('lane-start main() resumes from the lane contract with no token and no netw
   const out = laneJson(run.stdout);
   assert.equal(out['code'], 'lane_resumed');
 
-  // Reusing, not re-fetching: with LINEAR_* stripped, any capture attempt fails
-  // with "LINEAR_API_TOKEN or LINEAR_API_KEY is required".
+  // Named for what it actually observes: the resume completes offline and leaves
+  // the contract intact. It does NOT by itself prove the capture wiring is
+  // present -- it survives that mutation, because the lane's own copy is still
+  // readable. The wiring is proved by the conflict and capture-failure tests
+  // below, which is where M9a is detected.
   const readBack = readTaskContract(f.issueId, f.worktree);
   assert.equal(readBack.contract_hash, seeded.contract_hash,
     'resume must keep the lane contract hash stable');

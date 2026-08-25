@@ -39,16 +39,19 @@ the `manifestExists` guard and every assertion below it was satisfied by a
 - [x] A dry run leaves the lane root byte-identical — tracked and untracked.
 - [x] Thirteen reintroduced defect classes each make a named test fail, including
   both lane-start capture call sites.
-- [x] No production behaviour changed: the entrypoints, the packet module and
-  the parser are unmodified by this lane beyond the inherited fixes.
+- [x] Production behaviour DID change, deliberately and by PM direction:
+  `lane-start.ts` (contract lifecycle) and `execution-packet.ts` (standalone CLI,
+  nesting-aware parser, residue fidelity) are rewritten beyond the preserved
+  head. `claude-exec.ts` and `codex-exec.ts` remain byte-identical to it.
 - [x] No test-only root parameter was added to production code.
 
 ## EVIDENCE:
 
 ```text
 pnpm verify:static           PASS (exit 0)
-unit suite                   5048 tests, 5048 pass, 0 fail
-focused executor suites      81 tests, 81 pass, 0 fail
+pnpm test                    4934 tests, 4934 pass, 0 fail (exit 0)
+focused executor suites      85 tests, 85 pass, 0 fail
+lane-start suite             39 tests, 39 pass, 0 fail
 r-level check                PASS — 13 changed files, rules matched: (none)
 mutation battery             13 of 13 defect classes DETECTED
 lane-root mutation           0 tracked and 0 untracked changes after a dry run
@@ -61,8 +64,9 @@ lane-root mutation           0 tracked and 0 untracked changes after a dry run
 | `pnpm verify:static` | PASS | Exit 0. Runs lint, type-check, build and the repository suite. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally, by design: `assert-staging` requires the `staging-ci` environment and `CI_SUPABASE_*` credentials, and refuses any other target. Not run locally, and not required for this lane. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
-| `pnpm test` | PASS | 5048 tests, 0 failures, within `pnpm verify:static`. |
-| `pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts` | PASS | 81 tests, 0 failures. |
+| `pnpm test` | PASS | 4934 tests, 0 failures, exit 0. `pnpm verify:static` totals 5048 because it also runs the smart-form package suite (114); an earlier revision mislabelled that pipeline total as `pnpm test`. |
+| `pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts` | PASS | 85 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 39 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 13 changed files. Rules matched: (none). |
 | `pnpm test:db` | N/A | No runtime, delivery or database path is touched. `lane_type: governance`, `proof_profile: static`. |
 
@@ -94,49 +98,32 @@ a child process with `cwd` inside a git-initialised fixture directory rebinds
 
 ### Carry-forward audit (PR #1445, eight script files)
 
-Every script file from the rejected PR, compared by SHA-256 against current
-`main`, preserved head `581af41b`, and this worktree:
+Measured at this head, not at the time of the port. An earlier revision of this
+table still listed `execution-packet.ts` and `lane-start.ts` as "ported
+byte-identical"; both were subsequently rewritten in this bounce, so those rows
+were false and are corrected here.
 
 ```text
-FILE                       MAIN      581af41b  WORKTREE  CLASSIFICATION
-claude-exec.ts             778ee512  7b1577a3  7b1577a3  ported byte-identical
+FILE                       MAIN      581af41b  THIS HEAD  STATUS
+claude-exec.ts             778ee512  7b1577a3  7b1577a3   ported byte-identical
+codex-exec.ts              095d4c44  927868f5  927868f5   ported byte-identical
+execution-packet.ts        15b02a9b  9fd72abc  3de57483   ported, then rewritten (bounce 1)
+lane-start.ts              b88f2f3d  9a7e519b  b368855f   omitted, ported, then rewritten (bounce 1)
+lane-start.test.ts         6d41de15  2b2b69d8  0bd36c96   omitted, ported, then extended
 claude-exec.test.ts        a93c47f2  e5ce303c  (rewritten) executing tests, this lane
-codex-exec.ts              095d4c44  927868f5  927868f5  ported byte-identical
 codex-exec.test.ts         2afd51d5  43f5b78d  (rewritten) executing tests, this lane
-execution-packet.ts        15b02a9b  9fd72abc  9fd72abc  ported byte-identical
 execution-packet.test.ts   2c43eb9b  162979f8  (rewritten) executing tests, this lane
-lane-start.ts              b88f2f3d  9a7e519b  9a7e519b  ACCIDENTALLY OMITTED -> now ported
-lane-start.test.ts         6d41de15  2b2b69d8  2b2b69d8  ACCIDENTALLY OMITTED -> now ported
 ```
 
 `lane-start.ts` and `lane-start.test.ts` were accidentally omitted from the
-UTV2-1747 port. They are the **capture** step. On `main`, `lane-start` writes a
-sync record with no `task_contract`:
-
-```text
-$ cat .ops/sync/UTV2-1747.yml     # written by main's lane-start
-version: 1
-approval: ...
-entities:
-  issues: [UTV2-1747]
-                                   # no task_contract key
-
-$ readTaskContract('UTV2-1747', <lane root>)
-THROWS - task contract is absent from .../.ops/sync/UTV2-1747.yml;
-         refusing to dispatch without a work order
-```
-
-Stated precisely, because an earlier reading of this was too strong: capture is
-**not** absent altogether — the exec-time path
-(`generateDispatchExecutionPacketResult`) still captures and persists at
-dispatch. What the omission breaks is the **dry-run** path specifically. A dry
+original port. They are the capture step. On `main`, `lane-start` writes a sync
+record with no `task_contract`, and `readTaskContract` throws
+`task contract is absent` for every real lane. Stated precisely: capture is not
+absent altogether -- the exec-time path still captures at dispatch -- but a dry
 run deliberately never captures, so without lane-start-time capture every
-`--dry-run` on a real lane refuses. That is exactly the path this lane's new
-tests exercise, so testing it without this file would have been coverage of a
-path no real lane could reach.
-
-Both files are now ported byte-identically and added to `file_scope_lock`. One
-deliberate deviation from byte-identity is disclosed below.
+`--dry-run` on a real lane refuses. `581af41b`'s full 14-file diff contains
+nothing else beyond UTV2-1737's own lane apparatus, which is correctly not
+carried.
 
 ### Option B: the port is a source artifact, not the design
 
@@ -218,47 +205,36 @@ as `(not extracted - see "Additional issue content" below)` rather than
 `(none declared)`, so the executor is never told a guardrail does not exist when
 one does. Worth a follow-up to widen the whitelist; not a blocker.
 
-### Tier C safety: two behavioural changes the port introduces
+### Tier C safety
 
-Both were missed by the first revision of this bundle, which asserted
-`production_behaviour_changed: false`. That was wrong relative to `main` and is
-withdrawn. `lane-start.ts` is a Tier C path that every lane start depends on.
+`scripts/ops/lane-start.ts` is a Tier C path every lane start depends on. An
+earlier revision of this bundle described two behavioural risks here as
+"disclosed rather than fixed", and named `captureOrReadTaskContract`,
+`syncContentWithTaskContract` and a line number that no longer exist. That text
+described the pre-bounce design and directly contradicted the Option B section
+above. It was stale and is withdrawn. What ships:
 
-**1. A hard external dependency on Linear, on every lane start and every resume.**
-`main()` now calls `captureOrReadTaskContract(issueId, linearTaskToken())` on
-both the fresh and resume paths. With no `LINEAR_API_TOKEN`/`LINEAR_API_KEY`, an
-unreachable `api.linear.app`, or an issue that cannot be fetched, lane-start now
-refuses where `main` succeeded. Neither call site can orphan state — both sit
-before lease reservation and worktree creation, and `main()`'s try/catch turns a
-throw into a structured `lane_start_failed` with exit 1 — so this fails closed
-rather than corrupting anything. But it is a real new failure mode under
-containment, in CI, and on any machine without a token.
+| Previously disclosed risk | Status at this head | Evidence |
+|---|---|---|
+| Linear required on every lane start AND resume | **Fixed.** Only a first capture needs it. | Resume exits 0 with `LINEAR_API_TOKEN`/`LINEAR_API_KEY` stripped, and with a token present a `curl` shim records zero invocations. |
+| Resume merged a worktree write against the control checkout's record, overwriting branch entities | **Fixed.** Each destination merges against its own record. | With different findings seeded in each root, neither leaks into the other. |
 
-**2. Asymmetric root on resume, with a silent-overwrite path.**
-`syncContentWithTaskContract` merges against `ROOT/.ops/sync/<id>.yml` (the
-control checkout), while the resume path writes that merged content into the
-**lane worktree**, over the branch's own tracked sync record:
+`main()` calls `resolveLaneTaskContract`, not `captureOrReadTaskContract`; the
+latter survives only as a re-export for the dispatch path.
 
-```text
-lane-start.ts  helper: reads  ROOT/.ops/sync/<id>.yml
-lane-start.ts  :949    writes <worktree>/.ops/sync/<id>.yml
+Residual, and intended: a lane with no valid contract in either root still needs
+a reachable Linear and a valid token for its single bounded capture. There is no
+work order to proceed from without one. That capture precedes every lease,
+worktree and manifest mutation, so a failure leaves lane state untouched.
 
-measured, root control checkout:
-  481 sync records present
-  481 of 481 carry no task_contract
-```
-
-Every merge base on the resume path is therefore a legacy root copy. Two
-consequences: `entities.findings/controls/proofs` accumulated on the branch are
-replaced by whatever the root copy holds, and because the root copy never has a
-`task_contract`, each resume re-fetches from Linear and can substitute a
-contract with a different `contract_hash` than the one the executor is already
-working from.
-
-This is inherited from `581af41b`, not authored here, and it is disclosed rather
-than fixed: repairing it means changing the ported capture design, which is
-beyond a byte-identical carry-forward. It is the sharpest open question on this
-lane and is flagged for PM decision.
+Two further findings are recorded rather than fixed, both pre-existing on `main`:
+the readmission path still copies the control checkout's sync record into the
+worktree, so readmit can still overwrite branch-accumulated entities; and
+`generateDispatchExecutionPacketResult`'s `LINEAR_API_KEY` fallback is dead code
+because `readConfiguredEnvValue` returns `''` rather than a nullish value, so a
+deployment carrying only `LINEAR_API_KEY` would refuse there while `lane-start`
+(which uses `||`) would succeed. Neither is introduced by this lane and neither
+is in its declared scope.
 
 ### Mutation testing
 
@@ -325,19 +301,19 @@ never consults — a defect this codebase has hit before.
 
 ### Substantive diff stat
 
-Recounted. An earlier revision of this bundle reported "6 files changed, 1852
-insertions" and omitted both lane-start files -- including the one Tier C
-production file this lane adds. That figure was wrong and is withdrawn.
+Recounted at this head with `git diff --numstat`. Two earlier revisions of this
+section reported figures that did not match the tree; both are withdrawn.
 
 ```text
-scripts/ops/claude-exec.test.ts      | 365 +++++++++++-
-scripts/ops/claude-exec.ts           |  69 +++-
-scripts/ops/codex-exec.test.ts       | 356 ++++++++++++-
-scripts/ops/codex-exec.ts            |  64 +++-
-scripts/ops/execution-packet.test.ts | 339 ++++++++++++-
-scripts/ops/execution-packet.ts      | 688 ++++++++++++++++++++++++++
-scripts/ops/lane-start.test.ts       |  99 +++-
-scripts/ops/lane-start.ts            |  47 +-
-8 script files changed
-whole diff: 13 files changed
+scripts/ops/execution-packet.ts      | 760 +
+scripts/ops/execution-packet.test.ts | 516 +
+scripts/ops/claude-exec.test.ts      | 364 +
+scripts/ops/codex-exec.test.ts       | 360 +
+scripts/ops/lane-start.test.ts       | 341 +
+scripts/ops/lane-start.ts            | 171 +
+scripts/ops/claude-exec.ts           |  66 +
+scripts/ops/codex-exec.ts            |  60 +
+8 script files
+
+whole diff: 13 files changed, 3241 insertions(+), 38 deletions(-)
 ```
