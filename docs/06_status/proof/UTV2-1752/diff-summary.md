@@ -41,7 +41,27 @@ after which the post-checkout resolution saw contracts at both roots and failed
 closed as `lane_contract_conflict` — against the branch's own valid record. It
 also made readmission require the network for a branch that needed nothing.
 
-### `scripts/ops/execution-packet.ts` — Finding 3 (P2)
+### `scripts/ops/execution-packet.ts` — Finding 3 (P2) and both review threads
+
+Three changes, two of them from PR review threads:
+
+1. **Reserved-descendant subtraction** (Finding 3, as before).
+2. **One field table** (`PRRT_kwDORr3vD86cHGhZ`). `CONTRACT_FIELD_SPECS` is now
+   the single source for which headings each field extracts AND which are
+   reserved. The previous fix restated the reserved set as a literal list that
+   omitted `guardrails`, all four `non goals` spellings and `required evidence`,
+   so a nested non-goal was both retained by its acceptance ancestor and
+   extracted as a non-goal — the same sentence became a thing to do and a thing
+   not to do. A list could not have expressed `non goals`' prefix matching
+   anyway. `G8` fails if any `sectionLines` call names a heading literal again.
+3. **Fence and indentation awareness** (`PRRT_kwDORr3vD86cHGhc`). `parseSections`
+   tracks fenced blocks and requires at most three leading spaces, and
+   `sectionItems` keeps a fenced block as one item with its newlines. The second
+   half was not in the report and was found by an assertion: flattening put
+   `# do not run this against production` on the same line as `pnpm test:db`,
+   where the comment swallows the command.
+
+### Original Finding 3 detail
 
 Nested sections whose heading is a reserved contract field are no longer
 double-counted as residue of their ancestor.
@@ -57,7 +77,7 @@ No 1752 edits. Present so the packet path is whole.
 
 ### Tests
 
-- `execution-packet.test.ts`: adds G1 and G5. **48/48 pass.**
+- `execution-packet.test.ts`: adds G1, G5, and the thread regressions G6-G11. **54/54 pass.**
 - `lane-start.test.ts`: adds `resolveTaskContractAcrossRoots` import, a `seedContractRoots()` helper, and G2/G3/G4. **44/44 pass.**
 
 ### Proof bundle — Finding 4 (P2)
@@ -76,9 +96,11 @@ predecessor's bundle.
 | 1 | P1 | Readmission resolves contract before worktree exists | **FIXED** — proved by G2/G3/G4 + mutation M3 |
 | 2 | P1 | Mandatory T1 database verification | **SATISFIED BY CI.** `pnpm test:db` cannot run locally (`ci:assert-staging` refuses `host=127.0.0.1`), but CI job **Writable DB proof (staging only)** produces a run-scoped receipt against staging `xskgrzbteyqdufktjrjx`, validated **inside the required `verify` context**. Not waived, not `N/A`, not author-asserted. |
 | 3 | P2 | Nested reserved-field sections counted twice | **FIXED** — proved by G5 + mutation M2 |
+| T2 | P2 | Review thread: reserve ALL recognized contract headings | **FIXED** — G6/G7/G8 + mutation M4 |
+| T3 | P2 | Review thread: honor fenced code while parsing headings | **FIXED** — G9/G10/G11 + mutations M5/M6/M7 |
 | 4 | P2 | Proof truth / stale figures | **FIXED** — bundle regenerated at this SHA |
 
-All four findings are closed. The lane is still **not merge-authorized**: Merge Gate is BLOCKED pending a `pm-verdict/v1` APPROVED comment from CODEOWNERS and the `t1-approved` label. Green CI does not substitute for either.
+All four findings and all three review threads are closed. The lane is **not merge-authorized and not ready for a mechanical merge**: two packet-parser defects were fixed after the previous review, so this head requires a fresh independent exact-head review and a new `pm-verdict/v1` APPROVED comment plus the `t1-approved` label. Green CI substitutes for none of that.
 
 ---
 

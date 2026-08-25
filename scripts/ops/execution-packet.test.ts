@@ -12,6 +12,7 @@ import {
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
   generateDispatchExecutionPacketResult,
+  packetContractFieldSpecs,
   PREAMBLE_KEY,
   readTaskContract,
   renderTaskContract,
@@ -1332,5 +1333,256 @@ test('G5: a claimed child is subtracted from an UNRECOGNIZED ancestor that survi
     occurrences,
     1,
     `the claimed child must appear exactly once, saw ${occurrences}`,
+  );
+});
+
+test('G6: a non-goal nested under acceptance criteria is NOT also an acceptance criterion', () => {
+  // Review thread PRRT_kwDORr3vD86cHGhZ. The first version of the reservation
+  // fix hardcoded its own list of reserved headings and omitted `non goals`,
+  // `guardrails` and `required evidence`. A nested non-goal therefore stayed
+  // inside the acceptance ancestor AND was extracted by the non-goals pass, so
+  // the same sentence became both a thing to do and a thing NOT to do.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- claimed criterion alpha',
+    '',
+    '### Non-goals',
+    '- do not touch the scheduler',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999960',
+    title: 'Nested non-goal under acceptance criteria',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999960',
+    description,
+  });
+
+  assert.match(
+    contract.non_goals.join('\n'),
+    /do not touch the scheduler/u,
+    'the nested non-goal must reach non_goals',
+  );
+  assert.doesNotMatch(
+    contract.acceptance_criteria.join('\n'),
+    /do not touch the scheduler/u,
+    'a non-goal must NEVER appear as an acceptance criterion',
+  );
+  assert.match(
+    contract.acceptance_criteria.join('\n'),
+    /claimed criterion alpha/u,
+    'the real criterion must survive',
+  );
+
+  const rendered = renderTaskContract(contract);
+  const occurrences = rendered.split('do not touch the scheduler').length - 1;
+  assert.equal(
+    occurrences,
+    1,
+    `the non-goal must appear exactly once, saw ${occurrences}`,
+  );
+});
+
+test('G7: guardrails and required evidence nested under a contract field are not swallowed by it', () => {
+  // Same defect class as G6, on the other two omitted heading families.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '### Guardrails',
+    '- never write to production',
+    '',
+    '### Required evidence',
+    '- staging receipt',
+    '',
+    '## Acceptance criteria',
+    '- claimed criterion gamma',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999961',
+    title: 'Nested guardrails and evidence under objective',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999961',
+    description,
+  });
+
+  assert.match(
+    contract.guardrails.join('\n'),
+    /never write to production/u,
+    'the nested guardrail must reach guardrails',
+  );
+  assert.match(
+    contract.required_evidence.join('\n'),
+    /staging receipt/u,
+    'the nested evidence item must reach required_evidence',
+  );
+  assert.doesNotMatch(
+    contract.objective,
+    /never write to production/u,
+    'a guardrail must not be absorbed into the objective',
+  );
+
+  const rendered = renderTaskContract(contract);
+  for (const needle of ['never write to production', 'staging receipt']) {
+    const occurrences = rendered.split(needle).length - 1;
+    assert.equal(
+      occurrences,
+      1,
+      `"${needle}" must appear exactly once, saw ${occurrences}`,
+    );
+  }
+});
+
+test('G8: every extracted heading is reserved — extraction and reservation share one table', () => {
+  // The drift guard. G6/G7 catch the omissions that existed; this catches the
+  // NEXT one, by refusing to let a field be extracted under a heading the
+  // reservation set does not know about.
+  const specs = packetContractFieldSpecs();
+  assert.ok(specs.length >= 6, 'the field table must not be empty');
+
+  const source = fs.readFileSync(
+    path.join(ROOT, 'scripts/ops/execution-packet.ts'),
+    'utf8',
+  );
+  // No extraction site may pass a heading literal directly to sectionLines;
+  // they must all go through fieldSpec(), which reads this same table.
+  const literalCalls = source.match(/sectionLines\(\s*parsed,\s*\['/gu) ?? [];
+  assert.equal(
+    literalCalls.length,
+    0,
+    `every sectionLines call must source its headings from the field table, ` +
+      `found ${literalCalls.length} with inline literals`,
+  );
+
+  for (const spec of specs) {
+    assert.ok(spec.headings.length > 0, 'each field must declare a heading');
+  }
+});
+
+test('G9: a "#" line inside a fenced code block is not parsed as a heading', () => {
+  // Review thread PRRT_kwDORr3vD86cHGhc. The heading regex ran against the
+  // TRIMMED line and tracked no fence state, so a shell comment opened a
+  // section, ate the rest of the fence as its body, and split the fence.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- run the documented command',
+    '',
+    '```bash',
+    '# do not run this against production',
+    'pnpm test:db',
+    '```',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999962',
+    title: 'Fenced hash line',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999962',
+    description,
+  });
+
+  const rendered = renderTaskContract(contract);
+  assert.match(
+    rendered,
+    /# do not run this against production/u,
+    'the shell comment must survive verbatim, with its # intact',
+  );
+  // parseSections' concern: no phantom section was opened by the `#` line.
+  const phantom = contract.unmapped_sections.some((entry) =>
+    /do not run this against production/u.test(entry.heading ?? ''),
+  );
+  assert.equal(
+    phantom,
+    false,
+    'the shell comment must not have opened a section of its own',
+  );
+  assert.match(
+    contract.acceptance_criteria.join('\n'),
+    /run the documented command/u,
+    'the real criterion must not have been orphaned by a phantom heading',
+  );
+});
+
+test('G11: a fenced block inside a contract field survives as ONE item with newlines', () => {
+  // sectionItems' concern, distinct from G9's. Preserving the `#` in the
+  // parser is not enough if the block is then flattened: collapsing
+  // `# do not run this against production` onto the same line as
+  // `pnpm test:db` makes the comment swallow the command.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- run the documented command',
+    '',
+    '```bash',
+    '# do not run this against production',
+    'pnpm test:db',
+    '```',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999964',
+    title: 'Fenced block preserved as one item',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999964',
+    description,
+  });
+
+  const fencedItem = contract.acceptance_criteria.find((item) =>
+    item.startsWith('```bash'),
+  );
+  assert.ok(fencedItem, 'the fenced block must survive as its own item');
+  assert.equal(
+    fencedItem,
+    '```bash\n# do not run this against production\npnpm test:db\n```',
+    'the fenced block must keep its newlines verbatim',
+  );
+  assert.doesNotMatch(
+    contract.acceptance_criteria.join('\n'),
+    /do not run this against production pnpm test:db/u,
+    'the comment must never end up on the same line as the command',
+  );
+});
+
+test('G10: an indented code line beginning with "#" is not parsed as a heading', () => {
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- keep the indented block verbatim',
+    '',
+    '    # indented shell comment',
+    '    pnpm verify',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999963',
+    title: 'Indented hash line',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999963',
+    description,
+  });
+
+  const rendered = renderTaskContract(contract);
+  // The defect strips the `#` (it is consumed as heading syntax) and opens a
+  // section named for the comment text. Asserting a mere occurrence count does
+  // NOT detect that -- the text appears once either way -- which is exactly how
+  // the first version of this test managed to be vacuous.
+  assert.match(
+    rendered,
+    /# indented shell comment/u,
+    'the leading # must survive; consuming it as heading syntax is the defect',
+  );
+  const openedSection = contract.unmapped_sections.some((entry) =>
+    /^indented shell comment$/u.test((entry.heading ?? '').trim()),
+  );
+  assert.equal(
+    openedSection,
+    false,
+    'an indented code line must not open a section of its own',
   );
 });

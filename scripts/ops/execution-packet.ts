@@ -322,8 +322,57 @@ function parseSections(markdown: string): ParsedSections {
   // down. Descendants are recorded so that consuming a parent also consumes
   // them, which keeps the same content from being duplicated into residue.
   const open: SectionOccurrence[] = [];
+  // A line inside a fenced code block is never a heading, and neither is an
+  // indented code line. The previous regex ran against `rawLine.trim()`, so
+  // BOTH were misread: a shell comment such as `# do not run this in prod`
+  // inside a ``` block opened a section, swallowed the rest of the fence as
+  // its body, and split the fence in half. Where the description also carried
+  // a real acceptance heading the legacy whole-description fallback was
+  // disabled, so that text reached the executor with its `#` stripped and its
+  // fence broken -- turning a prohibition into ordinary prose. An unterminated
+  // fence deliberately runs to end of input: treating the remainder as code is
+  // the fail-closed reading, since promoting it to headings is what corrupts
+  // the work order.
+  let fence: { char: string; len: number } | null = null;
+  const pushContent = (rawLine: string): void => {
+    if (open.length > 0) {
+      const deepest = open[open.length - 1]!;
+      for (const owner of open) {
+        owner.lines.push(rawLine);
+        owner.lineOwners.push(deepest.id);
+      }
+    } else {
+      preamble ??= add(PREAMBLE_KEY, PREAMBLE_KEY, 0);
+      preamble.lines.push(rawLine);
+      preamble.lineOwners.push(preamble.id);
+    }
+  };
   for (const rawLine of markdown.split(/\r?\n/u)) {
-    const heading = /^(#{1,6})\s+(.+?)\s*$/u.exec(rawLine.trim());
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(rawLine);
+    if (fence !== null) {
+      const marker = fenceMatch?.[1] ?? '';
+      if (
+        marker.length >= fence.len &&
+        marker[0] === fence.char &&
+        (fenceMatch?.[2] ?? '').trim() === ''
+      ) {
+        fence = null;
+      }
+      pushContent(rawLine);
+      continue;
+    }
+    if (fenceMatch) {
+      const marker = fenceMatch[1] ?? '';
+      const info = fenceMatch[2] ?? '';
+      // A backtick fence's info string may not itself contain a backtick.
+      if (!(marker[0] === '`' && info.includes('`'))) {
+        fence = { char: marker[0]!, len: marker.length };
+        pushContent(rawLine);
+        continue;
+      }
+    }
+    // Up to three leading spaces is still a heading; four or more is code.
+    const heading = /^ {0,3}(#{1,6})\s+(.+?)\s*$/u.exec(rawLine);
     if (heading) {
       const level = (heading[1] ?? '').length;
       const raw = (heading[2] ?? '').trim();
@@ -352,33 +401,81 @@ function parseSections(markdown: string): ParsedSections {
     // before any `##`, and that text never reached the executor. It is now
     // captured under a sentinel key and travels as residue like any other
     // unconsumed section.
-    if (open.length > 0) {
-      const deepest = open[open.length - 1]!;
-      for (const owner of open) {
-        owner.lines.push(rawLine);
-        owner.lineOwners.push(deepest.id);
-      }
-    } else {
-      preamble ??= add(PREAMBLE_KEY, PREAMBLE_KEY, 0);
-      preamble.lines.push(rawLine);
-      preamble.lineOwners.push(preamble.id);
-    }
+    pushContent(rawLine);
   }
   return { occurrences };
 }
 
 /**
- * Heading keys that some contract field claims directly. A nested occurrence
- * carrying one of these belongs to THAT field, never to whichever ancestor
- * happens to enclose it -- see `sectionLines`' reservation handling.
+ * The heading whitelist for every contract field, in ONE place.
+ *
+ * This table is the single source for two things that must never disagree:
+ * which headings each field extracts, and which headings are RESERVED so an
+ * enclosing section cannot also swallow them. The first version of this fix
+ * restated the reserved set as its own literal list, and that list silently
+ * omitted `guardrails`, the four `non goals` spellings and `required
+ * evidence`. A `### Non-goals` nested under `## Acceptance criteria` was then
+ * left inside the acceptance ancestor AND extracted by the non-goals pass, so
+ * the same text became both a thing to do and a thing not to do -- a
+ * contradictory, silently widened work order.
+ *
+ * Restating a list beside the thing it must mirror is what produced that bug,
+ * so the mirror is gone: field extraction and reservation both read this
+ * table, and `packetContractFieldSpecs()` exposes it so a test can assert
+ * there is no third copy.
  */
-const CONTRACT_FIELD_HEADINGS: readonly string[] = [
-  'objective',
-  'required outcome',
-  'acceptance criteria',
-  'acceptance criterion',
-  'exit criteria',
-].map(normalizeHeading);
+interface ContractFieldSpec {
+  readonly headings: readonly string[];
+  /** `non goals` matches by prefix, so reservation must too. */
+  readonly prefix: boolean;
+}
+
+const CONTRACT_FIELD_SPECS: readonly ContractFieldSpec[] = [
+  { headings: ['objective', 'required outcome'], prefix: false },
+  { headings: ['acceptance criteria', 'acceptance criterion'], prefix: false },
+  { headings: ['exit criteria'], prefix: false },
+  { headings: ['guardrails'], prefix: false },
+  {
+    headings: ['non goals', 'non-goals', 'out of scope', 'explicitly out of scope'],
+    prefix: true,
+  },
+  { headings: ['required evidence', 'evidence'], prefix: false },
+];
+
+/** Exposed so tests can prove extraction and reservation share one table. */
+export function packetContractFieldSpecs(): readonly ContractFieldSpec[] {
+  return CONTRACT_FIELD_SPECS;
+}
+
+/**
+ * True when `key` is claimed directly by some contract field. A nested
+ * occurrence carrying such a key belongs to THAT field, never to whichever
+ * ancestor happens to enclose it -- see `sectionLines`' reservation handling.
+ */
+function isContractFieldHeading(key: string): boolean {
+  return CONTRACT_FIELD_SPECS.some((spec) =>
+    spec.headings.some((heading) => {
+      const value = normalizeHeading(heading);
+      return key === value || (spec.prefix && key.startsWith(value));
+    }),
+  );
+}
+
+/**
+ * Look a field spec up by its first heading. Extraction sites go through this
+ * so they cannot name a heading the reservation set does not know about.
+ */
+function fieldSpec(firstHeading: string): ContractFieldSpec {
+  const spec = CONTRACT_FIELD_SPECS.find(
+    (candidate) => candidate.headings[0] === firstHeading,
+  );
+  if (!spec) {
+    throw new Error(
+      `execution-packet: no contract field spec registered for "${firstHeading}"`,
+    );
+  }
+  return spec;
+}
 
 function sectionLines(
   parsed: ParsedSections,
@@ -394,7 +491,7 @@ function sectionLines(
    * acceptance extraction, whose per-call consumed-set could not see that the
    * objective pass had already taken it.
    */
-  reservedKeys: readonly string[] = CONTRACT_FIELD_HEADINGS,
+  isReserved: (key: string) => boolean = isContractFieldHeading,
 ): string[] {
   const wanted = headings.map(normalizeHeading);
   const byId = new Map(parsed.occurrences.map((o) => [o.id, o]));
@@ -436,7 +533,7 @@ function sectionLines(
       const child = byId.get(childId);
       if (!child) continue;
       if (reserved.has(childId)) continue;
-      if (!reservedKeys.includes(child.key)) continue;
+      if (!isReserved(child.key)) continue;
       if (claimsOwnKey(child)) continue;
       reserved.add(childId);
       for (const nested of child.descendants) reserved.add(nested);
@@ -547,7 +644,42 @@ function sectionItems(lines: string[]): string[] {
     paragraph = [];
   };
 
+  // A fenced block is ONE item and keeps its newlines. Collapsing it with the
+  // surrounding paragraph whitespace put a shell comment and the command it
+  // warns about on the same line -- `# do not run this in prod pnpm test:db` --
+  // where the `#` silently comments out the command. Preserving the heading's
+  // `#` (see `parseSections`) is not enough on its own if the block is then
+  // flattened here; both halves are required for a fenced command to survive
+  // into the work order meaning what it meant in the issue.
+  let fence: { char: string; len: number } | null = null;
+  let fenced: string[] = [];
+
   for (const rawLine of lines) {
+    const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(rawLine);
+    if (fence !== null) {
+      fenced.push(rawLine);
+      const marker = fenceMatch?.[1] ?? '';
+      if (
+        marker.length >= fence.len &&
+        marker[0] === fence.char &&
+        (fenceMatch?.[2] ?? '').trim() === ''
+      ) {
+        items.push(fenced.join('\n'));
+        fenced = [];
+        fence = null;
+      }
+      continue;
+    }
+    if (fenceMatch) {
+      const marker = fenceMatch[1] ?? '';
+      const info = fenceMatch[2] ?? '';
+      if (!(marker[0] === '`' && info.includes('`'))) {
+        flushParagraph();
+        fence = { char: marker[0]!, len: marker.length };
+        fenced = [rawLine];
+        continue;
+      }
+    }
     const line = rawLine.trim();
     if (!line) {
       flushParagraph();
@@ -562,6 +694,9 @@ function sectionItems(lines: string[]): string[] {
     }
     paragraph.push(line);
   }
+  // An unterminated fence still travels verbatim rather than being dropped or
+  // silently reflowed into the previous paragraph.
+  if (fenced.length > 0) items.push(fenced.join('\n'));
   flushParagraph();
   return items;
 }
@@ -582,16 +717,28 @@ export function buildTaskContract(
   const parsed = parseSections(description);
   const consumed: number[] = [];
   const objectiveItems = sectionItems(
-    sectionLines(parsed, ['objective', 'required outcome'], false, consumed),
+    sectionLines(parsed, [...fieldSpec('objective').headings], fieldSpec('objective').prefix, consumed),
   );
   const objective = objectiveItems.join('\n') || title;
   const explicitAcceptance = sectionItems(
-    sectionLines(parsed, ['acceptance criteria', 'acceptance criterion'], false, consumed),
+    sectionLines(
+      parsed,
+      [...fieldSpec('acceptance criteria').headings],
+      fieldSpec('acceptance criteria').prefix,
+      consumed,
+    ),
   );
   const hasAcceptanceHeading = parsed.occurrences.some((occurrence) =>
     ['acceptance criteria', 'acceptance criterion'].includes(occurrence.key),
   );
-  const exitCriteria = sectionItems(sectionLines(parsed, ['exit criteria'], false, consumed));
+  const exitCriteria = sectionItems(
+    sectionLines(
+      parsed,
+      [...fieldSpec('exit criteria').headings],
+      fieldSpec('exit criteria').prefix,
+      consumed,
+    ),
+  );
 
   // Existing issues predate the heading convention. Preserve their complete
   // work order verbatim instead of inventing criteria or bulk-migrating state.
@@ -621,17 +768,29 @@ export function buildTaskContract(
     issue_id: issueId,
     objective,
     acceptance_criteria: acceptanceCriteria,
-    guardrails: sectionItems(sectionLines(parsed, ['guardrails'], false, consumed)),
+    guardrails: sectionItems(
+      sectionLines(
+        parsed,
+        [...fieldSpec('guardrails').headings],
+        fieldSpec('guardrails').prefix,
+        consumed,
+      ),
+    ),
     non_goals: sectionItems(
       sectionLines(
         parsed,
-        ['non goals', 'non-goals', 'out of scope', 'explicitly out of scope'],
-        true,
+        [...fieldSpec('non goals').headings],
+        fieldSpec('non goals').prefix,
         consumed,
       ),
     ),
     required_evidence: sectionItems(
-      sectionLines(parsed, ['required evidence', 'evidence'], false, consumed),
+      sectionLines(
+        parsed,
+        [...fieldSpec('required evidence').headings],
+        fieldSpec('required evidence').prefix,
+        consumed,
+      ),
     ),
     exit_criteria: exitCriteria,
     unmapped_sections: unmappedSections(parsed, [consumed]).map((entry) => {

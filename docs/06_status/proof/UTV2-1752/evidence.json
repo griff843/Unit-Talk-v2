@@ -230,11 +230,139 @@
     "static_proof_status": "COMPLETE",
     "runtime_proof_status": "PRODUCED_BY_CI (staging test:db receipt verified inside required verify)",
     "t1_database_verification_status": "SATISFIED_BY_CI",
-    "ready_for_pm_review": true,
+    "ready_for_pm_review": false,
     "pending": [
-      "independent exact-head review",
+      "exact-head CI green after the thread fixes",
+      "fresh EXECUTOR_RESULT at the new head",
+      "new independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "pm-verdict/v1 APPROVED from CODEOWNERS and the t1-approved label. Merge Gate is BLOCKED until both exist."
+    "blocking_on": "Not ready for merge. Two packet-parser defects were fixed after the previous review; the lane requires a fresh exact-head review and a new PM verdict."
+  },
+  "review_threads": [
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhR",
+      "severity": "P1",
+      "subject": "Obtain the mandatory T1 database receipt",
+      "status": "OUTDATED_ALREADY_FIXED",
+      "detail": "Raised against 3959392029, where evidence.json still read PENDING_REQUIRED. The receipt is produced by CI job 'Writable DB proof (staging only)' and validated inside the required verify context."
+    },
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhZ",
+      "severity": "P2",
+      "subject": "Reserve all recognized contract headings",
+      "status": "FIXED",
+      "detail": "The reserved set omitted guardrails, all four non-goals spellings, and required evidence/evidence, so a nested non-goal was both left in its acceptance ancestor and extracted as a non-goal. Fixed structurally: extraction and reservation now read one table (CONTRACT_FIELD_SPECS) and every extraction site goes through fieldSpec(). A flat list could not express non-goals' prefix matching in any case.",
+      "regression_tests": [
+        "G6",
+        "G7",
+        "G8"
+      ],
+      "mutation": "M4"
+    },
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhc",
+      "severity": "P2",
+      "subject": "Honor fenced code while parsing headings",
+      "status": "FIXED",
+      "detail": "parseSections now tracks fenced blocks and requires at most three leading spaces. A second half not named in the report was found by assertion: sectionItems flattened a fenced block into one whitespace-collapsed line, putting a shell comment on the same line as the command it warns about. sectionItems is now fence-aware.",
+      "regression_tests": [
+        "G9",
+        "G10",
+        "G11"
+      ],
+      "mutation": "M5, M6, M7"
+    }
+  ],
+  "mutation_testing": {
+    "battery": [
+      {
+        "id": "M1",
+        "mutation": "contract-field subtraction disabled",
+        "killed": [
+          "G1"
+        ],
+        "intended": [
+          "G1"
+        ]
+      },
+      {
+        "id": "M2",
+        "mutation": "residue subtraction disabled",
+        "killed": [
+          "G5"
+        ],
+        "intended": [
+          "G5"
+        ]
+      },
+      {
+        "id": "M3",
+        "mutation": "readmission contract resolved pre-worktree",
+        "killed": [
+          "G4"
+        ],
+        "intended": [
+          "G4"
+        ]
+      },
+      {
+        "id": "M4",
+        "mutation": "reservation reverted to the pre-fix hardcoded five",
+        "killed": [
+          "G6",
+          "G7"
+        ],
+        "intended": [
+          "G6",
+          "G7"
+        ]
+      },
+      {
+        "id": "M5",
+        "mutation": "parseSections fence tracking disabled",
+        "killed": [
+          "G9",
+          "G11"
+        ],
+        "intended": [
+          "G9"
+        ],
+        "note": "Cascade, not a loose assertion: with no intact fence, G11 cannot pass either. M7 isolates the sectionItems half."
+      },
+      {
+        "id": "M6",
+        "mutation": "heading match reverted to the trimmed line",
+        "killed": [
+          "G10"
+        ],
+        "intended": [
+          "G10"
+        ]
+      },
+      {
+        "id": "M7",
+        "mutation": "sectionItems fence handling disabled",
+        "killed": [
+          "G11"
+        ],
+        "intended": [
+          "G11"
+        ]
+      }
+    ],
+    "restore_method": "file copy from a sha256-verified baseline; never git checkout; every restore re-verified by sha256",
+    "vacuity_disclosure": [
+      {
+        "test": "G1",
+        "found_by": "M2 killing nothing",
+        "detail": "G1's ancestor is itself a contract field, so it never reaches the residue path. G5 was added to exercise it."
+      },
+      {
+        "test": "G10",
+        "found_by": "M6 killing nothing",
+        "detail": "G10 first asserted only an occurrence count, which holds whether or not the defect is present: the defect strips the '#' and opens a section, and a count sees neither. Rewritten to assert the '#' survives and no section is opened. Second occurrence of this failure mode by the same author in the same lane."
+      }
+    ]
   }
 }

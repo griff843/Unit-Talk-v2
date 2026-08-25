@@ -53,10 +53,11 @@ forward from the predecessor's proof.
 ```text
 pnpm verify:static           PASS (exit 0)
 verify:static suite total    5062 tests, 5062 pass, 0 fail, 0 skipped
-execution-packet suite       48 tests, 48 pass, 0 fail
+execution-packet suite       54 tests, 54 pass, 0 fail
 lane-start suite             44 tests, 44 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             3 of 3 mutations DETECTED, each killing only its own test
+mutation battery             7 of 7 mutations DETECTED (M1-M7); see the
+                             mutation table below for exact kill targets
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
                              proof (staging only)" and validated inside the required
                              `verify` context; read that context's conclusion on the
@@ -204,6 +205,87 @@ scripts/ops/  8 files, 3618 insertions(+), 41 deletions(-)
 
 The whole-diff insertion total is deliberately not quoted: it counts this proof
 bundle, so recording it here would change it.
+
+
+## Review threads (PR #1447)
+
+Three threads were opened by the automated reviewer. All three are addressed.
+
+| Thread | Sev | Subject | Disposition |
+|---|---|---|---|
+| `PRRT_kwDORr3vD86cHGhR` | P1 | `test:db` left `PENDING_REQUIRED` | Already outdated when read. The receipt is produced and validated by CI inside the required `verify` context. |
+| `PRRT_kwDORr3vD86cHGhZ` | P2 | Reserve all recognized contract headings | **FIXED**, and the fix is broader than the report. |
+| `PRRT_kwDORr3vD86cHGhc` | P2 | Honor fenced code while parsing headings | **FIXED**, plus a second half the report did not name. |
+
+### Thread 2 — the reserved set was the wrong shape, not merely too short
+
+The first version of the reservation fix restated its own literal list of
+reserved headings beside the extraction calls. That list omitted `guardrails`,
+all four `non goals` spellings, and `required evidence`/`evidence`. A
+`### Non-goals` nested under `## Acceptance criteria` was therefore left inside
+the acceptance ancestor AND extracted by the non-goals pass: the same sentence
+became both a thing to do and a thing NOT to do. For an executor that is a
+contradictory, silently widened work order.
+
+Lengthening the list would not have been a fix. `non goals` matches by PREFIX,
+so a flat list of keys cannot even express its matching rule, and any restated
+list can drift again the next time a field is added. Extraction and reservation
+now both read one table, `CONTRACT_FIELD_SPECS`, and every extraction site goes
+through `fieldSpec()` rather than naming heading literals. `G8` fails if a
+`sectionLines` call ever passes an inline heading literal again — the drift
+itself is now a test failure, not a review-time catch.
+
+### Thread 3 — the parser was half the defect
+
+The heading regex ran against `rawLine.trim()` and tracked no fence state, so
+a `#` line inside a ``` block opened a section, consumed the `#` as syntax, and
+split the fence. `parseSections` now tracks fences and requires at most three
+leading spaces (four or more is code). An unterminated fence deliberately runs
+to end of input: treating the remainder as code is the fail-closed reading.
+
+That alone was NOT sufficient, and the shortfall was found by an assertion, not
+by inspection. `sectionItems` flattened a fenced block into a single
+whitespace-collapsed paragraph, which put
+`# do not run this against production` on the same line as `pnpm test:db` —
+where the comment silently swallows the command. Preserving the `#` in the
+parser while flattening the block here would have left the original harm intact
+in a different function. `sectionItems` is now fence-aware and emits a fenced
+block as one item with its newlines.
+
+## Mutation battery
+
+Each mutation was applied to a byte-verified baseline and reverted by file
+copy, never by `git checkout`; every restore was re-checked by `sha256`.
+
+| # | Mutation | Tests killed | Intended target |
+|---|---|---|---|
+| M1 | contract-field subtraction disabled | G1 | G1 |
+| M2 | residue subtraction disabled | G5 | G5 |
+| M3 | readmission contract resolved pre-worktree | G4 | G4 |
+| M4 | reservation reverted to the pre-fix hardcoded five | G6, G7 | G6, G7 |
+| M5 | `parseSections` fence tracking disabled | G9, G11 | G9 |
+| M6 | heading match reverted to the trimmed line | G10 | G10 |
+| M7 | `sectionItems` fence handling disabled | G11 | G11 |
+
+M5 kills two tests rather than one. That is a genuine cascade, not a loose
+assertion: destroying fence tracking in the parser leaves `sectionItems` with
+no intact fence to preserve, so G11 cannot pass either. M7 isolates the
+`sectionItems` half on its own, which is why the two halves are separately
+provable.
+
+### A second vacuous test, disclosed rather than corrected quietly
+
+`G10` as first written asserted only that the indented comment appeared exactly
+once in the rendered packet. M6 killed nothing, because that text appears once
+whether or not the defect is present — the defect strips the `#` and opens a
+section, and an occurrence count sees neither. This is the same failure mode
+disclosed earlier in this bundle for the residue fix, committed a second time by
+the same author in the same lane. G10 now asserts the `#` survives and that no
+section is opened by the line; M6 then kills exactly G10.
+
+The pattern is worth naming: an occurrence count is a weak assertion because it
+tends to hold under the very defect it is meant to detect. Assert the property
+the fix creates, not the tidiness of the output.
 
 ### Residual risk
 
