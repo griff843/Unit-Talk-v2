@@ -21,9 +21,10 @@
   },
   "scope": {
     "changed_files": 13,
-    "substantive_diff_stat": "8 script files; whole diff 13 files changed, 3241 insertions(+), 38 deletions(-)",
+    "substantive_diff_stat": "8 script files: 2638 insertions(+), 38 deletions(-); whole diff 13 files (8 script, 5 lane/proof artifacts)",
     "production_files_modified_by_this_lane": 2,
-    "note": "execution-packet.ts and lane-start.ts are deliberately changed beyond the preserved head, per PM direction to treat 581af41b as a source artifact rather than architectural authority. claude-exec.ts and codex-exec.ts remain byte-identical to it."
+    "note": "execution-packet.ts and lane-start.ts are deliberately changed beyond the preserved head, per PM direction to treat 581af41b as a source artifact rather than architectural authority. claude-exec.ts and codex-exec.ts remain byte-identical to it.",
+    "diff_stat_note": "The whole-diff insertion total is deliberately not quoted: it counts the proof bundle itself, so recording it here changes it. Three successive revisions quoted a figure that did not match the tree for exactly that reason. The script-file total is stable under proof edits."
   },
   "static_proof": {
     "verify_static": "PASS (exit 0)",
@@ -48,9 +49,9 @@
       "via": "stage of pnpm verify:static (exit 0)"
     },
     "lint": {
-      "command": "pnpm lint",
+      "command": "pnpm exec eslint --max-warnings=0",
       "result": "PASS",
-      "detail": "0 errors, 0 warnings on the four changed test files"
+      "detail": "0 errors, 0 warnings across all eight changed script files (four sources and four test files)"
     },
     "r_level_check": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -97,11 +98,12 @@
       "The resume path no longer merges a lane worktree write against the control checkout's record, so branch-accumulated entities are preserved."
     ],
     "residual": "A first capture for a lane with no contract anywhere still requires a reachable Linear and a valid token. That is intended: there is no work order to proceed from.",
-    "correction": "An earlier revision of this bundle carried a Tier C section describing both risks as disclosed-not-fixed and naming captureOrReadTaskContract, syncContentWithTaskContract and a line number that do not exist at this head. That text described the pre-bounce design, contradicted the Option B section of the same document, and is withdrawn.",
+    "correction": "An earlier revision of this bundle carried a Tier C section describing both risks as disclosed-not-fixed. It named syncContentWithTaskContract and a line number that no longer exist, and captureOrReadTaskContract, which does still exist but is no longer called by main(). That text described the pre-bounce design, contradicted the Option B section of the same document, and is withdrawn.",
     "recorded_not_fixed": [
       "The readmission path still copies the control checkout's sync record into the worktree, so readmit can overwrite branch-accumulated entities. Pre-existing on main; the fix in this lane is scoped to resume.",
       "generateDispatchExecutionPacketResult's LINEAR_API_KEY fallback is unreachable because readConfiguredEnvValue returns '' rather than a nullish value. Pre-existing; lane-start.ts uses || and handles both."
-    ]
+    ],
+    "resume_offline_evidence": "lane-start main() resumes to lane_resumed with LINEAR_API_TOKEN and LINEAR_API_KEY deleted from the child environment. A fetch on that path fails with 'LINEAR_API_TOKEN or LINEAR_API_KEY is required', so exit 0 is only reachable without one. An earlier revision of this bundle cited a curl shim in lane-start.test.ts; no such shim exists there, and that citation is withdrawn."
   },
   "sign_off": {
     "static_proof_status": "PASS",

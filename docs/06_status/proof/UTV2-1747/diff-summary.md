@@ -1,6 +1,10 @@
 # UTV2-1747 — diff summary
 
-13 files changed, 3241 insertions(+), 38 deletions(-). Substantive: 8 script files.
+Substantive: 8 script files, 2638 insertions(+), 38 deletions(-).
+Whole diff: 13 files (8 script, 5 lane/proof artifacts).
+
+The whole-diff insertion total is deliberately not quoted: it counts this file,
+so recording it here changes it.
 
 Rewritten at bounce 1. The previous version of this file was pre-bounce text: it
 described `execution-packet.ts` as inherited byte-identically, described a
@@ -32,5 +36,5 @@ point of this bounce, not a defect in the carry-forward.
 
 ## What this does not do
 
-No new file, no new tooling, and no widening of the parser's heading whitelist.
+No new source or tooling file (the five non-script files are this lane's own manifest, sync record and proof artifacts), and no widening of the parser's heading whitelist.
 No runtime, database, deployment, ingestion or delivery path is touched.

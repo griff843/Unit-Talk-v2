@@ -209,14 +209,15 @@ one does. Worth a follow-up to widen the whitelist; not a blocker.
 
 `scripts/ops/lane-start.ts` is a Tier C path every lane start depends on. An
 earlier revision of this bundle described two behavioural risks here as
-"disclosed rather than fixed", and named `captureOrReadTaskContract`,
-`syncContentWithTaskContract` and a line number that no longer exist. That text
+"disclosed rather than fixed", and named `syncContentWithTaskContract`, which no longer exists, a line
+number that no longer exists, and `captureOrReadTaskContract`, which does still
+exist but is no longer called by `main()`. That text
 described the pre-bounce design and directly contradicted the Option B section
 above. It was stale and is withdrawn. What ships:
 
 | Previously disclosed risk | Status at this head | Evidence |
 |---|---|---|
-| Linear required on every lane start AND resume | **Fixed.** Only a first capture needs it. | Resume exits 0 with `LINEAR_API_TOKEN`/`LINEAR_API_KEY` stripped, and with a token present a `curl` shim records zero invocations. |
+| Linear required on every lane start AND resume | **Fixed.** Only a first capture needs it. | `lane-start main()` resumes to `lane_resumed` with `LINEAR_API_TOKEN` and `LINEAR_API_KEY` deleted from the child environment; a fetch on that path fails with `LINEAR_API_TOKEN or LINEAR_API_KEY is required`, so exit 0 is only reachable without one. `resolveLaneTaskContract` returns from either root's valid contract before any fetch. |
 | Resume merged a worktree write against the control checkout's record, overwriting branch entities | **Fixed.** Each destination merges against its own record. | With different findings seeded in each root, neither leaks into the other. |
 
 `main()` calls `resolveLaneTaskContract`, not `captureOrReadTaskContract`; the
@@ -315,5 +316,12 @@ scripts/ops/claude-exec.ts           |  66 +
 scripts/ops/codex-exec.ts            |  60 +
 8 script files
 
-whole diff: 13 files changed, 3241 insertions(+), 38 deletions(-)
+8 script files: 2638 insertions(+), 38 deletions(-)
+whole diff: 13 files (8 script, 5 lane/proof artifacts)
 ```
+
+The whole-diff insertion total is deliberately not quoted. It counts the proof
+bundle itself, so writing the number into this file changes it -- which is why
+three successive revisions of this section quoted a figure that did not match
+the tree. The script-file total above is stable under proof edits and is the
+figure that describes the actual change.
