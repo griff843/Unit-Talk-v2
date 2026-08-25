@@ -22,8 +22,10 @@ import {
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   laneContractRoots,
+  linearTaskToken,
   mirrorPreflightTokenToWorktree,
   persistLaneTaskContract,
+  resolveLaneTaskContract,
   resolveReadmissionContract,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
@@ -862,6 +864,9 @@ function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): Lane
   }
   fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
   fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+  // Fresh admission creates the worktree under .out/ and installs into it;
+  // both must be ignored or the clean-control-checkout assertion refuses first.
+  fs.writeFileSync(path.join(root, '.gitignore'), '.out/\nnode_modules/\n');
 
   const git = (args: string[], cwd = root): void => {
     const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
@@ -911,6 +916,9 @@ function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): Lane
   const bin = path.join(dir, 'bin');
   fs.mkdirSync(bin, { recursive: true });
   fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\necho "[]"\nexit 0\n', { mode: 0o755 });
+  // Fresh admission runs the isolated install in the new worktree. The stub
+  // only fakes that install; nothing under test depends on its behaviour.
+  fs.writeFileSync(path.join(bin, 'pnpm'), '#!/bin/sh\nmkdir -p node_modules\nexit 0\n', { mode: 0o755 });
 
   return { root, worktree, bin, issueId, branch };
 }
@@ -935,13 +943,20 @@ function seedContractAt(
   return contract;
 }
 
-function runLaneStart(fixture: LaneFixture, extra: string[] = []): {
+function runLaneStart(
+  fixture: LaneFixture,
+  extra: string[] = [],
+  envOverride: Record<string, string> = {},
+): {
   status: number | null; stdout: string; stderr: string;
 } {
   const env = { ...process.env, PATH: `${fixture.bin}${path.delimiter}${process.env['PATH'] ?? ''}` };
-  // A capture must not be able to reach the real Linear from a test.
+  // A capture must not be able to reach the real Linear from a test. A test
+  // that needs the capture path supplies a fixture token AND a `curl` stub on
+  // the fixture PATH, so the request is still served locally.
   delete env['LINEAR_API_TOKEN'];
   delete env['LINEAR_API_KEY'];
+  Object.assign(env, envOverride);
   const r = spawnSync(LANE_TSX_BIN, [
     path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), fixture.issueId,
     '--tier', 'T2', '--branch', fixture.branch, '--lane-type', 'governance',
@@ -1483,9 +1498,13 @@ function seedReadmissionFixture(
   git(['config', 'user.email', 'test@example.com']);
   git(['config', 'user.name', 'Test']);
 
+  // Each root's record carries a DISTINGUISHABLE entity. Without this the two
+  // records are byte-identical apart from the work order, so a mutation that
+  // copies one over the other is invisible -- which is exactly how R2b survived
+  // the round-4 battery with all 50 tests green.
   const controlContract = opts.controlDescription === null
     ? null
-    : seedContractAt(root, issueId, opts.controlDescription);
+    : seedContractAt(root, issueId, opts.controlDescription, 'CONTROL-ONLY-FINDING');
   git(['add', '-A']);
   git(['commit', '-qm', 'seed']);
 
@@ -1496,7 +1515,7 @@ function seedReadmissionFixture(
   // The branch carries its OWN authoritative work order, committed on the
   // branch -- exactly the state finding 1 said readmission destroyed.
   git(['checkout', '-q', '-b', branch]);
-  const branchContract = seedContractAt(root, issueId, opts.branchDescription);
+  const branchContract = seedContractAt(root, issueId, opts.branchDescription, 'BRANCH-ONLY-FINDING');
   // The branch also carries real work, so its commit is non-empty even when the
   // two roots hold an identical contract (G21). A fixture that commits nothing
   // is not a readmittable branch.
@@ -1649,6 +1668,19 @@ test('G19: readmission refuses when control and the branch carry different work 
     out['worktree_contract_hash'],
     'the refusal must report two genuinely different contract hashes',
   );
+  // Asserting only that the two differ leaves the LABELS free to be swapped,
+  // and an operator reconciling a conflict acts on the labels. Pin each hash to
+  // the root it actually came from.
+  assert.equal(
+    out['control_contract_hash'],
+    f.controlContract?.contract_hash,
+    'control_contract_hash must be the CONTROL checkout hash, not the branch one',
+  );
+  assert.equal(
+    out['worktree_contract_hash'],
+    f.branchContract.contract_hash,
+    'worktree_contract_hash must be the BRANCH hash, not the control one',
+  );
 
   // The branch's committed record is the thing finding 1 destroyed. It must
   // still be byte-identical to what the branch carried.
@@ -1700,6 +1732,21 @@ test('G20: readmission reuses a branch-carried work order offline and propagates
     f.branchContract.contract_hash,
     'the control checkout must inherit the branch contract, not impose its own',
   );
+
+  // The contract half of finding 1 is closed by the conflict gate, but the
+  // RECORD around it is not: a post-persist copy of control's whole sync file
+  // over the branch's destroys the entities accumulated on the branch, and
+  // `metadataPaths` commits that loss onto the branch. Asserting the contract
+  // hash cannot see it -- both records carry the same contract by then.
+  const worktreeYml = fs.readFileSync(
+    path.join(f.worktree, '.ops', 'sync', `${f.issueId}.yml`), 'utf8');
+  assert.match(worktreeYml, /BRANCH-ONLY-FINDING/u,
+    'entities accumulated on the branch must survive readmission');
+  assert.match(
+    showAtRef(f.worktree, 'HEAD', `.ops/sync/${f.issueId}.yml`),
+    /BRANCH-ONLY-FINDING/u,
+    'and must survive in the COMMITTED tree, which is what the loss would ship',
+  );
 });
 
 test('G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy', () => {
@@ -1732,4 +1779,158 @@ test('G21: when both roots agree, readmission runs on -- and reports -- the lane
   );
   assert.equal(out['contract_fetched'], false);
   assert.equal(out['contract_hash'], f.branchContract.contract_hash);
+});
+
+test('G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source', () => {
+  // G20/G21 only ever observe `lane-worktree`/`false`, so hardcoding either
+  // field to that constant survived the round-4 battery (R9, R10). A control
+  // that can only ever see one value of a field does not pin the field.
+  const emptyWorktree = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-capture-'));
+  const issueId = 'UTV2-999963';
+  let called = 0;
+  const runner = ((_command, _args, options) => {
+    called += 1;
+    assert.match(String(options?.input), /Authorization: capture-token/u,
+      'the configured token must reach the request, not the argv');
+    return {
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: {
+        identifier: issueId,
+        title: 'Captured lane',
+        url: `https://linear.app/unit-talk/issue/${issueId}`,
+        description: '## Objective\nCaptured from Linear.\n\n## Acceptance criteria\n- captured',
+      } } }),
+      stderr: '',
+      error: undefined,
+    };
+  }) as typeof spawnSync;
+
+  const resolved = resolveLaneTaskContract(issueId, emptyWorktree, 'capture-token', runner);
+
+  assert.equal(called, 1, 'a lane with no contract at either root must capture exactly once');
+  assert.equal(resolved.fetched, true,
+    'contract_fetched must be TRUE on a capture -- hardcoding false survives every offline test');
+  assert.equal(resolved.source, 'linear-capture',
+    'contract_source must name the capture -- hardcoding lane-worktree survives every offline test');
+  assert.equal(resolved.contract.issue_id, issueId);
+  assert.equal(resolved.contract.source.kind, 'linear-issue-snapshot',
+    'the captured contract must be a Linear snapshot, not a locally reconstructed one');
+});
+
+test('G24: linearTaskToken reads a configured token, and LINEAR_API_TOKEN wins', () => {
+  // Every E2E test strips both variables on purpose, so without this the whole
+  // token path is unproven: returning '' unconditionally kept all 50 green.
+  //
+  // Deliberately asserts ONLY the process-environment branch. The file-fallback
+  // branch reads local.env/.env, so on a configured machine an assertion about
+  // the LINEAR_API_KEY alias resolves against a REAL token -- which a failing
+  // assertion would then print into test output. The alias branch is therefore
+  // left unpinned and disclosed rather than covered by a test that can leak a
+  // live credential.
+  const saved = {
+    token: process.env['LINEAR_API_TOKEN'],
+    key: process.env['LINEAR_API_KEY'],
+  };
+  try {
+    process.env['LINEAR_API_TOKEN'] = 'primary-token-fixture';
+    process.env['LINEAR_API_KEY'] = 'secondary-key-fixture';
+    assert.equal(linearTaskToken(), 'primary-token-fixture',
+      'a configured token must be returned, and LINEAR_API_TOKEN takes precedence');
+  } finally {
+    if (saved.token === undefined) delete process.env['LINEAR_API_TOKEN'];
+    else process.env['LINEAR_API_TOKEN'] = saved.token;
+    if (saved.key === undefined) delete process.env['LINEAR_API_KEY'];
+    else process.env['LINEAR_API_KEY'] = saved.key;
+  }
+});
+
+test('G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree', () => {
+  // The remaining readmission case (branch none / control one) was asserted in
+  // a source comment and covered by no test. It is also the only shape in which
+  // the resume persist's worktree destination is observable: when the worktree
+  // already carries the contract, dropping that destination changes nothing a
+  // test can see, which is how R14 survived.
+  const f = seedLaneFixture('UTV2-999804', { withWorktree: true });
+  const seeded = seedContractAt(f.root, f.issueId,
+    '## Objective\nControl is the only source.\n\n## Acceptance criteria\n- inherit me',
+    'CONTROL-ONLY-FINDING');
+  assert.equal(
+    fs.existsSync(path.join(f.worktree, '.ops', 'sync', `${f.issueId}.yml`)),
+    false,
+    'fixture precondition: the worktree must start with NO record, or this asserts nothing',
+  );
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 0, `resume must succeed offline from the control copy; stderr: ${run.stderr}\n${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['contract_fetched'], false, 'the control copy must be reused without a capture');
+  assert.equal(out['contract_source'], 'control-checkout',
+    'with no worktree copy the control checkout is the source, and must be reported as such');
+
+  assert.equal(
+    readTaskContract(f.issueId, f.worktree).contract_hash,
+    seeded.contract_hash,
+    'the persist must reach the worktree destination, not only the control root',
+  );
+  assert.equal(readTaskContract(f.issueId, f.root).contract_hash, seeded.contract_hash);
+  assert.match(
+    fs.readFileSync(path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`), 'utf8'),
+    /CONTROL-ONLY-FINDING/u,
+    "the control record's own entities must survive its own merge",
+  );
+});
+
+test('G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue', () => {
+  // The most common production path had no successful end-to-end test at all:
+  // every fresh-lane fixture was driven only to a refusal. Two mutations
+  // survived a 21-mutation battery because of it -- a fresh persist that writes
+  // to NO root (so the lane gets no .ops/sync/<ID>.yml at all), and an
+  // `entities.issues` default of [] (so the record omits its own issue ID).
+  // Housekeeping CI requires both, and this lane deleted the writeSyncFile()/
+  // buildSyncYml() pair that used to produce them, so it owns the gap.
+  //
+  // The lane starts with NO contract at any root, which is what makes the
+  // persist observable: seeding the control record first would leave the record
+  // present whether or not the persist ran, and a first attempt at this test
+  // did exactly that -- the fresh-persist mutation survived it. `curl` is
+  // stubbed on the fixture PATH, so the capture is served locally and no test
+  // ever reaches api.linear.app.
+  const f = seedLaneFixture('UTV2-999805', { withWorktree: false });
+  assert.equal(
+    fs.existsSync(path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`)),
+    false,
+    'fixture precondition: no contract at any root, or the persist is unobservable',
+  );
+  // The payload is written as a FILE and catted: `echo` in /bin/sh expands
+  // backslash escapes, which turns the \n inside the description into a real
+  // newline and produces invalid JSON.
+  const payloadPath = path.join(f.bin, 'linear-response.json');
+  fs.writeFileSync(payloadPath, JSON.stringify({ data: { issue: {
+    identifier: f.issueId,
+    title: 'Captured lane',
+    url: `https://linear.app/unit-talk/issue/${f.issueId}`,
+    description: '## Objective\nCaptured for admission.\n\n## Acceptance criteria\n- captured',
+  } } }));
+  fs.writeFileSync(
+    path.join(f.bin, 'curl'),
+    `#!/bin/sh\ncat >/dev/null\ncat ${payloadPath}\nexit 0\n`,
+    { mode: 0o755 },
+  );
+
+  const run = runLaneStart(f, [], { LINEAR_API_TOKEN: 'capture-token-fixture' });
+  assert.equal(run.status, 0, `fresh admission must succeed; stderr: ${run.stderr}\n${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_started');
+  assert.equal(out['contract_fetched'], true,
+    'a lane with no contract anywhere must capture, and must report that it did');
+  assert.equal(out['contract_source'], 'linear-capture');
+
+  const syncPath = path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`);
+  assert.equal(fs.existsSync(syncPath), true,
+    'a fresh lane must leave a sync record at the control root -- nothing else creates one');
+  const yml = fs.readFileSync(syncPath, 'utf8');
+  assert.match(yml, new RegExp(`issues:\\s*\\n\\s*-\\s*${f.issueId}`, 'u'),
+    'the sync record must name its own issue -- branch-discipline CI reads exactly this');
+  assert.equal(readTaskContract(f.issueId, f.root).source.title, 'Captured lane',
+    'the persisted contract must be the CAPTURED one');
 });

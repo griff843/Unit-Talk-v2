@@ -210,7 +210,13 @@ function isDocsOnlyFastPathFile(filePath: string): boolean {
   );
 }
 
-function linearTaskToken(): string {
+/**
+ * Exported so the token plumbing has a positive control. Every lane-start E2E
+ * test is deliberately offline with both variables stripped, so nothing
+ * otherwise proves this function can read a configured token at all -- a
+ * mutation returning `''` unconditionally survived a 21-mutation battery.
+ */
+export function linearTaskToken(): string {
   return (
     readConfiguredEnvValue('LINEAR_API_TOKEN') ||
     readConfiguredEnvValue('LINEAR_API_KEY') ||
