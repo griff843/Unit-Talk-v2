@@ -237,14 +237,42 @@ function normalizeHeading(value: string): string {
  */
 export const PREAMBLE_KEY = '(description preamble)';
 
-function parseSections(markdown: string): Map<string, string[]> {
+interface ParsedSections {
+  sections: Map<string, string[]>;
+  /** heading -> every heading nested beneath it, in document order. */
+  descendants: Map<string, string[]>;
+}
+
+function parseSections(markdown: string): ParsedSections {
   const sections = new Map<string, string[]>();
-  let current: string | null = null;
+  const descendants = new Map<string, string[]>();
+  // Open ancestors, outermost first. A line belongs to the deepest heading AND
+  // to every heading above it: an `## Acceptance criteria` parent whose items
+  // live under `### Functional` used to end up empty, because any heading -- at
+  // any level -- replaced `current`. With the parent empty and
+  // hasAcceptanceHeading true, the fallback was disabled and the contract was
+  // refused for "missing acceptance criteria" while the criteria sat one level
+  // down. Descendants are recorded so that consuming a parent also consumes
+  // them, which keeps the same content from being duplicated into residue.
+  const open: Array<{ key: string; level: number }> = [];
   for (const rawLine of markdown.split(/\r?\n/u)) {
-    const heading = /^#{1,6}\s+(.+?)\s*$/u.exec(rawLine.trim());
+    const heading = /^(#{1,6})\s+(.+?)\s*$/u.exec(rawLine.trim());
     if (heading) {
-      current = normalizeHeading(heading[1] ?? '');
-      if (!sections.has(current)) sections.set(current, []);
+      const level = (heading[1] ?? '').length;
+      const key = normalizeHeading(heading[2] ?? '');
+      while (open.length > 0 && (open[open.length - 1]?.level ?? 0) >= level) {
+        open.pop();
+      }
+      for (const ancestor of open) {
+        // The subheading line itself is content of its parent; without it the
+        // parent loses the fact that the subsection exists at all.
+        sections.get(ancestor.key)?.push(rawLine);
+        const kin = descendants.get(ancestor.key);
+        if (kin && !kin.includes(key)) kin.push(key);
+      }
+      open.push({ key, level });
+      if (!sections.has(key)) sections.set(key, []);
+      if (!descendants.has(key)) descendants.set(key, []);
       continue;
     }
     // Content before the first heading used to be discarded outright: `current`
@@ -253,29 +281,36 @@ function parseSections(markdown: string): Map<string, string[]> {
     // before any `##`, and that text never reached the executor. It is now
     // captured under a sentinel key and travels as residue like any other
     // unconsumed section.
-    if (current) sections.get(current)!.push(rawLine);
-    else {
+    if (open.length > 0) {
+      for (const owner of open) sections.get(owner.key)?.push(rawLine);
+    } else {
       if (!sections.has(PREAMBLE_KEY)) sections.set(PREAMBLE_KEY, []);
-      sections.get(PREAMBLE_KEY)!.push(rawLine);
+      sections.get(PREAMBLE_KEY)?.push(rawLine);
     }
   }
-  return sections;
+  return { sections, descendants };
 }
 
 function sectionLines(
-  sections: Map<string, string[]>,
+  parsed: ParsedSections,
   headings: string[],
   prefix = false,
   matched?: string[],
 ): string[] {
   const wanted = headings.map(normalizeHeading);
-  for (const [heading, lines] of sections) {
+  for (const [heading, lines] of parsed.sections) {
     if (
       wanted.some(
         (value) => heading === value || (prefix && heading.startsWith(value)),
       )
     ) {
       matched?.push(heading);
+      // Consuming a parent consumes what is nested beneath it. Those lines are
+      // already carried in the parent's own content, so leaving the children
+      // unconsumed would repeat the same text in "Additional issue content".
+      for (const child of parsed.descendants.get(heading) ?? []) {
+        matched?.push(child);
+      }
       return lines;
     }
   }
@@ -300,12 +335,19 @@ function sectionLines(
  * with the contract and are rendered verbatim.
  */
 function unmappedSections(
-  sections: Map<string, string[]>,
+  parsed: ParsedSections,
   consumed: string[][],
 ): Array<{ heading: string; lines: string[] }> {
+  const sections = parsed.sections;
   const taken = new Set<string>();
   for (const group of consumed) {
     for (const heading of group) taken.add(heading);
+  }
+  // A surviving ancestor already carries its descendants' lines, so emitting the
+  // descendants again would repeat the same text in the prompt.
+  for (const [heading, kin] of parsed.descendants) {
+    if (taken.has(heading)) continue;
+    for (const child of kin) taken.add(child);
   }
   const out: Array<{ heading: string; lines: string[] }> = [];
   for (const [heading, lines] of sections) {
@@ -363,19 +405,20 @@ export function buildTaskContract(
   const issueId = source.identifier.trim().toUpperCase();
   const title = source.title.trim();
   const description = source.description.trim();
-  const sections = parseSections(description);
+  const parsed = parseSections(description);
+  const sections = parsed.sections;
   const consumed: string[] = [];
   const objectiveItems = sectionItems(
-    sectionLines(sections, ['objective', 'required outcome'], false, consumed),
+    sectionLines(parsed, ['objective', 'required outcome'], false, consumed),
   );
   const objective = objectiveItems.join('\n') || title;
   const explicitAcceptance = sectionItems(
-    sectionLines(sections, ['acceptance criteria', 'acceptance criterion'], false, consumed),
+    sectionLines(parsed, ['acceptance criteria', 'acceptance criterion'], false, consumed),
   );
   const hasAcceptanceHeading = [...sections.keys()].some((heading) =>
     ['acceptance criteria', 'acceptance criterion'].includes(heading),
   );
-  const exitCriteria = sectionItems(sectionLines(sections, ['exit criteria'], false, consumed));
+  const exitCriteria = sectionItems(sectionLines(parsed, ['exit criteria'], false, consumed));
 
   // Existing issues predate the heading convention. Preserve their complete
   // work order verbatim instead of inventing criteria or bulk-migrating state.
@@ -405,22 +448,30 @@ export function buildTaskContract(
     issue_id: issueId,
     objective,
     acceptance_criteria: acceptanceCriteria,
-    guardrails: sectionItems(sectionLines(sections, ['guardrails'], false, consumed)),
+    guardrails: sectionItems(sectionLines(parsed, ['guardrails'], false, consumed)),
     non_goals: sectionItems(
       sectionLines(
-        sections,
+        parsed,
         ['non goals', 'non-goals', 'out of scope', 'explicitly out of scope'],
         true,
         consumed,
       ),
     ),
     required_evidence: sectionItems(
-      sectionLines(sections, ['required evidence', 'evidence'], false, consumed),
+      sectionLines(parsed, ['required evidence', 'evidence'], false, consumed),
     ),
     exit_criteria: exitCriteria,
-    unmapped_sections: unmappedSections(sections, [consumed]).map(
-      (entry) => `${entry.heading}: ${entry.lines.join(' ').replace(/\s+/gu, ' ').trim()}`,
-    ),
+    unmapped_sections: unmappedSections(parsed, [consumed]).map((entry) => {
+      // Flattening with join(' ') plus whitespace collapse silently rewrote
+      // multiline commands, fenced code, tables and paragraph boundaries -- and
+      // contradicted this module's own claim to carry residue verbatim. Lines
+      // are preserved as authored; only leading and trailing blank lines go.
+      const body = entry.lines
+        .join('\n')
+        .replace(/^\s*\n+/u, '')
+        .replace(/\n+\s*$/u, '');
+      return body ? `${entry.heading}:\n${body}` : `${entry.heading}:`;
+    }),
     source: {
       kind: 'linear-issue-snapshot',
       issue_url: source.url.trim(),
@@ -803,7 +854,15 @@ export function renderTaskContract(contract: TaskContract): string {
           '### Additional issue content (not classified)',
           'These sections were not mapped to a field above. They are part of the work order.',
           '',
-          ...contract.unmapped_sections.map((entry) => `- ${entry}`),
+          ...contract.unmapped_sections.flatMap((entry) => {
+            const nl = entry.indexOf('\n');
+            // A multiline section is emitted with its body verbatim rather than
+            // folded into one bullet: indenting it to satisfy markdown list
+            // syntax would alter the very commands, code blocks and tables this
+            // residue exists to carry intact.
+            if (nl === -1) return [`- ${entry}`];
+            return [`- ${entry.slice(0, nl)}`, ...entry.slice(nl + 1).split('\n'), ''];
+          }),
         ]
       : []),
   ].join('\n'));
@@ -1068,7 +1127,19 @@ function main(): void {
     );
   }
 
-  const packet = generateExecutionPacket(readManifest(issueId));
+  // A newly admitted lane has no captured contract yet, so the strict packet
+  // gate refused -- which made the policy-required standalone command unusable
+  // on exactly the lanes it exists to preview. Route through the same
+  // authoritative capture-and-persist the dispatch path uses, then apply the
+  // identical strict validator. This is the one place a capture may happen from
+  // this entry point; it is not a second, looser packet definition.
+  const result = generateDispatchExecutionPacketResult(readManifest(issueId));
+  if (!result.ok) {
+    emitJson(result);
+    process.exitCode = 1;
+    return;
+  }
+  const packet = result.packet;
   if (bools.has('enforce-cwd')) {
     assertExecutionPacketCwd(packet);
   }

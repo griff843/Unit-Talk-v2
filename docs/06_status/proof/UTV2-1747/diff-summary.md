@@ -1,6 +1,6 @@
 # UTV2-1747 — diff summary
 
-11 files changed. Substantive: 8 script files.
+13 files changed, 3168 insertions(+), 38 deletions(-). Substantive: 8 script files.
 
 ## Production source (inherited, unmodified by this lane)
 
@@ -11,10 +11,22 @@
 | `scripts/ops/codex-exec.ts` | Inherited byte-identically: the same `--dry-run` purity branch. |
 | `scripts/ops/lane-start.ts` | **Carry-forward correction.** Accidentally omitted from the original port. Replaces the contract-less `buildSyncYml` with `captureOrReadTaskContract` + `buildSyncYmlWithTaskContract`, so a lane's sync record carries its work order from lane-start time. Without it every `--dry-run` on a real lane refuses, because dry run deliberately never captures. One disclosed deviation from byte-identity: `syncContentWithTaskContract` gained an `export` keyword and a doc comment, to provide a test seam. |
 
-Beyond the inherited fixes, this lane authored exactly one production change: an
-`export` keyword on `syncContentWithTaskContract`. The isolated-root requirement
-needed no production change at all, because `getRepoRoot()` already derives
-`ROOT` from `process.cwd()`.
+Per PM direction (bounce 1), the preserved head is a source artifact rather than
+architectural authority. `lane-start.ts` and `execution-packet.ts` are therefore
+changed deliberately beyond it; `claude-exec.ts` and `codex-exec.ts` remain
+byte-identical to `581af41b`. The isolated-root requirement still needed no
+production change, because `getRepoRoot()` already derives `ROOT` from
+`process.cwd()`.
+
+## Corrections in this bounce
+
+| Change | Why |
+|---|---|
+| `lane-start.ts`: full contract lifecycle | Resume no longer refetches or depends on Linear; each destination merges against its own sync record; divergent contracts fail closed as `lane_contract_conflict`; one bounded capture happens before any lease, worktree or manifest mutation. |
+| `execution-packet.ts`: standalone CLI | Routed through capture-and-persist then the identical strict validator, so the policy-required command works on a newly admitted lane. |
+| `execution-packet.ts`: nesting-aware parser | Criteria under `### Functional` no longer orphan their `## Acceptance criteria` parent and trigger a false "missing acceptance criteria" refusal. |
+| `execution-packet.ts`: residue fidelity | Multiline commands, fenced code and tables keep their line structure instead of being folded by `join(' ')`. |
+| `lane-start.test.ts`: child-process coverage of `main()` | The capture wiring is now executed, so removing either call site fails a test. |
 
 ## Tests
 

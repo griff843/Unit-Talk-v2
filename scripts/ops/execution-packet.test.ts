@@ -16,7 +16,7 @@ import {
   renderTaskContract,
   TaskContractError,
 } from './execution-packet.js';
-import { type LaneManifest } from './shared.js';
+import { ROOT, type LaneManifest } from './shared.js';
 
 function createTestManifest(
   overrides: Partial<LaneManifest> = {},
@@ -628,16 +628,40 @@ test('control characters in the issue description never reach the rendered promp
 });
 
 test('a section heading with an empty body is still carried as residue', () => {
+  // The fixture must leave the prohibition heading genuinely EMPTY -- no body and
+  // no nested subsection. An earlier fixture put a `### Details` subsection under
+  // it; once nested content began flowing to its parent, the heading was no
+  // longer empty and this test stopped exercising the empty-body branch at all,
+  // silently going vacuous. Its sibling below covers the nested-subsection case.
   const contract = buildTaskContract({
     identifier: 'UTV2-9999',
     title: 'empty section guard',
     url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
     description:
-      '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n### Details\n- ok\n',
+      '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n## Details\n- ok\n',
   });
+  const bare = contract.unmapped_sections.find((entry) =>
+    entry.toLowerCase().startsWith('do not touch production'));
+  assert.ok(bare, 'an empty-bodied heading must survive as residue, carrying its own vocabulary');
   const rendered = renderTaskContract(contract).toLowerCase();
   for (const token of ['touch', 'production'])
     assert.ok(rendered.includes(token), `heading vocabulary "${token}" must not be dropped`);
+});
+
+test('a heading whose only content is a subsection keeps that subsection with it', () => {
+  // The companion case: content nested under a prohibition heading must travel
+  // with the prohibition, not replace it.
+  const contract = buildTaskContract({
+    identifier: 'UTV2-9999',
+    title: 'nested prohibition',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-9999',
+    description:
+      '## Objective\nx\n\n## Acceptance criteria\n- y\n\n## DO NOT TOUCH PRODUCTION\n\n### Details\n- no DDL\n',
+  });
+  const rendered = renderTaskContract(contract);
+  assert.match(rendered, /do not touch production/iu);
+  assert.match(rendered, /no DDL/u,
+    'the nested detail must travel with the heading it qualifies');
 });
 
 test('a contract predating unmapped_sections refuses structurally, not with a TypeError', () => {
@@ -673,4 +697,157 @@ test('the rendered prompt carries source provenance so staleness is visible', ()
   const rendered = renderTaskContract(contract);
   assert.match(rendered, /Source issue: /u);
   assert.match(rendered, /Captured at: /u);
+});
+
+// ---------------------------------------------------------------------------
+// PM review findings, UTV2-1747 (bounce 1)
+// ---------------------------------------------------------------------------
+
+test('the standalone packet CLI produces a packet for a newly admitted pre-contract lane', () => {
+  // Finding 1. The policy-required standalone command called the strict packet
+  // gate directly, so a lane whose sync record had no task_contract -- every
+  // freshly admitted lane -- was refused by exactly the command meant to
+  // preview it. Executed as a child process so the real CLI path is measured,
+  // with curl stubbed so the one capture happens offline.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-cli-'));
+  const root = path.join(dir, 'repo');
+  const wt = path.join(root, 'wt');
+  const issueId = 'UTV2-999820';
+  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations'), { recursive: true });
+  fs.mkdirSync(wt, { recursive: true });
+  fs.copyFileSync(
+    path.join(ROOT, 'docs', '05_operations', 'db-writer-classification.json'),
+    path.join(root, 'docs', '05_operations', 'db-writer-classification.json'),
+  );
+  fs.writeFileSync(path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
+    `${JSON.stringify({
+      schema_version: 2, issue_id: issueId, lane_type: 'governance', executor: 'claude',
+      tier: 'T2', worktree_path: wt, branch: `claude/${issueId.toLowerCase()}-fixture`,
+      base_branch: 'main', commit_sha: null, pr_url: null, files_changed: [],
+      file_scope_lock: ['scripts/ops/fixture.ts'], expected_proof_paths: [], status: 'started',
+      started_at: '2026-08-24T00:00:00.000Z', heartbeat_at: '2026-08-24T00:00:00.000Z',
+      closed_at: null, blocked_by: [], preflight_token: '.out/ops/preflight/fixture.json',
+      created_by: 'claude', truth_check_history: [], reopen_history: [],
+      execution_location: { mode: 'worktree', cwd: wt, package_install: 'verified',
+        setup_command: null, main_checkout_control_only: true },
+    }, null, 2)}\n`);
+  fs.writeFileSync(path.join(wt, 'README.md'), 'seed\n');
+  for (const args of [['init', '-q', '-b', 'main', '.'], ['config', 'user.email', 't@e.com'],
+    ['config', 'user.name', 'T'], ['add', '-A'], ['commit', '-qm', 'seed']]) {
+    spawnSync('git', args, { cwd: root, stdio: 'pipe' });
+  }
+
+  // Offline Linear. The CLI's single capture reads this instead of the network.
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const objective = 'Preview a pre-contract lane without refusing.';
+  const payload = JSON.stringify({ data: { issue: {
+    identifier: issueId, title: 'CLI fixture',
+    url: `https://linear.app/unit-talk/issue/${issueId}`,
+    description: `## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet`,
+  } } });
+  fs.writeFileSync(path.join(bin, 'curl'),
+    `#!/bin/sh\ncat >/dev/null 2>&1\ncat <<'JSON'\n${payload}\nJSON\nexit 0\n`, { mode: 0o755 });
+
+  const run = spawnSync(
+    path.join(ROOT, 'node_modules', '.bin', 'tsx'),
+    [path.join(ROOT, 'scripts', 'ops', 'execution-packet.ts'), issueId],
+    { cwd: root, encoding: 'utf8', timeout: 180_000,
+      env: { ...process.env, PATH: `${bin}${path.delimiter}${process.env['PATH'] ?? ''}`,
+             LINEAR_API_TOKEN: 'stub-token' } },
+  );
+
+  assert.equal(run.status, 0,
+    `the standalone CLI must produce a packet for a pre-contract lane; stderr: ${run.stderr}\n${run.stdout}`);
+  const packet = JSON.parse(run.stdout.slice(run.stdout.indexOf('{'), run.stdout.lastIndexOf('}') + 1)) as
+    { task_contract?: { objective?: string } };
+  assert.equal(packet.task_contract?.objective, objective,
+    'the emitted packet must carry the captured objective');
+  // The capture is persisted, so the next read is not another network call.
+  assert.equal(readTaskContract(issueId, root).objective, objective,
+    'the CLI must persist the contract it captured');
+});
+
+test('acceptance criteria under a nested subheading are not lost', () => {
+  // Finding 2. Any heading at any level replaced the current section, so an
+  // `## Acceptance criteria` parent whose items lived under `### Functional`
+  // ended up empty -- and because the parent heading existed, the fallback was
+  // disabled and the contract was refused for "missing acceptance criteria"
+  // while the criteria sat one level below.
+  const description = [
+    '## Objective', 'Ship the nested-heading fix.', '',
+    '## Acceptance criteria',
+    '### Functional',
+    '- the nested item survives',
+    '### Non-functional',
+    '- the second nested item survives too',
+    '',
+    '## Guardrails',
+    '- do not widen the parser whitelist',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999821', title: 'nested acceptance',
+    url: 'https://linear.app/unit-talk/issue/UTV2-999821', description,
+  }, '2026-08-24T00:00:00.000Z');
+
+  const joined = contract.acceptance_criteria.join('\n');
+  assert.match(joined, /the nested item survives/u,
+    'a criterion under a subheading must reach acceptance_criteria');
+  assert.match(joined, /the second nested item survives too/u,
+    'every nested subsection must be associated with its parent');
+  // Consuming the parent consumes its children, so the same text is not also
+  // repeated in the residue.
+  const residue = contract.unmapped_sections.join('\n');
+  assert.doesNotMatch(residue, /the nested item survives/u,
+    'nested content consumed by a parent must not be duplicated into residue');
+});
+
+test('unclassified content keeps its line and formatting semantics', () => {
+  // Finding 3. Residue was flattened with join(' ') plus whitespace collapse,
+  // which silently rewrote multiline commands, fenced code, tables and
+  // paragraph boundaries -- while the bundle claimed it travelled verbatim.
+  const description = [
+    '## Objective', 'Carry residue intact.', '',
+    '## Acceptance criteria', '- residue is preserved', '',
+    '## Rollback runbook',
+    '```sql',
+    'BEGIN;',
+    '  ALTER TABLE provider_offer_history DETACH PARTITION p20260901;',
+    'COMMIT;',
+    '```',
+    '',
+    '| step | owner |',
+    '| --- | --- |',
+    '| detach | dba |',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999822', title: 'residue fidelity',
+    url: 'https://linear.app/unit-talk/issue/UTV2-999822', description,
+  }, '2026-08-24T00:00:00.000Z');
+
+  const residue = contract.unmapped_sections.join('\n');
+  assert.match(residue, /\n/u, 'residue must not be flattened onto one line');
+  for (const line of [
+    'BEGIN;',
+    '  ALTER TABLE provider_offer_history DETACH PARTITION p20260901;',
+    'COMMIT;',
+    '| step | owner |',
+    '| --- | --- |',
+  ]) {
+    assert.ok(residue.includes(line),
+      `residue must carry this line exactly as authored: ${JSON.stringify(line)}`);
+  }
+  // The indented statement must keep its indentation: whitespace collapse
+  // rewrote it, and an executor pasting the block would run different SQL.
+  assert.ok(residue.includes('\n  ALTER TABLE'),
+    'leading indentation inside a fenced block must survive');
+
+  const rendered = renderTaskContract(contract);
+  assert.ok(rendered.includes('  ALTER TABLE provider_offer_history DETACH PARTITION p20260901;'),
+    'the rendered prompt must carry the multiline block intact');
+  assert.ok(rendered.includes('| --- | --- |'),
+    'the rendered prompt must carry table rows intact');
 });

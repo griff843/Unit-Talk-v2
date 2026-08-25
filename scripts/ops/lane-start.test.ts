@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   buildSyncYmlWithTaskContract,
   buildTaskContract,
   generateDispatchExecutionPacketResult,
   readTaskContract,
   renderTaskContract,
+  type TaskContract,
 } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
 import {
@@ -800,4 +802,242 @@ test('UTV2-1634: discovery failure blocks the docs-only fast path as well as nor
     guardIndex !== -1 && guardIndex < fastPathIndex,
     'the fail-closed discovery guard must precede the docs-only fast path, so an unknown board refuses both routes',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Executing coverage for lane-start main() (UTV2-1747)
+//
+// Nothing in this repository executed lane-start's main(), so reverting either
+// real capture call site left the whole suite green -- the defect class this
+// lane exists to remove, sitting in the lane's own dependency. These tests run
+// the real entrypoint as a child process against a fixture repository.
+//
+// Isolation: getRepoRoot() shells out to `git rev-parse --show-toplevel`
+// inheriting process.cwd(), so a git-initialised fixture directory rebinds ROOT
+// to itself. Offline: a stub `gh` on PATH returns an empty board, and the
+// LINEAR_* variables are stripped from the child environment, so a capture
+// cannot silently succeed against the real Linear.
+// ---------------------------------------------------------------------------
+
+const LANE_TSX_BIN = path.join(ROOT, 'node_modules', '.bin', 'tsx');
+
+interface LaneFixture {
+  root: string;
+  worktree: string;
+  bin: string;
+  issueId: string;
+  branch: string;
+}
+
+function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): LaneFixture {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lanestart-'));
+  const root = path.join(dir, 'repo');
+  const slug = issueId.toLowerCase();
+  const branch = `claude/${slug}-fixture`;
+  const worktree = path.join(root, '.out', 'worktrees', branch.replaceAll('/', '__'));
+
+  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations', 'policies'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations', 'schemas'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', 'governance'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'scripts', 'ops'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.ops', 'sync'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.ops', 'leases'), { recursive: true });
+
+  // Real control data, copied rather than invented: a hand-authored policy or
+  // schema can assert against a field the production reader never consults.
+  for (const rel of [
+    ['docs', '05_operations', 'policies', 'codex-model-routing.json'],
+    ['docs', '05_operations', 'db-writer-classification.json'],
+    ['docs', '05_operations', 'DELEGATION_STATE.json'],
+    ['docs', '05_operations', 'schemas', 'lane_manifest_v1.schema.json'],
+    ['docs', 'governance', 'CONCURRENCY_CONFIG.json'],
+  ]) {
+    fs.copyFileSync(path.join(ROOT, ...rel), path.join(root, ...rel));
+  }
+  fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
+  fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+
+  const git = (args: string[], cwd = root): void => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
+  };
+  git(['init', '-q', '-b', 'main', '.']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+  git(['add', '-A']);
+  git(['commit', '-qm', 'seed']);
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+
+  if (opts.withWorktree) {
+    git(['worktree', 'add', '-q', '-b', branch, worktree]);
+    // A worktree that already has node_modules skips the isolated install, so
+    // the resume path completes without a package manager or a network.
+    fs.mkdirSync(path.join(worktree, 'node_modules'), { recursive: true });
+    fs.mkdirSync(path.join(worktree, '.ops', 'sync'), { recursive: true });
+
+    const manifest = {
+      schema_version: 2, issue_id: issueId, lane_type: 'governance', executor: 'claude',
+      tier: 'T2', worktree_path: worktree, branch, base_branch: 'main', commit_sha: null,
+      pr_url: null, files_changed: [], file_scope_lock: ['scripts/ops/fixture.ts'],
+      expected_proof_paths: [], status: 'started',
+      started_at: '2026-08-24T00:00:00.000Z', heartbeat_at: '2026-08-24T00:00:00.000Z',
+      closed_at: null, blocked_by: [], preflight_token: `.out/ops/preflight/${branch}.json`,
+      created_by: 'claude', truth_check_history: [], reopen_history: [],
+      execution_location: {
+        mode: 'worktree', cwd: worktree, package_install: 'verified',
+        setup_command: null, main_checkout_control_only: true,
+      },
+    };
+    fs.writeFileSync(
+      path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+  }
+
+  const tokenPath = path.join(root, '.out', 'ops', 'preflight', `${branch}.json`);
+  fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+  fs.writeFileSync(tokenPath, `${JSON.stringify({
+    schema_version: 1, status: 'pass', issue_id: issueId, branch, head_sha: head,
+    expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+  }, null, 2)}\n`);
+
+  // Stub board. Kept outside the repository so it is not untracked content.
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\necho "[]"\nexit 0\n', { mode: 0o755 });
+
+  return { root, worktree, bin, issueId, branch };
+}
+
+/** Write a contract into one root, optionally carrying accumulated entities. */
+function seedContractAt(
+  destRoot: string,
+  issueId: string,
+  description: string,
+  extraFinding?: string,
+): TaskContract {
+  const contract = buildTaskContract({
+    identifier: issueId, title: 'Fixture lane',
+    url: `https://linear.app/unit-talk/issue/${issueId}`,
+    description,
+  }, '2026-08-24T00:00:00.000Z');
+  let yml = buildSyncYmlWithTaskContract(issueId, contract);
+  if (extraFinding) yml = yml.replace('  findings: []', `  findings:\n    - ${extraFinding}`);
+  const p = path.join(destRoot, '.ops', 'sync', `${issueId}.yml`);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, yml);
+  return contract;
+}
+
+function runLaneStart(fixture: LaneFixture, extra: string[] = []): {
+  status: number | null; stdout: string; stderr: string;
+} {
+  const env = { ...process.env, PATH: `${fixture.bin}${path.delimiter}${process.env['PATH'] ?? ''}` };
+  // A capture must not be able to reach the real Linear from a test.
+  delete env['LINEAR_API_TOKEN'];
+  delete env['LINEAR_API_KEY'];
+  const r = spawnSync(LANE_TSX_BIN, [
+    path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), fixture.issueId,
+    '--tier', 'T2', '--branch', fixture.branch, '--lane-type', 'governance',
+    '--executor', 'claude', '--files', 'scripts/ops/fixture.ts', ...extra,
+  ], { cwd: fixture.root, encoding: 'utf8', timeout: 180_000, env });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+}
+
+function laneJson(out: string): Record<string, unknown> {
+  const start = out.indexOf('{');
+  const end = out.lastIndexOf('}');
+  assert.ok(start >= 0 && end > start, `expected JSON in lane-start output:\n${out}`);
+  return JSON.parse(out.slice(start, end + 1)) as Record<string, unknown>;
+}
+
+test('lane-start main() resumes from the lane contract with no token and no network', () => {
+  const f = seedLaneFixture('UTV2-999801', { withWorktree: true });
+  const seeded = seedContractAt(f.worktree, f.issueId,
+    '## Objective\nResume must reuse this contract.\n\n## Acceptance criteria\n- no refetch');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 0, `resume must succeed offline; stderr: ${run.stderr}\n${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_resumed');
+
+  // Reusing, not re-fetching: with LINEAR_* stripped, any capture attempt fails
+  // with "LINEAR_API_TOKEN or LINEAR_API_KEY is required".
+  const readBack = readTaskContract(f.issueId, f.worktree);
+  assert.equal(readBack.contract_hash, seeded.contract_hash,
+    'resume must keep the lane contract hash stable');
+});
+
+test('lane-start main() persists one contract to both roots, merging each against its own record', () => {
+  const f = seedLaneFixture('UTV2-999802', { withWorktree: true });
+  const seeded = seedContractAt(f.worktree, f.issueId,
+    '## Objective\nPersist to both roots.\n\n## Acceptance criteria\n- merged per destination',
+    'BRANCH-FINDING-1');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 0, `resume must succeed; stderr: ${run.stderr}\n${run.stdout}`);
+
+  // The branch's accumulated entities survive: merging the worktree write
+  // against the CONTROL checkout's record replaced them with the control copy's.
+  const worktreeYml = fs.readFileSync(path.join(f.worktree, '.ops', 'sync', `${f.issueId}.yml`), 'utf8');
+  assert.match(worktreeYml, /BRANCH-FINDING-1/u,
+    'the branch sync record must keep entities accumulated on the branch');
+
+  assert.equal(readTaskContract(f.issueId, f.worktree).contract_hash, seeded.contract_hash);
+  assert.equal(readTaskContract(f.issueId, f.root).contract_hash, seeded.contract_hash,
+    'both roots must carry the same contract');
+});
+
+test('lane-start main() refuses two different valid contracts instead of choosing one', () => {
+  const f = seedLaneFixture('UTV2-999803', { withWorktree: true });
+  seedContractAt(f.worktree, f.issueId,
+    '## Objective\nThe lane is working from this one.\n\n## Acceptance criteria\n- a');
+  seedContractAt(f.root, f.issueId,
+    '## Objective\nA DIFFERENT work order.\n\n## Acceptance criteria\n- b');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `divergent contracts must fail closed; ${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_contract_conflict');
+  assert.notEqual(out['control_contract_hash'], out['worktree_contract_hash']);
+});
+
+test('lane-start main() resume capture failure creates no lane state at all', () => {
+  // No contract anywhere and no token: the one bounded capture fails. Nothing
+  // may be reserved, written or mutated -- a half-started lane is worse than a
+  // refused one.
+  const f = seedLaneFixture('UTV2-999804', { withWorktree: true });
+  const manifestPath = path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`);
+  const before = fs.readFileSync(manifestPath, 'utf8');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `capture failure must refuse; ${run.stdout}`);
+  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u);
+
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
+    'a failed capture must reserve no lease');
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'sync')), [],
+    'a failed capture must write no control sync record');
+  assert.deepEqual(fs.readdirSync(path.join(f.worktree, '.ops', 'sync')), [],
+    'a failed capture must write no lane sync record');
+  assert.equal(fs.readFileSync(manifestPath, 'utf8'), before,
+    'a failed capture must not touch the manifest');
+});
+
+test('lane-start main() fresh-lane capture failure refuses before creating any lane substrate', () => {
+  // Exercises the OTHER real capture call site. Without it, a fresh lane with no
+  // contract and no token would proceed past this point instead of refusing here.
+  const f = seedLaneFixture('UTV2-999805', { withWorktree: false });
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `fresh capture failure must refuse; ${run.stdout}`);
+  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u,
+    'the fresh path must refuse AT capture, before branch, worktree, lease or manifest creation');
+
+  assert.equal(fs.existsSync(path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`)), false,
+    'no manifest may be created when the capture fails');
+  assert.equal(fs.existsSync(f.worktree), false, 'no worktree may be created when the capture fails');
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
+    'no lease may be reserved when the capture fails');
 });

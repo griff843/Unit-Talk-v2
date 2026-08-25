@@ -1,8 +1,8 @@
 # PROOF: UTV2-1747
 
-MERGE_SHA: cf73e5bf8d2e474b28fdc042bb9025645138164b
+MERGE_SHA: beb66432aff0d5e318ce3e8b2b84ad55e8dd7185
 
-Verified source SHA: `cf73e5bf8d2e474b28fdc042bb9025645138164b`
+Verified source SHA: `beb66432aff0d5e318ce3e8b2b84ad55e8dd7185`
 
 The executor packet layer shipped with tests that could not observe it. This
 lane does not change what the packet does; it makes the packet's behaviour
@@ -37,9 +37,8 @@ the `manifestExists` guard and every assertion below it was satisfied by a
 - [x] No test makes a network or paid model call. Health checks are satisfied by
   stub CLIs on `PATH`.
 - [x] A dry run leaves the lane root byte-identical — tracked and untracked.
-- [ ] Eight of nine reintroduced defect classes make a named test fail. M9 does NOT.
-  The lane-start capture wiring has no executing coverage; see below. Recorded as
-  an unchecked box because it is not satisfied.
+- [x] Thirteen reintroduced defect classes each make a named test fail, including
+  both lane-start capture call sites.
 - [x] No production behaviour changed: the entrypoints, the packet module and
   the parser are unmodified by this lane beyond the inherited fixes.
 - [x] No test-only root parameter was added to production code.
@@ -48,10 +47,10 @@ the `manifestExists` guard and every assertion below it was satisfied by a
 
 ```text
 pnpm verify:static           PASS (exit 0)
-unit suite                   5039 tests, 5039 pass, 0 fail
+unit suite                   5048 tests, 5048 pass, 0 fail
 focused executor suites      81 tests, 81 pass, 0 fail
 r-level check                PASS — 13 changed files, rules matched: (none)
-mutation battery             8 of 9 DETECTED; M9 UNDETECTED and disclosed below
+mutation battery             13 of 13 defect classes DETECTED
 lane-root mutation           0 tracked and 0 untracked changes after a dry run
 ```
 
@@ -62,7 +61,7 @@ lane-root mutation           0 tracked and 0 untracked changes after a dry run
 | `pnpm verify:static` | PASS | Exit 0. Runs lint, type-check, build and the repository suite. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally, by design: `assert-staging` requires the `staging-ci` environment and `CI_SUPABASE_*` credentials, and refuses any other target. Not run locally, and not required for this lane. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
-| `pnpm test` | PASS | 5039 tests, 0 failures, within `pnpm verify:static`. |
+| `pnpm test` | PASS | 5048 tests, 0 failures, within `pnpm verify:static`. |
 | `pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts` | PASS | 81 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 13 changed files. Rules matched: (none). |
 | `pnpm test:db` | N/A | No runtime, delivery or database path is touched. `lane_type: governance`, `proof_profile: static`. |
@@ -139,18 +138,56 @@ path no real lane could reach.
 Both files are now ported byte-identically and added to `file_scope_lock`. One
 deliberate deviation from byte-identity is disclosed below.
 
-### Byte-identical port, with no deviation
+### Option B: the port is a source artifact, not the design
 
-An earlier revision of this bundle added an `export` keyword and a doc comment to
-`syncContentWithTaskContract` in `lane-start.ts`, justified by a test that was
-said to execute that wiring. Independent review established the justification was
-false: the test called the helper directly and never executed `main()`. Both
-lane-start files have been restored to byte-identical copies of `581af41b`, and
-the false statement has been removed from production source.
+PM directed a correction inside this lane rather than a merge-with-disclosure or
+a successor. The preserved head supplies the code; it does not settle the
+contract lifecycle. `lane-start.ts` therefore deviates from `581af41b`
+deliberately and by instruction, and the deviation is the point of this bounce.
+
+Implemented lifecycle:
+
+| Rule | Where |
+|---|---|
+| A fresh lane captures once, validates, and persists the SAME contract to both roots | `resolveLaneTaskContract` + `persistLaneTaskContract` |
+| Resume uses the lane's existing valid contract and does not routinely refetch | `resolveLaneTaskContract` returns `fetched: false` from either root |
+| Resume merges against the DESTINATION's own sync record | `syncContentForDestination(destRoot, ...)` |
+| Two valid contracts with different hashes fail closed, structurally | `LaneContractConflictError`, surfaced as `code: lane_contract_conflict` |
+| A legacy lane with no contract anywhere gets one bounded capture, before any lease, worktree or manifest mutation | both call sites sit above `prepareLaneWithIsolatedPnpm`/`reserveLease` |
+| A missing token may block first capture but is not a dependency of normal resume | resume with `LINEAR_*` stripped succeeds |
+
+Both previously disclosed Tier C risks are now **fixed rather than disclosed**:
+the resume path no longer requires Linear, and each destination merges against
+its own record, so branch-accumulated entities survive.
+
+### PM review findings (bounce 1)
+
+**1. Standalone packet CLI refused pre-contract lanes.** `main()` called the
+strict gate directly, so the policy-required command failed on exactly the lanes
+it exists to preview. It now routes through the same authoritative
+capture-and-persist the dispatch path uses, then applies the identical strict
+validator. Covered by an executing child-process CLI test with `curl` stubbed.
+
+**2. Nested acceptance headings produced a false refusal.** Any heading at any
+level replaced the current section, so an `## Acceptance criteria` parent whose
+items sat under `### Functional` ended up empty -- and because the parent
+heading existed, the fallback was disabled and the contract was refused for
+"missing acceptance criteria" while the criteria sat one level down.
+`parseSections` is now nesting-aware: a line belongs to the deepest heading and
+to every ancestor, and consuming a parent consumes its descendants so the same
+text is not duplicated into residue.
+
+**3. Residue flattening altered multiline semantics.** `entry.lines.join(' ')`
+plus whitespace collapse rewrote multiline commands, fenced code, tables and
+paragraph boundaries, while this bundle claimed residue travelled verbatim.
+Lines are now preserved as authored. Measured on the real UTV2-1736 issue, the
+three safety constraints now render on their own lines instead of folded into a
+single run-on line:
 
 ```text
-lane-start.ts       581af41b 9a7e519b == worktree 9a7e519b
-lane-start.test.ts  581af41b 2b2b69d8 == worktree 2b2b69d8
+"* **No unrestricted DEFAULT partition.** ..."
+"* **No retention deletion.** Do not drop, detach or prune historical partitions. ..."
+"* **Stop before production DDL.** Do not apply schema changes to production. ..."
 ```
 
 ### Complete UTV2-1736 rendered packet
@@ -225,39 +262,41 @@ lane and is flagged for PM decision.
 
 ### Mutation testing
 
-Each defect class was reintroduced, the relevant suite run, and the source file
-restored and checked byte-identical by SHA-256 afterwards.
+Thirteen defect classes, each reintroduced alone, the owning suite run, and the
+source file restored and checked byte-identical by SHA-256 afterwards.
 
 ```text
-DETECTED      M1 codex dry-run purity branch removed
-DETECTED      M2 claude dry-run purity branch removed
-DETECTED      M3 printDryRun called with wrong arity behind an `as never` cast
-DETECTED      M4 generateExecutionPacket not imported at all
-DETECTED      M5 PREAMBLE_KEY reverted to a NUL-byte sentinel
-DETECTED      M6 stripControlChars removed from the render
-DETECTED      M7 stale-contract unmapped_sections assertion removed
-DETECTED      M8 empty-bodied heading no longer carried as residue
-NOT DETECTED  M9 lane-start capture wiring reverted to a contract-less sync file
+DETECTED  M1  codex dry-run purity branch removed
+DETECTED  M2  claude dry-run purity branch removed
+DETECTED  M3  printDryRun called with wrong arity behind an `as never` cast
+DETECTED  M4  generateExecutionPacket not imported at all
+DETECTED  M5  PREAMBLE_KEY reverted to a NUL-byte sentinel
+DETECTED  M6  stripControlChars removed from the render
+DETECTED  M7  stale-contract unmapped_sections assertion removed
+DETECTED  M8  empty-bodied heading no longer carried as residue
+DETECTED  M9a lane-start RESUME capture call site removed
+DETECTED  M9b lane-start FRESH capture call site removed
+DETECTED  M10 standalone packet CLI reverted to the strict path
+DETECTED  M11 parseSections reverted to flat (any heading replaces current)
+DETECTED  M12 residue reverted to join(' ') with whitespace collapse
 ```
 
-M5 and M6 were not detected on the first run of this battery. The
-control-character test inherited into this lane used a fixture containing no
-control characters, so its assertion held whether or not any stripping was
-applied. The replacement carries a hostile description, asserts its own fixture
-is non-vacuous before asserting anything about output, and passes the rendered
-prompt to `spawnSync` as a real argv element.
+**M9 is now detected on both call sites**, which it was not in the previous
+bounce. `lane-start`'s `main()` is executed as a child process against a fixture
+repository; removing the resume capture fails two tests and removing the fresh
+capture fails one. The seven required properties are each asserted by an
+executing test: fresh-start capture and persistence, resume without a network
+fetch, preservation of branch sync entities, contract-hash stability across
+resume, structured refusal on conflicting contracts, zero state creation on
+capture failure, and no live-network dependency.
 
-**M9 remains undetected, and this is a known gap, not a solved problem.**
-Measured directly: reverting *both* `captureOrReadTaskContract` call sites in
-`lane-start.ts`'s `main()` to a contract-less sync file leaves the four relevant
-suites at **115 tests, 115 pass, 0 fail**. Nothing in this repository executes
-`lane-start`'s `main()`. That was true before this lane and remains true after
-it. An earlier revision of this bundle claimed "9 of 9 detected" on the strength
-of a test that exercised the extracted helper rather than the wiring; that claim
-was false and is withdrawn. Closing it honestly requires a child-process test of
-`lane-start main()` against a fixture root, which needs a preflight token, a git
-repository, worktree creation and a `pnpm install` — out of proportion to this
-lane and better done as its own increment.
+**M8 regressed during this bounce and was caught by the battery.** Making the
+parser nesting-aware meant the empty-body fixture (`## DO NOT TOUCH PRODUCTION`
+followed by `### Details`) was no longer empty -- the heading now inherits its
+subsection -- so the test silently stopped exercising the branch it named. The
+fixture was changed to a genuinely empty heading and a companion test added for
+the nested case. Recorded because a test going vacuous as a side effect of an
+unrelated fix is the failure mode this lane exists to remove.
 
 ### A control that passed while its compiler never ran
 
