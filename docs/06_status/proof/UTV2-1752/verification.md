@@ -1,27 +1,31 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: 3e7abdbbaedaa360529871b61f1ace68b45182fe
+MERGE_SHA: 7faa7a05ea795bf035fde644b0bba104bae77083
 
-> `MERGE_SHA` names the implementation commit `3e7abdbb`, which is an ancestor
+> `MERGE_SHA` names the implementation commit `7faa7a05`, which is an ancestor
 > of the PR head. This is the form `executor-result-validator.yml` requires and
 > documents: a proof may reference the implementation commit rather than its own
 > commit, because a file cannot contain its own SHA. It is rebound to the actual
 > merge SHA after merge by `ops:proof-generate --merge-sha` (run from
 > `post-merge-lane-close.yml`). It is NOT a claim that this lane has merged.
 
-Verified source SHA: `3e7abdbbaedaa360529871b61f1ace68b45182fe`
+Verified source SHA: `7faa7a05ea795bf035fde644b0bba104bae77083`
 
 This lane finishes the executor-packet transport. It does not re-derive the
 implementation: the preserved tree is ported byte-exact from the reviewed head
 and only the exact-head findings that remained are addressed.
 
-Every figure below was measured **at the PR head**, not at the SHA anchor. The
-anchor `3e7abdbb` is this lane's first implementation commit and exists only
-because a file cannot contain its own SHA; the tree there predates G8-G18 and
-its source hashes differ from the mutation baselines recorded below. An earlier
-revision of this document claimed measurement AT the anchor, which was false and
-self-contradicting; an independent review caught it. Nothing is carried
-forward from the predecessor's proof.
+Every figure below was measured **at the PR head**. The anchor is this lane's
+LATEST implementation commit `7faa7a05`, and it exists only because a file
+cannot contain its own SHA. It carries every source control this bundle
+describes, including G23-G26, so the source hashes recorded under the mutation
+battery are the hashes at the anchor.
+
+Two earlier defects in this field are recorded rather than quietly fixed. An
+early revision claimed the figures were measured AT the anchor, which was false.
+A later revision left the anchor at `3e7abdbb`, this lane's FIRST implementation
+commit, five commits stale — a reviewer checking it out saw none of the code
+described here. Nothing is carried forward from the predecessor's proof.
 
 ## ASSERTIONS:
 
@@ -42,7 +46,7 @@ forward from the predecessor's proof.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
 - [x] Each fix is load-bearing: the mutation battery was re-measured IN FULL at
-  this head by a scripted runner — 16 mutations, 16 detected, 0 survivors — and
+  this head by a scripted runner — 24 mutations, 24 detected, 0 survivors — and
   both sources restored byte-identical after every one. Every control this lane
   adds is killed by at least one mutation, including G2 and G3, which an earlier
   revision of this file correctly recorded as unproven and which M14 now kills.
@@ -66,13 +70,13 @@ forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5081 tests, 5081 pass, 0 fail, 0 skipped
+verify:static suite total    5085 tests, 5085 pass, 0 fail, 0 skipped
                              (0 `not ok` lines in the full run log)
 execution-packet suite       61 tests, 61 pass, 0 fail
-lane-start suite             50 tests, 50 pass, 0 fail
+lane-start suite             54 tests, 54 pass, 0 fail
 claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             16 of 16 DETECTED, re-measured in full at THIS head
+mutation battery             24 of 24 DETECTED, re-measured in full at THIS head
                              by a scripted runner; see the table below. Both
                              sources restored byte-identical after each
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
@@ -85,13 +89,13 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5081 tests, 5081 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
+| `pnpm verify:static` | PASS | Exit 0. 5085 tests, 5085 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS, but **does not cover this diff** | Stage of `pnpm verify:static` (exit 0). `tsconfig.json` has `files: []` and no project reference covering `scripts/`, so NONE of this lane's eight changed source files are type-checked. This is why a `.heading` access on a `string` shipped green. `tsconfig.json` is not in this lane's `file_scope_lock`; reported, not fixed. |
 | `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 61 tests, 0 failures. |
-| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 50 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 54 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +24 | 5057 at the preserved head to 5081 here. The delta is exactly G1-G18, G2b/G2c, G22, and the three end-to-end readmission tests G19/G20/G21 — and nothing else. |
+| Test delta | +28 | 5057 at the preserved head to 5085 here: G1-G18, G2b/G2c, G22, the three end-to-end readmission tests G19/G20/G21, and the four round-5 controls G23-G26. Derived by `measure.py`, not typed — enumerating the additions by hand here is what went stale four times. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -200,7 +204,7 @@ Measured at the head this bundle describes, by the command shown:
 
 ```text
 $ git diff --numstat origin/main...HEAD -- scripts/ops/
-  8 files, 5087 insertions(+), 41 deletions(-)
+  8 files, 5294 insertions(+), 41 deletions(-)
 ```
 
 Two notes, both from review findings:
@@ -309,11 +313,19 @@ Both matched after every mutation.
 | M11 | `resolveReadmissionContract` captures on the readmission path too | `lane-start.ts` | `G20`, `G4` |
 | M12 | readmission resolves the contract against ROOT only (finding 1, ordering half) | `lane-start.ts` | `F5`, `G19`, `G20`, `G21` |
 | M13 | finding 1 restored: control's sync record written over the branch's via `writeFileSync`/`readFileSync` | `lane-start.ts` | `G19`, `G20` |
-| M14 | offline reuse disabled — a valid contract at a root is never reused | `execution-packet.ts` | 7 tests, including `G2`, `G20`, `G21`, `G2b` |
+| M14 | offline reuse disabled — a valid contract at a root is never reused | `execution-packet.ts` | 8 tests, including `G2`, `G20`, `G21`, `G25` |
 | M15 | `TaskContractConflictError` throw removed (disagreement no longer fails closed) | `execution-packet.ts` | `F1`, `G19`, `G2c`, `lane-start main() refuses two different valid contracts instead of choosing one` |
-| M16 | `persistTaskContractToRoots` merges every destination against `roots[0]` | `execution-packet.ts` | `F5b`, `lane-start main() persists one contract to both roots, merging each against its own record` |
+| M16 | `persistTaskContractToRoots` merges every destination against `roots[0]` | `execution-packet.ts` | `F5b`, `G20`, `lane-start main() persists one contract to both roots, merging each against its own record` |
+| R2b | finding 1's RECORD half restored: control's whole sync file copied over the branch's AFTER the persist | `scripts/ops/lane-start.ts` | `G20` |
+| R9 | `contract_source` hardcoded to `'lane-worktree'` | `scripts/ops/lane-start.ts` | `G23`, `G25`, `G26` |
+| R10 | `contract_fetched` hardcoded to `false` | `scripts/ops/lane-start.ts` | `G23`, `G26` |
+| R13 | the fresh-lane persist writes to no root at all | `scripts/ops/lane-start.ts` | `G26` |
+| R14 | the resume persist drops the worktree destination | `scripts/ops/lane-start.ts` | `G25` |
+| R16 | the refusal swaps `control_contract_hash` and `worktree_contract_hash` | `scripts/ops/lane-start.ts` | `G19` |
+| R18 | `linearTaskToken()` returns `''` unconditionally | `scripts/ops/lane-start.ts` | `G24`, `G26` |
+| R21 | `buildSyncYmlWithTaskContract` defaults `entities.issues` to `[]` | `scripts/ops/execution-packet.ts` | `G26` |
 
-**16 mutations, 16 detected, 0 survivors.**
+**24 mutations, 24 detected, 0 survivors.**
 
 Reading notes, so no row is read as stronger than it is:
 
@@ -546,7 +558,11 @@ identically, so a future tab-specific special case fails. Narrowing this
 correctly needs real list-nesting state in `sectionItems`, which is a change of
 scope rather than a fix; it is disclosed here, not silently kept.
 
-### Running count of my own vacuous controls
+### Running count of my own vacuous controls (as of the THIRD round)
+
+SUPERSEDED BY THE FOURTH ROUND — the current count is **thirteen**, in
+"Fourth independent review" below. This section is left as it stood so the
+growth of the count is legible rather than quietly rewritten.
 
 Nine, across three review rounds. Three vacuous assertions (G1's original form,
 G10's first rewrite, the G9/G10 structural halves), four source-text greps
@@ -561,10 +577,78 @@ fixture and an unobservable field all share the property that they pass whether
 or not the code is correct. The only reliable detector has been executing the
 mutation the control names and watching what dies.
 
-Two of the three rounds found a defect in the control the *previous* round had
+Two of the three rounds (three of four, after the round below) found a defect in the control the *previous* round had
 just installed. That is the strongest single statement this bundle can make
 about its own reliability, and it is the reason no round of this lane treats a
 clean review as a formality.
+
+## Fourth independent review — eight surviving mutations, and the P1 was narrower than claimed
+
+A fourth independent review ran a **21-mutation battery** against this head in
+its own worktree, reproducing every suite total and the diff stat exactly, and
+confirming that G19/G20/G21 are honest end-to-end tests (it verified that
+`ROOT` genuinely rebinds to the throwaway repo, and that G19 exits non-zero for
+the reason it claims rather than incidental fixture breakage).
+
+It then found **eight mutations this bundle's own battery had not thought to
+run, all surviving**. The claim "16 mutations, 16 detected, 0 survivors" was
+true of those 16 and false of the code. Two of the eight are defects in
+controls the *previous* round installed.
+
+| Survivor | What it reintroduced | Now killed by |
+|---|---|---|
+| R2b | finding 1's RECORD half: control's whole sync file copied over the branch's after the persist, destroying entities accumulated on the branch — and `metadataPaths` commits the loss onto the branch | `G20` |
+| R9 | `contract_source` hardcoded — the field added last round to make root precedence observable was itself constant-satisfiable | `G23`, `G25`, `G26` |
+| R10 | `contract_fetched` hardcoded `false` | `G23`, `G26` |
+| R13 | the fresh-lane persist writing to no root — a new lane gets no `.ops/sync/<ID>.yml` at all | `G26` |
+| R14 | the resume persist dropping its worktree destination | `G25` |
+| R16 | the refusal's two hashes swapped, so an operator reconciling a conflict is told the branch's hash is control's | `G19` |
+| R18 | `linearTaskToken()` returning `''` unconditionally | `G24`, `G26` |
+| R21 | `entities.issues` defaulting to `[]`, so a new lane's sync record omits its own issue ID | `G26` |
+
+### What each fix actually changed
+
+- **The readmission fixture seeded byte-identical records at both roots.** A
+  clobber of one by the other was therefore invisible, and G19's title claim
+  "and never overwrites the branch copy" was only ever checked through a run
+  that refuses *before* reaching the write. Each root now carries a
+  distinguishable entity, and G20 asserts the branch's entity survives in the
+  working copy **and** in the committed tree — which is what the loss ships.
+- **`contract_source` / `contract_fetched` were observed at one value only.**
+  G20/G21 could only ever see `lane-worktree` and `false`. G23 drives a real
+  capture through an injected runner; G25 observes `control-checkout`; G26
+  observes `linear-capture` end-to-end. A field a control can only see one
+  value of is not pinned by that control.
+- **The fresh-admission path — the most common one in production — had no
+  successful end-to-end test at all.** Every fresh-lane fixture was driven only
+  to a refusal. G26 admits a lane holding no contract at any root, with `curl`
+  stubbed on the fixture PATH so the capture is served locally.
+- **The remaining readmission shape had no test.** "A branch carrying none
+  still inherits control's copy" was asserted in a source comment only. G25
+  covers it, and it is also the only shape in which the resume persist's
+  worktree destination is observable.
+
+### Finding 1 is narrower than this bundle claimed
+
+Its **contract** half is closed by the conflict gate: two differing valid
+contracts fail closed, so precedence cannot serve a stale contract to a lane.
+Its **record** half was still reintroducible at this head (R2b). Earlier
+revisions of this bundle did not make that distinction and should have.
+
+### One vacuous control found by me this round, before the mutation ran
+
+My first attempt at G26 seeded the control sync record, so the fresh-lane
+persist had nothing observable to add and R13 **still survived it**. The test
+passed and proved nothing. It was caught by executing the mutation against it,
+not by reading it — the same detector that has caught every other instance.
+
+### Running count
+
+Vacuous or unpinned controls of my own, across four review rounds: **THIRTEEN**.
+**Nine were found by independent reviewers, not by me.** Three of the four
+rounds found a defect in a control the previous round had just installed. The
+count is kept because it is the most honest single statement this bundle can
+make about the reliability of its own claims.
 
 ### Residual risk
 

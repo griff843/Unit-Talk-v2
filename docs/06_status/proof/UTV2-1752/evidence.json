@@ -8,8 +8,8 @@
   "status": "changes_in_progress",
   "generated_at": "2026-08-25T18:40:00Z",
   "sha_binding": {
-    "verified_source_sha": "3e7abdbbaedaa360529871b61f1ace68b45182fe",
-    "verified_source_note": "Implementation commit for this lane, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. Figures in this bundle were measured at the PR HEAD, not at this SHA: the tree here predates G8-G18 and its source hashes differ from the mutation baselines recorded under mutation_testing. An earlier revision claimed measurement at this SHA, which was false.",
+    "verified_source_sha": "7faa7a05ea795bf035fde644b0bba104bae77083",
+    "verified_source_note": "This lane's LATEST implementation commit, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. It carries every source control this bundle describes (through G26), so the mutation baselines recorded under mutation_testing are the hashes at this SHA. Two earlier defects in this field are recorded rather than hidden: an early revision claimed the figures were measured AT the anchor (false), and a later one left the anchor five commits stale at 3e7abdbb, so a reviewer checking it out saw none of the described code.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -45,12 +45,12 @@
       "codex-exec.test.ts": "55f220781c0639857800210373eb497df9b056716827c6987c5d56fbf9c166f5",
       "execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
       "execution-packet.test.ts": "7e6b2ed2e38bf45e51f607c7f381de63a0b95eb052112e61676af94e1e694ec5",
-      "lane-start.ts": "6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c",
-      "lane-start.test.ts": "c20ba136f15f3784e12e8081a526bd76722363f0560d767784a41795b9a3e959"
+      "lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560",
+      "lane-start.test.ts": "e2536f843a4e70f77a4c4b37631fc7cb561337800d1d6305a909d1ccfe8bfd47"
     }
   },
   "scope": {
-    "substantive_diff_stat": "scripts/ops: 8 files, 5087 insertions(+), 41 deletions(-) (git diff --numstat origin/main...HEAD -- scripts/ops/, measured at the head this bundle describes; the whole-diff total is deliberately not quoted because it counts this bundle)",
+    "substantive_diff_stat": "scripts/ops: 8 files, 5294 insertions(+), 41 deletions(-) (git diff --numstat origin/main...HEAD -- scripts/ops/, measured at the head this bundle describes; the whole-diff total is deliberately not quoted because it counts this bundle)",
     "diff_stat_note": "The whole-diff insertion total is deliberately not quoted: it counts this proof bundle, so recording it would change it."
   },
   "static_proof": {
@@ -58,24 +58,33 @@
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. For this lane that is a gap, not an exemption - see runtime_proof.test_db.",
     "verify_static_suite": {
       "command": "pnpm verify:static",
-      "tests": 5077,
-      "pass": 5077,
+      "exit_code": 0,
+      "tests": 5085,
+      "pass": 5085,
       "fail": 0,
       "skipped": 0,
-      "exit_code": 0,
-      "note": "Totals summed across the complete run log, not a tail. 0 `not ok` lines."
+      "not_ok_lines": 0,
+      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
     },
     "execution_packet_suite": {
       "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
-      "tests": 60,
-      "pass": 60,
-      "fail": 0
+      "exit_code": 0,
+      "tests": 61,
+      "pass": 61,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0,
+      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
     },
     "lane_start_suite": {
       "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
-      "tests": 47,
-      "pass": 47,
-      "fail": 0
+      "exit_code": 0,
+      "tests": 54,
+      "pass": 54,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0,
+      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -90,9 +99,10 @@
     },
     "test_delta": {
       "preserved_head": 5057,
-      "this_head": 5077,
-      "delta": 20,
-      "detail": "The delta is exactly G1-G18 plus G2b/G2c and nothing else."
+      "this_head": 5085,
+      "delta": 28,
+      "derived_from": "scratchpad measure.py",
+      "detail": "G1-G18 plus G2b/G2c, plus G19-G22 (round 4) and G23-G26 (round 5). Enumerating the additions by name here was itself a hand-maintained figure that went stale; the suite files are the enumeration."
     },
     "vacuity_disclosure": {
       "control": "residue per-line subtraction (finding 3, residue half)",
@@ -102,9 +112,13 @@
     },
     "exec_entrypoint_suites": {
       "command": "pnpm exec tsx --test scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts",
+      "exit_code": 0,
       "tests": 46,
       "pass": 46,
-      "fail": 0
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0,
+      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
     }
   },
   "runtime_proof": {
@@ -147,11 +161,13 @@
       "title": "Readmission timing",
       "status": "FIXED",
       "covered_by": [
-        "G2",
-        "G3",
-        "G4"
+        "G19",
+        "G20",
+        "G21"
       ],
-      "mutation": "M3"
+      "mutation": "R1, R2b, R5, R12 (readmission E2E); the earlier G2/G3/G4 + M3 attribution was WRONG",
+      "attribution_correction": "This entry read covered_by G2/G3/G4, mutation M3 through four review rounds. G2/G3/G4 are unit-level and M3 is the FENCE_RE mutation, unrelated to readmission. A third review proved the readmission path had no executing control at all; a fourth found this file still asserting the disproved attribution while diff-summary.md asserted the correct one.",
+      "scope_correction": "Finding 1 is NARROWER than earlier revisions of this bundle claimed. Its CONTRACT half is closed by the conflict gate. Its RECORD half was still reintroducible at this head (mutation R2b: a post-persist copy of control sync file over the branch destroys entities accumulated on the branch, and metadataPaths commits the loss). G20 now pins it."
     },
     {
       "id": 2,
@@ -219,11 +235,11 @@
     "ready_for_pm_review": false,
     "pending": [
       "exact-head CI green at the new head",
-      "fresh EXECUTOR_RESULT at the new head",
-      "a FOURTH independent exact-head review",
+      "fresh EXECUTOR_RESULT at the new head, carrying the full executor-result/v1 header block",
+      "a FIFTH independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "Not ready for merge. A THIRD independent exact-head review returned CHANGES_REQUIRED and found that finding 1 -- this lane headline P1 -- was still guarded only by a source-text grep, and that root precedence was behaviourally inert because the field encoding it was emitted nowhere. Both are now closed end-to-end (G19/G20/G21) and the mutation battery was re-measured in full at this head. Three consecutive reviews have each found a defect the previous round installed or missed, so a clean fourth review is not treated as a formality by this bundle."
+    "blocking_on": "Not ready for merge. A FOURTH independent exact-head review returned CHANGES_REQUIRED. It ran a 21-mutation battery and found EIGHT mutations surviving that this lane's own 16-mutation battery had not thought to run -- including R2b, which reintroduces the RECORD half of this lane's headline P1 (control's sync file copied over the branch's after the persist, with the loss committed onto the branch by metadataPaths) with every test green. Two of the eight were defects in controls the THIRD round installed. All eight are now killed by executed mutations, and the finding-1 attribution in this file -- which had asserted the disproved G2/G3/G4 + M3 through four rounds while diff-summary.md asserted the correct one -- is corrected and generated rather than typed. Three of four rounds have found a defect the previous round installed or missed, so a clean fifth review is not treated as a formality by this bundle."
   },
   "review_threads": [
     {
@@ -265,11 +281,11 @@
     "runner": "scratchpad battery.py (three-round battery, re-measured in full at this head)",
     "baselines": {
       "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
-      "scripts/ops/lane-start.ts": "6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c"
+      "scripts/ops/lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560"
     },
     "restore_verified": "sha256 equality after every mutation",
-    "mutations": 16,
-    "detected": 16,
+    "mutations": 24,
+    "detected": 24,
     "undetected": [],
     "battery": [
       {
@@ -415,6 +431,7 @@
           "G2",
           "G20",
           "G21",
+          "G25",
           "G2b",
           "G3 (inversion)",
           "lane-start main() completes an offline resume without corrupting the lane contract",
@@ -438,10 +455,80 @@
         "intended_target": "F5b (per-destination merge)",
         "tests_killed": [
           "F5b",
+          "G20",
           "lane-start main() persists one contract to both roots, merging each against its own record"
+        ]
+      },
+      {
+        "id": "R9",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "contract_source hardcoded lane-worktree",
+        "tests_killed": [
+          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
+          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R10",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "contract_fetched hardcoded false",
+        "tests_killed": [
+          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R13",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "fresh persist writes to no root",
+        "tests_killed": [
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R14",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "resume persist drops the worktree root",
+        "tests_killed": [
+          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree"
+        ]
+      },
+      {
+        "id": "R16",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "refusal hash labels swapped",
+        "tests_killed": [
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy"
+        ]
+      },
+      {
+        "id": "R18",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "linearTaskToken always empty",
+        "tests_killed": [
+          "G24: linearTaskToken reads a configured token, and LINEAR_API_TOKEN wins",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R21",
+        "file": "scripts/ops/execution-packet.ts",
+        "intended_target": "entities.issues default emptied",
+        "tests_killed": [
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R2b",
+        "file": "scripts/ops/lane-start.ts",
+        "intended_target": "clobber branch sync record via writeFileSync after persist",
+        "tests_killed": [
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout"
         ]
       }
     ],
-    "note": "Every row was re-executed against THIS head. Earlier revisions of this bundle carried rows and baselines measured at a previous head; three consecutive reviews found figures in this bundle that belonged to a different tree."
+    "note": "Every row was re-executed against THIS head. Earlier revisions of this bundle carried rows and baselines measured at a previous head; three consecutive reviews found figures in this bundle that belonged to a different tree.",
+    "round_5_note": "The R-series rows are the eight mutations an independent fourth review found SURVIVING this lane own 16-mutation battery. They are carried here because a battery is only as honest as the mutations it did not think to run: this bundle claimed \"16 detected, 0 survivors\" and that claim was true of its own 16 and false of the code."
   }
 }
