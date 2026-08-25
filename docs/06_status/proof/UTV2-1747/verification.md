@@ -1,8 +1,8 @@
 # PROOF: UTV2-1747
 
-MERGE_SHA: 87372863beb8a974e3ef9424ab1ecebf2ad28f86
+MERGE_SHA: 8ef502365d71938150b05000e16ee0f8f250c171
 
-Verified source SHA: `87372863beb8a974e3ef9424ab1ecebf2ad28f86`
+Verified source SHA: `8ef502365d71938150b05000e16ee0f8f250c171`
 
 The executor packet layer shipped with tests that could not observe it. This
 lane does not change what the packet does; it makes the packet's behaviour
