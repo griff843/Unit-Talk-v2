@@ -15,7 +15,12 @@ This lane finishes the executor-packet transport. It does not re-derive the
 implementation: the preserved tree is ported byte-exact from the reviewed head
 and only the exact-head findings that remained are addressed.
 
-Every figure below was measured at the verified source SHA. Nothing is carried
+Every figure below was measured **at the PR head**, not at the SHA anchor. The
+anchor `3e7abdbb` is this lane's first implementation commit and exists only
+because a file cannot contain its own SHA; the tree there predates G8-G18 and
+its source hashes differ from the mutation baselines recorded below. An earlier
+revision of this document claimed measurement AT the anchor, which was false and
+self-contradicting; an independent review caught it. Nothing is carried
 forward from the predecessor's proof.
 
 ## ASSERTIONS:
@@ -27,7 +32,8 @@ forward from the predecessor's proof.
   extraction by per-line ownership. A recognized nested section reaches exactly
   one field and appears exactly once in the rendered packet.
 - [x] Finding 4 (P2) FIXED — this bundle is regenerated. Every count,
-  mutation summary and status was measured at the verified source SHA; no
+  mutation summary and status was measured at the PR head (see the note above
+  on why the SHA anchor is not the measurement point); no
   figure or unresolved-defect claim is carried over from the predecessor.
 - [x] Finding 2 (P1) SATISFIED BY CI — `pnpm test:db` requires the
   staging-backed environment and is produced by CI, then validated inside the
@@ -54,13 +60,13 @@ forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5071 tests, 5071 pass, 0 fail, 0 skipped
+verify:static suite total    5077 tests, 5077 pass, 0 fail, 0 skipped
                              (0 `not ok` lines in the full run log)
-execution-packet suite       57 tests, 57 pass, 0 fail
-lane-start suite             44 tests, 44 pass, 0 fail
+execution-packet suite       60 tests, 60 pass, 0 fail
+lane-start suite             47 tests, 47 pass, 0 fail
 claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             11 of 11 mutations DETECTED (M1-M10 plus M4b); see
+mutation battery             15 of 15 mutations DETECTED across two rounds; see
                              the mutation table below for exact kill targets
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
                              proof (staging only)" and validated inside the required
@@ -72,13 +78,13 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5071 tests, 5071 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. |
+| `pnpm verify:static` | PASS | Exit 0. 5077 tests, 5077 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
-| `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
-| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 57 tests, 0 failures. |
-| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 44 tests, 0 failures. |
+| `pnpm type-check` | PASS, but **does not cover this diff** | Stage of `pnpm verify:static` (exit 0). `tsconfig.json` has `files: []` and no project reference covering `scripts/`, so NONE of this lane's eight changed source files are type-checked. This is why a `.heading` access on a `string` shipped green. `tsconfig.json` is not in this lane's `file_scope_lock`; reported, not fixed. |
+| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 60 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 47 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +14 | 5057 at the preserved head to 5071 here. The delta is exactly G1-G14 and nothing else. |
+| Test delta | +20 | 5057 at the preserved head to 5077 here. The delta is exactly G1-G18 plus G2b/G2c and nothing else. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -214,10 +220,26 @@ contradictory, silently widened work order.
 Lengthening the list would not have been a fix. `non goals` matches by PREFIX,
 so a flat list of keys cannot even express its matching rule, and any restated
 list can drift again the next time a field is added. Extraction and reservation
-now both read one table, `CONTRACT_FIELD_SPECS`, and every extraction site goes
-through `fieldSpec()` rather than naming heading literals. `G8` fails if a
-`sectionLines` call ever passes an inline heading literal again — the drift
-itself is now a test failure, not a review-time catch.
+now both read one table, `CONTRACT_FIELD_SPECS`.
+
+Two claims that stood here earlier were FALSE and are corrected rather than
+deleted:
+
+- *"every extraction site goes through `fieldSpec()` rather than naming heading
+  literals"* — a **third** mirror survived at the empty-acceptance guard,
+  restating the acceptance headings with `.includes` instead of the shared match
+  rule, so an alias in the table was invisible to it and silently re-enabled the
+  legacy whole-description fallback. Found by an independent review while this
+  document asserted the mirror was gone. It now reads the table; G18 covers it,
+  parameterized over every alias so a reinstated mirror fails on whichever one
+  it omits.
+- *"`G8` fails if a `sectionLines` call ever passes an inline heading literal
+  again"* — it does not. G8 fails on a literal that DIVERGES from the table; a
+  literal that merely restates it passes. The protection is real but narrower
+  than was claimed, and the claim is corrected rather than the code, because a
+  faithful restatement is not itself the defect. What IS now impossible is the
+  drift: `sectionLines` throws on any extraction heading the reservation set
+  does not contain (G12).
 
 ### Thread 3 — the parser was half the defect
 
@@ -350,6 +372,85 @@ fix — surviving at a different indentation. G10's own fixture exhibited it whi
 asserting nothing about it. `sectionItems` now holds an indented run verbatim as
 one item; G13 covers it, G10 gained an assertion for the collapse, and M8
 isolates it.
+
+## Second independent review — a sixth vacuous control, on this lane's own P1
+
+A second independent review of head `eec27f18` returned CHANGES_REQUIRED. The
+five previously-disclosed controls were confirmed genuinely repaired. It then
+found what the first review's fixes had not touched.
+
+**The ordering half of finding 1 (P1) had no live control at all.** G2 is cited
+throughout this bundle as proving "the branch copy wins over the control
+checkout". Its fixture seeds a contract in exactly **one** root — so
+`rootIndex === 0` restates the fixture and holds under *any* precedence. Three
+separate reintroductions of the defect all passed green: reversing the root
+order in `laneContractRoots` (L2), making readmission resolve control-only (L3),
+and reversing precedence inside `resolveTaskContractAcrossRoots` (M11).
+
+One correction to the review's characterisation, verified by measurement: on a
+genuine disagreement between two valid contracts the resolver **fails closed**
+with `TaskContractConflictError` rather than preferring a root. Reversing
+precedence therefore cannot serve a stale control contract to a lane; what it
+flips is which root is *reported* as the source when the two agree. The coverage
+gap was entirely real; the harm is narrower than "the control checkout wins".
+G2b now asserts the reported source under agreement, G2c asserts the fail-closed
+refusal under disagreement (and that the refusal is symmetric, not an artefact of
+search order), and G15 asserts the root order directly. L2 → G15, M11 → G2b,
+L3 → F5.
+
+**The named harm survived at tab indentation.** `^ {4,}` matched spaces only, so
+a tab-indented block — and a tab-indented fence, which is not a fence under the
+three-space rule — fell through to the paragraph collapse. Measured on the tree
+this bundle had already declared closed:
+
+```text
+"\t# do not run in prod\n\tpnpm destroy"  ->  "# do not run in prod pnpm destroy"
+```
+
+That output is byte-identical to what the mutation which kills G13 produces. The
+section below titled "A fourth defect, found while covering the third" declared
+this class closed while it was live at a different indentation. Indentation is
+now measured in columns with tabs expanded to the next 4-column stop; G16 covers
+tabs, G17 covers the blank-line-inside-an-indented-run rule that had no test.
+
+**F5 was a new source grep testing the wrong code path.** Added by this PR and
+not disclosed, it anchored on the first `if (readmitExistingBranch) {` — the
+*resume* path's throw-guard — with an end anchor that never matched, so its
+"block" was the remaining 26KB of the file. This bundle condemned exactly that
+pattern in G4 in the same breath. It is re-anchored on the readmission metadata
+write with both anchors asserted and the slice length bounded, and it is
+disclosed as still being a source-text control.
+
+**Two claims in this document were simply false** and are corrected in place
+above: that every extraction site goes through `fieldSpec()` (a third mirror
+survived at the empty-acceptance guard), and that G8 fails on any inline heading
+literal (it fails only on one that diverges from the table).
+
+**The SHA anchor contradicted every figure.** `sha_binding` asserted that figures
+were measured at `3e7abdbb`, a tree that predates G8-G18 entirely. This is the
+first review's P1 recurring in inverted form. The anchor is now described as what
+it is: an ancestor commit used because a file cannot contain its own SHA.
+
+**`diff-summary.md` was never regenerated.** I updated its Verification section
+and left its Tests section reporting 54/54 and its prose describing the removed
+five-key `CONTRACT_FIELD_HEADINGS` list — the very defect the same document
+declares fixed two sections earlier — as current. One of three bundle files was
+stale while finding 4 claimed all three were regenerated.
+
+### Running count of my own vacuous controls
+
+Seven, across two review rounds. Three vacuous assertions (G1's original form,
+G10's first rewrite, the G9/G10 structural halves), three source-text greps
+(G8, G4, F5), and one fixture that could not fail on the property it was cited
+for (G2). **Four of the seven were found by independent reviewers, not by me.**
+
+The pattern across all seven is one thing: I asserted the *presence* of a fix
+rather than its *effect*. An occurrence count, a source grep, and a
+single-root fixture all share the property that they pass whether or not the
+code is correct. The only reliable detector has been executing the mutation the
+control names and watching what dies — which is why every control in this lane
+now carries a named mutation, and why the two that still do not (G3, and the
+negative half of F5) are stated as such rather than left to inference.
 
 ### Residual risk
 

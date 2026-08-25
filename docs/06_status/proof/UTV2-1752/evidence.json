@@ -9,7 +9,7 @@
   "generated_at": "2026-08-25T18:40:00Z",
   "sha_binding": {
     "verified_source_sha": "3e7abdbbaedaa360529871b61f1ace68b45182fe",
-    "verified_source_note": "Implementation commit for this lane. Every figure in this bundle was measured against the tree at this SHA.",
+    "verified_source_note": "Implementation commit for this lane, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. Figures in this bundle were measured at the PR HEAD, not at this SHA: the tree here predates G8-G18 and its source hashes differ from the mutation baselines recorded under mutation_testing. An earlier revision claimed measurement at this SHA, which was false.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -46,7 +46,8 @@
       "execution-packet.test.ts": "8d1c2b94cbb2b256",
       "lane-start.ts": "e5546157e9fe2283",
       "lane-start.test.ts": "9932cd876d05bd79"
-    }
+    },
+    "sha256_note": "The prefixes recorded here are the PORTED values from the preserved head d54abcbd, used to prove the four executor entrypoints were carried over byte-identically. They are NOT head values for the two files this lane changed; for those see mutation_testing.baselines."
   },
   "scope": {
     "substantive_diff_stat": "scripts/ops: 8 files, 3618 insertions(+), 41 deletions(-)",
@@ -57,8 +58,8 @@
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. For this lane that is a gap, not an exemption - see runtime_proof.test_db.",
     "verify_static_suite": {
       "command": "pnpm verify:static",
-      "tests": 5071,
-      "pass": 5071,
+      "tests": 5077,
+      "pass": 5077,
       "fail": 0,
       "skipped": 0,
       "exit_code": 0,
@@ -66,20 +67,21 @@
     },
     "execution_packet_suite": {
       "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
-      "tests": 57,
-      "pass": 57,
+      "tests": 60,
+      "pass": 60,
       "fail": 0
     },
     "lane_start_suite": {
       "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
-      "tests": 44,
-      "pass": 44,
+      "tests": 47,
+      "pass": 47,
       "fail": 0
     },
     "type_check": {
       "command": "pnpm type-check",
       "result": "PASS",
-      "via": "stage of pnpm verify:static (exit 0)"
+      "via": "stage of pnpm verify:static (exit 0)",
+      "caveat": "DOES NOT COVER THIS DIFF. tsconfig.json has files: [] and no project reference covering scripts/, so none of this lane's eight changed source files are type-checked. This is why a .heading access on a string shipped green. tsconfig.json is not in this lane file_scope_lock; reported, not fixed."
     },
     "r_level_check": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -88,9 +90,9 @@
     },
     "test_delta": {
       "preserved_head": 5057,
-      "this_head": 5071,
-      "delta": 14,
-      "detail": "The delta is exactly G1-G14 and nothing else."
+      "this_head": 5077,
+      "delta": 20,
+      "detail": "The delta is exactly G1-G18 plus G2b/G2c and nothing else."
     },
     "vacuity_disclosure": {
       "control": "residue per-line subtraction (finding 3, residue half)",
@@ -179,6 +181,27 @@
       "covered_by": [],
       "mutation": null,
       "detail": "This bundle is regenerated from measurement at the verified source SHA. Every count, mutation summary and status here was measured at that SHA; no figure or unresolved-defect claim is carried over from the predecessor's bundle."
+    },
+    {
+      "id": "review-round-2",
+      "source": "independent exact-head review of eec27f18",
+      "verdict_received": "CHANGES_REQUIRED",
+      "p1": [
+        "Ordering half of finding 1 had no live control (G2 vacuous); L2/L3/M11 all passed green."
+      ],
+      "p2": [
+        "Named harm survived at TAB indentation, undisclosed, after the bundle declared the class closed.",
+        "sha_binding claimed measurement at an anchor whose tree predates the tests being reported.",
+        "diff-summary.md was never regenerated: reported 54/54 and described the removed five-key list as current.",
+        "F5 was a new, mis-anchored source grep testing the resume path."
+      ],
+      "p3": [
+        "Third heading mirror at the empty-acceptance guard.",
+        "G8 \"any inline literal\" claim was false.",
+        "tsconfig.json does not cover scripts/ (out of scope, reported).",
+        "Blank-line-in-indented-run rule untested."
+      ],
+      "disposition": "All addressed except tsconfig.json, which is outside file_scope_lock."
     }
   ],
   "safety_posture": {
@@ -200,7 +223,7 @@
       "new independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "Not ready for merge. An independent exact-head review of 486b32c4 returned CHANGES_REQUIRED with two P1 findings (dead assertions in G9/G10; a stale measurement layer in this bundle) and four P2/P3 findings. All are addressed at the new head, which requires a fresh independent review and a new PM verdict."
+    "blocking_on": "Not ready for merge. A SECOND independent exact-head review returned CHANGES_REQUIRED, finding a sixth vacuous control on the lane own P1 plus the named harm surviving at tab indentation. All findings are addressed at the new head, which requires a THIRD independent review and a new PM verdict."
   },
   "review_threads": [
     {
@@ -240,12 +263,12 @@
   "mutation_testing": {
     "method": "Applied to a byte-verified baseline, reverted BY FILE COPY (never git checkout), every restore re-checked by sha256.",
     "baselines": {
-      "scripts/ops/execution-packet.ts": "4c13a569357e33adc56e70e79416261bfcf28e7796a9cc858886807cc0bf0fe5",
-      "scripts/ops/lane-start.ts": "64c8beb94adbad60b5decff42781d67d05e7901a4242c848c7b8976878fee60c"
+      "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
+      "scripts/ops/lane-start.ts": "5a2a801f1e89777f57cdbd2c5145739f95b13a65efae9012ccec4de6a6cc3540"
     },
     "restore_verified": true,
-    "mutations": 11,
-    "detected": 11,
+    "mutations": 15,
+    "detected": 15,
     "battery": [
       {
         "id": "M1",
@@ -375,10 +398,9 @@
     ],
     "not_proven_load_bearing": {
       "controls": [
-        "G2",
         "G3"
       ],
-      "detail": "No mutation in this battery kills G2 or G3. Stated rather than left to inference."
+      "detail": "G3 is killed only via a pre-existing LINEAR_API_TOKEN guard string that predates this lane; it asserts nothing about readmission ordering. G2 covers the offline property only \u2014 G2b/G2c/G15 carry precedence and fail-closed."
     },
     "vacuity_disclosure": [
       {
@@ -410,6 +432,52 @@
         "defect": "Grepped lane-start.ts for the shape of a ternary. Measured that G2/G3 do not catch the finding-1 defect, so this grep was the only coverage for a P1 fix.",
         "resolution": "Decision extracted to resolveReadmissionContract; G4 injects a spy and asserts it is never called on readmission and called once for a fresh lane.",
         "found_by": "author, prompted by the reviewer's finding on G8"
+      },
+      {
+        "control": "G2",
+        "defect": "Its fixture seeded a contract in exactly ONE root, so rootIndex===0 restated the fixture and held under any precedence. The ordering half of finding 1 (P1) therefore had NO live control: three separate reintroductions passed green.",
+        "resolution": "G2 annotated to claim only the offline property. G2b (both roots agree -> lane root is the reported source), G2c (roots disagree -> fail closed), G15 (root order asserted directly) added. L2/M11 now killed.",
+        "found_by": "independent reviewer"
+      },
+      {
+        "control": "F5",
+        "defect": "A source grep anchored on the FIRST `if (readmitExistingBranch) {`, which is the RESUME path throw-guard, with an end anchor that never matched \u2014 so the slice was the remaining 26KB of the file and the assertions were satisfied by the resume path. Added by this PR, undisclosed, while this bundle condemned exactly this pattern in G4.",
+        "resolution": "Re-anchored on the readmission metadata write, both anchors asserted, slice length bounded. L3 now killed. DISCLOSED: still a source-text control; G15/G2b/G2c carry the behavioural load.",
+        "found_by": "independent reviewer"
+      }
+    ],
+    "round_2": [
+      {
+        "id": "L2",
+        "mutation": "laneContractRoots order reversed (control ahead of lane worktree)",
+        "killed": [
+          "G15"
+        ],
+        "previously": "PASSED GREEN \u2014 no control existed"
+      },
+      {
+        "id": "L3",
+        "mutation": "readmission resolves control-only (worktreePath -> null)",
+        "killed": [
+          "F5"
+        ],
+        "previously": "PASSED GREEN \u2014 F5 was mis-anchored to the resume path"
+      },
+      {
+        "id": "M11",
+        "mutation": "root precedence reversed inside resolveTaskContractAcrossRoots",
+        "killed": [
+          "G2b"
+        ],
+        "previously": "PASSED GREEN \u2014 every fixture seeded one root"
+      },
+      {
+        "id": "M9prime",
+        "mutation": "third heading mirror reinstated, omitting an alias",
+        "killed": [
+          "G18"
+        ],
+        "previously": "PASSED GREEN \u2014 mirror was unguarded"
       }
     ]
   }

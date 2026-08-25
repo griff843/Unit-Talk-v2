@@ -11,6 +11,7 @@ import {
   readTaskContract,
   renderTaskContract,
   resolveTaskContractAcrossRoots,
+  TaskContractConflictError,
   type TaskContract,
 } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
@@ -20,6 +21,7 @@ import {
   fetchLinearTaskSource,
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
+  laneContractRoots,
   mirrorPreflightTokenToWorktree,
   persistLaneTaskContract,
   resolveReadmissionContract,
@@ -1050,15 +1052,28 @@ test('lane-start main() fresh-lane capture failure refuses before creating any l
 
 test('F5: readmission resolves the branch contract instead of overwriting it with the control copy', () => {
   const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
-  const blockStart = source.indexOf('if (readmitExistingBranch) {');
-  assert.notStrictEqual(blockStart, -1, 'expected a readmitExistingBranch block to exist');
-  const blockEnd = source.indexOf('\n    } else if', blockStart);
-  const block = blockEnd === -1 ? source.slice(blockStart) : source.slice(blockStart, blockEnd);
 
-  // Precondition: the block really is the readmission path and really does
-  // place metadata into the lane worktree. Without this the assertions below
-  // could pass against an empty or mis-located slice.
-  assert.match(block, /worktreeManifestDir/u, 'slice must be the readmission metadata path');
+  // This slice used to be anchored on the FIRST `if (readmitExistingBranch) {`,
+  // which is the RESUME path's throw-guard, and its end anchor never matched --
+  // so the "block" was the remaining 26KB of the file and every assertion below
+  // was satisfied by the resume path instead. An independent review found it.
+  // The slice is now anchored on the readmission METADATA write, and the
+  // anchors are asserted rather than silently falling back to the whole file.
+  const blockStart = source.indexOf('const worktreeManifestDir = path.join(worktreePath');
+  assert.notStrictEqual(blockStart, -1, 'expected the readmission metadata write to exist');
+  const blockEnd = source.indexOf('const metadataPaths = [', blockStart);
+  assert.notStrictEqual(
+    blockEnd,
+    -1,
+    'end anchor must match -- an unmatched end anchor silently widens this ' +
+      'slice to the rest of the file, which is how this test came to assert ' +
+      'against the wrong code path',
+  );
+  const block = source.slice(blockStart, blockEnd);
+  assert.ok(
+    block.length < 3000,
+    `slice must be a block, not most of the file (got ${block.length} chars)`,
+  );
 
   // The defect: the control checkout's sync file was copied wholesale over the
   // branch's, discarding a divergent authoritative contract unread.
@@ -1079,6 +1094,13 @@ test('F5: readmission resolves the branch contract instead of overwriting it wit
     /persistLaneTaskContract\(\s*issueId,\s*readmittedContract,\s*\[ROOT,\s*worktreePath\]\s*\)/u,
     'the resolved contract must be persisted to both roots, not copied',
   );
+
+  // DISCLOSED: this remains a SOURCE-TEXT control and is evadable by
+  // reformatting. The behavioural load for the ordering property it gestures
+  // at is carried by G15 (root order), G2b (branch root is the reported
+  // source) and G2c (disagreement fails closed), each of which fails under
+  // mutation. This test's remaining value is the negative assertion -- that
+  // the wholesale copy has not returned -- which has no behavioural witness.
 });
 
 test('F5b: persisting a contract merges against each destination record rather than overwriting it', () => {
@@ -1184,6 +1206,34 @@ function seedContractRoots(issueId: string): {
   return { control, worktree, branchContract };
 }
 
+/**
+ * As above, but BOTH roots carry a contract and they DIFFER. Seeding only the
+ * worktree made `rootIndex === 0` a restatement of the fixture: with one root
+ * carrying anything, that root wins under any precedence. An independent
+ * review reversed the precedence and the suite stayed green.
+ */
+function seedBothRoots(issueId: string): {
+  control: string;
+  worktree: string;
+  branchContract: TaskContract;
+  controlContract: TaskContract;
+} {
+  const f = seedContractRoots(issueId);
+  const controlContract = buildTaskContract({
+    identifier: issueId,
+    title: 'STALE control-checkout work order',
+    url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+    description:
+      '## Objective\nstale control objective\n\n## Acceptance criteria\n- stale criterion',
+  });
+  fs.writeFileSync(
+    path.join(f.control, '.ops', 'sync', `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, controlContract),
+    'utf8',
+  );
+  return { ...f, controlContract };
+}
+
 test('G2: a readmitted branch reuses its OWN contract offline, after checkout', () => {
   const issueId = 'UTV2-999953';
   const f = seedContractRoots(issueId);
@@ -1194,6 +1244,10 @@ test('G2: a readmitted branch reuses its OWN contract offline, after checkout', 
     false,
     'control checkout must start with no record for this issue',
   );
+  // NOTE: with only ONE root carrying a contract, `rootIndex === 0` below is a
+  // restatement of this fixture and holds under ANY precedence. G2b is the
+  // control that can actually fail on precedence; this test covers the offline
+  // (no-network) property, which is what its name claims.
 
   // Post-checkout ordering: worktree root ahead of control, and an EMPTY token,
   // which is what linearTaskToken() returns under containment.
@@ -1206,6 +1260,91 @@ test('G2: a readmitted branch reuses its OWN contract offline, after checkout', 
     f.branchContract.contract_hash,
     'the preserved branch contract must be reused verbatim',
   );
+});
+
+test('G2b: with BOTH roots carrying the SAME contract, the BRANCH root is the source', () => {
+  // The control G2 could not be. An independent review reversed root precedence
+  // in `resolveTaskContractAcrossRoots` and the whole lane-start suite stayed
+  // green, because every fixture seeded exactly one root -- with one root
+  // carrying anything, that root wins under any precedence.
+  //
+  // What precedence actually decides is narrower than it first appears: when
+  // the two roots DISAGREE the resolver fails closed (G2c), so order cannot
+  // serve the wrong contract. Order decides which root is REPORTED as the
+  // source when they agree, and that is what must not silently flip to the
+  // control checkout.
+  const issueId = 'UTV2-999956';
+  const f = seedContractRoots(issueId);
+  // Same contract in both roots: agreement, not conflict.
+  fs.writeFileSync(
+    path.join(f.control, '.ops', 'sync', `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, f.branchContract),
+    'utf8',
+  );
+
+  const resolved = resolveTaskContractAcrossRoots(
+    issueId,
+    [f.worktree, f.control],
+    '',
+  );
+
+  assert.equal(resolved.fetched, false, 'a branch-carried contract must touch no network');
+  assert.equal(
+    resolved.rootIndex,
+    0,
+    'the lane worktree must be the reported source, not the control checkout',
+  );
+  assert.equal(
+    resolved.contract.contract_hash,
+    f.branchContract.contract_hash,
+    'the preserved branch contract must be reused verbatim',
+  );
+});
+
+test('G2c: two DIFFERENT valid contracts fail closed rather than picking one', () => {
+  // Fail closed (core invariant 10). This is the reason root precedence cannot
+  // serve a stale control-checkout contract to a lane: on disagreement the
+  // resolver refuses outright instead of preferring either root.
+  const issueId = 'UTV2-999957';
+  const f = seedBothRoots(issueId);
+
+  assert.notEqual(
+    f.branchContract.contract_hash,
+    f.controlContract.contract_hash,
+    'the fixture is only meaningful if the two roots genuinely differ',
+  );
+
+  assert.throws(
+    () => resolveTaskContractAcrossRoots(issueId, [f.worktree, f.control], ''),
+    (error: unknown) =>
+      error instanceof TaskContractConflictError &&
+      /Refusing to choose/u.test((error as Error).message),
+    'disagreeing contracts must refuse to resolve, never silently pick a root',
+  );
+
+  // And the refusal is symmetric -- it is not an artefact of the search order.
+  assert.throws(
+    () => resolveTaskContractAcrossRoots(issueId, [f.control, f.worktree], ''),
+    TaskContractConflictError,
+    'the refusal must not depend on which root is searched first',
+  );
+});
+
+test('G15: lane contract roots put the lane worktree AHEAD of the control checkout', () => {
+  // The ordering itself, asserted directly. Reversing it in the source is the
+  // defect; an inline ternary had no witness because the only fixtures that
+  // exercised it seeded a single root.
+  const roots = laneContractRoots('/tmp/some-lane-worktree');
+  assert.deepEqual(
+    roots,
+    ['/tmp/some-lane-worktree', ROOT],
+    'the lane worktree must be searched BEFORE the control checkout',
+  );
+  assert.equal(roots[0], '/tmp/some-lane-worktree', 'the lane copy must be first');
+
+  // No worktree (fresh lane, or the control checkout itself) -> control only.
+  assert.deepEqual(laneContractRoots(null), [ROOT]);
+  assert.deepEqual(laneContractRoots(ROOT), [ROOT]);
 });
 
 test('G3 (inversion): resolving BEFORE checkout cannot serve that branch and fails closed', () => {

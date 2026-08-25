@@ -1595,6 +1595,157 @@ test('G9: a "#" line inside a fenced code block is not parsed as a heading', () 
   );
 });
 
+test('G18: the empty-acceptance fallback guard reads the SHARED table, for every alias', () => {
+  // A THIRD mirror of the acceptance headings lived beside the table, matching
+  // with `.includes` instead of the shared rule. An alias present in the table
+  // was therefore invisible to this guard, silently re-enabling the legacy
+  // whole-description fallback for a section that WAS explicitly headed --
+  // handing the executor the entire issue text as its acceptance criteria
+  // instead of failing closed on an empty one.
+  //
+  // Parameterized over the table, so a reinstated mirror fails on whichever
+  // alias it omits rather than passing until someone notices.
+  const spec = packetContractFieldSpecs().find(
+    (candidate) => candidate.headings[0] === 'acceptance criteria',
+  )!;
+  assert.ok(spec.headings.length >= 2, 'the acceptance field must carry aliases');
+
+  for (const heading of spec.headings) {
+    const description = [
+      '## Objective',
+      'ship the transport',
+      '',
+      `## ${heading}`,
+    ].join('\n');
+
+    assert.throws(
+      () =>
+        buildTaskContract({
+          identifier: 'UTV2-999970',
+          title: `empty acceptance under "${heading}"`,
+          url: 'https://linear.app/unit-talk-v2/issue/UTV2-999970',
+          description,
+        }),
+      /missing acceptance criteria/u,
+      `"${heading}" is an acceptance heading, so an EMPTY body must fail ` +
+        'closed. If this guard cannot see the alias it falls back to the whole ' +
+        'description, and the executor receives the entire issue as its ' +
+        'acceptance criteria instead of an error',
+    );
+  }
+
+  // The fallback itself still exists for genuinely unheaded legacy issues.
+  const legacy = buildTaskContract({
+    identifier: 'UTV2-999971',
+    title: 'legacy issue with no acceptance heading',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999971',
+    description: '## Objective\nship the transport\n\nsome legacy prose body',
+  });
+  assert.match(
+    legacy.acceptance_criteria.join('\n'),
+    /legacy prose body/u,
+    'an issue with NO acceptance heading must still preserve its work order',
+  );
+});
+
+test('G16: TAB-indented code is preserved, not collapsed', () => {
+  // Found by an independent review AFTER this lane declared the indented-code
+  // class closed. `^ {4,}` matched spaces only, so a tab-indented block -- and
+  // a tab-indented fence, which is not a fence by the three-space rule -- fell
+  // through to the paragraph collapse and produced output byte-identical to
+  // what the mutation that kills G13 produces.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- run the tab-indented block:',
+    '',
+    '\t# do not run in prod',
+    '\tpnpm destroy',
+    '',
+    '- and the tab-indented fence:',
+    '',
+    '\t```bash',
+    '\t# also do not run this',
+    '\tpnpm wipe',
+    '\t```',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999968',
+    title: 'Tab-indented code under a contract field',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999968',
+    description,
+  });
+
+  const criteria = contract.acceptance_criteria;
+  assert.ok(
+    criteria.some((item) => item.includes('# do not run in prod\n')),
+    'the tab-indented block must keep its newline; got ' + JSON.stringify(criteria),
+  );
+  assert.ok(
+    criteria.some((item) => item.includes('# also do not run this\n')),
+    'the tab-indented fence must keep its newline; got ' + JSON.stringify(criteria),
+  );
+  assert.doesNotMatch(
+    criteria.join('\n'),
+    /# do not run in prod pnpm destroy/u,
+    'a tab-indented comment must NEVER be collapsed onto its command',
+  );
+  assert.doesNotMatch(
+    criteria.join('\n'),
+    /# also do not run this pnpm wipe/u,
+    'a tab-indented fence must NEVER be collapsed onto its command',
+  );
+});
+
+test('G17: a blank line does not end an indented block', () => {
+  // The deliberate rule at the top of the indented-run branch had no test: an
+  // independent review removed it and the suite stayed green. A blank line
+  // inside indented code is part of that code; ending the run there splits one
+  // block into two items and reflows the remainder.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- run the block:',
+    '',
+    '    # first stanza',
+    '    pnpm one',
+    '',
+    '    # second stanza',
+    '    pnpm two',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999969',
+    title: 'Blank line inside an indented block',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999969',
+    description,
+  });
+
+  const blocks = contract.acceptance_criteria.filter((item) =>
+    item.includes('# first stanza'),
+  );
+  assert.equal(
+    blocks.length,
+    1,
+    'the indented block must survive as ONE item; got ' +
+      JSON.stringify(contract.acceptance_criteria),
+  );
+  assert.ok(
+    blocks[0]!.includes('# second stanza'),
+    'the blank line must not have split the block in two',
+  );
+  assert.doesNotMatch(
+    contract.acceptance_criteria.join('\n'),
+    /# second stanza pnpm two/u,
+    'the tail of a split block must not be reflowed into a paragraph',
+  );
+});
+
 test('G14: prefix heading matching stops at a word boundary', () => {
   // `non goals` matches by prefix, and the match was a bare startsWith, so
   // `## Non goalsetting framework` -- an unrelated section -- was captured as

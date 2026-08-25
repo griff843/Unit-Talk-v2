@@ -229,6 +229,23 @@ export interface LaneContractResolution {
 }
 
 /**
+ * Roots to search for the lane's task contract, in precedence order.
+ *
+ * The lane's OWN copy must come first: it is the one the executor reads, and a
+ * readmitted branch carries a contract the control checkout may not have (or
+ * may have an older copy of). Reversing this silently serves main's contract to
+ * a branch -- the second half of the finding-1 defect, and the half that had no
+ * control until an independent review reversed the order and watched the suite
+ * stay green.
+ *
+ * It is a named function so the ORDER itself can be asserted, rather than being
+ * an inline ternary whose only witness is a fixture that seeds one root.
+ */
+export function laneContractRoots(worktreePath: string | null): string[] {
+  return worktreePath && worktreePath !== ROOT ? [worktreePath, ROOT] : [ROOT];
+}
+
+/**
  * Resolve the lane's work order WITHOUT making Linear a dependency of every
  * resume. A lane that already holds a valid contract reuses it verbatim; only a
  * lane with no valid contract anywhere performs one bounded capture. That
@@ -245,8 +262,7 @@ export function resolveLaneTaskContract(
   runner: typeof spawnSync = spawnSync,
 ): LaneContractResolution {
   // The lane's own copy wins when both agree: it is the one the executor reads.
-  const roots =
-    worktreePath && worktreePath !== ROOT ? [worktreePath, ROOT] : [ROOT];
+  const roots = laneContractRoots(worktreePath);
   const resolved = resolveTaskContractAcrossRoots(issueId, roots, token, runner);
   const source: LaneContractResolution['source'] = resolved.fetched
     ? 'linear-capture'

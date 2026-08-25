@@ -16,7 +16,7 @@ The branch contains two distinguishable populations:
 | Population | Files | Origin |
 |---|---|---|
 | **Ported** | `execution-packet.ts`, `claude-exec.ts`, `codex-exec.ts` and their tests (except the additions listed below) | byte-preserved from `d54abcbd`, re-applied onto current `main` |
-| **New in 1752** | the `lane-start.ts` readmission edits; the reserved-descendant logic in `execution-packet.ts`; test cases G1–G5 | authored in this lane to close findings 1 and 3 |
+| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases G1–G18 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
 
 Per-file `sha256` prefixes for both populations are recorded in
 `evidence.json → provenance`.
@@ -67,7 +67,7 @@ Nested sections whose heading is a reserved contract field are no longer
 double-counted as residue of their ancestor.
 
 - `SectionOccurrence` gains `lineOwners: number[]`, populated during `parseSections`.
-- `CONTRACT_FIELD_HEADINGS` names the reserved keys (`objective`, `required outcome`, `acceptance criteria`, `acceptance criterion`, `exit criteria`).
+- `CONTRACT_FIELD_SPECS` is the single table naming every contract field's headings and whether it matches by prefix. It replaced a `CONTRACT_FIELD_HEADINGS` constant whose five hardcoded keys (`objective`, `required outcome`, `acceptance criteria`, `acceptance criterion`, `exit criteria`) WERE the defect: they omitted `non goals`, `guardrails` and `required evidence`, and a flat list cannot express `non goals`' prefix matching at all. Extraction, reservation, the empty-acceptance guard and the heading-match rule all read it; `sectionLines` throws on any extraction heading it does not contain.
 - `sectionLines` subtracts reserved descendants (and their nested lines) from the ancestor's collected lines, unless the descendant claims its own key.
 - `unmappedSections` snapshots `taken` as `consumedByField` **before** the ancestor-suppression loop, then subtracts claimed descendant lines per line rather than per section.
 
@@ -77,15 +77,27 @@ No 1752 edits. Present so the packet path is whole.
 
 ### Tests
 
-- `execution-packet.test.ts`: adds G1, G5, and the thread regressions G6-G11. **54/54 pass.**
-- `lane-start.test.ts`: adds `resolveTaskContractAcrossRoots` import, a `seedContractRoots()` helper, and G2/G3/G4. **44/44 pass.**
+- `execution-packet.test.ts`: adds G1, G5, the thread regressions G6–G11, and
+  G12–G14 plus G16–G18 from two rounds of independent review. **60/60 pass.**
+- `lane-start.test.ts`: adds `resolveTaskContractAcrossRoots` /
+  `laneContractRoots` / `resolveReadmissionContract` imports, the
+  `seedContractRoots()` and `seedBothRoots()` helpers, and G2/G2b/G2c/G3/G4/G15.
+  **47/47 pass.**
+- `claude-exec.test.ts` 12/12, `codex-exec.test.ts` 34/34 — ported, unchanged.
 
 ### Proof bundle — Finding 4 (P2)
 
-`verification.md` and `evidence.json` are regenerated from measurement at the
-verified source SHA. Every count, mutation summary, and status is measured
-here; no figure or unresolved-defect claim is carried over from the
+All three bundle files are regenerated from measurement **at the PR head**, not
+at the SHA anchor. The anchor `3e7abdbb` is the lane's first implementation
+commit and exists only because a file cannot contain its own SHA; it is NOT
+where the figures were measured, and an earlier revision of this bundle wrongly
+said it was. No figure or unresolved-defect claim is carried over from the
 predecessor's bundle.
+
+An earlier revision of THIS file was also left stale while the other two were
+updated — it reported 54/54, described the removed five-key `CONTRACT_FIELD_HEADINGS`
+list as current, and contradicted its own Verification section. That was found
+by an independent review, not by me.
 
 ---
 

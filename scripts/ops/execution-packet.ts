@@ -471,6 +471,27 @@ function headingMatches(key: string, value: string, prefix: boolean): boolean {
 }
 
 /**
+ * Leading indentation width in columns, expanding tabs to the next 4-column
+ * stop as CommonMark does.
+ *
+ * Matching ` {4,}` alone missed tab-indented code entirely, so a tab-indented
+ * block -- including a tab-indented fence, which is not a fence by the
+ * three-space rule -- fell through to the paragraph collapse and produced
+ * `# do not run in prod pnpm destroy`: the comment swallowing the command,
+ * byte-identical to what the mutation that kills G13 produces. Found by an
+ * independent review AFTER this bundle declared the class closed.
+ */
+function indentWidth(rawLine: string): number {
+  let width = 0;
+  for (const ch of rawLine) {
+    if (ch === ' ') width += 1;
+    else if (ch === '\t') width += 4 - (width % 4);
+    else break;
+  }
+  return width;
+}
+
+/**
  * The fence state machine, in ONE place. It was duplicated verbatim in
  * `parseSections` and `sectionItems` with no test guarding their equivalence --
  * the same "restating a list beside the thing it must mirror" antipattern that
@@ -736,7 +757,8 @@ function sectionItems(lines: string[]): string[] {
   };
 
   for (const rawLine of lines) {
-    const isIndentedCode = /^ {4,}\S/u.test(rawLine);
+    const isIndentedCode =
+      rawLine.trim() !== '' && indentWidth(rawLine) >= 4;
     if (indented.length > 0) {
       // A blank line does not end an indented block; a non-indented,
       // non-blank line does.
@@ -815,8 +837,16 @@ export function buildTaskContract(
       consumed,
     ),
   );
+  // A THIRD mirror of the heading list lived here, restating the acceptance
+  // spec beside the table and using `.includes` rather than the shared match
+  // rule -- so an alias added to the table was silently not recognised here,
+  // re-enabling the legacy whole-description fallback. Found by an independent
+  // review while this bundle claimed "the mirror is gone".
+  const acceptanceSpec = fieldSpec('acceptance criteria');
   const hasAcceptanceHeading = parsed.occurrences.some((occurrence) =>
-    ['acceptance criteria', 'acceptance criterion'].includes(occurrence.key),
+    acceptanceSpec.headings.some((heading) =>
+      headingMatches(occurrence.key, normalizeHeading(heading), acceptanceSpec.prefix),
+    ),
   );
   const exitCriteria = sectionItems(
     sectionLines(
