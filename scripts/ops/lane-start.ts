@@ -33,6 +33,7 @@ import {
   resolveActiveLaneManifests,
   type ActiveLaneDiscovery,
   readManifest,
+  readConfiguredEnvValue,
   relativeToRoot,
   requireIssueId,
   requireVerificationTarget,
@@ -58,6 +59,20 @@ import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js'
 export { checkConcurrencyLimits } from './concurrency-rules.js';
 export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rules.js';
 import { checkConcurrencyLimits } from './concurrency-rules.js';
+import {
+  persistTaskContractToRoots,
+  resolveTaskContractAcrossRoots,
+  TaskContractConflictError,
+  type TaskContract,
+} from './execution-packet.js';
+export { captureOrReadTaskContract, fetchLinearTaskSource } from './execution-packet.js';
+// One conflict rule for the whole system. lane-start and the dispatch packet
+// path previously carried separate copies; only lane-start's refused.
+export {
+  readValidTaskContractAt,
+  syncContentForDestination,
+  TaskContractConflictError as LaneContractConflictError,
+} from './execution-packet.js';
 import {
   BOOTSTRAP_AUTHORIZATIONS_PATH,
   buildBootstrapAdmissionReceipt,
@@ -195,26 +210,59 @@ function isDocsOnlyFastPathFile(filePath: string): boolean {
   );
 }
 
-function writeSyncFile(issueId: string, content: string): void {
-  const syncDir = path.join(ROOT, '.ops', 'sync');
-  fs.mkdirSync(syncDir, { recursive: true });
-  fs.writeFileSync(path.join(syncDir, `${issueId}.yml`), content, 'utf8');
+function linearTaskToken(): string {
+  return (
+    readConfiguredEnvValue('LINEAR_API_TOKEN') ||
+    readConfiguredEnvValue('LINEAR_API_KEY') ||
+    ''
+  );
 }
 
-function buildSyncYml(issueId: string): string {
-  return [
-    'version: 1',
-    'approval:',
-    '  allow_multiple_issues: false',
-    '  skip_sync_required: false',
-    'entities:',
-    '  issues:',
-    `    - ${issueId}`,
-    '  findings: []',
-    '  controls: []',
-    '  proofs: []',
-    '',
-  ].join('\n');
+/**
+ * Where a lane's contract came from. `linear-capture` is the only value that
+ * means the network was touched.
+ */
+export interface LaneContractResolution {
+  contract: TaskContract;
+  fetched: boolean;
+  source: 'lane-worktree' | 'control-checkout' | 'linear-capture';
+}
+
+/**
+ * Resolve the lane's work order WITHOUT making Linear a dependency of every
+ * resume. A lane that already holds a valid contract reuses it verbatim; only a
+ * lane with no valid contract anywhere performs one bounded capture. That
+ * capture is the sole network call, and it happens before any lease, worktree
+ * or manifest mutation, so a Linear failure leaves lane state untouched.
+ *
+ * Delegates to the shared resolver so lane-start and the dispatch packet path
+ * cannot drift apart on what counts as a conflict.
+ */
+export function resolveLaneTaskContract(
+  issueId: string,
+  worktreePath: string | null,
+  token: string,
+  runner: typeof spawnSync = spawnSync,
+): LaneContractResolution {
+  // The lane's own copy wins when both agree: it is the one the executor reads.
+  const roots =
+    worktreePath && worktreePath !== ROOT ? [worktreePath, ROOT] : [ROOT];
+  const resolved = resolveTaskContractAcrossRoots(issueId, roots, token, runner);
+  const source: LaneContractResolution['source'] = resolved.fetched
+    ? 'linear-capture'
+    : roots[resolved.rootIndex] === ROOT
+      ? 'control-checkout'
+      : 'lane-worktree';
+  return { contract: resolved.contract, fetched: resolved.fetched, source };
+}
+
+/** Persist one contract to every root, each merged against its own record. */
+export function persistLaneTaskContract(
+  issueId: string,
+  contract: TaskContract,
+  roots: string[],
+): void {
+  persistTaskContractToRoots(issueId, contract, roots);
 }
 
 export function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
@@ -914,6 +962,16 @@ function main(): void {
         throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
       }
 
+      // Resume must not depend on Linear. The lane already holds its work order;
+      // re-fetching it on every resume made a reachable Linear a precondition
+      // for continuing existing work, and could swap in a different contract
+      // hash while the executor was already acting on the old one.
+      const contractResolution = resolveLaneTaskContract(
+        issueId,
+        worktreePath,
+        linearTaskToken(),
+      );
+
       const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
       const lease = reserveLease({
         issue_id: issueId,
@@ -935,6 +993,9 @@ function main(): void {
       }
       manifest.execution_location = setup.execution_location;
       writeManifest(manifest);
+      // Each destination merges against its OWN record, so the branch's
+      // accumulated entities, findings, controls and proofs survive.
+      persistLaneTaskContract(issueId, contractResolution.contract, [ROOT, worktreePath]);
       emitJson({
         ok: true,
         code: 'lane_resumed',
@@ -990,6 +1051,24 @@ function main(): void {
       }
       modelRouting = resolution.model_routing!;
     }
+
+    // One bounded capture, before any lease, worktree or manifest mutation, so a
+    // Linear failure leaves lane state completely unchanged. A lane that already
+    // holds a valid contract reuses it and touches no network.
+    //
+    // Readmission deliberately captures NOTHING here. The preserved branch may
+    // carry its OWN authoritative contract, and that copy only becomes visible
+    // once the worktree exists. Resolving now can see only the control
+    // checkout, so on a branch whose contract control does not have it would
+    // fetch a NEWER one from Linear and persist it to ROOT -- after which the
+    // post-checkout resolution sees a contract at BOTH roots and, if they
+    // differ, fails closed as lane_contract_conflict against the branch's own
+    // valid record. It would also make readmission require the network for a
+    // branch that already carries everything it needs. Fresh lanes keep the
+    // early bounded capture unchanged.
+    const contractResolution = readmitExistingBranch
+      ? null
+      : resolveLaneTaskContract(issueId, null, linearTaskToken());
 
     if (readmitExistingBranch) {
       if (!branchContainsExactIssue(branch, issueId)) {
@@ -1138,7 +1217,6 @@ function main(): void {
           throw new Error(`T1 lane ${issueId} has no expected_proof_paths declared`);
         }
         writeManifest(manifest);
-        writeSyncFile(issueId, buildSyncYml(issueId));
 
         if (git(['branch', '--show-current']).stdout !== 'main') {
           throw new Error('root checkout changed branches during readmission');
@@ -1147,9 +1225,24 @@ function main(): void {
         const worktreeManifestDir = path.join(worktreePath, 'docs', '06_status', 'lanes');
         fs.mkdirSync(worktreeManifestDir, { recursive: true });
         fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));
-        const worktreeSyncDir = path.join(worktreePath, '.ops', 'sync');
-        fs.mkdirSync(worktreeSyncDir, { recursive: true });
-        fs.copyFileSync(syncPath, path.join(worktreeSyncDir, `${issueId}.yml`));
+        // The readmitted branch may already carry its OWN authoritative work
+        // order, so this -- the FIRST and ONLY contract resolution on the
+        // readmission path -- runs after the branch is checked out, with the
+        // worktree root ordered ahead of the control checkout so the branch's
+        // own copy wins. A branch carrying a valid contract is therefore reused
+        // verbatim and OFFLINE: resolveTaskContractAcrossRoots only reaches
+        // fetchLinearTaskSource when NO root holds one, so the empty token
+        // returned by linearTaskToken() under containment is never consumed.
+        // A branch carrying none still inherits control's copy, and only a
+        // genuine disagreement between two VALID contracts fails closed as
+        // lane_contract_conflict. Each destination is merged against its own
+        // sync record rather than overwritten wholesale.
+        const readmittedContract = resolveLaneTaskContract(
+          issueId,
+          worktreePath,
+          linearTaskToken(),
+        ).contract;
+        persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);
 
         const metadataPaths = [
           `docs/06_status/lanes/${issueId}.json`,
@@ -1297,7 +1390,14 @@ function main(): void {
 
     manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
-    writeSyncFile(issueId, buildSyncYml(issueId));
+    // Unreachable on the readmission path, which returns above; the early
+    // capture is therefore always present here.
+    if (!contractResolution) {
+      throw new Error(
+        `internal: fresh lane ${issueId} reached persist with no captured contract`,
+      );
+    }
+    persistLaneTaskContract(issueId, contractResolution.contract, [ROOT]);
 
     // The empty proof directory (UTV2-1492) is scaffolded directly inside
     // the lane worktree below, alongside the manifest/sync mirror — not in
@@ -1420,8 +1520,28 @@ function main(): void {
   } catch (error) {
     emitJson({
       ok: false,
-      code: 'lane_start_failed',
+      // A divergent work order is its own machine-identifiable refusal, not a
+      // generic start failure: the operator has to reconcile two contracts, and
+      // an automated caller must be able to tell that apart from a bad flag.
+      code:
+        error instanceof TaskContractConflictError
+          ? error.code
+          : 'lane_start_failed',
       message: error instanceof Error ? error.message : String(error),
+      // The named pair is lane-start's established refusal shape and stays the
+      // operator-facing contract; `contracts` carries the same facts generically
+      // for the shared resolver, which is not limited to two roots.
+      ...(error instanceof TaskContractConflictError
+        ? {
+            control_contract_hash:
+              error.hashes.find((entry) => entry.root === ROOT)?.contract_hash ??
+              null,
+            worktree_contract_hash:
+              error.hashes.find((entry) => entry.root !== ROOT)?.contract_hash ??
+              null,
+            contracts: error.hashes,
+          }
+        : {}),
       issue_id: issueId || null,
       tier: tierInput ?? null,
       branch: branch ?? null,

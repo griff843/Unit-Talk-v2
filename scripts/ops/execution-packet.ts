@@ -1,6 +1,9 @@
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import {
   CANONICAL_PRODUCTION_SUPABASE_PROJECT_REF,
   extractProjectRefFromUrl,
@@ -11,6 +14,7 @@ import {
   ROOT,
   emitJson,
   parseArgs,
+  readConfiguredEnvValue,
   readManifest,
   type LaneManifest,
 } from './shared.js';
@@ -34,6 +38,7 @@ export interface ExecutionPacket {
   allowed_file_scope: string[];
   tier_c_warnings: string[];
   blockers: string[];
+  task_contract: TaskContract;
   required_verification: string[];
   verification_plan?: VerificationPlan;
   expected_proof_paths: string[];
@@ -45,6 +50,61 @@ export interface ExecutionPacket {
     manifest_path: string;
   };
   generated_at: string;
+}
+
+export interface LinearTaskSource {
+  identifier: string;
+  title: string;
+  url: string;
+  description: string;
+}
+
+export interface TaskContract {
+  schema_version: 1;
+  issue_id: string;
+  objective: string;
+  acceptance_criteria: string[];
+  guardrails: string[];
+  non_goals: string[];
+  required_evidence: string[];
+  exit_criteria: string[];
+  /**
+   * Description sections no whitelist consumed. Carried so the prompt can show
+   * the complete issue rather than silently discarding the remainder.
+   */
+  unmapped_sections: string[];
+  source: {
+    kind: 'linear-issue-snapshot';
+    issue_url: string;
+    title: string;
+    description: string;
+    captured_at: string;
+    description_sha256: string;
+  };
+  contract_hash: string;
+}
+
+export type ExecutionPacketResult =
+  | { ok: true; packet: ExecutionPacket }
+  | {
+      ok: false;
+      code: 'EXECUTION_PACKET_INVALID' | 'LANE_CONTRACT_CONFLICT';
+      issue_id: string;
+      branch: string;
+      message: string;
+      /**
+       * Present only on LANE_CONTRACT_CONFLICT. Both hashes travel so the
+       * operator can reconcile without re-deriving which root held what.
+       */
+      contracts?: Array<{ root: string; contract_hash: string }>;
+    };
+
+type LinearFetchRunner = typeof spawnSync;
+
+export interface DispatchPacketOptions {
+  root?: string;
+  linearToken?: string;
+  runner?: LinearFetchRunner;
 }
 
 export interface VerificationPlan {
@@ -74,11 +134,15 @@ const TIER_VERIFICATION_MAP: Record<string, string[]> = {
 export function generateExecutionPacket(
   manifest: LaneManifest,
   env: NodeJS.ProcessEnv = process.env,
+  suppliedTaskContract?: TaskContract,
+  root: string = ROOT,
 ): ExecutionPacket {
   const issueId = manifest.issue_id;
   const tier = manifest.tier ?? 'unknown';
   const expectedProofPaths = manifest.expected_proof_paths ?? [];
   const verificationPlan = buildVerificationPlan(manifest, env);
+  const taskContract = suppliedTaskContract ?? readTaskContract(issueId, root);
+  assertTaskContract(taskContract, issueId);
 
   return {
     issue_id: issueId,
@@ -103,6 +167,7 @@ export function generateExecutionPacket(
     allowed_file_scope: [...(manifest.file_scope_lock ?? [])],
     tier_c_warnings: collectTierCWarnings(manifest.file_scope_lock ?? []),
     blockers: [...(manifest.blocked_by ?? [])],
+    task_contract: taskContract,
     required_verification: buildRequiredVerification(tier, expectedProofPaths),
     verification_plan: verificationPlan,
     expected_proof_paths: [...expectedProofPaths],
@@ -119,6 +184,1006 @@ export function generateExecutionPacket(
     },
     generated_at: packetTimestamp(),
   };
+}
+
+export function generateExecutionPacketResult(
+  manifest: LaneManifest,
+  env: NodeJS.ProcessEnv = process.env,
+  suppliedTaskContract?: TaskContract,
+  root: string = ROOT,
+): ExecutionPacketResult {
+  try {
+    return {
+      ok: true,
+      packet: generateExecutionPacket(
+        manifest,
+        env,
+        suppliedTaskContract,
+        root,
+      ),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      code: 'EXECUTION_PACKET_INVALID',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message: `Execution packet refused: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function executionPacketFailure(
+  manifest: LaneManifest,
+  error: unknown,
+): ExecutionPacketResult {
+  const message = `Execution packet refused: ${error instanceof Error ? error.message : String(error)}`;
+  // A divergent-contract refusal is a distinct, actionable condition. Collapsing
+  // it into the generic invalid-packet code loses the one fact the operator
+  // needs: which roots disagree, and on what hashes.
+  if (error instanceof TaskContractConflictError) {
+    return {
+      ok: false,
+      code: 'LANE_CONTRACT_CONFLICT',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message,
+      contracts: error.hashes,
+    };
+  }
+  return {
+    ok: false,
+    code: 'EXECUTION_PACKET_INVALID',
+    issue_id: manifest.issue_id,
+    branch: manifest.branch,
+    message,
+  };
+}
+
+function normalizeHeading(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Sentinel key for description content that appears BEFORE the first heading.
+ *
+ * Deliberately not a valid markdown heading, so a real `## ...` in an issue can
+ * never collide with it and no whitelist can accidentally consume it.
+ */
+export const PREAMBLE_KEY = '(description preamble)';
+
+/**
+ * One heading as it actually appeared in the description.
+ *
+ * Identity is the occurrence, never the normalized text. Keying by normalized
+ * text merged two unrelated sections that happen to normalize alike -- e.g.
+ * `## Notes` / `### Details` followed later by a top-level `## Details`. The
+ * shared entry accumulated both bodies, the nested one was marked consumed as a
+ * descendant of `notes`, and the independent `## Details` body vanished from
+ * the contract and the prompt (UTV2-1747 review finding P2/headings).
+ */
+interface SectionOccurrence {
+  /** Stable identity for this occurrence; unique within one parse. */
+  id: number;
+  /** Normalized lookup key. Many occurrences may share one. */
+  key: string;
+  /**
+   * The heading exactly as authored, minus the leading `#`s and surrounding
+   * whitespace. Case, punctuation, backticks and flag prefixes are preserved:
+   * residue rendered from the normalized key turned `## Never run --force`
+   * into `never run force:`, rewriting a load-bearing prohibition while this
+   * module claimed to carry unclassified content verbatim.
+   */
+  raw: string;
+  level: number;
+  lines: string[];
+  /**
+   * Parallel to `lines`: the id of the DEEPEST occurrence that owns each line.
+   * An ancestor's `lines` deliberately include every descendant's heading and
+   * body, so without per-line ownership there is no way to hand a nested
+   * RECOGNIZED section to its own contract field without also leaving a copy
+   * inside the ancestor's field. Ownership makes that subtraction exact.
+   */
+  lineOwners: number[];
+  /** Occurrence ids nested beneath this one, in document order. */
+  descendants: number[];
+}
+
+interface ParsedSections {
+  occurrences: SectionOccurrence[];
+}
+
+function parseSections(markdown: string): ParsedSections {
+  const occurrences: SectionOccurrence[] = [];
+  let preamble: SectionOccurrence | null = null;
+  const add = (key: string, raw: string, level: number): SectionOccurrence => {
+    const occurrence: SectionOccurrence = {
+      id: occurrences.length,
+      key,
+      raw,
+      level,
+      lines: [],
+      lineOwners: [],
+      descendants: [],
+    };
+    occurrences.push(occurrence);
+    return occurrence;
+  };
+  // Open ancestors, outermost first. A line belongs to the deepest heading AND
+  // to every heading above it: an `## Acceptance criteria` parent whose items
+  // live under `### Functional` used to end up empty, because any heading -- at
+  // any level -- replaced `current`. With the parent empty and
+  // hasAcceptanceHeading true, the fallback was disabled and the contract was
+  // refused for "missing acceptance criteria" while the criteria sat one level
+  // down. Descendants are recorded so that consuming a parent also consumes
+  // them, which keeps the same content from being duplicated into residue.
+  const open: SectionOccurrence[] = [];
+  for (const rawLine of markdown.split(/\r?\n/u)) {
+    const heading = /^(#{1,6})\s+(.+?)\s*$/u.exec(rawLine.trim());
+    if (heading) {
+      const level = (heading[1] ?? '').length;
+      const raw = (heading[2] ?? '').trim();
+      const key = normalizeHeading(raw);
+      while (open.length > 0 && (open[open.length - 1]?.level ?? 0) >= level) {
+        open.pop();
+      }
+      const occurrence = add(key, raw, level);
+      for (const ancestor of open) {
+        // The subheading line itself is content of its parent; without it the
+        // parent loses the fact that the subsection exists at all. It is OWNED
+        // by the subsection, so subtracting that subsection removes its heading
+        // along with its body.
+        ancestor.lines.push(rawLine);
+        ancestor.lineOwners.push(occurrence.id);
+        if (!ancestor.descendants.includes(occurrence.id)) {
+          ancestor.descendants.push(occurrence.id);
+        }
+      }
+      open.push(occurrence);
+      continue;
+    }
+    // Content before the first heading used to be discarded outright: `current`
+    // was null, so the line was dropped with no residue. Issues routinely open
+    // with the load-bearing sentence -- the objective, or a prohibition --
+    // before any `##`, and that text never reached the executor. It is now
+    // captured under a sentinel key and travels as residue like any other
+    // unconsumed section.
+    if (open.length > 0) {
+      const deepest = open[open.length - 1]!;
+      for (const owner of open) {
+        owner.lines.push(rawLine);
+        owner.lineOwners.push(deepest.id);
+      }
+    } else {
+      preamble ??= add(PREAMBLE_KEY, PREAMBLE_KEY, 0);
+      preamble.lines.push(rawLine);
+      preamble.lineOwners.push(preamble.id);
+    }
+  }
+  return { occurrences };
+}
+
+/**
+ * Heading keys that some contract field claims directly. A nested occurrence
+ * carrying one of these belongs to THAT field, never to whichever ancestor
+ * happens to enclose it -- see `sectionLines`' reservation handling.
+ */
+const CONTRACT_FIELD_HEADINGS: readonly string[] = [
+  'objective',
+  'required outcome',
+  'acceptance criteria',
+  'acceptance criterion',
+  'exit criteria',
+].map(normalizeHeading);
+
+function sectionLines(
+  parsed: ParsedSections,
+  headings: string[],
+  prefix = false,
+  matched?: number[],
+  /**
+   * When set, descendants whose key is claimed by a DIFFERENT contract field
+   * are subtracted from this section's lines and left unconsumed, so the field
+   * that actually owns them can take them. Without this, a `### Acceptance
+   * criteria` nested under `## Objective` was emitted twice: once inside the
+   * objective (whose `lines` contain the whole subtree) and again by the
+   * acceptance extraction, whose per-call consumed-set could not see that the
+   * objective pass had already taken it.
+   */
+  reservedKeys: readonly string[] = CONTRACT_FIELD_HEADINGS,
+): string[] {
+  const wanted = headings.map(normalizeHeading);
+  const byId = new Map(parsed.occurrences.map((o) => [o.id, o]));
+  const claimsOwnKey = (occurrence: SectionOccurrence): boolean =>
+    wanted.some(
+      (value) =>
+        occurrence.key === value || (prefix && occurrence.key.startsWith(value)),
+    );
+  // EVERY matching occurrence contributes, not just the first. A description
+  // that opens `## Acceptance criteria` with an empty lead-in and then repeats
+  // the heading with the real content used to yield the empty first occurrence
+  // and refuse the task as missing acceptance criteria -- a regression against
+  // the normalized-key merge this parser replaced.
+  const collected: string[] = [];
+  const consumedHere = new Set<number>();
+  let found = false;
+  for (const occurrence of parsed.occurrences) {
+    // A nested occurrence already travels inside its ancestor's lines; taking
+    // it again would duplicate that text in the rendered section.
+    if (consumedHere.has(occurrence.id)) continue;
+    if (
+      !wanted.some(
+        (value) =>
+          occurrence.key === value ||
+          (prefix && occurrence.key.startsWith(value)),
+      )
+    ) {
+      continue;
+    }
+    found = true;
+    matched?.push(occurrence.id);
+    consumedHere.add(occurrence.id);
+
+    // Descendants reserved by a DIFFERENT contract field are not ours to take.
+    // Subtracting a reserved descendant also subtracts everything beneath it,
+    // otherwise its own children would survive as orphaned lines here.
+    const reserved = new Set<number>();
+    for (const childId of occurrence.descendants) {
+      const child = byId.get(childId);
+      if (!child) continue;
+      if (reserved.has(childId)) continue;
+      if (!reservedKeys.includes(child.key)) continue;
+      if (claimsOwnKey(child)) continue;
+      reserved.add(childId);
+      for (const nested of child.descendants) reserved.add(nested);
+    }
+
+    // Consuming a parent consumes what is nested beneath it. Those lines are
+    // already carried in the parent's own content, so leaving the children
+    // unconsumed would repeat the same text in "Additional issue content".
+    // Reserved descendants are the exception: they stay unconsumed so their
+    // own field claims them, and they are never left to residue either.
+    for (const child of occurrence.descendants) {
+      if (reserved.has(child)) continue;
+      matched?.push(child);
+      consumedHere.add(child);
+    }
+
+    if (reserved.size === 0) {
+      collected.push(...occurrence.lines);
+    } else {
+      occurrence.lines.forEach((line, index) => {
+        if (!reserved.has(occurrence.lineOwners[index] ?? occurrence.id)) {
+          collected.push(line);
+        }
+      });
+    }
+  }
+  return found ? collected : [];
+}
+
+/**
+ * Sections the whitelists did not consume (UTV2-1734 review finding B1).
+ *
+ * Once a description carries an exact `## Acceptance criteria` heading, only
+ * the six recognised headings were kept and everything else was discarded with
+ * no residue. Measured across the live board, 14 of 18 sectioned descriptions
+ * lost more than a fifth of their content and one lost 77% — including, on
+ * UTV2-1383, the single line forbidding a blanket UPDATE against production.
+ *
+ * The prompt then rendered `(none declared)` for the missing fields, which is
+ * an affirmative false claim rather than an omission, while instructing the
+ * executor not to go and read the issue. That is a safety reduction against
+ * today's behaviour, where an executor with no contract reads the issue itself.
+ *
+ * Nothing from the description is dropped now: unrecognised sections travel
+ * with the contract and are rendered verbatim.
+ */
+function unmappedSections(
+  parsed: ParsedSections,
+  consumed: number[][],
+): Array<{ heading: string; lines: string[] }> {
+  const taken = new Set<number>();
+  for (const group of consumed) {
+    for (const id of group) taken.add(id);
+  }
+  // Ids a contract FIELD actually claimed. Distinct from `taken` below, which
+  // also absorbs descendants suppressed merely because a surviving ancestor
+  // already carries them -- those must still render inside that ancestor.
+  const consumedByField = new Set<number>(taken);
+  // A surviving ancestor already carries its descendants' lines, so emitting the
+  // descendants again would repeat the same text in the prompt.
+  for (const occurrence of parsed.occurrences) {
+    if (taken.has(occurrence.id)) continue;
+    for (const child of occurrence.descendants) taken.add(child);
+  }
+  const out: Array<{ heading: string; lines: string[] }> = [];
+  for (const occurrence of parsed.occurrences) {
+    if (taken.has(occurrence.id)) continue;
+    // Residue carries the heading AS AUTHORED. Rendering `occurrence.key` here
+    // lowercased it and stripped punctuation, backticks and flag prefixes, so
+    // `## Never run --force` reached the executor as `never run force:`.
+    const heading = occurrence.raw;
+
+    // A descendant that a contract field already claimed must not reappear
+    // inside this surviving ancestor's residue. The ancestor's `lines` carry
+    // the whole subtree, so the claimed descendant is subtracted by line
+    // ownership -- the same subtraction `sectionLines` performs -- leaving the
+    // recognized child in exactly one place: its own contract field.
+    const claimed = new Set<number>();
+    for (const childId of occurrence.descendants) {
+      if (consumedByField.has(childId)) claimed.add(childId);
+    }
+    const lines =
+      claimed.size === 0
+        ? occurrence.lines
+        : occurrence.lines.filter(
+            (_line, index) =>
+              !claimed.has(occurrence.lineOwners[index] ?? occurrence.id),
+          );
+
+    // A section with an empty body still carries meaning in its HEADING --
+    // "## DO NOT TOUCH PRODUCTION" followed only by a subheading used to vanish
+    // entirely, taking the prohibition with it. Keep the heading as residue.
+    if (lines.every((line) => !line.trim())) {
+      out.push({ heading, lines: [] });
+      continue;
+    }
+    out.push({ heading, lines });
+  }
+  return out;
+}
+
+function sectionItems(lines: string[]): string[] {
+  const items: string[] = [];
+  let paragraph: string[] = [];
+  const flushParagraph = (): void => {
+    const value = paragraph.join(' ').replace(/\s+/gu, ' ').trim();
+    if (value) items.push(value);
+    paragraph = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      flushParagraph();
+      continue;
+    }
+    const listItem = /^(?:[-*+] |\d+[.)]\s+)(?:\[[ xX]\]\s*)?(.*)$/u.exec(line);
+    if (listItem) {
+      flushParagraph();
+      const value = (listItem[1] ?? '').trim();
+      if (value) items.push(value);
+      continue;
+    }
+    paragraph.push(line);
+  }
+  flushParagraph();
+  return items;
+}
+
+function taskContractHash(
+  contract: Omit<TaskContract, 'contract_hash'>,
+): string {
+  return createHash('sha256').update(JSON.stringify(contract)).digest('hex');
+}
+
+export function buildTaskContract(
+  source: LinearTaskSource,
+  capturedAt = packetTimestamp(),
+): TaskContract {
+  const issueId = source.identifier.trim().toUpperCase();
+  const title = source.title.trim();
+  const description = source.description.trim();
+  const parsed = parseSections(description);
+  const consumed: number[] = [];
+  const objectiveItems = sectionItems(
+    sectionLines(parsed, ['objective', 'required outcome'], false, consumed),
+  );
+  const objective = objectiveItems.join('\n') || title;
+  const explicitAcceptance = sectionItems(
+    sectionLines(parsed, ['acceptance criteria', 'acceptance criterion'], false, consumed),
+  );
+  const hasAcceptanceHeading = parsed.occurrences.some((occurrence) =>
+    ['acceptance criteria', 'acceptance criterion'].includes(occurrence.key),
+  );
+  const exitCriteria = sectionItems(sectionLines(parsed, ['exit criteria'], false, consumed));
+
+  // Existing issues predate the heading convention. Preserve their complete
+  // work order verbatim instead of inventing criteria or bulk-migrating state.
+  const acceptanceCriteria =
+    explicitAcceptance.length > 0
+      ? explicitAcceptance
+      : !hasAcceptanceHeading && description
+        ? [description]
+        : [];
+
+  if (!/^UTV2-\d+$/u.test(issueId)) {
+    throw new Error(
+      `task contract has an invalid issue identity: ${source.identifier}`,
+    );
+  }
+  if (!objective) {
+    throw new Error(`task contract for ${issueId} is missing an objective`);
+  }
+  if (acceptanceCriteria.length === 0) {
+    throw new Error(
+      `task contract for ${issueId} is missing acceptance criteria`,
+    );
+  }
+
+  const content: Omit<TaskContract, 'contract_hash'> = {
+    schema_version: 1,
+    issue_id: issueId,
+    objective,
+    acceptance_criteria: acceptanceCriteria,
+    guardrails: sectionItems(sectionLines(parsed, ['guardrails'], false, consumed)),
+    non_goals: sectionItems(
+      sectionLines(
+        parsed,
+        ['non goals', 'non-goals', 'out of scope', 'explicitly out of scope'],
+        true,
+        consumed,
+      ),
+    ),
+    required_evidence: sectionItems(
+      sectionLines(parsed, ['required evidence', 'evidence'], false, consumed),
+    ),
+    exit_criteria: exitCriteria,
+    unmapped_sections: unmappedSections(parsed, [consumed]).map((entry) => {
+      // Flattening with join(' ') plus whitespace collapse silently rewrote
+      // multiline commands, fenced code, tables and paragraph boundaries -- and
+      // contradicted this module's own claim to carry residue verbatim. Lines
+      // are preserved as authored; only leading and trailing blank lines go.
+      const body = entry.lines
+        .join('\n')
+        .replace(/^\s*\n+/u, '')
+        .replace(/\n+\s*$/u, '');
+      // The heading is emitted EXACTLY as authored. Appending `:` rewrote
+      // `Never run command --force!` into `Never run command --force!:`,
+      // which contradicts the verbatim-residue guarantee and can alter a
+      // heading that is itself a command.
+      return body ? `${entry.heading}\n${body}` : entry.heading;
+    }),
+    source: {
+      kind: 'linear-issue-snapshot',
+      issue_url: source.url.trim(),
+      title,
+      description,
+      captured_at: capturedAt,
+      description_sha256: createHash('sha256')
+        .update(description)
+        .digest('hex'),
+    },
+  };
+  return { ...content, contract_hash: taskContractHash(content) };
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+  );
+}
+
+/**
+ * Structured refusal for task-contract defects.
+ *
+ * Carries a machine-readable `code` and the issue id so a caller can act on the
+ * failure instead of parsing a message string, and so a stale contract never
+ * surfaces as an anonymous TypeError.
+ */
+export class TaskContractError extends Error {
+  readonly code: string;
+  readonly issueId: string;
+  constructor(code: string, issueId: string, message: string) {
+    super(message);
+    this.name = 'TaskContractError';
+    this.code = code;
+    this.issueId = issueId;
+  }
+}
+
+export function assertTaskContract(
+  contract: unknown,
+  expectedIssueId?: string,
+): asserts contract is TaskContract {
+  if (!contract || typeof contract !== 'object') {
+    throw new Error('task contract is missing or not an object');
+  }
+  const value = contract as Partial<TaskContract>;
+  const issueId = expectedIssueId ?? value.issue_id ?? '(unknown issue)';
+  if (value.schema_version !== 1 || value.issue_id !== issueId) {
+    throw new Error(`task contract identity mismatch for ${issueId}`);
+  }
+  if (typeof value.objective !== 'string' || !value.objective.trim()) {
+    throw new Error(`task contract for ${issueId} is missing an objective`);
+  }
+  if (
+    !isStringArray(value.acceptance_criteria) ||
+    value.acceptance_criteria.length === 0
+  ) {
+    throw new Error(
+      `task contract for ${issueId} is missing acceptance criteria`,
+    );
+  }
+  // A contract generated before unmapped_sections existed passes every check
+  // above and then dies on `contract.unmapped_sections.length` inside
+  // renderTaskContract -- a bare TypeError with no issue id and no remedy. That
+  // is fail-open followed by an unstructured crash. Refuse it here instead,
+  // structurally, naming the issue and the fix.
+  if (
+    !isStringArray(value.unmapped_sections)
+  ) {
+    throw new TaskContractError(
+      'stale_contract_missing_unmapped_sections',
+      issueId,
+      `task contract for ${issueId} predates unmapped_sections and is stale; ` +
+        `regenerate it with ops:lane-start so no description content is dropped`,
+    );
+  }
+  for (const field of [
+    'guardrails',
+    'non_goals',
+    'required_evidence',
+    'exit_criteria',
+  ] as const) {
+    if (!isStringArray(value[field])) {
+      throw new Error(
+        `task contract for ${issueId} is missing the ${field} array`,
+      );
+    }
+  }
+  if (
+    !value.source ||
+    value.source.kind !== 'linear-issue-snapshot' ||
+    typeof value.source.issue_url !== 'string' ||
+    typeof value.source.title !== 'string' ||
+    typeof value.source.description !== 'string' ||
+    typeof value.source.captured_at !== 'string' ||
+    typeof value.source.description_sha256 !== 'string'
+  ) {
+    throw new Error(
+      `task contract for ${issueId} is missing its Linear source snapshot`,
+    );
+  }
+  if (
+    createHash('sha256').update(value.source.description).digest('hex') !==
+    value.source.description_sha256
+  ) {
+    throw new Error(
+      `task contract source hash verification failed for ${issueId}`,
+    );
+  }
+  const contractHash = value.contract_hash;
+  const { contract_hash: _contractHash, ...content } = value as TaskContract;
+  if (
+    typeof contractHash !== 'string' ||
+    !/^[0-9a-f]{64}$/u.test(contractHash) ||
+    taskContractHash(content) !== contractHash
+  ) {
+    throw new Error(`task contract hash verification failed for ${issueId}`);
+  }
+}
+
+export function buildSyncYmlWithTaskContract(
+  issueId: string,
+  contract: TaskContract,
+  existingContent?: string,
+): string {
+  assertTaskContract(contract, issueId);
+  const parsed = existingContent?.trim()
+    ? parseYaml(existingContent)
+    : {
+        version: 1,
+        approval: { allow_multiple_issues: false, skip_sync_required: false },
+        entities: { issues: [issueId], findings: [], controls: [], proofs: [] },
+      };
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error(`sync record for ${issueId} is malformed`);
+  }
+  return stringifyYaml({
+    ...(parsed as Record<string, unknown>),
+    task_contract: contract,
+  });
+}
+
+function curlConfigValue(value: string): string {
+  if (/\r|\n/u.test(value)) {
+    throw new Error('Linear API token contains an invalid newline');
+  }
+  return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+}
+
+export function fetchLinearTaskSource(
+  issueId: string,
+  token: string,
+  runner: LinearFetchRunner = spawnSync,
+): LinearTaskSource {
+  if (!token.trim()) {
+    throw new Error(
+      `LINEAR_API_TOKEN or LINEAR_API_KEY is required to capture the task contract for ${issueId}`,
+    );
+  }
+  const query = `
+    query LaneTaskContract($id: String!) {
+      issue(id: $id) { identifier title url description }
+    }
+  `;
+  const result = runner(
+    'curl',
+    [
+      '--config',
+      '-',
+      '--fail-with-body',
+      '--silent',
+      '--show-error',
+      '--request',
+      'POST',
+      'https://api.linear.app/graphql',
+      '--header',
+      'Content-Type: application/json',
+      '--data-binary',
+      JSON.stringify({ query, variables: { id: issueId } }),
+    ],
+    {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      timeout: 15_000,
+      input: `header = "Authorization: ${curlConfigValue(token)}"\n`,
+    },
+  );
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `failed to capture Linear task contract for ${issueId}: ${result.error?.message ?? result.stderr ?? `curl exit ${result.status}`}`,
+    );
+  }
+  const payload = JSON.parse(String(result.stdout ?? '{}')) as {
+    data?: { issue?: LinearTaskSource | null };
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(
+      `failed to capture Linear task contract for ${issueId}: ${payload.errors.map((entry) => entry.message ?? 'unknown Linear error').join('; ')}`,
+    );
+  }
+  const issue = payload.data?.issue;
+  if (!issue || issue.identifier.toUpperCase() !== issueId) {
+    throw new Error(
+      `failed to capture Linear task contract for ${issueId}: issue identity mismatch or missing issue`,
+    );
+  }
+  return {
+    identifier: issue.identifier.toUpperCase(),
+    title: issue.title ?? '',
+    url: issue.url ?? '',
+    description: issue.description ?? '',
+  };
+}
+
+export function captureOrReadTaskContract(
+  issueId: string,
+  token: string,
+  root: string = ROOT,
+  runner: LinearFetchRunner = spawnSync,
+): TaskContract {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (fs.existsSync(syncPath)) {
+    const existing = fs.readFileSync(syncPath, 'utf8');
+    if (/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(existing)) {
+      return readTaskContract(issueId, root);
+    }
+  }
+  return buildTaskContract(fetchLinearTaskSource(issueId, token, runner));
+}
+
+/** First value that is a non-empty string; `''` when there is none. */
+export function firstNonEmpty(
+  ...values: Array<string | undefined | null>
+): string {
+  for (const value of values) {
+    // A whitespace-only value is not a usable token: `fetchLinearTaskSource`
+    // rejects it via `token.trim()`, so selecting it here would strand the
+    // caller instead of falling through to the next candidate. Emptiness is
+    // judged on the trimmed form; the ORIGINAL value is returned unchanged.
+    if (typeof value === 'string' && value.trim() !== '') return value;
+  }
+  return '';
+}
+
+/**
+ * Two valid but different work orders for one lane is unresolvable state: the
+ * executor may already be acting on either. Refuse structurally rather than
+ * pick one, which would silently discard the other.
+ */
+export class TaskContractConflictError extends Error {
+  readonly code = 'lane_contract_conflict';
+  constructor(
+    readonly issueId: string,
+    readonly hashes: Array<{ root: string; contract_hash: string }>,
+  ) {
+    super(
+      `lane ${issueId} has ${hashes.length} different valid task contracts: ` +
+        hashes.map((h) => `${h.root} ${h.contract_hash}`).join(' vs ') +
+        `. Refusing to choose. Reconcile them deliberately.`,
+    );
+    this.name = 'TaskContractConflictError';
+  }
+}
+
+/**
+ * A contract that is present but does not validate (a stale snapshot predating
+ * unmapped_sections, a hash that no longer matches its content) is reported as
+ * absent so it can be recaptured. Only a *valid* pair can conflict.
+ */
+export function readValidTaskContractAt(
+  root: string,
+  issueId: string,
+): TaskContract | null {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (!fs.existsSync(syncPath)) return null;
+  if (
+    !/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(
+      fs.readFileSync(syncPath, 'utf8'),
+    )
+  ) {
+    return null;
+  }
+  try {
+    return readTaskContract(issueId, root);
+  } catch {
+    return null;
+  }
+}
+
+export interface TaskContractResolution {
+  contract: TaskContract;
+  fetched: boolean;
+  /** Index into the `roots` argument, or -1 for a fresh Linear capture. */
+  rootIndex: number;
+}
+
+/**
+ * Resolve one work order across every root that may hold one, WITHOUT making
+ * Linear a dependency of a lane that already has a contract.
+ *
+ * `roots` is in precedence order: the first root holding a valid contract wins
+ * when all agree. Any two valid contracts with different hashes are a refusal,
+ * never a silent overwrite. Capture happens only when no root has one, and it
+ * is the sole network call.
+ */
+export function resolveTaskContractAcrossRoots(
+  issueId: string,
+  roots: string[],
+  token: string,
+  runner: LinearFetchRunner = spawnSync,
+): TaskContractResolution {
+  const found: Array<{ root: string; index: number; contract: TaskContract }> =
+    [];
+  roots.forEach((root, index) => {
+    const contract = readValidTaskContractAt(root, issueId);
+    if (contract) found.push({ root, index, contract });
+  });
+
+  const distinct = new Set(found.map((entry) => entry.contract.contract_hash));
+  if (distinct.size > 1) {
+    throw new TaskContractConflictError(
+      issueId,
+      found.map((entry) => ({
+        root: entry.root,
+        contract_hash: entry.contract.contract_hash,
+      })),
+    );
+  }
+
+  const winner = found[0];
+  if (winner) {
+    return { contract: winner.contract, fetched: false, rootIndex: winner.index };
+  }
+  return {
+    contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),
+    fetched: true,
+    rootIndex: -1,
+  };
+}
+
+/**
+ * Merge against the DESTINATION's own sync record, never a different root's.
+ * The control checkout holds legacy records with no contract and no accumulated
+ * entities; merging a lane worktree's write against those replaced the branch's
+ * findings, controls and proofs with the control copy's.
+ */
+export function syncContentForDestination(
+  destRoot: string,
+  issueId: string,
+  contract: TaskContract,
+): string {
+  const syncPath = path.join(destRoot, '.ops', 'sync', `${issueId}.yml`);
+  const existing = fs.existsSync(syncPath)
+    ? fs.readFileSync(syncPath, 'utf8')
+    : undefined;
+  return buildSyncYmlWithTaskContract(issueId, contract, existing);
+}
+
+/** Persist one contract to every root, each merged against its own record. */
+export function persistTaskContractToRoots(
+  issueId: string,
+  contract: TaskContract,
+  roots: string[],
+): void {
+  for (const root of roots) {
+    const syncDir = path.join(root, '.ops', 'sync');
+    fs.mkdirSync(syncDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(syncDir, `${issueId}.yml`),
+      syncContentForDestination(root, issueId, contract),
+      'utf8',
+    );
+  }
+}
+
+/**
+ * Executor-facing compatibility path. A pre-contract lane captures exactly one
+ * authoritative snapshot at dispatch time, persists it in the control checkout
+ * and lane worktree, and then goes through the same strict packet validator as
+ * every newly started lane.
+ */
+export function generateDispatchExecutionPacketResult(
+  manifest: LaneManifest,
+  env: NodeJS.ProcessEnv = process.env,
+  options: DispatchPacketOptions = {},
+): ExecutionPacketResult {
+  const root = options.root ?? ROOT;
+  try {
+    // `??` only skips null/undefined. `readConfiguredEnvValue` returns '' for a
+    // key it cannot resolve, so an empty LINEAR_API_TOKEN in local.env/.env
+    // short-circuited the chain and capture refused as tokenless even though
+    // LINEAR_API_KEY was configured. Truthy fallback, matching lane-start's
+    // `linearTaskToken()`.
+    const token = firstNonEmpty(
+      options.linearToken,
+      env['LINEAR_API_TOKEN'],
+      env['LINEAR_API_KEY'],
+      readConfiguredEnvValue('LINEAR_API_TOKEN'),
+      readConfiguredEnvValue('LINEAR_API_KEY'),
+    );
+
+    const laneCwd = manifest.execution_location?.cwd ?? manifest.worktree_path;
+    const laneRoot = path.isAbsolute(laneCwd)
+      ? laneCwd
+      : path.resolve(root, laneCwd);
+    const laneRootExists = laneRoot !== root && fs.existsSync(laneRoot);
+
+    // Resolve across BOTH roots before writing either. Reading only the control
+    // copy and then persisting it to the lane silently replaced a lane's
+    // authoritative work order -- the executor may already be acting on it --
+    // while `lane-start` refused the identical conflict.
+    const resolution = resolveTaskContractAcrossRoots(
+      manifest.issue_id,
+      laneRootExists ? [laneRoot, root] : [root],
+      token,
+      options.runner ?? spawnSync,
+    );
+    const contract = resolution.contract;
+
+    persistTaskContractToRoots(
+      manifest.issue_id,
+      contract,
+      laneRootExists ? [root, laneRoot] : [root],
+    );
+
+    return generateExecutionPacketResult(manifest, env, contract, root);
+  } catch (error) {
+    return executionPacketFailure(manifest, error);
+  }
+}
+
+export function readTaskContract(
+  issueId: string,
+  root: string = ROOT,
+): TaskContract {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (!fs.existsSync(syncPath)) {
+    throw new Error(
+      `task contract is absent: sync record not found at ${syncPath}`,
+    );
+  }
+  const parsed = parseYaml(fs.readFileSync(syncPath, 'utf8')) as {
+    task_contract?: unknown;
+  } | null;
+  if (!parsed?.task_contract) {
+    throw new Error(
+      `task contract is absent from ${syncPath}; refusing to dispatch without a work order`,
+    );
+  }
+  assertTaskContract(parsed.task_contract, issueId);
+  return parsed.task_contract;
+}
+
+/**
+ * Control characters must never reach the rendered prompt. The prompt is passed
+ * as an argv element to `spawnSync`, and Node rejects an argument containing a
+ * NUL byte with a bare TypeError -- crashing the dispatch instead of dropping a
+ * line, which is strictly worse than the content loss this module exists to
+ * prevent. An earlier revision used a NUL-prefixed sentinel and did exactly
+ * that. Stripped defensively here so no future sentinel or pasted issue content
+ * can reintroduce it.
+ */
+function stripControlChars(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, '');
+}
+
+export function renderTaskContract(contract: TaskContract): string {
+  assertTaskContract(contract);
+  const hasUnmapped = contract.unmapped_sections.length > 0;
+  // Provenance, so the executor can judge staleness. A cached contract is served
+  // without re-fetching, and the prompt tells the executor not to infer the task
+  // elsewhere -- without these lines it has no way to know the snapshot is old.
+  const provenance = [
+    `Source issue: ${contract.source.issue_url}`,
+    `Captured at: ${contract.source.captured_at}`,
+  ].join('\n');
+  // "(none declared)" is an assertion, not an omission. When the description
+  // carried sections no whitelist consumed, the honest statement is that the
+  // field was not extracted — and the content itself is rendered below, so the
+  // executor is never told a guardrail does not exist when one does.
+  const render = (values: string[]): string =>
+    values.length > 0
+      ? values.map((value) => `- ${value}`).join('\n')
+      : hasUnmapped
+        ? '- (not extracted — see "Additional issue content" below)'
+        : '- (none declared)';
+  return stripControlChars([
+    `## Authoritative task contract (integrity hash ${contract.contract_hash})`,
+    '',
+    'This is the captured work order. Do not infer a replacement task from the branch name, file scope, an existing PR, or the repo brief.',
+    '',
+    provenance,
+    '',
+    '### Objective',
+    contract.objective,
+    '',
+    '### Acceptance criteria',
+    render(contract.acceptance_criteria),
+    '',
+    '### Guardrails',
+    render(contract.guardrails),
+    '',
+    '### Non-goals',
+    render(contract.non_goals),
+    '',
+    '### Required evidence',
+    render(contract.required_evidence),
+    '',
+    '### Exit criteria',
+    render(contract.exit_criteria),
+    // Everything the whitelists did not classify, verbatim. Without this the
+    // prompt asserted a complete work order while having dropped up to 77% of
+    // the description — including, on one live lane, the only line forbidding
+    // a production mutation.
+    ...(contract.unmapped_sections.length > 0
+      ? [
+          '',
+          '### Additional issue content (not classified)',
+          'These sections were not mapped to a field above. They are part of the work order.',
+          '',
+          ...contract.unmapped_sections.flatMap((entry) => {
+            const nl = entry.indexOf('\n');
+            // A multiline section is emitted with its body verbatim rather than
+            // folded into one bullet: indenting it to satisfy markdown list
+            // syntax would alter the very commands, code blocks and tables this
+            // residue exists to carry intact.
+            if (nl === -1) return [`- ${entry}`];
+            return [`- ${entry.slice(0, nl)}`, ...entry.slice(nl + 1).split('\n'), ''];
+          }),
+        ]
+      : []),
+  ].join('\n'));
 }
 
 function buildVerificationPlan(
@@ -380,7 +1445,19 @@ function main(): void {
     );
   }
 
-  const packet = generateExecutionPacket(readManifest(issueId));
+  // A newly admitted lane has no captured contract yet, so the strict packet
+  // gate refused -- which made the policy-required standalone command unusable
+  // on exactly the lanes it exists to preview. Route through the same
+  // authoritative capture-and-persist the dispatch path uses, then apply the
+  // identical strict validator. This is the one place a capture may happen from
+  // this entry point; it is not a second, looser packet definition.
+  const result = generateDispatchExecutionPacketResult(readManifest(issueId));
+  if (!result.ok) {
+    emitJson(result);
+    process.exitCode = 1;
+    return;
+  }
+  const packet = result.packet;
   if (bools.has('enforce-cwd')) {
     assertExecutionPacketCwd(packet);
   }

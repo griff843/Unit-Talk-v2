@@ -3,14 +3,115 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ROOT } from './shared.js';
+import { spawnSync } from 'node:child_process';
 import {
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  generateDispatchExecutionPacketResult,
+  readTaskContract,
+  renderTaskContract,
+  resolveTaskContractAcrossRoots,
+  type TaskContract,
+} from './execution-packet.js';
+import { ROOT, type LaneManifest } from './shared.js';
+import {
+  captureOrReadTaskContract,
   type ExistingBranchReadmissionToken,
+  fetchLinearTaskSource,
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
+  persistLaneTaskContract,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
+
+test('lane-start captures Linear truth without exposing its token in process arguments', () => {
+  const token = 'token-fixture';
+  const source = fetchLinearTaskSource('UTV2-1734', token, ((_command, args, options) => {
+    assert.equal(args.includes('https://api.linear.app/graphql'), true);
+    assert.equal(args.includes('--config'), true);
+    assert.equal(args.join(' ').includes(token), false);
+    assert.match(String(options?.input), /Authorization: token-fixture/u);
+    return {
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: {
+        identifier: 'UTV2-1734',
+        title: 'Deliver the task contract',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1734',
+        description: '## Acceptance criteria\n- Prompt contains the work order.',
+      } } }),
+      stderr: '',
+      error: undefined,
+    };
+  }) as typeof import('node:child_process')['spawnSync']);
+
+  assert.equal(source.identifier, 'UTV2-1734');
+  assert.equal(source.title, 'Deliver the task contract');
+});
+
+test('a sanctioned executor dispatch captures, persists, and renders a legacy lane contract', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-legacy-lane-contract-'));
+  const laneRoot = path.join(root, 'lane-worktree');
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  fs.mkdirSync(laneRoot, { recursive: true });
+  fs.writeFileSync(path.join(syncDir, 'UTV2-1667.yml'), 'version: 1\nentities:\n  issues:\n    - UTV2-1667\n', 'utf8');
+
+  const description = '## Scope\n- Preserve this legacy lane without a bulk migration.';
+  const manifest = {
+    issue_id: 'UTV2-1667', branch: 'codex/utv2-1667-legacy-lane', tier: 'T2',
+    lane_type: 'governance', executor: 'codex-cli', worktree_path: laneRoot,
+    file_scope_lock: ['scripts/ops/codex-exec.ts'], expected_proof_paths: [], blocked_by: [],
+  } as LaneManifest;
+  const result = generateDispatchExecutionPacketResult(manifest, {}, {
+    root,
+    linearToken: 'token-fixture',
+    runner: ((_command, _args) => ({
+      status: 0,
+      stdout: JSON.stringify({ data: { issue: {
+        identifier: 'UTV2-1667', title: 'Legacy objective',
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-1667', description,
+      } } }),
+      stderr: '', error: undefined,
+    })) as typeof import('node:child_process')['spawnSync'],
+  });
+
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.equal(result.packet.task_contract.objective, 'Legacy objective');
+  assert.deepEqual(result.packet.task_contract.acceptance_criteria, [description]);
+  assert.match(renderTaskContract(result.packet.task_contract), /Preserve this legacy lane/u);
+  assert.deepEqual(readTaskContract('UTV2-1667', root), result.packet.task_contract);
+  assert.deepEqual(readTaskContract('UTV2-1667', laneRoot), result.packet.task_contract);
+});
+
+test('lane-start reuses a valid contract and fails closed on an invalid one', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-existing-contract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const contract = buildTaskContract({
+    identifier: 'UTV2-1734', title: 'Objective',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1734',
+    description: '## Acceptance criteria\n- Criterion.',
+  }, '2000-01-01T00:00:00.000Z');
+  const syncPath = path.join(syncDir, 'UTV2-1734.yml');
+  fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract('UTV2-1734', contract), 'utf8');
+
+  let fetched = false;
+  const runner = ((_command: string, _args: readonly string[]) => {
+    fetched = true;
+    throw new Error('must not fetch');
+  }) as typeof import('node:child_process')['spawnSync'];
+  assert.deepEqual(captureOrReadTaskContract('UTV2-1734', 'token-fixture', root, runner), contract);
+  assert.equal(fetched, false);
+
+  fs.writeFileSync(syncPath, fs.readFileSync(syncPath, 'utf8').replace('Criterion.', 'Changed.'), 'utf8');
+  assert.throws(
+    () => captureOrReadTaskContract('UTV2-1734', 'token-fixture', root, runner),
+    /hash verification failed/u,
+  );
+  assert.equal(fetched, false);
+});
 
 function readmissionToken(): ExistingBranchReadmissionToken {
   return {
@@ -702,5 +803,450 @@ test('UTV2-1634: discovery failure blocks the docs-only fast path as well as nor
   assert.ok(
     guardIndex !== -1 && guardIndex < fastPathIndex,
     'the fail-closed discovery guard must precede the docs-only fast path, so an unknown board refuses both routes',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Executing coverage for lane-start main() (UTV2-1747)
+//
+// Nothing in this repository executed lane-start's main(), so reverting either
+// real capture call site left the whole suite green -- the defect class this
+// lane exists to remove, sitting in the lane's own dependency. These tests run
+// the real entrypoint as a child process against a fixture repository.
+//
+// Isolation: getRepoRoot() shells out to `git rev-parse --show-toplevel`
+// inheriting process.cwd(), so a git-initialised fixture directory rebinds ROOT
+// to itself. Offline: a stub `gh` on PATH returns an empty board, and the
+// LINEAR_* variables are stripped from the child environment, so a capture
+// cannot silently succeed against the real Linear.
+// ---------------------------------------------------------------------------
+
+const LANE_TSX_BIN = path.join(ROOT, 'node_modules', '.bin', 'tsx');
+
+interface LaneFixture {
+  root: string;
+  worktree: string;
+  bin: string;
+  issueId: string;
+  branch: string;
+}
+
+function seedLaneFixture(issueId: string, opts: { withWorktree: boolean }): LaneFixture {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lanestart-'));
+  const root = path.join(dir, 'repo');
+  const slug = issueId.toLowerCase();
+  const branch = `claude/${slug}-fixture`;
+  const worktree = path.join(root, '.out', 'worktrees', branch.replaceAll('/', '__'));
+
+  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations', 'policies'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations', 'schemas'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', 'governance'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'scripts', 'ops'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.ops', 'sync'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.ops', 'leases'), { recursive: true });
+
+  // Real control data, copied rather than invented: a hand-authored policy or
+  // schema can assert against a field the production reader never consults.
+  for (const rel of [
+    ['docs', '05_operations', 'policies', 'codex-model-routing.json'],
+    ['docs', '05_operations', 'db-writer-classification.json'],
+    ['docs', '05_operations', 'DELEGATION_STATE.json'],
+    ['docs', '05_operations', 'schemas', 'lane_manifest_v1.schema.json'],
+    ['docs', 'governance', 'CONCURRENCY_CONFIG.json'],
+  ]) {
+    fs.copyFileSync(path.join(ROOT, ...rel), path.join(root, ...rel));
+  }
+  fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
+  fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+
+  const git = (args: string[], cwd = root): void => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
+  };
+  git(['init', '-q', '-b', 'main', '.']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+  git(['add', '-A']);
+  git(['commit', '-qm', 'seed']);
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim();
+
+  if (opts.withWorktree) {
+    git(['worktree', 'add', '-q', '-b', branch, worktree]);
+    // A worktree that already has node_modules skips the isolated install, so
+    // the resume path completes without a package manager or a network.
+    fs.mkdirSync(path.join(worktree, 'node_modules'), { recursive: true });
+    fs.mkdirSync(path.join(worktree, '.ops', 'sync'), { recursive: true });
+
+    const manifest = {
+      schema_version: 2, issue_id: issueId, lane_type: 'governance', executor: 'claude',
+      tier: 'T2', worktree_path: worktree, branch, base_branch: 'main', commit_sha: null,
+      pr_url: null, files_changed: [], file_scope_lock: ['scripts/ops/fixture.ts'],
+      expected_proof_paths: [], status: 'started',
+      started_at: '2026-08-24T00:00:00.000Z', heartbeat_at: '2026-08-24T00:00:00.000Z',
+      closed_at: null, blocked_by: [], preflight_token: `.out/ops/preflight/${branch}.json`,
+      created_by: 'claude', truth_check_history: [], reopen_history: [],
+      execution_location: {
+        mode: 'worktree', cwd: worktree, package_install: 'verified',
+        setup_command: null, main_checkout_control_only: true,
+      },
+    };
+    fs.writeFileSync(
+      path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+  }
+
+  const tokenPath = path.join(root, '.out', 'ops', 'preflight', `${branch}.json`);
+  fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+  fs.writeFileSync(tokenPath, `${JSON.stringify({
+    schema_version: 1, status: 'pass', issue_id: issueId, branch, head_sha: head,
+    expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+  }, null, 2)}\n`);
+
+  // Stub board. Kept outside the repository so it is not untracked content.
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\necho "[]"\nexit 0\n', { mode: 0o755 });
+
+  return { root, worktree, bin, issueId, branch };
+}
+
+/** Write a contract into one root, optionally carrying accumulated entities. */
+function seedContractAt(
+  destRoot: string,
+  issueId: string,
+  description: string,
+  extraFinding?: string,
+): TaskContract {
+  const contract = buildTaskContract({
+    identifier: issueId, title: 'Fixture lane',
+    url: `https://linear.app/unit-talk/issue/${issueId}`,
+    description,
+  }, '2026-08-24T00:00:00.000Z');
+  let yml = buildSyncYmlWithTaskContract(issueId, contract);
+  if (extraFinding) yml = yml.replace('  findings: []', `  findings:\n    - ${extraFinding}`);
+  const p = path.join(destRoot, '.ops', 'sync', `${issueId}.yml`);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, yml);
+  return contract;
+}
+
+function runLaneStart(fixture: LaneFixture, extra: string[] = []): {
+  status: number | null; stdout: string; stderr: string;
+} {
+  const env = { ...process.env, PATH: `${fixture.bin}${path.delimiter}${process.env['PATH'] ?? ''}` };
+  // A capture must not be able to reach the real Linear from a test.
+  delete env['LINEAR_API_TOKEN'];
+  delete env['LINEAR_API_KEY'];
+  const r = spawnSync(LANE_TSX_BIN, [
+    path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), fixture.issueId,
+    '--tier', 'T2', '--branch', fixture.branch, '--lane-type', 'governance',
+    '--executor', 'claude', '--files', 'scripts/ops/fixture.ts', ...extra,
+  ], { cwd: fixture.root, encoding: 'utf8', timeout: 180_000, env });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+}
+
+function laneJson(out: string): Record<string, unknown> {
+  const start = out.indexOf('{');
+  const end = out.lastIndexOf('}');
+  assert.ok(start >= 0 && end > start, `expected JSON in lane-start output:\n${out}`);
+  return JSON.parse(out.slice(start, end + 1)) as Record<string, unknown>;
+}
+
+test('lane-start main() completes an offline resume without corrupting the lane contract', () => {
+  const f = seedLaneFixture('UTV2-999801', { withWorktree: true });
+  const seeded = seedContractAt(f.worktree, f.issueId,
+    '## Objective\nResume must reuse this contract.\n\n## Acceptance criteria\n- no refetch');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 0, `resume must succeed offline; stderr: ${run.stderr}\n${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_resumed');
+
+  // Named for what it actually observes: the resume completes offline and leaves
+  // the contract intact. It does NOT by itself prove the capture wiring is
+  // present -- it survives that mutation, because the lane's own copy is still
+  // readable. The wiring is proved by the conflict and capture-failure tests
+  // below, which is where M9a is detected.
+  const readBack = readTaskContract(f.issueId, f.worktree);
+  assert.equal(readBack.contract_hash, seeded.contract_hash,
+    'resume must keep the lane contract hash stable');
+});
+
+test('lane-start main() persists one contract to both roots, merging each against its own record', () => {
+  const f = seedLaneFixture('UTV2-999802', { withWorktree: true });
+  const seeded = seedContractAt(f.worktree, f.issueId,
+    '## Objective\nPersist to both roots.\n\n## Acceptance criteria\n- merged per destination',
+    'BRANCH-FINDING-1');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 0, `resume must succeed; stderr: ${run.stderr}\n${run.stdout}`);
+
+  // The branch's accumulated entities survive: merging the worktree write
+  // against the CONTROL checkout's record replaced them with the control copy's.
+  const worktreeYml = fs.readFileSync(path.join(f.worktree, '.ops', 'sync', `${f.issueId}.yml`), 'utf8');
+  assert.match(worktreeYml, /BRANCH-FINDING-1/u,
+    'the branch sync record must keep entities accumulated on the branch');
+
+  assert.equal(readTaskContract(f.issueId, f.worktree).contract_hash, seeded.contract_hash);
+  assert.equal(readTaskContract(f.issueId, f.root).contract_hash, seeded.contract_hash,
+    'both roots must carry the same contract');
+});
+
+test('lane-start main() refuses two different valid contracts instead of choosing one', () => {
+  const f = seedLaneFixture('UTV2-999803', { withWorktree: true });
+  seedContractAt(f.worktree, f.issueId,
+    '## Objective\nThe lane is working from this one.\n\n## Acceptance criteria\n- a');
+  seedContractAt(f.root, f.issueId,
+    '## Objective\nA DIFFERENT work order.\n\n## Acceptance criteria\n- b');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `divergent contracts must fail closed; ${run.stdout}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_contract_conflict');
+  assert.notEqual(out['control_contract_hash'], out['worktree_contract_hash']);
+});
+
+test('lane-start main() resume capture failure creates no lane state at all', () => {
+  // No contract anywhere and no token: the one bounded capture fails. Nothing
+  // may be reserved, written or mutated -- a half-started lane is worse than a
+  // refused one.
+  const f = seedLaneFixture('UTV2-999804', { withWorktree: true });
+  const manifestPath = path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`);
+  const before = fs.readFileSync(manifestPath, 'utf8');
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `capture failure must refuse; ${run.stdout}`);
+  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u);
+
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
+    'a failed capture must reserve no lease');
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'sync')), [],
+    'a failed capture must write no control sync record');
+  assert.deepEqual(fs.readdirSync(path.join(f.worktree, '.ops', 'sync')), [],
+    'a failed capture must write no lane sync record');
+  assert.equal(fs.readFileSync(manifestPath, 'utf8'), before,
+    'a failed capture must not touch the manifest');
+});
+
+test('lane-start main() fresh-lane capture failure refuses before creating any lane substrate', () => {
+  // Exercises the OTHER real capture call site. Without it, a fresh lane with no
+  // contract and no token would proceed past this point instead of refusing here.
+  const f = seedLaneFixture('UTV2-999805', { withWorktree: false });
+
+  const run = runLaneStart(f);
+  assert.equal(run.status, 1, `fresh capture failure must refuse; ${run.stdout}`);
+  assert.match(String(laneJson(run.stdout)['message']), /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u,
+    'the fresh path must refuse AT capture, before branch, worktree, lease or manifest creation');
+
+  assert.equal(fs.existsSync(path.join(f.root, 'docs', '06_status', 'lanes', `${f.issueId}.json`)), false,
+    'no manifest may be created when the capture fails');
+  assert.equal(fs.existsSync(f.worktree), false, 'no worktree may be created when the capture fails');
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
+    'no lease may be reserved when the capture fails');
+});
+
+test('F5: readmission resolves the branch contract instead of overwriting it with the control copy', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const blockStart = source.indexOf('if (readmitExistingBranch) {');
+  assert.notStrictEqual(blockStart, -1, 'expected a readmitExistingBranch block to exist');
+  const blockEnd = source.indexOf('\n    } else if', blockStart);
+  const block = blockEnd === -1 ? source.slice(blockStart) : source.slice(blockStart, blockEnd);
+
+  // Precondition: the block really is the readmission path and really does
+  // place metadata into the lane worktree. Without this the assertions below
+  // could pass against an empty or mis-located slice.
+  assert.match(block, /worktreeManifestDir/u, 'slice must be the readmission metadata path');
+
+  // The defect: the control checkout's sync file was copied wholesale over the
+  // branch's, discarding a divergent authoritative contract unread.
+  assert.doesNotMatch(
+    block,
+    /copyFileSync\(\s*syncPath/u,
+    'readmission must not copy the control sync file over the branch copy',
+  );
+  // The fix: resolve across BOTH roots once the branch worktree exists, then
+  // persist per-destination so each is merged against its own record.
+  assert.match(
+    block,
+    /resolveLaneTaskContract\(\s*issueId,\s*worktreePath,/u,
+    'readmission must resolve the contract against the checked-out branch worktree',
+  );
+  assert.match(
+    block,
+    /persistLaneTaskContract\(\s*issueId,\s*readmittedContract,\s*\[ROOT,\s*worktreePath\]\s*\)/u,
+    'the resolved contract must be persisted to both roots, not copied',
+  );
+});
+
+test('F5b: persisting a contract merges against each destination record rather than overwriting it', () => {
+  const issueId = 'UTV2-999908';
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-f5b-'));
+  const rootA = path.join(base, 'control');
+  const rootB = path.join(base, 'worktree');
+  for (const dir of [rootA, rootB]) {
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+  }
+
+  const contract = buildTaskContract({
+    identifier: issueId,
+    title: 'Merge not clobber',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description: '## Objective\nmerge\n\n## Acceptance criteria\n- merged',
+  });
+
+  // rootA already holds a record carrying a distinguishing proof path; rootB
+  // holds none. If persistence overwrote wholesale instead of merging against
+  // each destination, rootA's proof entry would disappear.
+  const existingA = [
+    'version: 1',
+    'approval:',
+    '  allow_multiple_issues: false',
+    '  skip_sync_required: false',
+    'entities:',
+    '  issues:',
+    `    - ${issueId}`,
+    '  findings: []',
+    '  controls: []',
+    '  proofs:',
+    `    - docs/06_status/proof/${issueId}/control-only.md`,
+    '',
+  ].join('\n');
+  const syncA = path.join(rootA, '.ops', 'sync', `${issueId}.yml`);
+  const syncB = path.join(rootB, '.ops', 'sync', `${issueId}.yml`);
+  fs.writeFileSync(syncA, existingA, 'utf8');
+
+  // Preconditions: rootA's marker is present and rootB has no record at all.
+  assert.match(existingA, /control-only\.md/u, 'fixture must carry a distinguishing entry');
+  assert.equal(fs.existsSync(syncB), false, 'rootB must start with no record');
+
+  persistLaneTaskContract(issueId, contract, [rootA, rootB]);
+
+  const afterA = fs.readFileSync(syncA, 'utf8');
+  const afterB = fs.readFileSync(syncB, 'utf8');
+  assert.equal(
+    readTaskContract(issueId, rootA).contract_hash,
+    contract.contract_hash,
+    'the contract must be written into the control record',
+  );
+  assert.equal(
+    readTaskContract(issueId, rootB).contract_hash,
+    contract.contract_hash,
+    'the contract must be written into the worktree record',
+  );
+  assert.match(
+    afterA,
+    /control-only\.md/u,
+    'the pre-existing entry must survive: persistence merges, it does not clobber',
+  );
+  assert.doesNotMatch(
+    afterB,
+    /control-only\.md/u,
+    "the other destination's record must not be copied across",
+  );
+});
+
+/**
+ * UTV2-1752 finding 1 (P1): readmission timing.
+ *
+ * The predecessor resolved the contract BEFORE the branch worktree existed.
+ * At that point only the control checkout is visible, so a branch carrying its
+ * own authoritative contract could not be seen: the early pass fetched a newer
+ * one from Linear, persisted it to ROOT, and the post-checkout pass then saw a
+ * contract at both roots -- failing closed as lane_contract_conflict against
+ * the branch's own valid record. It also made readmission require the network
+ * for a branch that already carries everything it needs.
+ */
+function seedContractRoots(issueId: string): {
+  control: string;
+  worktree: string;
+  branchContract: TaskContract;
+} {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readmit-'));
+  const control = path.join(base, 'control');
+  const worktree = path.join(base, 'worktree');
+  for (const dir of [control, worktree]) {
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+  }
+  const branchContract = buildTaskContract({
+    identifier: issueId,
+    title: 'Preserved branch work order',
+    url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+    description: '## Objective\npreserved branch objective\n\n## Acceptance criteria\n- preserved criterion',
+  });
+  fs.writeFileSync(
+    path.join(worktree, '.ops', 'sync', `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, branchContract),
+    'utf8',
+  );
+  return { control, worktree, branchContract };
+}
+
+test('G2: a readmitted branch reuses its OWN contract offline, after checkout', () => {
+  const issueId = 'UTV2-999953';
+  const f = seedContractRoots(issueId);
+
+  // Preconditions: only the branch carries a contract.
+  assert.equal(
+    fs.existsSync(path.join(f.control, '.ops', 'sync', `${issueId}.yml`)),
+    false,
+    'control checkout must start with no record for this issue',
+  );
+
+  // Post-checkout ordering: worktree root ahead of control, and an EMPTY token,
+  // which is what linearTaskToken() returns under containment.
+  const resolved = resolveTaskContractAcrossRoots(issueId, [f.worktree, f.control], '');
+
+  assert.equal(resolved.fetched, false, 'a branch-carried contract must touch no network');
+  assert.equal(resolved.rootIndex, 0, 'the branch copy must win over the control checkout');
+  assert.equal(
+    resolved.contract.contract_hash,
+    f.branchContract.contract_hash,
+    'the preserved branch contract must be reused verbatim',
+  );
+});
+
+test('G3 (inversion): resolving BEFORE checkout cannot serve that branch and fails closed', () => {
+  const issueId = 'UTV2-999954';
+  const f = seedContractRoots(issueId);
+
+  // This is the defect's shape: the pre-checkout pass sees only the control
+  // checkout, because the worktree does not exist yet. With no token it cannot
+  // invent one either, so the early capture is provably unable to serve a
+  // readmission that the post-checkout resolution above handles offline.
+  assert.throws(
+    () => resolveTaskContractAcrossRoots(issueId, [f.control], ''),
+    /LINEAR_API_TOKEN or LINEAR_API_KEY is required/u,
+    'pre-checkout resolution must not silently succeed for a readmitted branch',
+  );
+
+  // And the branch copy that it could not see is genuinely valid, so the
+  // failure is one of TIMING, not of a missing contract.
+  const afterCheckout = resolveTaskContractAcrossRoots(issueId, [f.worktree, f.control], '');
+  assert.equal(afterCheckout.fetched, false);
+  assert.equal(
+    afterCheckout.contract.contract_hash,
+    f.branchContract.contract_hash,
+    'the same lookup succeeds once the worktree exists — the defect is ordering',
+  );
+});
+
+test('G4: the readmission path performs no contract capture before the worktree exists', () => {
+  const source = fs.readFileSync(
+    path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'),
+    'utf8',
+  );
+  // Fresh lanes keep the early bounded capture; readmission must opt out of it.
+  assert.match(
+    source,
+    /const contractResolution = readmitExistingBranch\s*\n?\s*\?\s*null\s*\n?\s*:\s*resolveLaneTaskContract\(issueId,\s*null,\s*linearTaskToken\(\)\)/u,
+    'readmission must capture nothing before the worktree exists',
+  );
+  // The stale ROOT persist of that never-captured contract must be gone.
+  assert.doesNotMatch(
+    source,
+    /writeManifest\(manifest\);\s*\n\s*persistLaneTaskContract\(issueId,\s*contractResolution\.contract,\s*\[ROOT\]\);\s*\n\s*\n\s*if \(git\(\['branch', '--show-current'\]\)/u,
+    'the readmission path must not persist a contract it never captured',
   );
 });
