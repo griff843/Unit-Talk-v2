@@ -1052,6 +1052,15 @@ function main(): void {
         lease_code: lease.code,
         lease_path: lease.lease_path,
         manifest_path: relativeToRoot(manifestPath),
+        // Which root the work order came from, and whether the network was
+        // touched to get it. An operator reconciling a lane that is running on
+        // an unexpected contract needs to know WHICH copy won, and an
+        // automated caller needs `linear-capture` to be distinguishable from a
+        // reuse. Emitting it is also what makes the root precedence in
+        // `laneContractRoots` an observable property rather than a dead field.
+        contract_source: contractResolution.source,
+        contract_hash: contractResolution.contract.contract_hash,
+        contract_fetched: contractResolution.fetched,
         status: manifest.status,
       });
       return;
@@ -1284,11 +1293,12 @@ function main(): void {
         // genuine disagreement between two VALID contracts fails closed as
         // lane_contract_conflict. Each destination is merged against its own
         // sync record rather than overwritten wholesale.
-        const readmittedContract = resolveLaneTaskContract(
+        const readmittedResolution = resolveLaneTaskContract(
           issueId,
           worktreePath,
           linearTaskToken(),
-        ).contract;
+        );
+        const readmittedContract = readmittedResolution.contract;
         persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);
 
         const metadataPaths = [
@@ -1350,6 +1360,9 @@ function main(): void {
           file_scope_lock: normalizedFiles,
           expected_proof_paths: manifest.expected_proof_paths,
           preflight_token: preflight.tokenRelativePath,
+          contract_source: readmittedResolution.source,
+          contract_hash: readmittedContract.contract_hash,
+          contract_fetched: readmittedResolution.fetched,
           status: 'started',
         });
         return;
@@ -1543,6 +1556,9 @@ function main(): void {
       file_scope_lock: normalizedFiles,
       expected_proof_paths: manifest.expected_proof_paths,
       preflight_token: preflight.tokenRelativePath,
+      contract_source: contractResolution.source,
+      contract_hash: contractResolution.contract.contract_hash,
+      contract_fetched: contractResolution.fetched,
       status: 'started',
       // UTV2-1619 capability 18: an authorized admission must never look like an
       // ordinary one. Absent when the lane was admitted under the caps.

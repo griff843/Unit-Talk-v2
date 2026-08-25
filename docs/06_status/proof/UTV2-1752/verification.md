@@ -41,10 +41,16 @@ forward from the predecessor's proof.
   the author.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
-- [x] Each fix is load-bearing: eleven mutations were executed, every one was
-  detected, every G1-G14 control except G2 and G3 is killed by at least one of
-  them, and both sources restore byte-identical afterwards. G2/G3 are called
-  out explicitly below as NOT killed by any mutation in this battery.
+- [x] Each fix is load-bearing: the mutation battery was re-measured IN FULL at
+  this head by a scripted runner — 16 mutations, 16 detected, 0 survivors — and
+  both sources restored byte-identical after every one. Every control this lane
+  adds is killed by at least one mutation, including G2 and G3, which an earlier
+  revision of this file correctly recorded as unproven and which M14 now kills.
+- [x] Finding 1 (P1) is covered END-TO-END. `lane-start` main() is executed
+  through the real `--readmit-existing-branch` path by G19/G20/G21. Before this
+  head that path had NO test in this repository at all, and the third
+  independent review demonstrated the defect could be reintroduced with the
+  whole suite green.
 
 ## EVIDENCE:
 
@@ -60,14 +66,15 @@ forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5077 tests, 5077 pass, 0 fail, 0 skipped
+verify:static suite total    5081 tests, 5081 pass, 0 fail, 0 skipped
                              (0 `not ok` lines in the full run log)
-execution-packet suite       60 tests, 60 pass, 0 fail
-lane-start suite             47 tests, 47 pass, 0 fail
+execution-packet suite       61 tests, 61 pass, 0 fail
+lane-start suite             50 tests, 50 pass, 0 fail
 claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             15 of 15 mutations DETECTED across two rounds; see
-                             the mutation table below for exact kill targets
+mutation battery             16 of 16 DETECTED, re-measured in full at THIS head
+                             by a scripted runner; see the table below. Both
+                             sources restored byte-identical after each
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
                              proof (staging only)" and validated inside the required
                              `verify` context; read that context's conclusion on the
@@ -78,13 +85,13 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5077 tests, 5077 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. |
+| `pnpm verify:static` | PASS | Exit 0. 5081 tests, 5081 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS, but **does not cover this diff** | Stage of `pnpm verify:static` (exit 0). `tsconfig.json` has `files: []` and no project reference covering `scripts/`, so NONE of this lane's eight changed source files are type-checked. This is why a `.heading` access on a `string` shipped green. `tsconfig.json` is not in this lane's `file_scope_lock`; reported, not fixed. |
-| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 60 tests, 0 failures. |
-| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 47 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 61 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 50 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +20 | 5057 at the preserved head to 5077 here. The delta is exactly G1-G18 plus G2b/G2c and nothing else. |
+| Test delta | +24 | 5057 at the preserved head to 5081 here. The delta is exactly G1-G18, G2b/G2c, G22, and the three end-to-end readmission tests G19/G20/G21 — and nothing else. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -189,12 +196,23 @@ original blind `copyFileSync(syncPath, ...)` was still present.
 
 ### Substantive diff stat
 
+Measured at the head this bundle describes, by the command shown:
+
 ```text
-scripts/ops/  8 files, 3618 insertions(+), 41 deletions(-)
+$ git diff --numstat origin/main...HEAD -- scripts/ops/
+  8 files, 5087 insertions(+), 41 deletions(-)
 ```
 
-The whole-diff insertion total is deliberately not quoted: it counts this proof
-bundle, so recording it here would change it.
+Two notes, both from review findings:
+
+- The whole-diff insertion total is deliberately not quoted: it counts this
+  proof bundle, so recording it here would change it.
+- An earlier revision recorded `3618 insertions` — the figure at the SHA anchor
+  `3e7abdbb`, a tree that predates most of the tests this bundle reports. That
+  is precisely the "measured at the anchor, not the head" defect this document's
+  own header claims to have repudiated, and a third independent review caught it
+  still present. The command is now quoted alongside the figure so the claim is
+  reproducible rather than asserted.
 
 
 ## Review threads (PR #1447)
@@ -260,46 +278,64 @@ block as one item with its newlines.
 
 ## Mutation battery
 
-Re-measured from scratch against the current tree. Every mutation was applied
-to a byte-verified baseline and reverted **by file copy, never by
-`git checkout`**; every restore was re-checked by `sha256`.
+**Re-measured in full at this head by a scripted runner.** Earlier revisions of
+this file carried rows and baseline hashes belonging to a previous tree; three
+consecutive independent reviews found figures in this bundle that had been
+measured somewhere other than where they were claimed. The table below is the
+runner's output, and `evidence.json`'s `mutation_testing` block is generated
+from the same JSON rather than transcribed.
 
-Baselines: `execution-packet.ts` `4c13a569357e33adc56e70e79416261bfcf28e7796a9cc858886807cc0bf0fe5`,
-`lane-start.ts` `64c8beb94adbad60b5decff42781d67d05e7901a4242c848c7b8976878fee60c`.
-Both matched after every single mutation.
+Each mutation was applied to a `sha256`-verified baseline, both suites were run,
+and the baseline was restored **by file copy, never by `git checkout`**, with
+`sha256` re-checked before the next mutation.
 
-| # | Mutation | Tests killed | Intended target |
+Baselines, at this head:
+`execution-packet.ts` `982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86`,
+`lane-start.ts` `6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c`.
+Both matched after every mutation.
+
+| # | Mutation | File | Tests killed |
 |---|---|---|---|
-| M1 | `sectionLines` reserved-descendant exemption removed | G1, G6, G7, G8 | G1 |
-| M2 | residue claimed-child subtraction removed | G5 | G5 |
-| M3 | readmission capture guard removed | G4 | G4 |
-| M4 | reservation predicate given its own hardcoded five | 53 tests | G6, G7, G8 |
-| M4b | narrowed **only** on the nested-suppression path | G6, G7, G8 | G6, G7, G8 |
-| M5 | `parseSections` fence tracking disabled | G9, G11 | G9 |
-| M6 | heading match reverted to the trimmed line | G10, G13 | G10 |
-| M7 | `sectionItems` fence handling disabled | G11 | G11 |
-| M8 | `sectionItems` indented-code handling disabled | G10, G13 | G13 |
-| M9 | unreserved extraction heading added, `sectionLines` guard removed | G12 | G12 |
-| M10 | word boundary removed from `headingMatches` | G14 | G14 |
+| M1 | `sectionLines` reserved-descendant subtraction disabled | `execution-packet.ts` | `G1`, `G6`, `G7`, `G8` |
+| M2 | `unmappedSections` claimed-child subtraction disabled | `execution-packet.ts` | `G5` |
+| M3 | `parseSections` fence tracking destroyed (`FENCE_RE` never matches) | `execution-packet.ts` | 19 tests, including `B1`, `F3`, `F4`, `F8` |
+| M4 | heading regex leading-space bound `^ {0,3}` widened to `^ *` | `execution-packet.ts` | `G10`, `G13`, `G17` |
+| M5 | `sectionLines` unreserved-extraction-heading guard removed | `execution-packet.ts` | `G12` |
+| M6 | `headingMatches` prefix word-boundary removed | `execution-packet.ts` | `G14` |
+| M7 | `indentWidth` stops expanding a tab to the next 4-column stop | `execution-packet.ts` | `G16`, `G22` |
+| M8 | a blank line ends an indented run in `sectionItems` | `execution-packet.ts` | `G17` |
+| M9 | `resolveTaskContractAcrossRoots` takes the LAST matching root, not the first | `execution-packet.ts` | `G21`, `G2b` |
+| M10 | `laneContractRoots` returns `[ROOT, worktreePath]` (order reversed) | `lane-start.ts` | `G15`, `G21` |
+| M11 | `resolveReadmissionContract` captures on the readmission path too | `lane-start.ts` | `G20`, `G4` |
+| M12 | readmission resolves the contract against ROOT only (finding 1, ordering half) | `lane-start.ts` | `F5`, `G19`, `G20`, `G21` |
+| M13 | finding 1 restored: control's sync record written over the branch's via `writeFileSync`/`readFileSync` | `lane-start.ts` | `G19`, `G20` |
+| M14 | offline reuse disabled — a valid contract at a root is never reused | `execution-packet.ts` | 7 tests, including `G2`, `G20`, `G21`, `G2b` |
+| M15 | `TaskContractConflictError` throw removed (disagreement no longer fails closed) | `execution-packet.ts` | `F1`, `G19`, `G2c`, `lane-start main() refuses two different valid contracts instead of choosing one` |
+| M16 | `persistTaskContractToRoots` merges every destination against `roots[0]` | `execution-packet.ts` | `F5b`, `lane-start main() persists one contract to both roots, merging each against its own record` |
 
-M4 kills 53 tests rather than a handful. That is not a loose assertion: with the
-reservation set narrowed, the fail-closed guard now inside `sectionLines`
-refuses every extraction heading it no longer recognises, so the defect can no
-longer be introduced quietly at all. M4b narrows only the nested-suppression
-path, leaving the guard intact, and isolates the three controls that catch the
-defect on its own terms.
+**16 mutations, 16 detected, 0 survivors.**
 
-M5 kills two tests: destroying fence tracking in the parser leaves
-`sectionItems` with no intact fence to preserve, so G11 cannot pass either. M7
-isolates the `sectionItems` half. M6 and M8 overlap on G13 for the same reason —
-an indented fence depends on both the heading-indentation rule and the
-indented-run handling.
+Reading notes, so no row is read as stronger than it is:
 
-**Not proven load-bearing by this battery: G2 and G3.** No mutation executed
-here kills them. G3 is an inversion test that asserts a throw, and G2 asserts
-the offline-reuse path that the finding-1 fix enables; neither is exercised by
-removing the guard, because M3's damage is caught first by G4. This is stated
-rather than left for a reader to infer from the table.
+- **M3 is blunt.** Destroying `FENCE_RE` outright breaks fence handling
+  everywhere, so it kills 19 tests rather than isolating one. It establishes
+  that fence tracking is load-bearing, not that any single control is specific
+  to it. M14 is broad for the same reason.
+- **M12 and M13 are the finding-1 mutations.** M13 is the reintroduction a third
+  independent review used to show that, before G19/G20 existed, the defect could
+  be restored with the whole suite green. Both are now killed end-to-end.
+- **M10 and M9 changed no behaviour before this head.** Root precedence decided
+  only which root was *reported* as the contract's source, and that value was
+  emitted nowhere. It is now emitted as `contract_source`, which is what lets
+  G21 kill both mutations through `lane-start` main() rather than through a
+  unit test on an unobservable field.
+- **G2 and G3 are no longer unproven.** An earlier revision of this section
+  stated that no mutation in the battery killed them. M14 kills both, and the
+  third independent review's equivalent mutation did the same. That earlier
+  statement is superseded, not deleted, because it was cited elsewhere in this
+  bundle.
+- The two `lane-start main()` tests that appear by name in M15 and M16 predate
+  this lane; they are reported verbatim as the runner emitted them.
 
 ### Three vacuous controls, all disclosed
 
@@ -437,20 +473,98 @@ five-key `CONTRACT_FIELD_HEADINGS` list — the very defect the same document
 declares fixed two sections earlier — as current. One of three bundle files was
 stale while finding 4 claimed all three were regenerated.
 
+## Third independent review — the eighth and ninth, and the P1 was still open
+
+A third independent review of head `56c4700b` returned CHANGES_REQUIRED. It
+reproduced every suite count and the `verify:static` total exactly, confirmed
+the executor-entrypoint port byte-for-byte, ran an eighteen-mutation battery of
+its own, and upheld the fail-closed correction recorded above — extending it:
+because `LaneContractResolution.source` had no consumer anywhere in production,
+root precedence was **behaviourally inert**, so G15 and G2b were guarding a
+value nothing could observe. Verified independently: the two `.source` reads in
+`lane-start.ts` are `ResolvedActiveLane.source`, a different type.
+
+**Finding 1 — this lane's headline P1 — had no control that survived semantic
+reintroduction.** The review restored the original clobber with
+`fs.writeFileSync(dest, fs.readFileSync(syncPath))` in place of the removed
+`copyFileSync`. All 47 tests passed. F5's positive regexes still matched, its
+negative regex was bypassed, and G2/G2b/G2c/G3/G4/G15 were untouched — every one
+of them exercises an extracted helper or the shared resolver directly, so none
+executes the readmission call site. The defect this lane exists to close was
+guarded exclusively by a grep this same document classes as theatre.
+
+Confirmed by measurement before fixing: `--readmit-existing-branch` appeared in
+**zero** tests in this repository. `lane-start` main() had never been executed
+through the readmission path by any test, in this lane or before it.
+
+The remedy is end-to-end. `seedReadmissionFixture()` builds a throwaway git
+repository with a local bare origin, a branch carrying its own committed work
+order, a readmission preflight token, and stub `gh`/`pnpm` binaries on PATH, and
+runs `lane-start.ts` as a program:
+
+- **G19** — control and branch carry *different* valid contracts. Readmission
+  must refuse with `lane_contract_conflict`, and the branch's committed record
+  must be byte-unchanged afterwards. Under the defect this run SUCCEEDS.
+- **G20** — the branch carries the only contract. Readmission must reuse it with
+  `contract_fetched: false` (the child environment has no `LINEAR_*` token, so a
+  capture would refuse), and the control checkout must inherit it.
+- **G21** — both roots agree. The lane must report `contract_source:
+  lane-worktree`, which is the root-ordering property made observable.
+
+Measured: the reintroduction is killed by G19 and G20; resolving control-only is
+killed by G19, G20 and G21; and the two ordering mutations are now each killed
+by an end-to-end test as well as their unit test.
+
+**The ninth vacuity was a field emitted nowhere.** `LaneContractResolution.source`
+was computed and never read, so the precedence encoded in `laneContractRoots`
+could not be observed by an operator or an automated caller. Rather than delete
+it and retire its two tests, `lane-start` now emits `contract_source`,
+`contract_hash` and `contract_fetched` on all three success paths — resume,
+readmission and fresh start. An operator reconciling a lane running on an
+unexpected work order can now see which copy won and whether the network was
+touched, and G21 asserts it end-to-end.
+
+**Finding 4 recurred a third time.** `diff-summary.md` still reported the
+figures of two heads ago, still asserted the `G8` claim this document had
+already labelled false, and still credited finding 1 to G2/G3/G4 — while
+carrying a new paragraph *admitting* it had been stale. The mutation baselines
+quoted in this file were `eec27f18`'s while `evidence.json` carried the head's;
+"3618 insertions" was the figure at the SHA anchor; and a single bundle held
+three different mutation counts.
+
+Re-synchronising was tried twice and failed twice, so the duplication is gone
+instead: every measured figure is single-sourced here, `evidence.json`'s
+`mutation_testing` block is generated from the battery runner's own output
+rather than typed, and `diff-summary.md` quotes no figures at all.
+
+**A P3 behaviour change was undisclosed.** Column-aware indentation means a
+tab-indented nested list item now measures four columns and is held verbatim as
+code rather than re-flowed into its parent. No content is lost, and a
+four-space nested item already behaved this way — tabs extended an existing rule
+rather than creating a class. G22 pins both halves and asserts they classify
+identically, so a future tab-specific special case fails. Narrowing this
+correctly needs real list-nesting state in `sectionItems`, which is a change of
+scope rather than a fix; it is disclosed here, not silently kept.
+
 ### Running count of my own vacuous controls
 
-Seven, across two review rounds. Three vacuous assertions (G1's original form,
-G10's first rewrite, the G9/G10 structural halves), three source-text greps
-(G8, G4, F5), and one fixture that could not fail on the property it was cited
-for (G2). **Four of the seven were found by independent reviewers, not by me.**
+Nine, across three review rounds. Three vacuous assertions (G1's original form,
+G10's first rewrite, the G9/G10 structural halves), four source-text greps
+(G8, G4, F5, and F5 again after re-anchoring — it remained the sole detector of
+the P1), one fixture that could not fail on the property it was cited for (G2),
+and one pair of tests guarding a field with no consumer (G15/G2b, counted once).
+**Six of the nine were found by independent reviewers, not by me.**
 
-The pattern across all seven is one thing: I asserted the *presence* of a fix
-rather than its *effect*. An occurrence count, a source grep, and a
-single-root fixture all share the property that they pass whether or not the
-code is correct. The only reliable detector has been executing the mutation the
-control names and watching what dies — which is why every control in this lane
-now carries a named mutation, and why the two that still do not (G3, and the
-negative half of F5) are stated as such rather than left to inference.
+The pattern across all nine is one thing: I asserted the *presence* of a fix
+rather than its *effect*. An occurrence count, a source grep, a single-root
+fixture and an unobservable field all share the property that they pass whether
+or not the code is correct. The only reliable detector has been executing the
+mutation the control names and watching what dies.
+
+Two of the three rounds found a defect in the control the *previous* round had
+just installed. That is the strongest single statement this bundle can make
+about its own reliability, and it is the reason no round of this lane treats a
+clean review as a formality.
 
 ### Residual risk
 

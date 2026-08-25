@@ -37,20 +37,20 @@
       "scripts/ops/lane-start.test.ts"
     ],
     "already_present_on_main": [],
-    "sha256_prefixes_at_head": {
-      "claude-exec.ts": "7b1577a356d338d1",
-      "claude-exec.test.ts": "64532e51f11a7658",
-      "codex-exec.ts": "927868f53c18a3df",
-      "codex-exec.test.ts": "55f220781c063985",
-      "execution-packet.ts": "485a2580b123897f",
-      "execution-packet.test.ts": "8d1c2b94cbb2b256",
-      "lane-start.ts": "e5546157e9fe2283",
-      "lane-start.test.ts": "9932cd876d05bd79"
-    },
-    "sha256_note": "The prefixes recorded here are the PORTED values from the preserved head d54abcbd, used to prove the four executor entrypoints were carried over byte-identically. They are NOT head values for the two files this lane changed; for those see mutation_testing.baselines."
+    "sha256_note": "Full sha256 of each file AS IT IS AT THIS HEAD. The previous key held prefixes measured at the ported head d54abcbd for the four entrypoints and at an earlier head for the four changed files, while being labelled \"at_head\" -- a third independent review flagged the mislabel. The four ported entrypoints are byte-identical to d54abcbd; the four changed files are not, and never were.",
+    "sha256_at_head": {
+      "claude-exec.ts": "7b1577a356d338d1ebc1c3db67a4223668280babe8f30f9e76e0813161aa2f98",
+      "claude-exec.test.ts": "64532e51f11a76582d443e6331c4f6e8c1450be6345c7adf51839ae4d04526fb",
+      "codex-exec.ts": "927868f53c18a3dfe07fc00dc6c30929a041acaea57de64f83f4ad900839b138",
+      "codex-exec.test.ts": "55f220781c0639857800210373eb497df9b056716827c6987c5d56fbf9c166f5",
+      "execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
+      "execution-packet.test.ts": "7e6b2ed2e38bf45e51f607c7f381de63a0b95eb052112e61676af94e1e694ec5",
+      "lane-start.ts": "6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c",
+      "lane-start.test.ts": "c20ba136f15f3784e12e8081a526bd76722363f0560d767784a41795b9a3e959"
+    }
   },
   "scope": {
-    "substantive_diff_stat": "scripts/ops: 8 files, 3618 insertions(+), 41 deletions(-)",
+    "substantive_diff_stat": "scripts/ops: 8 files, 5087 insertions(+), 41 deletions(-) (git diff --numstat origin/main...HEAD -- scripts/ops/, measured at the head this bundle describes; the whole-diff total is deliberately not quoted because it counts this bundle)",
     "diff_stat_note": "The whole-diff insertion total is deliberately not quoted: it counts this proof bundle, so recording it would change it."
   },
   "static_proof": {
@@ -177,10 +177,10 @@
       "id": 4,
       "severity": "P2",
       "title": "Proof truth",
-      "status": "FIXED",
+      "status": "ADDRESSED STRUCTURALLY (recurred in rounds 2 and 3)",
       "covered_by": [],
       "mutation": null,
-      "detail": "This bundle is regenerated from measurement at the verified source SHA. Every count, mutation summary and status here was measured at that SHA; no figure or unresolved-defect claim is carried over from the predecessor's bundle."
+      "detail": "Rounds 2 and 3 each found this bundle carrying figures from a previous head. Re-synchronising by hand was attempted twice and failed twice. The measured figures are now single-sourced in verification.md, this file's mutation_testing and diff-stat blocks are GENERATED from the battery runner's output and from git, and diff-summary.md quotes no figures at all. The SHA anchor is an ancestor commit used only because a file cannot contain its own SHA; it is not where any figure was measured, and no text in this bundle now claims it is."
     },
     {
       "id": "review-round-2",
@@ -218,12 +218,12 @@
     "t1_database_verification_status": "SATISFIED_BY_CI",
     "ready_for_pm_review": false,
     "pending": [
-      "exact-head CI green after the thread fixes",
+      "exact-head CI green at the new head",
       "fresh EXECUTOR_RESULT at the new head",
-      "new independent exact-head review",
+      "a FOURTH independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "Not ready for merge. A SECOND independent exact-head review returned CHANGES_REQUIRED, finding a sixth vacuous control on the lane own P1 plus the named harm surviving at tab indentation. All findings are addressed at the new head, which requires a THIRD independent review and a new PM verdict."
+    "blocking_on": "Not ready for merge. A THIRD independent exact-head review returned CHANGES_REQUIRED and found that finding 1 -- this lane headline P1 -- was still guarded only by a source-text grep, and that root precedence was behaviourally inert because the field encoding it was emitted nowhere. Both are now closed end-to-end (G19/G20/G21) and the mutation battery was re-measured in full at this head. Three consecutive reviews have each found a defect the previous round installed or missed, so a clean fourth review is not treated as a formality by this bundle."
   },
   "review_threads": [
     {
@@ -261,224 +261,187 @@
     }
   ],
   "mutation_testing": {
-    "method": "Applied to a byte-verified baseline, reverted BY FILE COPY (never git checkout), every restore re-checked by sha256.",
+    "method": "Each mutation applied to a sha256-verified baseline, both suites run, baseline restored BY FILE COPY (never git checkout) and re-verified by sha256 before the next mutation. Executed by a scripted runner; the table below is its output, not a transcription.",
+    "runner": "scratchpad battery.py (three-round battery, re-measured in full at this head)",
     "baselines": {
       "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
-      "scripts/ops/lane-start.ts": "5a2a801f1e89777f57cdbd2c5145739f95b13a65efae9012ccec4de6a6cc3540"
+      "scripts/ops/lane-start.ts": "6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c"
     },
-    "restore_verified": true,
-    "mutations": 15,
-    "detected": 15,
+    "restore_verified": "sha256 equality after every mutation",
+    "mutations": 16,
+    "detected": 16,
+    "undetected": [],
     "battery": [
       {
         "id": "M1",
-        "mutation": "sectionLines reserved-descendant exemption removed",
-        "killed": [
+        "file": "execution-packet.ts",
+        "intended_target": "G1",
+        "tests_killed": [
           "G1",
           "G6",
           "G7",
           "G8"
-        ],
-        "intended": [
-          "G1"
         ]
       },
       {
         "id": "M2",
-        "mutation": "residue claimed-child subtraction removed",
-        "killed": [
-          "G5"
-        ],
-        "intended": [
+        "file": "execution-packet.ts",
+        "intended_target": "G5",
+        "tests_killed": [
           "G5"
         ]
       },
       {
         "id": "M3",
-        "mutation": "readmission capture guard removed",
-        "killed": [
-          "G4"
-        ],
-        "intended": [
-          "G4"
-        ],
-        "note": "G4 is now behavioural (spy resolver). Measured: G2 and G3 do NOT catch this mutation."
+        "file": "execution-packet.ts",
+        "intended_target": "G9",
+        "tests_killed": [
+          "B1",
+          "F3",
+          "F4",
+          "F8",
+          "G1",
+          "G11",
+          "G14",
+          "G18",
+          "G22",
+          "G5",
+          "G6",
+          "G7",
+          "G8",
+          "G9",
+          "a present but empty acceptance section fails closed instead of using the legacy fallback",
+          "a section heading with an empty body is still carried as residue",
+          "task contract captures and renders every required work-order field",
+          "the standalone packet CLI produces a packet for a newly admitted pre-contract lane",
+          "unclassified content keeps its line and formatting semantics"
+        ]
       },
       {
         "id": "M4",
-        "mutation": "reservation predicate given its own hardcoded five",
-        "killed": [
-          "53 tests"
-        ],
-        "intended": [
-          "G6",
-          "G7",
-          "G8"
-        ],
-        "note": "Broad because the fail-closed guard in sectionLines now refuses every unrecognised extraction heading, so the defect cannot be introduced quietly. M4b isolates the controls."
-      },
-      {
-        "id": "M4b",
-        "mutation": "narrowed ONLY on the nested-suppression path",
-        "killed": [
-          "G6",
-          "G7",
-          "G8"
-        ],
-        "intended": [
-          "G6",
-          "G7",
-          "G8"
+        "file": "execution-packet.ts",
+        "intended_target": "G10",
+        "tests_killed": [
+          "G10",
+          "G13",
+          "G17"
         ]
       },
       {
         "id": "M5",
-        "mutation": "parseSections fence tracking disabled",
-        "killed": [
-          "G9",
-          "G11"
-        ],
-        "intended": [
-          "G9"
-        ],
-        "note": "Cascade: with no intact fence G11 cannot pass either. M7 isolates the sectionItems half."
+        "file": "execution-packet.ts",
+        "intended_target": "G12",
+        "tests_killed": [
+          "G12"
+        ]
       },
       {
         "id": "M6",
-        "mutation": "heading match reverted to the trimmed line",
-        "killed": [
-          "G10",
-          "G13"
-        ],
-        "intended": [
-          "G10"
+        "file": "execution-packet.ts",
+        "intended_target": "G14",
+        "tests_killed": [
+          "G14"
         ]
       },
       {
         "id": "M7",
-        "mutation": "sectionItems fence handling disabled",
-        "killed": [
-          "G11"
-        ],
-        "intended": [
-          "G11"
+        "file": "execution-packet.ts",
+        "intended_target": "G16",
+        "tests_killed": [
+          "G16",
+          "G22"
         ]
       },
       {
         "id": "M8",
-        "mutation": "sectionItems indented-code handling disabled",
-        "killed": [
-          "G10",
-          "G13"
-        ],
-        "intended": [
-          "G13"
+        "file": "execution-packet.ts",
+        "intended_target": "G17",
+        "tests_killed": [
+          "G17"
         ]
       },
       {
         "id": "M9",
-        "mutation": "unreserved extraction heading added and sectionLines guard removed",
-        "killed": [
-          "G12"
-        ],
-        "intended": [
-          "G12"
+        "file": "execution-packet.ts",
+        "intended_target": "G2b/G21",
+        "tests_killed": [
+          "G21",
+          "G2b"
         ]
       },
       {
         "id": "M10",
-        "mutation": "word boundary removed from headingMatches",
-        "killed": [
-          "G14"
-        ],
-        "intended": [
-          "G14"
+        "file": "lane-start.ts",
+        "intended_target": "G15/G21",
+        "tests_killed": [
+          "G15",
+          "G21"
         ]
-      }
-    ],
-    "not_proven_load_bearing": {
-      "controls": [
-        "G3"
-      ],
-      "detail": "G3 is killed only via a pre-existing LINEAR_API_TOKEN guard string that predates this lane; it asserts nothing about readmission ordering. G2 covers the offline property only \u2014 G2b/G2c/G15 carry precedence and fail-closed."
-    },
-    "vacuity_disclosure": [
-      {
-        "control": "G1 (original form)",
-        "defect": "Residue subtraction neutralised and the suite still passed; G1's ancestor is itself a contract field and never reaches the residue path.",
-        "resolution": "G5 added; M2 kills it.",
-        "found_by": "author"
-      },
-      {
-        "control": "G10 (first rewrite)",
-        "defect": "Asserted only an occurrence count, which holds with or without the defect; M6 killed nothing.",
-        "resolution": "Rewritten to assert the # survives and no section opens.",
-        "found_by": "author"
-      },
-      {
-        "control": "G9 and G10 structural halves",
-        "defect": "Read entry.heading off elements of unmapped_sections, which is string[]; the value was always undefined so assert.equal(false,false) passed unconditionally. These were the ONLY assertions covering the phantom-section half of the defect, and this bundle previously claimed they held.",
-        "resolution": "Now entry.split(chr(10))[0]; the structural assertion was also moved AHEAD of the textual one, because running second it was never reached under mutation.",
-        "found_by": "independent reviewer"
-      },
-      {
-        "control": "G8 (grep form)",
-        "defect": "Asserted a lexical source shape, not behaviour. Reviewer defeated it twice: a hardcoded reservation list reintroducing the exact named defect, and a const hoist adding an unreserved heading.",
-        "resolution": "G8 is now behavioural over every heading of every field; the evasion it structurally cannot see is closed by a fail-closed guard in sectionLines, covered by G12.",
-        "found_by": "independent reviewer"
-      },
-      {
-        "control": "G4 (grep form)",
-        "defect": "Grepped lane-start.ts for the shape of a ternary. Measured that G2/G3 do not catch the finding-1 defect, so this grep was the only coverage for a P1 fix.",
-        "resolution": "Decision extracted to resolveReadmissionContract; G4 injects a spy and asserts it is never called on readmission and called once for a fresh lane.",
-        "found_by": "author, prompted by the reviewer's finding on G8"
-      },
-      {
-        "control": "G2",
-        "defect": "Its fixture seeded a contract in exactly ONE root, so rootIndex===0 restated the fixture and held under any precedence. The ordering half of finding 1 (P1) therefore had NO live control: three separate reintroductions passed green.",
-        "resolution": "G2 annotated to claim only the offline property. G2b (both roots agree -> lane root is the reported source), G2c (roots disagree -> fail closed), G15 (root order asserted directly) added. L2/M11 now killed.",
-        "found_by": "independent reviewer"
-      },
-      {
-        "control": "F5",
-        "defect": "A source grep anchored on the FIRST `if (readmitExistingBranch) {`, which is the RESUME path throw-guard, with an end anchor that never matched \u2014 so the slice was the remaining 26KB of the file and the assertions were satisfied by the resume path. Added by this PR, undisclosed, while this bundle condemned exactly this pattern in G4.",
-        "resolution": "Re-anchored on the readmission metadata write, both anchors asserted, slice length bounded. L3 now killed. DISCLOSED: still a source-text control; G15/G2b/G2c carry the behavioural load.",
-        "found_by": "independent reviewer"
-      }
-    ],
-    "round_2": [
-      {
-        "id": "L2",
-        "mutation": "laneContractRoots order reversed (control ahead of lane worktree)",
-        "killed": [
-          "G15"
-        ],
-        "previously": "PASSED GREEN \u2014 no control existed"
-      },
-      {
-        "id": "L3",
-        "mutation": "readmission resolves control-only (worktreePath -> null)",
-        "killed": [
-          "F5"
-        ],
-        "previously": "PASSED GREEN \u2014 F5 was mis-anchored to the resume path"
       },
       {
         "id": "M11",
-        "mutation": "root precedence reversed inside resolveTaskContractAcrossRoots",
-        "killed": [
-          "G2b"
-        ],
-        "previously": "PASSED GREEN \u2014 every fixture seeded one root"
+        "file": "lane-start.ts",
+        "intended_target": "G4",
+        "tests_killed": [
+          "G20",
+          "G4"
+        ]
       },
       {
-        "id": "M9prime",
-        "mutation": "third heading mirror reinstated, omitting an alias",
-        "killed": [
-          "G18"
-        ],
-        "previously": "PASSED GREEN \u2014 mirror was unguarded"
+        "id": "M12",
+        "file": "lane-start.ts",
+        "intended_target": "G19/G20/G21",
+        "tests_killed": [
+          "F5",
+          "G19",
+          "G20",
+          "G21"
+        ]
+      },
+      {
+        "id": "M13",
+        "file": "lane-start.ts",
+        "intended_target": "G19/G20",
+        "tests_killed": [
+          "G19",
+          "G20"
+        ]
+      },
+      {
+        "id": "M14",
+        "file": "execution-packet.ts",
+        "intended_target": "G2/G3 (offline reuse)",
+        "tests_killed": [
+          "G2",
+          "G20",
+          "G21",
+          "G2b",
+          "G3 (inversion)",
+          "lane-start main() completes an offline resume without corrupting the lane contract",
+          "lane-start main() persists one contract to both roots, merging each against its own record"
+        ]
+      },
+      {
+        "id": "M15",
+        "file": "execution-packet.ts",
+        "intended_target": "G2c/G19",
+        "tests_killed": [
+          "F1",
+          "G19",
+          "G2c",
+          "lane-start main() refuses two different valid contracts instead of choosing one"
+        ]
+      },
+      {
+        "id": "M16",
+        "file": "execution-packet.ts",
+        "intended_target": "F5b (per-destination merge)",
+        "tests_killed": [
+          "F5b",
+          "lane-start main() persists one contract to both roots, merging each against its own record"
+        ]
       }
-    ]
+    ],
+    "note": "Every row was re-executed against THIS head. Earlier revisions of this bundle carried rows and baselines measured at a previous head; three consecutive reviews found figures in this bundle that belonged to a different tree."
   }
 }

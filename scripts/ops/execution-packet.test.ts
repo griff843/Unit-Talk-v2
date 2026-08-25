@@ -1927,3 +1927,57 @@ test('G10: an indented code line beginning with "#" is not parsed as a heading',
     'the indented comment must not be collapsed onto the command it precedes',
   );
 });
+
+test('G22: a nested list item indented to four columns is held verbatim -- tabs and spaces alike', () => {
+  // Disclosed by a third independent review as an undisclosed behaviour change:
+  // making indentation column-aware means `\t- nested` now measures four
+  // columns and is classed as indented code, where the space-only rule left it
+  // to be flattened into the parent list item.
+  //
+  // This is NOT a tab-specific quirk, and that is the point of asserting both
+  // halves below: a four-SPACE nested item already behaved this way before this
+  // lane touched anything. Tab handling extended an existing rule consistently
+  // rather than introducing a new class. `sectionItems` carries no
+  // list-continuation context, so it cannot tell a nested bullet from a code
+  // line -- and for a module whose contract is "verbatim", erring toward
+  // preservation is the safe direction: the text survives intact, it is simply
+  // not re-flowed. Narrowing it would require real list-nesting state, which is
+  // a change of scope, not a fix. This test pins the behaviour so it is
+  // specified rather than accidental.
+  const build = (indent: string): string[] => {
+    const description = [
+      '## Objective',
+      'ship the transport',
+      '',
+      '## Acceptance criteria',
+      '- parent item',
+      `${indent}- nested bullet`,
+    ].join('\n');
+    return buildTaskContract({
+      identifier: 'UTV2-999969',
+      title: 'Nested list item indentation',
+      url: 'https://linear.app/unit-talk-v2/issue/UTV2-999969',
+      description,
+    }).acceptance_criteria;
+  };
+
+  const tabbed = build('\t');
+  const spaced = build('    ');
+
+  assert.ok(
+    tabbed.includes('\t- nested bullet'),
+    `a tab-indented nested item is held verbatim; got ${JSON.stringify(tabbed)}`,
+  );
+  assert.ok(
+    spaced.includes('    - nested bullet'),
+    `a four-space nested item is held verbatim; got ${JSON.stringify(spaced)}`,
+  );
+  assert.deepEqual(
+    tabbed.map((item) => item.replace(/^\t/u, '')),
+    spaced.map((item) => item.replace(/^ {4}/u, '')),
+    'a tab and four spaces must classify identically -- if they diverge, the ' +
+      'column rule has become a tab-specific special case',
+  );
+  // The content must survive either way. Loss, not re-flow, would be the defect.
+  assert.ok(tabbed.join('\n').includes('nested bullet'));
+});

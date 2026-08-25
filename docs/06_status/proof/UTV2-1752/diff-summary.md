@@ -53,7 +53,12 @@ Three changes, two of them from PR review threads:
    so a nested non-goal was both retained by its acceptance ancestor and
    extracted as a non-goal — the same sentence became a thing to do and a thing
    not to do. A list could not have expressed `non goals`' prefix matching
-   anyway. `G8` fails if any `sectionLines` call names a heading literal again.
+   anyway. An earlier revision of this file claimed `G8` fails if any
+   `sectionLines` call names a heading literal again. That was FALSE: G8 only
+   fires on a literal that DIVERGES from the table. The property is enforced in
+   production code instead -- `sectionLines` throws on any extraction heading
+   that is not reserved -- because no test that enumerates the table can detect
+   a heading absent from it.
 3. **Fence and indentation awareness** (`PRRT_kwDORr3vD86cHGhc`). `parseSections`
    tracks fenced blocks and requires at most three leading spaces, and
    `sectionItems` keeps a fenced block as one item with its newlines. The second
@@ -77,13 +82,20 @@ No 1752 edits. Present so the packet path is whole.
 
 ### Tests
 
-- `execution-packet.test.ts`: adds G1, G5, the thread regressions G6–G11, and
-  G12–G14 plus G16–G18 from two rounds of independent review. **60/60 pass.**
+- `execution-packet.test.ts`: adds G1, G5, the thread regressions G6-G11, and
+  G12-G14, G16-G18 and G22 from three rounds of independent review.
 - `lane-start.test.ts`: adds `resolveTaskContractAcrossRoots` /
   `laneContractRoots` / `resolveReadmissionContract` imports, the
-  `seedContractRoots()` and `seedBothRoots()` helpers, and G2/G2b/G2c/G3/G4/G15.
-  **47/47 pass.**
-- `claude-exec.test.ts` 12/12, `codex-exec.test.ts` 34/34 — ported, unchanged.
+  `seedContractRoots()`, `seedBothRoots()` and `seedReadmissionFixture()`
+  helpers, G2/G2b/G2c/G3/G4/G15, and the end-to-end readmission tests
+  G19/G20/G21 -- the first coverage this repository has ever had of
+  `lane-start --readmit-existing-branch` running as a program.
+- `claude-exec.test.ts`, `codex-exec.test.ts` -- ported, unchanged.
+
+**No test count appears in this file.** Restating measured figures in three
+places is what produced the same stale-bundle finding in two consecutive
+reviews; every count now lives in exactly one place, the EVIDENCE block of
+`verification.md`, with its machine mirror in `evidence.json`.
 
 ### Proof bundle — Finding 4 (P2)
 
@@ -105,12 +117,12 @@ by an independent review, not by me.
 
 | # | Sev | Finding | Status |
 |---|---|---|---|
-| 1 | P1 | Readmission resolves contract before worktree exists | **FIXED** — proved by G2/G3/G4 + mutation M3 |
+| 1 | P1 | Readmission resolves contract before worktree exists | **FIXED** — proved end-to-end by G19/G20/G21 through `lane-start` main(). G2/G3/G4/G15/G2b/G2c cover the extracted helpers; a third review showed those alone did NOT catch a semantic reintroduction of the defect, and that F5 (a source grep) was at that point its only detector. |
 | 2 | P1 | Mandatory T1 database verification | **SATISFIED BY CI.** `pnpm test:db` cannot run locally (`ci:assert-staging` refuses `host=127.0.0.1`), but CI job **Writable DB proof (staging only)** produces a run-scoped receipt against staging `xskgrzbteyqdufktjrjx`, validated **inside the required `verify` context**. Not waived, not `N/A`, not author-asserted. |
 | 3 | P2 | Nested reserved-field sections counted twice | **FIXED** — proved by G5 + mutation M2 |
 | T2 | P2 | Review thread: reserve ALL recognized contract headings | **FIXED** — G6/G7/G8 + mutation M4 |
 | T3 | P2 | Review thread: honor fenced code while parsing headings | **FIXED** — G9/G10/G11 + mutations M5/M6/M7 |
-| 4 | P2 | Proof truth / stale figures | **FIXED** — bundle regenerated at this SHA |
+| 4 | P2 | Proof truth / stale figures | **RE-OPENED TWICE, then addressed structurally.** Rounds 2 and 3 each found this file stale again while the other two were updated. The remedy is no longer "regenerate carefully": measured figures are now single-sourced in `verification.md` and generated into `evidence.json` from the battery's own output, and this file quotes none. |
 
 All four findings and all three review threads are closed. The lane is **not merge-authorized and not ready for a mechanical merge**: two packet-parser defects were fixed after the previous review, so this head requires a fresh independent exact-head review and a new `pm-verdict/v1` APPROVED comment plus the `t1-approved` label. Green CI substitutes for none of that.
 
@@ -126,18 +138,28 @@ All four findings and all three review threads are closed. The lane is **not mer
 
 ## Verification
 
-- `pnpm verify:static` — exit 0, **5071 pass / 0 fail / 0 skipped**, 0 `not ok` lines
-  (`pnpm verify` cannot exit 0 locally: `ci:assert-staging` refuses on `host=127.0.0.1`)
-- `execution-packet` suite 57/57, `lane-start` 44/44, exec entrypoints 46/46
-- R-level compliance — PASS
-- Mutation battery re-measured from scratch: **11 mutations, 11 detected**
-  (M1-M10 plus M4b). Both sources restored byte-identical to baseline after
-  every mutation (`sha256` verified, restored by file copy, never
-  `git checkout`). G2 and G3 are explicitly NOT killed by any mutation here.
-- **Five controls of mine proved nothing when written** — three vacuous
-  assertions and two source-text greps. Two were found by an independent
-  reviewer, not by me. All five are disclosed in `verification.md` with the
-  mutation that now kills each, rather than silently corrected.
+Every measured figure for this lane -- suite totals, `verify:static` result,
+r-level outcome, the mutation battery and its kill targets -- is recorded once,
+in the EVIDENCE block and Mutation battery section of
+`docs/06_status/proof/UTV2-1752/verification.md`, with the machine-readable
+mirror in `docs/06_status/proof/UTV2-1752/evidence.json`.
+
+This file deliberately restates none of them. Two consecutive independent
+reviews found this file carrying figures from an earlier head while the other
+two files had been updated; the third review found the same defect a third
+time, including a paragraph that admitted the staleness while leaving the stale
+numbers in place. Duplication was the cause, so the duplication is gone rather
+than re-synchronised.
+
+- `pnpm verify` cannot exit 0 locally: `ci:assert-staging` refuses on
+  `host=127.0.0.1`. The live half is supplied and enforced by CI inside the
+  required `verify` context (finding 2).
+- **Nine controls of mine proved nothing when written** -- three vacuous
+  assertions, four source-text greps, one single-root fixture, and one
+  emitted-nowhere field whose two tests guarded state no consumer could
+  observe. Six of the nine were found by independent reviewers, not by me. Each
+  is disclosed in `verification.md` with the mutation that now kills it, rather
+  than silently corrected.
 
 Full detail: `docs/06_status/proof/UTV2-1752/verification.md`,
 machine-readable: `docs/06_status/proof/UTV2-1752/evidence.json`.

@@ -1096,11 +1096,16 @@ test('F5: readmission resolves the branch contract instead of overwriting it wit
   );
 
   // DISCLOSED: this remains a SOURCE-TEXT control and is evadable by
-  // reformatting. The behavioural load for the ordering property it gestures
-  // at is carried by G15 (root order), G2b (branch root is the reported
-  // source) and G2c (disagreement fails closed), each of which fails under
-  // mutation. This test's remaining value is the negative assertion -- that
-  // the wholesale copy has not returned -- which has no behavioural witness.
+  // reformatting -- a third independent review reintroduced the exact clobber
+  // with `fs.writeFileSync(dest, fs.readFileSync(syncPath))`, satisfying every
+  // regex above while the whole suite stayed green. It was, at that point, the
+  // ONLY control for finding 1.
+  //
+  // It no longer is. G19/G20/G21 drive `lane-start` main() through the real
+  // `--readmit-existing-branch` path and kill that reintroduction, and G21
+  // kills the root-ordering mutations too. This test is now redundant
+  // belt-and-braces on an already-covered property rather than the thing
+  // standing between the defect and production.
 });
 
 test('F5b: persisting a contract merges against each destination record rather than overwriting it', () => {
@@ -1400,4 +1405,331 @@ test('G4: the readmission path performs no contract capture before the worktree 
     'a FRESH lane must still capture before checkout',
   );
   assert.equal(calls, 1, 'the fresh-lane path must call the resolver exactly once');
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end readmission (G19/G20).
+//
+// The third independent review established that finding 1 -- the control
+// checkout's sync record clobbering a readmitted branch's own authoritative
+// contract -- was guarded ONLY by F5, a source-text grep. It demonstrated the
+// defect could be reintroduced with `fs.writeFileSync(worktreeSync,
+// fs.readFileSync(syncPath))` in place of the removed `copyFileSync`, leaving
+// every one of F5's regexes satisfied and all 47 tests green. G2/G2b/G2c/G4/G15
+// all operate on extracted helpers or on `resolveTaskContractAcrossRoots`
+// directly, so none of them execute the readmission call site.
+//
+// These two tests run `lane-start.ts` main() through the actual
+// `--readmit-existing-branch` path in a throwaway git repository with a local
+// bare origin, a stub `gh` and a stub `pnpm`. No test below this comment
+// asserts on source text.
+// ---------------------------------------------------------------------------
+
+interface ReadmissionFixture {
+  root: string;
+  worktree: string;
+  bin: string;
+  issueId: string;
+  branch: string;
+  branchSha: string;
+  controlContract: TaskContract | null;
+  branchContract: TaskContract;
+}
+
+function seedReadmissionFixture(
+  issueId: string,
+  opts: { controlDescription: string | null; branchDescription: string },
+): ReadmissionFixture {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readmit-e2e-'));
+  const root = path.join(dir, 'repo');
+  const originPath = path.join(dir, 'origin.git');
+  const slug = issueId.toLowerCase();
+  const branch = `claude/${slug}-fixture`;
+  const worktree = path.join(root, '.out', 'worktrees', branch.replaceAll('/', '__'));
+
+  for (const rel of [
+    ['docs', '06_status', 'lanes'],
+    ['docs', '05_operations', 'policies'],
+    ['docs', '05_operations', 'schemas'],
+    ['docs', 'governance'],
+    ['scripts', 'ops'],
+    ['.ops', 'sync'],
+    ['.ops', 'leases'],
+  ]) {
+    fs.mkdirSync(path.join(root, ...rel), { recursive: true });
+  }
+  for (const rel of [
+    ['docs', '05_operations', 'policies', 'codex-model-routing.json'],
+    ['docs', '05_operations', 'db-writer-classification.json'],
+    ['docs', '05_operations', 'DELEGATION_STATE.json'],
+    ['docs', '05_operations', 'schemas', 'lane_manifest_v1.schema.json'],
+    ['docs', 'governance', 'CONCURRENCY_CONFIG.json'],
+  ]) {
+    fs.copyFileSync(path.join(ROOT, ...rel), path.join(root, ...rel));
+  }
+  fs.writeFileSync(path.join(root, 'scripts', 'ops', 'fixture.ts'), 'export const fixture = 1;\n');
+  fs.writeFileSync(path.join(root, 'README.md'), 'seed\n');
+  // `assertCleanMainControlCheckout` runs with --untracked-files=all, so the
+  // lane worktree and the pnpm stub's node_modules must be ignored or
+  // readmission refuses before it reaches any contract logic.
+  fs.writeFileSync(path.join(root, '.gitignore'), '.out/\nnode_modules/\n');
+
+  const git = (args: string[], cwd = root): string => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' });
+    if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
+    return (r.stdout ?? '').trim();
+  };
+  git(['init', '-q', '-b', 'main', '.']);
+  git(['config', 'user.email', 'test@example.com']);
+  git(['config', 'user.name', 'Test']);
+
+  const controlContract = opts.controlDescription === null
+    ? null
+    : seedContractAt(root, issueId, opts.controlDescription);
+  git(['add', '-A']);
+  git(['commit', '-qm', 'seed']);
+
+  spawnSync('git', ['init', '-q', '--bare', originPath], { encoding: 'utf8' });
+  git(['remote', 'add', 'origin', originPath]);
+  git(['push', '-q', '-u', 'origin', 'main']);
+
+  // The branch carries its OWN authoritative work order, committed on the
+  // branch -- exactly the state finding 1 said readmission destroyed.
+  git(['checkout', '-q', '-b', branch]);
+  const branchContract = seedContractAt(root, issueId, opts.branchDescription);
+  // The branch also carries real work, so its commit is non-empty even when the
+  // two roots hold an identical contract (G21). A fixture that commits nothing
+  // is not a readmittable branch.
+  fs.writeFileSync(
+    path.join(root, 'scripts', 'ops', 'fixture.ts'),
+    'export const fixture = 2;\n',
+  );
+  git(['add', '--', `.ops/sync/${issueId}.yml`, 'scripts/ops/fixture.ts']);
+  git(['commit', '-qm', `feat(ops): ${issueId} branch-carried work order`]);
+  git(['push', '-q', 'origin', branch]);
+  const branchSha = git(['rev-parse', 'HEAD']);
+  git(['checkout', '-q', 'main']);
+  const mainSha = git(['rev-parse', 'HEAD']);
+
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  const repository = 'unit-talk/fixture';
+  const pullRequest = {
+    number: 4242,
+    head: { ref: branch, sha: branchSha, repo: { full_name: repository } },
+    base: { ref: 'main', repo: { full_name: repository } },
+    html_url: `https://github.com/${repository}/pull/4242`,
+  };
+  fs.writeFileSync(path.join(bin, 'pr.json'), `${JSON.stringify([pullRequest])}\n`);
+  // The board enumeration uses `gh api --paginate --slurp`, which returns an
+  // array of PAGES; the exact-PR revalidation uses a plain `gh api`, which
+  // returns a flat array. The stub answers both truthfully with the same single
+  // open PR rather than showing readmission an empty board it would not see in
+  // production.
+  fs.writeFileSync(path.join(bin, 'board.json'), `${JSON.stringify([[pullRequest]])}\n`);
+  fs.writeFileSync(
+    path.join(bin, 'gh'),
+    [
+      '#!/bin/sh',
+      `if [ "$1" = "repo" ]; then echo "${repository}"; exit 0; fi`,
+      'for arg in "$@"; do',
+      `  if [ "$arg" = "--slurp" ]; then cat "${path.join(bin, 'board.json')}"; exit 0; fi`,
+      'done',
+      // The branch carries no lane manifest, and active-lane discovery treats a
+      // CONFIRMED 404 as genuine absence while treating anything else as an
+      // unknown board. Answering the contents probe with gh's real 404
+      // signature is what makes the fixture an honest empty-manifest branch
+      // rather than a broken one.
+      'case "$*" in',
+      '  *contents*) echo "gh: Not Found (HTTP 404)" >&2; exit 1;;',
+      'esac',
+      `if [ "$1" = "api" ]; then cat "${path.join(bin, 'pr.json')}"; exit 0; fi`,
+      'echo "[]"',
+      'exit 0',
+    ].join('\n') + '\n',
+    { mode: 0o755 },
+  );
+  // A readmitted worktree is created empty by `git worktree add`, so the
+  // isolated-install step runs for real. The stub satisfies it without a
+  // network or a package manager.
+  fs.writeFileSync(
+    path.join(bin, 'pnpm'),
+    '#!/bin/sh\nmkdir -p node_modules\nexit 0\n',
+    { mode: 0o755 },
+  );
+
+  const tokenPath = path.join(root, '.out', 'ops', 'preflight', `${branch}.json`);
+  fs.mkdirSync(path.dirname(tokenPath), { recursive: true });
+  fs.writeFileSync(tokenPath, `${JSON.stringify({
+    schema_version: 1,
+    status: 'pass',
+    issue_id: issueId,
+    branch,
+    head_sha: mainSha,
+    expires_at: new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString(),
+    mode: 'existing-branch-readmission',
+    tier: 'T2',
+    requested_lane_type: 'governance',
+    previous_lane_type: 'governance',
+    executor: 'claude',
+    file_scope: ['scripts/ops/fixture.ts'],
+    origin_main_sha: mainSha,
+    branch_head_sha: branchSha,
+    open_pr_number: 4242,
+    open_pr_base_ref: 'main',
+    ahead_count: 1,
+    behind_count: 0,
+    no_worktree: true,
+    no_active_lease: true,
+    no_active_merge_mutex: true,
+  }, null, 2)}\n`);
+
+  return { root, worktree, bin, issueId, branch, branchSha, controlContract, branchContract };
+}
+
+function runReadmission(fixture: ReadmissionFixture): {
+  status: number | null; stdout: string; stderr: string;
+} {
+  const env = { ...process.env, PATH: `${fixture.bin}${path.delimiter}${process.env['PATH'] ?? ''}` };
+  delete env['LINEAR_API_TOKEN'];
+  delete env['LINEAR_API_KEY'];
+  const r = spawnSync(LANE_TSX_BIN, [
+    path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), fixture.issueId,
+    '--tier', 'T2', '--branch', fixture.branch, '--lane-type', 'governance',
+    '--executor', 'claude', '--files', 'scripts/ops/fixture.ts',
+    '--readmit-existing-branch',
+  ], { cwd: fixture.root, encoding: 'utf8', timeout: 180_000, env });
+  return { status: r.status, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
+}
+
+/** Read a path out of a branch's committed tree, not the working copy. */
+function showAtRef(root: string, ref: string, repoRelativePath: string): string {
+  const r = spawnSync('git', ['show', `${ref}:${repoRelativePath}`], {
+    cwd: root, encoding: 'utf8', stdio: 'pipe',
+  });
+  assert.equal(r.status, 0, `git show ${ref}:${repoRelativePath} failed: ${r.stderr}`);
+  return r.stdout ?? '';
+}
+
+/**
+ * Materialise a ref's COMMITTED sync record into a throwaway root so the
+ * production reader parses it. Asserting on the working copy alone would miss a
+ * defect that writes the right file and commits the wrong content.
+ */
+function contractRootFromRef(root: string, ref: string, issueId: string): string {
+  const content = showAtRef(root, ref, `.ops/sync/${issueId}.yml`);
+  const dest = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-atref-'));
+  fs.mkdirSync(path.join(dest, '.ops', 'sync'), { recursive: true });
+  fs.writeFileSync(path.join(dest, '.ops', 'sync', `${issueId}.yml`), content);
+  return dest;
+}
+
+test('G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy', () => {
+  const f = seedReadmissionFixture('UTV2-999960', {
+    controlDescription:
+      '## Objective\nCONTROL ORDER: do the stale thing.\n\n## Acceptance criteria\n- stale',
+    branchDescription:
+      '## Objective\nBRANCH ORDER: do the authoritative thing.\n\n## Acceptance criteria\n- authoritative',
+  });
+
+  const run = runReadmission(f);
+
+  // Finding 1's defect made this run SUCCEED, silently replacing the branch's
+  // work order with control's. Failing closed is the fix.
+  assert.notEqual(run.status, 0, `readmission must fail closed on divergent contracts:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['ok'], false);
+  assert.equal(
+    out['code'],
+    'lane_contract_conflict',
+    'a divergent work order must be its own machine-identifiable refusal',
+  );
+  assert.notEqual(
+    out['control_contract_hash'],
+    out['worktree_contract_hash'],
+    'the refusal must report two genuinely different contract hashes',
+  );
+
+  // The branch's committed record is the thing finding 1 destroyed. It must
+  // still be byte-identical to what the branch carried.
+  const committed = showAtRef(f.root, f.branch, `.ops/sync/${f.issueId}.yml`);
+  assert.match(committed, /BRANCH ORDER/u, 'the branch work order must survive a refused readmission');
+  assert.doesNotMatch(committed, /CONTROL ORDER/u, "control's work order must not have been written onto the branch");
+
+  // The rollback must also leave the control checkout as it found it.
+  const control = fs.readFileSync(path.join(f.root, '.ops', 'sync', `${f.issueId}.yml`), 'utf8');
+  assert.match(control, /CONTROL ORDER/u, 'the control record must be restored by the rollback');
+});
+
+test('G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout', () => {
+  const f = seedReadmissionFixture('UTV2-999961', {
+    controlDescription: null,
+    branchDescription:
+      '## Objective\nBRANCH ORDER: the branch is the only source.\n\n## Acceptance criteria\n- reuse me',
+  });
+
+  const run = runReadmission(f);
+  assert.equal(run.status, 0, `readmission must succeed:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_readmitted_existing_branch');
+  assert.equal(out['open_pr_number'], 4242);
+  assert.equal(out['contract_fetched'], false, 'readmission must reuse the branch copy without a capture');
+  assert.equal(out['contract_source'], 'lane-worktree');
+
+  // LINEAR_API_TOKEN/KEY are stripped from the child environment, so any
+  // capture would have refused as tokenless. Reaching a started lane at all
+  // proves the branch's own contract was reused without a network round-trip.
+  assert.equal(
+    readTaskContract(f.issueId, f.worktree).contract_hash,
+    f.branchContract.contract_hash,
+    'the readmitted contract hash must be the branch copy, unmodified',
+  );
+
+  // The metadata commit is made on the branch: the committed tree, not just the
+  // working copy, must carry the branch's own order.
+  assert.equal(
+    readTaskContract(f.issueId, contractRootFromRef(f.worktree, 'HEAD', f.issueId)).contract_hash,
+    f.branchContract.contract_hash,
+    'the readmission metadata commit must not rewrite the branch work order',
+  );
+
+  // Both roots are persisted, so the control checkout inherits the branch's
+  // order rather than the reverse.
+  assert.equal(
+    readTaskContract(f.issueId, f.root).contract_hash,
+    f.branchContract.contract_hash,
+    'the control checkout must inherit the branch contract, not impose its own',
+  );
+});
+
+test('G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy', () => {
+  // The ordering half of finding 1. With two DIFFERENT valid contracts the
+  // resolver fails closed (G19), so precedence can never serve a stale contract
+  // to a lane; what it decides is which root the lane reports as the source of
+  // the copy it is running on. That was unobservable until `contract_source`
+  // was emitted, which is why reversing the root order (M10) and taking the
+  // last match instead of the first (M12) each killed exactly one unit test and
+  // changed nothing an operator could see.
+  const identical =
+    '## Objective\nSHARED ORDER: both roots hold this.\n\n## Acceptance criteria\n- agree';
+  const f = seedReadmissionFixture('UTV2-999962', {
+    controlDescription: identical,
+    branchDescription: identical,
+  });
+  assert.equal(
+    f.controlContract?.contract_hash,
+    f.branchContract.contract_hash,
+    'fixture precondition: the two roots must genuinely agree, or this asserts nothing',
+  );
+
+  const run = runReadmission(f);
+  assert.equal(run.status, 0, `readmission must succeed when the roots agree:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(
+    out['contract_source'],
+    'lane-worktree',
+    'the lane worktree must be searched before the control checkout, and reported as the source',
+  );
+  assert.equal(out['contract_fetched'], false);
+  assert.equal(out['contract_hash'], f.branchContract.contract_hash);
 });
