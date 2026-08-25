@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "f4cc222cd4a51249dc358c657e5d38e72b43e4a6",
-    "verified_source_note": "Single implementation commit on this branch; the tree at this SHA contains the inherited packet fixes and all new tests. Later commits are proof artifacts only.",
+    "verified_source_sha": "51001ddd9eeaa3ae839798e4831ca679d2ed5588",
+    "verified_source_note": "Carry-forward correction commit; the tree at this SHA contains the inherited packet fixes, the ported lane-start capture step, and all tests. Later commits are proof artifacts only.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
