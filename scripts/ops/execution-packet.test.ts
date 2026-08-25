@@ -9,6 +9,7 @@ import {
   assertTaskContract,
   buildSyncYmlWithTaskContract,
   buildTaskContract,
+  fetchLinearTaskSource,
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
   generateDispatchExecutionPacketResult,
@@ -1980,4 +1981,184 @@ test('G22: a nested list item indented to four columns is held verbatim -- tabs 
   );
   // The content must survive either way. Loss, not re-flow, would be the defect.
   assert.ok(tabbed.join('\n').includes('nested bullet'));
+});
+
+/** Build a contract from a description and return one field, for guard tests. */
+function contractFrom(description: string, issueId = 'UTV2-999970'): TaskContract {
+  return buildTaskContract({
+    identifier: issueId,
+    title: 'Guard fixture',
+    url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+    description,
+  }, '2026-08-25T00:00:00.000Z');
+}
+
+test('G29: an UNTERMINATED fenced block travels verbatim instead of being dropped', () => {
+  // A fifth independent review found this line -- introduced by this lane, and
+  // stated as a guarantee in both the code comment and this bundle -- covered by
+  // nothing: deleting the terminal flush left every test green while the
+  // unterminated block vanished from the work order entirely.
+  //
+  // The harm is the exact content-loss class this lane exists to close: the
+  // review's measured case lost BOTH a guardrail comment and the destructive
+  // command it forbade.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- keep this',
+    '```bash',
+    '# NEVER run against production',
+    'pnpm db:reset --force',
+  ].join('\n'));
+
+  const fenced = contract.acceptance_criteria.filter((item) => item.includes('```'));
+  assert.equal(fenced.length, 1,
+    'the unterminated fence must survive as its own item, not be dropped');
+  assert.match(fenced[0]!, /# NEVER run against production/u,
+    'the guardrail line inside an unterminated fence must reach the executor');
+  assert.match(fenced[0]!, /pnpm db:reset --force/u,
+    'and so must the command it forbids -- losing either is the defect this lane closes');
+});
+
+test('G30: a fence-looking line CARRYING AN INFO STRING does not close an open fence', () => {
+  // CommonMark: a closing fence may not carry an info string. Without the rule
+  // a ```sh line inside a block ends it, splitting one verbatim block into
+  // three items and changing what the executor is told.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '```',
+    '# do not run in prod',
+    '```sh',
+    'pnpm destroy',
+    '```',
+  ].join('\n'));
+
+  const fenced = contract.acceptance_criteria.filter((item) => item.includes('```'));
+  assert.equal(fenced.length, 1,
+    'an info-string line must not close the fence -- the block stays whole');
+  assert.match(fenced[0]!, /# do not run in prod[\s\S]*pnpm destroy/u,
+    'the guardrail and the command it guards must stay in the SAME block');
+});
+
+test('G31: a backtick fence whose info string contains a backtick does not open a fence', () => {
+  // CommonMark forbids a backtick in a backtick fence's info string. Dropping
+  // the guard makes an ordinary inline-code line open a block that then
+  // swallows everything after it.
+  //
+  // The fence line must start at column 0 (FENCE_RE allows at most three
+  // leading spaces). An earlier version of this test put the backticks inside a
+  // list item, where FENCE_RE never matches at all -- so deleting the guard
+  // produced byte-identical output and the test proved nothing.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '``` `inline`',
+    '- second criterion',
+  ].join('\n'));
+
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    ['first criterion', '``` `inline`', 'second criterion'],
+    'a line whose info string contains a backtick must not open a fence and swallow the rest',
+  );
+});
+
+test('G32: a token containing a newline is REFUSED, not written into the curl config', () => {
+  // Security control, introduced by this lane and previously covered by nothing.
+  // curl --config reads directives line by line, so an unrefused newline in a
+  // token value injects arbitrary curl directives -- an SSRF/exfiltration
+  // primitive, not a formatting bug.
+  let calls = 0;
+  const runner = (() => {
+    calls += 1;
+    return { status: 0, stdout: '{}', stderr: '', error: undefined };
+  }) as typeof spawnSync;
+
+  assert.throws(
+    () => fetchLinearTaskSource('UTV2-999971', 'good-token\n--output /tmp/pwned', runner),
+    /invalid newline/u,
+    'a newline in the token must fail closed',
+  );
+  assert.equal(calls, 0, 'and must refuse BEFORE curl is invoked at all');
+
+  for (const bad of ['tok\ren', 'tok\r\nen', '\ntok']) {
+    assert.throws(() => fetchLinearTaskSource('UTV2-999971', bad, runner), /invalid newline/u,
+      `CR and LF alike must be refused (${JSON.stringify(bad)})`);
+  }
+  assert.equal(calls, 0);
+});
+
+test('G33: an invalid contract is REFUSED before it can be persisted to a sync record', () => {
+  // buildSyncYmlWithTaskContract is the only writer of .ops/sync/<ID>.yml.
+  // Without its assertTaskContract call an unvalidated object is written to
+  // disk and every later reader inherits it -- a silent-corruption path, where
+  // invariant 10 requires failing closed.
+  const good = contractFrom('## Objective\nvalid\n\n## Acceptance criteria\n- ok', 'UTV2-999972');
+  assert.doesNotThrow(() => buildSyncYmlWithTaskContract('UTV2-999972', good));
+
+  const wrongIssue = { ...good, issue_id: 'UTV2-000000' } as TaskContract;
+  assert.throws(() => buildSyncYmlWithTaskContract('UTV2-999972', wrongIssue),
+    /identity mismatch/u,
+    'a contract for a DIFFERENT issue must never be written into this issue record');
+
+  const noHash = { ...good, contract_hash: '' } as TaskContract;
+  assert.throws(() => buildSyncYmlWithTaskContract('UTV2-999972', noHash),
+    /hash verification failed/u,
+    'a contract with no integrity hash must be refused');
+
+  // Tampering with the CONTENT while keeping a well-formed hash must also fail:
+  // the hash is recomputed, not merely shape-checked.
+  const tampered = { ...good, objective: 'do something else entirely' } as TaskContract;
+  assert.throws(() => buildSyncYmlWithTaskContract('UTV2-999972', tampered),
+    /hash verification failed/u,
+    'a contract whose content no longer matches its hash must be refused');
+});
+
+test('G34: a sync record that parses to a non-object FAILS CLOSED instead of being corrupted', () => {
+  // Without the guard a record parsing to a string or an array is spread into a
+  // character-indexed object and written back, silently destroying the record
+  // rather than refusing.
+  const good = contractFrom('## Objective\nvalid\n\n## Acceptance criteria\n- ok', 'UTV2-999973');
+  for (const malformed of ['just a bare string\n', '- one\n- two\n', '42\n']) {
+    assert.throws(
+      () => buildSyncYmlWithTaskContract('UTV2-999973', good, malformed),
+      /malformed/u,
+      `a record parsing to a non-object must be refused (${JSON.stringify(malformed)})`,
+    );
+  }
+});
+
+test('G35: an UNRECOGNIZED nested section renders once, inside its ancestor -- not twice', () => {
+  // The third of three sibling suppressions. `sectionLines` (M1) and the
+  // claimed-child subtraction (M2) each had a control; this one -- the
+  // unrecognized-under-unrecognized case -- had none, so removing it repeated
+  // the nested section verbatim in the prompt with every test green.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- ok',
+    '',
+    '## Operator notes',
+    'Read this first.',
+    '',
+    '### Production safety',
+    'NEVER run a blanket UPDATE against production.',
+  ].join('\n'), 'UTV2-999974');
+
+  const occurrences = contract.unmapped_sections.filter((section) =>
+    section.includes('NEVER run a blanket UPDATE against production.'));
+  assert.equal(occurrences.length, 1,
+    'the nested section must appear exactly once -- a surviving ancestor already carries it');
+  assert.match(occurrences[0]!, /Operator notes/u,
+    'and it must appear INSIDE that ancestor, not as a section of its own');
 });

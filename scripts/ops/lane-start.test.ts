@@ -1448,12 +1448,21 @@ interface ReadmissionFixture {
   branch: string;
   branchSha: string;
   controlContract: TaskContract | null;
-  branchContract: TaskContract;
+  branchContract: TaskContract | null;
 }
 
 function seedReadmissionFixture(
   issueId: string,
-  opts: { controlDescription: string | null; branchDescription: string },
+  opts: {
+    controlDescription: string | null;
+    /**
+     * `null` means the branch carries NO work order. Both roots being empty is
+     * the only shape in which readmission reaches a capture, and neither shape
+     * had a test until a fifth review found the readmission emit site
+     * reporting a hardcoded source and fetched flag.
+     */
+    branchDescription: string | null;
+  },
 ): ReadmissionFixture {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readmit-e2e-'));
   const root = path.join(dir, 'repo');
@@ -1515,7 +1524,18 @@ function seedReadmissionFixture(
   // The branch carries its OWN authoritative work order, committed on the
   // branch -- exactly the state finding 1 said readmission destroyed.
   git(['checkout', '-q', '-b', branch]);
-  const branchContract = seedContractAt(root, issueId, opts.branchDescription, 'BRANCH-ONLY-FINDING');
+  // The branch is cut FROM main, so it inherits whatever record main committed.
+  // A branch that is supposed to carry no work order must therefore DELETE the
+  // inherited one and commit that deletion -- otherwise the fixture silently
+  // seeds the state it claims to exclude, and the test asserts nothing. The
+  // first draft of this fixture did exactly that.
+  const branchSyncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  const branchContract = opts.branchDescription === null
+    ? null
+    : seedContractAt(root, issueId, opts.branchDescription, 'BRANCH-ONLY-FINDING');
+  const removedInheritedRecord =
+    opts.branchDescription === null && fs.existsSync(branchSyncPath);
+  if (removedInheritedRecord) git(['rm', '-q', '--', `.ops/sync/${issueId}.yml`]);
   // The branch also carries real work, so its commit is non-empty even when the
   // two roots hold an identical contract (G21). A fixture that commits nothing
   // is not a readmittable branch.
@@ -1523,7 +1543,7 @@ function seedReadmissionFixture(
     path.join(root, 'scripts', 'ops', 'fixture.ts'),
     'export const fixture = 2;\n',
   );
-  git(['add', '--', `.ops/sync/${issueId}.yml`, 'scripts/ops/fixture.ts']);
+  git(['add', '--', ...(branchContract ? [`.ops/sync/${issueId}.yml`] : []), 'scripts/ops/fixture.ts']);
   git(['commit', '-qm', `feat(ops): ${issueId} branch-carried work order`]);
   git(['push', '-q', 'origin', branch]);
   const branchSha = git(['rev-parse', 'HEAD']);
@@ -1606,12 +1626,16 @@ function seedReadmissionFixture(
   return { root, worktree, bin, issueId, branch, branchSha, controlContract, branchContract };
 }
 
-function runReadmission(fixture: ReadmissionFixture): {
+function runReadmission(
+  fixture: ReadmissionFixture,
+  envOverride: Record<string, string> = {},
+): {
   status: number | null; stdout: string; stderr: string;
 } {
   const env = { ...process.env, PATH: `${fixture.bin}${path.delimiter}${process.env['PATH'] ?? ''}` };
   delete env['LINEAR_API_TOKEN'];
   delete env['LINEAR_API_KEY'];
+  Object.assign(env, envOverride);
   const r = spawnSync(LANE_TSX_BIN, [
     path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), fixture.issueId,
     '--tier', 'T2', '--branch', fixture.branch, '--lane-type', 'governance',
@@ -1641,6 +1665,12 @@ function contractRootFromRef(root: string, ref: string, issueId: string): string
   fs.mkdirSync(path.join(dest, '.ops', 'sync'), { recursive: true });
   fs.writeFileSync(path.join(dest, '.ops', 'sync', `${issueId}.yml`), content);
   return dest;
+}
+
+/** The branch's work order, for the fixtures that seed one. */
+function branchContractOf(f: ReadmissionFixture): TaskContract {
+  assert.ok(f.branchContract, 'this fixture must seed a branch work order');
+  return f.branchContract;
 }
 
 test('G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy', () => {
@@ -1678,8 +1708,26 @@ test('G19: readmission refuses when control and the branch carry different work 
   );
   assert.equal(
     out['worktree_contract_hash'],
-    f.branchContract.contract_hash,
+    branchContractOf(f).contract_hash,
     'worktree_contract_hash must be the BRANCH hash, not the control one',
+  );
+
+  // The generic `contracts` payload is what a caller that is NOT limited to two
+  // roots reads; the named pair above cannot cover it, so emptying it survived
+  // the whole battery. Pin every entry to the root it came from.
+  const contracts = out['contracts'] as Array<{ root?: string; contract_hash?: string }> | undefined;
+  assert.ok(Array.isArray(contracts), 'the refusal must carry a generic contracts payload');
+  assert.equal(contracts.length, 2, 'both roots must appear in the generic payload');
+  const byRoot = new Map(contracts.map((entry) => [entry.root, entry.contract_hash]));
+  assert.equal(
+    byRoot.get(f.root),
+    f.controlContract?.contract_hash,
+    'the control root entry must carry the control hash',
+  );
+  assert.equal(
+    byRoot.get(f.worktree),
+    branchContractOf(f).contract_hash,
+    'the worktree root entry must carry the branch hash',
   );
 
   // The branch's committed record is the thing finding 1 destroyed. It must
@@ -1713,7 +1761,7 @@ test('G20: readmission reuses a branch-carried work order offline and propagates
   // proves the branch's own contract was reused without a network round-trip.
   assert.equal(
     readTaskContract(f.issueId, f.worktree).contract_hash,
-    f.branchContract.contract_hash,
+    branchContractOf(f).contract_hash,
     'the readmitted contract hash must be the branch copy, unmodified',
   );
 
@@ -1721,7 +1769,7 @@ test('G20: readmission reuses a branch-carried work order offline and propagates
   // working copy, must carry the branch's own order.
   assert.equal(
     readTaskContract(f.issueId, contractRootFromRef(f.worktree, 'HEAD', f.issueId)).contract_hash,
-    f.branchContract.contract_hash,
+    branchContractOf(f).contract_hash,
     'the readmission metadata commit must not rewrite the branch work order',
   );
 
@@ -1729,7 +1777,7 @@ test('G20: readmission reuses a branch-carried work order offline and propagates
   // order rather than the reverse.
   assert.equal(
     readTaskContract(f.issueId, f.root).contract_hash,
-    f.branchContract.contract_hash,
+    branchContractOf(f).contract_hash,
     'the control checkout must inherit the branch contract, not impose its own',
   );
 
@@ -1765,7 +1813,7 @@ test('G21: when both roots agree, readmission runs on -- and reports -- the lane
   });
   assert.equal(
     f.controlContract?.contract_hash,
-    f.branchContract.contract_hash,
+    branchContractOf(f).contract_hash,
     'fixture precondition: the two roots must genuinely agree, or this asserts nothing',
   );
 
@@ -1778,7 +1826,7 @@ test('G21: when both roots agree, readmission runs on -- and reports -- the lane
     'the lane worktree must be searched before the control checkout, and reported as the source',
   );
   assert.equal(out['contract_fetched'], false);
-  assert.equal(out['contract_hash'], f.branchContract.contract_hash);
+  assert.equal(out['contract_hash'], branchContractOf(f).contract_hash);
 });
 
 test('G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source', () => {
@@ -1933,4 +1981,124 @@ test('G26: a FRESH lane CAPTURES its work order and writes a sync record naming 
     'the sync record must name its own issue -- branch-discipline CI reads exactly this');
   assert.equal(readTaskContract(f.issueId, f.root).source.title, 'Captured lane',
     'the persisted contract must be the CAPTURED one');
+});
+
+test('G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout', () => {
+  // A fifth review found the round-4 fix only half-applied: G23 is a unit test
+  // that never reaches main(), and G20/G21 are the only tests that read
+  // contract_source/contract_fetched on the READMISSION path -- both asserting
+  // exactly 'lane-worktree'/false. Hardcoding either at that emit site survived
+  // the whole suite. This is the same "a control that can only see one value
+  // does not pin the field" defect, recurring on the very path finding 1 is
+  // about.
+  const f = seedReadmissionFixture('UTV2-999964', {
+    controlDescription:
+      '## Objective\nCONTROL ORDER: the branch carries none.\n\n## Acceptance criteria\n- inherit',
+    branchDescription: null,
+  });
+  assert.equal(f.branchContract, null, 'fixture precondition (variable)');
+  // And the precondition that actually matters: the branch's COMMITTED tree
+  // must hold no sync record. Asserting only the fixture variable is what let
+  // the first draft of this test pass against a branch that had inherited
+  // control's record from main and therefore reported `lane-worktree` honestly.
+  assert.equal(
+    spawnSync('git', ['cat-file', '-e', `${f.branch}:.ops/sync/${f.issueId}.yml`],
+      { cwd: f.root, encoding: 'utf8' }).status !== 0,
+    true,
+    'fixture precondition: the branch tree must carry NO sync record',
+  );
+
+  const run = runReadmission(f);
+  assert.equal(run.status, 0, `readmission must succeed from the control copy:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_readmitted_existing_branch');
+  assert.equal(
+    out['contract_source'],
+    'control-checkout',
+    'a readmitted branch running on the CONTROL copy must say so -- reporting lane-worktree here ' +
+      'tells an operator the branch own order won when it did not',
+  );
+  assert.equal(out['contract_fetched'], false, 'and it must not have touched the network');
+  assert.equal(
+    readTaskContract(f.issueId, f.worktree).contract_hash,
+    f.controlContract?.contract_hash,
+    'the branch must actually inherit the control work order',
+  );
+});
+
+test('G28: readmission with NO work order at either root captures, and reports linear-capture', () => {
+  // The only shape in which readmission reaches a capture at all. Untested
+  // until now, which is why `contract_fetched` could be hardcoded false at the
+  // readmission emit site with every test green.
+  const f = seedReadmissionFixture('UTV2-999965', {
+    controlDescription: null,
+    branchDescription: null,
+  });
+  const payloadPath = path.join(f.bin, 'linear-response.json');
+  fs.writeFileSync(payloadPath, JSON.stringify({ data: { issue: {
+    identifier: f.issueId,
+    title: 'Captured on readmission',
+    url: `https://linear.app/unit-talk/issue/${f.issueId}`,
+    description: '## Objective\nCaptured on readmission.\n\n## Acceptance criteria\n- captured',
+  } } }));
+  fs.writeFileSync(
+    path.join(f.bin, 'curl'),
+    `#!/bin/sh\ncat >/dev/null\ncat ${payloadPath}\nexit 0\n`,
+    { mode: 0o755 },
+  );
+
+  const run = runReadmission(f, { LINEAR_API_TOKEN: 'capture-token-fixture' });
+  assert.equal(run.status, 0, `readmission must capture when no root holds a contract:\n${run.stdout}\n${run.stderr}`);
+  const out = laneJson(run.stdout);
+  assert.equal(out['code'], 'lane_readmitted_existing_branch');
+  assert.equal(out['contract_fetched'], true,
+    'a readmission that touched the network must report that it did');
+  assert.equal(out['contract_source'], 'linear-capture');
+  assert.equal(
+    readTaskContract(f.issueId, f.worktree).source.title,
+    'Captured on readmission',
+    'the captured work order must be the one persisted to the branch',
+  );
+});
+
+test('G36: the readmission metadata commit STAGES the sync record, not only the manifest', () => {
+  // Without the sync path in metadataPaths an inherited work order is written
+  // to the worktree and never committed, so the branch ships without the work
+  // order the lane is running on -- and the next readmission re-derives it.
+  const f = seedReadmissionFixture('UTV2-999966', {
+    controlDescription:
+      '## Objective\nCONTROL ORDER: must be committed to the branch.\n\n## Acceptance criteria\n- commit me',
+    branchDescription: null,
+  });
+
+  const run = runReadmission(f);
+  assert.equal(run.status, 0, `readmission must succeed:\n${run.stdout}\n${run.stderr}`);
+
+  // The COMMITTED tree, not the working copy: an uncommitted inheritance is
+  // exactly the loss this asserts against.
+  assert.equal(
+    readTaskContract(f.issueId, contractRootFromRef(f.worktree, 'HEAD', f.issueId)).contract_hash,
+    f.controlContract?.contract_hash,
+    'the inherited work order must be committed onto the branch by the metadata commit',
+  );
+});
+
+test('G37: a fresh sync record declares schema version 1 and both approval flags false', () => {
+  // The default record's shape is what Housekeeping and branch-discipline CI
+  // read. `version` could be omitted and both approval flags flipped to true
+  // with every test green -- G26 asserted only the issues key. Defaulting
+  // `allow_multiple_issues`/`skip_sync_required` to true is a fail-OPEN default
+  // on a governance record.
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999967', title: 'Fresh sync record',
+    url: 'https://linear.app/unit-talk/issue/UTV2-999967',
+    description: '## Objective\nfresh\n\n## Acceptance criteria\n- ok',
+  }, '2026-08-25T00:00:00.000Z');
+
+  const yml = buildSyncYmlWithTaskContract('UTV2-999967', contract);
+  assert.match(yml, /^version: 1$/mu, 'a fresh record must declare schema version 1');
+  assert.match(yml, /allow_multiple_issues: false/u,
+    'a fresh record must not default to allowing multiple issues');
+  assert.match(yml, /skip_sync_required: false/u,
+    'a fresh record must not default to skipping the sync requirement');
 });
