@@ -1,8 +1,8 @@
 # PROOF: UTV2-1747
 
-MERGE_SHA: 8ef502365d71938150b05000e16ee0f8f250c171
+MERGE_SHA: 2f5aa2dd9f60d77eaef0f633052b640f73b922ff
 
-Verified source SHA: `8ef502365d71938150b05000e16ee0f8f250c171`
+Verified source SHA: `2f5aa2dd9f60d77eaef0f633052b640f73b922ff`
 
 The executor packet layer shipped with tests that could not observe it. This
 lane does not change what the packet does; it makes the packet's behaviour
@@ -405,3 +405,117 @@ bundle itself, so writing the number into this file changes it -- which is why
 three successive revisions of this section quoted a figure that did not match
 the tree. The script-file total above is stable under proof edits and is the
 figure that describes the actual change.
+
+## PM review findings (bounce 3)
+
+Five findings were raised against the exact head `933e788f355c87d3ec1ee1a359d6fda9c565109f`.
+All five are fixed. Every figure below is pasted command output.
+
+### Finding 1 (P1) — readmission replaced a divergent branch contract unread
+
+`resolveLaneTaskContract(issueId, null, ...)` ran *before* the readmitted
+branch's worktree existed, so it could only see the control checkout. The
+readmission path then copied the control sync file over the branch's with
+`fs.copyFileSync(syncPath, ...)`, so a branch already carrying a different
+valid work order had it silently replaced.
+
+Fixed: once the branch worktree is checked out, the contract is resolved across
+both roots and persisted per-destination. An identical contract is reused with
+no network; two different valid contracts fail closed as `lane_contract_conflict`;
+a branch carrying none inherits control's, merged against its own sync record.
+
+Covered by F5 (structural: the readmission block no longer copies, and does
+resolve against `worktreePath`) and F5b (behavioural: persistence merges into
+each destination instead of clobbering).
+
+### Finding 2 (P2) — whitespace-only token masked a valid key
+
+`firstNonEmpty` treated `'   '` as usable because it is not exactly `''`.
+`fetchLinearTaskSource` then rejected it via `token.trim()` and never tried
+`LINEAR_API_KEY`. Emptiness is now judged on the trimmed form while the
+original value is returned unchanged. F2 covered only the exact-`''` case, so
+it could not see this; F6 covers it.
+
+### Finding 3 (P2) — a repeated recognized heading yielded only the first occurrence
+
+`sectionLines` returned on its first match. A description opening
+`## Acceptance criteria` with an empty lead-in and then repeating the heading
+with the real content produced no criteria and refused the task as missing
+acceptance criteria — a regression against the normalized-key merge this parser
+replaced. All matching occurrences now aggregate, with nested occurrences
+skipped so an ancestor's lines are not counted twice. F7 covers it.
+
+### Finding 4 (P2) — an authored heading gained punctuation it never had
+
+Residue rendered `${entry.heading}:`, turning `Never run command --force!`
+into `Never run command --force!:`. The heading is now emitted exactly as
+authored. F4 was genuinely vacuous for this alteration — it used a substring
+match, so the appended colon passed. This was confirmed by measurement, not
+assumed: under mutation M15 (re-append the colon) F4 still passes and only F8
+fails. F8 compares the complete rendered line.
+
+### Finding 5 (P2) — proof was bound to a SHA predating the work it described
+
+Corrected. See "SHA binding" below.
+
+### Mutation / inversion battery (bounce 3)
+
+Every fix was inverted. Each mutation was detected, and each killed only its
+own test. Both source files were restored by file copy — never `git checkout` —
+and verified byte-identical to the pre-mutation baseline.
+
+```text
+M13  revert trim-emptiness in firstNonEmpty
+     not ok 44 - F6: a whitespace-only LINEAR_API_TOKEN does not mask LINEAR_API_KEY
+
+M14  revert section aggregation to first-occurrence-only
+     not ok 45 - F7: a repeated recognized heading aggregates instead of yielding only the first
+
+M15  re-append the colon to an authored heading
+     not ok 46 - F8: an unmapped heading is rendered as an exact line with no invented punctuation
+     (F4 SURVIVES this mutation -- the vacuity the reviewer identified)
+
+M16  restore the blind sync copy in the readmission path
+     not ok 40 - F5: readmission resolves the branch contract instead of overwriting it with the control copy
+
+M17  make contract persistence overwrite instead of merge
+     not ok 41 - F5b: persisting a contract merges against each destination record rather than overwriting it
+```
+
+Baseline restored, verified:
+
+```text
+ea6d4145060293ed4fbe24dc558f1c11edc352c4b8017f85bd2d33d9bfa95f57  scripts/ops/execution-packet.ts
+43b050410a053e35782d26c781a792879c2ec7467293331973aad140b68fc239  scripts/ops/lane-start.ts
+```
+
+### SHA binding (bounce 3)
+
+```text
+Verified source SHA: 2f5aa2dd9f60d77eaef0f633052b640f73b922ff
+  fix(ops): UTV2-1747 resolve the five exact-head review findings
+```
+
+This SHA is the commit whose tree contains every line of implementation the
+figures above were measured against — the shared resolver, F1-F4, and the five
+bounce-3 fixes. The bounce-2 binding (`8ef5023`) predated the resolver and all
+four F-regressions, so it could not establish provenance for results measured
+after it. The final PR head is the commit that adds this document; it changes
+no executable code.
+
+### Verification at the bound SHA
+
+```text
+$ pnpm verify:static
+EXIT=0
+tests=5057  pass=5057  fail=0  skipped=0
+```
+
+Bounce-2 head measured 5052 passing. The delta of exactly +5 is F5, F5b, F6,
+F7 and F8 — no other test changed state.
+
+`pnpm verify` cannot reach exit 0 in this environment: `ci:assert-staging`
+refuses with `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx`
+before any test runs. That gate is unrelated to this diff, which touches no
+part of that chain. CI on the merge SHA remains the authority for the live-DB
+half.

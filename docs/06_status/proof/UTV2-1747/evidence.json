@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "8ef502365d71938150b05000e16ee0f8f250c171",
-    "verified_source_note": "Bounce-1 proof-correction commit; the tree at this SHA contains the lifecycle, the three review-finding fixes, the widened compile smoke, and the corrected proof.",
+    "verified_source_sha": "2f5aa2dd9f60d77eaef0f633052b640f73b922ff",
+    "verified_source_note": "Bounce-3 implementation commit; the tree at this SHA contains the shared contract resolver, regressions F1-F4, and all five bounce-3 review-finding fixes that the recorded figures were measured against.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-08-24T23:55:00Z"
+    "bound_at": "2026-08-25T12:20:00Z"
   },
   "scope": {
     "changed_files": 13,
