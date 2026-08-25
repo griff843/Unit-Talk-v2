@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "beb66432aff0d5e318ce3e8b2b84ad55e8dd7185",
+    "verified_source_sha": "953dae38f178df9d28b4ac88c103a7f147282697",
     "verified_source_note": "Bounce-1 correction commit; the tree at this SHA contains the contract lifecycle, the three review-finding fixes, and all tests.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
