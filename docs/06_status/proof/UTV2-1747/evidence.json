@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "51001ddd9eeaa3ae839798e4831ca679d2ed5588",
+    "verified_source_sha": "PENDING",
     "verified_source_note": "Carry-forward correction commit; the tree at this SHA contains the inherited packet fixes, the ported lane-start capture step, and all tests. Later commits are proof artifacts only.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -20,18 +20,18 @@
     "bound_at": "2026-08-24T23:55:00Z"
   },
   "scope": {
-    "changed_files": 11,
-    "substantive_diff_stat": "6 files changed, 1852 insertions(+), 14 deletions(-)",
-    "production_files_modified_by_this_lane": 1,
-    "note": "Four production files carry fixes inherited byte-identically from 581af41b. One deliberate deviation: syncContentWithTaskContract in lane-start.ts gained an export keyword and a doc comment, to provide a test seam for M9. Nothing else in either lane-start file changed."
+    "changed_files": 13,
+    "substantive_diff_stat": "8 script files changed; whole diff 13 files",
+    "production_files_modified_by_this_lane": 0,
+    "note": "Four production files carry fixes inherited byte-identically from 581af41b. This lane authored no production change: an earlier revision added an export keyword and doc comment to lane-start.ts, justified by a test later shown not to execute the wiring it named; both lane-start files are now byte-identical to 581af41b."
   },
   "static_proof": {
     "verify_static": "PASS (exit 0)",
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally by design (assert-staging requires the staging-ci environment and CI_SUPABASE_* credentials). Not required for this lane.",
     "repo_test_suite": {
       "command": "pnpm test",
-      "tests": 5040,
-      "pass": 5040,
+      "tests": 5039,
+      "pass": 5039,
       "fail": 0,
       "via": "stage of pnpm verify:static (exit 0)"
     },
@@ -49,14 +49,14 @@
     "lint": {
       "command": "pnpm lint",
       "result": "PASS",
-      "detail": "0 errors, 0 warnings on the three changed test files"
+      "detail": "0 errors, 0 warnings on the four changed test files"
     },
     "r_level_check": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "detail": "11 changed files; rules matched: (none)"
+      "detail": "13 changed files; rules matched: (none)"
     },
-    "mutation_testing": "Nine defect classes reintroduced one at a time; each makes a named test fail; each source file restored and verified byte-identical by SHA-256. Three classes were NOT detected on first run and required test changes: M5 (NUL sentinel) and M6 (strip removed), both masked by an inherited control-character test whose fixture contained no control characters; and M9 (lane-start capture reverted), masked because the inherited lane-start capture test exercises the exec-time path rather than lane-start's own wiring. Three instances of the same class - a control that does not execute the path it names."
+    "mutation_testing": "Nine defect classes reintroduced one at a time. EIGHT are detected; M9 is NOT. Measured: reverting both captureOrReadTaskContract call sites in lane-start main() to a contract-less sync file leaves the four relevant suites at 115 tests, 115 pass, 0 fail. Nothing in this repository executes lane-start's main(); that was true before this lane and remains true. An earlier revision claimed 9 of 9 on the strength of a test that exercised the extracted helper rather than the wiring; that claim is withdrawn. Separately, the narrow compile smoke passed whenever tsc never ran; it is now hardened and verified by inversion."
   },
   "premise_verification": {
     "claim": "The replaced codex dry-run test could not observe the packet layer.",
@@ -79,24 +79,30 @@
     "third_defect": "The inherited control-character test asserted a property that held trivially for its own fixture."
   },
   "safety_posture": {
-    "production_behaviour_changed": false,
+    "production_behaviour_changed": true,
     "database_behaviour_changed": false,
     "deployment_ingestion_delivery_changed": false,
     "guard_weakened": false,
-    "parser_expanded": false,
-    "guard_note": "No guard was relaxed. Three vacuous or live-mutating tests were replaced with executing ones, and one inherited vacuous assertion was made non-vacuous."
+    "tier_c_path_touched": "scripts/ops/lane-start.ts",
+    "behavioural_change_1": "lane-start now requires a reachable Linear and a valid token on every lane start and resume. Fails closed (structured lane_start_failed, exit 1) before lease reservation or worktree creation, so it cannot orphan state, but it is a new failure mode under containment and in CI.",
+    "behavioural_change_2": "Asymmetric root on resume: syncContentWithTaskContract merges against ROOT/.ops/sync/<id>.yml but the resume path writes into the lane worktree. Measured: 481 of 481 sync records in the root checkout carry no task_contract, so every resume merge base is legacy - branch-accumulated entities are overwritten and the contract can be re-fetched and swapped mid-flight. Inherited from 581af41b; disclosed, not fixed.",
+    "correction": "An earlier revision of this bundle asserted production_behaviour_changed: false. That was wrong relative to main and is withdrawn."
   },
   "sign_off": {
     "static_proof_status": "PASS",
     "runtime_proof_status": "N/A - no runtime path touched",
     "ready_for_pm_review": true,
-    "pending": []
+    "pending": [
+      "M9 (lane-start main() capture wiring) has no executing coverage - disclosed, not closed.",
+      "Two Tier C behavioural changes inherited from the port require a PM decision: the new hard Linear dependency on every lane start/resume, and the asymmetric-root overwrite on resume."
+    ]
   },
   "known_limitations": [
     "The fixture helpers are duplicated across claude-exec.test.ts and codex-exec.test.ts rather than shared. This lane may not add a file, and importing a helper from another test module would re-register that module's tests in both runs. Recorded as a visible decision, not an oversight.",
     "The codex dry-run prompt preview is truncated before the objective renders, so the codex test ties the prompt to the on-disk contract by integrity hash instead of matching the objective text directly. The claude preview does include the objective and is asserted directly.",
     "Each executing test spawns a tsx child process and costs roughly 0.8s; the three executor suites run in about 6s total.",
-    "The packet parser's heading whitelist does not cover '## Deliverables' or '## Hard constraints', which UTV2-1736 uses. Content is preserved verbatim via unmapped_sections and no field falsely claims 'none declared', so this is a extraction-quality follow-up, not a correctness defect."
+    "The packet parser's heading whitelist does not cover '## Deliverables' or '## Hard constraints', which UTV2-1736 uses. Content is preserved verbatim via unmapped_sections and no field falsely claims 'none declared', so this is a extraction-quality follow-up, not a correctness defect.",
+    "Nothing in the repository executes lane-start's main(). Closing M9 honestly needs a child-process test against a fixture root requiring a preflight token, a git repository, worktree creation and pnpm install - better as its own increment."
   ],
   "carry_forward_audit": {
     "scope": "All eight script files from rejected PR #1445, compared by SHA-256 against current main, preserved head 581af41b, and this worktree.",
@@ -104,10 +110,8 @@
       "scripts/ops/claude-exec.ts",
       "scripts/ops/codex-exec.ts",
       "scripts/ops/execution-packet.ts",
+      "scripts/ops/lane-start.ts",
       "scripts/ops/lane-start.test.ts"
-    ],
-    "ported_with_disclosed_deviation": [
-      "scripts/ops/lane-start.ts"
     ],
     "rewritten_by_this_lane": [
       "scripts/ops/claude-exec.test.ts",

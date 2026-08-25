@@ -17,7 +17,6 @@ import {
   fetchLinearTaskSource,
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
-  syncContentWithTaskContract,
   mirrorPreflightTokenToWorktree,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
@@ -801,32 +800,4 @@ test('UTV2-1634: discovery failure blocks the docs-only fast path as well as nor
     guardIndex !== -1 && guardIndex < fastPathIndex,
     'the fail-closed discovery guard must precede the docs-only fast path, so an unknown board refuses both routes',
   );
-});
-
-test('lane-start persists a sync record the executor can actually read back', () => {
-  // Reverting this wiring to the legacy contract-less sync file makes every real
-  // lane's --dry-run refuse -- dry run deliberately never captures, so a lane
-  // whose sync record carries no contract can never be previewed. The inherited
-  // suite stayed green through exactly that mutation, because its capture test
-  // above exercises the exec-time path (generateDispatchExecutionPacketResult)
-  // rather than lane-start's own wiring. This executes the wiring.
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lane-sync-'));
-  const issueId = 'UTV2-999950';
-  const contract = buildTaskContract({
-    identifier: issueId,
-    title: 'Sync wiring fixture',
-    url: `https://linear.app/unit-talk/issue/${issueId}`,
-    description: '## Objective\nThe sync record must carry the captured contract.\n\n## Acceptance criteria\n- readTaskContract resolves it.',
-  }, '2026-08-24T00:00:00.000Z');
-
-  const yml = syncContentWithTaskContract(issueId, contract);
-  fs.mkdirSync(path.join(root, '.ops', 'sync'), { recursive: true });
-  fs.writeFileSync(path.join(root, '.ops', 'sync', `${issueId}.yml`), yml);
-
-  // The round trip is the assertion: readTaskContract verifies description_sha256
-  // and contract_hash, so a sync record without an intact contract cannot pass.
-  const readBack = readTaskContract(issueId, root);
-  assert.equal(readBack.contract_hash, contract.contract_hash,
-    'the persisted sync record must carry the captured contract intact');
-  assert.equal(readBack.objective, contract.objective);
 });

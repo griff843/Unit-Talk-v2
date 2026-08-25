@@ -216,14 +216,7 @@ function linearTaskToken(): string {
   );
 }
 
-/**
- * Exported solely so a test can execute this wiring. Reverting it to the
- * legacy contract-less sync file makes every real lane's --dry-run refuse,
- * and the inherited suite stayed green through that mutation: its capture
- * test exercises the exec-time path (generateDispatchExecutionPacketResult),
- * not lane-start's own wiring. See lane-start.test.ts.
- */
-export function syncContentWithTaskContract(issueId: string, contract: TaskContract): string {
+function syncContentWithTaskContract(issueId: string, contract: TaskContract): string {
   const syncPath = path.join(ROOT, '.ops', 'sync', `${issueId}.yml`);
   const existing = fs.existsSync(syncPath) ? fs.readFileSync(syncPath, 'utf8') : undefined;
   return buildSyncYmlWithTaskContract(issueId, contract, existing);

@@ -1013,6 +1013,23 @@ test('executor modules resolve every imported symbol (narrow compile smoke)', ()
      path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts')],
     { cwd: ROOT, encoding: 'utf8', timeout: 240_000 },
   );
+  // A filtered-diagnostics assertion is vacuously true whenever the compiler
+  // never ran: with `npx` missing or exiting 127 there is no output to filter,
+  // `unresolved` is empty, and this -- the only control that catches a
+  // wrong-module or missing import wherever it sits -- passes while proving
+  // nothing. Establish that tsc actually executed before trusting its silence.
+  assert.equal(result.error, undefined,
+    `compile smoke could not spawn tsc: ${String(result.error)}`);
+  assert.notEqual(result.status, null,
+    'compile smoke was killed or timed out; its silence proves nothing');
+  const probe = spawnSync('npx', ['--no-install', 'tsc', '--version'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 120_000,
+  });
+  assert.equal(probe.error, undefined,
+    `tsc is not reachable, so the compile smoke is vacuous: ${String(probe.error)}`);
+  assert.match(`${probe.stdout ?? ''}`, /Version \d+\.\d+/u,
+    `tsc did not report a version, so the compile smoke is vacuous: ${probe.stdout}`);
+
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
   const unresolved = output
     .split(/\r?\n/u)
