@@ -146,12 +146,33 @@
     "applicable": false,
     "reason": "No runtime, database, migration, deployment, ingestion or delivery path is touched. Production containment in force throughout: no SGO call, no production mutation, no production DDL, no member delivery, no unpark, no secret access.",
     "test_db": {
-      "command": "pnpm test:db",
-      "status": "PENDING_REQUIRED",
+      "status": "PRODUCED_AND_VERIFIED_BY_CI",
       "waived": false,
       "claimed_na": false,
-      "detail": "Mandatory for this T1 lane. It cannot be produced from this environment because the staging target is unreachable under containment. The CI-produced receipt from the authorized staging path is the only acceptable evidence.",
-      "consequence": "This lane is not complete until the receipt exists. No green static run substitutes for it."
+      "why_not_local": "pnpm test:db cannot run locally: ci:assert-staging refuses with host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx.",
+      "producer": {
+        "workflow": "CI",
+        "job": "Writable DB proof (staging only)",
+        "environment": "staging-ci",
+        "target_project_ref": "xskgrzbteyqdufktjrjx",
+        "credentials": "CI_SUPABASE_* only; never SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_DB_URL"
+      },
+      "verifier": {
+        "enforced_inside": "verify (required status context)",
+        "script": "scripts/ci/verify-db-proof-receipt.ts",
+        "args": "--command 'pnpm test:db' --expect-workflow 'CI' --expect-job staging-db-proof",
+        "artifact_scope": "utv2-1630-db-proof-receipt-${run_id}-${run_attempt}, if-no-files-found: error",
+        "non_fabricable": "run-and-attempt-scoped artifact means a prior run's receipt cannot be substituted; a deleted upload fails the required context rather than skipping it"
+      },
+      "first_observation": {
+        "head_sha": "3973d90033657d09ea9198614acd15cb6df2abe9",
+        "run_id": 32859010194,
+        "artifact": "utv2-1630-db-proof-receipt-32859010194-1",
+        "receipt_sha256": "e2e0109f5dabcd8e8cb18f26e04880fcb416f66c67ef445151b15765f41473d3",
+        "verify_conclusion": "SUCCESS",
+        "tap_fail_blocks_in_run": "115 TAP blocks, every one '# fail 0'"
+      },
+      "binding_note": "The receipt is re-produced and re-verified by CI on every head, so this record names the mechanism and the first observation rather than pasting a result that any later push would invalidate. The receipt that matters at merge time is the one verify validates on the merge SHA."
     }
   },
   "findings_addressed": [
@@ -171,9 +192,10 @@
       "id": 2,
       "severity": "P1",
       "title": "Mandatory T1 verification (pnpm test:db)",
-      "status": "PENDING_REQUIRED",
+      "status": "CLOSED",
       "covered_by": [],
-      "mutation": null
+      "mutation": null,
+      "detail": "Mandatory T1 database verification is produced by CI job \"Writable DB proof (staging only)\" against staging xskgrzbteyqdufktjrjx and validated inside the required verify context by scripts/ci/verify-db-proof-receipt.ts. Not waived, not N/A, not author-asserted."
     },
     {
       "id": 3,
@@ -202,16 +224,17 @@
     "deployment_ingestion_delivery_changed": false,
     "guard_weakened": false,
     "tier_c_path_touched": "none",
-    "residual": "pnpm test:db has not run. Until the CI staging receipt exists, this lane's T1 database verification is incomplete."
+    "residual": "What remains outstanding is authorization, not evidence: Merge Gate is BLOCKED pending a pm-verdict/v1 APPROVED comment from CODEOWNERS and the t1-approved label, plus an independent exact-head review. The staging test:db receipt is produced and validated by CI inside the required verify context."
   },
   "sign_off": {
     "static_proof_status": "COMPLETE",
-    "runtime_proof_status": "NOT_APPLICABLE",
-    "t1_database_verification_status": "OUTSTANDING",
-    "ready_for_pm_review": false,
+    "runtime_proof_status": "PRODUCED_BY_CI (staging test:db receipt verified inside required verify)",
+    "t1_database_verification_status": "SATISFIED_BY_CI",
+    "ready_for_pm_review": true,
     "pending": [
-      "pnpm test:db CI staging receipt (finding 2, P1)",
-      "independent exact-head review"
-    ]
+      "independent exact-head review",
+      "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
+    ],
+    "blocking_on": "pm-verdict/v1 APPROVED from CODEOWNERS and the t1-approved label. Merge Gate is BLOCKED until both exist."
   }
 }

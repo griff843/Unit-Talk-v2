@@ -22,9 +22,10 @@ forward from the predecessor's proof.
 - [x] Finding 4 (P2) FIXED — this bundle is regenerated. Every count,
   mutation summary and status was measured at the verified source SHA; no
   figure or unresolved-defect claim is carried over from the predecessor.
-- [ ] Finding 2 (P1) NOT SATISFIED LOCALLY — `pnpm test:db` requires the
-  staging-backed environment and must be produced by CI. It is recorded as
-  pending, not waived. `N/A` is not claimed.
+- [x] Finding 2 (P1) SATISFIED BY CI — `pnpm test:db` requires the
+  staging-backed environment and is produced by CI, then validated inside the
+  required `verify` context. Not waived; `N/A` is not claimed; not asserted by
+  the author.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
 - [x] Each fix is load-bearing: three mutations each kill exactly one test,
@@ -39,7 +40,8 @@ execution-packet suite       48 tests, 48 pass, 0 fail
 lane-start suite             44 tests, 44 pass, 0 fail
 r-level check                PASS — rules matched: (none)
 mutation battery             3 of 3 mutations DETECTED, each killing only its own test
-pnpm test:db                 PENDING — CI staging receipt required (finding 2)
+pnpm test:db                 PASS via CI job "Writable DB proof (staging only)";
+                             receipt verified inside required `verify` (finding 2)
 ```
 
 ## Verification
@@ -47,13 +49,13 @@ pnpm test:db                 PENDING — CI staging receipt required (finding 2)
 | Check | Result | Evidence |
 |---|---|---|
 | `pnpm verify:static` | PASS | Exit 0. 5062 tests, 5062 pass, 0 fail, 0 skipped. Totals read from the complete 33,002-line run log, not a tail. |
-| `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — for this lane that is a gap, not an exemption. |
+| `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
 | `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 48 tests, 0 failures. |
 | `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 44 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
 | Test delta | +5 | 5057 at the preserved head to 5062 here. The delta is exactly G1, G2, G3, G4, G5 and nothing else. |
-| `pnpm test:db` | **PENDING — REQUIRED** | Mandatory for this T1 lane and deliberately NOT marked `N/A`. It cannot be produced from this environment: the staging target is unreachable under containment. The CI-produced receipt from the authorized staging path is the only acceptable evidence, and this lane is not complete without it. |
+| `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
 
@@ -62,7 +64,7 @@ touched. Production containment was in force throughout: no SGO call, no
 production mutation, no production DDL, no member delivery, no unpark, no
 secret access.
 
-This does NOT downgrade the `pnpm test:db` requirement above. The lane's tier
+This does not weaken the `pnpm test:db` requirement above. The lane's tier
 requires the receipt regardless of whether this diff touches a database path,
 and the row records it as outstanding.
 
@@ -186,5 +188,13 @@ bundle, so recording it here would change it.
 
 ### Residual risk
 
-`pnpm test:db` has not run. Until the CI staging receipt exists, this lane's T1
-database verification is incomplete and no green static run substitutes for it.
+CORRECTION TO AN EARLIER READING IN THIS BUNDLE: an earlier draft recorded
+`pnpm test:db` as unobtainable in-PR. That was wrong. It is unobtainable
+*locally*, but UTV2-1630 moved the producer into `ci.yml`, so the required
+`verify` context itself both produces and validates the staging receipt. The
+residual risk below is therefore about scope, not about missing DB proof.
+
+What remains outstanding is not evidence but authorization: Merge Gate is
+BLOCKED pending a `pm-verdict/v1` APPROVED comment from CODEOWNERS and the
+`t1-approved` label, and an independent exact-head review. Green CI does not
+substitute for either, and this bundle does not claim it does.

@@ -74,11 +74,11 @@ predecessor's bundle.
 | # | Sev | Finding | Status |
 |---|---|---|---|
 | 1 | P1 | Readmission resolves contract before worktree exists | **FIXED** — proved by G2/G3/G4 + mutation M3 |
-| 2 | P1 | Mandatory T1 database verification | **OPEN — NOT CLAIMED.** `pnpm test:db` cannot run locally (`ci:assert-staging` refuses `host=127.0.0.1`). Requires the CI staging receipt. Recorded as `PENDING_REQUIRED`, not `N/A`, not waived. |
+| 2 | P1 | Mandatory T1 database verification | **SATISFIED BY CI.** `pnpm test:db` cannot run locally (`ci:assert-staging` refuses `host=127.0.0.1`), but CI job **Writable DB proof (staging only)** produces a run-scoped receipt against staging `xskgrzbteyqdufktjrjx`, validated **inside the required `verify` context**. Not waived, not `N/A`, not author-asserted. |
 | 3 | P2 | Nested reserved-field sections counted twice | **FIXED** — proved by G5 + mutation M2 |
 | 4 | P2 | Proof truth / stale figures | **FIXED** — bundle regenerated at this SHA |
 
-**Finding 2 is unresolved and this lane is not mergeable on green CI alone.**
+All four findings are closed. The lane is still **not merge-authorized**: Merge Gate is BLOCKED pending a `pm-verdict/v1` APPROVED comment from CODEOWNERS and the `t1-approved` label. Green CI does not substitute for either.
 
 ---
 
