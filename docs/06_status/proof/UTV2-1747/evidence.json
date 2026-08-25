@@ -20,18 +20,18 @@
     "bound_at": "2026-08-24T23:55:00Z"
   },
   "scope": {
-    "changed_files": 9,
+    "changed_files": 11,
     "substantive_diff_stat": "6 files changed, 1852 insertions(+), 14 deletions(-)",
-    "production_files_modified_by_this_lane": 0,
-    "note": "The three non-test source files carry fixes inherited byte-identically from the preserved commit 581af41bf145f17dea8cfae4966c799f58077748. This lane authored no new production change: the isolation requirement was met without adding a test-only root parameter, because getRepoRoot() already derives ROOT from process.cwd()."
+    "production_files_modified_by_this_lane": 1,
+    "note": "Four production files carry fixes inherited byte-identically from 581af41b. One deliberate deviation: syncContentWithTaskContract in lane-start.ts gained an export keyword and a doc comment, to provide a test seam for M9. Nothing else in either lane-start file changed."
   },
   "static_proof": {
     "verify_static": "PASS (exit 0)",
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally by design (assert-staging requires the staging-ci environment and CI_SUPABASE_* credentials). Not required for this lane.",
     "repo_test_suite": {
       "command": "pnpm test",
-      "tests": 5036,
-      "pass": 5036,
+      "tests": 5040,
+      "pass": 5040,
       "fail": 0,
       "via": "stage of pnpm verify:static (exit 0)"
     },
@@ -54,9 +54,9 @@
     "r_level_check": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "verdict": "PASS",
-      "detail": "9 changed files; rules matched: (none)"
+      "detail": "11 changed files; rules matched: (none)"
     },
-    "mutation_testing": "Eight defect classes reintroduced one at a time; each makes a named test fail; each source file restored and verified byte-identical by SHA-256. M5 (NUL sentinel) and M6 (strip removed) were NOT detected on the first run - the inherited control-character test used a fixture with no control characters, so its assertion held either way. That test was replaced; both are detected now."
+    "mutation_testing": "Nine defect classes reintroduced one at a time; each makes a named test fail; each source file restored and verified byte-identical by SHA-256. Three classes were NOT detected on first run and required test changes: M5 (NUL sentinel) and M6 (strip removed), both masked by an inherited control-character test whose fixture contained no control characters; and M9 (lane-start capture reverted), masked because the inherited lane-start capture test exercises the exec-time path rather than lane-start's own wiring. Three instances of the same class - a control that does not execute the path it names."
   },
   "premise_verification": {
     "claim": "The replaced codex dry-run test could not observe the packet layer.",
@@ -95,6 +95,49 @@
   "known_limitations": [
     "The fixture helpers are duplicated across claude-exec.test.ts and codex-exec.test.ts rather than shared. This lane may not add a file, and importing a helper from another test module would re-register that module's tests in both runs. Recorded as a visible decision, not an oversight.",
     "The codex dry-run prompt preview is truncated before the objective renders, so the codex test ties the prompt to the on-disk contract by integrity hash instead of matching the objective text directly. The claude preview does include the objective and is asserted directly.",
-    "Each executing test spawns a tsx child process and costs roughly 0.8s; the three executor suites run in about 6s total."
-  ]
+    "Each executing test spawns a tsx child process and costs roughly 0.8s; the three executor suites run in about 6s total.",
+    "The packet parser's heading whitelist does not cover '## Deliverables' or '## Hard constraints', which UTV2-1736 uses. Content is preserved verbatim via unmapped_sections and no field falsely claims 'none declared', so this is a extraction-quality follow-up, not a correctness defect."
+  ],
+  "carry_forward_audit": {
+    "scope": "All eight script files from rejected PR #1445, compared by SHA-256 against current main, preserved head 581af41b, and this worktree.",
+    "ported_byte_identical": [
+      "scripts/ops/claude-exec.ts",
+      "scripts/ops/codex-exec.ts",
+      "scripts/ops/execution-packet.ts",
+      "scripts/ops/lane-start.test.ts"
+    ],
+    "ported_with_disclosed_deviation": [
+      "scripts/ops/lane-start.ts"
+    ],
+    "rewritten_by_this_lane": [
+      "scripts/ops/claude-exec.test.ts",
+      "scripts/ops/codex-exec.test.ts",
+      "scripts/ops/execution-packet.test.ts"
+    ],
+    "accidentally_omitted_now_corrected": [
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-start.test.ts"
+    ],
+    "deliberately_omitted": [],
+    "already_present_on_main": [],
+    "finding": "lane-start.ts and lane-start.test.ts were accidentally omitted. They are the capture step: on main, lane-start writes a sync record with no task_contract, and readTaskContract throws 'task contract is absent' for every real lane.",
+    "precision_correction": "Capture is NOT absent altogether. The exec-time path (generateDispatchExecutionPacketResult) still captures and persists at dispatch. The omission specifically breaks the DRY-RUN path, which deliberately never captures - so without lane-start-time capture, every --dry-run on a real lane refuses. That is the exact path this lane's new tests exercise.",
+    "clean_port_verified": "main has not moved on either file since merge-base e4f32988, so the port applied with no reconciliation.",
+    "tier_c_consequence": "lane-start.ts matches the Tier C pattern ^scripts/ops/(lane|merge|tier)-[^/]+(?<!\\.test)\\.ts$, so this lane is now Tier C. Measured board state: the two existing hard fails (UTV2-1729<->UTV2-1743 Tier C conflict, and UTV2-1743 merged-but-in_review) predate this change and involve neither UTV2-1747 nor UTV2-1736. Tier C contention gates /dispatch admission, not PR merge."
+  },
+  "end_to_end_proof_utv2_1736": {
+    "method": "Real read-only Linear fetch for UTV2-1736, then build, persist, re-read and render, all against an isolated root. The live UTV2-1736 lane was never written.",
+    "capture": "ok - description 3374 bytes",
+    "build": "ok - 8 unmapped sections",
+    "persist": "ok",
+    "reread": "ok - description_sha256 and contract_hash verified",
+    "render": "ok - 7702-byte prompt",
+    "hard_constraints_present": {
+      "no_unrestricted_default_partition": true,
+      "no_retention_deletion": true,
+      "stop_before_production_ddl": true
+    },
+    "falsely_claims_none_declared": false,
+    "parser_limitation": "UTV2-1736 uses '## Deliverables' and '## Hard constraints', which no whitelist consumes, so guardrails and acceptance_criteria are not cleanly extracted. Nothing is lost: content is carried verbatim in unmapped_sections and unextracted fields render as '(not extracted)' rather than '(none declared)'. Recorded as a follow-up; parser expansion is out of scope for this lane."
+  }
 }

@@ -21,7 +21,9 @@
     "scripts/ops/codex-exec.test.ts",
     "scripts/ops/codex-exec.ts",
     "scripts/ops/execution-packet.test.ts",
-    "scripts/ops/execution-packet.ts"
+    "scripts/ops/execution-packet.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1747/evidence.json"

@@ -1,7 +1,6 @@
 # UTV2-1747 — diff summary
 
-9 files changed, 1907 insertions(+), 14 deletions(-).
-Substantive: 6 files changed, 1852 insertions(+), 14 deletions(-).
+11 files changed. Substantive: 8 script files.
 
 ## Production source (inherited, unmodified by this lane)
 
@@ -10,10 +9,12 @@ Substantive: 6 files changed, 1852 insertions(+), 14 deletions(-).
 | `scripts/ops/execution-packet.ts` | Inherited byte-identically from `581af41b`: `PREAMBLE_KEY` without a NUL sentinel, `stripControlChars` on the rendered output, `TaskContractError` with a code, the `unmapped_sections` staleness assertion, empty-heading residue, and source provenance lines. |
 | `scripts/ops/claude-exec.ts` | Inherited byte-identically: the `--dry-run` branch reads the packet without capture or persistence, and the failure handler emits structured JSON instead of calling `printDryRun` with the wrong arity. |
 | `scripts/ops/codex-exec.ts` | Inherited byte-identically: the same `--dry-run` purity branch. |
+| `scripts/ops/lane-start.ts` | **Carry-forward correction.** Accidentally omitted from the original port. Replaces the contract-less `buildSyncYml` with `captureOrReadTaskContract` + `buildSyncYmlWithTaskContract`, so a lane's sync record carries its work order from lane-start time. Without it every `--dry-run` on a real lane refuses, because dry run deliberately never captures. One disclosed deviation from byte-identity: `syncContentWithTaskContract` gained an `export` keyword and a doc comment, to provide a test seam. |
 
-This lane authored **no** new production change. The isolated-root requirement
-was met without a test-only root parameter, because `getRepoRoot()` already
-derives `ROOT` from `process.cwd()`.
+Beyond the inherited fixes, this lane authored exactly one production change: an
+`export` keyword on `syncContentWithTaskContract`. The isolated-root requirement
+needed no production change at all, because `getRepoRoot()` already derives
+`ROOT` from `process.cwd()`.
 
 ## Tests
 
@@ -22,6 +23,7 @@ derives `ROOT` from `process.cwd()`.
 | `scripts/ops/codex-exec.test.ts` | Replaces the dry-run test that never reached packet generation with three executing tests: rendered-packet-carries-the-contract, lane-root-byte-identical, and refuses-without-a-captured-contract. Adds the isolated fixture-root helpers. Corrects the file header, which claimed `main()` could only be exercised against a live Codex CLI. |
 | `scripts/ops/claude-exec.test.ts` | Replaces the two dry-run tests that wrote fixtures into the live checkout with the same three shapes, run as a child process in an isolated root. Their original assertions are preserved. |
 | `scripts/ops/execution-packet.test.ts` | Replaces a control-character test whose fixture contained no control characters with two tests: `PREAMBLE_KEY` is spawn-safe on its own, and a hostile description is stripped before render. Both assert their own fixture is non-vacuous. |
+| `scripts/ops/lane-start.test.ts` | Ported byte-identically, plus one added test that executes lane-start's own sync wiring and round-trips the result through `readTaskContract`. The inherited suite stayed green when that wiring was reverted, because its capture test exercises the exec-time path instead. |
 
 ## What this does not do
 
