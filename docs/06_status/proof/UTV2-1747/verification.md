@@ -61,13 +61,14 @@ lane-root mutation           0 tracked and 0 untracked changes after a dry run
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. Runs lint, type-check, build and the repository suite. |
+| `pnpm verify:static` | PASS | Exit 0. 5052 tests, 0 failures, 0 `not ok` lines. Runs lint, type-check, build and the repository suite. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally, by design: `assert-staging` requires the `staging-ci` environment and `CI_SUPABASE_*` credentials, and refuses any other target. Not run locally, and not required for this lane. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
-| `pnpm test` | PASS | 4934 tests, 0 failures, exit 0. `pnpm verify:static` totals 5048 because it also runs the smart-form package suite (114); an earlier revision mislabelled that pipeline total as `pnpm test`. |
-| `pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts` | PASS | 85 tests, 0 failures. |
+| `pnpm test` | PASS | 4938 tests, 0 failures, exit 0. `pnpm verify:static` totals 5052 because it also runs the smart-form package suite (114); an earlier revision mislabelled that pipeline total as `pnpm test`. Both rose by exactly 4 against the bounce-1 head (4934 / 5048) — the four bounce-2 regression tests below, and nothing else. |
+| `pnpm exec tsx --test scripts/ops/{execution-packet,claude-exec,codex-exec}.test.ts` | PASS | 89 tests, 0 failures (execution-packet alone: 43). |
 | `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 39 tests, 0 failures. |
-| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 13 changed files. Rules matched: (none). |
+| `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | 14 changed files. Rules matched: (none). |
+| File count, population named | — | The PR diff GitHub reviews is `origin/main...HEAD` = **13 files**, all authored by this lane and all inside `file_scope_lock`. `r-level-check` reports **14** because it diffs `origin/main..HEAD` (two-dot), which also picks up `docs/06_status/readiness/readiness-score.json` — changed on `main` since the branch point, not by this lane. Both numbers are correct for their own population; neither is the other. |
 | `pnpm test:db` | N/A | No runtime, delivery or database path is touched. `lane_type: governance`, `proof_profile: static`. |
 
 ## Runtime Verification
@@ -228,14 +229,93 @@ a reachable Linear and a valid token for its single bounded capture. There is no
 work order to proceed from without one. That capture precedes every lease,
 worktree and manifest mutation, so a failure leaves lane state untouched.
 
-Two further findings are recorded rather than fixed, both pre-existing on `main`:
-the readmission path still copies the control checkout's sync record into the
-worktree, so readmit can still overwrite branch-accumulated entities; and
-`generateDispatchExecutionPacketResult`'s `LINEAR_API_KEY` fallback is dead code
-because `readConfiguredEnvValue` returns `''` rather than a nullish value, so a
-deployment carrying only `LINEAR_API_KEY` would refuse there while `lane-start`
-(which uses `||`) would succeed. Neither is introduced by this lane and neither
-is in its declared scope.
+CORRECTION (bounce 2). An earlier revision of this bundle recorded two findings
+as "both pre-existing on `main`". That classification was half wrong, and the
+reviewer caught it rather than the author. Measured:
+
+```text
+$ git show origin/main:scripts/ops/execution-packet.ts | grep -c generateDispatchExecutionPacketResult
+0
+$ git show origin/main:scripts/ops/execution-packet.ts | grep -n readConfiguredEnvValue
+(no output — ABSENT on main)
+$ git show origin/main:scripts/ops/lane-start.ts | grep -n worktreeSyncDir
+1150:        const worktreeSyncDir = path.join(worktreePath, '.ops', 'sync');
+1152:        fs.copyFileSync(syncPath, path.join(worktreeSyncDir, `${issueId}.yml`));
+```
+
+So: the readmission path's raw sync copy IS pre-existing on `main` and remains
+recorded, not fixed, and out of this lane's declared scope. The
+`LINEAR_API_KEY` fallback is NOT pre-existing — both the function and the
+fallback were introduced by this PR. It was this lane's defect, it is fixed
+below, and calling it inherited was a false statement in a proof bundle.
+
+### PM review findings (bounce 2) — PR #1446 at head 53d0fa55
+
+Four unresolved, non-outdated Codex threads at the exact head (one P1, three
+P2), all in `scripts/ops/execution-packet.ts`. All four corrected.
+
+| # | Finding | Correction |
+|---|---|---|
+| P1 | `captureOrReadTaskContract()` read only the control root, so the dispatch path silently replaced a lane worktree's authoritative contract — the same conflict `lane-start` refuses. | Both roots are resolved BEFORE any write. A divergent valid pair throws `TaskContractConflictError` and the packet returns `code: LANE_CONTRACT_CONFLICT` carrying both hashes. The lane file is left byte-identical. |
+| P2 | `??` token chain: an empty configured `LINEAR_API_TOKEN` masked `LINEAR_API_KEY`, so capture refused as tokenless. | `firstNonEmpty()` replaces the chain, matching `lane-start`'s `linearTaskToken()` (`||`). Provenance corrected above. |
+| P2 | Sections keyed by normalized heading text merged two unrelated occurrences (`## Notes` / `### Details` then a later `## Details`), and the independent body vanished. | The parser is rekeyed from normalized text to per-occurrence identity (`SectionOccurrence.id`). Consuming a parent consumes only ITS descendants. |
+| P2 | Unmapped residue rendered the normalized map key, so `## Never run --force` reached the executor as `never run force:` — while this bundle claimed residue travels verbatim. | Each occurrence retains `raw`, the heading exactly as authored. Residue renders `raw`; the normalized key is used only for lookup. |
+
+The P1 fix deliberately deviates from the preserved branch, as PM authorized.
+Rather than add a third conflict rule, the shared implementation now lives in
+`execution-packet.ts` and `lane-start.ts` delegates to it, so the two paths
+cannot drift apart again. `lane-start`'s established refusal JSON
+(`control_contract_hash` / `worktree_contract_hash`) is preserved unchanged and
+`contracts` carries the same facts generically.
+
+#### Bounce-2 inversion battery
+
+Each defect reintroduced alone, the owning suite run, the source restored by
+file copy (never `git checkout`, which has destroyed uncommitted work here), and
+the restore checked byte-identical by SHA-256.
+
+```text
+baseline: pnpm exec tsx --test scripts/ops/execution-packet.test.ts -> 43/43 pass
+
+M1  read control root only, then overwrite the lane
+      -> not ok 40 - F1: divergent valid contracts ... refuse instead of overwriting
+      -> ok 41 (F2 unaffected)
+M2  restore the `??` token chain
+      -> not ok 41 - F2: an empty configured LINEAR_API_TOKEN does not mask LINEAR_API_KEY
+      -> ok 40 (F1 unaffected)
+M3  key sections by normalized text (merge occurrences)
+      -> not ok 42 - F3: a repeated normalized heading keeps both occurrences as distinct sections
+      -> ok 43 (F4 unaffected)
+M4  render `occurrence.key` instead of `occurrence.raw`
+      -> not ok 43 - F4: an unmapped heading keeps its authored case, punctuation and flag prefix
+      -> ok 42 (F3 unaffected)
+
+sha256 before: 66288bd6b039d77e3a7600eff3115436d8ddae6f1838dcef27c9e21918da2a4f
+sha256 after : 66288bd6b039d77e3a7600eff3115436d8ddae6f1838dcef27c9e21918da2a4f
+```
+
+Each mutation kills exactly its own test and leaves its siblings green, which is
+what distinguishes four independent guards from one broad assertion. Every
+bounce-2 test asserts its own precondition first (that the two fixture contracts
+genuinely differ; that the masking value is an empty string and not `undefined`;
+that the fixture really does repeat a normalizing heading; that the fixture
+heading really does carry case, backticks, a flag prefix and punctuation), so
+none can pass vacuously.
+
+#### An unplanned inversion, recorded because it is evidence
+
+The first full `pnpm verify` after these fixes exited 1 on a single test:
+
+```text
+not ok 1274 - lane-start main() refuses two different valid contracts instead of choosing one
+  scripts/ops/lane-start.test.ts:1006  Expected "actual" to be strictly unequal to: undefined
+```
+
+Collapsing `lane-start`'s conflict class onto the shared resolver had changed its
+refusal JSON. That was a real break of an operator-facing shape, and it is also
+unplanned proof that the test is non-vacuous: the emission was removed and the
+named test failed. It was invisible to the targeted 43/43 run and surfaced only
+in the full suite. Fixed by preserving the named pair alongside `contracts`.
 
 ### Mutation testing
 

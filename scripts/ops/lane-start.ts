@@ -60,13 +60,19 @@ export { checkConcurrencyLimits } from './concurrency-rules.js';
 export type { ConcurrencyViolation, IncomingLaneScope } from './concurrency-rules.js';
 import { checkConcurrencyLimits } from './concurrency-rules.js';
 import {
-  buildSyncYmlWithTaskContract,
-  buildTaskContract,
-  fetchLinearTaskSource,
-  readTaskContract,
+  persistTaskContractToRoots,
+  resolveTaskContractAcrossRoots,
+  TaskContractConflictError,
   type TaskContract,
 } from './execution-packet.js';
 export { captureOrReadTaskContract, fetchLinearTaskSource } from './execution-packet.js';
+// One conflict rule for the whole system. lane-start and the dispatch packet
+// path previously carried separate copies; only lane-start's refused.
+export {
+  readValidTaskContractAt,
+  syncContentForDestination,
+  TaskContractConflictError as LaneContractConflictError,
+} from './execution-packet.js';
 import {
   BOOTSTRAP_AUTHORIZATIONS_PATH,
   buildBootstrapAdmissionReceipt,
@@ -223,54 +229,14 @@ export interface LaneContractResolution {
 }
 
 /**
- * Two valid but different work orders for one lane is unresolvable state: the
- * executor may already be acting on either. Refuse structurally rather than
- * pick one, which would silently discard the other.
- */
-export class LaneContractConflictError extends Error {
-  readonly code = 'lane_contract_conflict';
-  constructor(
-    readonly issueId: string,
-    readonly controlHash: string,
-    readonly worktreeHash: string,
-  ) {
-    super(
-      `lane ${issueId} has two different valid task contracts: control checkout ` +
-        `${controlHash} vs lane worktree ${worktreeHash}. Refusing to choose. ` +
-        `Delete the stale .ops/sync/${issueId}.yml, or reconcile them deliberately.`,
-    );
-    this.name = 'LaneContractConflictError';
-  }
-}
-
-/**
- * A contract that is present but does not validate (a stale snapshot predating
- * unmapped_sections, a hash that no longer matches its content) is reported as
- * absent so it can be recaptured -- which is exactly what the stale-contract
- * error tells the operator to do. Only a *valid* pair can conflict.
- */
-export function readValidTaskContractAt(
-  root: string,
-  issueId: string,
-): TaskContract | null {
-  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
-  if (!fs.existsSync(syncPath)) return null;
-  if (!/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(fs.readFileSync(syncPath, 'utf8'))) {
-    return null;
-  }
-  try {
-    return readTaskContract(issueId, root);
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Resolve the lane's work order WITHOUT making Linear a dependency of every
  * resume. A lane that already holds a valid contract reuses it verbatim; only a
  * lane with no valid contract anywhere performs one bounded capture. That
  * capture is the sole network call, and it happens before any lease, worktree
  * or manifest mutation, so a Linear failure leaves lane state untouched.
+ *
+ * Delegates to the shared resolver so lane-start and the dispatch packet path
+ * cannot drift apart on what counts as a conflict.
  */
 export function resolveLaneTaskContract(
   issueId: string,
@@ -278,46 +244,16 @@ export function resolveLaneTaskContract(
   token: string,
   runner: typeof spawnSync = spawnSync,
 ): LaneContractResolution {
-  const control = readValidTaskContractAt(ROOT, issueId);
-  const worktree =
-    worktreePath && worktreePath !== ROOT
-      ? readValidTaskContractAt(worktreePath, issueId)
-      : null;
-
-  if (control && worktree && control.contract_hash !== worktree.contract_hash) {
-    throw new LaneContractConflictError(
-      issueId,
-      control.contract_hash,
-      worktree.contract_hash,
-    );
-  }
   // The lane's own copy wins when both agree: it is the one the executor reads.
-  if (worktree) return { contract: worktree, fetched: false, source: 'lane-worktree' };
-  if (control) return { contract: control, fetched: false, source: 'control-checkout' };
-
-  return {
-    contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),
-    fetched: true,
-    source: 'linear-capture',
-  };
-}
-
-/**
- * Merge against the DESTINATION's own sync record, never a different root's.
- * The control checkout holds hundreds of legacy records with no contract and no
- * accumulated entities; merging a lane worktree's write against those replaced
- * the branch's findings, controls and proofs with the control copy's.
- */
-export function syncContentForDestination(
-  destRoot: string,
-  issueId: string,
-  contract: TaskContract,
-): string {
-  const syncPath = path.join(destRoot, '.ops', 'sync', `${issueId}.yml`);
-  const existing = fs.existsSync(syncPath)
-    ? fs.readFileSync(syncPath, 'utf8')
-    : undefined;
-  return buildSyncYmlWithTaskContract(issueId, contract, existing);
+  const roots =
+    worktreePath && worktreePath !== ROOT ? [worktreePath, ROOT] : [ROOT];
+  const resolved = resolveTaskContractAcrossRoots(issueId, roots, token, runner);
+  const source: LaneContractResolution['source'] = resolved.fetched
+    ? 'linear-capture'
+    : roots[resolved.rootIndex] === ROOT
+      ? 'control-checkout'
+      : 'lane-worktree';
+  return { contract: resolved.contract, fetched: resolved.fetched, source };
 }
 
 /** Persist one contract to every root, each merged against its own record. */
@@ -326,15 +262,7 @@ export function persistLaneTaskContract(
   contract: TaskContract,
   roots: string[],
 ): void {
-  for (const root of roots) {
-    const syncDir = path.join(root, '.ops', 'sync');
-    fs.mkdirSync(syncDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(syncDir, `${issueId}.yml`),
-      syncContentForDestination(root, issueId, contract),
-      'utf8',
-    );
-  }
+  persistTaskContractToRoots(issueId, contract, roots);
 }
 
 export function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
@@ -1562,14 +1490,22 @@ function main(): void {
       // generic start failure: the operator has to reconcile two contracts, and
       // an automated caller must be able to tell that apart from a bad flag.
       code:
-        error instanceof LaneContractConflictError
+        error instanceof TaskContractConflictError
           ? error.code
           : 'lane_start_failed',
       message: error instanceof Error ? error.message : String(error),
-      ...(error instanceof LaneContractConflictError
+      // The named pair is lane-start's established refusal shape and stays the
+      // operator-facing contract; `contracts` carries the same facts generically
+      // for the shared resolver, which is not limited to two roots.
+      ...(error instanceof TaskContractConflictError
         ? {
-            control_contract_hash: error.controlHash,
-            worktree_contract_hash: error.worktreeHash,
+            control_contract_hash:
+              error.hashes.find((entry) => entry.root === ROOT)?.contract_hash ??
+              null,
+            worktree_contract_hash:
+              error.hashes.find((entry) => entry.root !== ROOT)?.contract_hash ??
+              null,
+            contracts: error.hashes,
           }
         : {}),
       issue_id: issueId || null,

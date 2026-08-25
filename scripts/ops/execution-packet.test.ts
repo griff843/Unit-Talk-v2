@@ -11,6 +11,7 @@ import {
   buildTaskContract,
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
+  generateDispatchExecutionPacketResult,
   PREAMBLE_KEY,
   readTaskContract,
   renderTaskContract,
@@ -850,4 +851,247 @@ test('unclassified content keeps its line and formatting semantics', () => {
     'the rendered prompt must carry the multiline block intact');
   assert.ok(rendered.includes('| --- | --- |'),
     'the rendered prompt must carry table rows intact');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1747 exact-head review findings (PR #1446). One regression test per
+// finding; each asserts its own precondition first so it cannot pass vacuously.
+// ---------------------------------------------------------------------------
+
+/** A repo root + lane worktree with a manifest, and no network anywhere. */
+function seedDispatchRoots(): { root: string; wt: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-rf-'));
+  const root = path.join(dir, 'repo');
+  const wt = path.join(root, 'wt');
+  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.mkdirSync(path.join(root, '.ops', 'sync'), { recursive: true });
+  fs.mkdirSync(path.join(wt, '.ops', 'sync'), { recursive: true });
+  return { root, wt };
+}
+
+function dispatchManifest(issueId: string, wt: string): LaneManifest {
+  return createTestManifest({
+    issue_id: issueId,
+    worktree_path: wt,
+    branch: `claude/${issueId.toLowerCase()}-fixture`,
+    execution_location: {
+      mode: 'worktree',
+      cwd: wt,
+      package_install: 'verified',
+      setup_command: null,
+      main_checkout_control_only: true,
+    },
+  });
+}
+
+function linearRunner(description: string, title = 'Fixture'): typeof spawnSync {
+  return ((_cmd: string, _args: string[], _opts: unknown) => ({
+    status: 0,
+    error: undefined,
+    stderr: '',
+    stdout: JSON.stringify({
+      data: {
+        issue: {
+          identifier: 'PLACEHOLDER_ID',
+          title,
+          url: 'https://linear.app/unit-talk/issue/x',
+          description,
+        },
+      },
+    }),
+  })) as unknown as typeof spawnSync;
+}
+
+test('F1: divergent valid contracts in control and lane roots refuse instead of overwriting', () => {
+  const issueId = 'UTV2-999901';
+  const { root, wt } = seedDispatchRoots();
+
+  const controlContract = buildTaskContract({
+    identifier: issueId,
+    title: 'Control copy',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description: '## Objective\ncontrol objective\n\n## Acceptance criteria\n- control',
+  });
+  const laneContract = buildTaskContract({
+    identifier: issueId,
+    title: 'Lane copy',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description: '## Objective\nlane objective\n\n## Acceptance criteria\n- lane',
+  });
+
+  // Precondition: the two contracts genuinely differ. Without this the test
+  // would pass against an implementation that never compares anything.
+  assert.notEqual(
+    controlContract.contract_hash,
+    laneContract.contract_hash,
+    'fixture contracts are identical — this test would be vacuous',
+  );
+
+  fs.writeFileSync(
+    path.join(root, '.ops', 'sync', `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, controlContract, undefined),
+    'utf8',
+  );
+  fs.writeFileSync(
+    path.join(wt, '.ops', 'sync', `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, laneContract, undefined),
+    'utf8',
+  );
+  const laneBytesBefore = fs.readFileSync(
+    path.join(wt, '.ops', 'sync', `${issueId}.yml`),
+  );
+
+  const result = generateDispatchExecutionPacketResult(
+    dispatchManifest(issueId, wt),
+    { LINEAR_API_TOKEN: 'stub' },
+    { root, runner: linearRunner('unused') },
+  );
+
+  assert.equal(result.ok, false, 'a divergent pair must refuse, not produce a packet');
+  assert.equal(
+    result.ok === false ? result.code : null,
+    'LANE_CONTRACT_CONFLICT',
+    `refusal must be structurally identifiable; got ${JSON.stringify(result)}`,
+  );
+  assert.deepEqual(
+    fs.readFileSync(path.join(wt, '.ops', 'sync', `${issueId}.yml`)),
+    laneBytesBefore,
+    'the lane worktree contract must be left byte-identical, never overwritten',
+  );
+});
+
+test('F2: an empty configured LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () => {
+  const issueId = 'UTV2-999902';
+  const { root, wt } = seedDispatchRoots();
+  const env = { LINEAR_API_TOKEN: '', LINEAR_API_KEY: 'real-key' };
+
+  // Precondition: the masking value really is an empty string, not undefined.
+  // `??` skips undefined, so an undefined fixture would test nothing.
+  assert.equal(env.LINEAR_API_TOKEN, '', 'fixture must use an EMPTY token');
+  assert.ok(env.LINEAR_API_KEY.length > 0, 'fixture must supply a real key');
+
+  let sawToken: string | null = null;
+  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
+    sawToken = opts?.input ?? '';
+    return {
+      status: 0,
+      error: undefined,
+      stderr: '',
+      stdout: JSON.stringify({
+        data: {
+          issue: {
+            identifier: issueId,
+            title: 'Fixture',
+            url: 'https://linear.app/unit-talk/issue/x',
+            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured',
+          },
+        },
+      }),
+    };
+  }) as unknown as typeof spawnSync;
+
+  const result = generateDispatchExecutionPacketResult(
+    dispatchManifest(issueId, wt),
+    env,
+    { root, runner },
+  );
+
+  assert.equal(
+    result.ok,
+    true,
+    `capture must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
+  );
+  assert.match(
+    String(sawToken ?? ''),
+    /real-key/u,
+    'the configured key must actually reach the fetch, not just avoid the refusal',
+  );
+});
+
+test('F3: a repeated normalized heading keeps both occurrences as distinct sections', () => {
+  const description = [
+    '## Objective',
+    'ship it',
+    '',
+    '## Acceptance criteria',
+    '- done',
+    '',
+    '## Notes',
+    'parent body',
+    '',
+    '### Details',
+    'nested detail body',
+    '',
+    '## Details',
+    'independent top-level detail body',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999903',
+    title: 'Repeated headings',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description,
+  });
+
+  // Precondition: the description really does repeat a normalizing heading.
+  assert.equal(
+    (description.match(/^#{2,3} Details$/gmu) ?? []).length,
+    2,
+    'fixture must contain two headings that normalize alike',
+  );
+
+  const residue = contract.unmapped_sections.join('\n');
+  assert.match(
+    residue,
+    /independent top-level detail body/u,
+    'the later independent section must survive; it was being swallowed by the nested occurrence',
+  );
+  assert.match(residue, /nested detail body/u, 'the nested body must also survive');
+  assert.match(
+    renderTaskContract(contract),
+    /independent top-level detail body/u,
+    'the rendered prompt must carry the independent section too',
+  );
+});
+
+test('F4: an unmapped heading keeps its authored case, punctuation and flag prefix', () => {
+  const description = [
+    '## Objective',
+    'ship it',
+    '',
+    '## Acceptance criteria',
+    '- done',
+    '',
+    '## Never run `--force` against production!',
+    'this prohibition is load-bearing',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999904',
+    title: 'Verbatim headings',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description,
+  });
+
+  // Precondition: the heading contains exactly the characters normalization
+  // destroys — uppercase, backticks, a flag prefix and punctuation.
+  assert.match(description, /## Never run `--force` against production!/u,
+    'fixture heading must carry case, backticks, a flag prefix and punctuation');
+
+  const residue = contract.unmapped_sections.join('\n');
+  assert.match(
+    residue,
+    /Never run `--force` against production!/u,
+    `the authored heading must be preserved verbatim; got: ${residue}`,
+  );
+  assert.doesNotMatch(
+    residue,
+    /never run force:/u,
+    'the normalized lookup key must never be rendered as the heading',
+  );
+  assert.match(
+    renderTaskContract(contract),
+    /Never run `--force` against production!/u,
+    'the rendered prompt must carry the authored heading',
+  );
 });

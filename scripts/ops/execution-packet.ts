@@ -88,10 +88,15 @@ export type ExecutionPacketResult =
   | { ok: true; packet: ExecutionPacket }
   | {
       ok: false;
-      code: 'EXECUTION_PACKET_INVALID';
+      code: 'EXECUTION_PACKET_INVALID' | 'LANE_CONTRACT_CONFLICT';
       issue_id: string;
       branch: string;
       message: string;
+      /**
+       * Present only on LANE_CONTRACT_CONFLICT. Both hashes travel so the
+       * operator can reconcile without re-deriving which root held what.
+       */
+      contracts?: Array<{ root: string; contract_hash: string }>;
     };
 
 type LinearFetchRunner = typeof spawnSync;
@@ -212,12 +217,26 @@ function executionPacketFailure(
   manifest: LaneManifest,
   error: unknown,
 ): ExecutionPacketResult {
+  const message = `Execution packet refused: ${error instanceof Error ? error.message : String(error)}`;
+  // A divergent-contract refusal is a distinct, actionable condition. Collapsing
+  // it into the generic invalid-packet code loses the one fact the operator
+  // needs: which roots disagree, and on what hashes.
+  if (error instanceof TaskContractConflictError) {
+    return {
+      ok: false,
+      code: 'LANE_CONTRACT_CONFLICT',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message,
+      contracts: error.hashes,
+    };
+  }
   return {
     ok: false,
     code: 'EXECUTION_PACKET_INVALID',
     issue_id: manifest.issue_id,
     branch: manifest.branch,
-    message: `Execution packet refused: ${error instanceof Error ? error.message : String(error)}`,
+    message,
   };
 }
 
@@ -237,15 +256,54 @@ function normalizeHeading(value: string): string {
  */
 export const PREAMBLE_KEY = '(description preamble)';
 
+/**
+ * One heading as it actually appeared in the description.
+ *
+ * Identity is the occurrence, never the normalized text. Keying by normalized
+ * text merged two unrelated sections that happen to normalize alike -- e.g.
+ * `## Notes` / `### Details` followed later by a top-level `## Details`. The
+ * shared entry accumulated both bodies, the nested one was marked consumed as a
+ * descendant of `notes`, and the independent `## Details` body vanished from
+ * the contract and the prompt (UTV2-1747 review finding P2/headings).
+ */
+interface SectionOccurrence {
+  /** Stable identity for this occurrence; unique within one parse. */
+  id: number;
+  /** Normalized lookup key. Many occurrences may share one. */
+  key: string;
+  /**
+   * The heading exactly as authored, minus the leading `#`s and surrounding
+   * whitespace. Case, punctuation, backticks and flag prefixes are preserved:
+   * residue rendered from the normalized key turned `## Never run --force`
+   * into `never run force:`, rewriting a load-bearing prohibition while this
+   * module claimed to carry unclassified content verbatim.
+   */
+  raw: string;
+  level: number;
+  lines: string[];
+  /** Occurrence ids nested beneath this one, in document order. */
+  descendants: number[];
+}
+
 interface ParsedSections {
-  sections: Map<string, string[]>;
-  /** heading -> every heading nested beneath it, in document order. */
-  descendants: Map<string, string[]>;
+  occurrences: SectionOccurrence[];
 }
 
 function parseSections(markdown: string): ParsedSections {
-  const sections = new Map<string, string[]>();
-  const descendants = new Map<string, string[]>();
+  const occurrences: SectionOccurrence[] = [];
+  let preamble: SectionOccurrence | null = null;
+  const add = (key: string, raw: string, level: number): SectionOccurrence => {
+    const occurrence: SectionOccurrence = {
+      id: occurrences.length,
+      key,
+      raw,
+      level,
+      lines: [],
+      descendants: [],
+    };
+    occurrences.push(occurrence);
+    return occurrence;
+  };
   // Open ancestors, outermost first. A line belongs to the deepest heading AND
   // to every heading above it: an `## Acceptance criteria` parent whose items
   // live under `### Functional` used to end up empty, because any heading -- at
@@ -254,25 +312,26 @@ function parseSections(markdown: string): ParsedSections {
   // refused for "missing acceptance criteria" while the criteria sat one level
   // down. Descendants are recorded so that consuming a parent also consumes
   // them, which keeps the same content from being duplicated into residue.
-  const open: Array<{ key: string; level: number }> = [];
+  const open: SectionOccurrence[] = [];
   for (const rawLine of markdown.split(/\r?\n/u)) {
     const heading = /^(#{1,6})\s+(.+?)\s*$/u.exec(rawLine.trim());
     if (heading) {
       const level = (heading[1] ?? '').length;
-      const key = normalizeHeading(heading[2] ?? '');
+      const raw = (heading[2] ?? '').trim();
+      const key = normalizeHeading(raw);
       while (open.length > 0 && (open[open.length - 1]?.level ?? 0) >= level) {
         open.pop();
       }
+      const occurrence = add(key, raw, level);
       for (const ancestor of open) {
         // The subheading line itself is content of its parent; without it the
         // parent loses the fact that the subsection exists at all.
-        sections.get(ancestor.key)?.push(rawLine);
-        const kin = descendants.get(ancestor.key);
-        if (kin && !kin.includes(key)) kin.push(key);
+        ancestor.lines.push(rawLine);
+        if (!ancestor.descendants.includes(occurrence.id)) {
+          ancestor.descendants.push(occurrence.id);
+        }
       }
-      open.push({ key, level });
-      if (!sections.has(key)) sections.set(key, []);
-      if (!descendants.has(key)) descendants.set(key, []);
+      open.push(occurrence);
       continue;
     }
     // Content before the first heading used to be discarded outright: `current`
@@ -282,36 +341,38 @@ function parseSections(markdown: string): ParsedSections {
     // captured under a sentinel key and travels as residue like any other
     // unconsumed section.
     if (open.length > 0) {
-      for (const owner of open) sections.get(owner.key)?.push(rawLine);
+      for (const owner of open) owner.lines.push(rawLine);
     } else {
-      if (!sections.has(PREAMBLE_KEY)) sections.set(PREAMBLE_KEY, []);
-      sections.get(PREAMBLE_KEY)?.push(rawLine);
+      preamble ??= add(PREAMBLE_KEY, PREAMBLE_KEY, 0);
+      preamble.lines.push(rawLine);
     }
   }
-  return { sections, descendants };
+  return { occurrences };
 }
 
 function sectionLines(
   parsed: ParsedSections,
   headings: string[],
   prefix = false,
-  matched?: string[],
+  matched?: number[],
 ): string[] {
   const wanted = headings.map(normalizeHeading);
-  for (const [heading, lines] of parsed.sections) {
+  for (const occurrence of parsed.occurrences) {
     if (
       wanted.some(
-        (value) => heading === value || (prefix && heading.startsWith(value)),
+        (value) =>
+          occurrence.key === value ||
+          (prefix && occurrence.key.startsWith(value)),
       )
     ) {
-      matched?.push(heading);
+      matched?.push(occurrence.id);
       // Consuming a parent consumes what is nested beneath it. Those lines are
       // already carried in the parent's own content, so leaving the children
       // unconsumed would repeat the same text in "Additional issue content".
-      for (const child of parsed.descendants.get(heading) ?? []) {
-        matched?.push(child);
-      }
-      return lines;
+      // Only THIS occurrence's descendants are consumed -- a later independent
+      // heading that normalizes alike is a different section and survives.
+      for (const child of occurrence.descendants) matched?.push(child);
+      return occurrence.lines;
     }
   }
   return [];
@@ -336,30 +397,33 @@ function sectionLines(
  */
 function unmappedSections(
   parsed: ParsedSections,
-  consumed: string[][],
+  consumed: number[][],
 ): Array<{ heading: string; lines: string[] }> {
-  const sections = parsed.sections;
-  const taken = new Set<string>();
+  const taken = new Set<number>();
   for (const group of consumed) {
-    for (const heading of group) taken.add(heading);
+    for (const id of group) taken.add(id);
   }
   // A surviving ancestor already carries its descendants' lines, so emitting the
   // descendants again would repeat the same text in the prompt.
-  for (const [heading, kin] of parsed.descendants) {
-    if (taken.has(heading)) continue;
-    for (const child of kin) taken.add(child);
+  for (const occurrence of parsed.occurrences) {
+    if (taken.has(occurrence.id)) continue;
+    for (const child of occurrence.descendants) taken.add(child);
   }
   const out: Array<{ heading: string; lines: string[] }> = [];
-  for (const [heading, lines] of sections) {
-    if (taken.has(heading)) continue;
+  for (const occurrence of parsed.occurrences) {
+    if (taken.has(occurrence.id)) continue;
+    // Residue carries the heading AS AUTHORED. Rendering `occurrence.key` here
+    // lowercased it and stripped punctuation, backticks and flag prefixes, so
+    // `## Never run --force` reached the executor as `never run force:`.
+    const heading = occurrence.raw;
     // A section with an empty body still carries meaning in its HEADING --
     // "## DO NOT TOUCH PRODUCTION" followed only by a subheading used to vanish
     // entirely, taking the prohibition with it. Keep the heading as residue.
-    if (lines.every((line) => !line.trim())) {
+    if (occurrence.lines.every((line) => !line.trim())) {
       out.push({ heading, lines: [] });
       continue;
     }
-    out.push({ heading, lines });
+    out.push({ heading, lines: occurrence.lines });
   }
   return out;
 }
@@ -406,8 +470,7 @@ export function buildTaskContract(
   const title = source.title.trim();
   const description = source.description.trim();
   const parsed = parseSections(description);
-  const sections = parsed.sections;
-  const consumed: string[] = [];
+  const consumed: number[] = [];
   const objectiveItems = sectionItems(
     sectionLines(parsed, ['objective', 'required outcome'], false, consumed),
   );
@@ -415,8 +478,8 @@ export function buildTaskContract(
   const explicitAcceptance = sectionItems(
     sectionLines(parsed, ['acceptance criteria', 'acceptance criterion'], false, consumed),
   );
-  const hasAcceptanceHeading = [...sections.keys()].some((heading) =>
-    ['acceptance criteria', 'acceptance criterion'].includes(heading),
+  const hasAcceptanceHeading = parsed.occurrences.some((occurrence) =>
+    ['acceptance criteria', 'acceptance criterion'].includes(occurrence.key),
   );
   const exitCriteria = sectionItems(sectionLines(parsed, ['exit criteria'], false, consumed));
 
@@ -704,22 +767,145 @@ export function captureOrReadTaskContract(
   return buildTaskContract(fetchLinearTaskSource(issueId, token, runner));
 }
 
-function persistTaskContract(
+/** First value that is a non-empty string; `''` when there is none. */
+export function firstNonEmpty(
+  ...values: Array<string | undefined | null>
+): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value !== '') return value;
+  }
+  return '';
+}
+
+/**
+ * Two valid but different work orders for one lane is unresolvable state: the
+ * executor may already be acting on either. Refuse structurally rather than
+ * pick one, which would silently discard the other.
+ */
+export class TaskContractConflictError extends Error {
+  readonly code = 'lane_contract_conflict';
+  constructor(
+    readonly issueId: string,
+    readonly hashes: Array<{ root: string; contract_hash: string }>,
+  ) {
+    super(
+      `lane ${issueId} has ${hashes.length} different valid task contracts: ` +
+        hashes.map((h) => `${h.root} ${h.contract_hash}`).join(' vs ') +
+        `. Refusing to choose. Reconcile them deliberately.`,
+    );
+    this.name = 'TaskContractConflictError';
+  }
+}
+
+/**
+ * A contract that is present but does not validate (a stale snapshot predating
+ * unmapped_sections, a hash that no longer matches its content) is reported as
+ * absent so it can be recaptured. Only a *valid* pair can conflict.
+ */
+export function readValidTaskContractAt(
+  root: string,
+  issueId: string,
+): TaskContract | null {
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  if (!fs.existsSync(syncPath)) return null;
+  if (
+    !/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(
+      fs.readFileSync(syncPath, 'utf8'),
+    )
+  ) {
+    return null;
+  }
+  try {
+    return readTaskContract(issueId, root);
+  } catch {
+    return null;
+  }
+}
+
+export interface TaskContractResolution {
+  contract: TaskContract;
+  fetched: boolean;
+  /** Index into the `roots` argument, or -1 for a fresh Linear capture. */
+  rootIndex: number;
+}
+
+/**
+ * Resolve one work order across every root that may hold one, WITHOUT making
+ * Linear a dependency of a lane that already has a contract.
+ *
+ * `roots` is in precedence order: the first root holding a valid contract wins
+ * when all agree. Any two valid contracts with different hashes are a refusal,
+ * never a silent overwrite. Capture happens only when no root has one, and it
+ * is the sole network call.
+ */
+export function resolveTaskContractAcrossRoots(
+  issueId: string,
+  roots: string[],
+  token: string,
+  runner: LinearFetchRunner = spawnSync,
+): TaskContractResolution {
+  const found: Array<{ root: string; index: number; contract: TaskContract }> =
+    [];
+  roots.forEach((root, index) => {
+    const contract = readValidTaskContractAt(root, issueId);
+    if (contract) found.push({ root, index, contract });
+  });
+
+  const distinct = new Set(found.map((entry) => entry.contract.contract_hash));
+  if (distinct.size > 1) {
+    throw new TaskContractConflictError(
+      issueId,
+      found.map((entry) => ({
+        root: entry.root,
+        contract_hash: entry.contract.contract_hash,
+      })),
+    );
+  }
+
+  const winner = found[0];
+  if (winner) {
+    return { contract: winner.contract, fetched: false, rootIndex: winner.index };
+  }
+  return {
+    contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),
+    fetched: true,
+    rootIndex: -1,
+  };
+}
+
+/**
+ * Merge against the DESTINATION's own sync record, never a different root's.
+ * The control checkout holds legacy records with no contract and no accumulated
+ * entities; merging a lane worktree's write against those replaced the branch's
+ * findings, controls and proofs with the control copy's.
+ */
+export function syncContentForDestination(
+  destRoot: string,
   issueId: string,
   contract: TaskContract,
-  root: string,
-): void {
-  const syncDir = path.join(root, '.ops', 'sync');
-  const syncPath = path.join(syncDir, `${issueId}.yml`);
+): string {
+  const syncPath = path.join(destRoot, '.ops', 'sync', `${issueId}.yml`);
   const existing = fs.existsSync(syncPath)
     ? fs.readFileSync(syncPath, 'utf8')
     : undefined;
-  fs.mkdirSync(syncDir, { recursive: true });
-  fs.writeFileSync(
-    syncPath,
-    buildSyncYmlWithTaskContract(issueId, contract, existing),
-    'utf8',
-  );
+  return buildSyncYmlWithTaskContract(issueId, contract, existing);
+}
+
+/** Persist one contract to every root, each merged against its own record. */
+export function persistTaskContractToRoots(
+  issueId: string,
+  contract: TaskContract,
+  roots: string[],
+): void {
+  for (const root of roots) {
+    const syncDir = path.join(root, '.ops', 'sync');
+    fs.mkdirSync(syncDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(syncDir, `${issueId}.yml`),
+      syncContentForDestination(root, issueId, contract),
+      'utf8',
+    );
+  }
 }
 
 /**
@@ -735,28 +921,42 @@ export function generateDispatchExecutionPacketResult(
 ): ExecutionPacketResult {
   const root = options.root ?? ROOT;
   try {
-    const token =
-      options.linearToken ??
-      env['LINEAR_API_TOKEN'] ??
-      env['LINEAR_API_KEY'] ??
-      readConfiguredEnvValue('LINEAR_API_TOKEN') ??
-      readConfiguredEnvValue('LINEAR_API_KEY') ??
-      '';
-    const contract = captureOrReadTaskContract(
-      manifest.issue_id,
-      token,
-      root,
-      options.runner ?? spawnSync,
+    // `??` only skips null/undefined. `readConfiguredEnvValue` returns '' for a
+    // key it cannot resolve, so an empty LINEAR_API_TOKEN in local.env/.env
+    // short-circuited the chain and capture refused as tokenless even though
+    // LINEAR_API_KEY was configured. Truthy fallback, matching lane-start's
+    // `linearTaskToken()`.
+    const token = firstNonEmpty(
+      options.linearToken,
+      env['LINEAR_API_TOKEN'],
+      env['LINEAR_API_KEY'],
+      readConfiguredEnvValue('LINEAR_API_TOKEN'),
+      readConfiguredEnvValue('LINEAR_API_KEY'),
     );
-    persistTaskContract(manifest.issue_id, contract, root);
 
     const laneCwd = manifest.execution_location?.cwd ?? manifest.worktree_path;
     const laneRoot = path.isAbsolute(laneCwd)
       ? laneCwd
       : path.resolve(root, laneCwd);
-    if (laneRoot !== root && fs.existsSync(laneRoot)) {
-      persistTaskContract(manifest.issue_id, contract, laneRoot);
-    }
+    const laneRootExists = laneRoot !== root && fs.existsSync(laneRoot);
+
+    // Resolve across BOTH roots before writing either. Reading only the control
+    // copy and then persisting it to the lane silently replaced a lane's
+    // authoritative work order -- the executor may already be acting on it --
+    // while `lane-start` refused the identical conflict.
+    const resolution = resolveTaskContractAcrossRoots(
+      manifest.issue_id,
+      laneRootExists ? [laneRoot, root] : [root],
+      token,
+      options.runner ?? spawnSync,
+    );
+    const contract = resolution.contract;
+
+    persistTaskContractToRoots(
+      manifest.issue_id,
+      contract,
+      laneRootExists ? [root, laneRoot] : [root],
+    );
 
     return generateExecutionPacketResult(manifest, env, contract, root);
   } catch (error) {
