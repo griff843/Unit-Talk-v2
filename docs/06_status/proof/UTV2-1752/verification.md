@@ -1,6 +1,13 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: N/A
+MERGE_SHA: 3e7abdbbaedaa360529871b61f1ace68b45182fe
+
+> `MERGE_SHA` names the implementation commit `3e7abdbb`, which is an ancestor
+> of the PR head. This is the form `executor-result-validator.yml` requires and
+> documents: a proof may reference the implementation commit rather than its own
+> commit, because a file cannot contain its own SHA. It is rebound to the actual
+> merge SHA after merge by `ops:proof-generate --merge-sha` (run from
+> `post-merge-lane-close.yml`). It is NOT a claim that this lane has merged.
 
 Verified source SHA: `3e7abdbbaedaa360529871b61f1ace68b45182fe`
 
