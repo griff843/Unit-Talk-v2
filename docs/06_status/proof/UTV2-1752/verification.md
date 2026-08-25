@@ -40,6 +40,16 @@ forward from the predecessor's proof.
 
 ## EVIDENCE:
 
+> Every figure below was measured locally before this file was written. The one
+> line that is NOT a measurement is `pnpm test:db`, and it deliberately states no
+> result: the receipt is produced and validated by CI per head, so any pass/fail
+> written here would either predate the run it describes or be invalidated by the
+> next push. An earlier revision of this file did write a flat `PASS` there; that
+> assertion was made in the same push that triggered the run it described, and was
+> therefore not knowable when written. It happened to be true. It was still the
+> wrong thing to write, and this note records that rather than quietly deleting it.
+
+
 ```text
 pnpm verify:static           PASS (exit 0)
 verify:static suite total    5062 tests, 5062 pass, 0 fail, 0 skipped
@@ -47,8 +57,10 @@ execution-packet suite       48 tests, 48 pass, 0 fail
 lane-start suite             44 tests, 44 pass, 0 fail
 r-level check                PASS — rules matched: (none)
 mutation battery             3 of 3 mutations DETECTED, each killing only its own test
-pnpm test:db                 PASS via CI job "Writable DB proof (staging only)";
-                             receipt verified inside required `verify` (finding 2)
+pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
+                             proof (staging only)" and validated inside the required
+                             `verify` context; read that context's conclusion on the
+                             head under review, not this line (finding 2)
 ```
 
 ## Verification
