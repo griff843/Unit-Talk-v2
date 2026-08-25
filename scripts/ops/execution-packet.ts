@@ -333,7 +333,7 @@ function parseSections(markdown: string): ParsedSections {
   // fence deliberately runs to end of input: treating the remainder as code is
   // the fail-closed reading, since promoting it to headings is what corrupts
   // the work order.
-  let fence: { char: string; len: number } | null = null;
+  let fence: FenceState | null = null;
   const pushContent = (rawLine: string): void => {
     if (open.length > 0) {
       const deepest = open[open.length - 1]!;
@@ -348,28 +348,16 @@ function parseSections(markdown: string): ParsedSections {
     }
   };
   for (const rawLine of markdown.split(/\r?\n/u)) {
-    const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(rawLine);
     if (fence !== null) {
-      const marker = fenceMatch?.[1] ?? '';
-      if (
-        marker.length >= fence.len &&
-        marker[0] === fence.char &&
-        (fenceMatch?.[2] ?? '').trim() === ''
-      ) {
-        fence = null;
-      }
+      if (fenceClosedBy(rawLine, fence)) fence = null;
       pushContent(rawLine);
       continue;
     }
-    if (fenceMatch) {
-      const marker = fenceMatch[1] ?? '';
-      const info = fenceMatch[2] ?? '';
-      // A backtick fence's info string may not itself contain a backtick.
-      if (!(marker[0] === '`' && info.includes('`'))) {
-        fence = { char: marker[0]!, len: marker.length };
-        pushContent(rawLine);
-        continue;
-      }
+    const opened = fenceOpenedBy(rawLine);
+    if (opened) {
+      fence = opened;
+      pushContent(rawLine);
+      continue;
     }
     // Up to three leading spaces is still a heading; four or more is code.
     const heading = /^ {0,3}(#{1,6})\s+(.+?)\s*$/u.exec(rawLine);
@@ -442,9 +430,79 @@ const CONTRACT_FIELD_SPECS: readonly ContractFieldSpec[] = [
   { headings: ['required evidence', 'evidence'], prefix: false },
 ];
 
+/**
+ * Exposed so a test can drive the extraction path directly and prove the
+ * unreserved-heading guard in `sectionLines` actually fires. Not part of the
+ * module's API surface for callers.
+ */
+export function packetParseSectionsForTest(markdown: string): ParsedSections {
+  return parseSections(markdown);
+}
+
+/** See `packetParseSectionsForTest`. */
+export function packetSectionLinesForTest(
+  parsed: ParsedSections,
+  headings: string[],
+  prefix = false,
+): string[] {
+  return sectionLines(parsed, headings, prefix);
+}
+
 /** Exposed so tests can prove extraction and reservation share one table. */
 export function packetContractFieldSpecs(): readonly ContractFieldSpec[] {
   return CONTRACT_FIELD_SPECS;
+}
+
+/**
+ * Does a normalized section `key` match a normalized heading `value`?
+ *
+ * This rule had THREE copies -- one in the reservation predicate and two in
+ * `sectionLines` -- and a fix applied to one of them left the other two on the
+ * old behaviour. It lives here once now, for the same reason the heading table
+ * does.
+ *
+ * A prefix match must end on a word boundary: bare `startsWith` captured
+ * `## Non goalsetting framework` as `non goals`.
+ */
+function headingMatches(key: string, value: string, prefix: boolean): boolean {
+  if (key === value) return true;
+  if (!prefix || !key.startsWith(value)) return false;
+  return key.length === value.length || key[value.length] === ' ';
+}
+
+/**
+ * The fence state machine, in ONE place. It was duplicated verbatim in
+ * `parseSections` and `sectionItems` with no test guarding their equivalence --
+ * the same "restating a list beside the thing it must mirror" antipattern that
+ * produced the reservation bug this module documents above.
+ */
+const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
+
+interface FenceState {
+  readonly char: string;
+  readonly len: number;
+}
+
+/** The fence a line opens, or null if it opens none. */
+function fenceOpenedBy(rawLine: string): FenceState | null {
+  const match = FENCE_RE.exec(rawLine);
+  if (!match) return null;
+  const marker = match[1] ?? '';
+  const info = match[2] ?? '';
+  // A backtick fence's info string may not itself contain a backtick.
+  if (marker[0] === '`' && info.includes('`')) return null;
+  return { char: marker[0]!, len: marker.length };
+}
+
+/** True when `rawLine` closes `fence`: same char, at least as long, no info. */
+function fenceClosedBy(rawLine: string, fence: FenceState): boolean {
+  const match = FENCE_RE.exec(rawLine);
+  const marker = match?.[1] ?? '';
+  return (
+    marker.length >= fence.len &&
+    marker[0] === fence.char &&
+    (match?.[2] ?? '').trim() === ''
+  );
 }
 
 /**
@@ -455,8 +513,7 @@ export function packetContractFieldSpecs(): readonly ContractFieldSpec[] {
 function isContractFieldHeading(key: string): boolean {
   return CONTRACT_FIELD_SPECS.some((spec) =>
     spec.headings.some((heading) => {
-      const value = normalizeHeading(heading);
-      return key === value || (spec.prefix && key.startsWith(value));
+      return headingMatches(key, normalizeHeading(heading), spec.prefix);
     }),
   );
 }
@@ -494,12 +551,24 @@ function sectionLines(
   isReserved: (key: string) => boolean = isContractFieldHeading,
 ): string[] {
   const wanted = headings.map(normalizeHeading);
+  // Fail closed on the drift this whole table exists to prevent. A heading
+  // extraction accepts but reservation does not know is exactly the bug that
+  // made a nested non-goal into an acceptance criterion, and no test that
+  // enumerates the table can see it -- the drifted heading is, by definition,
+  // absent from the table. So the check lives here, on the path every
+  // extraction takes, rather than in a test that inspects the source text.
+  for (const value of wanted) {
+    if (!isReserved(value)) {
+      throw new Error(
+        `execution-packet: heading "${value}" is used for extraction but is ` +
+          `not reserved. Add it to CONTRACT_FIELD_SPECS instead of passing it ` +
+          `directly, or nested occurrences of it will bleed into their ancestor.`,
+      );
+    }
+  }
   const byId = new Map(parsed.occurrences.map((o) => [o.id, o]));
   const claimsOwnKey = (occurrence: SectionOccurrence): boolean =>
-    wanted.some(
-      (value) =>
-        occurrence.key === value || (prefix && occurrence.key.startsWith(value)),
-    );
+    wanted.some((value) => headingMatches(occurrence.key, value, prefix));
   // EVERY matching occurrence contributes, not just the first. A description
   // that opens `## Acceptance criteria` with an empty lead-in and then repeats
   // the heading with the real content used to yield the empty first occurrence
@@ -513,11 +582,7 @@ function sectionLines(
     // it again would duplicate that text in the rendered section.
     if (consumedHere.has(occurrence.id)) continue;
     if (
-      !wanted.some(
-        (value) =>
-          occurrence.key === value ||
-          (prefix && occurrence.key.startsWith(value)),
-      )
+      !wanted.some((value) => headingMatches(occurrence.key, value, prefix))
     ) {
       continue;
     }
@@ -651,34 +716,55 @@ function sectionItems(lines: string[]): string[] {
   // `#` (see `parseSections`) is not enough on its own if the block is then
   // flattened here; both halves are required for a fenced command to survive
   // into the work order meaning what it meant in the issue.
-  let fence: { char: string; len: number } | null = null;
+  //
+  // The same reasoning applies one indentation level in. A block indented four
+  // or more spaces is an indented code block, and a fence indented that far
+  // (the ordinary way to nest code under a list item) is not a fence at all by
+  // the three-space rule above -- so both used to fall through to the
+  // paragraph collapse and produce exactly the damage this comment describes:
+  // `# indented shell comment pnpm verify`. Indented runs are therefore held
+  // verbatim as one item too.
+  let fence: FenceState | null = null;
   let fenced: string[] = [];
+  let indented: string[] = [];
+  const flushIndented = (): void => {
+    while (indented.length > 0 && indented[indented.length - 1]!.trim() === '') {
+      indented.pop();
+    }
+    if (indented.length > 0) items.push(indented.join('\n'));
+    indented = [];
+  };
 
   for (const rawLine of lines) {
-    const fenceMatch = /^ {0,3}(`{3,}|~{3,})(.*)$/u.exec(rawLine);
+    const isIndentedCode = /^ {4,}\S/u.test(rawLine);
+    if (indented.length > 0) {
+      // A blank line does not end an indented block; a non-indented,
+      // non-blank line does.
+      if (isIndentedCode || rawLine.trim() === '') {
+        indented.push(rawLine);
+        continue;
+      }
+      flushIndented();
+    } else if (isIndentedCode && fence === null) {
+      flushParagraph();
+      indented.push(rawLine);
+      continue;
+    }
     if (fence !== null) {
       fenced.push(rawLine);
-      const marker = fenceMatch?.[1] ?? '';
-      if (
-        marker.length >= fence.len &&
-        marker[0] === fence.char &&
-        (fenceMatch?.[2] ?? '').trim() === ''
-      ) {
+      if (fenceClosedBy(rawLine, fence)) {
         items.push(fenced.join('\n'));
         fenced = [];
         fence = null;
       }
       continue;
     }
-    if (fenceMatch) {
-      const marker = fenceMatch[1] ?? '';
-      const info = fenceMatch[2] ?? '';
-      if (!(marker[0] === '`' && info.includes('`'))) {
-        flushParagraph();
-        fence = { char: marker[0]!, len: marker.length };
-        fenced = [rawLine];
-        continue;
-      }
+    const opened = fenceOpenedBy(rawLine);
+    if (opened) {
+      flushParagraph();
+      fence = opened;
+      fenced = [rawLine];
+      continue;
     }
     const line = rawLine.trim();
     if (!line) {
@@ -697,6 +783,7 @@ function sectionItems(lines: string[]): string[] {
   // An unterminated fence still travels verbatim rather than being dropped or
   // silently reflowed into the previous paragraph.
   if (fenced.length > 0) items.push(fenced.join('\n'));
+  flushIndented();
   flushParagraph();
   return items;
 }

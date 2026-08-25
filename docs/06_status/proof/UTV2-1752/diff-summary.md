@@ -107,19 +107,25 @@ All four findings and all three review threads are closed. The lane is **not mer
 ## Out of scope (deliberately not touched)
 
 - `ops-merge-wrapper.ts` `git-merge-main` `--ff-only` defect — filed as **UTV2-1753**, left in Backlog per PM.
-- Any change beyond the four findings above.
+- Any change beyond the four findings and the review-thread defects above.
 - No SGO, ingestion, delivery, production DDL, or production unpark action.
 
 ---
 
 ## Verification
 
-- `pnpm verify:static` — exit 0, **5062 pass / 0 fail / 0 skipped**
+- `pnpm verify:static` — exit 0, **5071 pass / 0 fail / 0 skipped**, 0 `not ok` lines
   (`pnpm verify` cannot exit 0 locally: `ci:assert-staging` refuses on `host=127.0.0.1`)
+- `execution-packet` suite 57/57, `lane-start` 44/44, exec entrypoints 46/46
 - R-level compliance — PASS
-- Mutation battery M1→G1, M2→G5, M3→G4, each killing only its own test;
-  both sources restored byte-identical to baseline (`sha256` verified).
-  One vacuity was found and is disclosed in `verification.md`, not silently corrected.
+- Mutation battery re-measured from scratch: **11 mutations, 11 detected**
+  (M1-M10 plus M4b). Both sources restored byte-identical to baseline after
+  every mutation (`sha256` verified, restored by file copy, never
+  `git checkout`). G2 and G3 are explicitly NOT killed by any mutation here.
+- **Five controls of mine proved nothing when written** — three vacuous
+  assertions and two source-text greps. Two were found by an independent
+  reviewer, not by me. All five are disclosed in `verification.md` with the
+  mutation that now kills each, rather than silently corrected.
 
 Full detail: `docs/06_status/proof/UTV2-1752/verification.md`,
 machine-readable: `docs/06_status/proof/UTV2-1752/evidence.json`.

@@ -22,6 +22,7 @@ import {
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
   persistLaneTaskContract,
+  resolveReadmissionContract,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 
@@ -1233,20 +1234,31 @@ test('G3 (inversion): resolving BEFORE checkout cannot serve that branch and fai
 });
 
 test('G4: the readmission path performs no contract capture before the worktree exists', () => {
-  const source = fs.readFileSync(
-    path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'),
-    'utf8',
+  // This test used to be a grep of lane-start.ts for the shape of a ternary.
+  // An independent review showed that class of assertion is theatre elsewhere
+  // in this lane -- it survives any reformatting and proves nothing about what
+  // the code DOES -- and G2/G3 were measured NOT to catch a reintroduction of
+  // this defect. So assert the behaviour: on readmission the capture must not
+  // merely return null, it must never run at all.
+  let calls = 0;
+  const spy = (): never => {
+    calls += 1;
+    throw new Error(
+      'pre-checkout capture ran on a readmitted branch: the worktree does not ' +
+        'exist yet, so this can only reach the control checkout or the network',
+    );
+  };
+
+  const readmitted = resolveReadmissionContract(true, 'UTV2-999955', '', spy);
+  assert.equal(calls, 0, 'readmission must perform NO capture before checkout');
+  assert.equal(readmitted, null, 'readmission must carry no pre-checkout contract');
+
+  // The inverse: a fresh lane still captures early, so the guard is scoped to
+  // readmission and has not simply disabled capture everywhere.
+  assert.throws(
+    () => resolveReadmissionContract(false, 'UTV2-999955', '', spy),
+    /pre-checkout capture ran/u,
+    'a FRESH lane must still capture before checkout',
   );
-  // Fresh lanes keep the early bounded capture; readmission must opt out of it.
-  assert.match(
-    source,
-    /const contractResolution = readmitExistingBranch\s*\n?\s*\?\s*null\s*\n?\s*:\s*resolveLaneTaskContract\(issueId,\s*null,\s*linearTaskToken\(\)\)/u,
-    'readmission must capture nothing before the worktree exists',
-  );
-  // The stale ROOT persist of that never-captured contract must be gone.
-  assert.doesNotMatch(
-    source,
-    /writeManifest\(manifest\);\s*\n\s*persistLaneTaskContract\(issueId,\s*contractResolution\.contract,\s*\[ROOT\]\);\s*\n\s*\n\s*if \(git\(\['branch', '--show-current'\]\)/u,
-    'the readmission path must not persist a contract it never captured',
-  );
+  assert.equal(calls, 1, 'the fresh-lane path must call the resolver exactly once');
 });

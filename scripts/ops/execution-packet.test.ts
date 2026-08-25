@@ -13,12 +13,19 @@ import {
   generateExecutionPacketResult,
   generateDispatchExecutionPacketResult,
   packetContractFieldSpecs,
+  packetParseSectionsForTest as parseSectionsForTest,
+  packetSectionLinesForTest as sectionLinesForTest,
   PREAMBLE_KEY,
   readTaskContract,
   renderTaskContract,
   TaskContractError,
+  type TaskContract,
 } from './execution-packet.js';
 import { ROOT, type LaneManifest } from './shared.js';
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
 
 function createTestManifest(
   overrides: Partial<LaneManifest> = {},
@@ -1435,30 +1442,108 @@ test('G7: guardrails and required evidence nested under a contract field are not
   }
 });
 
-test('G8: every extracted heading is reserved — extraction and reservation share one table', () => {
-  // The drift guard. G6/G7 catch the omissions that existed; this catches the
-  // NEXT one, by refusing to let a field be extracted under a heading the
-  // reservation set does not know about.
+test('G8: EVERY extraction heading is reserved -- proven behaviourally, per heading', () => {
+  // The drift guard. An earlier version of this test grepped the source for
+  // `sectionLines(parsed, ['`. That was theatre: it asserted a lexical shape,
+  // not the property. An independent review evaded it twice -- once by giving
+  // the reservation predicate its own hardcoded list (reintroducing the exact
+  // defect this test is named for) and once by hoisting the headings to a
+  // `const` that added an unreserved heading -- and the suite stayed green.
+  //
+  // So assert the BEHAVIOUR instead, for every heading of every field: nest
+  // that heading under a different contract field and require that (a) its
+  // content reaches its own field and (b) it does NOT bleed into the ancestor.
+  // A heading extraction knows and reservation does not fails (b). This cannot
+  // be evaded by moving, renaming, or restating a literal, because it never
+  // reads the source text at all.
   const specs = packetContractFieldSpecs();
   assert.ok(specs.length >= 6, 'the field table must not be empty');
 
-  const source = fs.readFileSync(
-    path.join(ROOT, 'scripts/ops/execution-packet.ts'),
-    'utf8',
-  );
-  // No extraction site may pass a heading literal directly to sectionLines;
-  // they must all go through fieldSpec(), which reads this same table.
-  const literalCalls = source.match(/sectionLines\(\s*parsed,\s*\['/gu) ?? [];
-  assert.equal(
-    literalCalls.length,
-    0,
-    `every sectionLines call must source its headings from the field table, ` +
-      `found ${literalCalls.length} with inline literals`,
-  );
+  const fieldKey: Record<string, keyof TaskContract> = {
+    objective: 'objective',
+    'acceptance criteria': 'acceptance_criteria',
+    'exit criteria': 'exit_criteria',
+    guardrails: 'guardrails',
+    'non goals': 'non_goals',
+    'required evidence': 'required_evidence',
+  };
 
+  const asText = (value: unknown): string =>
+    Array.isArray(value) ? value.join('\n') : String(value ?? '');
+
+  let checked = 0;
   for (const spec of specs) {
     assert.ok(spec.headings.length > 0, 'each field must declare a heading');
+    const own = fieldKey[spec.headings[0]!];
+    assert.ok(
+      own,
+      `no TaskContract key mapped for "${spec.headings[0]}" -- a field was ` +
+        `added to the table without extending this guard`,
+    );
+
+    for (const heading of spec.headings) {
+      const ancestorSpec = specs.find(
+        (candidate) => candidate.headings[0] !== spec.headings[0],
+      )!;
+      const ancestorHeading = ancestorSpec.headings[0]!;
+      const ancestorKey = fieldKey[ancestorHeading]!;
+      const marker = `sentinel for ${heading} under ${ancestorHeading}`;
+
+      const description = [
+        `## ${ancestorHeading}`,
+        '- ancestor content that must stay put',
+        '',
+        `### ${heading}`,
+        `- ${marker}`,
+      ].join('\n');
+
+      const contract = buildTaskContract({
+        identifier: 'UTV2-999965',
+        title: `reservation coverage for ${heading}`,
+        url: 'https://linear.app/unit-talk-v2/issue/UTV2-999965',
+        description,
+      });
+
+      assert.match(
+        asText(contract[own!]),
+        new RegExp(escapeRegExp(marker), 'u'),
+        `"${heading}" must be extracted into ${String(own)}`,
+      );
+      assert.doesNotMatch(
+        asText(contract[ancestorKey]),
+        new RegExp(escapeRegExp(marker), 'u'),
+        `"${heading}" is an extraction heading, so it MUST also be reserved; ` +
+          `it bled into the enclosing "${ancestorHeading}" field`,
+      );
+      checked += 1;
+    }
   }
+  assert.ok(checked >= 12, `expected every heading covered, checked ${checked}`);
+});
+
+test('G12: sectionLines fails closed on an extraction heading that is not reserved', () => {
+  // G8 enumerates the table, so it structurally CANNOT see a heading that
+  // extraction accepts but that was never added to the table -- an independent
+  // review evaded the previous guard exactly that way, by hoisting the
+  // headings to a const and appending one. The property therefore has to be
+  // enforced on the extraction path itself. This test proves that guard fires,
+  // and it is the reason `sectionLines` throws rather than silently coping.
+  const parsed = parseSectionsForTest(
+    ['## Goal', '- some content'].join('\n'),
+  );
+  assert.throws(
+    () => sectionLinesForTest(parsed, ['goal']),
+    /is used for extraction but is not reserved/u,
+    'an unreserved extraction heading must be refused, not silently accepted',
+  );
+  // A reserved heading on the same path must still work, so the guard is not
+  // simply rejecting everything.
+  assert.doesNotThrow(() =>
+    sectionLinesForTest(
+      parseSectionsForTest(['## Objective', '- ship it'].join('\n')),
+      ['objective'],
+    ),
+  );
 });
 
 test('G9: a "#" line inside a fenced code block is not parsed as a heading', () => {
@@ -1486,14 +1571,12 @@ test('G9: a "#" line inside a fenced code block is not parsed as a heading', () 
   });
 
   const rendered = renderTaskContract(contract);
-  assert.match(
-    rendered,
-    /# do not run this against production/u,
-    'the shell comment must survive verbatim, with its # intact',
-  );
   // parseSections' concern: no phantom section was opened by the `#` line.
+  // unmapped_sections is string[] (`heading\nbody`), NOT objects. Reading a
+  // `.heading` property off a string yields undefined, which made the previous
+  // form of this assertion unconditionally true. Take the heading line itself.
   const phantom = contract.unmapped_sections.some((entry) =>
-    /do not run this against production/u.test(entry.heading ?? ''),
+    /do not run this against production/u.test(entry.split('\n')[0] ?? ''),
   );
   assert.equal(
     phantom,
@@ -1501,9 +1584,104 @@ test('G9: a "#" line inside a fenced code block is not parsed as a heading', () 
     'the shell comment must not have opened a section of its own',
   );
   assert.match(
+    rendered,
+    /# do not run this against production/u,
+    'the shell comment must survive verbatim, with its # intact',
+  );
+  assert.match(
     contract.acceptance_criteria.join('\n'),
     /run the documented command/u,
     'the real criterion must not have been orphaned by a phantom heading',
+  );
+});
+
+test('G14: prefix heading matching stops at a word boundary', () => {
+  // `non goals` matches by prefix, and the match was a bare startsWith, so
+  // `## Non goalsetting framework` -- an unrelated section -- was captured as
+  // non-goals and its content became things NOT to do. The rule had three
+  // copies; this covers the single one that remains.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Non goalsetting framework',
+    '- adopt the goalsetting framework in Q3',
+    '',
+    '## Non-goals',
+    '- do not touch the scheduler',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999967',
+    title: 'Prefix boundary',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999967',
+    description,
+  });
+
+  assert.match(
+    contract.non_goals.join('\n'),
+    /do not touch the scheduler/u,
+    'the real non-goal must still be captured by the prefix rule',
+  );
+  assert.doesNotMatch(
+    contract.non_goals.join('\n'),
+    /adopt the goalsetting framework/u,
+    'a heading that merely starts with "non goal" is NOT a non-goals section',
+  );
+});
+
+test('G13: an indented code block survives as ONE item with its newlines', () => {
+  // Four-space indentation is an indented code block, and a fence indented
+  // that far -- the ordinary way to nest code under a list item -- is not a
+  // fence by the three-space rule, so both used to fall through to the
+  // paragraph collapse. That produced `# do not run in prod pnpm destroy`:
+  // the comment swallowing the command, the exact harm G11 exists to prevent,
+  // surviving at a different indentation.
+  const description = [
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- run the nested block:',
+    '',
+    '    ```bash',
+    '    # do not run in prod',
+    '    pnpm destroy',
+    '    ```',
+    '',
+    '- and the bare indented block:',
+    '',
+    '    # bare indented comment',
+    '    pnpm verify',
+  ].join('\n');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999966',
+    title: 'Indented code under a contract field',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-999966',
+    description,
+  });
+
+  const criteria = contract.acceptance_criteria;
+  assert.ok(
+    criteria.some((item) => item.includes('# do not run in prod\n')),
+    'the indented fence must keep the newline after its comment; got ' +
+      JSON.stringify(criteria),
+  );
+  assert.ok(
+    criteria.some((item) => item.includes('# bare indented comment\n')),
+    'the bare indented block must keep its newline; got ' +
+      JSON.stringify(criteria),
+  );
+  assert.doesNotMatch(
+    criteria.join('\n'),
+    /# do not run in prod pnpm destroy/u,
+    'a comment must NEVER be collapsed onto the command it warns about',
+  );
+  assert.doesNotMatch(
+    criteria.join('\n'),
+    /# bare indented comment pnpm verify/u,
+    'a comment must NEVER be collapsed onto the command that follows it',
   );
 });
 
@@ -1572,17 +1750,29 @@ test('G10: an indented code line beginning with "#" is not parsed as a heading',
   // section named for the comment text. Asserting a mere occurrence count does
   // NOT detect that -- the text appears once either way -- which is exactly how
   // the first version of this test managed to be vacuous.
-  assert.match(
-    rendered,
-    /# indented shell comment/u,
-    'the leading # must survive; consuming it as heading syntax is the defect',
-  );
+  // See G9: entries are `heading\nbody` strings, so `.heading` is undefined and
+  // the assertion could never fail. Compare against the first line.
   const openedSection = contract.unmapped_sections.some((entry) =>
-    /^indented shell comment$/u.test((entry.heading ?? '').trim()),
+    /^indented shell comment$/u.test((entry.split('\n')[0] ?? '').trim()),
   );
   assert.equal(
     openedSection,
     false,
     'an indented code line must not open a section of its own',
+  );
+  assert.match(
+    rendered,
+    /# indented shell comment/u,
+    'the leading # must survive; consuming it as heading syntax is the defect',
+  );
+  // An independent review found this fixture exhibited the OTHER half of the
+  // harm while asserting nothing about it: the criterion read
+  // `# indented shell comment pnpm verify`, the comment swallowing the command.
+  // Surviving the heading parser is worthless if the item collapse then undoes
+  // it, so assert the command is still on its own line.
+  assert.doesNotMatch(
+    contract.acceptance_criteria.join('\n'),
+    /# indented shell comment pnpm verify/u,
+    'the indented comment must not be collapsed onto the command it precedes',
   );
 });

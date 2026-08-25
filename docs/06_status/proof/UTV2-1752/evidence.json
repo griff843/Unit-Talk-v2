@@ -5,8 +5,8 @@
   "lane_type": "governance",
   "proof_profile": "static",
   "title": "Executor packet finalization: correct readmission timing, T1 proof, and nested-section consumption",
-  "status": "ready_for_review",
-  "generated_at": "2026-08-25T14:35:00Z",
+  "status": "changes_in_progress",
+  "generated_at": "2026-08-25T18:40:00Z",
   "sha_binding": {
     "verified_source_sha": "3e7abdbbaedaa360529871b61f1ace68b45182fe",
     "verified_source_note": "Implementation commit for this lane. Every figure in this bundle was measured against the tree at this SHA.",
@@ -57,17 +57,17 @@
     "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. For this lane that is a gap, not an exemption - see runtime_proof.test_db.",
     "verify_static_suite": {
       "command": "pnpm verify:static",
-      "tests": 5062,
-      "pass": 5062,
+      "tests": 5071,
+      "pass": 5071,
       "fail": 0,
       "skipped": 0,
       "exit_code": 0,
-      "note": "Totals read from the complete 33002-line run log, not a tail."
+      "note": "Totals summed across the complete run log, not a tail. 0 `not ok` lines."
     },
     "execution_packet_suite": {
       "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
-      "tests": 48,
-      "pass": 48,
+      "tests": 57,
+      "pass": 57,
       "fail": 0
     },
     "lane_start_suite": {
@@ -88,58 +88,21 @@
     },
     "test_delta": {
       "preserved_head": 5057,
-      "this_head": 5062,
-      "delta": 5,
-      "accounted_by": [
-        "G1",
-        "G2",
-        "G3",
-        "G4",
-        "G5"
-      ],
-      "note": "The delta is exactly the five tests added by this lane and nothing else."
-    },
-    "mutation_testing": {
-      "mutations": 3,
-      "detected": 3,
-      "method": "Each mutation applied to the shipped source, suite run, source restored by file copy - never by git checkout.",
-      "battery": [
-        {
-          "id": "M1",
-          "mutation": "sectionLines reserved-descendant subtraction neutralised",
-          "killed": [
-            "G1"
-          ],
-          "result": "execution-packet 47 pass, 1 fail",
-          "kills_only_its_own_test": true
-        },
-        {
-          "id": "M2",
-          "mutation": "residue per-line subtraction neutralised",
-          "killed": [
-            "G5"
-          ],
-          "result": "execution-packet 47 pass, 1 fail",
-          "kills_only_its_own_test": true
-        },
-        {
-          "id": "M3",
-          "mutation": "unconditional early capture restored (the finding-1 defect)",
-          "killed": [
-            "G4"
-          ],
-          "result": "lane-start 43 pass, 1 fail",
-          "kills_only_its_own_test": true
-        }
-      ],
-      "restore_check": "scripts/ops/execution-packet.ts OK; scripts/ops/lane-start.ts OK",
-      "inversion": "G3 is the inversion for finding 1: resolving with only the pre-checkout root fails closed on the same fixture that resolves offline once the worktree exists."
+      "this_head": 5071,
+      "delta": 14,
+      "detail": "The delta is exactly G1-G14 and nothing else."
     },
     "vacuity_disclosure": {
       "control": "residue per-line subtraction (finding 3, residue half)",
       "finding": "Initially proven by nothing: with the subtraction neutralised (M2) the whole suite still passed, because G1's enclosing section is itself a contract field and never reaches the residue path.",
       "correction": "G5 added to exercise a recognized child under an UNRECOGNIZED ancestor. M2 now kills G5.",
       "disclosed_because": "Presence and a green run proved nothing until the mutation was executed against the path the control names."
+    },
+    "exec_entrypoint_suites": {
+      "command": "pnpm exec tsx --test scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts",
+      "tests": 46,
+      "pass": 46,
+      "fail": 0
     }
   },
   "runtime_proof": {
@@ -237,7 +200,7 @@
       "new independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "Not ready for merge. Two packet-parser defects were fixed after the previous review; the lane requires a fresh exact-head review and a new PM verdict."
+    "blocking_on": "Not ready for merge. An independent exact-head review of 486b32c4 returned CHANGES_REQUIRED with two P1 findings (dead assertions in G9/G10; a stale measurement layer in this bundle) and four P2/P3 findings. All are addressed at the new head, which requires a fresh independent review and a new PM verdict."
   },
   "review_threads": [
     {
@@ -275,12 +238,23 @@
     }
   ],
   "mutation_testing": {
+    "method": "Applied to a byte-verified baseline, reverted BY FILE COPY (never git checkout), every restore re-checked by sha256.",
+    "baselines": {
+      "scripts/ops/execution-packet.ts": "4c13a569357e33adc56e70e79416261bfcf28e7796a9cc858886807cc0bf0fe5",
+      "scripts/ops/lane-start.ts": "64c8beb94adbad60b5decff42781d67d05e7901a4242c848c7b8976878fee60c"
+    },
+    "restore_verified": true,
+    "mutations": 11,
+    "detected": 11,
     "battery": [
       {
         "id": "M1",
-        "mutation": "contract-field subtraction disabled",
+        "mutation": "sectionLines reserved-descendant exemption removed",
         "killed": [
-          "G1"
+          "G1",
+          "G6",
+          "G7",
+          "G8"
         ],
         "intended": [
           "G1"
@@ -288,7 +262,7 @@
       },
       {
         "id": "M2",
-        "mutation": "residue subtraction disabled",
+        "mutation": "residue claimed-child subtraction removed",
         "killed": [
           "G5"
         ],
@@ -298,24 +272,40 @@
       },
       {
         "id": "M3",
-        "mutation": "readmission contract resolved pre-worktree",
+        "mutation": "readmission capture guard removed",
         "killed": [
           "G4"
         ],
         "intended": [
           "G4"
-        ]
+        ],
+        "note": "G4 is now behavioural (spy resolver). Measured: G2 and G3 do NOT catch this mutation."
       },
       {
         "id": "M4",
-        "mutation": "reservation reverted to the pre-fix hardcoded five",
+        "mutation": "reservation predicate given its own hardcoded five",
         "killed": [
-          "G6",
-          "G7"
+          "53 tests"
         ],
         "intended": [
           "G6",
-          "G7"
+          "G7",
+          "G8"
+        ],
+        "note": "Broad because the fail-closed guard in sectionLines now refuses every unrecognised extraction heading, so the defect cannot be introduced quietly. M4b isolates the controls."
+      },
+      {
+        "id": "M4b",
+        "mutation": "narrowed ONLY on the nested-suppression path",
+        "killed": [
+          "G6",
+          "G7",
+          "G8"
+        ],
+        "intended": [
+          "G6",
+          "G7",
+          "G8"
         ]
       },
       {
@@ -328,13 +318,14 @@
         "intended": [
           "G9"
         ],
-        "note": "Cascade, not a loose assertion: with no intact fence, G11 cannot pass either. M7 isolates the sectionItems half."
+        "note": "Cascade: with no intact fence G11 cannot pass either. M7 isolates the sectionItems half."
       },
       {
         "id": "M6",
         "mutation": "heading match reverted to the trimmed line",
         "killed": [
-          "G10"
+          "G10",
+          "G13"
         ],
         "intended": [
           "G10"
@@ -349,19 +340,76 @@
         "intended": [
           "G11"
         ]
-      }
-    ],
-    "restore_method": "file copy from a sha256-verified baseline; never git checkout; every restore re-verified by sha256",
-    "vacuity_disclosure": [
-      {
-        "test": "G1",
-        "found_by": "M2 killing nothing",
-        "detail": "G1's ancestor is itself a contract field, so it never reaches the residue path. G5 was added to exercise it."
       },
       {
-        "test": "G10",
-        "found_by": "M6 killing nothing",
-        "detail": "G10 first asserted only an occurrence count, which holds whether or not the defect is present: the defect strips the '#' and opens a section, and a count sees neither. Rewritten to assert the '#' survives and no section is opened. Second occurrence of this failure mode by the same author in the same lane."
+        "id": "M8",
+        "mutation": "sectionItems indented-code handling disabled",
+        "killed": [
+          "G10",
+          "G13"
+        ],
+        "intended": [
+          "G13"
+        ]
+      },
+      {
+        "id": "M9",
+        "mutation": "unreserved extraction heading added and sectionLines guard removed",
+        "killed": [
+          "G12"
+        ],
+        "intended": [
+          "G12"
+        ]
+      },
+      {
+        "id": "M10",
+        "mutation": "word boundary removed from headingMatches",
+        "killed": [
+          "G14"
+        ],
+        "intended": [
+          "G14"
+        ]
+      }
+    ],
+    "not_proven_load_bearing": {
+      "controls": [
+        "G2",
+        "G3"
+      ],
+      "detail": "No mutation in this battery kills G2 or G3. Stated rather than left to inference."
+    },
+    "vacuity_disclosure": [
+      {
+        "control": "G1 (original form)",
+        "defect": "Residue subtraction neutralised and the suite still passed; G1's ancestor is itself a contract field and never reaches the residue path.",
+        "resolution": "G5 added; M2 kills it.",
+        "found_by": "author"
+      },
+      {
+        "control": "G10 (first rewrite)",
+        "defect": "Asserted only an occurrence count, which holds with or without the defect; M6 killed nothing.",
+        "resolution": "Rewritten to assert the # survives and no section opens.",
+        "found_by": "author"
+      },
+      {
+        "control": "G9 and G10 structural halves",
+        "defect": "Read entry.heading off elements of unmapped_sections, which is string[]; the value was always undefined so assert.equal(false,false) passed unconditionally. These were the ONLY assertions covering the phantom-section half of the defect, and this bundle previously claimed they held.",
+        "resolution": "Now entry.split(chr(10))[0]; the structural assertion was also moved AHEAD of the textual one, because running second it was never reached under mutation.",
+        "found_by": "independent reviewer"
+      },
+      {
+        "control": "G8 (grep form)",
+        "defect": "Asserted a lexical source shape, not behaviour. Reviewer defeated it twice: a hardcoded reservation list reintroducing the exact named defect, and a const hoist adding an unreserved heading.",
+        "resolution": "G8 is now behavioural over every heading of every field; the evasion it structurally cannot see is closed by a fail-closed guard in sectionLines, covered by G12.",
+        "found_by": "independent reviewer"
+      },
+      {
+        "control": "G4 (grep form)",
+        "defect": "Grepped lane-start.ts for the shape of a ternary. Measured that G2/G3 do not catch the finding-1 defect, so this grep was the only coverage for a P1 fix.",
+        "resolution": "Decision extracted to resolveReadmissionContract; G4 injects a spy and asserts it is never called on readmission and called once for a fresh lane.",
+        "found_by": "author, prompted by the reviewer's finding on G8"
       }
     ]
   }

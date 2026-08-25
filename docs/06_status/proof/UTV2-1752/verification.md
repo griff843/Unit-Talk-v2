@@ -35,8 +35,10 @@ forward from the predecessor's proof.
   the author.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
-- [x] Each fix is load-bearing: three mutations each kill exactly one test,
-  its own, and both sources restore byte-identical afterwards.
+- [x] Each fix is load-bearing: eleven mutations were executed, every one was
+  detected, every G1-G14 control except G2 and G3 is killed by at least one of
+  them, and both sources restore byte-identical afterwards. G2/G3 are called
+  out explicitly below as NOT killed by any mutation in this battery.
 
 ## EVIDENCE:
 
@@ -52,12 +54,14 @@ forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5062 tests, 5062 pass, 0 fail, 0 skipped
-execution-packet suite       54 tests, 54 pass, 0 fail
+verify:static suite total    5071 tests, 5071 pass, 0 fail, 0 skipped
+                             (0 `not ok` lines in the full run log)
+execution-packet suite       57 tests, 57 pass, 0 fail
 lane-start suite             44 tests, 44 pass, 0 fail
+claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             7 of 7 mutations DETECTED (M1-M7); see the
-                             mutation table below for exact kill targets
+mutation battery             11 of 11 mutations DETECTED (M1-M10 plus M4b); see
+                             the mutation table below for exact kill targets
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
                              proof (staging only)" and validated inside the required
                              `verify` context; read that context's conclusion on the
@@ -68,13 +72,13 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5062 tests, 5062 pass, 0 fail, 0 skipped. Totals read from the complete 33,002-line run log, not a tail. |
+| `pnpm verify:static` | PASS | Exit 0. 5071 tests, 5071 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS | Stage of `pnpm verify:static` (exit 0). |
-| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 48 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 57 tests, 0 failures. |
 | `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 44 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +5 | 5057 at the preserved head to 5062 here. The delta is exactly G1, G2, G3, G4, G5 and nothing else. |
+| Test delta | +14 | 5057 at the preserved head to 5071 here. The delta is exactly G1-G14 and nothing else. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -137,31 +141,11 @@ was executed against the path the control names.
 
 ### Mutation / inversion battery
 
-Each mutation was applied to the shipped source, the suite run, and the source
-restored by file copy — never by `git checkout`.
-
-```text
-BASELINE      execution-packet 48/48 pass    lane-start 44/44 pass
-
-M1  sectionLines reserved-descendant subtraction neutralised
-    KILLED: G1 — a recognized section nested under another recognized section
-            lands in exactly one field
-    execution-packet 47 pass, 1 fail   (kills only its own test)
-
-M2  residue per-line subtraction neutralised
-    KILLED: G5 — a claimed child is subtracted from an UNRECOGNIZED ancestor
-            that survives as residue
-    execution-packet 47 pass, 1 fail   (kills only its own test)
-
-M3  unconditional early capture restored (the finding-1 defect)
-    KILLED: G4 — the readmission path performs no contract capture before the
-            worktree exists
-    lane-start 43 pass, 1 fail         (kills only its own test)
-
-RESTORE CHECK
-    scripts/ops/execution-packet.ts: OK
-    scripts/ops/lane-start.ts: OK
-```
+Superseded by the consolidated **Mutation battery** section below, which was
+re-measured from scratch against the current tree. The earlier block in this
+position reported an M1-M3 battery whose mutations were written against code
+this lane has since replaced; it was removed rather than left to contradict the
+current table, which is the defect an independent review found in this bundle.
 
 G3 is itself the inversion for finding 1: it asserts that resolving with only
 the pre-checkout root fails closed on the same fixture that resolves offline
@@ -254,38 +238,118 @@ block as one item with its newlines.
 
 ## Mutation battery
 
-Each mutation was applied to a byte-verified baseline and reverted by file
-copy, never by `git checkout`; every restore was re-checked by `sha256`.
+Re-measured from scratch against the current tree. Every mutation was applied
+to a byte-verified baseline and reverted **by file copy, never by
+`git checkout`**; every restore was re-checked by `sha256`.
+
+Baselines: `execution-packet.ts` `4c13a569357e33adc56e70e79416261bfcf28e7796a9cc858886807cc0bf0fe5`,
+`lane-start.ts` `64c8beb94adbad60b5decff42781d67d05e7901a4242c848c7b8976878fee60c`.
+Both matched after every single mutation.
 
 | # | Mutation | Tests killed | Intended target |
 |---|---|---|---|
-| M1 | contract-field subtraction disabled | G1 | G1 |
-| M2 | residue subtraction disabled | G5 | G5 |
-| M3 | readmission contract resolved pre-worktree | G4 | G4 |
-| M4 | reservation reverted to the pre-fix hardcoded five | G6, G7 | G6, G7 |
+| M1 | `sectionLines` reserved-descendant exemption removed | G1, G6, G7, G8 | G1 |
+| M2 | residue claimed-child subtraction removed | G5 | G5 |
+| M3 | readmission capture guard removed | G4 | G4 |
+| M4 | reservation predicate given its own hardcoded five | 53 tests | G6, G7, G8 |
+| M4b | narrowed **only** on the nested-suppression path | G6, G7, G8 | G6, G7, G8 |
 | M5 | `parseSections` fence tracking disabled | G9, G11 | G9 |
-| M6 | heading match reverted to the trimmed line | G10 | G10 |
+| M6 | heading match reverted to the trimmed line | G10, G13 | G10 |
 | M7 | `sectionItems` fence handling disabled | G11 | G11 |
+| M8 | `sectionItems` indented-code handling disabled | G10, G13 | G13 |
+| M9 | unreserved extraction heading added, `sectionLines` guard removed | G12 | G12 |
+| M10 | word boundary removed from `headingMatches` | G14 | G14 |
 
-M5 kills two tests rather than one. That is a genuine cascade, not a loose
-assertion: destroying fence tracking in the parser leaves `sectionItems` with
-no intact fence to preserve, so G11 cannot pass either. M7 isolates the
-`sectionItems` half on its own, which is why the two halves are separately
-provable.
+M4 kills 53 tests rather than a handful. That is not a loose assertion: with the
+reservation set narrowed, the fail-closed guard now inside `sectionLines`
+refuses every extraction heading it no longer recognises, so the defect can no
+longer be introduced quietly at all. M4b narrows only the nested-suppression
+path, leaving the guard intact, and isolates the three controls that catch the
+defect on its own terms.
 
-### A second vacuous test, disclosed rather than corrected quietly
+M5 kills two tests: destroying fence tracking in the parser leaves
+`sectionItems` with no intact fence to preserve, so G11 cannot pass either. M7
+isolates the `sectionItems` half. M6 and M8 overlap on G13 for the same reason —
+an indented fence depends on both the heading-indentation rule and the
+indented-run handling.
 
-`G10` as first written asserted only that the indented comment appeared exactly
-once in the rendered packet. M6 killed nothing, because that text appears once
-whether or not the defect is present — the defect strips the `#` and opens a
-section, and an occurrence count sees neither. This is the same failure mode
-disclosed earlier in this bundle for the residue fix, committed a second time by
-the same author in the same lane. G10 now asserts the `#` survives and that no
-section is opened by the line; M6 then kills exactly G10.
+**Not proven load-bearing by this battery: G2 and G3.** No mutation executed
+here kills them. G3 is an inversion test that asserts a throw, and G2 asserts
+the offline-reuse path that the finding-1 fix enables; neither is exercised by
+removing the guard, because M3's damage is caught first by G4. This is stated
+rather than left for a reader to infer from the table.
 
-The pattern is worth naming: an occurrence count is a weak assertion because it
-tends to hold under the very defect it is meant to detect. Assert the property
-the fix creates, not the tidiness of the output.
+### Three vacuous controls, all disclosed
+
+This bundle has now disclosed **three** assertions of my own that proved nothing
+when written. All three were found the same way — by executing the mutation the
+control names — and all three are recorded rather than quietly corrected.
+
+1. **The residue control (G1's original form).** With the subtraction
+   neutralised the suite still passed, because G1's enclosing section is itself
+   a contract field and never reaches the residue path. G5 was added to
+   exercise a recognized child under an UNRECOGNIZED ancestor.
+2. **G10 as first written.** It asserted only that the indented comment
+   appeared exactly once. That holds whether or not the defect is present, so
+   M6 killed nothing. Rewritten to assert the `#` survives and no section
+   opens.
+3. **G9 and G10's structural halves — found by the independent reviewer, not
+   by me.** Both read `entry.heading` off elements of
+   `TaskContract.unmapped_sections`, which is `string[]`. `entry.heading` is
+   therefore `undefined` on every element, `undefined ?? ''` is `''`, the regex
+   never matches, and `assert.equal(someFalse, false)` passed unconditionally.
+   These were the **only** assertions covering "no phantom section was opened" —
+   the precise half of the defect thread 3 named — and this bundle previously
+   claimed they held. They now read `entry.split('\n')[0]`, and the structural
+   assertion was moved **ahead** of the textual one in each test, because when
+   it ran second the textual assertion failed first under mutation and the
+   structural one was never reached. Only after that reorder do M5 and M6 fail
+   on the structural message specifically.
+
+Two further controls were theatre in a different way — they asserted the shape
+of the source text rather than behaviour:
+
+- **G8** grepped for `sectionLines(parsed, ['`. The reviewer defeated it twice:
+  once by giving the reservation predicate its own hardcoded list — reintroducing
+  the exact defect G8 is named for, with the suite still green — and once by
+  hoisting the headings to a `const` with an extra unreserved entry. G8 is now
+  behavioural, enumerating every heading of every field and proving each is both
+  extracted into its own field and withheld from its ancestor.
+- **G4** grepped `lane-start.ts` for the shape of a ternary. I measured that
+  G2 and G3 do **not** catch a reintroduction of the finding-1 defect, so that
+  grep was the lane's only coverage for a P1 fix. The decision is now extracted
+  into `resolveReadmissionContract`, and G4 injects a spy resolver and asserts
+  it is never called on readmission — and *is* called exactly once for a fresh
+  lane, so the guard has not simply disabled capture everywhere.
+
+The lexical guard could not be repaired in place: G8 enumerates the field table,
+so it structurally cannot see a heading that extraction accepts but that was
+never added to that table. That property is now enforced in the production code
+instead — `sectionLines` throws on any extraction heading the reservation set
+does not know — which is what makes the reviewer's second evasion impossible
+rather than merely detected. G12 covers that guard.
+
+### A fourth defect, found while covering the third
+
+The indented-code case was still broken. `^ {0,3}` means a fence indented four
+spaces — the ordinary way to nest code under a list item — is not a fence, so it
+fell through to the paragraph collapse along with plain indented code. Measured
+on the shipped tree before the fix:
+
+```text
+acceptance_criteria = [
+  "keep the indented block verbatim",
+  "# indented shell comment pnpm verify",
+  "and a nested fenced block:",
+  "```bash # do not run in prod pnpm destroy ```"
+]
+```
+
+That is the comment swallowing the command — the exact harm this lane exists to
+fix — surviving at a different indentation. G10's own fixture exhibited it while
+asserting nothing about it. `sectionItems` now holds an indented run verbatim as
+one item; G13 covers it, G10 gained an assertion for the collapse, and M8
+isolates it.
 
 ### Residual risk
 

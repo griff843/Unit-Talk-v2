@@ -256,6 +256,35 @@ export function resolveLaneTaskContract(
   return { contract: resolved.contract, fetched: resolved.fetched, source };
 }
 
+/**
+ * Whether to capture the lane's task contract BEFORE the worktree exists.
+ *
+ * A readmitted branch already carries its own contract, and the pre-checkout
+ * pass cannot see it -- the worktree does not exist yet -- so that pass could
+ * only reach the control checkout or the network. For a branch carrying its
+ * own contract that is both wrong and, under containment with no token, fatal
+ * (see the G3 inversion). Readmission therefore captures nothing here and
+ * resolves once, after checkout.
+ *
+ * This lives in its own function so the rule can be asserted by CALLING it and
+ * observing that no capture occurs, rather than by grepping this file for the
+ * shape of a ternary -- a source-text assertion survives any reformatting and
+ * proves nothing about behaviour.
+ */
+export function resolveReadmissionContract(
+  readmitExistingBranch: boolean,
+  issueId: string,
+  token: string,
+  resolve: (
+    id: string,
+    worktreePath: string | null,
+    t: string,
+  ) => LaneContractResolution = resolveLaneTaskContract,
+): LaneContractResolution | null {
+  if (readmitExistingBranch) return null;
+  return resolve(issueId, null, token);
+}
+
 /** Persist one contract to every root, each merged against its own record. */
 export function persistLaneTaskContract(
   issueId: string,
@@ -1066,9 +1095,11 @@ function main(): void {
     // valid record. It would also make readmission require the network for a
     // branch that already carries everything it needs. Fresh lanes keep the
     // early bounded capture unchanged.
-    const contractResolution = readmitExistingBranch
-      ? null
-      : resolveLaneTaskContract(issueId, null, linearTaskToken());
+    const contractResolution = resolveReadmissionContract(
+      readmitExistingBranch,
+      issueId,
+      linearTaskToken(),
+    );
 
     if (readmitExistingBranch) {
       if (!branchContainsExactIssue(branch, issueId)) {
