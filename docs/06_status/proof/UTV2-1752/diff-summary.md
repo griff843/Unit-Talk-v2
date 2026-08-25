@@ -3,8 +3,8 @@
 **Issue:** UTV2-1752 — packet finalization (readmission timing + nested-section consumption)
 **Tier:** T1 · **Lane type:** governance
 **Branch:** `claude/utv2-1752-packet-finalization`
-**Verified source SHA:** `3e7abdbbaedaa360529871b61f1ace68b45182fe`
-MERGE_SHA: 3e7abdbbaedaa360529871b61f1ace68b45182fe
+**Verified source SHA:** `73e6ff504c973fe0cb9c008384baf3084d0028a5`
+MERGE_SHA: 73e6ff504c973fe0cb9c008384baf3084d0028a5
 **Predecessor:** UTV2-1747 / PR #1446, closed unmerged at `d54abcbd`. That tree was preserved and ported here; UTV2-1752 addresses its four review findings and nothing else.
 
 ---
@@ -16,7 +16,7 @@ The branch contains two distinguishable populations:
 | Population | Files | Origin |
 |---|---|---|
 | **Ported** | `execution-packet.ts`, `claude-exec.ts`, `codex-exec.ts` and their tests (except the additions listed below) | byte-preserved from `d54abcbd`, re-applied onto current `main` |
-| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases G1–G18 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
+| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases G1-G37 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
 
 Per-file `sha256` prefixes for both populations are recorded in
 `evidence.json → provenance`.
@@ -154,12 +154,11 @@ than re-synchronised.
 - `pnpm verify` cannot exit 0 locally: `ci:assert-staging` refuses on
   `host=127.0.0.1`. The live half is supplied and enforced by CI inside the
   required `verify` context (finding 2).
-- **Nine controls of mine proved nothing when written** -- three vacuous
-  assertions, four source-text greps, one single-root fixture, and one
-  emitted-nowhere field whose two tests guarded state no consumer could
-  observe. Six of the nine were found by independent reviewers, not by me. Each
-  is disclosed in `verification.md` with the mutation that now kills it, rather
-  than silently corrected.
+- **Controls of mine that proved nothing when written** are counted once, in
+  `verification.md`'s running count, and each is disclosed there with the
+  mutation that now kills it rather than silently corrected. This file
+  deliberately does not restate the number: it was stated here and in
+  `verification.md` at once, and it went stale here first.
 
 Full detail: `docs/06_status/proof/UTV2-1752/verification.md`,
 machine-readable: `docs/06_status/proof/UTV2-1752/evidence.json`.

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: 7faa7a05ea795bf035fde644b0bba104bae77083
+MERGE_SHA: 73e6ff504c973fe0cb9c008384baf3084d0028a5
 
 > `MERGE_SHA` names the implementation commit `7faa7a05`, which is an ancestor
 > of the PR head. This is the form `executor-result-validator.yml` requires and
@@ -9,7 +9,7 @@ MERGE_SHA: 7faa7a05ea795bf035fde644b0bba104bae77083
 > merge SHA after merge by `ops:proof-generate --merge-sha` (run from
 > `post-merge-lane-close.yml`). It is NOT a claim that this lane has merged.
 
-Verified source SHA: `7faa7a05ea795bf035fde644b0bba104bae77083`
+Verified source SHA: `73e6ff504c973fe0cb9c008384baf3084d0028a5`
 
 This lane finishes the executor-packet transport. It does not re-derive the
 implementation: the preserved tree is ported byte-exact from the reviewed head
@@ -70,13 +70,13 @@ described here. Nothing is carried forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5085 tests, 5085 pass, 0 fail, 0 skipped
+verify:static suite total    5096 tests, 5096 pass, 0 fail, 0 skipped
                              (0 `not ok` lines in the full run log)
-execution-packet suite       61 tests, 61 pass, 0 fail
-lane-start suite             54 tests, 54 pass, 0 fail
+execution-packet suite       68 tests, 68 pass, 0 fail
+lane-start suite             58 tests, 58 pass, 0 fail
 claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             24 of 24 DETECTED, re-measured in full at THIS head
+mutation battery             37 of 37 DETECTED, re-measured in full at THIS head
                              by a scripted runner; see the table below. Both
                              sources restored byte-identical after each
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
@@ -89,11 +89,11 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5085 tests, 5085 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
+| `pnpm verify:static` | PASS | Exit 0. 5096 tests, 5096 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS, but **does not cover this diff** | Stage of `pnpm verify:static` (exit 0). `tsconfig.json` has `files: []` and no project reference covering `scripts/`, so NONE of this lane's eight changed source files are type-checked. This is why a `.heading` access on a `string` shipped green. `tsconfig.json` is not in this lane's `file_scope_lock`; reported, not fixed. |
-| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 61 tests, 0 failures. |
-| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 54 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 68 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 58 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
 | Test delta | +28 | 5057 at the preserved head to 5085 here: G1-G18, G2b/G2c, G22, the three end-to-end readmission tests G19/G20/G21, and the four round-5 controls G23-G26. Derived by `measure.py`, not typed — enumerating the additions by hand here is what went stale four times. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
@@ -295,35 +295,48 @@ and the baseline was restored **by file copy, never by `git checkout`**, with
 
 Baselines, at this head:
 `execution-packet.ts` `982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86`,
-`lane-start.ts` `6dbbf21774e775ca1b3e8c1aebd89c8f9c2886f3385215b9b478491995e0003c`.
+`lane-start.ts` `209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560`.
 Both matched after every mutation.
 
 | # | Mutation | File | Tests killed |
 |---|---|---|---|
-| M1 | `sectionLines` reserved-descendant subtraction disabled | `execution-packet.ts` | `G1`, `G6`, `G7`, `G8` |
-| M2 | `unmappedSections` claimed-child subtraction disabled | `execution-packet.ts` | `G5` |
-| M3 | `parseSections` fence tracking destroyed (`FENCE_RE` never matches) | `execution-packet.ts` | 19 tests, including `B1`, `F3`, `F4`, `F8` |
-| M4 | heading regex leading-space bound `^ {0,3}` widened to `^ *` | `execution-packet.ts` | `G10`, `G13`, `G17` |
-| M5 | `sectionLines` unreserved-extraction-heading guard removed | `execution-packet.ts` | `G12` |
-| M6 | `headingMatches` prefix word-boundary removed | `execution-packet.ts` | `G14` |
-| M7 | `indentWidth` stops expanding a tab to the next 4-column stop | `execution-packet.ts` | `G16`, `G22` |
-| M8 | a blank line ends an indented run in `sectionItems` | `execution-packet.ts` | `G17` |
-| M9 | `resolveTaskContractAcrossRoots` takes the LAST matching root, not the first | `execution-packet.ts` | `G21`, `G2b` |
-| M10 | `laneContractRoots` returns `[ROOT, worktreePath]` (order reversed) | `lane-start.ts` | `G15`, `G21` |
-| M11 | `resolveReadmissionContract` captures on the readmission path too | `lane-start.ts` | `G20`, `G4` |
-| M12 | readmission resolves the contract against ROOT only (finding 1, ordering half) | `lane-start.ts` | `F5`, `G19`, `G20`, `G21` |
-| M13 | finding 1 restored: control's sync record written over the branch's via `writeFileSync`/`readFileSync` | `lane-start.ts` | `G19`, `G20` |
-| M14 | offline reuse disabled — a valid contract at a root is never reused | `execution-packet.ts` | 8 tests, including `G2`, `G20`, `G21`, `G25` |
-| M15 | `TaskContractConflictError` throw removed (disagreement no longer fails closed) | `execution-packet.ts` | `F1`, `G19`, `G2c`, `lane-start main() refuses two different valid contracts instead of choosing one` |
-| M16 | `persistTaskContractToRoots` merges every destination against `roots[0]` | `execution-packet.ts` | `F5b`, `G20`, `lane-start main() persists one contract to both roots, merging each against its own record` |
-| R2b | finding 1's RECORD half restored: control's whole sync file copied over the branch's AFTER the persist | `scripts/ops/lane-start.ts` | `G20` |
-| R9 | `contract_source` hardcoded to `'lane-worktree'` | `scripts/ops/lane-start.ts` | `G23`, `G25`, `G26` |
-| R10 | `contract_fetched` hardcoded to `false` | `scripts/ops/lane-start.ts` | `G23`, `G26` |
-| R13 | the fresh-lane persist writes to no root at all | `scripts/ops/lane-start.ts` | `G26` |
-| R14 | the resume persist drops the worktree destination | `scripts/ops/lane-start.ts` | `G25` |
-| R16 | the refusal swaps `control_contract_hash` and `worktree_contract_hash` | `scripts/ops/lane-start.ts` | `G19` |
-| R18 | `linearTaskToken()` returns `''` unconditionally | `scripts/ops/lane-start.ts` | `G24`, `G26` |
-| R21 | `buildSyncYmlWithTaskContract` defaults `entities.issues` to `[]` | `scripts/ops/execution-packet.ts` | `G26` |
+| M1 | intended control G1 | `execution-packet.ts` | `G1`, `G6`, `G7`, `G8` |
+| M2 | intended control G5 | `execution-packet.ts` | `G5` |
+| M3 | intended control G9 | `execution-packet.ts` | `B1`, `F3`, `F4`, `F8`, `G1`, `G11`, `G14`, `G18`, `G22`, `G31`, `G35`, `G5`, `G6`, `G7`, `G8`, `G9`, `a present but empty acceptance section fails closed instead of using the legacy fallback`, `a section heading with an empty body is still carried as residue`, `task contract captures and renders every required work-order field`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane`, `unclassified content keeps its line and formatting semantics` |
+| M4 | intended control G10 | `execution-packet.ts` | `G10`, `G13`, `G17` |
+| M5 | intended control G12 | `execution-packet.ts` | `G12` |
+| M6 | intended control G14 | `execution-packet.ts` | `G14` |
+| M7 | intended control G16 | `execution-packet.ts` | `G16`, `G22` |
+| M8 | intended control G17 | `execution-packet.ts` | `G17` |
+| M9 | intended control G2b/G21 | `execution-packet.ts` | `G21`, `G2b` |
+| M10 | intended control G15/G21 | `lane-start.ts` | `G15`, `G21` |
+| M11 | intended control G4 | `lane-start.ts` | `G20`, `G4` |
+| M12 | intended control G19/G20/G21 | `lane-start.ts` | `F5`, `G19`, `G20`, `G21` |
+| M13 | intended control G19/G20 | `lane-start.ts` | `G19`, `G20`, `G27`, `G28` |
+| M14 | intended control G2/G3 (offline reuse) | `execution-packet.ts` | `G2`, `G20`, `G21`, `G25`, `G27`, `G2b`, `G3 (inversion)`, `G36`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() persists one contract to both roots, merging each against its own record` |
+| M15 | intended control G2c/G19 | `execution-packet.ts` | `F1`, `G19`, `G2c`, `lane-start main() refuses two different valid contracts instead of choosing one` |
+| M16 | intended control F5b (per-destination merge) | `execution-packet.ts` | `F5b`, `G20`, `lane-start main() persists one contract to both roots, merging each against its own record` |
+| R2b | clobber branch sync record via writeFileSync after persist | `lane-start.ts` | `G20` |
+| R9 | contract_source hardcoded lane-worktree | `lane-start.ts` | `G23`, `G25`, `G26`, `G27`, `G28` |
+| R10 | contract_fetched hardcoded false | `lane-start.ts` | `G23`, `G26`, `G28` |
+| R13 | fresh persist writes to no root | `lane-start.ts` | `G26` |
+| R14 | resume persist drops the worktree root | `lane-start.ts` | `G25` |
+| R16 | refusal hash labels swapped | `lane-start.ts` | `G19` |
+| R18 | linearTaskToken always empty | `lane-start.ts` | `G24`, `G26`, `G28` |
+| R21 | entities.issues default emptied | `execution-packet.ts` | `G26` |
+| P1 | readmission emit hardcodes contract_source | `lane-start.ts` | `G27`, `G28` |
+| P2 | readmission emit hardcodes contract_fetched | `lane-start.ts` | `G28` |
+| P6 | conflict refusal drops generic contracts payload | `lane-start.ts` | `G19` |
+| Q2 | readmission metadata commit drops the sync record | `lane-start.ts` | `G36` |
+| P11 | default sync approval flags default true | `execution-packet.ts` | `G37` |
+| P12 | default sync record omits version | `execution-packet.ts` | `G37` |
+| N5 | buildSyncYmlWithTaskContract skips validation | `execution-packet.ts` | `G33` |
+| N6 | unterminated fence dropped | `execution-packet.ts` | `G29` |
+| N7 | fenceClosedBy ignores the info-string rule | `execution-packet.ts` | `G30` |
+| N8 | fenceOpenedBy drops the backtick-in-info guard | `execution-packet.ts` | `G31` |
+| N9 | curlConfigValue newline guard removed | `execution-packet.ts` | `G32` |
+| P10 | malformed sync record guard removed | `execution-packet.ts` | `G34` |
+| Q6 | unmappedSections ancestor suppression removed | `execution-packet.ts` | `G35` |
 
 **24 mutations, 24 detected, 0 survivors.**
 
@@ -632,7 +645,8 @@ controls the *previous* round installed.
 
 Its **contract** half is closed by the conflict gate: two differing valid
 contracts fail closed, so precedence cannot serve a stale contract to a lane.
-Its **record** half was still reintroducible at this head (R2b). Earlier
+Its **record** half was still reintroducible at the head this section was
+written against (R2b); G20 kills that mutation at the current head. Earlier
 revisions of this bundle did not make that distinction and should have.
 
 ### One vacuous control found by me this round, before the mutation ran
@@ -646,9 +660,62 @@ not by reading it — the same detector that has caught every other instance.
 
 Vacuous or unpinned controls of my own, across four review rounds: **THIRTEEN**.
 **Nine were found by independent reviewers, not by me.** Three of the four
-rounds found a defect in a control the previous round had just installed. The
+rounds found a defect in a control the previous round had just installed.
+
+SUPERSEDED at the next head: see the fifth-round count below. The
 count is kept because it is the most honest single statement this bundle can
 make about the reliability of its own claims.
+
+## Fifth review (mine) and the sixth round — two survivors, both my test defects
+
+The fifth review was my own, run against the round-5 head. It found three
+proof-truth defects in this bundle and eight uncovered code properties. Eleven
+new controls (G27-G37) were written for the latter. Running the round-6 battery
+against them left **two survivors**, and in both cases the defect was in the
+test I had just written, not in the code:
+
+| Survivor | What survived | Why my control did not kill it |
+|---|---|---|
+| **N8** | `fenceOpenedBy`'s backtick-in-info guard deleted | G31's fixture put the backticks inside a list item (`- ``` ...`). `FENCE_RE` is `/^ {0,3}(`{3,}|~{3,})(.*)$/u` and never matches a list-item line, so the guard was never reached. Deleting it produced **byte-identical output**. The test asserted a substring count, which the swallowed block also satisfied. |
+| **P6** | the generic `contracts: error.hashes` refusal payload emptied to `[]` | Genuinely uncovered. G19 asserted only the named `control_contract_hash`/`worktree_contract_hash` pair, which cannot observe the generic payload a caller not limited to two roots reads. |
+
+G31 was rewritten with a column-0 fence line, where the guard is observable
+(baseline `["first criterion", "``` `inline`", "second criterion"]`; mutant
+`["first criterion", "``` `inline`\n- second criterion"]`), and G19 gained
+root-to-hash assertions over `contracts`. Both mutations now die.
+
+**G31 is vacuous control #14.** It is a new instance of a class already in this
+bundle: *a fixture that cannot exercise the code path it names*. It was found by
+executing the mutation, not by reading the test.
+
+### The three proof-truth defects, fixed structurally
+
+Rounds 1-4 fixed stale figures by hand and round 5 found three more, because
+whatever the generator did not own stayed hand-maintained. All derived fields are
+now generated by one runner (`bundlegen.py`) from `battery_r7.json`,
+`measured.json` and the live tree:
+
+| Defect found in round 5 | Structural fix |
+|---|---|
+| `verification.md`'s battery baseline hash was hand-typed and stale at `6dbbf217…` (pre-fix) while `evidence.json` carried the correct one | the baseline block is generated from the live tree hash |
+| `evidence.json findings_addressed[0].mutation` cited `R1, R5, R12`, which do not exist in its own battery (copied from a reviewer's IDs) | attribution is **derived**: for each finding, the mutations whose recorded run actually killed one of its `covered_by` tests |
+| `diff-summary.md` was never regenerated, leaving `MERGE_SHA: 3e7abdbb` and a second, different MERGE_SHA token elsewhere in the bundle | every stale SHA token across all three files is rewritten to one source SHA, so two cannot coexist |
+
+### Running count (current)
+
+Vacuous or unpinned controls of my own, across five review rounds: **FOURTEEN**.
+**Nine were found by independent reviewers, not by me.** Four of the five rounds
+found a defect in a control the previous round had just installed -- including
+this one, where the control was less than an hour old. The count is kept because
+it is the most honest single statement this bundle can make about the
+reliability of its own claims.
+
+### One battery, not four partial ones
+
+Earlier revisions reported a 24-mutation battery assembled from several rounds'
+JSON files. This head reports the **union of every mutation ever run in this
+lane**, deduped by ID and re-executed in full against the current tree. The
+count in the table below is that union, not a per-round subset.
 
 ### Residual risk
 

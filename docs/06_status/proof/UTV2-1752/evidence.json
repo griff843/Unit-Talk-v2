@@ -8,7 +8,7 @@
   "status": "changes_in_progress",
   "generated_at": "2026-08-25T18:40:00Z",
   "sha_binding": {
-    "verified_source_sha": "7faa7a05ea795bf035fde644b0bba104bae77083",
+    "verified_source_sha": "73e6ff504c973fe0cb9c008384baf3084d0028a5",
     "verified_source_note": "This lane's LATEST implementation commit, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. It carries every source control this bundle describes (through G26), so the mutation baselines recorded under mutation_testing are the hashes at this SHA. Two earlier defects in this field are recorded rather than hidden: an early revision claimed the figures were measured AT the anchor (false), and a later one left the anchor five commits stale at 3e7abdbb, so a reviewer checking it out saw none of the described code.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -39,14 +39,8 @@
     "already_present_on_main": [],
     "sha256_note": "Full sha256 of each file AS IT IS AT THIS HEAD. The previous key held prefixes measured at the ported head d54abcbd for the four entrypoints and at an earlier head for the four changed files, while being labelled \"at_head\" -- a third independent review flagged the mislabel. The four ported entrypoints are byte-identical to d54abcbd; the four changed files are not, and never were.",
     "sha256_at_head": {
-      "claude-exec.ts": "7b1577a356d338d1ebc1c3db67a4223668280babe8f30f9e76e0813161aa2f98",
-      "claude-exec.test.ts": "64532e51f11a76582d443e6331c4f6e8c1450be6345c7adf51839ae4d04526fb",
-      "codex-exec.ts": "927868f53c18a3dfe07fc00dc6c30929a041acaea57de64f83f4ad900839b138",
-      "codex-exec.test.ts": "55f220781c0639857800210373eb497df9b056716827c6987c5d56fbf9c166f5",
-      "execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
-      "execution-packet.test.ts": "7e6b2ed2e38bf45e51f607c7f381de63a0b95eb052112e61676af94e1e694ec5",
-      "lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560",
-      "lane-start.test.ts": "e2536f843a4e70f77a4c4b37631fc7cb561337800d1d6305a909d1ccfe8bfd47"
+      "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
+      "scripts/ops/lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560"
     }
   },
   "scope": {
@@ -59,32 +53,29 @@
     "verify_static_suite": {
       "command": "pnpm verify:static",
       "exit_code": 0,
-      "tests": 5085,
-      "pass": 5085,
+      "tests": 5096,
+      "pass": 5096,
       "fail": 0,
       "skipped": 0,
-      "not_ok_lines": 0,
-      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
+      "not_ok_lines": 0
     },
     "execution_packet_suite": {
       "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
       "exit_code": 0,
-      "tests": 61,
-      "pass": 61,
+      "tests": 68,
+      "pass": 68,
       "fail": 0,
       "skipped": 0,
-      "not_ok_lines": 0,
-      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
+      "not_ok_lines": 0
     },
     "lane_start_suite": {
       "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
       "exit_code": 0,
-      "tests": 54,
-      "pass": 54,
+      "tests": 58,
+      "pass": 58,
       "fail": 0,
       "skipped": 0,
-      "not_ok_lines": 0,
-      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
+      "not_ok_lines": 0
     },
     "type_check": {
       "command": "pnpm type-check",
@@ -117,8 +108,7 @@
       "pass": 46,
       "fail": 0,
       "skipped": 0,
-      "not_ok_lines": 0,
-      "derived_from": "scratchpad measure.py -- parsed from the run, never typed"
+      "not_ok_lines": 0
     }
   },
   "runtime_proof": {
@@ -165,9 +155,9 @@
         "G20",
         "G21"
       ],
-      "mutation": "R1, R2b, R5, R12 (readmission E2E); the earlier G2/G3/G4 + M3 attribution was WRONG",
+      "mutation": "M9, M10, M11, M12, M13, M14, M15, M16, R2b, R16, P6 \u2014 derived from battery_r7.json: every mutation whose run killed one of G19, G20, G21",
       "attribution_correction": "This entry read covered_by G2/G3/G4, mutation M3 through four review rounds. G2/G3/G4 are unit-level and M3 is the FENCE_RE mutation, unrelated to readmission. A third review proved the readmission path had no executing control at all; a fourth found this file still asserting the disproved attribution while diff-summary.md asserted the correct one.",
-      "scope_correction": "Finding 1 is NARROWER than earlier revisions of this bundle claimed. Its CONTRACT half is closed by the conflict gate. Its RECORD half was still reintroducible at this head (mutation R2b: a post-persist copy of control sync file over the branch destroys entities accumulated on the branch, and metadataPaths commits the loss). G20 now pins it."
+      "scope_correction": "Finding 1 is NARROWER than earlier revisions of this bundle claimed. Its CONTRACT half is closed by the conflict gate. Its RECORD half was still reintroducible at the round-4 head (mutation R2b: a post-persist copy of control sync file over the branch destroys entities accumulated on the branch, and metadataPaths commits the loss). G20 now pins it."
     },
     {
       "id": 2,
@@ -187,7 +177,7 @@
         "G1",
         "G5"
       ],
-      "mutation": "M1, M2"
+      "mutation": "M1, M2, M3 \u2014 derived from battery_r7.json: every mutation whose run killed one of G1, G5"
     },
     {
       "id": 4,
@@ -236,10 +226,10 @@
     "pending": [
       "exact-head CI green at the new head",
       "fresh EXECUTOR_RESULT at the new head, carrying the full executor-result/v1 header block",
-      "a FIFTH independent exact-head review",
+      "a SIXTH independent exact-head review",
       "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
     ],
-    "blocking_on": "Not ready for merge. A FOURTH independent exact-head review returned CHANGES_REQUIRED. It ran a 21-mutation battery and found EIGHT mutations surviving that this lane's own 16-mutation battery had not thought to run -- including R2b, which reintroduces the RECORD half of this lane's headline P1 (control's sync file copied over the branch's after the persist, with the loss committed onto the branch by metadataPaths) with every test green. Two of the eight were defects in controls the THIRD round installed. All eight are now killed by executed mutations, and the finding-1 attribution in this file -- which had asserted the disproved G2/G3/G4 + M3 through four rounds while diff-summary.md asserted the correct one -- is corrected and generated rather than typed. Three of four rounds have found a defect the previous round installed or missed, so a clean fifth review is not treated as a formality by this bundle."
+    "blocking_on": "Not ready for merge. The FIFTH review of this bundle was my own and found three proof-truth defects plus eight uncovered code properties; eleven new controls (G27-G37) were written for the latter. The sixth mutation round left TWO survivors, and in both cases the defect was in a control this lane had just written: G31's fixture put its fence markers inside a list item, where FENCE_RE never matches, so deleting the guard it named produced byte-identical output; and G19 could not observe the generic `contracts` refusal payload at all. Both are fixed and both mutations now die. That is vacuous control #14 in this lane, found by executing the mutation rather than by reading the test. The battery reported here is the UNION of every mutation run across all seven rounds (37), re-executed in full at this head: 37 of 37 detected, no survivors, no anchor misses. Every derived field in all three bundle files is now generated by one runner from that JSON and the live tree, because round 5 proved that hand-fixing leaves whatever the generator does not own. Four of five rounds have found a defect the previous round installed or missed, so a clean sixth review is not treated as a formality by this bundle."
   },
   "review_threads": [
     {
@@ -277,21 +267,22 @@
     }
   ],
   "mutation_testing": {
-    "method": "Each mutation applied to a sha256-verified baseline, both suites run, baseline restored BY FILE COPY (never git checkout) and re-verified by sha256 before the next mutation. Executed by a scripted runner; the table below is its output, not a transcription.",
-    "runner": "scratchpad battery.py (three-round battery, re-measured in full at this head)",
+    "method": "Each mutation applied to a sha256-verified baseline, both suites run, baseline restored BY FILE COPY (never git checkout) and re-verified by sha256 before the next mutation. Executed by a scripted runner; this block is its JSON output, not a transcription.",
+    "runner": "scratchpad battery_r7.py \u2014 the UNION of every mutation run across all seven rounds of this lane, re-executed in full at this head",
     "baselines": {
-      "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
-      "scripts/ops/lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560"
+      "lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560",
+      "execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86"
     },
     "restore_verified": "sha256 equality after every mutation",
-    "mutations": 24,
-    "detected": 24,
+    "mutations": 37,
+    "detected": 37,
     "undetected": [],
+    "anchor_no_longer_present": [],
     "battery": [
       {
         "id": "M1",
         "file": "execution-packet.ts",
-        "intended_target": "G1",
+        "description": "intended control G1",
         "tests_killed": [
           "G1",
           "G6",
@@ -302,7 +293,7 @@
       {
         "id": "M2",
         "file": "execution-packet.ts",
-        "intended_target": "G5",
+        "description": "intended control G5",
         "tests_killed": [
           "G5"
         ]
@@ -310,7 +301,7 @@
       {
         "id": "M3",
         "file": "execution-packet.ts",
-        "intended_target": "G9",
+        "description": "intended control G9",
         "tests_killed": [
           "B1",
           "F3",
@@ -321,6 +312,8 @@
           "G14",
           "G18",
           "G22",
+          "G31",
+          "G35",
           "G5",
           "G6",
           "G7",
@@ -336,7 +329,7 @@
       {
         "id": "M4",
         "file": "execution-packet.ts",
-        "intended_target": "G10",
+        "description": "intended control G10",
         "tests_killed": [
           "G10",
           "G13",
@@ -346,7 +339,7 @@
       {
         "id": "M5",
         "file": "execution-packet.ts",
-        "intended_target": "G12",
+        "description": "intended control G12",
         "tests_killed": [
           "G12"
         ]
@@ -354,7 +347,7 @@
       {
         "id": "M6",
         "file": "execution-packet.ts",
-        "intended_target": "G14",
+        "description": "intended control G14",
         "tests_killed": [
           "G14"
         ]
@@ -362,7 +355,7 @@
       {
         "id": "M7",
         "file": "execution-packet.ts",
-        "intended_target": "G16",
+        "description": "intended control G16",
         "tests_killed": [
           "G16",
           "G22"
@@ -371,7 +364,7 @@
       {
         "id": "M8",
         "file": "execution-packet.ts",
-        "intended_target": "G17",
+        "description": "intended control G17",
         "tests_killed": [
           "G17"
         ]
@@ -379,7 +372,7 @@
       {
         "id": "M9",
         "file": "execution-packet.ts",
-        "intended_target": "G2b/G21",
+        "description": "intended control G2b/G21",
         "tests_killed": [
           "G21",
           "G2b"
@@ -388,7 +381,7 @@
       {
         "id": "M10",
         "file": "lane-start.ts",
-        "intended_target": "G15/G21",
+        "description": "intended control G15/G21",
         "tests_killed": [
           "G15",
           "G21"
@@ -397,7 +390,7 @@
       {
         "id": "M11",
         "file": "lane-start.ts",
-        "intended_target": "G4",
+        "description": "intended control G4",
         "tests_killed": [
           "G20",
           "G4"
@@ -406,7 +399,7 @@
       {
         "id": "M12",
         "file": "lane-start.ts",
-        "intended_target": "G19/G20/G21",
+        "description": "intended control G19/G20/G21",
         "tests_killed": [
           "F5",
           "G19",
@@ -417,23 +410,27 @@
       {
         "id": "M13",
         "file": "lane-start.ts",
-        "intended_target": "G19/G20",
+        "description": "intended control G19/G20",
         "tests_killed": [
           "G19",
-          "G20"
+          "G20",
+          "G27",
+          "G28"
         ]
       },
       {
         "id": "M14",
         "file": "execution-packet.ts",
-        "intended_target": "G2/G3 (offline reuse)",
+        "description": "intended control G2/G3 (offline reuse)",
         "tests_killed": [
           "G2",
           "G20",
           "G21",
           "G25",
+          "G27",
           "G2b",
           "G3 (inversion)",
+          "G36",
           "lane-start main() completes an offline resume without corrupting the lane contract",
           "lane-start main() persists one contract to both roots, merging each against its own record"
         ]
@@ -441,7 +438,7 @@
       {
         "id": "M15",
         "file": "execution-packet.ts",
-        "intended_target": "G2c/G19",
+        "description": "intended control G2c/G19",
         "tests_killed": [
           "F1",
           "G19",
@@ -452,7 +449,7 @@
       {
         "id": "M16",
         "file": "execution-packet.ts",
-        "intended_target": "F5b (per-destination merge)",
+        "description": "intended control F5b (per-destination merge)",
         "tests_killed": [
           "F5b",
           "G20",
@@ -460,75 +457,182 @@
         ]
       },
       {
-        "id": "R9",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "contract_source hardcoded lane-worktree",
+        "id": "R2b",
+        "file": "lane-start.ts",
+        "description": "clobber branch sync record via writeFileSync after persist",
         "tests_killed": [
-          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
-          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree",
-          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+          "G20"
+        ]
+      },
+      {
+        "id": "R9",
+        "file": "lane-start.ts",
+        "description": "contract_source hardcoded lane-worktree",
+        "tests_killed": [
+          "G23",
+          "G25",
+          "G26",
+          "G27",
+          "G28"
         ]
       },
       {
         "id": "R10",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "contract_fetched hardcoded false",
+        "file": "lane-start.ts",
+        "description": "contract_fetched hardcoded false",
         "tests_killed": [
-          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
-          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+          "G23",
+          "G26",
+          "G28"
         ]
       },
       {
         "id": "R13",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "fresh persist writes to no root",
+        "file": "lane-start.ts",
+        "description": "fresh persist writes to no root",
         "tests_killed": [
-          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+          "G26"
         ]
       },
       {
         "id": "R14",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "resume persist drops the worktree root",
+        "file": "lane-start.ts",
+        "description": "resume persist drops the worktree root",
         "tests_killed": [
-          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree"
+          "G25"
         ]
       },
       {
         "id": "R16",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "refusal hash labels swapped",
+        "file": "lane-start.ts",
+        "description": "refusal hash labels swapped",
         "tests_killed": [
-          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy"
+          "G19"
         ]
       },
       {
         "id": "R18",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "linearTaskToken always empty",
+        "file": "lane-start.ts",
+        "description": "linearTaskToken always empty",
         "tests_killed": [
-          "G24: linearTaskToken reads a configured token, and LINEAR_API_TOKEN wins",
-          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+          "G24",
+          "G26",
+          "G28"
         ]
       },
       {
         "id": "R21",
-        "file": "scripts/ops/execution-packet.ts",
-        "intended_target": "entities.issues default emptied",
+        "file": "execution-packet.ts",
+        "description": "entities.issues default emptied",
         "tests_killed": [
-          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+          "G26"
         ]
       },
       {
-        "id": "R2b",
-        "file": "scripts/ops/lane-start.ts",
-        "intended_target": "clobber branch sync record via writeFileSync after persist",
+        "id": "P1",
+        "file": "lane-start.ts",
+        "description": "readmission emit hardcodes contract_source",
         "tests_killed": [
-          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout"
+          "G27",
+          "G28"
+        ]
+      },
+      {
+        "id": "P2",
+        "file": "lane-start.ts",
+        "description": "readmission emit hardcodes contract_fetched",
+        "tests_killed": [
+          "G28"
+        ]
+      },
+      {
+        "id": "P6",
+        "file": "lane-start.ts",
+        "description": "conflict refusal drops generic contracts payload",
+        "tests_killed": [
+          "G19"
+        ]
+      },
+      {
+        "id": "Q2",
+        "file": "lane-start.ts",
+        "description": "readmission metadata commit drops the sync record",
+        "tests_killed": [
+          "G36"
+        ]
+      },
+      {
+        "id": "P11",
+        "file": "execution-packet.ts",
+        "description": "default sync approval flags default true",
+        "tests_killed": [
+          "G37"
+        ]
+      },
+      {
+        "id": "P12",
+        "file": "execution-packet.ts",
+        "description": "default sync record omits version",
+        "tests_killed": [
+          "G37"
+        ]
+      },
+      {
+        "id": "N5",
+        "file": "execution-packet.ts",
+        "description": "buildSyncYmlWithTaskContract skips validation",
+        "tests_killed": [
+          "G33"
+        ]
+      },
+      {
+        "id": "N6",
+        "file": "execution-packet.ts",
+        "description": "unterminated fence dropped",
+        "tests_killed": [
+          "G29"
+        ]
+      },
+      {
+        "id": "N7",
+        "file": "execution-packet.ts",
+        "description": "fenceClosedBy ignores the info-string rule",
+        "tests_killed": [
+          "G30"
+        ]
+      },
+      {
+        "id": "N8",
+        "file": "execution-packet.ts",
+        "description": "fenceOpenedBy drops the backtick-in-info guard",
+        "tests_killed": [
+          "G31"
+        ]
+      },
+      {
+        "id": "N9",
+        "file": "execution-packet.ts",
+        "description": "curlConfigValue newline guard removed",
+        "tests_killed": [
+          "G32"
+        ]
+      },
+      {
+        "id": "P10",
+        "file": "execution-packet.ts",
+        "description": "malformed sync record guard removed",
+        "tests_killed": [
+          "G34"
+        ]
+      },
+      {
+        "id": "Q6",
+        "file": "execution-packet.ts",
+        "description": "unmappedSections ancestor suppression removed",
+        "tests_killed": [
+          "G35"
         ]
       }
-    ],
-    "note": "Every row was re-executed against THIS head. Earlier revisions of this bundle carried rows and baselines measured at a previous head; three consecutive reviews found figures in this bundle that belonged to a different tree.",
-    "round_5_note": "The R-series rows are the eight mutations an independent fourth review found SURVIVING this lane own 16-mutation battery. They are carried here because a battery is only as honest as the mutations it did not think to run: this bundle claimed \"16 detected, 0 survivors\" and that claim was true of its own 16 and false of the code."
+    ]
   }
 }
