@@ -1,0 +1,202 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1752",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Executor packet finalization: correct readmission timing, T1 proof, and nested-section consumption",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-25T14:35:00Z",
+  "verifier": {
+    "identity": "claude-orchestrator",
+    "role": "implementing executor"
+  },
+  "sha_binding": {
+    "verified_source_sha": "3e7abdbbaedaa360529871b61f1ace68b45182fe",
+    "verified_source_note": "Implementation commit for this lane. Every figure in this bundle was measured against the tree at this SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-25T14:35:00Z"
+  },
+  "provenance": {
+    "preserved_head": "d54abcbda8c5a218c0ac4072b98a13175426199c",
+    "reviewed_head": "bc53be68447bf09d056ce59dd2724bd1e2aaee05",
+    "equivalence": "Lane content at the preserved head is byte-identical to the reviewed head; the two differ only by merge commits taken from main. Verified by checksum before porting.",
+    "base": "10ad4ddea1924da6458249e41f9277532d52dfb9",
+    "ported_byte_identical": [
+      "scripts/ops/claude-exec.ts",
+      "scripts/ops/claude-exec.test.ts",
+      "scripts/ops/codex-exec.ts",
+      "scripts/ops/codex-exec.test.ts"
+    ],
+    "ported_then_changed_by_this_lane": [
+      "scripts/ops/execution-packet.ts",
+      "scripts/ops/execution-packet.test.ts",
+      "scripts/ops/lane-start.ts",
+      "scripts/ops/lane-start.test.ts"
+    ],
+    "already_present_on_main": [],
+    "sha256_prefixes_at_head": {
+      "claude-exec.ts": "7b1577a356d338d1",
+      "claude-exec.test.ts": "64532e51f11a7658",
+      "codex-exec.ts": "927868f53c18a3df",
+      "codex-exec.test.ts": "55f220781c063985",
+      "execution-packet.ts": "485a2580b123897f",
+      "execution-packet.test.ts": "8d1c2b94cbb2b256",
+      "lane-start.ts": "e5546157e9fe2283",
+      "lane-start.test.ts": "9932cd876d05bd79"
+    }
+  },
+  "scope": {
+    "substantive_diff_stat": "scripts/ops: 8 files, 3618 insertions(+), 41 deletions(-)",
+    "diff_stat_note": "The whole-diff insertion total is deliberately not quoted: it counts this proof bundle, so recording it would change it."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. For this lane that is a gap, not an exemption - see runtime_proof.test_db.",
+    "verify_static_suite": {
+      "command": "pnpm verify:static",
+      "tests": 5062,
+      "pass": 5062,
+      "fail": 0,
+      "skipped": 0,
+      "exit_code": 0,
+      "note": "Totals read from the complete 33002-line run log, not a tail."
+    },
+    "execution_packet_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
+      "tests": 48,
+      "pass": 48,
+      "fail": 0
+    },
+    "lane_start_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
+      "tests": 44,
+      "pass": 44,
+      "fail": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)"
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "rules matched: (none) - no R-level artifacts required for this diff"
+    },
+    "test_delta": {
+      "preserved_head": 5057,
+      "this_head": 5062,
+      "delta": 5,
+      "accounted_by": ["G1", "G2", "G3", "G4", "G5"],
+      "note": "The delta is exactly the five tests added by this lane and nothing else."
+    },
+    "mutation_testing": {
+      "mutations": 3,
+      "detected": 3,
+      "method": "Each mutation applied to the shipped source, suite run, source restored by file copy - never by git checkout.",
+      "battery": [
+        {
+          "id": "M1",
+          "mutation": "sectionLines reserved-descendant subtraction neutralised",
+          "killed": ["G1"],
+          "result": "execution-packet 47 pass, 1 fail",
+          "kills_only_its_own_test": true
+        },
+        {
+          "id": "M2",
+          "mutation": "residue per-line subtraction neutralised",
+          "killed": ["G5"],
+          "result": "execution-packet 47 pass, 1 fail",
+          "kills_only_its_own_test": true
+        },
+        {
+          "id": "M3",
+          "mutation": "unconditional early capture restored (the finding-1 defect)",
+          "killed": ["G4"],
+          "result": "lane-start 43 pass, 1 fail",
+          "kills_only_its_own_test": true
+        }
+      ],
+      "restore_check": "scripts/ops/execution-packet.ts OK; scripts/ops/lane-start.ts OK",
+      "inversion": "G3 is the inversion for finding 1: resolving with only the pre-checkout root fails closed on the same fixture that resolves offline once the worktree exists."
+    },
+    "vacuity_disclosure": {
+      "control": "residue per-line subtraction (finding 3, residue half)",
+      "finding": "Initially proven by nothing: with the subtraction neutralised (M2) the whole suite still passed, because G1's enclosing section is itself a contract field and never reaches the residue path.",
+      "correction": "G5 added to exercise a recognized child under an UNRECOGNIZED ancestor. M2 now kills G5.",
+      "disclosed_because": "Presence and a green run proved nothing until the mutation was executed against the path the control names."
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "reason": "No runtime, database, migration, deployment, ingestion or delivery path is touched. Production containment in force throughout: no SGO call, no production mutation, no production DDL, no member delivery, no unpark, no secret access.",
+    "test_db": {
+      "command": "pnpm test:db",
+      "status": "PENDING_REQUIRED",
+      "waived": false,
+      "claimed_na": false,
+      "detail": "Mandatory for this T1 lane. It cannot be produced from this environment because the staging target is unreachable under containment. The CI-produced receipt from the authorized staging path is the only acceptable evidence.",
+      "consequence": "This lane is not complete until the receipt exists. No green static run substitutes for it."
+    }
+  },
+  "findings_addressed": [
+    {
+      "id": 1,
+      "severity": "P1",
+      "title": "Readmission timing",
+      "status": "FIXED",
+      "covered_by": ["G2", "G3", "G4"],
+      "mutation": "M3"
+    },
+    {
+      "id": 2,
+      "severity": "P1",
+      "title": "Mandatory T1 verification (pnpm test:db)",
+      "status": "PENDING_REQUIRED",
+      "covered_by": [],
+      "mutation": null
+    },
+    {
+      "id": 3,
+      "severity": "P2",
+      "title": "Nested recognized-section consumption",
+      "status": "FIXED",
+      "covered_by": ["G1", "G5"],
+      "mutation": "M1, M2"
+    },
+    {
+      "id": 4,
+      "severity": "P2",
+      "title": "Proof truth",
+      "status": "FIXED",
+      "covered_by": [],
+      "mutation": null,
+      "detail": "This bundle is regenerated from measurement at the verified source SHA. Every count, mutation summary and status here was measured at that SHA; no figure or unresolved-defect claim is carried over from the predecessor's bundle."
+    }
+  ],
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "tier_c_path_touched": "none",
+    "residual": "pnpm test:db has not run. Until the CI staging receipt exists, this lane's T1 database verification is incomplete."
+  },
+  "sign_off": {
+    "static_proof_status": "COMPLETE",
+    "runtime_proof_status": "NOT_APPLICABLE",
+    "t1_database_verification_status": "OUTSTANDING",
+    "ready_for_pm_review": false,
+    "pending": [
+      "pnpm test:db CI staging receipt (finding 2, P1)",
+      "independent exact-head review"
+    ]
+  }
+}
