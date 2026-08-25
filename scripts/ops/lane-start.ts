@@ -1213,9 +1213,21 @@ function main(): void {
         const worktreeManifestDir = path.join(worktreePath, 'docs', '06_status', 'lanes');
         fs.mkdirSync(worktreeManifestDir, { recursive: true });
         fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));
-        const worktreeSyncDir = path.join(worktreePath, '.ops', 'sync');
-        fs.mkdirSync(worktreeSyncDir, { recursive: true });
-        fs.copyFileSync(syncPath, path.join(worktreeSyncDir, `${issueId}.yml`));
+        // The readmitted branch may already carry its OWN authoritative work
+        // order. The resolution above ran before this worktree existed, so it
+        // could only see the control checkout; copying control's sync file over
+        // the branch's therefore replaced a divergent contract silently. Resolve
+        // again now that the branch is checked out: an identical contract is
+        // reused with no network, two different VALID contracts fail closed as
+        // lane_contract_conflict, and a branch carrying none inherits control's.
+        // Each destination is merged against its own sync record rather than
+        // overwritten wholesale.
+        const readmittedContract = resolveLaneTaskContract(
+          issueId,
+          worktreePath,
+          linearTaskToken(),
+        ).contract;
+        persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);
 
         const metadataPaths = [
           `docs/06_status/lanes/${issueId}.json`,

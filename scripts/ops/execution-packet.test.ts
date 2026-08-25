@@ -1095,3 +1095,143 @@ test('F4: an unmapped heading keeps its authored case, punctuation and flag pref
     'the rendered prompt must carry the authored heading',
   );
 });
+
+test('F6: a whitespace-only LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () => {
+  const issueId = 'UTV2-999905';
+  const { root, wt } = seedDispatchRoots();
+  const env = { LINEAR_API_TOKEN: '   \t\n ', LINEAR_API_KEY: 'real-key' };
+
+  // Precondition: the masking value is non-empty as a STRING but empty once
+  // trimmed. F2's exact-'' fixture cannot reach this branch, so without this
+  // assertion the test could silently degrade into a duplicate of F2.
+  assert.notEqual(env.LINEAR_API_TOKEN, '', 'fixture token must not be exactly empty');
+  assert.equal(env.LINEAR_API_TOKEN.trim(), '', 'fixture token must be whitespace-only');
+
+  let sawToken: string | null = null;
+  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
+    sawToken = opts?.input ?? '';
+    return {
+      status: 0,
+      error: undefined,
+      stderr: '',
+      stdout: JSON.stringify({
+        data: {
+          issue: {
+            identifier: issueId,
+            title: 'Fixture',
+            url: 'https://linear.app/unit-talk/issue/x',
+            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured',
+          },
+        },
+      }),
+    };
+  }) as unknown as typeof spawnSync;
+
+  const result = generateDispatchExecutionPacketResult(
+    dispatchManifest(issueId, wt),
+    env,
+    { root, runner },
+  );
+
+  assert.equal(
+    result.ok,
+    true,
+    `a whitespace-only token must fall through to LINEAR_API_KEY; got ${result.ok === false ? result.message : ''}`,
+  );
+  assert.match(
+    String(sawToken ?? ''),
+    /real-key/u,
+    'the configured key must actually reach the fetch, not merely avoid the refusal',
+  );
+});
+
+test('F7: a repeated recognized heading aggregates instead of yielding only the first', () => {
+  const description = [
+    '## Objective',
+    'ship it',
+    '',
+    '## Acceptance criteria',
+    '',
+    '## Acceptance criteria',
+    '- the real criterion',
+  ].join('\n');
+
+  // Precondition: the heading really is repeated and the FIRST occurrence is
+  // empty. If the fixture put content in the first occurrence the test would
+  // pass against the first-occurrence-only implementation and prove nothing.
+  const occurrences = description
+    .split('\n')
+    .filter((line) => line.trim() === '## Acceptance criteria');
+  assert.equal(occurrences.length, 2, 'fixture must repeat the recognized heading');
+  assert.equal(
+    description.indexOf('## Acceptance criteria\n\n'),
+    description.indexOf('## Acceptance criteria'),
+    'the FIRST occurrence must be empty for this test to be non-vacuous',
+  );
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999906',
+    title: 'Repeated recognized heading',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description,
+  });
+
+  assert.ok(
+    contract.acceptance_criteria.length > 0,
+    'the populated later occurrence must supply the criteria, not be discarded',
+  );
+  assert.ok(
+    contract.acceptance_criteria.some((item) => /the real criterion/u.test(item)),
+    `the later occurrence's content must survive; got ${JSON.stringify(contract.acceptance_criteria)}`,
+  );
+  // The aggregated occurrences are consumed, so the criteria must NOT also be
+  // re-emitted as unmapped residue.
+  assert.doesNotMatch(
+    contract.unmapped_sections.join('\n'),
+    /the real criterion/u,
+    'aggregated content must not be duplicated into residue',
+  );
+});
+
+test('F8: an unmapped heading is rendered as an exact line with no invented punctuation', () => {
+  const authored = 'Never run command --force!';
+  const description = [
+    '## Objective',
+    'ship it',
+    '',
+    '## Acceptance criteria',
+    '- done',
+    '',
+    `## ${authored}`,
+    'this prohibition is load-bearing',
+  ].join('\n');
+
+  // Precondition: the authored heading already ends in punctuation, so an
+  // appended ':' is detectable. A substring match (F4) cannot see it, which is
+  // exactly why this test compares the COMPLETE line.
+  assert.ok(authored.endsWith('!'), 'fixture heading must end in punctuation');
+
+  const contract = buildTaskContract({
+    identifier: 'UTV2-999907',
+    title: 'Exact residue heading',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description,
+  });
+
+  const entry = contract.unmapped_sections.find((section) =>
+    section.includes(authored),
+  );
+  assert.ok(entry, `residue must carry the authored heading; got ${JSON.stringify(contract.unmapped_sections)}`);
+
+  const firstLine = String(entry).split('\n')[0];
+  assert.strictEqual(
+    firstLine,
+    authored,
+    `the rendered heading line must equal the authored heading EXACTLY; got ${JSON.stringify(firstLine)}`,
+  );
+  assert.doesNotMatch(
+    String(entry),
+    /--force!:/u,
+    'no colon may be appended to an authored heading',
+  );
+});

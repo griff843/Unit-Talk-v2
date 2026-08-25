@@ -357,25 +357,40 @@ function sectionLines(
   matched?: number[],
 ): string[] {
   const wanted = headings.map(normalizeHeading);
+  // EVERY matching occurrence contributes, not just the first. A description
+  // that opens `## Acceptance criteria` with an empty lead-in and then repeats
+  // the heading with the real content used to yield the empty first occurrence
+  // and refuse the task as missing acceptance criteria -- a regression against
+  // the normalized-key merge this parser replaced.
+  const collected: string[] = [];
+  const consumedHere = new Set<number>();
+  let found = false;
   for (const occurrence of parsed.occurrences) {
+    // A nested occurrence already travels inside its ancestor's lines; taking
+    // it again would duplicate that text in the rendered section.
+    if (consumedHere.has(occurrence.id)) continue;
     if (
-      wanted.some(
+      !wanted.some(
         (value) =>
           occurrence.key === value ||
           (prefix && occurrence.key.startsWith(value)),
       )
     ) {
-      matched?.push(occurrence.id);
-      // Consuming a parent consumes what is nested beneath it. Those lines are
-      // already carried in the parent's own content, so leaving the children
-      // unconsumed would repeat the same text in "Additional issue content".
-      // Only THIS occurrence's descendants are consumed -- a later independent
-      // heading that normalizes alike is a different section and survives.
-      for (const child of occurrence.descendants) matched?.push(child);
-      return occurrence.lines;
+      continue;
     }
+    found = true;
+    matched?.push(occurrence.id);
+    consumedHere.add(occurrence.id);
+    // Consuming a parent consumes what is nested beneath it. Those lines are
+    // already carried in the parent's own content, so leaving the children
+    // unconsumed would repeat the same text in "Additional issue content".
+    for (const child of occurrence.descendants) {
+      matched?.push(child);
+      consumedHere.add(child);
+    }
+    collected.push(...occurrence.lines);
   }
-  return [];
+  return found ? collected : [];
 }
 
 /**
@@ -533,7 +548,11 @@ export function buildTaskContract(
         .join('\n')
         .replace(/^\s*\n+/u, '')
         .replace(/\n+\s*$/u, '');
-      return body ? `${entry.heading}:\n${body}` : `${entry.heading}:`;
+      // The heading is emitted EXACTLY as authored. Appending `:` rewrote
+      // `Never run command --force!` into `Never run command --force!:`,
+      // which contradicts the verbatim-residue guarantee and can alter a
+      // heading that is itself a command.
+      return body ? `${entry.heading}\n${body}` : entry.heading;
     }),
     source: {
       kind: 'linear-issue-snapshot',
@@ -772,7 +791,11 @@ export function firstNonEmpty(
   ...values: Array<string | undefined | null>
 ): string {
   for (const value of values) {
-    if (typeof value === 'string' && value !== '') return value;
+    // A whitespace-only value is not a usable token: `fetchLinearTaskSource`
+    // rejects it via `token.trim()`, so selecting it here would strand the
+    // caller instead of falling through to the next candidate. Emptiness is
+    // judged on the trimmed form; the ORIGINAL value is returned unchanged.
+    if (typeof value === 'string' && value.trim() !== '') return value;
   }
   return '';
 }

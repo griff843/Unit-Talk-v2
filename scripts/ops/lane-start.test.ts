@@ -20,6 +20,7 @@ import {
   findMissingReadmissionScopePaths,
   isPermittedControlRegistryPath,
   mirrorPreflightTokenToWorktree,
+  persistLaneTaskContract,
   validateReadmissionTokenRequest,
 } from './lane-start.js';
 
@@ -1043,4 +1044,104 @@ test('lane-start main() fresh-lane capture failure refuses before creating any l
   assert.equal(fs.existsSync(f.worktree), false, 'no worktree may be created when the capture fails');
   assert.deepEqual(fs.readdirSync(path.join(f.root, '.ops', 'leases')), [],
     'no lease may be reserved when the capture fails');
+});
+
+test('F5: readmission resolves the branch contract instead of overwriting it with the control copy', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'), 'utf8');
+  const blockStart = source.indexOf('if (readmitExistingBranch) {');
+  assert.notStrictEqual(blockStart, -1, 'expected a readmitExistingBranch block to exist');
+  const blockEnd = source.indexOf('\n    } else if', blockStart);
+  const block = blockEnd === -1 ? source.slice(blockStart) : source.slice(blockStart, blockEnd);
+
+  // Precondition: the block really is the readmission path and really does
+  // place metadata into the lane worktree. Without this the assertions below
+  // could pass against an empty or mis-located slice.
+  assert.match(block, /worktreeManifestDir/u, 'slice must be the readmission metadata path');
+
+  // The defect: the control checkout's sync file was copied wholesale over the
+  // branch's, discarding a divergent authoritative contract unread.
+  assert.doesNotMatch(
+    block,
+    /copyFileSync\(\s*syncPath/u,
+    'readmission must not copy the control sync file over the branch copy',
+  );
+  // The fix: resolve across BOTH roots once the branch worktree exists, then
+  // persist per-destination so each is merged against its own record.
+  assert.match(
+    block,
+    /resolveLaneTaskContract\(\s*issueId,\s*worktreePath,/u,
+    'readmission must resolve the contract against the checked-out branch worktree',
+  );
+  assert.match(
+    block,
+    /persistLaneTaskContract\(\s*issueId,\s*readmittedContract,\s*\[ROOT,\s*worktreePath\]\s*\)/u,
+    'the resolved contract must be persisted to both roots, not copied',
+  );
+});
+
+test('F5b: persisting a contract merges against each destination record rather than overwriting it', () => {
+  const issueId = 'UTV2-999908';
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-f5b-'));
+  const rootA = path.join(base, 'control');
+  const rootB = path.join(base, 'worktree');
+  for (const dir of [rootA, rootB]) {
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+  }
+
+  const contract = buildTaskContract({
+    identifier: issueId,
+    title: 'Merge not clobber',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description: '## Objective\nmerge\n\n## Acceptance criteria\n- merged',
+  });
+
+  // rootA already holds a record carrying a distinguishing proof path; rootB
+  // holds none. If persistence overwrote wholesale instead of merging against
+  // each destination, rootA's proof entry would disappear.
+  const existingA = [
+    'version: 1',
+    'approval:',
+    '  allow_multiple_issues: false',
+    '  skip_sync_required: false',
+    'entities:',
+    '  issues:',
+    `    - ${issueId}`,
+    '  findings: []',
+    '  controls: []',
+    '  proofs:',
+    `    - docs/06_status/proof/${issueId}/control-only.md`,
+    '',
+  ].join('\n');
+  const syncA = path.join(rootA, '.ops', 'sync', `${issueId}.yml`);
+  const syncB = path.join(rootB, '.ops', 'sync', `${issueId}.yml`);
+  fs.writeFileSync(syncA, existingA, 'utf8');
+
+  // Preconditions: rootA's marker is present and rootB has no record at all.
+  assert.match(existingA, /control-only\.md/u, 'fixture must carry a distinguishing entry');
+  assert.equal(fs.existsSync(syncB), false, 'rootB must start with no record');
+
+  persistLaneTaskContract(issueId, contract, [rootA, rootB]);
+
+  const afterA = fs.readFileSync(syncA, 'utf8');
+  const afterB = fs.readFileSync(syncB, 'utf8');
+  assert.equal(
+    readTaskContract(issueId, rootA).contract_hash,
+    contract.contract_hash,
+    'the contract must be written into the control record',
+  );
+  assert.equal(
+    readTaskContract(issueId, rootB).contract_hash,
+    contract.contract_hash,
+    'the contract must be written into the worktree record',
+  );
+  assert.match(
+    afterA,
+    /control-only\.md/u,
+    'the pre-existing entry must survive: persistence merges, it does not clobber',
+  );
+  assert.doesNotMatch(
+    afterB,
+    /control-only\.md/u,
+    "the other destination's record must not be copied across",
+  );
 });
