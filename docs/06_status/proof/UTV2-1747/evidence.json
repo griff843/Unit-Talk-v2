@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-24T23:55:00Z",
   "sha_binding": {
-    "verified_source_sha": "PENDING",
-    "verified_source_note": "Bounce-1 correction commit; the tree at this SHA contains the contract lifecycle, the three review-finding fixes, and all tests.",
+    "verified_source_sha": "87372863beb8a974e3ef9424ab1ecebf2ad28f86",
+    "verified_source_note": "Bounce-1 proof-correction commit; the tree at this SHA contains the lifecycle, the three review-finding fixes, the widened compile smoke, and the corrected proof.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
