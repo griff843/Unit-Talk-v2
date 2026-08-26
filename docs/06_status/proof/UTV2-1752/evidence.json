@@ -8,7 +8,7 @@
   "status": "changes_in_progress",
   "generated_at": "2026-08-25T18:40:00Z",
   "sha_binding": {
-    "verified_source_sha": "623207503529136092fb53863b939b65b57d14f5",
+    "verified_source_sha": "30cf24621af0ae030fcecac1b5d90ad25d20f4ef",
     "verified_source_note": "This lane's LATEST implementation commit, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. It carries every source control this bundle describes (through G26), so the mutation baselines recorded under mutation_testing are the hashes at this SHA. Two earlier defects in this field are recorded rather than hidden: an early revision claimed the figures were measured AT the anchor (false), and a later one left the anchor five commits stale at 3e7abdbb, so a reviewer checking it out saw none of the described code.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,8 +16,8 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "sha_type": "substantive_commit_sha",
-    "bound_at": "2026-08-25T14:35:00Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-26T16:02:25.781Z"
   },
   "provenance": {
     "preserved_head": "d54abcbda8c5a218c0ac4072b98a13175426199c",
@@ -148,7 +148,7 @@
         "G20",
         "G21"
       ],
-      "mutation": "NO mutation in the battery kills G19, G20, G21 \u2014 this control is UNPROVEN at this head",
+      "mutation": "NO mutation in the battery kills G19, G20, G21 — this control is UNPROVEN at this head",
       "attribution_correction": "This entry read covered_by G2/G3/G4, mutation M3 through four review rounds. G2/G3/G4 are unit-level and M3 is the FENCE_RE mutation, unrelated to readmission. A third review proved the readmission path had no executing control at all; a fourth found this file still asserting the disproved attribution while diff-summary.md asserted the correct one.",
       "scope_correction": "Finding 1 is NARROWER than earlier revisions of this bundle claimed. Its CONTRACT half is closed by the conflict gate. Its RECORD half was still reintroducible at the round-4 head (mutation R2b: a post-persist copy of control sync file over the branch destroys entities accumulated on the branch, and metadataPaths commits the loss). G20 now pins it."
     },
@@ -170,7 +170,7 @@
         "G1",
         "G5"
       ],
-      "mutation": "NO mutation in the battery kills G1, G5 \u2014 this control is UNPROVEN at this head"
+      "mutation": "NO mutation in the battery kills G1, G5 — this control is UNPROVEN at this head"
     },
     {
       "id": 4,

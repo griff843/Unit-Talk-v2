@@ -1,6 +1,6 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: 623207503529136092fb53863b939b65b57d14f5
+MERGE_SHA: 30cf24621af0ae030fcecac1b5d90ad25d20f4ef
 
 > `MERGE_SHA` names the implementation commit `62320750`, which is an ancestor
 > of the PR head. This is the form `executor-result-validator.yml` requires and

@@ -7,9 +7,21 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1752-packet-finalization",
   "branch": "claude/utv2-1752-packet-finalization",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "30cf24621af0ae030fcecac1b5d90ad25d20f4ef",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1447",
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1752/diff-summary.md",
+    "docs/06_status/proof/UTV2-1752/evidence.json",
+    "docs/06_status/proof/UTV2-1752/verification.md",
+    "scripts/ops/claude-exec.test.ts",
+    "scripts/ops/claude-exec.ts",
+    "scripts/ops/codex-exec.test.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/execution-packet.test.ts",
+    "scripts/ops/execution-packet.ts",
+    "scripts/ops/lane-start.test.ts",
+    "scripts/ops/lane-start.ts"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1752/diff-summary.md",
     "docs/06_status/proof/UTV2-1752/evidence.json",
@@ -26,14 +38,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1752/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-25T14:00:23.845Z",
-  "heartbeat_at": "2026-08-25T14:19:01.831Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-26T16:02:31.780Z",
+  "closed_at": "2026-08-26T16:02:31.780Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1752-packet-finalization.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-26T16:02:27.429Z",
+      "verdict": "pass",
+      "merge_sha": "30cf24621af0ae030fcecac1b5d90ad25d20f4ef",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
