@@ -1,0 +1,839 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1752",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Executor packet finalization: correct readmission timing, T1 proof, and nested-section consumption",
+  "status": "changes_in_progress",
+  "generated_at": "2026-08-25T18:40:00Z",
+  "sha_binding": {
+    "verified_source_sha": "623207503529136092fb53863b939b65b57d14f5",
+    "verified_source_note": "This lane's LATEST implementation commit, and an ANCESTOR of the PR head. It is the anchor only because a file cannot contain its own SHA. It carries every source control this bundle describes (through G26), so the mutation baselines recorded under mutation_testing are the hashes at this SHA. Two earlier defects in this field are recorded rather than hidden: an early revision claimed the figures were measured AT the anchor (false), and a later one left the anchor five commits stale at 3e7abdbb, so a reviewer checking it out saw none of the described code.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "substantive_commit_sha",
+    "bound_at": "2026-08-25T14:35:00Z"
+  },
+  "provenance": {
+    "preserved_head": "d54abcbda8c5a218c0ac4072b98a13175426199c",
+    "reviewed_head": "bc53be68447bf09d056ce59dd2724bd1e2aaee05",
+    "equivalence": "Lane content at the preserved head is byte-identical to the reviewed head; the two differ only by merge commits taken from main. Verified by checksum before porting.",
+    "base": "10ad4ddea1924da6458249e41f9277532d52dfb9",
+    "ported_byte_identical": [
+      "scripts/ops/claude-exec.ts",
+      "scripts/ops/claude-exec.test.ts",
+      "scripts/ops/codex-exec.ts",
+      "scripts/ops/codex-exec.test.ts"
+    ],
+    "ported_then_changed_by_this_lane": {
+      "scripts/ops/execution-packet.ts": "982c4a5e52f4e915",
+      "scripts/ops/execution-packet.test.ts": "c0295141f74bcf74",
+      "scripts/ops/lane-start.ts": "209909603ff131ba",
+      "scripts/ops/lane-start.test.ts": "a1f48a1ccc9930a3"
+    },
+    "already_present_on_main": [],
+    "sha256_note": "Full sha256 of each file AS IT IS AT THIS HEAD. The previous key held prefixes measured at the ported head d54abcbd for the four entrypoints and at an earlier head for the four changed files, while being labelled \"at_head\" -- a third independent review flagged the mislabel. The four ported entrypoints are byte-identical to d54abcbd; the four changed files are not, and never were.",
+    "sha256_at_head": {
+      "scripts/ops/execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
+      "scripts/ops/lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560"
+    }
+  },
+  "scope": {
+    "substantive_diff_stat": "scripts/ops: 8 files, 6029 insertions(+), 41 deletions(-) (git diff --numstat origin/main...HEAD -- scripts/ops/, generated at the head this bundle describes; the whole-diff total is deliberately not quoted because it counts this bundle)",
+    "diff_stat_note": "The whole-diff insertion total is deliberately not quoted: it counts this proof bundle, so recording it would change it."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "verify_full": "PARTIAL - static stages PASS; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. For this lane that is a gap, not an exemption - see runtime_proof.test_db.",
+    "verify_static_suite": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "tests": 5108,
+      "pass": 5108,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0
+    },
+    "execution_packet_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/execution-packet.test.ts",
+      "exit_code": 0,
+      "tests": 75,
+      "pass": 75,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0
+    },
+    "lane_start_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-start.test.ts",
+      "exit_code": 0,
+      "tests": 63,
+      "pass": 63,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "via": "stage of pnpm verify:static (exit 0)",
+      "caveat": "DOES NOT COVER THIS DIFF. tsconfig.json has files: [] and no project reference covering scripts/, so none of this lane's eight changed source files are type-checked. This is why a .heading access on a string shipped green. tsconfig.json is not in this lane file_scope_lock; reported, not fixed."
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "rules matched: (none) - no R-level artifacts required for this diff"
+    },
+    "vacuity_disclosure": {
+      "control": "residue per-line subtraction (finding 3, residue half)",
+      "finding": "Initially proven by nothing: with the subtraction neutralised (M2) the whole suite still passed, because G1's enclosing section is itself a contract field and never reaches the residue path.",
+      "correction": "G5 added to exercise a recognized child under an UNRECOGNIZED ancestor. M2 now kills G5.",
+      "disclosed_because": "Presence and a green run proved nothing until the mutation was executed against the path the control names."
+    },
+    "exec_entrypoint_suites": {
+      "command": "pnpm exec tsx --test scripts/ops/claude-exec.test.ts scripts/ops/codex-exec.test.ts",
+      "exit_code": 0,
+      "tests": 46,
+      "pass": 46,
+      "fail": 0,
+      "skipped": 0,
+      "not_ok_lines": 0
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "reason": "No runtime, database, migration, deployment, ingestion or delivery path is touched. Production containment in force throughout: no SGO call, no production mutation, no production DDL, no member delivery, no unpark, no secret access.",
+    "test_db": {
+      "status": "PRODUCED_AND_VERIFIED_BY_CI",
+      "waived": false,
+      "claimed_na": false,
+      "why_not_local": "pnpm test:db cannot run locally: ci:assert-staging refuses with host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx.",
+      "producer": {
+        "workflow": "CI",
+        "job": "Writable DB proof (staging only)",
+        "environment": "staging-ci",
+        "target_project_ref": "xskgrzbteyqdufktjrjx",
+        "credentials": "CI_SUPABASE_* only; never SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_DB_URL"
+      },
+      "verifier": {
+        "enforced_inside": "verify (required status context)",
+        "script": "scripts/ci/verify-db-proof-receipt.ts",
+        "args": "--command 'pnpm test:db' --expect-workflow 'CI' --expect-job staging-db-proof",
+        "artifact_scope": "utv2-1630-db-proof-receipt-${run_id}-${run_attempt}, if-no-files-found: error",
+        "non_fabricable": "run-and-attempt-scoped artifact means a prior run's receipt cannot be substituted; a deleted upload fails the required context rather than skipping it"
+      },
+      "first_observation": {
+        "head_sha": "3973d90033657d09ea9198614acd15cb6df2abe9",
+        "run_id": 32859010194,
+        "artifact": "utv2-1630-db-proof-receipt-32859010194-1",
+        "receipt_sha256": "e2e0109f5dabcd8e8cb18f26e04880fcb416f66c67ef445151b15765f41473d3",
+        "verify_conclusion": "SUCCESS",
+        "tap_fail_blocks_in_run": "115 TAP blocks, every one '# fail 0'"
+      },
+      "binding_note": "The receipt is re-produced and re-verified by CI on every head, so this record names the mechanism and the first observation rather than pasting a result that any later push would invalidate. The receipt that matters at merge time is the one verify validates on the merge SHA."
+    }
+  },
+  "findings_addressed": [
+    {
+      "id": 1,
+      "severity": "P1",
+      "title": "Readmission timing",
+      "status": "FIXED",
+      "covered_by": [
+        "G19",
+        "G20",
+        "G21"
+      ],
+      "mutation": "NO mutation in the battery kills G19, G20, G21 \u2014 this control is UNPROVEN at this head",
+      "attribution_correction": "This entry read covered_by G2/G3/G4, mutation M3 through four review rounds. G2/G3/G4 are unit-level and M3 is the FENCE_RE mutation, unrelated to readmission. A third review proved the readmission path had no executing control at all; a fourth found this file still asserting the disproved attribution while diff-summary.md asserted the correct one.",
+      "scope_correction": "Finding 1 is NARROWER than earlier revisions of this bundle claimed. Its CONTRACT half is closed by the conflict gate. Its RECORD half was still reintroducible at the round-4 head (mutation R2b: a post-persist copy of control sync file over the branch destroys entities accumulated on the branch, and metadataPaths commits the loss). G20 now pins it."
+    },
+    {
+      "id": 2,
+      "severity": "P1",
+      "title": "Mandatory T1 verification (pnpm test:db)",
+      "status": "CLOSED",
+      "covered_by": [],
+      "mutation": null,
+      "detail": "Mandatory T1 database verification is produced by CI job \"Writable DB proof (staging only)\" against staging xskgrzbteyqdufktjrjx and validated inside the required verify context by scripts/ci/verify-db-proof-receipt.ts. Not waived, not N/A, not author-asserted."
+    },
+    {
+      "id": 3,
+      "severity": "P2",
+      "title": "Nested recognized-section consumption",
+      "status": "FIXED",
+      "covered_by": [
+        "G1",
+        "G5"
+      ],
+      "mutation": "NO mutation in the battery kills G1, G5 \u2014 this control is UNPROVEN at this head"
+    },
+    {
+      "id": 4,
+      "severity": "P2",
+      "title": "Proof truth",
+      "status": "ADDRESSED STRUCTURALLY (recurred in rounds 2 and 3)",
+      "covered_by": [],
+      "mutation": null,
+      "detail": "Rounds 2 and 3 each found this bundle carrying figures from a previous head. Re-synchronising by hand was attempted twice and failed twice. The measured figures are now single-sourced in verification.md, this file's mutation_testing and diff-stat blocks are GENERATED from the battery runner's output and from git, and diff-summary.md quotes no figures at all. The SHA anchor is an ancestor commit used only because a file cannot contain its own SHA; it is not where any figure was measured, and no text in this bundle now claims it is."
+    },
+    {
+      "id": "review-round-2",
+      "source": "independent exact-head review of eec27f18",
+      "verdict_received": "CHANGES_REQUIRED",
+      "p1": [
+        "Ordering half of finding 1 had no live control (G2 vacuous); L2/L3/M11 all passed green."
+      ],
+      "p2": [
+        "Named harm survived at TAB indentation, undisclosed, after the bundle declared the class closed.",
+        "sha_binding claimed measurement at an anchor whose tree predates the tests being reported.",
+        "diff-summary.md was never regenerated: reported 54/54 and described the removed five-key list as current.",
+        "F5 was a new, mis-anchored source grep testing the resume path."
+      ],
+      "p3": [
+        "Third heading mirror at the empty-acceptance guard.",
+        "G8 \"any inline literal\" claim was false.",
+        "tsconfig.json does not cover scripts/ (out of scope, reported).",
+        "Blank-line-in-indented-run rule untested."
+      ],
+      "disposition": "All addressed except tsconfig.json, which is outside file_scope_lock."
+    }
+  ],
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "tier_c_path_touched": "none",
+    "residual": "What remains outstanding is authorization, not evidence: Merge Gate is BLOCKED pending a pm-verdict/v1 APPROVED comment from CODEOWNERS and the t1-approved label, plus an independent exact-head review. The staging test:db receipt is produced and validated by CI inside the required verify context."
+  },
+  "sign_off": {
+    "static_proof_status": "COMPLETE",
+    "runtime_proof_status": "PRODUCED_BY_CI (staging test:db receipt verified inside required verify)",
+    "t1_database_verification_status": "SATISFIED_BY_CI",
+    "ready_for_pm_review": false,
+    "pending": [
+      "exact-head CI green at the new head",
+      "fresh EXECUTOR_RESULT at the new head, carrying the full executor-result/v1 header block",
+      "a SEVENTH independent exact-head review",
+      "pm-verdict/v1 APPROVED + t1-approved label (PM gate)"
+    ],
+    "blocking_on": "Not ready for merge. The EIGHTH independent exact-head review returned CHANGES_REQUIRED with a P1: it re-executed 45 of the 47 then-published mutations on isolated repository copies, found NO actual survivor, but proved the published RECORD was false for 30 of them -- entries 18 through 47 each carried a kill set inflated by a constant block of roughly 33 unrelated failing tests. The cause was the /tmp tmpfs exhausting its inode table mid-run (25,117 leaked mkdtemp fixture directories, pushed over the limit by that run's own 94 suite executions), so from entry 18 onward fixture creation failed with ENOSPC and a block of tests was red regardless of the mutation. In that state every mutation scores 'detected' automatically, which is exactly the direction that would conceal a survivor. The record was impossible on its face as well: lane-start.ts mutations claimed to kill execution-packet.test.ts tests, a suite that cannot reach lane-start.ts at all. The same review found the battery was not the union it claimed to be -- the three mutations proving G42/G43/G44 had never been persisted to a definition list. This cycle is EVIDENCE-ONLY under PM directive 5420127581: no source or test file was changed, and the executable/test tree is asserted byte-identical to the reviewed head. The battery was re-run by a runner that fails closed on any infrastructure error rather than scoring it as a kill, with a clean baseline asserted before the run, after every tenth mutation and at the end, an inode floor checked before every mutation, an exact expected test total enforced per suite run, and a structural rejection of any killer reported by a suite that cannot reach the mutated file. Measured at this head: 50 mutations, 50 detected, 0 survivors. Eight of nine rounds have found a defect the previous round installed or missed, so a clean ninth review is not treated by this bundle as a formality."
+  },
+  "review_threads": [
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhR",
+      "severity": "P1",
+      "subject": "Obtain the mandatory T1 database receipt",
+      "status": "OUTDATED_ALREADY_FIXED",
+      "detail": "Raised against 3959392029, where evidence.json still read PENDING_REQUIRED. The receipt is produced by CI job 'Writable DB proof (staging only)' and validated inside the required verify context."
+    },
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhZ",
+      "severity": "P2",
+      "subject": "Reserve all recognized contract headings",
+      "status": "FIXED",
+      "detail": "The reserved set omitted guardrails, all four non-goals spellings, and required evidence/evidence, so a nested non-goal was both left in its acceptance ancestor and extracted as a non-goal. Fixed structurally: extraction and reservation now read one table (CONTRACT_FIELD_SPECS) and every extraction site goes through fieldSpec(). A flat list could not express non-goals' prefix matching in any case.",
+      "regression_tests": [
+        "G6",
+        "G7",
+        "G8"
+      ],
+      "mutation": "M4"
+    },
+    {
+      "thread_id": "PRRT_kwDORr3vD86cHGhc",
+      "severity": "P2",
+      "subject": "Honor fenced code while parsing headings",
+      "status": "FIXED",
+      "detail": "parseSections now tracks fenced blocks and requires at most three leading spaces. A second half not named in the report was found by assertion: sectionItems flattened a fenced block into one whitespace-collapsed line, putting a shell comment on the same line as the command it warns about. sectionItems is now fence-aware.",
+      "regression_tests": [
+        "G9",
+        "G10",
+        "G11"
+      ],
+      "mutation": "M5, M6, M7"
+    }
+  ],
+  "mutation_testing": {
+    "method": "Each mutation applied to a sha256-verified baseline, both suites run, baseline restored BY FILE COPY (never git checkout) and re-verified by sha256 before the next mutation. Executed by a scripted runner; this block is its JSON output, not a transcription.",
+    "runner": "The UNION of every mutation run across every round of this lane (50), re-executed in full at this head. Executed by a scripted runner over the mutation set published in full in the verification.md appendix (sha256 94dae395f2067cd857dc1030a5fbc1733efee4c604d38104db7793c466d306a9); that appendix is self-contained and re-runs this entire battery on a clean checkout. The seventh review found this field naming three different runners across the bundle; it is now one generated string.",
+    "baselines": {
+      "execution-packet.ts": "982c4a5e52f4e9152a5773d55e094005487bef63fa87b30de8ff611f43d67f86",
+      "lane-start.ts": "209909603ff131ba6ac749c81f960ba0d0e19a2a5f03c8fbdf91161c1778d560"
+    },
+    "restore_verified": "sha256 equality after every mutation",
+    "mutations": 50,
+    "detected": 50,
+    "undetected": [],
+    "anchor_no_longer_present": [],
+    "battery": [
+      {
+        "id": "M1",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G1",
+        "tests_killed": [
+          "G1: a recognized section nested under another recognized section lands in exactly one field",
+          "G6: a non-goal nested under acceptance criteria is NOT also an acceptance criterion",
+          "G7: guardrails and required evidence nested under a contract field are not swallowed by it",
+          "G8: EVERY extraction heading is reserved -- proven behaviourally, per heading"
+        ]
+      },
+      {
+        "id": "M2",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G5",
+        "tests_killed": [
+          "G5: a claimed child is subtracted from an UNRECOGNIZED ancestor that survives as residue"
+        ]
+      },
+      {
+        "id": "M3",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G9",
+        "tests_killed": [
+          "B1: an empty field never claims \"none declared\" while content went unmapped",
+          "B1: sections outside the whitelist survive into the contract",
+          "B1: the rendered prompt contains the unmapped content verbatim",
+          "F3: a repeated normalized heading keeps both occurrences as distinct sections",
+          "F4: an unmapped heading keeps its authored case, punctuation and flag prefix",
+          "F8: an unmapped heading is rendered as an exact line with no invented punctuation",
+          "G11: a fenced block inside a contract field survives as ONE item with newlines",
+          "G14: prefix heading matching stops at a word boundary",
+          "G18: the empty-acceptance fallback guard reads the SHARED table, for every alias",
+          "G1: a recognized section nested under another recognized section lands in exactly one field",
+          "G22: a nested list item indented to four columns is held verbatim -- tabs and spaces alike",
+          "G31: a backtick fence whose info string contains a backtick does not open a fence",
+          "G35: an UNRECOGNIZED nested section renders once, inside its ancestor -- not twice",
+          "G39: a shorter fence does not close a longer one",
+          "G40: a fence marker indented four columns is code, not a fence",
+          "G42: a fence is closed only by its OWN character, not by the other fence char",
+          "G43: a fence indented one to three columns is still a fence",
+          "G44: tilde fences are honoured, not only backtick fences",
+          "G45/G46: readTaskContract refuses a wrong schema_version and an empty criteria list, each with ITS OWN refusal",
+          "G5: a claimed child is subtracted from an UNRECOGNIZED ancestor that survives as residue",
+          "G6: a non-goal nested under acceptance criteria is NOT also an acceptance criterion",
+          "G7: guardrails and required evidence nested under a contract field are not swallowed by it",
+          "G8: EVERY extraction heading is reserved -- proven behaviourally, per heading",
+          "G9: a \"\\#\" line inside a fenced code block is not parsed as a heading",
+          "a present but empty acceptance section fails closed instead of using the legacy fallback",
+          "a section heading with an empty body is still carried as residue",
+          "task contract captures and renders every required work-order field",
+          "the standalone packet CLI produces a packet for a newly admitted pre-contract lane",
+          "unclassified content keeps its line and formatting semantics"
+        ]
+      },
+      {
+        "id": "M4",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G10",
+        "tests_killed": [
+          "G10: an indented code line beginning with \"\\#\" is not parsed as a heading",
+          "G13: an indented code block survives as ONE item with its newlines",
+          "G17: a blank line does not end an indented block"
+        ]
+      },
+      {
+        "id": "M5",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G12",
+        "tests_killed": [
+          "G12: sectionLines fails closed on an extraction heading that is not reserved"
+        ]
+      },
+      {
+        "id": "M6",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G14",
+        "tests_killed": [
+          "G14: prefix heading matching stops at a word boundary"
+        ]
+      },
+      {
+        "id": "M7",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G16",
+        "tests_killed": [
+          "G16: TAB-indented code is preserved, not collapsed",
+          "G22: a nested list item indented to four columns is held verbatim -- tabs and spaces alike"
+        ]
+      },
+      {
+        "id": "M8",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G17",
+        "tests_killed": [
+          "G17: a blank line does not end an indented block"
+        ]
+      },
+      {
+        "id": "M9",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G2b/G21",
+        "tests_killed": [
+          "G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy",
+          "G2b: with BOTH roots carrying the SAME contract, the BRANCH root is the source"
+        ]
+      },
+      {
+        "id": "M10",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G15/G21",
+        "tests_killed": [
+          "G15: lane contract roots put the lane worktree AHEAD of the control checkout",
+          "G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy"
+        ]
+      },
+      {
+        "id": "M11",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G4",
+        "tests_killed": [
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout",
+          "G4: the readmission path performs no contract capture before the worktree exists"
+        ]
+      },
+      {
+        "id": "M12",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G19/G20/G21",
+        "tests_killed": [
+          "F5: readmission resolves the branch contract instead of overwriting it with the control copy",
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy",
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout",
+          "G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy"
+        ]
+      },
+      {
+        "id": "M13",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G19/G20",
+        "tests_killed": [
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy",
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout",
+          "G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout",
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "M14",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G2/G3 (offline reuse)",
+        "tests_killed": [
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout",
+          "G21: when both roots agree, readmission runs on -- and reports -- the lane worktree copy",
+          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree",
+          "G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout",
+          "G2: a readmitted branch reuses its OWN contract offline, after checkout",
+          "G2b: with BOTH roots carrying the SAME contract, the BRANCH root is the source",
+          "G3 (inversion): resolving BEFORE checkout cannot serve that branch and fails closed",
+          "G36: the readmission metadata commit STAGES the sync record, not only the manifest",
+          "G41: readmission REFUSES to commit when the worktree index carries a non-metadata path",
+          "G47: readmission refuses when staging the metadata fails",
+          "G48: readmission refuses when the staged-path probe itself fails, even with a non-empty result",
+          "G49: readmission refuses when the metadata commit would stage nothing at all",
+          "G50: readmission refuses when the metadata commit fails",
+          "lane-start main() completes an offline resume without corrupting the lane contract",
+          "lane-start main() persists one contract to both roots, merging each against its own record"
+        ]
+      },
+      {
+        "id": "M15",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G2c/G19",
+        "tests_killed": [
+          "F1: divergent valid contracts in control and lane roots refuse instead of overwriting",
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy",
+          "G2c: two DIFFERENT valid contracts fail closed rather than picking one",
+          "lane-start main() refuses two different valid contracts instead of choosing one"
+        ]
+      },
+      {
+        "id": "M16",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control F5b (per-destination merge)",
+        "tests_killed": [
+          "F5b: persisting a contract merges against each destination record rather than overwriting it",
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout",
+          "lane-start main() persists one contract to both roots, merging each against its own record"
+        ]
+      },
+      {
+        "id": "R2b",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "clobber branch sync record via writeFileSync after persist",
+        "tests_killed": [
+          "G20: readmission reuses a branch-carried work order offline and propagates it to the control checkout"
+        ]
+      },
+      {
+        "id": "R9",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "contract_source hardcoded lane-worktree",
+        "tests_killed": [
+          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
+          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue",
+          "G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout",
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "R10",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "contract_fetched hardcoded false",
+        "tests_killed": [
+          "G23: a capture reports linear-capture and fetched:true -- the two other values of contract_source",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue",
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "R13",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "fresh persist writes to no root",
+        "tests_killed": [
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "R14",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "resume persist drops the worktree root",
+        "tests_killed": [
+          "G25: a worktree carrying NO contract inherits the control copy, and the persist reaches the worktree"
+        ]
+      },
+      {
+        "id": "R16",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "refusal hash labels swapped",
+        "tests_killed": [
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy"
+        ]
+      },
+      {
+        "id": "R18",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "linearTaskToken always empty",
+        "tests_killed": [
+          "G24: linearTaskToken reads a configured token, and LINEAR_API_TOKEN wins",
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue",
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "R21",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "entities.issues default emptied",
+        "tests_killed": [
+          "G26: a FRESH lane CAPTURES its work order and writes a sync record naming its own issue"
+        ]
+      },
+      {
+        "id": "P1",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "readmission emit hardcodes contract_source",
+        "tests_killed": [
+          "G27: a readmitted branch carrying NO work order inherits control -- and REPORTS control-checkout",
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "P2",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "readmission emit hardcodes contract_fetched",
+        "tests_killed": [
+          "G28: readmission with NO work order at either root captures, and reports linear-capture"
+        ]
+      },
+      {
+        "id": "P6",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "conflict refusal drops generic contracts payload",
+        "tests_killed": [
+          "G19: readmission refuses when control and the branch carry different work orders, and never overwrites the branch copy"
+        ]
+      },
+      {
+        "id": "Q2",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "readmission metadata commit drops the sync record",
+        "tests_killed": [
+          "G36: the readmission metadata commit STAGES the sync record, not only the manifest"
+        ]
+      },
+      {
+        "id": "P11",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "default sync approval flags default true",
+        "tests_killed": [
+          "G37: a fresh sync record declares schema version 1 and both approval flags false"
+        ]
+      },
+      {
+        "id": "P12",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "default sync record omits version",
+        "tests_killed": [
+          "G37: a fresh sync record declares schema version 1 and both approval flags false"
+        ]
+      },
+      {
+        "id": "N5",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "buildSyncYmlWithTaskContract skips validation",
+        "tests_killed": [
+          "G33: an invalid contract is REFUSED before it can be persisted to a sync record"
+        ]
+      },
+      {
+        "id": "N6",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "unterminated fence dropped",
+        "tests_killed": [
+          "G29: an UNTERMINATED fenced block travels verbatim instead of being dropped"
+        ]
+      },
+      {
+        "id": "N7",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "fenceClosedBy ignores the info-string rule",
+        "tests_killed": [
+          "G30: a fence-looking line CARRYING AN INFO STRING does not close an open fence"
+        ]
+      },
+      {
+        "id": "N8",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "fenceOpenedBy drops the backtick-in-info guard",
+        "tests_killed": [
+          "G31: a backtick fence whose info string contains a backtick does not open a fence"
+        ]
+      },
+      {
+        "id": "N9",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "curlConfigValue newline guard removed",
+        "tests_killed": [
+          "G32: a token containing a newline is REFUSED, not written into the curl config"
+        ]
+      },
+      {
+        "id": "P10",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "malformed sync record guard removed",
+        "tests_killed": [
+          "G34: a sync record that parses to a non-object FAILS CLOSED instead of being corrupted"
+        ]
+      },
+      {
+        "id": "Q6",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "unmappedSections ancestor suppression removed",
+        "tests_killed": [
+          "G35: an UNRECOGNIZED nested section renders once, inside its ancestor -- not twice"
+        ]
+      },
+      {
+        "id": "U1",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "curlConfigValue escaping removed (quote/backslash reach the config raw)",
+        "tests_killed": [
+          "G38: a token containing a quote or backslash is ESCAPED into the curl config, not passed raw"
+        ]
+      },
+      {
+        "id": "U2",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "fenceClosedBy minimum-length rule removed (a shorter fence closes a longer one)",
+        "tests_killed": [
+          "G39: a shorter fence does not close a longer one"
+        ]
+      },
+      {
+        "id": "U4",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "FENCE_RE indentation bound widened (4-space-indented code opens a fence)",
+        "tests_killed": [
+          "G40: a fence marker indented four columns is code, not a fence"
+        ]
+      },
+      {
+        "id": "U3",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "readmission non-metadata staged-path guard neutralised",
+        "tests_killed": [
+          "G41: readmission REFUSES to commit when the worktree index carries a non-metadata path"
+        ]
+      },
+      {
+        "id": "M-G45",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G45",
+        "tests_killed": [
+          "G45/G46: readTaskContract refuses a wrong schema_version and an empty criteria list, each with ITS OWN refusal"
+        ]
+      },
+      {
+        "id": "M-G46",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "intended control G46",
+        "tests_killed": [
+          "G45/G46: readTaskContract refuses a wrong schema_version and an empty criteria list, each with ITS OWN refusal"
+        ]
+      },
+      {
+        "id": "M-G47",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G47",
+        "tests_killed": [
+          "G47: readmission refuses when staging the metadata fails"
+        ]
+      },
+      {
+        "id": "M-G48",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G48",
+        "tests_killed": [
+          "G48: readmission refuses when the staged-path probe itself fails, even with a non-empty result"
+        ]
+      },
+      {
+        "id": "M-G49",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G49",
+        "tests_killed": [
+          "G49: readmission refuses when the metadata commit would stage nothing at all"
+        ]
+      },
+      {
+        "id": "M-G50",
+        "file": "scripts/ops/lane-start.ts",
+        "description": "intended control G50",
+        "tests_killed": [
+          "G50: readmission refuses when the metadata commit fails"
+        ]
+      },
+      {
+        "id": "V1",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "fenceClosedBy fence-CHARACTER rule (intended control G42)",
+        "tests_killed": [
+          "G42: a fence is closed only by its OWN character, not by the other fence char"
+        ]
+      },
+      {
+        "id": "V2",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "FENCE_RE three-space indentation bound, NARROWED (intended control G43)",
+        "tests_killed": [
+          "G43: a fence indented one to three columns is still a fence"
+        ]
+      },
+      {
+        "id": "V3",
+        "file": "scripts/ops/execution-packet.ts",
+        "description": "FENCE_RE tilde-fence branch removed (intended control G44)",
+        "tests_killed": [
+          "G44: tilde fences are honoured, not only backtick fences"
+        ]
+      }
+    ],
+    "measured_total": 50,
+    "survivors": [],
+    "infrastructure_policy": "Fail-closed. ENOSPC/EMFILE/ENFILE/ENOMEM, a killing signal, an exit code outside {0,1}, a missing TAP summary, a suite reporting fewer tests than its exact expected total, a free-inode count below the floor, or a killer reported by a suite that cannot reach the mutated file each ABORT the battery. An infrastructure failure is never recorded as a mutation kill.",
+    "clean_baseline_assertions": "before the run, after every tenth mutation, and at the end",
+    "dependency_rule": {
+      "scripts/ops/execution-packet.ts": [
+        "scripts/ops/execution-packet.test.ts",
+        "scripts/ops/lane-start.test.ts"
+      ],
+      "scripts/ops/lane-start.ts": [
+        "scripts/ops/lane-start.test.ts"
+      ]
+    },
+    "expected_suite_totals": {
+      "scripts/ops/execution-packet.test.ts": 75,
+      "scripts/ops/lane-start.test.ts": 63
+    },
+    "tmpdir": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/tmp-1752"
+  },
+  "test_delta": {
+    "baseline_total": 5057,
+    "total_at_head": 5108,
+    "delta": 51,
+    "controls_added": [
+      "B1",
+      "F1",
+      "F2",
+      "F3",
+      "F4",
+      "F5",
+      "F5b",
+      "F6",
+      "F7",
+      "F8",
+      "G1",
+      "G2",
+      "G2b",
+      "G2c",
+      "G3 (inversion)",
+      "G4",
+      "G5",
+      "G6",
+      "G7",
+      "G8",
+      "G9",
+      "G10",
+      "G11",
+      "G12",
+      "G13",
+      "G14",
+      "G15",
+      "G16",
+      "G17",
+      "G18",
+      "G19",
+      "G20",
+      "G21",
+      "G22",
+      "G23",
+      "G24",
+      "G25",
+      "G26",
+      "G27",
+      "G28",
+      "G29",
+      "G30",
+      "G31",
+      "G32",
+      "G33",
+      "G34",
+      "G35",
+      "G36",
+      "G37",
+      "G38",
+      "G39",
+      "G40",
+      "G41",
+      "G42",
+      "G43",
+      "G44",
+      "G45/G46",
+      "G47",
+      "G48",
+      "G49",
+      "G50"
+    ],
+    "derivation": "MEASURED verify:static total from measured.json, baselined on the preserved d54abcb tree",
+    "controls_added_count": 61,
+    "controls_added_baseline": "origin/main",
+    "controls_added_derivation": "enumerated from git diff origin/main...HEAD over the two suites",
+    "why_the_two_numbers_differ": "different baselines: origin/main never carried the preserved tree, so controls_added includes controls the port brought with it, while delta counts only what this lane added on top of the port"
+  }
+}

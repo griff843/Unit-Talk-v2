@@ -11,6 +11,7 @@ import {
   buildModelRoutingEvidence,
   commitAndPushEvidence,
   evaluateExecutionTruth,
+  resolveCodexExecutionPacket,
   resolveExecModelRouting,
 } from './codex-exec.js';
 import {
@@ -22,12 +23,18 @@ import {
   resolveExecutionTimeout,
   type ExecutionStateIdentity,
 } from './execution-checkpoint.js';
-import { ROOT } from './shared.js';
+import { ROOT, type LaneManifest } from './shared.js';
+import {
+  buildSyncYmlWithTaskContract,
+  buildTaskContract,
+  readTaskContract,
+  renderTaskContract,
+} from './execution-packet.js';
 
-// codex-exec.ts is an executable entry point — its `main()` process/spawn flow is
-// exercised via integration (pnpm ops:codex-exec --dry-run, which requires a live Codex
-// CLI). The pure resolution/evidence/arg-building helpers below are fully unit-testable
-// without spawning Codex or making any paid model call.
+// codex-exec.ts is an executable entry point. Its `main()` flow is executed for
+// real at the bottom of this file, against an isolated fixture lane root with a
+// stubbed CLI on PATH -- no live Codex, no network, no paid model call. The pure
+// resolution/evidence/arg-building helpers below are unit-tested directly.
 
 const REAL_POLICY_VERSION = loadModelRoutingPolicy().policy_version;
 
@@ -615,6 +622,12 @@ test('codex-exec resumes from the checkpoint before it builds the prompt', () =>
 });
 
 test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
+  const taskContract = buildTaskContract({
+    identifier: 'UTV2-1594',
+    title: 'Resume the supplied work order',
+    url: 'https://linear.app/unit-talk-v2/issue/UTV2-1594',
+    description: '## Acceptance criteria\n- Preserve completed work.',
+  }, '2026-05-25T00:00:00.000Z');
   const packet = {
     issue_id: 'UTV2-1594',
     tier: 'T1',
@@ -624,11 +637,13 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
     required_verification: ['pnpm verify'],
     closeout_instructions: ['open a PR'],
     repo_brief: 'REPO BRIEF BODY',
+    task_contract: taskContract,
   } as unknown as Parameters<typeof buildCodexPrompt>[0];
 
   const withoutResume = buildCodexPrompt(packet);
   assert.doesNotMatch(withoutResume, /RESUMED RUN/);
   assert.match(withoutResume, /REPO BRIEF BODY/);
+  assert.ok(withoutResume.includes(renderTaskContract(taskContract)));
 
   const withResume = buildCodexPrompt(packet, '## Execution checkpoint — RESUMED RUN\n\nprior findings here');
   assert.ok(
@@ -636,6 +651,35 @@ test('buildCodexPrompt places the resume brief ahead of the repo brief', () => {
     'a resumed run must read what is already settled before it reads the full repo brief',
   );
   assert.match(withResume, /prior findings here/);
+});
+
+test('codex-exec refuses an invalid packet with JSON and never continues to spawn', () => {
+  const manifest = { issue_id: 'UTV2-1734', branch: 'codex/utv2-1734' } as LaneManifest;
+  const emitted: string[] = [];
+  let continuedToSpawn = false;
+  const exitCode = resolveCodexExecutionPacket(
+    manifest,
+    () => { continuedToSpawn = true; },
+    value => { emitted.push(JSON.stringify(value)); },
+    () => ({
+      ok: false,
+      code: 'EXECUTION_PACKET_INVALID',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message: 'Execution packet refused: task contract is missing',
+    }),
+  );
+
+  assert.equal(exitCode, 2);
+  assert.equal(continuedToSpawn, false);
+  assert.equal(emitted.length, 1);
+  assert.deepEqual(JSON.parse(emitted[0]!), {
+    ok: false,
+    code: 'EXECUTION_PACKET_INVALID',
+    issue_id: 'UTV2-1734',
+    branch: 'codex/utv2-1734',
+    message: 'Execution packet refused: task contract is missing',
+  });
 });
 
 test('codex-exec opens a durable attempt immediately before the spawn', () => {
@@ -689,4 +733,315 @@ test('operator cancellation is honoured before any codex process is spawned', ()
   assert.ok(cancelIndex >= 0, 'codex-exec must honour a cancellation request');
   assert.ok(cancelIndex < spawnIndex, 'cancellation must be checked before the spawn');
   assert.match(source.slice(cancelIndex, cancelIndex + 600), /EXECUTION_CANCELLED/);
+});
+
+// ── UTV2-1737: EXECUTING dry-run regression coverage for the Codex entrypoint ─
+// main() calls process.exit on its failure paths, so the executing assertion
+// here is that the dry run REACHES its DRY_RUN emit without throwing an
+// unstructured error -- which a wrong-module or missing import would cause.
+
+// ---------------------------------------------------------------------------
+// Executing dry-run coverage (UTV2-1747)
+//
+// The test replaced here named an issue with no manifest on disk, so main()
+// exited at the manifestExists guard and every assertion below it passed on a
+// "no manifest found" refusal. It never reached packet generation: deleting the
+// whole dry-run purity branch left the suite green. These run the real
+// entrypoint against a complete lane root instead.
+//
+// Isolation is free: getRepoRoot() shells out to `git rev-parse --show-toplevel`
+// inheriting process.cwd(), so running the entrypoint with cwd inside a fixture
+// repository rebinds ROOT to it. No fixture is written into the live checkout
+// -- a leaked lane manifest there is read by the concurrency governor as a real
+// active lane -- and no production code carries a test-only root parameter.
+// ---------------------------------------------------------------------------
+
+const TSX_BIN = path.join(ROOT, 'node_modules', '.bin', 'tsx');
+
+interface LaneRoot {
+  /** Repo root for the run; also the git repository whose cleanliness is asserted. */
+  root: string;
+  /** PATH entry holding stub executor CLIs. Kept outside `root` so it is not untracked content. */
+  bin: string;
+  objective: string;
+  syncPath: string;
+}
+
+/**
+ * Both entrypoints health-check by executing the real CLI. Stubs keep the dry
+ * run offline: no paid model call, no network, deterministic version string.
+ */
+function stubExecutorClis(dir: string): string {
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(
+    path.join(bin, 'codex'),
+    '#!/bin/sh\ncase "$1" in\n  --version) echo "codex-stub 1.0.0"; exit 0;;\n  exec) echo "usage: codex exec"; exit 0;;\nesac\nexit 0\n',
+    { mode: 0o755 },
+  );
+  fs.writeFileSync(
+    path.join(bin, 'claude'),
+    '#!/bin/sh\n[ "$1" = "--version" ] && echo "claude-stub 1.0.0" && exit 0\nexit 0\n',
+    { mode: 0o755 },
+  );
+  return bin;
+}
+
+function buildLaneRoot(issueId: string, executor: 'claude' | 'codex-cli'): LaneRoot {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1747-lane-'));
+  const root = path.join(dir, 'repo');
+  const wt = path.join(root, 'wt');
+  fs.mkdirSync(path.join(root, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'docs', '05_operations', 'policies'), { recursive: true });
+  fs.mkdirSync(wt, { recursive: true });
+
+  // Copied, never invented. A hand-authored fixture can assert against a field
+  // the production reader never looks at, which makes the assertion vacuous.
+  for (const rel of [
+    ['docs', '05_operations', 'policies', 'codex-model-routing.json'],
+    ['docs', '05_operations', 'db-writer-classification.json'],
+  ]) {
+    fs.copyFileSync(path.join(ROOT, ...rel), path.join(root, ...rel));
+  }
+
+  const isClaude = executor === 'claude';
+  const manifest: Record<string, unknown> = {
+    schema_version: 2,
+    issue_id: issueId,
+    lane_type: 'governance',
+    executor,
+    tier: isClaude ? 'T1' : 'T2',
+    worktree_path: wt,
+    branch: `${isClaude ? 'claude' : 'codex'}/${issueId.toLowerCase()}-fixture`,
+    base_branch: 'main',
+    commit_sha: null,
+    pr_url: null,
+    files_changed: [],
+    file_scope_lock: ['scripts/ops/fixture.ts'],
+    expected_proof_paths: [],
+    status: 'started',
+    started_at: '2026-08-24T00:00:00.000Z',
+    heartbeat_at: '2026-08-24T00:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: '.out/ops/preflight/fixture.json',
+    created_by: isClaude ? 'claude' : 'codex',
+    truth_check_history: [],
+    reopen_history: [],
+    execution_location: {
+      mode: 'worktree',
+      cwd: wt,
+      package_install: 'verified',
+      setup_command: null,
+      main_checkout_control_only: true,
+    },
+  };
+  // A schema_version 2 Codex manifest must carry model_routing; a Claude
+  // manifest must never carry it. Both rules are enforced at runtime.
+  if (!isClaude) {
+    manifest['model_routing'] = {
+      profile: 'codex-terra-medium',
+      model: 'gpt-5.6-terra',
+      reasoning_effort: 'medium',
+      selected_by: 'three-brain',
+      policy_version: REAL_POLICY_VERSION,
+    };
+  }
+  fs.writeFileSync(
+    path.join(root, 'docs', '06_status', 'lanes', `${issueId}.json`),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+
+  const objective = 'Prove the captured objective reaches the executor prompt.';
+  // Built by production code on purpose: buildTaskContract computes
+  // description_sha256 and contract_hash, and assertTaskContract verifies both
+  // against the content. A hand-written contract cannot satisfy that, which is
+  // what stops this fixture inventing a field the reader never consults.
+  const contract = buildTaskContract(
+    {
+      identifier: issueId,
+      title: 'Fixture lane',
+      url: `https://linear.app/unit-talk/issue/${issueId}`,
+      description: [
+        '## Objective',
+        objective,
+        '',
+        '## Acceptance criteria',
+        '- The rendered packet carries this contract.',
+      ].join('\n'),
+    },
+    '2026-08-24T00:00:00.000Z',
+  );
+  const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
+  fs.mkdirSync(path.dirname(syncPath), { recursive: true });
+  fs.writeFileSync(syncPath, buildSyncYmlWithTaskContract(issueId, contract));
+
+  fs.writeFileSync(path.join(wt, 'README.md'), 'fixture\n');
+  for (const args of [
+    ['init', '--initial-branch=main'],
+    ['config', 'user.email', 'test@example.com'],
+    ['config', 'user.name', 'Test'],
+    ['add', '-A'],
+    ['commit', '-m', 'fixture base'],
+  ]) {
+    spawnSync('git', args, { cwd: root, stdio: 'pipe' });
+  }
+
+  return { root, bin: stubExecutorClis(dir), objective, syncPath };
+}
+
+function runExecutor(
+  script: 'claude-exec.ts' | 'codex-exec.ts',
+  lane: LaneRoot,
+  args: string[],
+): { status: number | null; stdout: string; stderr: string } {
+  const result = spawnSync(TSX_BIN, [path.join(ROOT, 'scripts', 'ops', script), ...args], {
+    cwd: lane.root,
+    encoding: 'utf8',
+    timeout: 180_000,
+    env: { ...process.env, PATH: `${lane.bin}${path.delimiter}${process.env['PATH'] ?? ''}` },
+  });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
+}
+
+/** Tracked and untracked changes both count -- a stray write is still a mutation. */
+function laneRootChanges(lane: LaneRoot): string {
+  return spawnSync('git', ['status', '--porcelain'], {
+    cwd: lane.root,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  }).stdout.trim();
+}
+
+function parseLeadingJson(out: string): Record<string, unknown> {
+  const start = out.indexOf('{');
+  const end = out.indexOf('\n}', start);
+  assert.ok(start >= 0 && end > start, `expected a JSON object in output:\n${out}`);
+  return JSON.parse(out.slice(start, end + 2)) as Record<string, unknown>;
+}
+
+test('codex-exec --dry-run executes to a rendered packet carrying the captured contract', () => {
+  const issueId = 'UTV2-999901';
+  const lane = buildLaneRoot(issueId, 'codex-cli');
+  const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
+
+  assert.equal(run.status, 0, `dry run must reach DRY_RUN; stderr: ${run.stderr}`);
+  const parsed = parseLeadingJson(run.stdout);
+  assert.equal(parsed['code'], 'DRY_RUN');
+  assert.equal(parsed['ok'], true);
+  assert.equal(parsed['dry_run'], true);
+
+  // The decisive assertion. The prompt preview is truncated before the objective
+  // renders, so the packet is tied to the on-disk contract by integrity hash
+  // instead: the hash appears only if generateExecutionPacket read THIS contract,
+  // validated it, and rendered it into the prompt.
+  const contract = readTaskContract(issueId, lane.root);
+  assert.ok(
+    run.stdout.includes(`integrity hash ${contract.contract_hash}`),
+    `codex prompt must carry the on-disk contract; got:\n${run.stdout}`,
+  );
+  assert.ok(
+    renderTaskContract(contract).includes(lane.objective),
+    'the contract rendered into that prompt must carry the captured objective',
+  );
+  assert.ok(
+    run.stdout.includes('## Authoritative task contract'),
+    'the prompt must present the contract as authoritative',
+  );
+  // The stub would report a launch; a dry run must plan one and stop.
+  assert.ok(
+    run.stdout.includes('(would run)'),
+    'dry run must describe the invocation rather than perform it',
+  );
+});
+
+test('codex-exec --dry-run leaves the lane root byte-identical', () => {
+  const issueId = 'UTV2-999902';
+  const lane = buildLaneRoot(issueId, 'codex-cli');
+  assert.equal(laneRootChanges(lane), '', 'fixture must start clean');
+
+  const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
+  assert.equal(run.status, 0, `dry run must succeed; stderr: ${run.stderr}`);
+
+  // Resolving a packet normally persists the sync record in both roots and, for
+  // a pre-contract lane, makes a live Linear call. Under --dry-run none of that
+  // may happen -- a preview that writes is not a preview.
+  assert.equal(
+    laneRootChanges(lane),
+    '',
+    'dry run must leave no tracked or untracked change in the lane root',
+  );
+});
+
+test('codex-exec --dry-run refuses a lane with no captured contract instead of fetching one', () => {
+  const issueId = 'UTV2-999903';
+  const lane = buildLaneRoot(issueId, 'codex-cli');
+  fs.rmSync(lane.syncPath);
+
+  const run = runExecutor('codex-exec.ts', lane, ['--issue', issueId, '--dry-run']);
+
+  assert.equal(run.status, 2, `expected a structured refusal; stderr: ${run.stderr}`);
+  const parsed = parseLeadingJson(run.stdout);
+  assert.equal(parsed['ok'], false);
+  assert.match(String(parsed['message']), /task contract is absent/u);
+  // The refusal must not have captured one: a live capture writes the record.
+  assert.equal(
+    fs.existsSync(lane.syncPath),
+    false,
+    'a dry run must never capture a contract, which would require a live Linear call',
+  );
+});
+
+test('executor modules resolve every imported symbol (narrow compile smoke)', () => {
+  // Narrow compile control, scoped to the two executor entrypoints only -- it
+  // does not pull the scripts tree into project references.
+  //
+  // Why it exists: `scripts/` is in no tsconfig project, so `pnpm verify:static`
+  // exits 0 while a symbol imported from the wrong module, or not imported at
+  // all, sits in the file. Both shipped past a green 105-test suite. Executing
+  // tests catch it only on code paths they actually reach; this catches it
+  // wherever it is.
+  //
+  // Deliberately asserts ONLY on unresolved-symbol diagnostics (TS2304 "Cannot
+  // find name", TS2305 "has no exported member"), so pre-existing module-format
+  // noise in the wider tree cannot make it flap.
+  const result = spawnSync(
+    'npx',
+    ['tsc', '--noEmit', '--module', 'nodenext', '--moduleResolution', 'nodenext',
+     '--target', 'es2022', '--skipLibCheck',
+     path.join(ROOT, 'scripts', 'ops', 'claude-exec.ts'),
+     path.join(ROOT, 'scripts', 'ops', 'codex-exec.ts'),
+     // lane-start.ts is a Tier C path every lane start depends on, and
+     // execution-packet.ts is the module both entrypoints resolve through.
+     // `scripts/` is in no tsconfig project, so without these two entries an
+     // unresolved symbol in either file ships past a fully green suite.
+     path.join(ROOT, 'scripts', 'ops', 'lane-start.ts'),
+     path.join(ROOT, 'scripts', 'ops', 'execution-packet.ts')],
+    { cwd: ROOT, encoding: 'utf8', timeout: 240_000 },
+  );
+  // A filtered-diagnostics assertion is vacuously true whenever the compiler
+  // never ran: with `npx` missing or exiting 127 there is no output to filter,
+  // `unresolved` is empty, and this -- the only control that catches a
+  // wrong-module or missing import wherever it sits -- passes while proving
+  // nothing. Establish that tsc actually executed before trusting its silence.
+  assert.equal(result.error, undefined,
+    `compile smoke could not spawn tsc: ${String(result.error)}`);
+  assert.notEqual(result.status, null,
+    'compile smoke was killed or timed out; its silence proves nothing');
+  const probe = spawnSync('npx', ['--no-install', 'tsc', '--version'], {
+    cwd: ROOT, encoding: 'utf8', timeout: 120_000,
+  });
+  assert.equal(probe.error, undefined,
+    `tsc is not reachable, so the compile smoke is vacuous: ${String(probe.error)}`);
+  assert.match(`${probe.stdout ?? ''}`, /Version \d+\.\d+/u,
+    `tsc did not report a version, so the compile smoke is vacuous: ${probe.stdout}`);
+
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+  const unresolved = output
+    .split(/\r?\n/u)
+    .filter((line) =>
+      /scripts[\\/]ops[\\/](?:claude-exec|codex-exec|lane-start|execution-packet)\.ts/u.test(line))
+    .filter((line) => /error TS2304|error TS2305/u.test(line));
+  assert.deepEqual(unresolved, [],
+    `executor entrypoints have unresolved imports:\n${unresolved.join('\n')}`);
 });
