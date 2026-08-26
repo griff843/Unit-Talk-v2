@@ -1,6 +1,6 @@
 # PROOF: UTV2-1750 — wire operational skills into dispatch routing and execution packet DoD
 
-MERGE_SHA: 4a89cf5f42c0e7f9d35ae1f703a61893bca4d43b
+MERGE_SHA: 235f198de1bbf82e50ecf3062dba1b7e0369cd68
 
 ## Verification
 
