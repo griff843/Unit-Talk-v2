@@ -16,7 +16,7 @@ The branch contains two distinguishable populations:
 | Population | Files | Origin |
 |---|---|---|
 | **Ported** | `execution-packet.ts`, `claude-exec.ts`, `codex-exec.ts` and their tests (except the additions listed below) | byte-preserved from `d54abcbd`, re-applied onto current `main` |
-| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases B1-G41 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
+| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases B1-G50 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
 
 Per-file `sha256` prefixes for both populations are recorded in
 `evidence.json → provenance`.
@@ -86,15 +86,14 @@ Every control ID below is enumerated by the generator from
 `git diff origin/main...HEAD`. An earlier revision listed these by hand and
 stopped at G22 while the suites had moved forty controls past it.
 
-- `execution-packet.test.ts`: adds 36 controls -- B1, F1, F2, F3, F4, F6, F7, F8, G1, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G16, G17, G18, G22, G29, G30, G31, G32, G33, G34, G35, G38, G39, G40, G42, G43, G44.
-- `lane-start.test.ts`: adds 23 controls -- F5b, F5, G2b, G2, G2c, G4, G15, G19, G20, G21, G23, G24, G25, G26, G27, G28, G36, G37, G41, G47, G48, G49, G50 -- together with the
+- `execution-packet.test.ts`: adds 37 controls -- B1, F1, F2, F3, F4, F6, F7, F8, G1, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G16, G17, G18, G22, G29, G30, G31, G32, G33, G34, G35, G38, G39, G40, G42, G43, G44, G45/G46.
+- `lane-start.test.ts`: adds 24 controls -- F5, F5b, G2, G2b, G2c, G3 (inversion), G4, G15, G19, G20, G21, G23, G24, G25, G26, G27, G28, G36, G37, G41, G47, G48, G49, G50 -- together with the
   `resolveTaskContractAcrossRoots` / `laneContractRoots` /
   `resolveReadmissionContract` imports and the `seedContractRoots()`,
   `seedBothRoots()` and `seedReadmissionFixture()` helpers. The end-to-end
   readmission controls are the first coverage this repository has ever had of
   `lane-start --readmit-existing-branch` running as a program.
 - `claude-exec.test.ts`, `codex-exec.test.ts` -- ported, unchanged.
-
 **No test count appears in this file.** Restating measured figures in three
 places is what produced the same stale-bundle finding in two consecutive
 reviews; every count now lives in exactly one place, the EVIDENCE block of
