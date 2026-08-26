@@ -2102,3 +2102,66 @@ test('G37: a fresh sync record declares schema version 1 and both approval flags
   assert.match(yml, /skip_sync_required: false/u,
     'a fresh record must not default to skipping the sync requirement');
 });
+
+test('G41: readmission REFUSES to commit when the worktree index carries a non-metadata path', () => {
+  // The sixth review found this guard (lane-start.ts, the `stagedPaths.some(...)`
+  // clause) killed by nothing: replacing the whole condition with `false` left
+  // both suites green. Every readmission test asserts a SUCCESS path, so none
+  // of them ever presents the guard with a dirty index.
+  //
+  // The dirt is introduced the way it would arise in production -- from the
+  // worktree itself, not by the test reaching into lane-start. A `post-checkout`
+  // hook (worktrees share the common `.git/hooks` directory) stages a stray
+  // file at `git worktree add` time, so by the time readmission stages its
+  // metadata the index already holds a path that is not in `metadataPaths`.
+  const f = seedReadmissionFixture('UTV2-999983', {
+    controlDescription:
+      '## Objective\nSHARED ORDER.\n\n## Acceptance criteria\n- shared',
+    branchDescription:
+      '## Objective\nSHARED ORDER.\n\n## Acceptance criteria\n- shared',
+  });
+
+  const hooks = path.join(f.root, '.git', 'hooks');
+  fs.mkdirSync(hooks, { recursive: true });
+  fs.writeFileSync(
+    path.join(hooks, 'post-checkout'),
+    '#!/bin/sh\nprintf stray > stray-not-metadata.txt\ngit add -- stray-not-metadata.txt\nexit 0\n',
+    { mode: 0o755 },
+  );
+
+  // Fixture precondition, established BEFORE and INDEPENDENTLY of the code under
+  // test: prove the hook really does dirty a fresh worktree's index. A throwaway
+  // detached worktree is created, inspected and removed. Checking the lane's own
+  // worktree after the run cannot serve as this precondition -- lane-start tears
+  // that worktree down when it refuses, so the check would read an absent
+  // directory and pass for the wrong reason.
+  const probe = path.join(f.root, '.out', 'worktrees', 'hook-probe');
+  const probeAdd = spawnSync('git', ['worktree', 'add', '-q', '--detach', probe, f.branchSha], {
+    cwd: f.root, encoding: 'utf8',
+  });
+  assert.equal(probeAdd.status, 0, `probe worktree must be creatable: ${probeAdd.stderr}`);
+  const probeStaged = spawnSync('git', ['diff', '--cached', '--name-only'], {
+    cwd: probe, encoding: 'utf8',
+  });
+  assert.match(
+    probeStaged.stdout ?? '',
+    /stray-not-metadata\.txt/u,
+    'fixture precondition: the post-checkout hook must stage a non-metadata path in a fresh worktree',
+  );
+  spawnSync('git', ['worktree', 'remove', '--force', probe], { cwd: f.root, encoding: 'utf8' });
+
+  const run = runReadmission(f);
+
+  assert.notEqual(run.status, 0, `readmission must fail closed on a dirty index:\n${run.stdout}\n${run.stderr}`);
+  assert.match(
+    `${run.stdout}\n${run.stderr}`,
+    /readmission attempted to commit non-metadata paths[\s\S]*stray-not-metadata\.txt/u,
+    'the refusal must name the offending path, not fail generically',
+  );
+
+  // And the stray path must not have been committed onto the branch.
+  const committed = spawnSync('git', ['cat-file', '-e', `${f.branch}:stray-not-metadata.txt`], {
+    cwd: f.root, encoding: 'utf8',
+  });
+  assert.notEqual(committed.status, 0, 'the stray path must never reach the branch');
+});

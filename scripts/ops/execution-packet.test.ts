@@ -2162,3 +2162,94 @@ test('G35: an UNRECOGNIZED nested section renders once, inside its ancestor -- n
   assert.match(occurrences[0]!, /Operator notes/u,
     'and it must appear INSIDE that ancestor, not as a section of its own');
 });
+
+test('G38: a token containing a quote or backslash is ESCAPED into the curl config, not passed raw', () => {
+  // The sixth review found the newline half of `curlConfigValue` covered by G32
+  // and the ESCAPING half covered by nothing: replacing the body with
+  // `return value` left both suites green. The token is interpolated into a
+  // quoted curl directive (`header = "Authorization: ..."`), so an unescaped
+  // quote terminates that value and everything after it is read by curl as
+  // further directives -- the same injection primitive G32 refuses newlines for.
+  let seen: string | undefined;
+  const runner = ((_cmd: string, _args: string[], opts: { input?: string }) => {
+    seen = opts.input;
+    return { status: 0, stdout: '{"data":{"issue":null}}', stderr: '', error: undefined };
+  }) as unknown as typeof spawnSync;
+
+  try {
+    fetchLinearTaskSource('UTV2-999982', 'tok"en\\with', runner);
+  } catch {
+    // The stub returns a null issue, so the call throws AFTER curl is invoked.
+    // The assertion below is about what was handed to curl, not the outcome.
+  }
+
+  assert.ok(seen, 'curl must have been invoked with a config on stdin');
+  assert.equal(
+    seen,
+    'header = "Authorization: tok\\"en\\\\with"\n',
+    'both the quote and the backslash must arrive escaped',
+  );
+  // An earlier draft added a regex assertion for "no unescaped quote", which
+  // matched the directive's own CLOSING quote and failed on correct output. The
+  // byte-equality above is strictly stronger than any such regex, so it stands
+  // alone rather than being propped up by a weaker, wronger companion.
+});
+
+test('G39: a shorter fence does not close a longer one', () => {
+  // `fenceClosedBy` requires the closing marker to be at least as long as the
+  // opener. Relaxing that to `>= 1` was uncovered: a ``` line inside a `````
+  // block ended it early, splitting one criterion into three, with both suites
+  // green.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '`````',
+    'inner',
+    '```',
+    'still inside',
+    '`````',
+    '- last criterion',
+  ].join('\n'));
+
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    ['first criterion', '`````\ninner\n```\nstill inside\n`````', 'last criterion'],
+    'the three-backtick line is fence CONTENT; only the five-backtick line closes',
+  );
+});
+
+test('G40: a fence marker indented four columns is code, not a fence', () => {
+  // CommonMark: four or more leading spaces is indented code, so FENCE_RE is
+  // bounded at three. The bound is dead on the acceptance-criteria path (an
+  // indented line is consumed before `fenceOpenedBy` is ever reached) and LIVE
+  // in `parseSections`, which tests for a fence before it tests for a heading.
+  // A first attempt at this control used a criteria-path fixture, where
+  // widening the bound produces byte-identical output -- it would have proved
+  // nothing. This fixture puts the indented marker in a section BODY, where
+  // widening the bound swallows the heading that follows it.
+  const contract = contractFrom([
+    '## Objective',
+    'run the thing',
+    '',
+    '    ```',
+    '    indented code block',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '- second criterion',
+  ].join('\n'));
+
+  assert.equal(
+    contract.objective,
+    'run the thing\n    ```\n    indented code block',
+    'the indented block stays inside Objective and does not open a fence',
+  );
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    ['first criterion', 'second criterion'],
+    'the heading after the indented block must still be recognized as a heading',
+  );
+});
