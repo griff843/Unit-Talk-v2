@@ -104,6 +104,27 @@ If issue IDs provided:
 2. Determine tier from labels (tier:T1, tier:T2, tier:T3)
 3. Call `/three-brain` for each candidate — the routing decision returned by `/three-brain` is authoritative. Apply routing defaults only if `/three-brain` is unavailable: T1→Claude, T2 clear-scope→Codex, T2 with migration/contract→Claude, T3→Claude
 
+### Phase 1.5: Deterministic skill discovery
+
+Before launching any executor (Phase 4/Codex), run skill discovery for each validated target. This is mechanical, not a judgment call: the same task contract must always select the same skills.
+
+```bash
+npx tsx scripts/ops/execution-packet.ts UTV2-{number}
+```
+
+The packet's `skill_routing.selected_skills` field is the routing authority — never re-derive this from reading the issue yourself. `skill_routing.reasons` names the trigger condition matched for each selected skill, and `skill_routing.note` states explicitly when no skill matched ("No operational skill trigger matched..."). Record the selected skills in the dispatch report (Phase 6) and pass them into the background executor prompt (Phase 4) so the executor is told which skill(s) to consult before proceeding — an empty selection is passed through unchanged, not silently dropped.
+
+Routing triggers (see `scripts/ops/execution-packet.ts`'s `SKILL_ROUTING_SPECS` for the authoritative patterns — this table is prose, not the source):
+
+| Condition | Skill |
+|---|---|
+| Broken, ghosted, parked, or merged-but-unclosed lane | `/lane-recovery` |
+| Required-context, head-binding, or merge-gate mismatch | `/pr-unblock` |
+| Proof bundle creation or correction | `/proof-authoring` |
+| A control claimed by tests | `/mutation-test` |
+
+Multiple skills may be selected when triggers genuinely overlap (e.g. a ghost lane whose PR is also head-mismatched selects both `/lane-recovery` and `/pr-unblock`). If the packet refuses with `INSUFFICIENT_TASK_CONTRACT`, the issue's Linear description is missing where-to-look, definition-of-done, or verification/self-check content — fix the issue description before dispatching; do not fabricate the missing section on the executor's behalf.
+
 ### Phase 2: Validate prerequisites (for each target)
 
 Check each target has:
@@ -250,6 +271,7 @@ Title: ${issue_title}
 Acceptance criteria: ${acceptance_criteria}
 File scope (do not touch anything outside this — declared at lane-start, immutable): ${file_scope_lock}
 ${tier === 'T1' ? 'Approved Outcome Contract:\n' + outcome_contract : 'Tier: ' + tier + ' — no planning phase required.'}
+${selected_skills.length > 0 ? 'Routed skills (Phase 1.5 skill discovery selected these deterministically — consult each before proceeding): ' + selected_skills.join(', ') : 'Routed skills: none matched (Phase 1.5 skill discovery found no trigger) — proceed without a routed skill.'}
 
 Do, in order:
 1. Implement the change within the declared file scope only.
