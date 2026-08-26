@@ -2253,3 +2253,138 @@ test('G40: a fence marker indented four columns is code, not a fence', () => {
     'the heading after the indented block must still be recognized as a heading',
   );
 });
+
+test('G42: a fence is closed only by its OWN character, not by the other fence char', () => {
+  // The seventh review found G39 pinned only the LENGTH half of fenceClosedBy's
+  // rule. The character half (`marker[0] === fence.char`) was killed by nothing:
+  // replacing it with `true` let a ~~~ line close a ``` block, splitting one
+  // criterion into three and swallowing the last one -- byte-for-byte the same
+  // harm class G39 exists for.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '```',
+    'inner code',
+    '~~~',
+    'still inside',
+    '```',
+    '- last criterion',
+  ].join('\n'));
+
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    ['first criterion', '```\ninner code\n~~~\nstill inside\n```', 'last criterion'],
+    'the ~~~ line is fence CONTENT; only a ``` line closes a ``` fence',
+  );
+});
+
+test('G43: a fence indented one to three columns is still a fence', () => {
+  // G40 pins only the WIDENING direction of FENCE_RE's indentation bound.
+  // NARROWING it to /^(...)/ survived the whole battery, and its harm is worse
+  // than widening's: an indented fenced block -- the ordinary shape under a list
+  // item -- stops being recognized, and its contents are DELETED from the work
+  // order rather than merely re-grouped.
+  const contract = contractFrom([
+    '## Objective',
+    'run the thing',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '   ```',
+    '   # do not run in prod',
+    '   pnpm destroy',
+    '   ```',
+    '- last criterion',
+  ].join('\n'));
+
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    [
+      'first criterion',
+      '   ```\n   # do not run in prod\n   pnpm destroy\n   ```',
+      'last criterion',
+    ],
+    'a three-space-indented fence must be recognized, and nothing inside it may be dropped',
+  );
+  assert.ok(
+    contract.acceptance_criteria.some((item) => item.includes('pnpm destroy')),
+    'the fenced command must survive; narrowing the bound deletes it outright',
+  );
+});
+
+test('G44: tilde fences are honoured, not only backtick fences', () => {
+  // FENCE_RE's `~{3,}` alternation was dead as far as the battery could see:
+  // removing it left both suites green. A tilde fence is the CommonMark escape
+  // for a block that itself contains backticks, so a work order that uses one
+  // is exactly the case where mis-parsing is most likely.
+  const contract = contractFrom([
+    '## Objective',
+    'ship the transport',
+    '',
+    '## Acceptance criteria',
+    '- first criterion',
+    '~~~',
+    'a fenced block containing ``` backticks',
+    '~~~',
+    '- last criterion',
+  ].join('\n'));
+
+  assert.deepEqual(
+    contract.acceptance_criteria,
+    [
+      'first criterion',
+      '~~~\na fenced block containing ``` backticks\n~~~',
+      'last criterion',
+    ],
+    'a tilde fence must open and close like a backtick fence',
+  );
+});
+
+test('G45/G46: readTaskContract refuses a wrong schema_version and an empty criteria list, each with ITS OWN refusal', () => {
+  // Both guards were killed by nothing. They are reachable through the exported
+  // `readTaskContract`, so under the second mutation a sync record with
+  // `acceptance_criteria: []` dispatches as a valid work order with nothing to
+  // satisfy.
+  //
+  // The assertions pin the SPECIFIC refusal message, not merely "it threw".
+  // That is deliberate: tampering with the YAML also invalidates the contract
+  // hash, so a mutant that drops one of these guards still throws -- from the
+  // LATER hash check, with a different message. Asserting only `assert.throws`
+  // would pass against both mutants and prove nothing.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1752-readcontract-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const issueId = 'UTV2-999984';
+  const contract = buildTaskContract({
+    identifier: issueId,
+    title: 'Guarded',
+    url: 'https://linear.app/unit-talk/issue/x',
+    description: '## Objective\nguard\n\n## Acceptance criteria\n- one',
+  });
+  const good = buildSyncYmlWithTaskContract(issueId, contract, null);
+  const syncPath = path.join(syncDir, `${issueId}.yml`);
+
+  // Baseline: the record as written is accepted, so neither refusal below can
+  // be passing because the fixture is broken in some other way.
+  fs.writeFileSync(syncPath, good, 'utf8');
+  assert.deepEqual(readTaskContract(issueId, root), contract);
+
+  fs.writeFileSync(syncPath, good.replace('schema_version: 1', 'schema_version: 2'), 'utf8');
+  assert.throws(
+    () => readTaskContract(issueId, root),
+    /identity mismatch/u,
+    'a wrong schema_version must be refused BY THE IDENTITY GUARD',
+  );
+
+  const emptied = good.replace(/ {2}acceptance_criteria:\n(?: {4}- .*\n)+/u, '  acceptance_criteria: []\n');
+  assert.notEqual(emptied, good, 'fixture precondition: the criteria list must actually have been emptied');
+  fs.writeFileSync(syncPath, emptied, 'utf8');
+  assert.throws(
+    () => readTaskContract(issueId, root),
+    /is missing acceptance criteria/u,
+    'an empty criteria list must be refused BY THE CRITERIA GUARD, not by a later hash check',
+  );
+});

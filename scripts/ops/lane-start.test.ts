@@ -2165,3 +2165,100 @@ test('G41: readmission REFUSES to commit when the worktree index carries a non-m
   });
   assert.notEqual(committed.status, 0, 'the stray path must never reach the branch');
 });
+
+/**
+ * Install a `git` stub on the fixture's PATH that delegates to the real git for
+ * everything except one injected fault. The fixture already prepends its `bin`
+ * to PATH for the lane-start child only, so fixture setup itself keeps using the
+ * real git.
+ *
+ * Fault injection is the honest way to reach these guards: they exist for git
+ * failures, and no arrangement of repository state makes real git fail on
+ * demand. What is asserted is that lane-start REFUSES with the guard's own
+ * message -- not merely that something went wrong.
+ */
+function injectGitFault(fixture: ReadmissionFixture, script: string): void {
+  const real = spawnSync('bash', ['-lc', 'command -v git'], { encoding: 'utf8' });
+  const realGit = (real.stdout ?? '').trim();
+  assert.ok(realGit && realGit !== path.join(fixture.bin, 'git'), 'must resolve the REAL git');
+  fs.writeFileSync(
+    path.join(fixture.bin, 'git'),
+    ['#!/bin/sh', `REAL_GIT=${realGit}`, script, 'exec "$REAL_GIT" "$@"', ''].join('\n'),
+    { mode: 0o755 },
+  );
+}
+
+test('G47: readmission refuses when staging the metadata fails', () => {
+  const f = seedReadmissionFixture('UTV2-999985', {
+    controlDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+    branchDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+  });
+  injectGitFault(f, 'if [ "$1" = "add" ]; then echo "injected add failure" >&2; exit 1; fi');
+  const run = runReadmission(f);
+  assert.notEqual(run.status, 0, `must fail closed:\n${run.stdout}\n${run.stderr}`);
+  assert.match(
+    `${run.stdout}\n${run.stderr}`,
+    /failed to stage readmission metadata/u,
+    'the stage-failure guard must be the thing that refuses',
+  );
+});
+
+test('G48: readmission refuses when the staged-path probe itself fails, even with a non-empty result', () => {
+  // This guard needs a probe that FAILS while still printing a plausible path.
+  // A probe that fails and prints nothing is caught by the empty-index guard
+  // instead (G49), so the two clauses would be indistinguishable and a mutation
+  // to either would survive.
+  const f = seedReadmissionFixture('UTV2-999986', {
+    controlDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+    branchDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+  });
+  injectGitFault(
+    f,
+    [
+      'if [ "$1" = "diff" ] && [ "$2" = "--cached" ]; then',
+      `  echo "docs/06_status/lanes/${'UTV2-999986'}.json"`,
+      '  exit 1',
+      'fi',
+    ].join('\n'),
+  );
+  const run = runReadmission(f);
+  assert.notEqual(run.status, 0, `must fail closed:\n${run.stdout}\n${run.stderr}`);
+  assert.match(
+    `${run.stdout}\n${run.stderr}`,
+    /readmission attempted to commit non-metadata paths/u,
+    'a failed probe must refuse even though the path it printed IS a metadata path',
+  );
+});
+
+test('G49: readmission refuses when the metadata commit would stage nothing at all', () => {
+  const f = seedReadmissionFixture('UTV2-999987', {
+    controlDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+    branchDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+  });
+  injectGitFault(
+    f,
+    'if [ "$1" = "diff" ] && [ "$2" = "--cached" ]; then exit 0; fi',
+  );
+  const run = runReadmission(f);
+  assert.notEqual(run.status, 0, `must fail closed:\n${run.stdout}\n${run.stderr}`);
+  assert.match(
+    `${run.stdout}\n${run.stderr}`,
+    /readmission attempted to commit non-metadata paths: \(none\)/u,
+    'an empty index must refuse, and the refusal must say the set was empty',
+  );
+});
+
+test('G50: readmission refuses when the metadata commit fails', () => {
+  const f = seedReadmissionFixture('UTV2-999988', {
+    controlDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+    branchDescription: '## Objective\nSHARED.\n\n## Acceptance criteria\n- shared',
+  });
+  injectGitFault(f, 'if [ "$1" = "commit" ]; then echo "injected commit failure" >&2; exit 1; fi');
+  const run = runReadmission(f);
+  assert.notEqual(run.status, 0, `must fail closed:\n${run.stdout}\n${run.stderr}`);
+  assert.match(
+    `${run.stdout}\n${run.stderr}`,
+    /failed to commit regenerated readmission metadata/u,
+    'the commit-failure guard must be the thing that refuses',
+  );
+});
