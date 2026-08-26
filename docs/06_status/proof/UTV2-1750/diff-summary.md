@@ -1,5 +1,7 @@
 # Diff Summary — UTV2-1750
 
+MERGE_SHA: 235f198de1bbf82e50ecf3062dba1b7e0369cd68
+
 ## Scope
 
 Wire the four already-drafted operational skills (`/lane-recovery`, `/pr-unblock`,
