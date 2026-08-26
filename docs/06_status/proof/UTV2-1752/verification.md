@@ -1,22 +1,22 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: 26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c
+MERGE_SHA: 623207503529136092fb53863b939b65b57d14f5
 
-> `MERGE_SHA` names the implementation commit `26b9c0e5`, which is an ancestor
+> `MERGE_SHA` names the implementation commit `62320750`, which is an ancestor
 > of the PR head. This is the form `executor-result-validator.yml` requires and
 > documents: a proof may reference the implementation commit rather than its own
 > commit, because a file cannot contain its own SHA. It is rebound to the actual
 > merge SHA after merge by `ops:proof-generate --merge-sha` (run from
 > `post-merge-lane-close.yml`). It is NOT a claim that this lane has merged.
 
-Verified source SHA: `26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c`
+Verified source SHA: `623207503529136092fb53863b939b65b57d14f5`
 
 This lane finishes the executor-packet transport. It does not re-derive the
 implementation: the preserved tree is ported byte-exact from the reviewed head
 and only the exact-head findings that remained are addressed.
 
 Every figure below was measured **at the PR head**. The anchor is this lane's
-LATEST implementation commit `26b9c0e5`, and it exists only because a file
+LATEST implementation commit `62320750`, and it exists only because a file
 cannot contain its own SHA. It carries every source control this bundle
 describes, including G23-G26, so the source hashes recorded under the mutation
 battery are the hashes at the anchor.
@@ -46,7 +46,7 @@ described here. Nothing is carried forward from the predecessor's proof.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
 - [x] Each fix is load-bearing: the mutation battery was re-measured IN FULL at
-  this head by a scripted runner — 41 mutations, 41 detected, 0 survivors — and
+  this head by a scripted runner — 47 mutations, 47 detected, 0 survivors — and
   both sources restored byte-identical after every one. Every control this lane
   adds is killed by at least one mutation, including G2 and G3, which an earlier
   revision of this file correctly recorded as unproven and which M14 now kills.
@@ -70,13 +70,13 @@ described here. Nothing is carried forward from the predecessor's proof.
 
 ```text
 pnpm verify:static           PASS (exit 0)
-verify:static suite total    5096 tests, 5096 pass, 0 fail, 0 skipped
+verify:static suite total    5108 tests, 5108 pass, 0 fail, 0 skipped
                              (0 `not ok` lines in the full run log)
-execution-packet suite       68 tests, 68 pass, 0 fail
-lane-start suite             58 tests, 58 pass, 0 fail
+execution-packet suite       75 tests, 75 pass, 0 fail
+lane-start suite             63 tests, 63 pass, 0 fail
 claude-exec + codex-exec     46 tests, 46 pass, 0 fail
 r-level check                PASS — rules matched: (none)
-mutation battery             37 of 37 DETECTED, re-measured in full at THIS head
+mutation battery             47 of 47 DETECTED, re-measured in full at THIS head
                              by a scripted runner; see the table below. Both
                              sources restored byte-identical after each
 pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable DB
@@ -89,13 +89,14 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 
 | Check | Result | Evidence |
 |---|---|---|
-| `pnpm verify:static` | PASS | Exit 0. 5096 tests, 5096 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
+| `pnpm verify:static` | PASS | Exit 0. 5108 tests, 5108 pass, 0 fail, 0 skipped, 0 `not ok` lines. Totals summed across the complete run log, not a tail. This run was executed on an unmutated tree AFTER the mutation battery finished, and both source hashes were re-checked at its completion — an earlier run this session overlapped the battery and was discarded rather than reported. |
 | `pnpm verify` | PARTIAL — static stages PASS | `verify` is `verify:static && test:live-db`. The static half exits 0. The live half refuses locally by design: `ci:assert-staging` reports `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` before any test runs. See `pnpm test:db` below — the live half is supplied by CI, which is where it is enforceable. |
 | `pnpm type-check` | PASS, but **does not cover this diff** | Stage of `pnpm verify:static` (exit 0). `tsconfig.json` has `files: []` and no project reference covering `scripts/`, so NONE of this lane's eight changed source files are type-checked. This is why a `.heading` access on a `string` shipped green. `tsconfig.json` is not in this lane's `file_scope_lock`; reported, not fixed. |
-| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 68 tests, 0 failures. |
-| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 58 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 75 tests, 0 failures. |
+| `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 63 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +43 | 5057 at the preserved head to 5100 here. Controls added by this lane, enumerated FROM THE DIFF rather than by hand: B1, F1, F2, F3, F4, F5b, F5, F6, F7, F8, G1, G2, G2b, G2c, G4, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G15, G16, G17, G18, G19, G20, G21, G22, G23, G24, G25, G26, G27, G28, G29, G30, G31, G32, G33, G34, G35, G36, G37, G38, G39, G40, G41. Both the number and the list are generated; hand-maintaining either is what went stale five times. |
+| Test delta vs the PRESERVED tree | +51 | 5057 tests at the preserved `d54abcb` tree to 5108 at this head, both MEASURED by running `verify:static`, never counted from a diff. |
+| Controls added vs `origin/main` | 59 | A DIFFERENT BASELINE from the row above, and therefore a different number by construction: `origin/main` never carried the preserved tree, so this count includes every control the port brought with it, while the row above counts only what this lane added ON TOP of the port. Enumerated by the generator from `git diff origin/main...HEAD` over the two suites, never by hand: B1, F1, F2, F3, F4, F5b, F5, F6, F7, F8, G1, G2b, G2, G2c, G4, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G15, G16, G17, G18, G19, G20, G21, G22, G23, G24, G25, G26, G27, G28, G29, G30, G31, G32, G33, G34, G35, G36, G37, G38, G39, G40, G41, G42, G43, G44, G47, G48, G49, G50. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -187,10 +188,10 @@ scripts/ops/codex-exec.test.ts    55f220781c063985
 Ported, then changed by this lane's findings:
 
 ```text
-scripts/ops/execution-packet.ts        485a2580b123897f
-scripts/ops/execution-packet.test.ts   8d1c2b94cbb2b256
-scripts/ops/lane-start.ts              e5546157e9fe2283
-scripts/ops/lane-start.test.ts         9932cd876d05bd79
+scripts/ops/execution-packet.ts             982c4a5e52f4e915
+scripts/ops/execution-packet.test.ts        c0295141f74bcf74
+scripts/ops/lane-start.ts                   209909603ff131ba
+scripts/ops/lane-start.test.ts              a1f48a1ccc9930a3
 ```
 
 None of the preserved work existed on `main` before this lane. Probed at base
@@ -204,7 +205,7 @@ Measured at the head this bundle describes, by the command shown:
 
 ```text
 $ git diff --numstat origin/main...HEAD -- scripts/ops/
-  8 files, 5797 insertions(+), 41 deletions(-)
+  8 files, 6029 insertions(+), 41 deletions(-)
 ```
 
 Two notes, both from review findings:
@@ -302,7 +303,7 @@ Both matched after every mutation.
 |---|---|---|---|
 | M1 | intended control G1 | `execution-packet.ts` | `G1`, `G6`, `G7`, `G8` |
 | M2 | intended control G5 | `execution-packet.ts` | `G5` |
-| M3 | intended control G9 | `execution-packet.ts` | `B1`, `F3`, `F4`, `F8`, `G1`, `G11`, `G14`, `G18`, `G22`, `G31`, `G35`, `G5`, `G6`, `G7`, `G8`, `G9`, `a present but empty acceptance section fails closed instead of using the legacy fallback`, `a section heading with an empty body is still carried as residue`, `task contract captures and renders every required work-order field`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane`, `unclassified content keeps its line and formatting semantics` |
+| M3 | intended control G9 | `execution-packet.ts` | `B1`, `F3`, `F4`, `F8`, `G1`, `G11`, `G14`, `G18`, `G22`, `G31`, `G35`, `G39`, `G40`, `G42`, `G43`, `G44`, `G45/G46`, `G5`, `G6`, `G7`, `G8`, `G9`, `a present but empty acceptance section fails closed instead of using the legacy fallback`, `a section heading with an empty body is still carried as residue`, `task contract captures and renders every required work-order field`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane`, `unclassified content keeps its line and formatting semantics` |
 | M4 | intended control G10 | `execution-packet.ts` | `G10`, `G13`, `G17` |
 | M5 | intended control G12 | `execution-packet.ts` | `G12` |
 | M6 | intended control G14 | `execution-packet.ts` | `G14` |
@@ -313,32 +314,42 @@ Both matched after every mutation.
 | M11 | intended control G4 | `lane-start.ts` | `G20`, `G4` |
 | M12 | intended control G19/G20/G21 | `lane-start.ts` | `F5`, `G19`, `G20`, `G21` |
 | M13 | intended control G19/G20 | `lane-start.ts` | `G19`, `G20`, `G27`, `G28` |
-| M14 | intended control G2/G3 (offline reuse) | `execution-packet.ts` | `G2`, `G20`, `G21`, `G25`, `G27`, `G2b`, `G3 (inversion)`, `G36`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() persists one contract to both roots, merging each against its own record` |
+| M14 | intended control G2/G3 (offline reuse) | `execution-packet.ts` | `G2`, `G20`, `G21`, `G25`, `G27`, `G2b`, `G3 (inversion)`, `G36`, `G41`, `G47`, `G48`, `G49`, `G50`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() persists one contract to both roots, merging each against its own record` |
 | M15 | intended control G2c/G19 | `execution-packet.ts` | `F1`, `G19`, `G2c`, `lane-start main() refuses two different valid contracts instead of choosing one` |
 | M16 | intended control F5b (per-destination merge) | `execution-packet.ts` | `F5b`, `G20`, `lane-start main() persists one contract to both roots, merging each against its own record` |
 | R2b | clobber branch sync record via writeFileSync after persist | `lane-start.ts` | `G20` |
-| R9 | contract_source hardcoded lane-worktree | `lane-start.ts` | `G23`, `G25`, `G26`, `G27`, `G28` |
-| R10 | contract_fetched hardcoded false | `lane-start.ts` | `G23`, `G26`, `G28` |
-| R13 | fresh persist writes to no root | `lane-start.ts` | `G26` |
-| R14 | resume persist drops the worktree root | `lane-start.ts` | `G25` |
-| R16 | refusal hash labels swapped | `lane-start.ts` | `G19` |
-| R18 | linearTaskToken always empty | `lane-start.ts` | `G24`, `G26`, `G28` |
-| R21 | entities.issues default emptied | `execution-packet.ts` | `G26` |
-| P1 | readmission emit hardcodes contract_source | `lane-start.ts` | `G27`, `G28` |
-| P2 | readmission emit hardcodes contract_fetched | `lane-start.ts` | `G28` |
-| P6 | conflict refusal drops generic contracts payload | `lane-start.ts` | `G19` |
-| Q2 | readmission metadata commit drops the sync record | `lane-start.ts` | `G36` |
-| P11 | default sync approval flags default true | `execution-packet.ts` | `G37` |
-| P12 | default sync record omits version | `execution-packet.ts` | `G37` |
-| N5 | buildSyncYmlWithTaskContract skips validation | `execution-packet.ts` | `G33` |
-| N6 | unterminated fence dropped | `execution-packet.ts` | `G29` |
-| N7 | fenceClosedBy ignores the info-string rule | `execution-packet.ts` | `G30` |
-| N8 | fenceOpenedBy drops the backtick-in-info guard | `execution-packet.ts` | `G31` |
-| N9 | curlConfigValue newline guard removed | `execution-packet.ts` | `G32` |
-| P10 | malformed sync record guard removed | `execution-packet.ts` | `G34` |
-| Q6 | unmappedSections ancestor suppression removed | `execution-packet.ts` | `G35` |
+| R9 | contract_source hardcoded lane-worktree | `lane-start.ts` | `F1`, `F2`, `F6`, `G23`, `G25`, `G26`, `G27`, `G28`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `missing and invalid contracts return parseable structured executor failures`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R10 | contract_fetched hardcoded false | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R13 | fresh persist writes to no root | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R14 | resume persist drops the worktree root | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R16 | refusal hash labels swapped | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R18 | linearTaskToken always empty | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G24`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| R21 | entities.issues default emptied | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P1 | readmission emit hardcodes contract_source | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P2 | readmission emit hardcodes contract_fetched | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P6 | conflict refusal drops generic contracts payload | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| Q2 | readmission metadata commit drops the sync record | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P11 | default sync approval flags default true | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G37`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P12 | default sync record omits version | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G37`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| N5 | buildSyncYmlWithTaskContract skips validation | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G33`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| N6 | unterminated fence dropped | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G29`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| N7 | fenceClosedBy ignores the info-string rule | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G30`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| N8 | fenceOpenedBy drops the backtick-in-info guard | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G31`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| N9 | curlConfigValue newline guard removed | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G32`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| P10 | malformed sync record guard removed | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G34`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| Q6 | unmappedSections ancestor suppression removed | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G35`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| U1 | curlConfigValue escaping removed (quote/backslash reach the config raw) | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G38`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| U2 | fenceClosedBy minimum-length rule removed (a shorter fence closes a longer one) | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G39`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| U4 | FENCE_RE indentation bound widened (4-space-indented code opens a fence) | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G40`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| U3 | readmission non-metadata staged-path guard neutralised | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G45 | intended control G45 | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G46 | intended control G46 | `execution-packet.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G47 | intended control G47 | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G48 | intended control G48 | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G49 | intended control G49 | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
+| M-G50 | intended control G50 | `lane-start.ts` | `F1`, `F2`, `F5b`, `F6`, `G19`, `G2`, `G20`, `G21`, `G23`, `G25`, `G26`, `G27`, `G28`, `G2b`, `G2c`, `G3 (inversion)`, `G36`, `G41`, `G45/G46`, `G47`, `G48`, `G49`, `G50`, `a sanctioned executor dispatch captures, persists, and renders a legacy lane contract`, `lane-start main() completes an offline resume without corrupting the lane contract`, `lane-start main() fresh-lane capture failure refuses before creating any lane substrate`, `lane-start main() persists one contract to both roots, merging each against its own record`, `lane-start main() refuses two different valid contracts instead of choosing one`, `lane-start main() resume capture failure creates no lane state at all`, `lane-start reuses a valid contract and fails closed on an invalid one`, `missing and invalid contracts return parseable structured executor failures`, `readmission 18`, `sync record preserves existing entities and rejects contract tampering`, `the standalone packet CLI produces a packet for a newly admitted pre-contract lane` |
 
-**41 mutations, 41 detected, 0 survivors.**
+**47 mutations, 47 detected, 0 survivors.**
 
 Reading notes, so no row is read as stronger than it is:
 
@@ -818,3 +829,391 @@ What remains outstanding is not evidence but authorization: Merge Gate is
 BLOCKED pending a `pm-verdict/v1` APPROVED comment from CODEOWNERS and the
 `t1-approved` label, and an independent exact-head review. Green CI does not
 substitute for either, and this bundle does not claim it does.
+
+## Appendix — the mutation battery, in full
+
+Everything this bundle claims about mutation coverage is re-executable from
+this appendix alone. Save the runner as `rerun.py` and the JSON block as
+`mutations.json`, then run `python3 rerun.py <repo-root> mutations.json` on a
+clean checkout of this PR head. It restores both sources by byte copy after
+every mutation and re-verifies their sha256, so a failed run cannot leave a
+mutated tree behind.
+
+The JSON block below is 47 mutations, sha256 `bb88f50bc2f2d4d7b1431a01a789558e177972902d0c94bd3e63abba2905537a`. It is the UNION of every mutation executed across every round
+of this lane, not just the current round's additions.
+
+```python
+import hashlib, json, shutil, subprocess, sys
+# Re-runs this lane's entire mutation battery from the JSON block below.
+# Usage: python3 rerun.py <repo-root> <mutations.json>
+ROOT, DEFS = sys.argv[1], json.load(open(sys.argv[2]))
+SRC = sorted({d['file'] for d in DEFS})
+BASE = {f: open(f'{ROOT}/{f}', 'rb').read() for f in SRC}
+SHA = {f: hashlib.sha256(b).hexdigest() for f, b in BASE.items()}
+SUITES = ['scripts/ops/execution-packet.test.ts', 'scripts/ops/lane-start.test.ts']
+
+def restore():
+    for f, b in BASE.items():
+        open(f'{ROOT}/{f}', 'wb').write(b)
+        assert hashlib.sha256(open(f'{ROOT}/{f}', 'rb').read()).hexdigest() == SHA[f], f
+
+def failing():
+    out = []
+    for suite in SUITES:
+        r = subprocess.run(['pnpm', 'exec', 'tsx', '--test', suite],
+                           cwd=ROOT, capture_output=True, text=True)
+        out += [l.split(' - ', 1)[1].split(':')[0]
+                for l in r.stdout.splitlines() if l.startswith('not ok ')]
+    return sorted(set(out))
+
+survivors, missed = [], []
+for d in DEFS:
+    restore()
+    path = f"{ROOT}/{d['file']}"
+    src = open(path).read()
+    if src.count(d['anchor']) != 1:          # anchor must be unique or the run is meaningless
+        missed.append(d['id']); continue
+    open(path, 'w').write(src.replace(d['anchor'], d['replacement'], 1))
+    assert hashlib.sha256(open(path, 'rb').read()).hexdigest() != SHA[d['file']], d['id']
+    killed_by = failing()
+    print(d['id'], killed_by or '*** SURVIVED ***', flush=True)
+    if not killed_by:
+        survivors.append(d['id'])
+restore()
+print(f'{len(DEFS)} mutations, {len(DEFS) - len(survivors) - len(missed)} detected, '
+      f'{len(survivors)} survivors {survivors}, {len(missed)} anchor misses {missed}')
+```
+
+```json
+[
+ {
+  "id": "M1",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G1",
+  "anchor": "      if (!isReserved(child.key)) continue;",
+  "replacement": "      if (true) continue;"
+ },
+ {
+  "id": "M2",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G5",
+  "anchor": "  const consumedByField = new Set<number>(taken);",
+  "replacement": "  const consumedByField = new Set<number>();"
+ },
+ {
+  "id": "M3",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G9",
+  "anchor": "const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;",
+  "replacement": "const FENCE_RE = /^$/u;"
+ },
+ {
+  "id": "M4",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G10",
+  "anchor": "    const heading = /^ {0,3}(#{1,6})\\s+(.+?)\\s*$/u.exec(rawLine);",
+  "replacement": "    const heading = /^ *(#{1,6})\\s+(.+?)\\s*$/u.exec(rawLine);"
+ },
+ {
+  "id": "M5",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G12",
+  "anchor": "  for (const value of wanted) {\n    if (!isReserved(value)) {",
+  "replacement": "  for (const value of wanted) {\n    if (false) {"
+ },
+ {
+  "id": "M6",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G14",
+  "anchor": "  if (!prefix || !key.startsWith(value)) return false;\n  return key.length === value.length || key[value.length] === ' ';",
+  "replacement": "  if (!prefix || !key.startsWith(value)) return false;\n  return true;"
+ },
+ {
+  "id": "M7",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G16",
+  "anchor": "    else if (ch === '\\t') width += 4 - (width % 4);",
+  "replacement": "    else if (ch === '\\t') width += 1;"
+ },
+ {
+  "id": "M8",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G17",
+  "anchor": "      if (isIndentedCode || rawLine.trim() === '') {",
+  "replacement": "      if (isIndentedCode) {"
+ },
+ {
+  "id": "M9",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G2b/G21",
+  "anchor": "  const winner = found[0];",
+  "replacement": "  const winner = found[found.length - 1];"
+ },
+ {
+  "id": "M10",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G15/G21",
+  "anchor": "  return worktreePath && worktreePath !== ROOT ? [worktreePath, ROOT] : [ROOT];",
+  "replacement": "  return worktreePath && worktreePath !== ROOT ? [ROOT, worktreePath] : [ROOT];"
+ },
+ {
+  "id": "M11",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G4",
+  "anchor": "  if (readmitExistingBranch) return null;\n  return resolve(issueId, null, token);",
+  "replacement": "  return resolve(issueId, null, token);"
+ },
+ {
+  "id": "M12",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G19/G20/G21",
+  "anchor": "        const readmittedResolution = resolveLaneTaskContract(\n          issueId,\n          worktreePath,\n          linearTaskToken(),\n        );",
+  "replacement": "        const readmittedResolution = resolveLaneTaskContract(\n          issueId,\n          null,\n          linearTaskToken(),\n        );"
+ },
+ {
+  "id": "M13",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G19/G20",
+  "anchor": "        fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));",
+  "replacement": "        fs.copyFileSync(manifestPath, path.join(worktreeManifestDir, `${issueId}.json`));\n        const mDir = path.join(worktreePath, '.ops', 'sync');\n        fs.mkdirSync(mDir, { recursive: true });\n        fs.writeFileSync(path.join(mDir, `${issueId}.yml`), fs.readFileSync(syncPath));"
+ },
+ {
+  "id": "M14",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G2/G3 (offline reuse)",
+  "anchor": "  const winner = found[0];\n  if (winner) {",
+  "replacement": "  const winner = undefined as typeof found[0] | undefined;\n  if (winner) {"
+ },
+ {
+  "id": "M15",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G2c/G19",
+  "anchor": "  const distinct = new Set(found.map((entry) => entry.contract.contract_hash));\n  if (distinct.size > 1) {",
+  "replacement": "  const distinct = new Set(found.map((entry) => entry.contract.contract_hash));\n  if (false) {"
+ },
+ {
+  "id": "M16",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control F5b (per-destination merge)",
+  "anchor": "      syncContentForDestination(root, issueId, contract),",
+  "replacement": "      syncContentForDestination(roots[0]!, issueId, contract),"
+ },
+ {
+  "id": "R2b",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "clobber branch sync record via writeFileSync after persist",
+  "anchor": "        persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);",
+  "replacement": "        persistLaneTaskContract(issueId, readmittedContract, [ROOT, worktreePath]);\n        fs.writeFileSync(path.join(worktreePath, '.ops', 'sync', `${issueId}.yml`), fs.readFileSync(path.join(ROOT, '.ops', 'sync', `${issueId}.yml`)));"
+ },
+ {
+  "id": "R9",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "contract_source hardcoded lane-worktree",
+  "anchor": "  const source: LaneContractResolution['source'] = resolved.fetched\n    ? 'linear-capture'\n    : roots[resolved.rootIndex] === ROOT\n      ? 'control-checkout'\n      : 'lane-worktree';",
+  "replacement": "  const source: LaneContractResolution['source'] = 'lane-worktree';"
+ },
+ {
+  "id": "R10",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "contract_fetched hardcoded false",
+  "anchor": "  return { contract: resolved.contract, fetched: resolved.fetched, source };",
+  "replacement": "  return { contract: resolved.contract, fetched: false, source };"
+ },
+ {
+  "id": "R13",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "fresh persist writes to no root",
+  "anchor": "    persistLaneTaskContract(issueId, contractResolution.contract, [ROOT]);",
+  "replacement": "    persistLaneTaskContract(issueId, contractResolution.contract, []);"
+ },
+ {
+  "id": "R14",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "resume persist drops the worktree root",
+  "anchor": "      persistLaneTaskContract(issueId, contractResolution.contract, [ROOT, worktreePath]);",
+  "replacement": "      persistLaneTaskContract(issueId, contractResolution.contract, [ROOT]);"
+ },
+ {
+  "id": "R16",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "refusal hash labels swapped",
+  "anchor": "            control_contract_hash:\n              error.hashes.find((entry) => entry.root === ROOT)?.contract_hash ??\n              null,\n            worktree_contract_hash:\n              error.hashes.find((entry) => entry.root !== ROOT)?.contract_hash ??\n              null,",
+  "replacement": "            control_contract_hash:\n              error.hashes.find((entry) => entry.root !== ROOT)?.contract_hash ??\n              null,\n            worktree_contract_hash:\n              error.hashes.find((entry) => entry.root === ROOT)?.contract_hash ??\n              null,"
+ },
+ {
+  "id": "R18",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "linearTaskToken always empty",
+  "anchor": "  return (\n    readConfiguredEnvValue('LINEAR_API_TOKEN') ||\n    readConfiguredEnvValue('LINEAR_API_KEY') ||\n    ''\n  );",
+  "replacement": "  return '';"
+ },
+ {
+  "id": "R21",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "entities.issues default emptied",
+  "anchor": "        entities: { issues: [issueId], findings: [], controls: [], proofs: [] },",
+  "replacement": "        entities: { issues: [], findings: [], controls: [], proofs: [] },"
+ },
+ {
+  "id": "P1",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "readmission emit hardcodes contract_source",
+  "anchor": "          contract_source: readmittedResolution.source,",
+  "replacement": "          contract_source: 'lane-worktree' as const,"
+ },
+ {
+  "id": "P2",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "readmission emit hardcodes contract_fetched",
+  "anchor": "          contract_fetched: readmittedResolution.fetched,",
+  "replacement": "          contract_fetched: false,"
+ },
+ {
+  "id": "P6",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "conflict refusal drops generic contracts payload",
+  "anchor": "            contracts: error.hashes,",
+  "replacement": "            contracts: [],"
+ },
+ {
+  "id": "Q2",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "readmission metadata commit drops the sync record",
+  "anchor": "        const metadataPaths = [\n          `docs/06_status/lanes/${issueId}.json`,\n          `.ops/sync/${issueId}.yml`,\n        ];",
+  "replacement": "        const metadataPaths = [\n          `docs/06_status/lanes/${issueId}.json`,\n        ];"
+ },
+ {
+  "id": "P11",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "default sync approval flags default true",
+  "anchor": "        approval: { allow_multiple_issues: false, skip_sync_required: false },",
+  "replacement": "        approval: { allow_multiple_issues: true, skip_sync_required: true },"
+ },
+ {
+  "id": "P12",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "default sync record omits version",
+  "anchor": "        version: 1,\n        approval:",
+  "replacement": "        approval:"
+ },
+ {
+  "id": "N5",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "buildSyncYmlWithTaskContract skips validation",
+  "anchor": "  assertTaskContract(contract, issueId);\n  const parsed = existingContent?.trim()",
+  "replacement": "  const parsed = existingContent?.trim()"
+ },
+ {
+  "id": "N6",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "unterminated fence dropped",
+  "anchor": "  if (fenced.length > 0) items.push(fenced.join('\\n'));",
+  "replacement": "  if (false) items.push(fenced.join('\\n'));"
+ },
+ {
+  "id": "N7",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "fenceClosedBy ignores the info-string rule",
+  "anchor": "    marker.length >= fence.len &&\n    marker[0] === fence.char &&\n    (match?.[2] ?? '').trim() === ''",
+  "replacement": "    marker.length >= fence.len &&\n    marker[0] === fence.char"
+ },
+ {
+  "id": "N8",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "fenceOpenedBy drops the backtick-in-info guard",
+  "anchor": "  if (marker[0] === '`' && info.includes('`')) return null;",
+  "replacement": ""
+ },
+ {
+  "id": "N9",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "curlConfigValue newline guard removed",
+  "anchor": "  if (/\\r|\\n/u.test(value)) {\n    throw new Error('Linear API token contains an invalid newline');\n  }\n",
+  "replacement": ""
+ },
+ {
+  "id": "P10",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "malformed sync record guard removed",
+  "anchor": "  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {\n    throw new Error(`sync record for ${issueId} is malformed`);\n  }\n",
+  "replacement": ""
+ },
+ {
+  "id": "Q6",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "unmappedSections ancestor suppression removed",
+  "anchor": "  for (const occurrence of parsed.occurrences) {\n    if (taken.has(occurrence.id)) continue;\n    for (const child of occurrence.descendants) taken.add(child);\n  }",
+  "replacement": ""
+ },
+ {
+  "id": "U1",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "curlConfigValue escaping removed (quote/backslash reach the config raw)",
+  "anchor": "  return value.replaceAll('\\\\', '\\\\\\\\').replaceAll('\"', '\\\\\"');",
+  "replacement": "  return value;"
+ },
+ {
+  "id": "U2",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "fenceClosedBy minimum-length rule removed (a shorter fence closes a longer one)",
+  "anchor": "    marker.length >= fence.len &&",
+  "replacement": "    marker.length >= 1 &&"
+ },
+ {
+  "id": "U4",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "FENCE_RE indentation bound widened (4-space-indented code opens a fence)",
+  "anchor": "const FENCE_RE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;",
+  "replacement": "const FENCE_RE = /^ *(`{3,}|~{3,})(.*)$/u;"
+ },
+ {
+  "id": "U3",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "readmission non-metadata staged-path guard neutralised",
+  "anchor": "          stagedPaths.some((filePath) => !metadataPaths.includes(filePath))",
+  "replacement": "          false"
+ },
+ {
+  "id": "M-G45",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G45",
+  "anchor": "if (value.schema_version !== 1 || value.issue_id !== issueId) {",
+  "replacement": "if (value.issue_id !== issueId) {"
+ },
+ {
+  "id": "M-G46",
+  "file": "scripts/ops/execution-packet.ts",
+  "intent": "intended control G46",
+  "anchor": "    value.acceptance_criteria.length === 0\n",
+  "replacement": "    false\n"
+ },
+ {
+  "id": "M-G47",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G47",
+  "anchor": "        if (!add.ok) {",
+  "replacement": "        if (false) {"
+ },
+ {
+  "id": "M-G48",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G48",
+  "anchor": "          !staged.ok ||\n",
+  "replacement": ""
+ },
+ {
+  "id": "M-G49",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G49",
+  "anchor": "          stagedPaths.length === 0 ||\n",
+  "replacement": ""
+ },
+ {
+  "id": "M-G50",
+  "file": "scripts/ops/lane-start.ts",
+  "intent": "intended control G50",
+  "anchor": "        if (!commit.ok) {",
+  "replacement": "        if (false) {"
+ }
+]
+```

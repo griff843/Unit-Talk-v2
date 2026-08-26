@@ -3,8 +3,8 @@
 **Issue:** UTV2-1752 — packet finalization (readmission timing + nested-section consumption)
 **Tier:** T1 · **Lane type:** governance
 **Branch:** `claude/utv2-1752-packet-finalization`
-**Verified source SHA:** `26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c`
-MERGE_SHA: 26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c
+**Verified source SHA:** `623207503529136092fb53863b939b65b57d14f5`
+MERGE_SHA: 623207503529136092fb53863b939b65b57d14f5
 **Predecessor:** UTV2-1747 / PR #1446, closed unmerged at `d54abcbd`. That tree was preserved and ported here; UTV2-1752 addresses its four review findings and nothing else.
 
 ---
@@ -16,7 +16,7 @@ The branch contains two distinguishable populations:
 | Population | Files | Origin |
 |---|---|---|
 | **Ported** | `execution-packet.ts`, `claude-exec.ts`, `codex-exec.ts` and their tests (except the additions listed below) | byte-preserved from `d54abcbd`, re-applied onto current `main` |
-| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases G1-G37 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
+| **New in 1752** | the `lane-start.ts` readmission edits and `laneContractRoots`/`resolveReadmissionContract` extractions; the reserved-descendant logic, shared field table, fence/indent handling and fail-closed extraction guard in `execution-packet.ts`; test cases B1-G41 | authored in this lane to close findings 1 and 3, the three review threads, and two rounds of independent-review findings |
 
 Per-file `sha256` prefixes for both populations are recorded in
 `evidence.json → provenance`.
@@ -82,13 +82,16 @@ No 1752 edits. Present so the packet path is whole.
 
 ### Tests
 
-- `execution-packet.test.ts`: adds G1, G5, the thread regressions G6-G11, and
-  G12-G14, G16-G18 and G22 from three rounds of independent review.
-- `lane-start.test.ts`: adds `resolveTaskContractAcrossRoots` /
-  `laneContractRoots` / `resolveReadmissionContract` imports, the
-  `seedContractRoots()`, `seedBothRoots()` and `seedReadmissionFixture()`
-  helpers, G2/G2b/G2c/G3/G4/G15, and the end-to-end readmission tests
-  G19/G20/G21 -- the first coverage this repository has ever had of
+Every control ID below is enumerated by the generator from
+`git diff origin/main...HEAD`. An earlier revision listed these by hand and
+stopped at G22 while the suites had moved forty controls past it.
+
+- `execution-packet.test.ts`: adds 36 controls -- B1, F1, F2, F3, F4, F6, F7, F8, G1, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G16, G17, G18, G22, G29, G30, G31, G32, G33, G34, G35, G38, G39, G40, G42, G43, G44.
+- `lane-start.test.ts`: adds 23 controls -- F5b, F5, G2b, G2, G2c, G4, G15, G19, G20, G21, G23, G24, G25, G26, G27, G28, G36, G37, G41, G47, G48, G49, G50 -- together with the
+  `resolveTaskContractAcrossRoots` / `laneContractRoots` /
+  `resolveReadmissionContract` imports and the `seedContractRoots()`,
+  `seedBothRoots()` and `seedReadmissionFixture()` helpers. The end-to-end
+  readmission controls are the first coverage this repository has ever had of
   `lane-start --readmit-existing-branch` running as a program.
 - `claude-exec.test.ts`, `codex-exec.test.ts` -- ported, unchanged.
 
@@ -100,7 +103,7 @@ reviews; every count now lives in exactly one place, the EVIDENCE block of
 ### Proof bundle — Finding 4 (P2)
 
 All three bundle files are regenerated from measurement **at the PR head**, not
-at the SHA anchor. The anchor `3e7abdbb` is the lane's first implementation
+at the SHA anchor. The anchor `62320750` is the lane's LATEST implementation
 commit and exists only because a file cannot contain its own SHA; it is NOT
 where the figures were measured, and an earlier revision of this bundle wrongly
 said it was. No figure or unresolved-defect claim is carried over from the
