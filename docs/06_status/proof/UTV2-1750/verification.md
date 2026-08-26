@@ -6,41 +6,41 @@ MERGE_SHA: 4a89cf5f42c0e7f9d35ae1f703a61893bca4d43b
 
 ### ASSERTIONS:
 
-1. All four operational skill files (`/lane-recovery`, `/pr-unblock`,
-   `/proof-authoring`, `/mutation-test`) are committed under
-   `.claude/commands/` and indexed as new rows in `CLAUDE.md`'s skills
-   table.
-2. `/dispatch` performs deterministic skill discovery (new Phase 1.5) before
-   any executor is launched, and the execution packet's `skill_routing`
-   field is the authoritative record of the skills that discovery selected.
-3. `generateExecutionPacket`/`generateExecutionPacketResult`, when called
-   with `enforceSufficiency: true` (the mode the standalone CLI uses, which
-   is what `/dispatch`'s Phase 1.5 shells out to), refuse with code
-   `INSUFFICIENT_TASK_CONTRACT` when a task contract is missing
-   where-to-look, definition-of-done, or verification/self-check content —
-   proven by a 4-mutation battery (removing each requirement individually,
-   then removing all three together) that shows the refusal fires on
-   exactly the conditions it names, not merely on any input.
-4. Each of the four skills has at least one positive routing fixture (its
-   trigger phrase selects the skill) and one negative fixture (an ordinary
-   description of unrelated work does not select it) — 8 fixtures total.
-5. A production lane fixture modeled on UTV2-1736 (objective, acceptance
-   criteria, constraints, mutation boundary, where-to-look, exit criteria,
-   required evidence) survives `TaskContract` parsing with all of that
-   content intact, and does not falsely trigger any of the four skills.
-6. A recovery-shaped fixture (ghost/stuck/parked/merged-but-unclosed lane
-   language) selects `/lane-recovery`; an ordinary narrow implementation
-   fixture selects no skill.
-7. Routing triggers match the specified conditions: ghost/broken/parked/
-   merged-but-unclosed → `/lane-recovery`; required-context/head-binding/
-   merge-gate mismatch → `/pr-unblock`; proof bundle creation/correction →
-   `/proof-authoring`; a control claimed by tests → `/mutation-test`; a
-   fixture combining two trigger phrases selects both skills.
-8. Sufficiency enforcement is opt-in (`ExecutionPacketOptions.
-   enforceSufficiency`, default `false`), so `claude-exec.ts`,
-   `codex-exec.ts`, and `lane-start.ts` — all out of this lane's declared
-   file scope — see no behavior change; confirmed by the full repo test
-   suite passing with 0 failures.
+- [x] All four operational skill files (`/lane-recovery`, `/pr-unblock`,
+      `/proof-authoring`, `/mutation-test`) are committed under
+      `.claude/commands/` and indexed as new rows in `CLAUDE.md`'s skills
+      table.
+- [x] `/dispatch` performs deterministic skill discovery (new Phase 1.5) before
+      any executor is launched, and the execution packet's `skill_routing`
+      field is the authoritative record of the skills that discovery selected.
+- [x] `generateExecutionPacket`/`generateExecutionPacketResult`, when called
+      with `enforceSufficiency: true` (the mode the standalone CLI uses, which
+      is what `/dispatch`'s Phase 1.5 shells out to), refuse with code
+      `INSUFFICIENT_TASK_CONTRACT` when a task contract is missing
+      where-to-look, definition-of-done, or verification/self-check content —
+      proven by a 4-mutation battery (removing each requirement individually,
+      then removing all three together) that shows the refusal fires on
+      exactly the conditions it names, not merely on any input.
+- [x] Each of the four skills has at least one positive routing fixture (its
+      trigger phrase selects the skill) and one negative fixture (an ordinary
+      description of unrelated work does not select it) — 8 fixtures total.
+- [x] A production lane fixture modeled on UTV2-1736 (objective, acceptance
+      criteria, constraints, mutation boundary, where-to-look, exit criteria,
+      required evidence) survives `TaskContract` parsing with all of that
+      content intact, and does not falsely trigger any of the four skills.
+- [x] A recovery-shaped fixture (ghost/stuck/parked/merged-but-unclosed lane
+      language) selects `/lane-recovery`; an ordinary narrow implementation
+      fixture selects no skill.
+- [x] Routing triggers match the specified conditions: ghost/broken/parked/
+      merged-but-unclosed → `/lane-recovery`; required-context/head-binding/
+      merge-gate mismatch → `/pr-unblock`; proof bundle creation/correction →
+      `/proof-authoring`; a control claimed by tests → `/mutation-test`; a
+      fixture combining two trigger phrases selects both skills.
+- [x] Sufficiency enforcement is opt-in (`ExecutionPacketOptions.
+      enforceSufficiency`, default `false`), so `claude-exec.ts`,
+      `codex-exec.ts`, and `lane-start.ts` — all out of this lane's declared
+      file scope — see no behavior change; confirmed by the full repo test
+      suite passing with 0 failures.
 
 ### EVIDENCE:
 
