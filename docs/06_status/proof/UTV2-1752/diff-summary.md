@@ -3,8 +3,8 @@
 **Issue:** UTV2-1752 — packet finalization (readmission timing + nested-section consumption)
 **Tier:** T1 · **Lane type:** governance
 **Branch:** `claude/utv2-1752-packet-finalization`
-**Verified source SHA:** `73e6ff504c973fe0cb9c008384baf3084d0028a5`
-MERGE_SHA: 73e6ff504c973fe0cb9c008384baf3084d0028a5
+**Verified source SHA:** `26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c`
+MERGE_SHA: 26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c
 **Predecessor:** UTV2-1747 / PR #1446, closed unmerged at `d54abcbd`. That tree was preserved and ported here; UTV2-1752 addresses its four review findings and nothing else.
 
 ---

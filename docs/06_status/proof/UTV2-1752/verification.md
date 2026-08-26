@@ -1,22 +1,22 @@
 # PROOF: UTV2-1752
 
-MERGE_SHA: 73e6ff504c973fe0cb9c008384baf3084d0028a5
+MERGE_SHA: 26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c
 
-> `MERGE_SHA` names the implementation commit `7faa7a05`, which is an ancestor
+> `MERGE_SHA` names the implementation commit `26b9c0e5`, which is an ancestor
 > of the PR head. This is the form `executor-result-validator.yml` requires and
 > documents: a proof may reference the implementation commit rather than its own
 > commit, because a file cannot contain its own SHA. It is rebound to the actual
 > merge SHA after merge by `ops:proof-generate --merge-sha` (run from
 > `post-merge-lane-close.yml`). It is NOT a claim that this lane has merged.
 
-Verified source SHA: `73e6ff504c973fe0cb9c008384baf3084d0028a5`
+Verified source SHA: `26b9c0e5c0ea75fc8d05b95ebe787c8ae8071a2c`
 
 This lane finishes the executor-packet transport. It does not re-derive the
 implementation: the preserved tree is ported byte-exact from the reviewed head
 and only the exact-head findings that remained are addressed.
 
 Every figure below was measured **at the PR head**. The anchor is this lane's
-LATEST implementation commit `7faa7a05`, and it exists only because a file
+LATEST implementation commit `26b9c0e5`, and it exists only because a file
 cannot contain its own SHA. It carries every source control this bundle
 describes, including G23-G26, so the source hashes recorded under the mutation
 battery are the hashes at the anchor.
@@ -46,7 +46,7 @@ described here. Nothing is carried forward from the predecessor's proof.
 - [x] The four executor entrypoint files are byte-identical to the preserved
   head; only the packet module, lane-start and their two suites changed.
 - [x] Each fix is load-bearing: the mutation battery was re-measured IN FULL at
-  this head by a scripted runner — 24 mutations, 24 detected, 0 survivors — and
+  this head by a scripted runner — 41 mutations, 41 detected, 0 survivors — and
   both sources restored byte-identical after every one. Every control this lane
   adds is killed by at least one mutation, including G2 and G3, which an earlier
   revision of this file correctly recorded as unproven and which M14 now kills.
@@ -95,7 +95,7 @@ pnpm test:db                 NOT AUTHOR-ASSERTED. Produced by CI job "Writable D
 | `pnpm exec tsx --test scripts/ops/execution-packet.test.ts` | PASS | 68 tests, 0 failures. |
 | `pnpm exec tsx --test scripts/ops/lane-start.test.ts` | PASS | 58 tests, 0 failures. |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS | Rules matched: (none) — no R-level artifacts required for this diff. |
-| Test delta | +28 | 5057 at the preserved head to 5085 here: G1-G18, G2b/G2c, G22, the three end-to-end readmission tests G19/G20/G21, and the four round-5 controls G23-G26. Derived by `measure.py`, not typed — enumerating the additions by hand here is what went stale four times. |
+| Test delta | +43 | 5057 at the preserved head to 5100 here. Controls added by this lane, enumerated FROM THE DIFF rather than by hand: B1, F1, F2, F3, F4, F5b, F5, F6, F7, F8, G1, G2, G2b, G2c, G4, G5, G6, G7, G8, G9, G10, G11, G12, G13, G14, G15, G16, G17, G18, G19, G20, G21, G22, G23, G24, G25, G26, G27, G28, G29, G30, G31, G32, G33, G34, G35, G36, G37, G38, G39, G40, G41. Both the number and the list are generated; hand-maintaining either is what went stale five times. |
 | `pnpm test:db` | **SATISFIED — by CI, not by me** | Mandatory for this T1 lane and deliberately never marked `N/A`. It cannot be produced from this environment (`ci:assert-staging` refuses `host=127.0.0.1`). It is produced by the CI job **Writable DB proof (staging only)** against staging `xskgrzbteyqdufktjrjx` under the `staging-ci` environment, and validated **inside the required `verify` context** by `scripts/ci/verify-db-proof-receipt.ts --command 'pnpm test:db' --expect-workflow CI --expect-job staging-db-proof`. The artifact is scoped `utv2-1630-db-proof-receipt-${run_id}-${run_attempt}` with `if-no-files-found: error`, so a prior run's receipt cannot be substituted and a deleted upload fails the required context rather than skipping it. First observed at head `3973d900`, run `32859010194`, receipt `sha256=e2e0109f…73d3`, `verify` SUCCESS. This is CI's assertion, not mine. |
 
 ## Runtime Verification
@@ -204,7 +204,7 @@ Measured at the head this bundle describes, by the command shown:
 
 ```text
 $ git diff --numstat origin/main...HEAD -- scripts/ops/
-  8 files, 5294 insertions(+), 41 deletions(-)
+  8 files, 5797 insertions(+), 41 deletions(-)
 ```
 
 Two notes, both from review findings:
@@ -338,7 +338,7 @@ Both matched after every mutation.
 | P10 | malformed sync record guard removed | `execution-packet.ts` | `G34` |
 | Q6 | unmappedSections ancestor suppression removed | `execution-packet.ts` | `G35` |
 
-**24 mutations, 24 detected, 0 survivors.**
+**41 mutations, 41 detected, 0 survivors.**
 
 Reading notes, so no row is read as stronger than it is:
 
@@ -716,6 +716,95 @@ Earlier revisions reported a 24-mutation battery assembled from several rounds'
 JSON files. This head reports the **union of every mutation ever run in this
 lane**, deduped by ID and re-executed in full against the current tree. The
 count in the table below is that union, not a per-round subset.
+
+## Sixth independent review — the structural claim was false, and four guards had no control
+
+The sixth review returned CHANGES_REQUIRED. Its P1 falsified this bundle's own
+headline claim.
+
+### P1: five derived figures were stale by exactly one commit
+
+The previous revision asserted that every derived field in all three files was
+generated by one runner. That was false. The generator regenerated *some*
+fields and left the rest hand-maintained — which is the exact failure mode the
+claim said had been eliminated.
+
+| Figure | Claimed | True at that head | Where |
+|---|---|---|---|
+| `scripts/ops` diff stat | 5294 insertions | **5643** | `verification.md` EVIDENCE block, `evidence.json scope.substantive_diff_stat` |
+| Test delta | +28 (5057 → 5085) | **+39** (5057 → 5096) | `verification.md` EVIDENCE block, `evidence.json test_delta` |
+| Battery count | 24 mutations, 24 detected | **37** | `verification.md` twice, one of them printed directly beneath a 37-row table |
+| `MERGE_SHA` anchor prose | names `7faa7a05` | the token was `73e6ff50`, and `73e6ff50` was the latest implementation commit | `verification.md` twice |
+
+The Test-delta cell is the sharpest instance: its own justification read
+*"enumerating the additions by hand here is what went stale four times"*, and it
+was stale for the fifth time in that same sentence.
+
+The generator now owns all of them. The diff stat is computed by `git diff
+--numstat`; the test delta is the measured `verify:static` total minus the
+recorded baseline, with the added control IDs **enumerated from the diff**; the
+battery counts are substituted everywhere they appear in prose, not just in the
+table; and the anchor prose is derived from the anchor the file actually
+carries. No figure in this bundle is typed.
+
+### P2/P3: four live guards that no test killed
+
+Each was proved by executing the mutation, and each is now killed by exactly
+the control written for it.
+
+| Mutation | Guard with no control | Now killed by |
+|---|---|---|
+| **U1** | `curlConfigValue`'s quote/backslash escaping. G32 covered only the newline half. The token is interpolated into a quoted curl directive, so an unescaped `"` closes that value and everything after it is read by curl as further directives — the same injection primitive G32 refuses newlines for. | **G38** |
+| **U2** | `fenceClosedBy`'s minimum-length rule. A ``` line closed a ````` fence, splitting one criterion into three, with both suites green. | **G39** |
+| **U3** | The readmission non-metadata staged-path guard — on the path this lane exists to harden. Every readmission test asserts a success path, so none ever presented the guard with a dirty index. | **G41** |
+| **U4** | `FENCE_RE`'s three-space indentation bound. | **G40** |
+
+### Two of my four new fixtures were wrong first, and both were caught before commit
+
+- **G40's first fixture was vacuous.** It placed the indented fence on the
+  acceptance-criteria path, where an indented line is consumed *before*
+  `fenceOpenedBy` is reached — so widening the bound produced byte-identical
+  output. The bound is dead there and live in `parseSections`, which tests for a
+  fence before it tests for a heading. The fixture now sits there, where the
+  mutant swallows the heading that follows.
+- **G41's first precondition would have passed for the wrong reason.** It read
+  the lane worktree's index *after* the run, but `lane-start` tears that
+  worktree down when it refuses, so the check read an absent directory. The
+  precondition now proves the hook dirties a fresh worktree's index in a
+  throwaway probe worktree, established before and independently of the code
+  under test.
+
+Both were found by probing the fixture against the mutation before committing,
+which is the only method that has ever caught this class in this lane.
+
+### Disclosed here because the sixth review found them disclosed nowhere
+
+The previous round reported P16 and L7 as "disclosed, not fixed". They were
+disclosed in the PR's executor-result comment and **not in this bundle**, which
+is where a reviewer looks. That was a real gap and the reviewer was right to
+call it. Recorded here:
+
+- **L7** — the readmission non-metadata staged-path guard. No longer merely
+  disclosed: it is fixed and killed by G41 (mutation U3).
+- **P16** — `flushIndented`'s trailing-blank trim. Cosmetic, not fixed, and no
+  control is claimed for it.
+- **`tsconfig.json` has `files: []` and no `scripts/` project reference**, so
+  `pnpm type-check` does not cover any source this lane changed. Out of scope,
+  reported unfixed.
+- **`file_scope_lock` omits this lane's own `.ops/sync/UTV2-1752.yml` and
+  `docs/06_status/lanes/UTV2-1752.json`**, both of which the diff touches. The
+  required `File scope lock` context is green at this head, so this is recorded
+  rather than repaired: amending a frozen scope lock mid-lane is a larger
+  governance action than the defect warrants, and CI is the authority.
+
+### Running count (current)
+
+Vacuous or unpinned controls of my own, across six review rounds: **FOURTEEN**,
+unchanged this round — the two defective fixtures above were caught before they
+were committed, which is the first time that has happened in this lane. What
+this round adds instead is a **false structural claim**: the bundle asserted
+generation it had not implemented. That is a different and arguably worse defect
+than a vacuous control, because it asserts the absence of a whole defect class.
 
 ### Residual risk
 
