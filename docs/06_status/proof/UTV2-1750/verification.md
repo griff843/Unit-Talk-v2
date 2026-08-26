@@ -4,7 +4,7 @@ MERGE_SHA: 4a89cf5f42c0e7f9d35ae1f703a61893bca4d43b
 
 ## Verification
 
-### ASSERTIONS
+### ASSERTIONS:
 
 1. All four operational skill files (`/lane-recovery`, `/pr-unblock`,
    `/proof-authoring`, `/mutation-test`) are committed under
@@ -42,7 +42,7 @@ MERGE_SHA: 4a89cf5f42c0e7f9d35ae1f703a61893bca4d43b
    file scope — see no behavior change; confirmed by the full repo test
    suite passing with 0 failures.
 
-### EVIDENCE
+### EVIDENCE:
 
 Focused test file, run via `pnpm exec tsx --test` (never bare `tsx`) with
 `TMPDIR=/home/griff843/code/Unit-Talk-v2/.out/tmp-1752`:
