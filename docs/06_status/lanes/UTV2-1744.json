@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1744-outbox-triage",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1452",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1744.yml",
@@ -25,9 +25,9 @@
     "docs/06_status/proof/UTV2-1744/evidence.json",
     "docs/06_status/proof/UTV2-1744/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-26T20:09:05.212Z",
-  "heartbeat_at": "2026-08-26T20:09:05.212Z",
+  "heartbeat_at": "2026-08-27T02:17:13.886Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1744-outbox-triage.json",
