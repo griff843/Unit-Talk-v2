@@ -26,28 +26,72 @@
 --   double storage growth. Restoring those partial indexes is a CLV/product decision,
 --   and CLV is currently NO-GO; see the commented alternative at the bottom of this file.
 
--- NO-PRECONDITION-REQUIRED: this migration is deliberately idempotent, so it has no
--- create-or-fail relation for the fail-closed precondition drill to exercise.
+-- FAIL-CLOSED-PRECONDITION: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124
 --
--- The drill (scripts/ci/migration-precondition-drill.ts) seeds a declared relation as a
--- decoy and requires the migration to raise SQLSTATE 42P07 before any DDL. That contract
--- fits a migration whose accidental execution on production would be SILENT because it
--- captures already-existing live DDL. This migration is the opposite case:
+-- What the precondition guards, and why it is not merely drill-shaped.
 --
---   * It creates genuinely new partitions that do not exist on production today, so an
---     execution against production is a visible, intended state change, not a no-op that
---     hides a bypassed authorization boundary.
---   * Idempotency is a required property here, not an accident: it is what makes a second
---     apply mutate nothing (`to_regclass(...) IS NOT NULL THEN CONTINUE`). Declaring a
---     42P07 precondition would mean deleting that property to satisfy a drill.
+-- This migration is idempotent: a day that already has an attached partition is
+-- skipped, so a second apply mutates nothing. Idempotency is a required property
+-- here. But "the name is already taken" and "the partition already exists" are NOT
+-- the same condition, and conflating them is the actual hazard.
 --
--- What it does assert instead, and what the proof bundle demonstrates by execution against
--- a non-production database, are the two fail-closed invariants that actually matter here:
--- complete coverage of the declared range, and the absence of a DEFAULT partition. Both
--- RAISE EXCEPTION inside the same transaction as the DDL, so a violation rolls the whole
--- migration back.
+-- If `public.provider_offer_history_p20260701` exists as a STANDALONE relation --
+-- a table someone created by hand, a leftover from a DETACH that was never dropped,
+-- a view -- then a bare `to_regclass IS NOT NULL` skip would silently accept it and
+-- report complete coverage. Rows for that day would then land nowhere, or in an
+-- unmanaged table outside the partition tree, and the coverage assertion below
+-- would pass while the invariant it exists to protect was already broken.
+--
+-- So the guard below runs BEFORE any DDL, walks the entire provisioned range, and
+-- refuses with SQLSTATE 42P07 (duplicate_table) the moment a target name is
+-- occupied by anything that is not an attached partition of provider_offer_history.
+-- Skipping remains correct for genuine partitions; only the ambiguous case refuses.
+--
+-- The two declared relations are the first and last day of the provisioned range,
+-- so the drill exercises both ends of the loop rather than only its first iteration.
 
 BEGIN;
+
+DO $precondition$
+DECLARE
+  d      date;
+  v_name text;
+  v_oid  oid;
+BEGIN
+  FOR d IN
+    SELECT gs::date
+    FROM generate_series(DATE '2026-07-01', DATE '2026-11-24', INTERVAL '1 day') gs
+  LOOP
+    v_name := format('provider_offer_history_p%s', to_char(d, 'YYYYMMDD'));
+    v_oid  := to_regclass('public.' || v_name);
+
+    -- Free name: this migration will create the partition below.
+    IF v_oid IS NULL THEN
+      CONTINUE;
+    END IF;
+
+    -- Name taken. Skipping is only safe when the occupant is genuinely an
+    -- attached partition of provider_offer_history.
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_inherits i
+      JOIN pg_class parent ON parent.oid = i.inhparent
+      JOIN pg_namespace pns ON pns.oid = parent.relnamespace
+      WHERE i.inhrelid = v_oid
+        AND pns.nspname = 'public'
+        AND parent.relname = 'provider_offer_history'
+    ) THEN
+      RAISE EXCEPTION
+        USING ERRCODE = '42P07',
+              MESSAGE = format(
+                'UTV2-1736: relation public.%I already exists and is NOT an attached partition of public.provider_offer_history. Refusing before any DDL rather than skipping it and reporting coverage that does not exist.',
+                v_name
+              );
+    END IF;
+  END LOOP;
+END;
+$precondition$;
+
 
 -- ---------------------------------------------------------------------------
 -- 1 + 2. Provision every missing day from the first gap day through an
