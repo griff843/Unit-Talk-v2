@@ -127,6 +127,11 @@ $ pnpm type-check    -> pass
 $ pnpm build         -> pass
 $ pnpm test          -> 98 suites, 0 failures
 $ pnpm verify        -> fails only at test:live-db (environment gate)
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 5
+Rules matched: (none) - no R-level artifacts required for this diff
 ```
 
 `test:live-db` refuses locally by design:
