@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1758-reconcile-classification",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1454",
   "files_changed": [
     ".ops/sync/UTV2-1758.yml",
     "docs/06_status/lanes/UTV2-1758.json",
@@ -34,7 +34,7 @@
   ],
   "status": "started",
   "started_at": "2026-08-27T21:19:57.833Z",
-  "heartbeat_at": "2026-08-27T22:00:00.991Z",
+  "heartbeat_at": "2026-08-27T22:00:54.457Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1758-reconcile-classification.json",
