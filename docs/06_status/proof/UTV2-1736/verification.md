@@ -256,31 +256,66 @@ Known gap 1. Every stage before it passes.
 
 ### 10. Migration gates
 
-This migration carries an explicit `-- NO-PRECONDITION-REQUIRED:` declaration
-rather than a `-- FAIL-CLOSED-PRECONDITION:` one. The reason is recorded in the
-migration itself and is not a convenience: the fail-closed precondition drill
-requires the migration to raise SQLSTATE `42P07` when a declared relation is
-seeded as a decoy, and satisfying that would mean deleting the idempotency that
-makes a second apply mutate nothing — a property this lane is required to have.
-The invariants this migration does assert (complete coverage of the declared
-range, and no DEFAULT partition) both `RAISE EXCEPTION` inside the same
-transaction as the DDL, so a violation rolls the whole migration back.
+**Fail-closed precondition.** The migration declares:
 
-The reversibility artifact is
+```text
+-- FAIL-CLOSED-PRECONDITION: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124
+```
+
+The guard is not drill-shaped. It exists because "the name is already taken" and
+"the partition already exists" are different conditions, and conflating them is
+the real hazard: if an in-range target name is occupied by a **standalone**
+relation — a hand-created table, a leftover from a `DETACH` that was never
+dropped — a bare `to_regclass IS NOT NULL` skip would accept it silently and the
+coverage assertion would then pass while the invariant it protects was already
+broken. Rows for that day would land nowhere, or in an unmanaged table outside
+the partition tree.
+
+So a pre-flight block walks the entire provisioned range **before any DDL** and
+raises SQLSTATE `42P07` the moment a target name is occupied by anything that is
+not an attached partition of `provider_offer_history`. Skipping stays correct for
+genuine partitions, so idempotency is preserved; only the ambiguous case refuses.
+The two declared relations are the first and last day of the range, so the drill
+exercises both ends of the loop rather than only its first iteration.
+
+**Executed refusal, on staging.** The guard was made to fail on the condition it
+names. `provider_offer_history_p20261124` (empty) was `DETACH`ed, producing
+exactly the hazard — an in-range name held by a standalone relation — and the
+guard body was then run:
+
+```text
+DETACH provider_offer_history_p20261124   -- now a standalone relation, in range
+run guard  -> SQLSTATE 42P07
+   "UTV2-1736: relation public.provider_offer_history_p20261124 already exists and is
+    NOT an attached partition of public.provider_offer_history. Refusing before any
+    DDL rather than skipping it and reporting coverage that does not exist."
+ATTACH provider_offer_history_p20261124 FOR VALUES FROM ('2026-11-24') TO ('2026-11-25')
+
+-- staging restored, verified:
+attached_in_range | last_day_reattached
+------------------+--------------------
+              147 |                   1
+```
+
+The assertion was written to raise `DRILL FAILED` on any SQLSTATE other than
+`42P07`; it did not raise. Staging carries no residue.
+
+**Reversibility.** The rollback artifact is
 `db/migrations-rollback/20260824000000_utv2_1736_offer_history_forward_partitions.down.sql`.
 It reverses exactly what the migration creates — the 147 in-range partitions and
 the helper function — refuses any partition holding rows, and never touches the
 60 pre-existing partitions, which are outside the provisioned range by
-construction.
+construction. CI's schema round-trip drill (apply -> rollback -> reapply
+convergence, scratch Postgres) passes on it.
 
-The `skip-proof-coverage` label is applied. `proof-coverage-guard` fires on any
-`supabase/migrations/*.sql` change and asks for an app-level live-DB proof
-because that class of change "has shipped broken because unit tests pass under
-InMemory while production diverges". That rationale does not apply here: this PR
-adds no app runtime code path at all. The monitor is read-only ops tooling, and
-the migration's coverage is the three dedicated scratch-Postgres drills plus
-Live Schema Parity plus the staging writable-DB proof — strictly stronger than an
-InMemory-versus-live comparison.
+**Proof-coverage guard.** The `skip-proof-coverage` label is applied.
+`proof-coverage-guard` fires on any `supabase/migrations/*.sql` change and asks
+for an app-level live-DB proof because that class of change "has shipped broken
+because unit tests pass under InMemory while production diverges". That rationale
+does not apply here: this PR adds no app runtime code path at all. The monitor is
+read-only ops tooling, and the migration's coverage is the three dedicated
+scratch-Postgres drills plus Live Schema Parity plus the staging writable-DB
+proof — strictly stronger than an InMemory-versus-live comparison.
 
 ## Known gaps, stated plainly
 
