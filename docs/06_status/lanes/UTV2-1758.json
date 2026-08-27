@@ -32,9 +32,9 @@
     "docs/06_status/proof/UTV2-1758/diff-summary.md",
     "docs/06_status/proof/UTV2-1758/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-27T21:19:57.833Z",
-  "heartbeat_at": "2026-08-27T22:00:54.457Z",
+  "heartbeat_at": "2026-08-27T22:03:48.497Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1758-reconcile-classification.json",
