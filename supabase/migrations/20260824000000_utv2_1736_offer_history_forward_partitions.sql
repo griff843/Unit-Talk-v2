@@ -26,6 +26,27 @@
 --   double storage growth. Restoring those partial indexes is a CLV/product decision,
 --   and CLV is currently NO-GO; see the commented alternative at the bottom of this file.
 
+-- NO-PRECONDITION-REQUIRED: this migration is deliberately idempotent, so it has no
+-- create-or-fail relation for the fail-closed precondition drill to exercise.
+--
+-- The drill (scripts/ci/migration-precondition-drill.ts) seeds a declared relation as a
+-- decoy and requires the migration to raise SQLSTATE 42P07 before any DDL. That contract
+-- fits a migration whose accidental execution on production would be SILENT because it
+-- captures already-existing live DDL. This migration is the opposite case:
+--
+--   * It creates genuinely new partitions that do not exist on production today, so an
+--     execution against production is a visible, intended state change, not a no-op that
+--     hides a bypassed authorization boundary.
+--   * Idempotency is a required property here, not an accident: it is what makes a second
+--     apply mutate nothing (`to_regclass(...) IS NOT NULL THEN CONTINUE`). Declaring a
+--     42P07 precondition would mean deleting that property to satisfy a drill.
+--
+-- What it does assert instead, and what the proof bundle demonstrates by execution against
+-- a non-production database, are the two fail-closed invariants that actually matter here:
+-- complete coverage of the declared range, and the absence of a DEFAULT partition. Both
+-- RAISE EXCEPTION inside the same transaction as the DDL, so a violation rolls the whole
+-- migration back.
+
 BEGIN;
 
 -- ---------------------------------------------------------------------------
