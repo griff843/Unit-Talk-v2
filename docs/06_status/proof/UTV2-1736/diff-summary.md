@@ -13,6 +13,8 @@ MERGE_SHA: cbfc0ebe775489a44bbe168004f41ec6a8decca4
 | `docs/06_status/proof/UTV2-1736/diff-summary.md` | rewritten | This file. |
 | `docs/06_status/proof/UTV2-1736/evidence.json` | rewritten | Schema v2 evidence with SHA binding, row counts, scenarios, and known gaps. |
 | `docs/06_status/proof/UTV2-1736/model-routing.json` | rewritten | Model routing record. |
+| `package.json` | +1 | Wires `scripts/ops/partition-provisioner.test.ts` into `test:ops` so this lane's 10 tests execute under required `verify`. `test:ops` is a hardcoded file list, not a glob. PM-authorized scope extension. |
+| `docs/06_status/lanes/UTV2-1736.json` | modified | Adds `package.json` and the manifest's own path to `file_scope_lock`, plus a `scope_override` block recording the PM authorization. |
 
 ## Design decisions, and what was deliberately not done
 

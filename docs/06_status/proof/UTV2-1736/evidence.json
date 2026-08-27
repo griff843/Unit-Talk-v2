@@ -5,7 +5,7 @@
   "lane_type": "migration",
   "proof_profile": "migration",
   "title": "Continuous daily partition coverage for provider_offer_history with a read-only forward-coverage monitor",
-  "status": "BLOCKED_ON_PM_SCOPE_EXTENSION",
+  "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-27T02:05:00Z",
   "merge_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
   "sha_binding": {
@@ -143,14 +143,22 @@
       "status": "FAIL",
       "exit_code": 1,
       "detail": "executable-wiring guard reports WIRING_TEST_UNWIRED_NEW scripts/ops/partition-provisioner.test.ts and WIRING_CAPABILITY_ORPHAN scripts/ops/partition-provisioner.ts. Both remedies (package.json test:ops, or docs/05_operations/executable-wiring-baseline.json) are outside this lane's immutable file_scope_lock. Requires a PM scope extension."
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test (4895 pass / 0 fail), smart-form verify, verify:commands"
+    },
+    "executable_wiring": {
+      "verdict": "PASS",
+      "required_reachable": 314,
+      "capability_orphan": 18,
+      "new_unwired": 0,
+      "new_orphan": 0,
+      "baseline_entries_added": 0
     }
   },
   "known_gaps": {
-    "ci_test_wiring": {
-      "severity": "BLOCKER",
-      "detail": "pnpm verify FAILS (exit 1). test:ops in package.json is a hardcoded file list, not a glob, and scripts/ops/partition-provisioner.test.ts is absent from it, so this lane's 10 tests never run under pnpm test, pnpm verify, or CI. The repo enforces this mechanically via executable-wiring, which is red. Remedies: (a) add the path to test:ops in package.json (correct fix), or (b) add a reviewed disposition to docs/05_operations/executable-wiring-baseline.json (suppresses rather than fixes). Both are outside file_scope_lock and require a PM scope extension.",
-      "blocks": "pnpm verify green, and therefore the T1 gate"
-    },
     "main_sync_blocked": {
       "severity": "HIGH",
       "detail": "The lane branch is 23 commits behind origin/main. ops:merge-wrapper git-merge-main is implemented as `git merge --ff-only origin/main` (scripts/ops/ops-merge-wrapper.ts:96) and cannot merge a diverged branch. git-rebase-main rewrites history and invalidates pm-verdict, t1-approved evidence, and executor-result. Raw git merge is forbidden. Governance tooling debt, not a safety refusal.",
@@ -159,6 +167,16 @@
     "real_sink_test_not_automated": {
       "severity": "LOW",
       "detail": "The real-sink proof was executed by driving the real function's output into staging's real system_runs and audit_log, because staging service-role credentials are unavailable locally under production containment. Automating it in CI would require editing package.json and adding a live T1 proof file, both outside file_scope_lock."
+    },
+    "test_db_receipt": {
+      "severity": "EXPECTED",
+      "detail": "pnpm verify is verify:static && test:live-db. verify:static is fully green on this branch. test:live-db refuses locally because production containment sets SUPABASE_URL=http://127.0.0.1:1 and assert-staging-target requires xskgrzbteyqdufktjrjx. The T1 live-DB receipt is produced by CI's staging-ci environment inside the required verify job. This is a correct safety refusal, not lane debt.",
+      "resolved_here": false
+    },
+    "ci_test_wiring_resolved": {
+      "severity": "RESOLVED",
+      "detail": "Under a PM-authorized scope extension covering package.json, scripts/ops/partition-provisioner.test.ts is wired into test:ops. executable-wiring reports verdict=PASS, required-reachable 313->314, capability orphan 19->18, new=0 on both. No baseline suppression entry was added.",
+      "resolved_here": true
     }
   },
   "scope_refusals": [
