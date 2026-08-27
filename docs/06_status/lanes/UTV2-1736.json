@@ -12,10 +12,12 @@
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1736.yml",
+    "docs/06_status/lanes/UTV2-1736.json",
     "docs/06_status/proof/UTV2-1736/diff-summary.md",
     "docs/06_status/proof/UTV2-1736/evidence.json",
     "docs/06_status/proof/UTV2-1736/model-routing.json",
     "docs/06_status/proof/UTV2-1736/verification.md",
+    "package.json",
     "scripts/ops/partition-provisioner.test.ts",
     "scripts/ops/partition-provisioner.ts",
     "supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql"
@@ -46,5 +48,13 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "authorized_by": "PM",
+    "authorized_at": "2026-08-27",
+    "paths": [
+      "package.json"
+    ],
+    "reason": "test:ops is a hardcoded file list, not a glob, so scripts/ops/partition-provisioner.test.ts was unreachable from any executable command and pnpm verify failed with WIRING_TEST_UNWIRED_NEW. PM authorized extending file scope to package.json to wire the lane's own tests into test:ops rather than suppressing the guard via the wiring baseline."
   }
 }

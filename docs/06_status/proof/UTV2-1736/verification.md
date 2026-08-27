@@ -66,9 +66,11 @@ ASSERTIONS:
 - [x] An induced pre-expiry condition reaches the **real operations sinks** —
       `system_runs` and `audit_log` — not merely the predicate.
 - [x] `pnpm test` on the lane branch: 4,895 tests, 0 failures, exit 0.
-- [ ] `pnpm verify` **FAILS** on this branch — see Known gap 1. The failure is
-      the executable-wiring guard correctly reporting that this lane's own test
-      file is not reachable from any package script or workflow command.
+- [x] `pnpm verify:static` — every static stage green, including the
+      executable-wiring guard, with this lane's own 10 tests now reachable from
+      `test:ops`.
+- [ ] `pnpm test:db` is **not obtainable locally** and is expected to be
+      produced in CI — see Known gap 1. It is not a defect in this lane.
 
 ## Runtime Verification
 
@@ -202,37 +204,57 @@ $ pnpm exec tsx --test scripts/ops/partition-provisioner.test.ts
 # fail 0
 ```
 
+The lane's 10 tests are now wired into `test:ops`, so they execute inside
+required `verify` rather than only when invoked by hand. The wiring guard
+confirms it:
+
+```text
+[executable-wiring] verdict=PASS required_roots=verify
+[executable-wiring] tests total=469 required-reachable=314 optional-reachable=36
+                    fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+[executable-wiring] capabilities total=155 wired=137 orphan=18 (baselined=18 new=0)
+[executable-wiring] baseline tests=119/119 capabilities=18/18
+```
+
+`required-reachable` moved 313 -> 314 and `capability orphan` 19 -> 18: exactly
+this lane's test file and its capability, and nothing else. No entry was added
+to `executable-wiring-baseline.json` — the signal was fixed, not suppressed.
+
+Every static stage of `pnpm verify` passes on this branch:
+
+```text
+$ pnpm verify:static
+ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
+ops:automation-coverage-check, env:check, lint, type-check, build,
+test (4,895 pass / 0 fail), smart-form verify, verify:commands
+-> all green
+```
+
 ## Known gaps, stated plainly
 
-1. **BLOCKER — `pnpm verify` fails: this lane's own test file is not wired into
-   any executable command.** `test:ops` in `package.json` is a hardcoded file
-   list, not a glob, and `scripts/ops/partition-provisioner.test.ts` is absent
-   from it. The repo enforces this mechanically, and the guard is red:
+1. **`pnpm verify` cannot go green in this worktree, and the reason is
+   containment, not this lane.** `verify` is `verify:static && test:live-db`.
+   `verify:static` is fully green. `test:live-db` refuses immediately:
 
    ```text
-   [executable-wiring] verdict=FAIL required_roots=verify
-   [executable-wiring] tests total=469 required-reachable=313 optional-reachable=36
-                       unwired=120 (baselined=119 new=1)
-   [FAIL] WIRING_TEST_UNWIRED_NEW scripts/ops/partition-provisioner.test.ts
-          - test file is not reachable from any package script or workflow command
-   [FAIL] WIRING_CAPABILITY_ORPHAN scripts/ops/partition-provisioner.ts
-          - active capability has documentation-only references and no executable reference
-   $ pnpm verify → EXIT=1
+   $ tsx scripts/ci/assert-staging-target.ts
+   [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+   [assert-staging] REFUSED: target identity could not be resolved from its URL
+     (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.
+     Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
    ```
 
-   The 4,895-test figure above therefore does **not** include this lane's own 10
-   tests, which run only when invoked directly.
+   Production containment sets `SUPABASE_URL=http://127.0.0.1:1` locally, so no
+   local invocation can reach a writable database — which is the intended
+   behaviour. The `pnpm test:db` receipt for this lane is produced by CI's
+   `staging-ci` environment inside the required `verify` job. This is a
+   correct safety refusal, not lane debt, and it is where the T1 live-DB
+   evidence must come from.
 
-   There are exactly two remedies and **both are outside this lane's immutable
-   `file_scope_lock`**:
-   - wire the test into `test:ops` in `package.json` (the correct fix — it makes
-     the tests actually run), or
-   - add a reviewed disposition to
-     `docs/05_operations/executable-wiring-baseline.json` (suppresses the signal
-     rather than fixing it; not recommended).
-
-   This lane cannot go green without a PM scope extension. It is a governance
-   scope decision, not something the lane may self-approve.
+   The earlier wiring blocker recorded here is **resolved**: under a PM-
+   authorized scope extension covering `package.json`, this lane's test file is
+   wired into `test:ops` and the guard reports `verdict=PASS` with
+   `new=0` on both tests and capabilities.
 
 2. **The lane branch is 23 commits behind `origin/main` and cannot be synced
    through the sanctioned path.** `ops:merge-wrapper git-merge-main` — the verb
