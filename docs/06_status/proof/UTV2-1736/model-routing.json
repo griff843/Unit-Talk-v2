@@ -1,1 +1,14 @@
-{"issue_id":"UTV2-1736","placeholder":true}
+{
+  "issue_id": "UTV2-1736",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "selected_by": "three-brain",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-08-27T02:05:00Z",
+  "merge_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4"
+}
