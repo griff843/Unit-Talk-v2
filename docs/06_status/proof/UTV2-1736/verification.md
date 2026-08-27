@@ -230,6 +230,58 @@ test (4,895 pass / 0 fail), smart-form verify, verify:commands
 -> all green
 ```
 
+### 9. Command receipts
+
+```text
+$ pnpm type-check
+> pnpm exec tsc -b tsconfig.json
+(no diagnostics; exit 0)
+
+$ pnpm test
+# tests 4895
+# pass 4895
+# fail 0
+
+$ pnpm verify:static
+-> all stages green (see section 8); exit 0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 38
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+`pnpm verify` itself exits 1 in this worktree, and only at `test:live-db` — see
+Known gap 1. Every stage before it passes.
+
+### 10. Migration gates
+
+This migration carries an explicit `-- NO-PRECONDITION-REQUIRED:` declaration
+rather than a `-- FAIL-CLOSED-PRECONDITION:` one. The reason is recorded in the
+migration itself and is not a convenience: the fail-closed precondition drill
+requires the migration to raise SQLSTATE `42P07` when a declared relation is
+seeded as a decoy, and satisfying that would mean deleting the idempotency that
+makes a second apply mutate nothing — a property this lane is required to have.
+The invariants this migration does assert (complete coverage of the declared
+range, and no DEFAULT partition) both `RAISE EXCEPTION` inside the same
+transaction as the DDL, so a violation rolls the whole migration back.
+
+The reversibility artifact is
+`db/migrations-rollback/20260824000000_utv2_1736_offer_history_forward_partitions.down.sql`.
+It reverses exactly what the migration creates — the 147 in-range partitions and
+the helper function — refuses any partition holding rows, and never touches the
+60 pre-existing partitions, which are outside the provisioned range by
+construction.
+
+The `skip-proof-coverage` label is applied. `proof-coverage-guard` fires on any
+`supabase/migrations/*.sql` change and asks for an app-level live-DB proof
+because that class of change "has shipped broken because unit tests pass under
+InMemory while production diverges". That rationale does not apply here: this PR
+adds no app runtime code path at all. The monitor is read-only ops tooling, and
+the migration's coverage is the three dedicated scratch-Postgres drills plus
+Live Schema Parity plus the staging writable-DB proof — strictly stronger than an
+InMemory-versus-live comparison.
+
 ## Known gaps, stated plainly
 
 1. **`pnpm verify` cannot go green in this worktree, and the reason is
