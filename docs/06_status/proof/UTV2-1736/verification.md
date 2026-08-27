@@ -1,6 +1,6 @@
 # PROOF: UTV2-1736
 
-MERGE_SHA: cbfc0ebe775489a44bbe168004f41ec6a8decca4
+MERGE_SHA: 58755c370d7766604b8612778b5afc17fb8d5ffe
 
 Continuous daily partition coverage for `public.provider_offer_history`, plus a
 read-only forward-coverage monitor that raises a pre-expiry alert into the real
@@ -316,6 +316,44 @@ does not apply here: this PR adds no app runtime code path at all. The monitor i
 read-only ops tooling, and the migration's coverage is the three dedicated
 scratch-Postgres drills plus Live Schema Parity plus the staging writable-DB
 proof — strictly stronger than an InMemory-versus-live comparison.
+
+### 11. CI receipts, at the exact source head
+
+All four migration receipts below were produced by CI at
+`58755c370d7766604b8612778b5afc17fb8d5ffe`, which is the last commit carrying
+non-proof changes. Every commit after it touches proof artifacts only.
+
+| Receipt | Result | Run | Job |
+|---|---|---:|---:|
+| Fail-closed precondition drill (scratch Postgres) | PASS | 33032924826 | 98389286094 |
+| Schema round-trip drill (scratch Postgres) | PASS | 33032924826 | 98389286153 |
+| Live Schema Parity | PASS | 33032924751 | 98389301930 |
+| Writable DB proof (staging only) | PASS | 33032924838 | 98389362906 |
+
+The precondition drill's seven cases, verbatim:
+
+```text
+migration-precondition-drill: supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql
+  [PASS] refuses when public.provider_offer_history_p20260701 pre-exists — raised SQLSTATE 42P07
+  [PASS] no DDL ran when public.provider_offer_history_p20260701 pre-exists — schema fingerprint identical before and after the attempt
+  [PASS] scratch restored after public.provider_offer_history_p20260701 case — back to baseline
+  [PASS] refuses when public.provider_offer_history_p20261124 pre-exists — raised SQLSTATE 42P07
+  [PASS] no DDL ran when public.provider_offer_history_p20261124 pre-exists — schema fingerprint identical before and after the attempt
+  [PASS] scratch restored after public.provider_offer_history_p20261124 case — back to baseline
+  [PASS] applies on an empty scratch schema — created all declared relations: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124
+migration-precondition-drill: PASS
+drilled 1 migration(s)
+```
+
+`no DDL ran ... schema fingerprint identical before and after the attempt` is the
+load-bearing line: it is what "refused before any DDL" actually means, and it is
+why the guard was placed as a pre-flight pass over the whole range rather than
+inline in the provisioning loop.
+
+The `Writable DB proof (staging only)` job is the T1 live-DB receipt that cannot
+be obtained locally under production containment (Known gap 1). It ran against
+staging `xskgrzbteyqdufktjrjx` in the `staging-ci` environment; no production
+credential is reachable from it.
 
 ## Known gaps, stated plainly
 
