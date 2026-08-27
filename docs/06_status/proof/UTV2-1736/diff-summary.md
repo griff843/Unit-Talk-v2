@@ -1,12 +1,12 @@
 # UTV2-1736 — diff summary
 
-MERGE_SHA: 33e76bad8ce78c4927d076f52683326461e52d86
+MERGE_SHA: b700091eb5b12605141b838297e3f04c1dcb121a
 
 ## Files changed
 
 | File | Lines | Purpose |
 |---|---|---|
-| `supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql` | +266 | Provisions every daily partition from 2026-07-01 through 2026-11-24 (147) on `provider_offer_history`, using the lean three-index shape matching current production. Asserts complete coverage and asserts no DEFAULT partition exists. Ships a commented, manual rollback that drops only the partitions it provisions and only while empty. Adds `list_provider_offer_history_partition_days()` for the monitor. |
+| `supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql` | +333 | Provisions every daily partition from 2026-07-01 through 2026-11-24 (147) on `provider_offer_history`, using the lean three-index shape matching current production. Asserts complete coverage and asserts no DEFAULT partition exists. Ships a commented, manual rollback that drops only the partitions it provisions and only while empty. Adds `list_provider_offer_history_partition_days()` for the monitor, and locks that `SECURITY DEFINER` function down to `service_role` only — revoking EXECUTE from `PUBLIC`, `anon`, and `authenticated`, each guarded on role existence, behind a fail-closed assertion that refuses to commit if any untrusted role retains EXECUTE. |
 | `db/migrations-rollback/20260824000000_utv2_1736_offer_history_forward_partitions.down.sql` | +67 | Rollback artifact required by `migration-reversibility-gate` and exercised by CI's schema round-trip drill (apply -> rollback -> reapply convergence). Reverses only the 147 partitions this migration provisions plus the helper function; counts rows before any DETACH and refuses a non-empty partition with `REFUSED: % holds % row(s); leaving attached` rather than dropping it. Never touches the 60 pre-existing partitions, which fall outside the provisioned range by construction. |
 | `scripts/ops/partition-provisioner.ts` | +338 | Read-only forward-coverage monitor. Never issues DDL. Computes the unbroken forward coverage run from today, evaluates it against warn/critical day thresholds, and writes the verdict to the real operations sinks (`system_runs` via startRun/completeRun, and `audit_log.record`). |
 | `scripts/ops/partition-provisioner.test.ts` | +204 | 10 tests covering naming round-trip, unbroken-run coverage semantics, threshold boundaries, inverted-threshold rejection, real-sink write on an induced CRITICAL, audit-sink failure propagation, and the absence of DEFAULT/DROP in the emitted SQL. |
@@ -16,6 +16,25 @@ MERGE_SHA: 33e76bad8ce78c4927d076f52683326461e52d86
 | `docs/06_status/proof/UTV2-1736/model-routing.json` | rewritten | Model routing record. |
 | `package.json` | +1 | Wires `scripts/ops/partition-provisioner.test.ts` into `test:ops` so this lane's 10 tests execute under required `verify`. `test:ops` is a hardcoded file list, not a glob. PM-authorized scope extension. |
 | `docs/06_status/lanes/UTV2-1736.json` | modified | Adds `package.json` and the manifest's own path to `file_scope_lock`, plus a `scope_override` block recording the PM authorization. |
+
+## Security correction applied mid-lane
+
+The helper function is `SECURITY DEFINER` and Supabase exposes public-schema
+functions as PostgREST RPC, so it must not be callable by `anon`.
+
+An initial correction revoked only from `PUBLIC`. That was insufficient:
+Supabase's `ALTER DEFAULT PRIVILEGES` grant EXECUTE to `anon`, `authenticated`,
+and `service_role` as **explicit** ACL entries, and revoking `PUBLIC` removes
+only the implicit one. Measured on staging, `has_function_privilege('public',
+...)` was `false` while `anon` was `true`. All four CI drills passed the
+incomplete version, because scratch Postgres has neither role.
+
+The committed block revokes per-role (guarded on role existence, so the
+migration still applies to scratch Postgres) and asserts fail-closed across
+`PUBLIC`, `anon`, and `authenticated`. Proven on staging: final ACL is
+`postgres=X/postgres | service_role=X/postgres`. The assertion was
+mutation-tested — re-granting `anon` made it raise. Full evidence in
+`verification.md` section 12.
 
 ## Design decisions, and what was deliberately not done
 

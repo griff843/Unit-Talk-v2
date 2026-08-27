@@ -1,6 +1,6 @@
 # PROOF: UTV2-1736
 
-MERGE_SHA: 33e76bad8ce78c4927d076f52683326461e52d86
+MERGE_SHA: b700091eb5b12605141b838297e3f04c1dcb121a
 
 Continuous daily partition coverage for `public.provider_offer_history`, plus a
 read-only forward-coverage monitor that raises a pre-expiry alert into the real
@@ -65,7 +65,12 @@ ASSERTIONS:
       caused the refusal.
 - [x] An induced pre-expiry condition reaches the **real operations sinks** —
       `system_runs` and `audit_log` — not merely the predicate.
-- [x] `pnpm test` on the lane branch: 4,895 tests, 0 failures, exit 0.
+- [x] The `SECURITY DEFINER` helper function is callable only by `service_role`.
+      `PUBLIC`, `anon`, and `authenticated` all hold no EXECUTE. Verified by
+      reading `pg_proc.proacl` on staging, not by inference — see section 12.
+- [x] The privilege assertion is **not vacuous**: re-granting EXECUTE to `anon`
+      on staging made it raise its named error. See section 12.
+- [x] `pnpm test` on the lane branch: 5,138 tests, 0 failures, exit 0.
 - [x] `pnpm verify:static` — every static stage green, including the
       executable-wiring guard, with this lane's own 10 tests now reachable from
       `test:ops`.
@@ -226,13 +231,13 @@ Every static stage of `pnpm verify` passes on this branch:
 $ pnpm verify:static
 ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
 ops:automation-coverage-check, env:check, lint, type-check, build,
-test (4,895 pass / 0 fail), smart-form verify, verify:commands
+test (5,138 pass / 0 fail), smart-form verify, verify:commands
 -> all green
 ```
 
 ### 9. Command receipts
 
-All re-executed at `33e76bad8ce78c4927d076f52683326461e52d86`, after this branch
+All re-executed at `b700091eb5b12605141b838297e3f04c1dcb121a`, after this branch
 was rebased onto `origin/main` `e0bc1480`. The receipts captured before the
 rebase are void and are not carried forward.
 
@@ -275,13 +280,30 @@ ok 10 - buildProvisioningSql emits reversible, DEFAULT-free DDL and never execut
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 12
+Changed files: 14
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-`Changed files: 12` is the lane's true delta. The pre-rebase run reported 38
-because it was diffing against a stale `origin/main`, not because the lane
-touched more files.
+**`Changed files: 14` overcounts; the lane's true delta is 12.** The checker
+diffs two-dot (`origin/main..HEAD`), which includes commits `main` gained after
+this branch diverged. The two extra files are both `main`'s, not this lane's:
+
+```text
+$ git diff origin/main...HEAD --name-only | wc -l    # three-dot: the lane's own commits
+12
+$ git diff origin/main..HEAD --name-only | wc -l     # two-dot: also sweeps in main's
+14
+
+only in the two-dot set:
+  docs/06_status/lanes/UTV2-1512.json          <- from a67a6a59, the reconciler
+  docs/06_status/readiness/readiness-score.json
+```
+
+Neither file is touched by any of this lane's commits. The verdict is `PASS`
+either way, so nothing is gated on the overcount here — but it is the same
+merge-base conflation recorded as UTV2-1755 against
+`scripts/ci/proof-binding-validator.ts`, appearing in a second checker. Noted
+rather than fixed: correcting it is out of this lane's scope.
 
 `pnpm verify` itself exits 1 in this worktree, and only at `test:live-db` — see
 Known gap 1. Every stage before it passes. The live-DB receipt for this lane is
@@ -334,7 +356,27 @@ attached_in_range | last_day_reattached
 The assertion was written to raise `DRILL FAILED` on any SQLSTATE other than
 `42P07`; it did not raise. Staging carries no residue.
 
-This staging execution predates the rebase. It is retained because the artifact it exercised — the migration SQL — is byte-identical across the rebase, and because the head-bound equivalent of the same property is the precondition drill in section 11, which re-passed all seven cases at `33e76bad`. Nothing here rests on the staging run alone.
+**This staging execution predates the current head, and the migration SQL is
+no longer byte-identical to what it exercised.** An earlier revision of this
+proof claimed byte-identity; that was true across the rebase but became false
+when the security correction was added (section 12). Stating the difference
+plainly:
+
+- What changed between that staging run and `b700091eb5b12605141b838297e3f04c1dcb121a`:
+  only the function-privilege block — `REVOKE`/`GRANT` statements plus a
+  fail-closed assertion over `PUBLIC`, `anon`, and `authenticated`.
+- What did **not** change: every `CREATE TABLE ... PARTITION OF` statement, the
+  index shape, the coverage assertion, the no-DEFAULT assertion, and the
+  rollback script. The seven scenarios below exercise partition provisioning
+  and rollback, none of which the security block touches.
+
+The scenarios are retained on that basis, and they are not the only evidence for
+the properties they cover: the head-bound equivalents are the precondition drill
+and the schema round-trip drill in section 11, which both re-passed at
+`b700091eb5b12605141b838297e3f04c1dcb121a` against the current SQL, including all seven precondition cases.
+The privilege block added at this head was itself executed and mutation-tested
+on staging — section 12. Nothing here rests on the pre-correction staging run
+alone.
 
 **Reversibility.** The rollback artifact is
 `db/migrations-rollback/20260824000000_utv2_1736_offer_history_forward_partitions.down.sql`.
@@ -356,15 +398,20 @@ proof — strictly stronger than an InMemory-versus-live comparison.
 ### 11. CI receipts, at the exact source head
 
 All four migration receipts below were produced by CI at
-`33e76bad8ce78c4927d076f52683326461e52d86`, which is the last commit carrying
+`b700091eb5b12605141b838297e3f04c1dcb121a`, which is the last commit carrying
 non-proof changes. Every commit after it touches proof artifacts only.
 
 | Receipt | Result | Run | Job |
 |---|---|---:|---:|
-| Fail-closed precondition drill (scratch Postgres) | PASS | 33033982414 | 98392567080 |
-| Schema round-trip drill (scratch Postgres) | PASS | 33033982414 | 98392567135 |
-| Live Schema Parity | PASS | 33033982491 | 98392579436 |
-| Writable DB proof (staging only) | PASS | 33033982464 | 98393020334 |
+| Fail-closed precondition drill (scratch Postgres) | PASS | 33085979223 | 98565597551 |
+| Schema round-trip drill (scratch Postgres) | PASS | 33085979223 | 98565597479 |
+| Live Schema Parity | PASS | 33085978601 | 98565631037 |
+| Writable DB proof (staging only) | PASS | 33085978369 | 98565908113 |
+
+These supersede the receipt sets captured at `33e76bad` and at `942b15de`. Both
+of those heads are void for approval purposes: `942b15de` carried the incomplete
+`REVOKE ... FROM PUBLIC` correction, and `b700091e` replaced it (section 12).
+Neither the earlier receipts nor any approval pinned to those heads is reused.
 
 The precondition drill's seven cases, verbatim:
 
@@ -390,6 +437,88 @@ The `Writable DB proof (staging only)` job is the T1 live-DB receipt that cannot
 be obtained locally under production containment (Known gap 1). It ran against
 staging `xskgrzbteyqdufktjrjx` in the `staging-ci` environment; no production
 credential is reachable from it.
+
+### 12. Function privilege lockdown, proven on staging
+
+`list_provider_offer_history_partition_days()` is `SECURITY DEFINER`, and
+Supabase exposes public-schema functions as PostgREST RPC. Postgres also grants
+EXECUTE on a new function to `PUBLIC` by default. Left alone, that combination
+makes the function callable by `anon`.
+
+The first correction issued only `REVOKE ALL ... FROM PUBLIC`. **That was
+insufficient, and CI did not catch it.** Supabase ships
+`ALTER DEFAULT PRIVILEGES` granting EXECUTE on new public-schema functions to
+`anon`, `authenticated`, and `service_role`, so the function is created with
+those as *explicit* ACL entries. Revoking from `PUBLIC` removes only the
+implicit entry.
+
+Measured on staging `xskgrzbteyqdufktjrjx` **before** the corrected block:
+
+```text
+SELECT p.proname, p.prosecdef, array_to_string(p.proacl, E'\n') AS acl
+FROM pg_catalog.pg_proc p
+JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname='public' AND p.proname='list_provider_offer_history_partition_days';
+
+proname                                    | prosecdef | acl
+-------------------------------------------+-----------+---------------------------
+list_provider_offer_history_partition_days | t         | postgres=X/postgres
+                                                       | anon=X/postgres
+                                                       | authenticated=X/postgres
+                                                       | service_role=X/postgres
+```
+
+```text
+public_exec | anon_exec | authenticated_exec | service_role_exec
+------------+-----------+--------------------+------------------
+ f          | t         | t                  | t
+```
+
+`has_function_privilege('public', ...)` reported **false** while `anon` reported
+**true**. An assertion checking only `PUBLIC` therefore passed on a function any
+unauthenticated caller could still invoke. All four CI drills passed it too —
+scratch Postgres has neither `anon` nor `authenticated`, so the roles the guard
+needed to name did not exist there and the check was trivially satisfied. This
+is the same failure mode as a fixture inventing a field: an environment missing
+the entity a control names makes the control vacuous while reporting green.
+
+The corrected block revokes per-role, guarded on role existence so the migration
+still applies to a scratch Postgres, then asserts fail-closed over every
+untrusted role. **After**, on the same staging database:
+
+```text
+public_exec | anon_exec | authenticated_exec | service_role_exec | acl
+------------+-----------+--------------------+-------------------+--------------------------------------------
+ f          | f         | f                  | t                 | postgres=X/postgres | service_role=X/postgres
+```
+
+#### Mutation test — the guard fails on the condition it names
+
+Presence of an assertion proves nothing. The condition was re-introduced and the
+guard re-run:
+
+```text
+GRANT EXECUTE ON FUNCTION public.list_provider_offer_history_partition_days() TO anon;
+-- then run the assertion block verbatim:
+
+ERROR:  P0001: MUTATION TEST OUTCOME: UTV2-1736: role anon still holds EXECUTE on
+list_provider_offer_history_partition_days() after the REVOKE. Refusing to leave a
+SECURITY DEFINER function callable by an untrusted role.
+CONTEXT:  PL/pgSQL function inline_code_block line 25 at RAISE
+```
+
+The mutation ran inside a `DO` block that aborted, so the temporary `GRANT`
+rolled back. Staging was re-read afterwards and confirmed at
+`postgres=X/postgres | service_role=X/postgres`.
+
+The whole block sits inside the migration's single transaction (`BEGIN;` .. 
+`COMMIT;`), so a migration that cannot reach the secure state does not commit
+partitions either.
+
+**Production impact: none from this PR.** The privilege state above was
+established on staging only. Production `zfzdnfwdarxucxtaojxm` was read-only
+throughout; the function does not exist there, because the migration has not
+been applied. Applying it remains a separate, deliberate production decision.
 
 ## Known gaps, stated plainly
 
@@ -447,13 +576,34 @@ credential is reachable from it.
    Every artifact pinned to the pre-rebase head is void and was **regenerated,
    not reused**: all four CI receipts, every command receipt in section 9, and
    the EXECUTOR_RESULT comment. The scope-override comment must likewise be
-   re-pinned to `33e76bad`.
+   re-pinned to `b700091eb5b12605141b838297e3f04c1dcb121a`.
 
 3. **The real-sink proof was executed by driving the real function's output into
    staging's real `system_runs` and `audit_log`**, because staging service-role
    credentials are not available locally under production containment. Closing
    the last gap — an automated in-CI integration test — would require editing
    `package.json` and adding a live T1 proof file, both outside `file_scope_lock`.
+
+4. **No automated gate can catch a regression of the privilege lockdown, and I
+   did not add one in this lane.** The in-migration assertion is the real
+   control and it is execution-proven (section 12) — but it can only fire where
+   the roles it names exist. CI's scratch Postgres has no `anon` or
+   `authenticated`, so the per-role branch is skipped there and the drills stay
+   green. `Live Schema Parity` compares schema shape, not function ACLs.
+
+   Concretely: if someone deleted the `REVOKE`/assert block from this migration,
+   every gate on this PR would still pass. The protection today rests on the
+   assertion running at **apply** time against a real Supabase database, which
+   is genuine but is not a merge-time guard.
+
+   Closing this properly means a test that asserts the migration text still
+   revokes from `PUBLIC`, `anon`, and `authenticated`. That file
+   (`scripts/ops/partition-provisioner.test.ts`) is already inside this lane's
+   `file_scope_lock`, so it is in scope — but adding it moves the substantive
+   anchor again and forces a third full re-verification cycle on this PR. I am
+   flagging it rather than deciding it unilaterally. Say the word and I will add
+   it; otherwise it should become a follow-up issue before the migration is
+   applied to production.
 
 ## Scope
 
