@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   DEFAULT_STALE_CLAIM_MS,
+  TERMINAL_STATUS,
+  TRIAGE_STATUSES,
   analyseStuckClaims,
   buildTriageReport,
   classifyDeadLetter,
@@ -171,8 +173,41 @@ test('no dead-letter class is approved for replay, including an unknown one', ()
   assert.match(fabricated.reason, /fail closed/);
 });
 
+test('the triage read names the terminal status that production actually uses', () => {
+  // Regression: the first draft filtered on `delivered`, which does not exist
+  // in this schema. Verified against production 2026-08-26 — the only statuses
+  // present are dead_letter, pending, processing, and sent.
+  assert.equal(TERMINAL_STATUS, 'sent');
+  assert.deepEqual([...TRIAGE_STATUSES], ['pending', 'processing', 'dead_letter']);
+  assert.equal(TRIAGE_STATUSES.includes(TERMINAL_STATUS as never), false);
+});
+
+test('a terminal (sent) row is neither live nor a dead letter', () => {
+  const report = buildTriageReport(
+    [row({ id: 'sent-1', status: 'sent', target: 'discord:best-bets' })],
+    { now: new Date('2026-08-26T00:00:00.000Z'), configuredTargets: [] },
+  );
+  assert.equal(report.totalDeadLetters, 0);
+  // Decisive: were `sent` treated as live, this member-facing target would
+  // flip the verdict to unsafe.
+  assert.equal(report.targetVerification.safe, true);
+  assert.deepEqual(report.targetVerification.memberFacingTargets, []);
+});
+
 test('the full report reproduces the live production shape', () => {
   const now = new Date('2026-08-26T00:00:00.000Z');
+  // Counts are the exact production population read 2026-08-26.
+  const DEAD_LETTER_COUNTS: Array<[string, string, number]> = [
+    ["proof-pick-blocked: source 't1-proof' is not a live source", 'discord:canary', 1614],
+    ['stale_pending_operator_review', 'discord:best-bets', 199],
+    [
+      'operator-disposition-2026-06-10: Mode 1 public delivery hold — stale discord:best-bets posts voided per PM go',
+      'discord:best-bets',
+      97,
+    ],
+    ['governance_public_delivery_suppressed_mode1_predeploy', 'discord:best-bets', 40],
+  ];
+
   const rows: OutboxRow[] = [
     ...Array.from({ length: 3 }, (_, i) =>
       row({ id: `pending-${i}`, status: 'pending', target: 'discord:canary' }),
@@ -186,22 +221,25 @@ test('the full report reproduces the live production shape', () => {
         claimed_by: `utv2-1497-worker-${i % 8}-batch-${Math.floor(i / 8)}`,
       }),
     ),
-    ...Object.entries(LIVE_REASONS).flatMap(([reason], index) =>
-      Array.from({ length: index + 1 }, (_, i) =>
-        row({
-          id: `dl-${index}-${i}`,
-          status: 'dead_letter',
-          target: index === 0 ? 'discord:canary' : 'discord:best-bets',
-          last_error: reason,
-        }),
+    ...DEAD_LETTER_COUNTS.flatMap(([reason, target, count], index) =>
+      Array.from({ length: count }, (_, i) =>
+        row({ id: `dl-${index}-${i}`, status: 'dead_letter', target, last_error: reason }),
       ),
     ),
-    row({ id: 'dl-null', status: 'dead_letter', target: 'discord:best-bets', last_error: null }),
+    ...Array.from({ length: 4 }, (_, i) =>
+      row({
+        id: `dl-null-${i}`,
+        status: 'dead_letter',
+        target: 'discord:best-bets',
+        last_error: null,
+      }),
+    ),
   ];
 
   const report = buildTriageReport(rows, { now, configuredTargets: [] });
 
-  assert.equal(report.totalDeadLetters, 1 + 2 + 3 + 4 + 1);
+  assert.equal(report.totalDeadLetters, 1614 + 199 + 97 + 40 + 4);
+  assert.equal(report.totalDeadLetters, 1954);
   assert.equal(report.maxDeadLetterAttempts, 1);
   assert.equal(report.targetVerification.safe, true);
   assert.equal(report.stuckClaims.claims.length, 32);
