@@ -12,10 +12,12 @@
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1745.yml",
+    "docs/06_status/lanes/UTV2-1745.json",
     "docs/06_status/proof/UTV2-1745/diff-summary.md",
     "docs/06_status/proof/UTV2-1745/evidence.json",
     "docs/06_status/proof/UTV2-1745/model-routing.json",
     "docs/06_status/proof/UTV2-1745/verification.md",
+    "package.json",
     "scripts/ops/pick-truth-audit.test.ts",
     "scripts/ops/pick-truth-audit.ts"
   ],
@@ -46,5 +48,13 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "authorized_by": "PM",
+    "authorized_at": "2026-08-27",
+    "paths": [
+      "package.json"
+    ],
+    "reason": "test:ops is a hardcoded file list, not a glob, so scripts/ops/pick-truth-audit.test.ts was unreachable from any executable command and pnpm verify failed with WIRING_TEST_UNWIRED_NEW. PM authorized extending file scope to package.json to wire the lane's own tests into test:ops rather than suppressing the guard via the wiring baseline."
   }
 }

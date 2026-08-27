@@ -1,0 +1,75 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1745",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "title": "Retrospective pick trustworthiness audit: the current population cannot support a trustworthy-pick claim",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-27T02:25:00Z",
+  "merge_sha": "1b9688bb130098c1eecdd41e2274ff142e529050",
+  "sha_binding": {
+    "verified_source_sha": "1b9688bb130098c1eecdd41e2274ff142e529050",
+    "verified_source_note": "Exact substantive branch head containing the read-only audit script and its tests. Commits after this anchor are restricted to this lane's proof artifacts and the PM-authorized package.json wiring. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-27T02:25:00Z"
+  },
+  "verdict": {
+    "can_currently_produce_trustworthy_pick": false,
+    "statement": "Of 107858 picks in production, exactly 1 is simultaneously non-fixture, fully identity- and provenance-complete, and settled. The population cannot support a trustworthy-pick, ROI, or CLV claim."
+  },
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0,
+      "note": "The CLI could not run locally: production containment neuters local.env and this session holds no PICK_TRUTH_AUDIT_READ_KEY. Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
+    },
+    "row_counts": [
+      { "table": "picks", "metric": "total", "value": 107858 },
+      { "table": "picks", "metric": "null_participant_id", "value": 101842 },
+      { "table": "picks", "metric": "null_line", "value": 8981 },
+      { "table": "picks", "metric": "null_odds", "value": 8588 },
+      { "table": "picks", "metric": "null_market_type_id", "value": 28376 },
+      { "table": "picks", "metric": "fixture_marked", "value": 79557 },
+      { "table": "picks", "metric": "non_fixture", "value": 28301 },
+      { "table": "picks", "metric": "has_event_identity", "value": 7197 },
+      { "table": "picks", "metric": "has_participant_identity", "value": 6017 },
+      { "table": "picks", "metric": "has_market_type", "value": 79482 },
+      { "table": "picks", "metric": "has_line_and_odds", "value": 98877 },
+      { "table": "picks", "metric": "has_source_provenance", "value": 7180 },
+      { "table": "picks", "metric": "settled", "value": 10307 },
+      { "table": "picks", "metric": "traceable_non_fixture", "value": 3055 },
+      { "table": "picks", "metric": "traceable_non_fixture_settled", "value": 1 },
+      { "table": "picks", "metric": "traceable_non_fixture_graded", "value": 2 },
+      { "table": "game_results", "metric": "rows", "value": 135249 }
+    ],
+    "structural_findings": [
+      "public.picks has no event_id column. Event linkage exists only as a camelCase eventId key inside the metadata jsonb, on 7197 rows (6.7%).",
+      "101842 of 107858 picks (94.4%) have a NULL participant_id; including the metadata.participantId fallback still leaves only 6017 (5.6%).",
+      "79557 picks (73.8%) carry an explicit fixture marker (testRun 60206, proof_fixture_id 19346, proof_issue 19351). Any aggregate over public.picks that does not exclude these is measuring the test harness.",
+      "game_results holds 135249 rows and IS a usable independent regrade source, so the blocker is the absence of a join key on the pick side, not the absence of outcome data."
+    ]
+  },
+  "static_proof": {
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts",
+      "status": "PASS",
+      "tests": 4,
+      "fail": 0,
+      "detail": "Now wired into test:ops under a PM-authorized scope extension."
+    }
+  },
+  "scope_refusals": [
+    "Read-only. The production adapter exposes only HTTP GET and has no write method.",
+    "No regrade, backfill, CLV persistence, replay, production write, or schema change.",
+    "No attempt to repair the 107858 historical picks; the population must not be represented as trustworthy.",
+    "Forward-flow trustworthiness is a separate successor requiring explicit event identity, participant identity, standardized selection, line/source provenance, settlement traceability, and closing-line capture as first-class fields at admission time."
+  ]
+}
