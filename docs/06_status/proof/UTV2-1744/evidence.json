@@ -1,0 +1,72 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1744",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "title": "Read-only distribution_outbox triage: no dead-letter class approved for replay",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-27T02:20:00Z",
+  "merge_sha": "df4cf115c6de564bf129847f1296325c0ba976ce",
+  "sha_binding": {
+    "verified_source_sha": "df4cf115c6de564bf129847f1296325c0ba976ce",
+    "verified_source_note": "Exact substantive branch head containing the triage script and its tests. Commits after this anchor are restricted to this lane's proof artifacts and the PM-authorized package.json wiring. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-27T02:20:00Z"
+  },
+  "verdict": {
+    "any_dead_letter_class_approved_for_replay": false,
+    "live_queue_target_safe": true,
+    "statement": "No dead-letter class is approved for replay. replayVerdict has no reachable approving branch and TriageReport.anyClassApprovedForReplay is typed as the literal false."
+  },
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0,
+      "note": "The local CLI path is unavailable under production containment (local.env carries SUPABASE_URL=http://127.0.0.1:1). Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
+    },
+    "row_counts": [
+      { "table": "distribution_outbox", "metric": "dead_letter", "value": 1954 },
+      { "table": "distribution_outbox", "metric": "pending", "value": 3 },
+      { "table": "distribution_outbox", "metric": "processing", "value": 32 },
+      { "table": "distribution_outbox", "metric": "sent", "value": 3758 },
+      { "table": "distribution_outbox", "metric": "stuck_claims", "value": 32 },
+      { "table": "distribution_outbox", "metric": "distinct_stuck_workers", "value": 32 },
+      { "table": "distribution_outbox", "metric": "distinct_stuck_targets", "value": 4 },
+      { "table": "distribution_outbox", "metric": "max_held_ms", "value": 2361129093 },
+      { "table": "distribution_outbox", "metric": "max_threshold_multiple", "value": 7870 }
+    ],
+    "dead_letter_classes": [
+      { "class": "proof_pick_blocked", "target": "discord:canary", "rows": 1614, "replay_approved": false },
+      { "class": "stale_pending_operator_review", "target": "discord:best-bets", "rows": 199, "replay_approved": false },
+      { "class": "operator_disposition_voided", "target": "discord:best-bets", "rows": 97, "replay_approved": false },
+      { "class": "governance_public_delivery_suppressed", "target": "discord:best-bets", "rows": 40, "replay_approved": false },
+      { "class": "unclassified_null_reason", "target": "discord:best-bets", "rows": 4, "replay_approved": false }
+    ]
+  },
+  "static_proof": {
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/outbox-triage.test.ts",
+      "status": "PASS",
+      "tests": 12,
+      "fail": 0,
+      "detail": "Each control proven by making it fail on the condition it names. Now wired into test:ops under a PM-authorized scope extension."
+    }
+  },
+  "corrections_made_in_lane": [
+    "The first draft filtered the read with .neq('status','delivered'). Production has no 'delivered' status; the terminal status is 'sent'. The filter matched nothing and pulled all 3758 terminal rows into the triage read. Fixed to .in('status',['pending','processing','dead_letter']) and pinned by two regression tests."
+  ],
+  "scope_refusals": [
+    "Read-only. The only database verb issued is SELECT.",
+    "No replay, requeue, release, delete, regrade, or backfill.",
+    "The 1954 dead letters are never to be replayed or modified.",
+    "Cleanup of the 32 orphaned processing rows and 3 pending canary rows is out of scope and belongs to a separate bounded successor."
+  ]
+}
