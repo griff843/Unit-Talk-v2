@@ -1,0 +1,229 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1758",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Reconciliation classification correctness and authoritative in-flight manifest resolution",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-27T21:59:16Z",
+  "sha_binding": {
+    "verified_source_sha": "5913819c7a585e87a253209b08892a5867e318a7",
+    "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-27T21:59:16Z"
+  },
+  "scope": {
+    "substantive_diff_stat": "scripts/ops: 2 files, 822 insertions(+), 54 deletions(-)",
+    "files": [
+      "scripts/ops/orchestration-reconciler.ts",
+      "scripts/ops/orchestration-reconciler.test.ts"
+    ],
+    "diff_stat_note": "Measured with git diff --numstat origin/main...HEAD -- scripts/ops/ at the anchor SHA. The whole-diff total is deliberately not quoted because it would count this proof bundle."
+  },
+  "static_proof": {
+    "verify_static": "PASS (lint, type-check, build, test all exit 0)",
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane is T2 and touches no DB surface.",
+    "full_test_suite": {
+      "command": "pnpm test",
+      "suites": 98,
+      "fail": 0
+    },
+    "lane_suite": {
+      "command": "pnpm exec tsx --test scripts/ops/orchestration-reconciler.test.ts",
+      "exit_code": 0,
+      "tests": 38,
+      "pass": 38,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "reason": "Governance/reconciliation tooling only. No runtime, database, migration, deployment, ingestion or delivery path is touched. Production containment in force throughout: no SGO call, no production mutation, no production DDL, no member delivery, no unpark, no secret access.",
+    "test_db": {
+      "status": "NOT_REQUIRED",
+      "waived": false,
+      "claimed_na": false,
+      "why": "T2 governance lane with a static proof profile. No DB surface is touched, so no live-DB receipt is required by r1-r5-rules for this lane_type."
+    }
+  },
+  "live_reconciliation": {
+    "command": "pnpm ops:orchestration-reconcile --current --json",
+    "generated_at": "2026-08-27T21:56:51.572Z",
+    "verdict": "FAIL",
+    "exit_code": 1,
+    "total_checks": 1450,
+    "buckets": {
+      "dispatch_blocking_failures": 8,
+      "closeout_debt": 18,
+      "warnings": 724,
+      "infra_errors": 0
+    },
+    "bucket_composition": {
+      "dispatch_blocking_failures": {
+        "ORCH-LINEAR-DELETED-ORPHAN": 1,
+        "ORCH-LINEAR-ACTIVE-RECORD": 2,
+        "ORCH-MERGED-PR-ACTIVE-MANIFEST": 1,
+        "ORCH-OPEN-PR-MANIFEST-URL": 2,
+        "ORCH-MERGED-PR-LINEAR-DONE": 2
+      },
+      "closeout_debt": {
+        "ORCH-MERGED-PR-LINEAR-DONE": 18
+      },
+      "warnings": {
+        "ORCH-HISTORICAL-DECAY": 624,
+        "ORCH-CLOSED-LANE-BRANCH-CLEANUP": 10,
+        "ORCH-GITHUB-CHECK": 90
+      },
+      "infra_errors": {}
+    },
+    "before": {
+      "source": "main @ b667c702",
+      "total_checks": 1538,
+      "undifferentiated_failures": 31,
+      "orch_open_pr_manifest_url_failures": 7,
+      "orch_infra": 1
+    },
+    "cleared_false_positives": [
+      "UTV2-1729",
+      "UTV2-1736",
+      "UTV2-1744",
+      "UTV2-1745"
+    ],
+    "cleared_cause": "Stale untracked working-tree manifest copies (status: started, pr_url: null) were preferred over the authoritative branch manifests.",
+    "remaining_dispatch_blocking": [
+      {
+        "id": "ORCH-LINEAR-DELETED-ORPHAN",
+        "issue_id": "UTV2-1512",
+        "detail": "Linear entity UTV2-1512 is deleted but lane state is still active; PM disposition required before dispatch"
+      },
+      {
+        "id": "ORCH-LINEAR-ACTIVE-RECORD",
+        "issue_id": "UTV2-1651",
+        "detail": "Linear In Codex has no active lease or lane manifest"
+      },
+      {
+        "id": "ORCH-LINEAR-ACTIVE-RECORD",
+        "issue_id": "UTV2-1659",
+        "detail": "Linear In Claude has no active lease or lane manifest"
+      },
+      {
+        "id": "ORCH-MERGED-PR-ACTIVE-MANIFEST",
+        "issue_id": "UTV2-1512",
+        "detail": "PR is merged but lane manifest remains blocked; record merge SHA/status before lane closeout"
+      },
+      {
+        "id": "ORCH-OPEN-PR-MANIFEST-URL",
+        "issue_id": "UTV2-1652",
+        "detail": "Open PR exists but the matching lane manifest is missing at the PR head and on main"
+      },
+      {
+        "id": "ORCH-OPEN-PR-MANIFEST-URL",
+        "issue_id": "UTV2-1659",
+        "detail": "Open PR exists but the lane manifest resolved from PR head ef66847c38f1ee80e84da729b344213dd7d8b740 is missing the matching PR URL"
+      },
+      {
+        "id": "ORCH-MERGED-PR-LINEAR-DONE",
+        "issue_id": "UTV2-1659",
+        "detail": "Merged PR is 37352m old but Linear state is In Claude (lane still holds active Linear record)"
+      },
+      {
+        "id": "ORCH-MERGED-PR-LINEAR-DONE",
+        "issue_id": "UTV2-1659",
+        "detail": "Merged PR is 37467m old but Linear state is In Claude (lane still holds active Linear record)"
+      }
+    ]
+  },
+  "mutation_testing": {
+    "method": "Each of the 7 regression fixtures is paired with a mutation of its own input that must flip the classification. A fixture that only ever runs green is not accepted as a control.",
+    "controls": [
+      {
+        "fixture": "1 - deleted Linear + active manifest",
+        "asserts": "ORCH-LINEAR-DELETED-ORPHAN, dispatch_blocking",
+        "mutation": "manifest set terminal (done)",
+        "flips_to": "ORCH-HISTORICAL-DECAY, warning, exit 0; and no check reports the entity as passing"
+      },
+      {
+        "fixture": "2 - UTV2-1736 manifest at exact PR head",
+        "asserts": "ORCH-OPEN-PR-MANIFEST-URL pass, resolved from PR head",
+        "mutation": "head manifest removed, leaving only the stale working-tree copy",
+        "flips_to": "fail, dispatch_blocking, resolved from working tree / main"
+      },
+      {
+        "fixture": "3 - UTV2-1652 shape, valid on-branch manifest",
+        "asserts": "pass, exit 0",
+        "mutation": "head manifest records a different PR URL",
+        "flips_to": "fail, dispatch_blocking, exit 1"
+      },
+      {
+        "fixture": "4 - genuinely missing manifest",
+        "asserts": "fail, dispatch_blocking, exit 1",
+        "mutation": "manifest supplied at the head for the same open PR",
+        "flips_to": "pass, exit 0 - proving the fail came from the manifest, not from the PR being open"
+      },
+      {
+        "fixture": "5 - transient Linear timeout",
+        "asserts": "ORCH-INFRA, infra_error, exit 3, no historical decay",
+        "mutation": "same issue with Entity not found",
+        "flips_to": "historical decay, warning, exit 0; and a 401 stays blocking"
+      },
+      {
+        "fixture": "6 - merged terminal lane with closeout debt",
+        "asserts": "closeout_debt, exit 0, verdict WARN",
+        "mutation": "lane given an active lease",
+        "flips_to": "dispatch_blocking, exit 1"
+      },
+      {
+        "fixture": "7 - active manifest at open PR head",
+        "asserts": "ORCH-LINEAR-ACTIVE-RECORD pass, resolved from open PR head",
+        "mutation": "head manifest removed / head manifest set terminal",
+        "flips_to": "fail, dispatch_blocking in both cases"
+      }
+    ],
+    "classifier_table": "classifyLinearLookupError is asserted over deleted, transient (timeout, ETIMEDOUT, 429, 503, ENOTFOUND), auth (401, Authentication required), and unknown. ENOTFOUND is specifically asserted transient, because its text contains 'not found'."
+  },
+  "allowlist_check": {
+    "requirement": "Do not implement a hard-coded issue allowlist.",
+    "method": "grep -n 'UTV2' scripts/ops/orchestration-reconciler.ts",
+    "result": "3 matches, all generic: two ID-shape regexes (/\\b((?:UTV2|UNI)-\\d+)\\b/i, /^(UTV2|UNI)-\\d+$/) and one CLI usage string. No issue identifier appears in any branch condition.",
+    "satisfied": true
+  },
+  "issue_evidence_correction": {
+    "field": "UTV2-1652 row of the issue's ORCH-OPEN-PR-MANIFEST-URL table",
+    "issue_claimed": "present on branch",
+    "measured": "absent at PR head 5c39f9ea6655f3eff25ef8c35b3f5e58486cc4f7 of PR #1401, while 676 sibling manifests are present at that same head",
+    "consequence": "UTV2-1652 correctly remains dispatch-blocking. It was not force-suppressed. This is fixture 4's anti-regression control firing on live data.",
+    "fixture_3_note": "Fixture 3 is retained under the UTV2-1652 identifiers as a synthetic valid on-branch manifest, because requirement 1 still needs a second independent positive case."
+  },
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "guard_weakened_note": "No genuinely blocking condition was weakened. Suppression is admitted only where a manifest was positively resolved at the exact PR head, and an unresolvable head falls back to the old behaviour with an infra error recorded. Transient, auth, and unclassifiable Linear failures all remain blocking.",
+    "tier_c_path_touched": "none"
+  },
+  "known_gaps": [
+    "Head manifests are resolved for open PRs only; a merged PR's manifest is expected on main.",
+    "If a PR head commit cannot be fetched locally, resolution is abandoned, an infra error is recorded, and the check falls back to the working-tree copy. Fail-closed.",
+    "The 624 ORCH-HISTORICAL-DECAY warnings are real deleted-entity debt spanning UTV2-570..1566. This lane classifies them; it does not remediate them. UTV2-1512 remediation is UTV2-1757.",
+    "docs/06_status/lanes/UTV2-1758.json is not in file_scope_lock: ops:lane-start requires every scope path to exist before it runs but is what creates the manifest, and file_scope_lock is immutable afterwards. Recorded as a known S1 scope-diff risk rather than worked around."
+  ],
+  "sign_off": {
+    "static_proof_status": "COMPLETE",
+    "runtime_proof_status": "NOT_APPLICABLE (T2 governance, static profile)",
+    "ready_for_pm_review": true,
+    "pending": [
+      "exact-head CI green",
+      "EXECUTOR_RESULT at the exact head",
+      "T2 merge authority: GitHub PR review approval or pm-verdict/v1 APPROVED"
+    ]
+  }
+}
