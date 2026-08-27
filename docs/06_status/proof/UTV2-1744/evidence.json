@@ -7,10 +7,10 @@
   "title": "Read-only distribution_outbox triage: no dead-letter class approved for replay",
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-27T02:20:00Z",
-  "merge_sha": "df4cf115c6de564bf129847f1296325c0ba976ce",
+  "merge_sha": "cb4581c8241a2b302aa456f53194d108998d3f6a",
   "sha_binding": {
-    "verified_source_sha": "df4cf115c6de564bf129847f1296325c0ba976ce",
-    "verified_source_note": "Exact substantive branch head containing the triage script and its tests. Commits after this anchor are restricted to this lane's proof artifacts and the PM-authorized package.json wiring. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_sha": "cb4581c8241a2b302aa456f53194d108998d3f6a",
+    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes (the script, its tests, and the PM-authorized package.json test:ops wiring). Every commit after this anchor changes only proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -33,22 +33,83 @@
       "note": "The local CLI path is unavailable under production containment (local.env carries SUPABASE_URL=http://127.0.0.1:1). Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
     },
     "row_counts": [
-      { "table": "distribution_outbox", "metric": "dead_letter", "value": 1954 },
-      { "table": "distribution_outbox", "metric": "pending", "value": 3 },
-      { "table": "distribution_outbox", "metric": "processing", "value": 32 },
-      { "table": "distribution_outbox", "metric": "sent", "value": 3758 },
-      { "table": "distribution_outbox", "metric": "stuck_claims", "value": 32 },
-      { "table": "distribution_outbox", "metric": "distinct_stuck_workers", "value": 32 },
-      { "table": "distribution_outbox", "metric": "distinct_stuck_targets", "value": 4 },
-      { "table": "distribution_outbox", "metric": "max_held_ms", "value": 2361129093 },
-      { "table": "distribution_outbox", "metric": "max_threshold_multiple", "value": 7870 }
+      {
+        "table": "distribution_outbox",
+        "metric": "dead_letter",
+        "value": 1954
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "pending",
+        "value": 3
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "processing",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "sent",
+        "value": 3758
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "stuck_claims",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "distinct_stuck_workers",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "distinct_stuck_targets",
+        "value": 4
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "max_held_ms",
+        "value": 2361129093
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "max_threshold_multiple",
+        "value": 7870
+      }
     ],
     "dead_letter_classes": [
-      { "class": "proof_pick_blocked", "target": "discord:canary", "rows": 1614, "replay_approved": false },
-      { "class": "stale_pending_operator_review", "target": "discord:best-bets", "rows": 199, "replay_approved": false },
-      { "class": "operator_disposition_voided", "target": "discord:best-bets", "rows": 97, "replay_approved": false },
-      { "class": "governance_public_delivery_suppressed", "target": "discord:best-bets", "rows": 40, "replay_approved": false },
-      { "class": "unclassified_null_reason", "target": "discord:best-bets", "rows": 4, "replay_approved": false }
+      {
+        "class": "proof_pick_blocked",
+        "target": "discord:canary",
+        "rows": 1614,
+        "replay_approved": false
+      },
+      {
+        "class": "stale_pending_operator_review",
+        "target": "discord:best-bets",
+        "rows": 199,
+        "replay_approved": false
+      },
+      {
+        "class": "operator_disposition_voided",
+        "target": "discord:best-bets",
+        "rows": 97,
+        "replay_approved": false
+      },
+      {
+        "class": "governance_public_delivery_suppressed",
+        "target": "discord:best-bets",
+        "rows": 40,
+        "replay_approved": false
+      },
+      {
+        "class": "unclassified_null_reason",
+        "target": "discord:best-bets",
+        "rows": 4,
+        "replay_approved": false
+      }
     ]
   },
   "static_proof": {
