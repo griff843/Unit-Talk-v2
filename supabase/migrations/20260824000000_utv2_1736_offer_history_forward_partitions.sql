@@ -234,34 +234,62 @@ COMMENT ON FUNCTION public.list_provider_offer_history_partition_days() IS
 -- but a SECURITY DEFINER function should never carry an implicit PUBLIC grant:
 -- least privilege is the property, not the payload's sensitivity.
 --
--- The REVOKE is unconditional and valid on any Postgres. The GRANT is guarded
--- on role existence so this migration still applies cleanly to a scratch
--- Postgres in CI, which has none of Supabase's roles. Only the monitor needs to
--- call this, and it authenticates as service_role.
+-- Revoking from PUBLIC alone is NOT sufficient on Supabase. The platform ships
+-- ALTER DEFAULT PRIVILEGES granting EXECUTE on new public-schema functions to
+-- anon, authenticated, and service_role, so the function is created with those
+-- as EXPLICIT grants in its ACL. A REVOKE ... FROM PUBLIC removes only the
+-- implicit PUBLIC entry and leaves anon holding EXECUTE -- i.e. the SECURITY
+-- DEFINER function stays callable by any unauthenticated PostgREST caller.
+-- Measured on staging before this block was corrected:
+--   proacl = postgres=X/postgres, anon=X/postgres, authenticated=X/postgres,
+--            service_role=X/postgres
+-- Each REVOKE is therefore issued per-role and guarded on role existence, so
+-- this migration still applies cleanly to a scratch Postgres in CI, which has
+-- none of Supabase's roles. Only the monitor needs to call this, and it
+-- authenticates as service_role.
 -- ---------------------------------------------------------------------------
 REVOKE ALL ON FUNCTION public.list_provider_offer_history_partition_days() FROM PUBLIC;
 
-DO $grant$
+DO $privs$
+DECLARE
+  v_role text;
 BEGIN
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = v_role) THEN
+      EXECUTE format(
+        'REVOKE ALL ON FUNCTION public.list_provider_offer_history_partition_days() FROM %I',
+        v_role);
+    END IF;
+  END LOOP;
+
   IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
     GRANT EXECUTE ON FUNCTION public.list_provider_offer_history_partition_days()
       TO service_role;
   END IF;
 END
-$grant$;
+$privs$;
 
-DO $assert_grant$
+-- Fail closed: refuse to leave the transaction in a state where any untrusted
+-- role can call a SECURITY DEFINER function. This guard was mutation-tested on
+-- staging -- re-granting EXECUTE to anon made it raise, so it is not vacuous.
+DO $assert_privs$
 DECLARE
-  v_public_has_execute boolean;
+  v_role text;
 BEGIN
-  SELECT has_function_privilege('public', 'public.list_provider_offer_history_partition_days()', 'EXECUTE')
-    INTO v_public_has_execute;
-  IF v_public_has_execute THEN
+  IF has_function_privilege('public', 'public.list_provider_offer_history_partition_days()', 'EXECUTE') THEN
     RAISE EXCEPTION
       'UTV2-1736: PUBLIC still holds EXECUTE on list_provider_offer_history_partition_days() after the REVOKE. Refusing to leave a SECURITY DEFINER function publicly callable.';
   END IF;
+
+  FOREACH v_role IN ARRAY ARRAY['anon', 'authenticated'] LOOP
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = v_role)
+       AND has_function_privilege(v_role, 'public.list_provider_offer_history_partition_days()', 'EXECUTE') THEN
+      RAISE EXCEPTION
+        'UTV2-1736: role % still holds EXECUTE on list_provider_offer_history_partition_days() after the REVOKE. Refusing to leave a SECURITY DEFINER function callable by an untrusted role.', v_role;
+    END IF;
+  END LOOP;
 END
-$assert_grant$;
+$assert_privs$;
 
 COMMIT;
 
