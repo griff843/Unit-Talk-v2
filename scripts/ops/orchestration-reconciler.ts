@@ -1817,17 +1817,11 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     branches,
     pullRequests,
   });
-  const currentIssueIds = collectCurrentIssueIds({
-    linearIssues: [],
-    leases,
-    manifests,
-    branches,
-    pullRequests,
-  });
+  // The "is this issue in the current working set" signal is deliberately no
+  // longer collected here: Linear failure classification must not depend on it.
   const linearIssueIds = new Set(issueIds);
   if (issueId) {
     linearIssueIds.add(issueId);
-    currentIssueIds.add(issueId);
   }
   const linearIssues = await fetchLinearIssues(
     [...linearIssueIds].sort((left, right) => left.localeCompare(right)),
