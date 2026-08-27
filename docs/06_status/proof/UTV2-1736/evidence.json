@@ -1,1 +1,172 @@
-{"issue_id":"UTV2-1736","placeholder":true}
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1736",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Continuous daily partition coverage for provider_offer_history with a read-only forward-coverage monitor",
+  "status": "BLOCKED_ON_PM_SCOPE_EXTENSION",
+  "generated_at": "2026-08-27T02:05:00Z",
+  "merge_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
+  "sha_binding": {
+    "verified_source_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
+    "verified_source_note": "Exact substantive branch head containing the migration, the coverage monitor, and its tests. Commits after this anchor are restricted to this lane's proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI; post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-27T02:05:00Z"
+  },
+  "production_ddl_applied": false,
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0
+    },
+    "ddl_target": {
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "environment": "staging",
+      "note": "Every DDL scenario was executed here. No production DDL was applied."
+    },
+    "production_row_counts": [
+      {
+        "table": "provider_offer_history",
+        "metric": "existing_partitions",
+        "value": 60
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "earliest_partition_day",
+        "value": "2026-05-02"
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "latest_partition_day",
+        "value": "2026-06-30"
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "target_range_days",
+        "value": 147
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "missing_in_range",
+        "value": 147
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "missing_up_to_today",
+        "value": 58
+      },
+      {
+        "table": "provider_offer_history",
+        "metric": "default_partitions",
+        "value": 0
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_runs",
+        "value": 109
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_succeeded",
+        "value": 0
+      },
+      {
+        "table": "cron.job_run_details",
+        "metric": "job_5_failed",
+        "value": 109
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "clean migration apply",
+        "status": "PASS",
+        "observed": "147 partitions, 2026-07-01..2026-11-24"
+      },
+      {
+        "name": "second apply mutates nothing",
+        "status": "PASS",
+        "observed": "created=0, before=147, after=147, oids_replaced=0"
+      },
+      {
+        "name": "row routes to the correct partition",
+        "status": "PASS",
+        "observed": "snapshot_at 2026-07-01 landed in provider_offer_history_p20260701"
+      },
+      {
+        "name": "rollback removes only empty lane-created partitions",
+        "status": "PASS",
+        "observed": "dropped=146"
+      },
+      {
+        "name": "rollback refuses a nonempty partition",
+        "status": "PASS",
+        "observed": "refused=1, partition survived attached with its row"
+      },
+      {
+        "name": "reapply after rollback succeeds",
+        "status": "PASS",
+        "observed": "created=146, total=147, preserved_rows=1, default_partitions=0"
+      },
+      {
+        "name": "induced pre-expiry reaches the real operations sink",
+        "status": "PASS",
+        "observed": "system_runs run_type=ops.partition_coverage status=failed AND audit_log action=partition_coverage.critical"
+      }
+    ]
+  },
+  "static_proof": {
+    "test": {
+      "command": "pnpm test",
+      "status": "PASS",
+      "tests": 4895,
+      "fail": 0,
+      "skipped": 0,
+      "detail": "Full unit suite on the lane branch, exit 0."
+    },
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/partition-provisioner.test.ts",
+      "status": "PASS",
+      "tests": 10,
+      "fail": 0,
+      "detail": "Run directly. NOT executed by CI \u2014 see known_gaps.ci_test_wiring."
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "status": "FAIL",
+      "exit_code": 1,
+      "detail": "executable-wiring guard reports WIRING_TEST_UNWIRED_NEW scripts/ops/partition-provisioner.test.ts and WIRING_CAPABILITY_ORPHAN scripts/ops/partition-provisioner.ts. Both remedies (package.json test:ops, or docs/05_operations/executable-wiring-baseline.json) are outside this lane's immutable file_scope_lock. Requires a PM scope extension."
+    }
+  },
+  "known_gaps": {
+    "ci_test_wiring": {
+      "severity": "BLOCKER",
+      "detail": "pnpm verify FAILS (exit 1). test:ops in package.json is a hardcoded file list, not a glob, and scripts/ops/partition-provisioner.test.ts is absent from it, so this lane's 10 tests never run under pnpm test, pnpm verify, or CI. The repo enforces this mechanically via executable-wiring, which is red. Remedies: (a) add the path to test:ops in package.json (correct fix), or (b) add a reviewed disposition to docs/05_operations/executable-wiring-baseline.json (suppresses rather than fixes). Both are outside file_scope_lock and require a PM scope extension.",
+      "blocks": "pnpm verify green, and therefore the T1 gate"
+    },
+    "main_sync_blocked": {
+      "severity": "HIGH",
+      "detail": "The lane branch is 23 commits behind origin/main. ops:merge-wrapper git-merge-main is implemented as `git merge --ff-only origin/main` (scripts/ops/ops-merge-wrapper.ts:96) and cannot merge a diverged branch. git-rebase-main rewrites history and invalidates pm-verdict, t1-approved evidence, and executor-result. Raw git merge is forbidden. Governance tooling debt, not a safety refusal.",
+      "blocks": "closeout, not PR open"
+    },
+    "real_sink_test_not_automated": {
+      "severity": "LOW",
+      "detail": "The real-sink proof was executed by driving the real function's output into staging's real system_runs and audit_log, because staging service-role credentials are unavailable locally under production containment. Automating it in CI would require editing package.json and adding a live T1 proof file, both outside file_scope_lock."
+    }
+  },
+  "scope_refusals": [
+    "No production DDL applied.",
+    "pg_cron job 5 not modified \u2014 Successor A, requires its own production decision.",
+    "No partition drop, detach, pruning, retention activation, or audit-log mutation.",
+    "No SGO, ingestion restart, worker start, queue replay, delivery activation, system picks, or member-facing output.",
+    "The six legacy additional indexes were deliberately not restored in this lane.",
+    "No DEFAULT partition created."
+  ]
+}
