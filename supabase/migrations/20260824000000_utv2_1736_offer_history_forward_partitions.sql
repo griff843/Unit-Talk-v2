@@ -224,6 +224,45 @@ $fn$;
 COMMENT ON FUNCTION public.list_provider_offer_history_partition_days() IS
   'UTV2-1736: read-only daily partition inventory for the coverage monitor.';
 
+-- ---------------------------------------------------------------------------
+-- Execute privilege on the reader.
+--
+-- Postgres grants EXECUTE on a newly created function to PUBLIC by default.
+-- Combined with SECURITY DEFINER -- and with Supabase exposing public-schema
+-- functions as PostgREST RPC -- that would leave this callable by `anon`. The
+-- function returns partition dates only, so the exposure is low-sensitivity,
+-- but a SECURITY DEFINER function should never carry an implicit PUBLIC grant:
+-- least privilege is the property, not the payload's sensitivity.
+--
+-- The REVOKE is unconditional and valid on any Postgres. The GRANT is guarded
+-- on role existence so this migration still applies cleanly to a scratch
+-- Postgres in CI, which has none of Supabase's roles. Only the monitor needs to
+-- call this, and it authenticates as service_role.
+-- ---------------------------------------------------------------------------
+REVOKE ALL ON FUNCTION public.list_provider_offer_history_partition_days() FROM PUBLIC;
+
+DO $grant$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'service_role') THEN
+    GRANT EXECUTE ON FUNCTION public.list_provider_offer_history_partition_days()
+      TO service_role;
+  END IF;
+END
+$grant$;
+
+DO $assert_grant$
+DECLARE
+  v_public_has_execute boolean;
+BEGIN
+  SELECT has_function_privilege('public', 'public.list_provider_offer_history_partition_days()', 'EXECUTE')
+    INTO v_public_has_execute;
+  IF v_public_has_execute THEN
+    RAISE EXCEPTION
+      'UTV2-1736: PUBLIC still holds EXECUTE on list_provider_offer_history_partition_days() after the REVOKE. Refusing to leave a SECURITY DEFINER function publicly callable.';
+  END IF;
+END
+$assert_grant$;
+
 COMMIT;
 
 -- ===========================================================================
