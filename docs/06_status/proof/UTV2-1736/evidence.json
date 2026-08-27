@@ -7,10 +7,10 @@
   "title": "Continuous daily partition coverage for provider_offer_history with a read-only forward-coverage monitor",
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-27T02:05:00Z",
-  "merge_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
+  "merge_sha": "58755c370d7766604b8612778b5afc17fb8d5ffe",
   "sha_binding": {
-    "verified_source_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
-    "verified_source_note": "Exact substantive branch head containing the migration, the coverage monitor, and its tests. Commits after this anchor are restricted to this lane's proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI; post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
+    "verified_source_sha": "58755c370d7766604b8612778b5afc17fb8d5ffe",
+    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes (the migration, its down script, the coverage monitor and its tests, and the PM-authorized package.json test:ops wiring). Every commit after this anchor changes only proof artifacts. All four migration receipts below were produced by CI at this exact head.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -120,7 +120,43 @@
         "status": "PASS",
         "observed": "system_runs run_type=ops.partition_coverage status=failed AND audit_log action=partition_coverage.critical"
       }
-    ]
+    ],
+    "head": "58755c370d7766604b8612778b5afc17fb8d5ffe",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 33032924826,
+      "job": 98389286094,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "refuses when public.provider_offer_history_p20260701 pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20260701 pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20260701 case \u2014 back to baseline",
+        "refuses when public.provider_offer_history_p20261124 pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20261124 pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20261124 case \u2014 back to baseline",
+        "applies on an empty scratch schema \u2014 created all declared relations: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 33032924826,
+      "job": 98389286153,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
+      "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 33032924751,
+      "job": 98389301930,
+      "workflow": "Live Schema Parity"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 33032924838,
+      "job": 98389362906,
+      "workflow": "CI / Writable DB proof (staging only)",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx. No production credential is reachable from this job."
+    }
   },
   "static_proof": {
     "test": {
