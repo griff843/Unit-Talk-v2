@@ -6,11 +6,11 @@
   "proof_profile": "migration",
   "title": "Continuous daily partition coverage for provider_offer_history with a read-only forward-coverage monitor",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-27T02:05:00Z",
-  "merge_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
+  "generated_at": "2026-08-27T02:55:00Z",
+  "merge_sha": "33e76bad8ce78c4927d076f52683326461e52d86",
   "sha_binding": {
-    "verified_source_sha": "cbfc0ebe775489a44bbe168004f41ec6a8decca4",
-    "verified_source_note": "Exact substantive branch head containing the migration, the coverage monitor, and its tests. Commits after this anchor are restricted to this lane's proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI; post-merge closeout rebinds the same gate-evaluated proof to the authoritative merge SHA.",
+    "verified_source_sha": "33e76bad8ce78c4927d076f52683326461e52d86",
+    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes (the migration, its down script, the coverage monitor and its tests, and the PM-authorized package.json test:ops wiring). Every commit after this anchor changes only proof artifacts. All four migration receipts below were produced by CI at this exact head.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-27T02:05:00Z"
+    "bound_at": "2026-08-27T02:55:00Z"
   },
   "production_ddl_applied": false,
   "runtime_proof": {
@@ -120,34 +120,70 @@
         "status": "PASS",
         "observed": "system_runs run_type=ops.partition_coverage status=failed AND audit_log action=partition_coverage.critical"
       }
-    ]
+    ],
+    "head": "33e76bad8ce78c4927d076f52683326461e52d86",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 33033982414,
+      "job": 98392567080,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "refuses when public.provider_offer_history_p20260701 pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20260701 pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20260701 case — back to baseline",
+        "refuses when public.provider_offer_history_p20261124 pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.provider_offer_history_p20261124 pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.provider_offer_history_p20261124 case — back to baseline",
+        "applies on an empty scratch schema — created all declared relations: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 33033982414,
+      "job": 98392567135,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
+    },
+    "live_schema_parity": {
+      "result": "PASS",
+      "run": 33033982491,
+      "job": 98392579436,
+      "workflow": "Live Schema Parity"
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 33033982464,
+      "job": 98393020334,
+      "workflow": "CI / Writable DB proof (staging only)",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx. No production credential is reachable from this job."
+    }
   },
   "static_proof": {
     "test": {
       "command": "pnpm test",
       "status": "PASS",
-      "tests": 4895,
+      "tests": 5138,
       "fail": 0,
       "skipped": 0,
-      "detail": "Full unit suite on the lane branch, exit 0."
+      "detail": "Full unit suite, executed inside verify:static at 33e76bad after the rebase onto origin/main e0bc1480. 5138 pass / 0 fail / 0 skipped, exit 0."
     },
     "lane_tests": {
       "command": "pnpm exec tsx --test scripts/ops/partition-provisioner.test.ts",
       "status": "PASS",
       "tests": 10,
       "fail": 0,
-      "detail": "Run directly. NOT executed by CI \u2014 see known_gaps.ci_test_wiring."
+      "detail": "Run directly for per-test verbatim output. Also executed by CI: the file is wired into test:ops and executable-wiring confirms it is reachable from the required verify root."
     },
     "verify": {
       "command": "pnpm verify",
       "status": "FAIL",
       "exit_code": 1,
-      "detail": "executable-wiring guard reports WIRING_TEST_UNWIRED_NEW scripts/ops/partition-provisioner.test.ts and WIRING_CAPABILITY_ORPHAN scripts/ops/partition-provisioner.ts. Both remedies (package.json test:ops, or docs/05_operations/executable-wiring-baseline.json) are outside this lane's immutable file_scope_lock. Requires a PM scope extension."
+      "detail": "pnpm verify is verify:static && test:live-db. verify:static is green (exit 0). test:live-db refuses locally because production containment sets SUPABASE_URL=http://127.0.0.1:1 and assert-staging-target requires xskgrzbteyqdufktjrjx. That is a correct safety refusal, not lane debt. The executable-wiring failure recorded here before the PM scope extension is resolved — the guard now reports verdict=PASS with new=0 on both baselines. The live-DB receipt is the CI writable_db_proof_staging receipt above, bound to this exact head."
     },
     "verify_static": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "detail": "ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test (4895 pass / 0 fail), smart-form verify, verify:commands"
+      "detail": "ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test (5138 pass / 0 fail / 0 skipped), smart-form verify, verify:commands. Re-executed at 33e76bad after the rebase; exit 0."
     },
     "executable_wiring": {
       "verdict": "PASS",
@@ -159,10 +195,10 @@
     }
   },
   "known_gaps": {
-    "main_sync_blocked": {
-      "severity": "HIGH",
-      "detail": "The lane branch is 23 commits behind origin/main. ops:merge-wrapper git-merge-main is implemented as `git merge --ff-only origin/main` (scripts/ops/ops-merge-wrapper.ts:96) and cannot merge a diverged branch. git-rebase-main rewrites history and invalidates pm-verdict, t1-approved evidence, and executor-result. Raw git merge is forbidden. Governance tooling debt, not a safety refusal.",
-      "blocks": "closeout, not PR open"
+    "main_sync_resolved": {
+      "severity": "RESOLVED",
+      "detail": "The branch was 23 commits behind origin/main, which reddened proof-binding by a merge-ref artifact unrelated to this lane. Synced via the sanctioned ops:merge-wrapper git-rebase-main onto origin/main e0bc1480; the branch is now 9 ahead / 0 behind. Zero conflicts — main touched none of this lane's 12 files, and the lane delta is byte-identical across the rebase. Pre- and post-rebase heads are preserved at refs/heads/preserve/utv2-1736-pre-rebase-36ba76f2 and refs/heads/preserve/utv2-1736-post-rebase-a59bd20c. Every artifact pinned to the pre-rebase head 36ba76f2 is void and was regenerated, not reused.",
+      "resolved_here": true
     },
     "real_sink_test_not_automated": {
       "severity": "LOW",
@@ -181,10 +217,27 @@
   },
   "scope_refusals": [
     "No production DDL applied.",
-    "pg_cron job 5 not modified \u2014 Successor A, requires its own production decision.",
+    "pg_cron job 5 not modified — Successor A, requires its own production decision.",
     "No partition drop, detach, pruning, retention activation, or audit-log mutation.",
     "No SGO, ingestion restart, worker start, queue replay, delivery activation, system picks, or member-facing output.",
     "The six legacy additional indexes were deliberately not restored in this lane.",
     "No DEFAULT partition created."
-  ]
+  ],
+  "rebase_record": {
+    "pre_rebase_head": "36ba76f2912eb7c200c987bb64951e78885d8768",
+    "post_rebase_substantive_head": "33e76bad8ce78c4927d076f52683326461e52d86",
+    "rebased_onto": "e0bc1480e44212eb494549784bf712465e0dabd0",
+    "method": "pnpm ops:merge-wrapper git-rebase-main (merge lock acquired and released)",
+    "conflicts": 0,
+    "lane_delta_content_changed": false,
+    "preserved_refs": [
+      "refs/heads/preserve/utv2-1736-pre-rebase-36ba76f2",
+      "refs/heads/preserve/utv2-1736-post-rebase-a59bd20c"
+    ],
+    "stale_artifacts_discarded": [
+      "EXECUTOR_RESULT comment pinned to 36ba76f2",
+      "all four CI receipts produced at 58755c37",
+      "scope-override body pinned to 36ba76f2"
+    ]
+  }
 }

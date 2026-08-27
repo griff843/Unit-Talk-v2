@@ -1,6 +1,6 @@
 # PROOF: UTV2-1736
 
-MERGE_SHA: cbfc0ebe775489a44bbe168004f41ec6a8decca4
+MERGE_SHA: 33e76bad8ce78c4927d076f52683326461e52d86
 
 Continuous daily partition coverage for `public.provider_offer_history`, plus a
 read-only forward-coverage monitor that raises a pre-expiry alert into the real
@@ -189,8 +189,8 @@ scenarios completed; staging carries no residue from this proof.
 
 ```text
 $ pnpm test
-# tests 4895
-# pass 4895
+# tests 5138
+# pass 5138
 # fail 0
 # cancelled 0
 # skipped 0
@@ -232,27 +232,61 @@ test (4,895 pass / 0 fail), smart-form verify, verify:commands
 
 ### 9. Command receipts
 
+All re-executed at `33e76bad8ce78c4927d076f52683326461e52d86`, after this branch
+was rebased onto `origin/main` `e0bc1480`. The receipts captured before the
+rebase are void and are not carried forward.
+
 ```text
 $ pnpm type-check
+> @unit-talk/v2@0.1.0 type-check
 > pnpm exec tsc -b tsconfig.json
 (no diagnostics; exit 0)
 
-$ pnpm test
-# tests 4895
-# pass 4895
-# fail 0
-
 $ pnpm verify:static
--> all stages green (see section 8); exit 0
+[executable-wiring] verdict=PASS required_roots=verify
+[executable-wiring] tests total=469 required-reachable=314 optional-reachable=36 fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+[executable-wiring] capabilities total=155 wired=137 orphan=18 (baselined=18 new=0)
+[executable-wiring] baseline tests=119/119 capabilities=18/18
+[command-manifest] Verified 14 command definition(s)
+[check-migration-versions] 8 migration file(s) verified — no duplicate versions.
+[lint-migrations] 7 migration file(s) checked — no findings.
+VERIFYSTATIC_EXIT=0
+
+$ pnpm test          # executed inside verify:static; aggregate across all suites
+# tests 5138
+# pass 5138
+# fail 0
+# skipped 0
+
+$ pnpm exec tsx --test scripts/ops/partition-provisioner.test.ts
+ok 1 - partitionNameForDay and dayFromPartitionName round-trip
+ok 2 - computeCoverage counts only the unbroken forward run
+ok 3 - a partition on the far side of a gap does not count as coverage
+ok 4 - today uncovered means zero forward coverage
+ok 5 - evaluatePreExpiry fires on exactly the thresholds it names
+ok 6 - evaluatePreExpiry rejects an inverted threshold pair
+ok 7 - an induced pre-expiry condition reaches the real operations sink
+ok 8 - an OK condition still writes a receipt, and records the run as succeeded
+ok 9 - sink failure propagates instead of being swallowed
+ok 10 - buildProvisioningSql emits reversible, DEFAULT-free DDL and never executes
+# tests 10
+# pass 10
+# fail 0
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 38
+Changed files: 12
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
+`Changed files: 12` is the lane's true delta. The pre-rebase run reported 38
+because it was diffing against a stale `origin/main`, not because the lane
+touched more files.
+
 `pnpm verify` itself exits 1 in this worktree, and only at `test:live-db` — see
-Known gap 1. Every stage before it passes.
+Known gap 1. Every stage before it passes. The live-DB receipt for this lane is
+`Writable DB proof (staging only)`, produced by CI at this exact head and
+recorded in section 11.
 
 ### 10. Migration gates
 
@@ -300,6 +334,8 @@ attached_in_range | last_day_reattached
 The assertion was written to raise `DRILL FAILED` on any SQLSTATE other than
 `42P07`; it did not raise. Staging carries no residue.
 
+This staging execution predates the rebase. It is retained because the artifact it exercised — the migration SQL — is byte-identical across the rebase, and because the head-bound equivalent of the same property is the precondition drill in section 11, which re-passed all seven cases at `33e76bad`. Nothing here rests on the staging run alone.
+
 **Reversibility.** The rollback artifact is
 `db/migrations-rollback/20260824000000_utv2_1736_offer_history_forward_partitions.down.sql`.
 It reverses exactly what the migration creates — the 147 in-range partitions and
@@ -316,6 +352,44 @@ does not apply here: this PR adds no app runtime code path at all. The monitor i
 read-only ops tooling, and the migration's coverage is the three dedicated
 scratch-Postgres drills plus Live Schema Parity plus the staging writable-DB
 proof — strictly stronger than an InMemory-versus-live comparison.
+
+### 11. CI receipts, at the exact source head
+
+All four migration receipts below were produced by CI at
+`33e76bad8ce78c4927d076f52683326461e52d86`, which is the last commit carrying
+non-proof changes. Every commit after it touches proof artifacts only.
+
+| Receipt | Result | Run | Job |
+|---|---|---:|---:|
+| Fail-closed precondition drill (scratch Postgres) | PASS | 33033982414 | 98392567080 |
+| Schema round-trip drill (scratch Postgres) | PASS | 33033982414 | 98392567135 |
+| Live Schema Parity | PASS | 33033982491 | 98392579436 |
+| Writable DB proof (staging only) | PASS | 33033982464 | 98393020334 |
+
+The precondition drill's seven cases, verbatim:
+
+```text
+migration-precondition-drill: supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql
+  [PASS] refuses when public.provider_offer_history_p20260701 pre-exists — raised SQLSTATE 42P07
+  [PASS] no DDL ran when public.provider_offer_history_p20260701 pre-exists — schema fingerprint identical before and after the attempt
+  [PASS] scratch restored after public.provider_offer_history_p20260701 case — back to baseline
+  [PASS] refuses when public.provider_offer_history_p20261124 pre-exists — raised SQLSTATE 42P07
+  [PASS] no DDL ran when public.provider_offer_history_p20261124 pre-exists — schema fingerprint identical before and after the attempt
+  [PASS] scratch restored after public.provider_offer_history_p20261124 case — back to baseline
+  [PASS] applies on an empty scratch schema — created all declared relations: public.provider_offer_history_p20260701, public.provider_offer_history_p20261124
+migration-precondition-drill: PASS
+drilled 1 migration(s)
+```
+
+`no DDL ran ... schema fingerprint identical before and after the attempt` is the
+load-bearing line: it is what "refused before any DDL" actually means, and it is
+why the guard was placed as a pre-flight pass over the whole range rather than
+inline in the provisioning loop.
+
+The `Writable DB proof (staging only)` job is the T1 live-DB receipt that cannot
+be obtained locally under production containment (Known gap 1). It ran against
+staging `xskgrzbteyqdufktjrjx` in the `staging-ci` environment; no production
+credential is reachable from it.
 
 ## Known gaps, stated plainly
 
@@ -343,15 +417,37 @@ proof — strictly stronger than an InMemory-versus-live comparison.
    wired into `test:ops` and the guard reports `verdict=PASS` with
    `new=0` on both tests and capabilities.
 
-2. **The lane branch is 23 commits behind `origin/main` and cannot be synced
-   through the sanctioned path.** `ops:merge-wrapper git-merge-main` — the verb
-   the wrapper itself recommends for "any branch carrying governance artifacts
-   or a proof bundle" — is implemented as `git merge --ff-only origin/main`
-   (`scripts/ops/ops-merge-wrapper.ts:96`), which by definition cannot merge a
-   diverged branch. The only working alternative, `git-rebase-main`, rewrites
-   history and invalidates pm-verdict, `t1-approved` evidence, and
-   executor-result. Raw `git merge` is forbidden. This is governance tooling
-   debt, not a safety refusal, and it blocks closeout rather than PR open.
+2. **The branch was 23 commits behind `origin/main`; that is now resolved, and
+   how it surfaced is worth recording.** Falling behind reddened the required
+   proof-binding check with a list of sixteen offending files, *none of which
+   this lane touched* — `scripts/ops/lane-start.ts`, `CLAUDE.md`,
+   `.ops/sync/UTV2-1512.yml` and others, all arriving from `main`. The cause is
+   `scripts/ci/proof-binding-validator.ts:161`, which takes `head` from
+   `GITHUB_SHA`; on a `pull_request` event that is the **merge ref**, so the
+   `verified_source_sha..head` diff sweeps in everything `main` gained since the
+   anchor. The gate cannot distinguish "the lane changed non-proof files after
+   its anchor" from "`main` moved". That defect is recorded separately for
+   normal admission and is deliberately **not** fixed in this lane.
+
+   The sync itself was performed with the sanctioned
+   `ops:merge-wrapper git-rebase-main` (merge lock acquired and released), onto
+   `origin/main` `e0bc1480`. `git-merge-main` was unusable: it is implemented as
+   `git merge --ff-only origin/main` (`scripts/ops/ops-merge-wrapper.ts:93-97`)
+   and cannot sync a diverged branch — a separate wrapper defect, also recorded
+   for separate admission.
+
+   The rebase produced **zero conflicts**, and that was verified rather than
+   assumed: `main` touched none of this lane's twelve files, and
+   `git diff 36ba76f2 HEAD` over those twelve files is empty, so no accepted
+   behaviour changed and no scope expanded. The branch is now 9 ahead / 0 behind.
+   Pre- and post-rebase heads are preserved at
+   `refs/heads/preserve/utv2-1736-pre-rebase-36ba76f2` and
+   `refs/heads/preserve/utv2-1736-post-rebase-a59bd20c`.
+
+   Every artifact pinned to the pre-rebase head is void and was **regenerated,
+   not reused**: all four CI receipts, every command receipt in section 9, and
+   the EXECUTOR_RESULT comment. The scope-override comment must likewise be
+   re-pinned to `33e76bad`.
 
 3. **The real-sink proof was executed by driving the real function's output into
    staging's real `system_runs` and `audit_log`**, because staging service-role
