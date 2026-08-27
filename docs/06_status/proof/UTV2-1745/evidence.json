@@ -7,10 +7,10 @@
   "title": "Retrospective pick trustworthiness audit: the current population cannot support a trustworthy-pick claim",
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-27T02:25:00Z",
-  "merge_sha": "1b9688bb130098c1eecdd41e2274ff142e529050",
+  "merge_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
   "sha_binding": {
-    "verified_source_sha": "1b9688bb130098c1eecdd41e2274ff142e529050",
-    "verified_source_note": "Exact substantive branch head containing the read-only audit script and its tests. Commits after this anchor are restricted to this lane's proof artifacts and the PM-authorized package.json wiring. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "verified_source_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
+    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes (the script, its tests, and the PM-authorized package.json test:ops wiring). Every commit after this anchor changes only proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -32,23 +32,91 @@
       "note": "The CLI could not run locally: production containment neuters local.env and this session holds no PICK_TRUTH_AUDIT_READ_KEY. Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
     },
     "row_counts": [
-      { "table": "picks", "metric": "total", "value": 107858 },
-      { "table": "picks", "metric": "null_participant_id", "value": 101842 },
-      { "table": "picks", "metric": "null_line", "value": 8981 },
-      { "table": "picks", "metric": "null_odds", "value": 8588 },
-      { "table": "picks", "metric": "null_market_type_id", "value": 28376 },
-      { "table": "picks", "metric": "fixture_marked", "value": 79557 },
-      { "table": "picks", "metric": "non_fixture", "value": 28301 },
-      { "table": "picks", "metric": "has_event_identity", "value": 7197 },
-      { "table": "picks", "metric": "has_participant_identity", "value": 6017 },
-      { "table": "picks", "metric": "has_market_type", "value": 79482 },
-      { "table": "picks", "metric": "has_line_and_odds", "value": 98877 },
-      { "table": "picks", "metric": "has_source_provenance", "value": 7180 },
-      { "table": "picks", "metric": "settled", "value": 10307 },
-      { "table": "picks", "metric": "traceable_non_fixture", "value": 3055 },
-      { "table": "picks", "metric": "traceable_non_fixture_settled", "value": 1 },
-      { "table": "picks", "metric": "traceable_non_fixture_graded", "value": 2 },
-      { "table": "game_results", "metric": "rows", "value": 135249 }
+      {
+        "table": "picks",
+        "metric": "total",
+        "value": 107858
+      },
+      {
+        "table": "picks",
+        "metric": "null_participant_id",
+        "value": 101842
+      },
+      {
+        "table": "picks",
+        "metric": "null_line",
+        "value": 8981
+      },
+      {
+        "table": "picks",
+        "metric": "null_odds",
+        "value": 8588
+      },
+      {
+        "table": "picks",
+        "metric": "null_market_type_id",
+        "value": 28376
+      },
+      {
+        "table": "picks",
+        "metric": "fixture_marked",
+        "value": 79557
+      },
+      {
+        "table": "picks",
+        "metric": "non_fixture",
+        "value": 28301
+      },
+      {
+        "table": "picks",
+        "metric": "has_event_identity",
+        "value": 7197
+      },
+      {
+        "table": "picks",
+        "metric": "has_participant_identity",
+        "value": 6017
+      },
+      {
+        "table": "picks",
+        "metric": "has_market_type",
+        "value": 79482
+      },
+      {
+        "table": "picks",
+        "metric": "has_line_and_odds",
+        "value": 98877
+      },
+      {
+        "table": "picks",
+        "metric": "has_source_provenance",
+        "value": 7180
+      },
+      {
+        "table": "picks",
+        "metric": "settled",
+        "value": 10307
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture",
+        "value": 3055
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture_settled",
+        "value": 1
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture_graded",
+        "value": 2
+      },
+      {
+        "table": "game_results",
+        "metric": "rows",
+        "value": 135249
+      }
     ],
     "structural_findings": [
       "public.picks has no event_id column. Event linkage exists only as a camelCase eventId key inside the metadata jsonb, on 7197 rows (6.7%).",
