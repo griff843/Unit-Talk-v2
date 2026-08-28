@@ -1,5 +1,5 @@
 # PROOF: UTV2-1762
-MERGE_SHA: 76c8d422b9ced176df1694e8a5e60940a07ea4c9
+MERGE_SHA: f966821f40cd0b6ba72d2bd746b952ed0b6b00aa
 
 Audited scope release: the narrowing-only mechanism `LANE_MANIFEST_SPEC.md`
 named as `ops:lane:relock` but never shipped. T2, governance tooling only. No
@@ -147,9 +147,15 @@ clean afterwards (`ls scripts/ops/ | grep mutant` returns nothing).
 
 ```text
 pnpm verify
-verify:static  PASS (env:check, lint, type-check, build all exit 0)
-pnpm test      98 suites, "# fail 0" in every one, 0 failing suites
+verify:static     PASS (env:check, lint, type-check, build all exit 0)
+pnpm type-check   exit 0 (tsc -b tsconfig.json, project references)
+pnpm lint         exit 0
+pnpm test         98 suites, "# fail 0" in every one, 0 failing suites
 ```
+
+`pnpm type-check` and `pnpm test` were each re-run standalone on the merged
+main at `f966821f40cd0b6ba72d2bd746b952ed0b6b00aa`, not only inside `pnpm
+verify`, and both exit 0.
 
 `test:live-db` refuses locally by design:
 
@@ -167,9 +173,11 @@ This lane is T2 and touches no DB surface.
 ### 7. R-level
 
 ```text
-pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+pnpm exec tsx scripts/ci/r-level-check.ts \
+  --base f966821f40cd0b6ba72d2bd746b952ed0b6b00aa^ \
+  --head f966821f40cd0b6ba72d2bd746b952ed0b6b00aa
 Verdict: PASS
-Changed files: 12
+Changed files: 13
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 

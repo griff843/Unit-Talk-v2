@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1762-audited-scope-release",
   "branch": "claude/utv2-1762-audited-scope-release",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1455",
   "files_changed": [],
   "file_scope_lock": [
@@ -28,14 +28,38 @@
     "docs/06_status/proof/UTV2-1762/diff-summary.md",
     "docs/06_status/proof/UTV2-1762/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-28T02:53:10.109Z",
-  "heartbeat_at": "2026-08-28T03:38:10.437Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-28T04:10:05.076Z",
+  "closed_at": "2026-08-28T04:10:05.076Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1762-audited-scope-release.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-28T04:09:12.323Z",
+      "verdict": "fail",
+      "merge_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
+      "failures": [
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-28T04:09:53.121Z",
+      "verdict": "pass",
+      "merge_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-08-28T04:10:03.229Z",
+      "verdict": "pass",
+      "merge_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

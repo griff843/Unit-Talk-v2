@@ -8,8 +8,8 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-28T03:45:00Z",
   "sha_binding": {
-    "verified_source_sha": "76c8d422b9ced176df1694e8a5e60940a07ea4c9",
-    "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
+    "verified_source_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
+    "verified_source_note": "Authoritative merge SHA of PR #1455 into main, bound post-merge by ops:proof-generate --merge-sha. The pre-merge anchor was 76c8d422b9ced176df1694e8a5e60940a07ea4c9 -- this lane's last non-proof commit, which carries every source control this bundle describes; it remains recorded as Anchor SHA in diff-summary.md. Approved PR head at merge time was de0f1dde83dcbe2de8a9c701eb899c508f5e0913.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-28T03:45:00Z"
+    "bound_at": "2026-08-28T04:08:36.836Z"
   },
   "scope": {
     "substantive_diff_stat": "8 files, 1848 insertions(+), 5 deletions(-)",

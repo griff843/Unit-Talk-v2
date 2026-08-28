@@ -3,6 +3,8 @@
 Audited, narrowing-only release of paths from an active lane's
 `file_scope_lock`. T2, governance tooling only.
 
+MERGE_SHA: f966821f40cd0b6ba72d2bd746b952ed0b6b00aa
+
 **Anchor SHA:** `76c8d422b9ced176df1694e8a5e60940a07ea4c9` (last non-proof commit)
 **Substantive diff:** 8 files, 1848 insertions(+), 5 deletions(-)
 
