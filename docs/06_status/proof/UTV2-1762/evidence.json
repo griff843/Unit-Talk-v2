@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-28T03:45:00Z",
   "sha_binding": {
-    "verified_source_sha": "e4101d1b36ad5bd1446a5abf245a7391c0214273",
+    "verified_source_sha": "76c8d422b9ced176df1694e8a5e60940a07ea4c9",
     "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -20,10 +20,9 @@
     "bound_at": "2026-08-28T03:45:00Z"
   },
   "scope": {
-    "substantive_diff_stat": "9 files, 1821 insertions(+), 5 deletions(-)",
+    "substantive_diff_stat": "8 files, 1848 insertions(+), 5 deletions(-)",
     "files": [
       "scripts/ops/scope-release.ts",
-      "scripts/ops/scope-release.test.ts",
       "scripts/ops/shared.ts",
       "scripts/ops/lane-manifest.ts",
       "scripts/ops/lane-manifest.test.ts",
@@ -51,14 +50,6 @@
     },
     "lane_suites": [
       {
-        "command": "pnpm exec tsx --test scripts/ops/scope-release.test.ts",
-        "exit_code": 0,
-        "tests": 24,
-        "pass": 24,
-        "fail": 0,
-        "skipped": 0
-      },
-      {
         "command": "pnpm exec tsx --test scripts/ci/file-scope-guard.test.ts",
         "exit_code": 0,
         "tests": 46,
@@ -69,8 +60,8 @@
       {
         "command": "pnpm exec tsx --test scripts/ops/lane-manifest.test.ts",
         "exit_code": 0,
-        "tests": 34,
-        "pass": 34,
+        "tests": 35,
+        "pass": 35,
         "fail": 0,
         "skipped": 0
       },
@@ -235,7 +226,7 @@
   "known_gaps": [
     "No lock_not_narrowed refusal exists: the filter-based derivation makes it structurally unreachable, and an unreachable refusal cannot be validated by making it fail on the condition it names. Requirement 1 is carried by three reachable, mutation-proven refusals instead.",
     "evaluateScopeRelease calls validateManifest, which checks preflight-token existence on disk, so the evaluator is not strictly pure. The test fixture materializes its own token rather than depending on ambient state.",
-    "scripts/ops/scope-release.test.ts is not listed in package.json's test:ops file list, because package.json is outside this lane's frozen file_scope_lock. It is chained via an import from the already-wired lane-manifest.test.ts and does execute under pnpm test. Direct wiring is follow-up work -- and is itself an instance of the frozen-scope problem this lane addresses.",
+    "The 24 scope-release tests live inside scripts/ops/lane-manifest.test.ts (35 tests total) rather than in a scripts/ops/scope-release.test.ts. The executable-wiring gate fails any new *.test.ts unreachable from a package script or workflow command; an import chain from an already-wired test file does not satisfy it (confirmed empirically -- a first attempt shipped the separate file chained by import and CI returned WIRING_TEST_UNWIRED_NEW). Both remedies require package.json or docs/05_operations/executable-wiring-baseline.json, which are outside this lane's frozen file_scope_lock, and baselining a brand-new suite as unwired would be false. Splitting the suite back out is follow-up work -- and is itself an instance of the frozen-scope problem this lane addresses.",
     "concurrent_lane_dependency scans other lane manifests' file_scope_lock. Undeclared work is invisible to this check, exactly as it is to ops:lane-start's own overlap check."
   ],
   "sign_off": {

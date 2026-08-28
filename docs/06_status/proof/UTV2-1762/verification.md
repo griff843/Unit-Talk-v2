@@ -1,5 +1,5 @@
 # PROOF: UTV2-1762
-MERGE_SHA: e4101d1b36ad5bd1446a5abf245a7391c0214273
+MERGE_SHA: 76c8d422b9ced176df1694e8a5e60940a07ea4c9
 
 Audited scope release: the narrowing-only mechanism `LANE_MANIFEST_SPEC.md`
 named as `ops:lane:relock` but never shipped. T2, governance tooling only. No
@@ -75,12 +75,19 @@ ASSERTIONS:
 
 EVIDENCE:
 
-### 1. Lane suite — `scripts/ops/scope-release.test.ts`
+### 1. Lane + command surface suite — `scripts/ops/lane-manifest.test.ts`
+
+The scope-release tests live in this file rather than a new
+`scripts/ops/scope-release.test.ts`. See "Known gaps" below: the
+`executable-wiring` gate rejects any new test file that is not reachable from a
+package script or workflow command, and `package.json` is outside this lane's
+frozen `file_scope_lock`. The 35 tests are 9 pre-existing lane-manifest tests,
+2 for the new subcommand's argument routing, and 24 scope-release tests.
 
 ```text
-# tests 24
+# tests 35
 # suites 0
-# pass 24
+# pass 35
 # fail 0
 # cancelled 0
 # skipped 0
@@ -99,19 +106,7 @@ EVIDENCE:
 # todo 0
 ```
 
-### 3. Command surface — `scripts/ops/lane-manifest.test.ts`
-
-```text
-# tests 34
-# suites 0
-# pass 34
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-```
-
-### 4. Manifest schema/validation — `scripts/ops/shared.test.ts`
+### 3. Manifest schema/validation — `scripts/ops/shared.test.ts`
 
 ```text
 # tests 72
@@ -123,10 +118,10 @@ EVIDENCE:
 # todo 0
 ```
 
-### 5. Mutation control — every refusal proven load-bearing
+### 4. Mutation control — every refusal proven load-bearing
 
 A green suite proves nothing about a refusal. The harness in
-`scope-release.test.ts` reads the module's own source, deletes one
+`lane-manifest.test.ts` reads `scripts/ops/scope-release.ts`'s own source, deletes one
 `refuse('<code>', ...)` call at a time by paren-balanced rewrite, writes the
 mutant beside the original, dynamically imports it, and asserts that the
 scenario naming that refusal now gets through. It also asserts, against the
@@ -199,14 +194,21 @@ Rules matched: (none) — no R-level artifacts required for this diff
   "resulting lock remains valid" requirement is met at evaluation time rather
   than only at write time; the test fixture materializes its own token instead
   of depending on whatever tokens exist in the checkout.
-- **`scripts/ops/scope-release.test.ts` is not listed in `package.json`'s
-  `test:ops` script.** `package.json` is outside this lane's frozen
-  `file_scope_lock`, so the suite is chained via an `import` from the already
-  wired `scripts/ops/lane-manifest.test.ts` — which is why it does execute
-  under `pnpm test` (its 24 tests are inside the 34 reported for
-  `lane-manifest.test.ts`). Wiring it directly into `test:ops` is follow-up
-  work, and is itself an instance of the same class of problem this lane
-  addresses: a frozen scope that cannot admit a file the work needs.
+- **The scope-release tests have no file of their own.** They live inside
+  `scripts/ops/lane-manifest.test.ts` (24 of its 35 tests) rather than in a
+  `scripts/ops/scope-release.test.ts`. The `executable-wiring` gate
+  (`ops:automation-coverage-check`) fails any *new* `*.test.ts` that is not
+  reachable from a package script or workflow command — an `import` chain from
+  an already wired test file does **not** satisfy it, which was confirmed
+  empirically: a first attempt shipped the separate file chained by import and
+  CI returned `WIRING_TEST_UNWIRED_NEW`. Both remedies — adding the path to
+  `package.json`'s `test:ops` list, or adding it to
+  `docs/05_operations/executable-wiring-baseline.json` — require files outside
+  this lane's frozen `file_scope_lock`, and baselining a brand-new suite as
+  "unwired" would be false. Splitting the suite back out once `package.json` is
+  in scope is follow-up work, and is itself an instance of the same class of
+  problem this lane addresses: a frozen scope that cannot admit a file the work
+  needs.
 - **Concurrency detection is manifest-based.** `concurrent_lane_dependency`
   scans other lane manifests' `file_scope_lock`. A lane that has begun editing
   a path without declaring it in a manifest is invisible to this check, exactly
