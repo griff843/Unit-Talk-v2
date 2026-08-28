@@ -1,4 +1,4 @@
-# UTV2-1759 — Verification
+# PROOF: UTV2-1759 — Verification
 MERGE_SHA: 09d5068a35074770171d8b40e2fcb8a95e3f5dc0
 
 Issue: UTV2-1759 — Post-merge S1 scope evaluation rejects the lane's own
@@ -60,6 +60,8 @@ absent issue ID fails `ISSUE_ID_PATTERN` (`^UTV2-\d+$`) and returns `[]`, so an
 unidentifiable lane receives no grant rather than a grant it could shape.
 
 ### Checklist
+
+ASSERTIONS:
 
 - [x] The lane's own manifest passes S1 without being in `file_scope_lock`.
 - [x] The lane's own sync file passes S1 without being in `file_scope_lock`.
