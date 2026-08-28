@@ -79,7 +79,7 @@ import {
 // `dir/**` entry in file_scope_lock could never match a real file path. The
 // pre-merge guard already implements the correct `/**`-and-prefix semantics, so
 // reuse that single definition here rather than adding a third independent one.
-import { matchesLockPattern } from '../ci/file-scope-guard.js';
+import { laneLifecycleScopePatterns, matchesLockPattern } from '../ci/file-scope-guard.js';
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
 import {
   validateEvidenceBundleContract,
@@ -728,12 +728,26 @@ export function evaluateScopeDiff(
   filesChanged: string[],
   fileScopeLock: string[],
   expectedProofPaths: string[],
+  issueId?: string | null,
 ): { status: 'pass' | 'fail'; detail: string } {
   if (filesChanged.length === 0 || fileScopeLock.length === 0) {
     return { status: 'pass', detail: 'scope-diff check not applicable (empty files_changed or scope)' };
   }
 
-  const allowedPatterns = [...fileScopeLock, ...expectedProofPaths];
+  // UTV2-1759: the lane's own lifecycle metadata. `file_scope_lock` is frozen at
+  // lane-start, but `ops:lane-start` then CREATES the manifest and sync file and
+  // the dispatch procedure requires committing them -- so they are in the merged
+  // diff of essentially every lane while being in almost no lane's declared
+  // scope. S1 rejected them, which made a truthful closeout impossible for doing
+  // exactly what the lane procedure prescribes.
+  //
+  // These patterns come from `laneLifecycleScopePatterns`, the SAME function the
+  // pre-merge guard uses for its unconditional own-lane grant, so the two gates
+  // share one definition instead of drifting apart. Every pattern is keyed to
+  // this lane's exact issue ID: another issue's manifest or sync file still
+  // fails, and an arbitrary file under either directory still fails. An absent
+  // or malformed issue ID yields no patterns, so the grant fails closed.
+  const allowedPatterns = [...fileScopeLock, ...expectedProofPaths, ...laneLifecycleScopePatterns(issueId)];
   const outOfScope = filesChanged.filter(
     (f) =>
       !allowedPatterns.some((pattern) => matchesLockPattern(f, pattern)) &&
@@ -1362,6 +1376,7 @@ export async function runTruthCheck(
       manifest.files_changed,
       manifest.file_scope_lock,
       manifest.expected_proof_paths,
+      manifest.issue_id,
     );
     addCheck('S1', scopeDiff.status, scopeDiff.detail);
 

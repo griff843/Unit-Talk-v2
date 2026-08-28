@@ -52,6 +52,8 @@ import path from 'node:path';
 const SELF_SCOPE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
 const LOCK_CONFLICT_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
 const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
+/** A whole issue ID and nothing else -- used to key exact-lane lifecycle paths. */
+const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
 
 type GuardVerdict = 'PASS' | 'FAIL';
 
@@ -697,6 +699,45 @@ function branchLooksLikeLane(branch: string): boolean {
   return ISSUE_BRANCH_PATTERN.test(branch);
 }
 
+/**
+ * The single definition of "this lane's own lifecycle bookkeeping paths".
+ *
+ * UTV2-1759: the pre-merge guard granted these unconditionally (below) while the
+ * post-merge S1 scope-diff check knew nothing about them. Every lane commits its
+ * own manifest and sync file -- `ops:lane-start` creates them and the dispatch
+ * procedure requires committing them -- but neither path is normally declared in
+ * `file_scope_lock`, which is frozen at lane-start. So the merged diff always
+ * contained files S1 rejected, and a truthful closeout was structurally
+ * impossible: the lane could not pass a gate by doing exactly what the lane
+ * procedure told it to do.
+ *
+ * The fix is one shared policy, not a second copy. Both guards now derive these
+ * patterns from this function, so they cannot drift into disagreeing about what
+ * a lane's own lifecycle metadata is -- the duplicated-authority failure class
+ * that UTV2-1640 already fixed once for glob semantics in this same pair of
+ * gates.
+ *
+ * EXACT-LANE ONLY. Every pattern is keyed to a specific issue ID. There is no
+ * `docs/06_status/lanes/**` and no `.ops/sync/**` here, deliberately: a directory
+ * exemption would let any lane's merged diff carry any OTHER lane's manifest or
+ * sync file, which is precisely the cross-lane scope bleed both guards exist to
+ * catch. Another issue's manifest still fails, and an arbitrary file under either
+ * directory still fails.
+ *
+ * Returns [] for a missing or malformed issue ID, so an unidentifiable lane
+ * receives no grant at all rather than a grant it can shape.
+ */
+export function laneLifecycleScopePatterns(issueId: string | undefined | null): string[] {
+  const normalized = String(issueId ?? '').trim().toUpperCase();
+  if (!ISSUE_ID_PATTERN.test(normalized)) return [];
+
+  return [
+    `.ops/sync/${normalized}.yml`,
+    `docs/06_status/lanes/${normalized}.json`,
+    `docs/06_status/proof/${normalized}/**`,
+  ];
+}
+
 function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   if (!manifest.issue_id) return [];
 
@@ -715,11 +756,7 @@ function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   // resolution -- arbitrary scope widening beyond these three canonical
   // paths still requires an externally authorized scope-override/v1
   // comment, same as before.
-  return [
-    `.ops/sync/${manifest.issue_id}.yml`,
-    `docs/06_status/lanes/${manifest.issue_id}.json`,
-    `docs/06_status/proof/${manifest.issue_id}/**`,
-  ];
+  return laneLifecycleScopePatterns(manifest.issue_id);
 }
 
 function fileIsAllowedByOwnManifest(
