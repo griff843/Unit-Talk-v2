@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1756-manifest-path-fidelity",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1457",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1756/diff-summary.md",
@@ -21,9 +21,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1756/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-28T14:37:42.833Z",
-  "heartbeat_at": "2026-08-28T14:37:42.833Z",
+  "heartbeat_at": "2026-08-28T15:34:13.675Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1756-manifest-path-fidelity.json",
