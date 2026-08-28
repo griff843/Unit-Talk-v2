@@ -1,4 +1,5 @@
 # Diff summary — UTV2-1756
+MERGE_SHA: c6f86a2c7404b22056e392ecee603b2f4d79d11d
 
 Substantive diff (excludes lane apparatus and the proof bundle itself):
 
