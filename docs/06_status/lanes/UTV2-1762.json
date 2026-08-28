@@ -1,0 +1,47 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1762",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1762-audited-scope-release",
+  "branch": "claude/utv2-1762-audited-scope-release",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/06_status/proof/UTV2-1762/diff-summary.md",
+    "docs/06_status/proof/UTV2-1762/evidence.json",
+    "docs/06_status/proof/UTV2-1762/verification.md",
+    "scripts/ci/file-scope-guard.test.ts",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ops/lane-manifest.test.ts",
+    "scripts/ops/lane-manifest.ts",
+    "scripts/ops/scope-release.test.ts",
+    "scripts/ops/scope-release.ts",
+    "scripts/ops/shared.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1762/diff-summary.md",
+    "docs/06_status/proof/UTV2-1762/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-08-28T02:53:10.109Z",
+  "heartbeat_at": "2026-08-28T02:53:10.109Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1762-audited-scope-release.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1762-audited-scope-release",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
