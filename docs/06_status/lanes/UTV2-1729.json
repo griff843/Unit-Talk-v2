@@ -28,9 +28,7 @@
     "scripts/ops/proof-rebind.test.ts",
     "scripts/ops/proof-rebind.ts",
     "scripts/ops/proof-schema.test.ts",
-    "scripts/ops/proof-schema.ts",
-    "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
+    "scripts/ops/proof-schema.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1729/evidence.json",
@@ -58,5 +56,63 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-08-28T04:12:39.058Z",
+      "actor": "griff843",
+      "reason": "PM-authorized narrowing: neither path is used by PR #1436; released so UTV2-1759 can lane-start without force or bypass. Authorized 2026-08-27.",
+      "pr_number": 1436,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1436",
+      "head_sha": "c3a6de0304a8be3187f74cf32c291c457f7605d5",
+      "previous_lock_hash": "0d70d5b0c2c005a15e330fe2444dc6aa2ff39532e1632a9a28d7aa2955187faa",
+      "resulting_lock_hash": "08a1301e30e8d7d5066ab79f096e223725a9a445cd8b4bad450737dc6a6376bd",
+      "released_paths": [
+        "scripts/ops/truth-check-lib.ts",
+        "scripts/ops/truth-check-lib.test.ts"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1729-proof-producing-contract on branch codex/utv2-1729-proof-producing-contract"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue UTV2-1729, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1436"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1436 OPEN at c3a6de0304a8be3187f74cf32c291c457f7605d5"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "0d70d5b0c2c005a15e330fe2444dc6aa2ff39532e1632a9a28d7aa2955187faa"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "18 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "697 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "18 entries remain"
+        }
+      ]
+    }
+  ]
 }
