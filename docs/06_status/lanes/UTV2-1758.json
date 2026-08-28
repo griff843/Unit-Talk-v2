@@ -7,11 +7,9 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1758-reconcile-classification",
   "branch": "claude/utv2-1758-reconcile-classification",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1fdd7fc8133da12786466c5b733030aee8dcf841",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1454",
   "files_changed": [
-    ".ops/sync/UTV2-1758.yml",
-    "docs/06_status/lanes/UTV2-1758.json",
     "docs/06_status/proof/UTV2-1758/diff-summary.md",
     "docs/06_status/proof/UTV2-1758/evidence.json",
     "docs/06_status/proof/UTV2-1758/model-routing.json",
@@ -32,14 +30,22 @@
     "docs/06_status/proof/UTV2-1758/diff-summary.md",
     "docs/06_status/proof/UTV2-1758/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-27T21:19:57.833Z",
-  "heartbeat_at": "2026-08-27T22:03:48.497Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-28T13:43:57.580Z",
+  "closed_at": "2026-08-28T13:43:57.580Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1758-reconcile-classification.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-28T13:43:55.294Z",
+      "verdict": "pass",
+      "merge_sha": "1fdd7fc8133da12786466c5b733030aee8dcf841",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
