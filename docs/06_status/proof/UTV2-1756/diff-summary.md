@@ -1,5 +1,5 @@
 # Diff summary — UTV2-1756
-MERGE_SHA: 06c438f792026b469d5d8e039e74d9c0aadcfa1b
+MERGE_SHA: dafb1f252ff4ac2c7329161f6b6d3533935c2028
 
 Substantive diff (excludes lane apparatus and the proof bundle itself):
 
@@ -48,3 +48,15 @@ scripts/ops/shared.ts         | 171 ++++++++++++++++++++++++++--
 ## Not touched
 
 `.github/workflows/reconcile-stale-lanes.yml`, `docs/06_status/lanes/UTV2-1512.json`, `docs/06_status/lanes/parked/UTV2-1512.json`, `docs/06_status/lanes/UTV2-1157*.json`, `scripts/ops/lane-close.ts`.
+
+## PM review round 2
+
+| Symbol | Change |
+| -- | -- |
+| `ManifestWritePolicyError` (new, `shared.ts`) | Exported error class thrown by `assertManifestWriteIsSafe` and by nothing else, so a caller can tell a deliberate policy refusal from an operational write failure. |
+| `assertManifestWriteIsSafe` | Both refusals now throw `ManifestWritePolicyError` instead of a bare `Error`. Adds one bounded exception: `done -> started`, the replacement `ops:lane-start` performs when an issue is worked a second time. The identity arm still applies to it. |
+| `applyManifestWrite` (`reconcile.ts`) | Catches only `ManifestWritePolicyError`. Every other failure propagates, escapes `main()`'s bare loop, and exits nonzero — a scheduled run can no longer report success having written nothing. |
+| `shared.test.ts` | Two restart tests: the sanctioned `done -> started` write lands; no other settled status reanimates to `started`, `done` opens only for `started`, refused writes leave the file byte-identical, and the identity arm still bites. |
+| `reconcile.test.ts` | Two write-failure tests: a policy refusal is recorded while an injected operational failure propagates; and a real OS ENOTDIR failure exits the command nonzero, with a control arm run first to catch a broken harness. |
+
+All five arms are mutation-tested in both directions; see `verification.md`.

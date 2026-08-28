@@ -1,5 +1,5 @@
 # PROOF: UTV2-1756 — Verification
-MERGE_SHA: 06c438f792026b469d5d8e039e74d9c0aadcfa1b
+MERGE_SHA: dafb1f252ff4ac2c7329161f6b6d3533935c2028
 
 Issue: UTV2-1756 — Scheduled reconciler overwrites root lane manifests with
 parked-copy content, reverting merged governance decisions every 6 hours.
@@ -243,6 +243,95 @@ Changed files: 7
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
+## PM review round 2 — two findings, both fixed
+
+PM withheld T1 approval at head `95757016` on two actionable findings. Both are
+fixed here, both are mutation-tested, and neither was cosmetic.
+
+### Finding 1 — the existing-done restart path was broken
+
+`ops:lane-start` replaces a `done` manifest with a fresh `started` one when an
+issue is worked a second time. `done -> started` is not in `TRANSITIONS`, and
+`done` is write-protected, so the guard as shipped at `95757016` **refused that
+write**.
+
+That is worse than a refused write. Reading `scripts/ops/lane-start.ts`, the
+ordering on the new-lane path is:
+
+| Line | Step |
+| -- | -- |
+| 1392 | `createBranchAndWorktree(branch, worktreePath)` |
+| 1395 | `prepareLaneWithIsolatedPnpm(...)` |
+| 1396 | `reserveLease({...})` |
+| 1413 | throw if an existing manifest is in any non-`done` status |
+| ~1458 | `writeManifest(manifest)` <- the guard fires here |
+
+There is no `try`/`catch` and no rollback on that path. A refusal at the write
+would therefore have stranded a branch, a worktree, and a lease on **every**
+restart of a completed issue.
+
+Fixed by permitting exactly `done -> started` in the guard, scoped to match the
+kernel's own rule: lane-start hard-errors on an existing manifest in any other
+status, so `done` is the only settled record it ever replaces and `started` the
+only status it replaces one with. The exception is unreachable by
+`ops:reconcile`, which only ever writes `blocked`, `merged`, or `done`, and only
+for manifests in `ACTIVE_LOCK_STATUSES` — which excludes `done`.
+
+### Finding 2 — reconcile swallowed operational write failures
+
+`applyManifestWrite` caught **every** error and recorded it as a refusal. A full
+disk, a read-only mount, or a bug in the writer would have been reported as a
+manifest-policy refusal, and the scheduled `ops:reconcile --apply` run would
+have exited 0 having written nothing.
+
+Fixed by giving the guard its own error type, `ManifestWritePolicyError`, thrown
+by `assertManifestWriteIsSafe` and by nothing else. `applyManifestWrite` catches
+only that; everything else propagates, escapes `main()`'s bare loop, and exits
+nonzero.
+
+### Residue on a rejected start — reported, not fixed
+
+PM also asked for proof that a rejected start leaves no worktree, lease, branch,
+or manifest residue. Two halves, answered separately and honestly:
+
+* **Manifest residue: none.** A refused write leaves the target byte-identical.
+  Asserted directly in `UTV2-1756 RESTART: the exception is exactly
+  done->started and nothing wider`, which compares file bytes before and after
+  every refusal.
+* **Worktree, branch, and lease residue: yes, and pre-existing.** The table
+  above shows all three are created before lane-start's non-`done` check at
+  line 1413, on a path with no rollback. So a start rejected for an existing
+  non-`done` manifest already stranded them before this lane existed. This lane
+  does not introduce that path and — with finding 1 fixed — no longer adds a
+  new way to reach it. Repairing it means giving lane-start's new-lane path a
+  rollback, which is a change to `scripts/ops/lane-start.ts`: outside this
+  lane's frozen `file_scope_lock`, and recorded as a known gap rather than
+  silently expanded into.
+
+### Mutation results for both fixes
+
+| Mutation | Expected | Observed |
+| -- | -- | -- |
+| Remove the `done -> started` exception | restart test fails | `not ok 87 ... RESTART: a done manifest accepts the sanctioned replacement` |
+| Widen it to any settled `-> started` | bounds test fails | `not ok 88 ... RESTART: the exception is exactly done->started and nothing wider` |
+| Restore the catch-all in `applyManifestWrite` | both write-failure tests fail | `not ok 27 ... policy refusal is recorded, an operational failure propagates` and `not ok 28 ... a real OS write failure exits nonzero` |
+| None (control) | all pass | `# pass 88 # fail 0` (shared), `# pass 28 # fail 0` (reconcile) |
+
+### A harness defect found and corrected mid-proof
+
+The first version of the command-level write-failure test put a *directory*
+where the manifest file belonged, expecting EISDIR. It passed — and kept
+passing under the catch-all mutation, which is how it was caught.
+`readAllManifestPaths` recurses into directories, so a directory named
+`UTV2-1512.json` simply vanishes from the candidate set and the subprocess died
+during fixture lookup instead. The nonzero exit was real and meaningless.
+
+Rebuilt to aim the write at a path whose parent is a regular file (ENOTDIR),
+which fails the write while leaving the read intact, and reordered so the
+control arm runs first and asserts a clean exit — so a harness that cannot
+import, cannot find its fixture, or cannot run at all fails the test instead of
+manufacturing a pass. Not a chmod, because CI may run as root.
+
 ## Deliberate behaviour change — record-merge onto a settled lane
 
 Surfaced by independent adversarial review of PR #1457, confirmed in source,
@@ -297,6 +386,18 @@ single-manifest lanes was too broad and has been corrected.
   fidelity defect — each writes back to the file it resolved for its own
   issue — so neither can reproduce `a67a6a59`; but neither is guarded.
   Recorded as follow-up work.
+- **`ops:lane-start`'s new-lane path has no rollback.** Branch, worktree, and
+  lease are created before its existing-manifest status check, so a start
+  rejected for an existing non-`done` manifest strands all three. Pre-existing,
+  unrelated to the clobber fix, and repairable only inside
+  `scripts/ops/lane-start.ts`, which is outside this lane's frozen scope.
+- **The restart proof is unit-level, not a real `ops:lane-start` invocation.**
+  The guard's behaviour on `done -> started` is proven directly against
+  `writeManifestAtPath`, and the lane-start ordering above is established by
+  reading the source. Driving the real command end-to-end needs a preflight
+  token, a real branch and worktree, and a lease, and `scripts/ops/lane-start.test.ts`
+  is outside this lane's frozen `file_scope_lock`. Naming this rather than
+  implying a coverage level the tests do not have.
 - **`writeJsonFile` is not atomic.** Plain `fs.writeFileSync`, no
   temp-file-and-rename as `scripts/ops/proof-rebind.ts` uses for its own
   writes. A crash mid-write can still truncate a settled manifest. Pre-existing

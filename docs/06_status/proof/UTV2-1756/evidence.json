@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-28T15:40:00Z",
   "sha_binding": {
-    "verified_source_sha": "06c438f792026b469d5d8e039e74d9c0aadcfa1b",
+    "verified_source_sha": "dafb1f252ff4ac2c7329161f6b6d3533935c2028",
     "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -91,7 +91,30 @@
     },
     "collateral_observed_during_mutation": "Mutations 2 and 3 reproduced the defect against the live repository: issueToManifestPath resolved to the real docs/06_status/lanes/UTV2-1512.json inside the lane worktree and the fixture's content was written over it (1 file changed, 17 insertions(+), 125 deletions(-) \u2014 lane_type, commit_sha, pr_url and the entire file_scope_lock replaced). The file was restored from HEAD and the working tree verified clean before this bundle was written. Reported because it measures the blast radius rather than asserting it: the corruption is whole-object, not only the status field.",
     "source_restored": true,
-    "baseline_after_restore": "111 tests, 111 pass, 0 fail"
+    "baseline_after_restore": "111 tests, 111 pass, 0 fail",
+    "rounds": [
+      {
+        "control": "done -> started restart exception and the narrowed reconcile catch",
+        "mutations": [
+          {
+            "mutation": "remove the done -> started exception in assertManifestWriteIsSafe",
+            "expected": "restart test fails",
+            "observed": "not ok 87 - UTV2-1756 RESTART: a done manifest accepts the sanctioned replacement by a fresh started lane"
+          },
+          {
+            "mutation": "widen the exception to any settled status -> started",
+            "expected": "bounds test fails",
+            "observed": "not ok 88 - UTV2-1756 RESTART: the exception is exactly done->started and nothing wider"
+          },
+          {
+            "mutation": "restore the catch-all in applyManifestWrite",
+            "expected": "both write-failure tests fail",
+            "observed": "not ok 27 and not ok 28"
+          }
+        ],
+        "control_run": "shared.test.ts 88 pass 0 fail; reconcile.test.ts 28 pass 0 fail"
+      }
+    ]
   },
   "static_proof": {
     "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane's proof profile is static: it touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",
