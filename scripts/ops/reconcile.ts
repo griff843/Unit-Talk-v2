@@ -33,14 +33,16 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
 import {
   ACTIVE_LOCK_STATUSES,
   ROOT,
+  issueToManifestPath,
   parseArgs,
-  readAllManifests,
+  readAllManifestEntries,
+  relativeToRoot,
+  writeManifestAtPath,
   type LaneManifest,
+  type LaneManifestEntry,
 } from './shared.js';
 
 // ── Thresholds (EXECUTION_TRUTH_MODEL.md §7) ─────────────────────────────────
@@ -92,6 +94,24 @@ export function selectReconcilableManifests(
   );
 }
 
+/**
+ * UTV2-1756: the same selection, preserving each manifest's source path.
+ *
+ * The selection policy is unchanged and deliberately not duplicated -- this
+ * delegates to `selectReconcilableManifests` above so the two can never drift
+ * into the divergent-definitions failure that produced this class of defect in
+ * the first place. What it adds is the path, so the write can land on the file
+ * the record was read from instead of on whatever `issueToManifestPath`
+ * happens to compute from the issue ID.
+ */
+export function selectReconcilableManifestEntries(
+  entries: LaneManifestEntry[],
+  issueFilter: ReadonlySet<string> = new Set(),
+): LaneManifestEntry[] {
+  const selected = new Set(selectReconcilableManifests(entries.map((entry) => entry.manifest), issueFilter));
+  return entries.filter((entry) => selected.has(entry.manifest));
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export type ReconcileVerdict = 'stale' | 'stranded' | 'orphaned' | 'ghost_merged' | 'clean';
@@ -104,6 +124,21 @@ export interface ReconcileEntry {
   heartbeat_age_h: number | null;
   action_taken: string;
   planned_mutation: string | null;
+  /**
+   * UTV2-1756: the file this record was read from and, on a write verdict, the
+   * file that was written. Reported so a sweep's digest names its destination
+   * instead of leaving it to be inferred from the issue ID -- the inference
+   * that produced the `a67a6a59` clobber.
+   */
+  manifest_path?: string;
+  /**
+   * UTV2-1756: true when the manifest write was refused by the fail-closed
+   * guard in `writeManifestAtPath`. The classification still stands -- the
+   * lane really is stranded or ghost-merged -- but nothing was written, so the
+   * run must not report it as a mutation.
+   */
+  refused?: boolean;
+  refusal_reason?: string;
 }
 
 interface ReconcileDigest {
@@ -127,7 +162,14 @@ export interface ReconcileManifestOptions {
   apply: boolean;
   now?: Date;
   branchExists?: (branch: string) => boolean | null;
-  writeManifest?: (manifest: LaneManifest) => void;
+  /**
+   * UTV2-1756: the file this manifest was read from, and therefore the file it
+   * must be written back to. Defaults to the issue-ID-derived root path only
+   * so that callers holding a single manifest with no filesystem provenance
+   * keep working; every sweep threads the real source path.
+   */
+  manifestPath?: string;
+  writeManifest?: (manifest: LaneManifest, manifestPath: string) => void;
   /**
    * Resolves the merged PR authoritatively backing this lane, or null when the
    * lane has no merged PR. Injectable so the ghost-lane rule is testable
@@ -232,13 +274,39 @@ function branchExistsOnRemote(branch: string): boolean | null {
 
 // ── Manifest write helpers ────────────────────────────────────────────────────
 
-function manifestPath(issueId: string): string {
-  return path.join(ROOT, 'docs', '06_status', 'lanes', `${issueId}.json`);
+/**
+ * UTV2-1756: writes go through `writeManifestAtPath`, not raw `fs`.
+ *
+ * The previous implementation resolved its own root path from the issue ID and
+ * wrote with `fs.writeFileSync` directly -- bypassing `validateManifest` and
+ * the status-transition guard entirely. Routing through the shared chokepoint
+ * is what makes the guard load-bearing on the one code path that actually
+ * caused the incident, rather than decorative next to it.
+ */
+function writeManifestJson(manifest: LaneManifest, filePath: string): void {
+  // `validate: false` is deliberate and is NOT a bypass of this lane's fix.
+  // The clobber guard inside `writeManifestAtPath` runs regardless; only
+  // outgoing schema validation is skipped, because reconciliation repairs
+  // legacy records it did not author. See WriteManifestOptions.
+  writeManifestAtPath(manifest, filePath, { validate: false });
 }
 
-function writeManifestJson(manifest: LaneManifest): void {
-  const filePath = manifestPath(manifest.issue_id);
-  fs.writeFileSync(filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+/**
+ * Applies a planned write, converting a fail-closed refusal into a recorded
+ * outcome instead of an exception that would abort the whole sweep. A refusal
+ * is a finding, not a crash: the operator needs to see the other lanes too.
+ */
+function applyManifestWrite(
+  manifest: LaneManifest,
+  filePath: string,
+  write: (manifest: LaneManifest, filePath: string) => void,
+): string | null {
+  try {
+    write(manifest, filePath);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
 }
 
 // ── Reconcile a single manifest ───────────────────────────────────────────────
@@ -253,6 +321,7 @@ export function reconcileManifest(
   const ageH = ageMs != null ? Math.round(ageMs / (60 * 60 * 1000) * 10) / 10 : null;
   const branchExists = options.branchExists ?? branchExistsOnRemote;
   const writeManifest = options.writeManifest ?? writeManifestJson;
+  const targetPath = options.manifestPath ?? issueToManifestPath(manifest.issue_id);
   const resolveMergedPr = options.resolveMergedPr ?? resolveMergedPrForLane;
 
   // Ghost-merged is checked FIRST. A merged lane's branch is routinely deleted
@@ -300,17 +369,21 @@ export function reconcileManifest(
       ],
     };
     const plannedMutation = 'status -> merged, commit_sha bound, locks released';
-    if (options.apply) {
-      writeManifest(updated);
-    }
+    const refusal = options.apply ? applyManifestWrite(updated, targetPath, writeManifest) : null;
     return {
       issue_id: manifest.issue_id,
       verdict: 'ghost_merged',
       detail: `PR ${merged.url ?? '(unknown)'} is merged (${merged.mergeSha}) but manifest status is "${manifest.status}"`,
       branch: manifest.branch,
       heartbeat_age_h: ageH,
-      action_taken: options.apply ? plannedMutation : `DRY-RUN - WOULD ${plannedMutation}`,
+      action_taken: refusal
+        ? `REFUSED - ${relativeToRoot(targetPath)} not written`
+        : options.apply
+          ? plannedMutation
+          : `DRY-RUN - WOULD ${plannedMutation}`,
       planned_mutation: plannedMutation,
+      manifest_path: relativeToRoot(targetPath),
+      ...(refusal ? { refused: true, refusal_reason: refusal } : {}),
     };
   }
 
@@ -346,17 +419,21 @@ export function reconcileManifest(
       ],
     };
     const plannedMutation = 'status -> blocked, truth_check_history appended';
-    if (options.apply) {
-      writeManifest(updated);
-    }
+    const refusal = options.apply ? applyManifestWrite(updated, targetPath, writeManifest) : null;
     return {
       issue_id: manifest.issue_id,
       verdict: 'stranded',
       detail: `heartbeat_at ${ageH}h old (threshold: 24h)`,
       branch: manifest.branch,
       heartbeat_age_h: ageH,
-      action_taken: options.apply ? plannedMutation : `DRY-RUN - WOULD ${plannedMutation}`,
+      action_taken: refusal
+        ? `REFUSED - ${relativeToRoot(targetPath)} not written`
+        : options.apply
+          ? plannedMutation
+          : `DRY-RUN - WOULD ${plannedMutation}`,
       planned_mutation: plannedMutation,
+      manifest_path: relativeToRoot(targetPath),
+      ...(refusal ? { refused: true, refusal_reason: refusal } : {}),
     };
   }
 
@@ -393,7 +470,7 @@ export function main(argv = process.argv.slice(2)): void {
   const jsonMode = parsed.bools.has('json');
   const apply = parsed.bools.has('apply');
 
-  const allManifests = readAllManifests();
+  const allEntries = readAllManifestEntries();
   // `--issue UTV2-###` (repeatable) narrows a run to specific lanes. The
   // scheduled job never passes it and still sweeps everything; an operator
   // reconciling one known ghost should not have to mutate fourteen unrelated
@@ -401,15 +478,20 @@ export function main(argv = process.argv.slice(2)): void {
   const issueFilter = new Set(
     (parsed.flags.get('issue') ?? []).map((value) => value.trim().toUpperCase()).filter(Boolean),
   );
-  const activeManifests = selectReconcilableManifests(allManifests, issueFilter);
+  const activeEntries = selectReconcilableManifestEntries(allEntries, issueFilter);
 
   const entries: ReconcileEntry[] = [];
   let mutations = 0;
 
-  for (const manifest of activeManifests) {
-    const entry = reconcileManifest(manifest, { apply });
+  for (const active of activeEntries) {
+    // UTV2-1756: `active.path` -- the file this record was actually read from
+    // -- is the write destination. Deriving it from the issue ID instead is
+    // precisely how a parked copy's content landed on a root manifest.
+    const entry = reconcileManifest(active.manifest, { apply, manifestPath: active.path });
     entries.push(entry);
-    if ((entry.verdict === 'stranded' || entry.verdict === 'ghost_merged') && apply) mutations++;
+    if ((entry.verdict === 'stranded' || entry.verdict === 'ghost_merged') && apply && !entry.refused) {
+      mutations++;
+    }
   }
 
   const digest: ReconcileDigest = {
@@ -417,8 +499,8 @@ export function main(argv = process.argv.slice(2)): void {
     run_at: runAt,
     mode,
     dry_run: !apply,
-    manifest_count: allManifests.length,
-    active_count: activeManifests.length,
+    manifest_count: allEntries.length,
+    active_count: activeEntries.length,
     planned_mutations: entries.filter((entry) => entry.planned_mutation !== null).length,
     mutations,
     entries: entries.filter((e) => e.verdict !== 'clean'),
@@ -431,7 +513,7 @@ export function main(argv = process.argv.slice(2)): void {
     if (!apply) {
       console.log('  DRY-RUN: no filesystem writes will be made. Pass --apply to mutate lane manifests.');
     }
-    console.log(`  manifests: ${allManifests.length} total, ${activeManifests.length} active`);
+    console.log(`  manifests: ${allEntries.length} total, ${activeEntries.length} active`);
     console.log(`  planned_mutations: ${digest.planned_mutations}`);
     console.log(`  mutations_applied: ${mutations}`);
 

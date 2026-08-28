@@ -488,6 +488,21 @@ const CODEX_EXECUTORS = new Set<LaneExecutor>(['codex-cli', 'codex-cloud']);
  * the normal gate, leaving both facts in the history.
  */
 const NON_SUCCESS_TERMINALS: LaneManifestStatus[] = ['failed', 'superseded', 'cancelled'];
+
+/**
+ * UTV2-1756: the statuses whose on-disk record gets a veto over an incoming
+ * write. These are the settled ones -- the records that represent a decision
+ * already taken, and that a repair job has no business reopening by side
+ * effect. `merged` is included: it is not lock-holding, but rolling a merged
+ * lane back to `blocked` would be the same class of regression as rolling a
+ * `superseded` one back, and `TRANSITIONS` already permits every legitimate
+ * move out of it.
+ */
+const TERMINAL_WRITE_PROTECTED_STATUSES = new Set<LaneManifestStatus>([
+  'merged',
+  'done',
+  ...NON_SUCCESS_TERMINALS,
+]);
 const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
   started: ['in_progress', 'blocked', 'parked', 'reopened', 'started', ...NON_SUCCESS_TERMINALS],
   in_progress: ['in_review', 'blocked', 'parked', 'reopened', 'in_progress', ...NON_SUCCESS_TERMINALS],
@@ -911,6 +926,28 @@ export function manifestExists(issueId: string): boolean {
   return fs.existsSync(issueToManifestPath(issueId));
 }
 
+/**
+ * UTV2-1756: a manifest paired with the exact file it was read from.
+ *
+ * `readAllManifestPaths` recurses, so the manifest tree can hold two records
+ * with the same `issue_id` -- `docs/06_status/lanes/UTV2-1512.json` alongside
+ * `docs/06_status/lanes/parked/UTV2-1512.json`, and (in the same directory)
+ * `UTV2-1157.json` alongside `UTV2-1157-codex.json`. Every writer that
+ * resolves its destination from the issue ID alone therefore writes one
+ * record's content over a different record's file.
+ *
+ * That is not hypothetical: commit `a67a6a59` reverted PR #1448's ratified
+ * `superseded` root manifest back to `blocked` and deleted 58 lines of
+ * `truth_check_history`, by reading the parked copy and writing the root path.
+ *
+ * Carrying the source path alongside the manifest is what makes writing back
+ * to the file a record actually came from expressible at all.
+ */
+export interface LaneManifestEntry {
+  path: string;
+  manifest: LaneManifest;
+}
+
 export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   if (!fs.existsSync(manifestDir)) {
     throw new Error(`Lane manifest directory does not exist: ${manifestDir}`);
@@ -932,8 +969,15 @@ export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   return paths.sort((left, right) => left.localeCompare(right));
 }
 
+export function readAllManifestEntries(manifestDir = MANIFEST_DIR): LaneManifestEntry[] {
+  return readAllManifestPaths(manifestDir).map((filePath) => ({
+    path: filePath,
+    manifest: parseJsonFile<LaneManifest>(filePath),
+  }));
+}
+
 export function readAllManifests(manifestDir = MANIFEST_DIR): LaneManifest[] {
-  return readAllManifestPaths(manifestDir).map((filePath) => parseJsonFile<LaneManifest>(filePath));
+  return readAllManifestEntries(manifestDir).map((entry) => entry.manifest);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1836,15 +1880,128 @@ export function validateScopeReleaseHistory(
   return errors;
 }
 
-export function writeManifest(manifest: LaneManifest): void {
-  validateManifestSchemaDependencies();
-  const manifestPath = issueToManifestPath(manifest.issue_id);
-  const errors = validateManifest(manifest, manifestPath);
-  if (errors.length > 0) {
-    throw new Error(errors.join('\n'));
+/**
+ * UTV2-1756: the single fail-closed guard every manifest write passes through.
+ *
+ * `writeManifestAtPath` is the chokepoint. Before a write can land on a file
+ * that already exists, the record already on disk gets a vote:
+ *
+ *   1. Identity. If the on-disk record carries a different `issue_id`, the
+ *      write is a cross-record clobber and is refused outright.
+ *   2. Terminal protection. When the record on disk is in a settled status,
+ *      the move to the incoming status must be legal under `TRANSITIONS`.
+ *      `superseded -> blocked` is not, so the exact clobber performed by
+ *      `a67a6a59` is refused here regardless of which caller resolved the path
+ *      or how it resolved it. A terminal root manifest is therefore
+ *      un-rewritable by any writer, not merely by the one writer whose path
+ *      resolution was fixed.
+ *
+ *      The arm is deliberately scoped to settled statuses rather than to every
+ *      status. Applying `TRANSITIONS` to in-flight records would make this
+ *      guard a lifecycle authority, which is not what this lane ratified --
+ *      and the table is not currently fit for that role: `ops:lane-link-pr`
+ *      moves every lane `started -> in_review` on PR binding, a transition the
+ *      table does not list. That gap is real and worth its own issue, but
+ *      closing it by having a write guard start refusing PR binding would be
+ *      smuggling a lifecycle change in under a clobber fix.
+ *
+ * The guard deliberately abstains when the on-disk file cannot be parsed or
+ * carries no recognisable status: a corrupt manifest must stay repairable, and
+ * refusing to overwrite garbage would brick the only path that fixes it.
+ *
+ * The guard is not a substitute for writing to the right file. Two records can
+ * share an `issue_id` and still be distinct lanes -- `UTV2-1157.json` and
+ * `UTV2-1157-codex.json` sit in the same directory and both say `UTV2-1157`,
+ * so the identity arm has nothing to compare and only the transition arm
+ * applies. Path fidelity at the call site is the primary fix; this guard is
+ * the backstop that holds even when a caller resolves the wrong path.
+ *
+ * Note the layering. `selectReconcilableManifests` (UTV2-1619) already fails
+ * closed on the *read* side by allowlisting active statuses; that fix is
+ * correct and untouched. It could not stop this defect because the candidate
+ * it selected was never the terminal manifest -- the terminal manifest was
+ * only ever the write *destination*. Guarding both sides is what closes it.
+ */
+function assertManifestWriteIsSafe(manifest: LaneManifest, manifestPath: string): void {
+  if (!fs.existsSync(manifestPath)) {
+    return;
+  }
+
+  let onDisk: LaneManifest;
+  try {
+    onDisk = parseJsonFile<LaneManifest>(manifestPath);
+  } catch {
+    // Unparseable target: abstain so a corrupt manifest stays repairable.
+    return;
+  }
+
+  const onDiskIssueId = String(onDisk?.issue_id ?? '').trim().toUpperCase();
+  const incomingIssueId = String(manifest.issue_id ?? '').trim().toUpperCase();
+  if (onDiskIssueId && incomingIssueId && onDiskIssueId !== incomingIssueId) {
+    throw new Error(
+      `Refusing to write manifest for ${incomingIssueId} over ${relativeToRoot(manifestPath)}, ` +
+        `which holds ${onDiskIssueId}: a manifest must be written back to its own file`,
+    );
+  }
+
+  if (!TERMINAL_WRITE_PROTECTED_STATUSES.has(onDisk?.status)) {
+    // Not settled (or an unrecognised legacy value): no transition vote. An
+    // in-flight lane is expected to move, and a corrupt one must stay
+    // repairable.
+    return;
+  }
+
+  try {
+    assertStatusTransition(onDisk.status, manifest.status);
+  } catch {
+    throw new Error(
+      `Refusing to overwrite ${relativeToRoot(manifestPath)}: on-disk status "${onDisk.status}" ` +
+        `cannot transition to "${manifest.status}". A terminal manifest may only be moved through ` +
+        'a legal transition (see TRANSITIONS); reconciling one backwards would rewrite settled truth.',
+    );
+  }
+}
+
+export interface WriteManifestOptions {
+  /**
+   * Whether to run full schema validation on the outgoing manifest.
+   *
+   * Defaults to true, and every lane-authoring writer leaves it that way.
+   * `ops:reconcile` sets it to false, deliberately: it repairs pre-existing
+   * records it did not author, and many of them no longer satisfy the current
+   * schema through no fault of the repair -- a reaped `preflight_token` file
+   * is enough, and `docs/06_status/lanes/UTV2-1512.json` fails on exactly that
+   * today. Validating there would make the reconciler refuse to release locks
+   * on precisely the legacy lanes reconciliation exists to unstick, turning a
+   * clobber bug into a stuck-board bug.
+   *
+   * The clobber guard below is NOT optional and runs either way. Skipping
+   * schema validation is a statement about the outgoing record's shape; it is
+   * never permission to write over a different record.
+   */
+  validate?: boolean;
+}
+
+export function writeManifestAtPath(
+  manifest: LaneManifest,
+  manifestPath: string,
+  options: WriteManifestOptions = {},
+): void {
+  assertManifestWriteIsSafe(manifest, manifestPath);
+
+  if (options.validate !== false) {
+    validateManifestSchemaDependencies();
+    const errors = validateManifest(manifest, manifestPath);
+    if (errors.length > 0) {
+      throw new Error(errors.join('\n'));
+    }
   }
 
   writeJsonFile(manifestPath, manifest);
+}
+
+export function writeManifest(manifest: LaneManifest): void {
+  writeManifestAtPath(manifest, issueToManifestPath(manifest.issue_id));
 }
 
 export function updateManifest(

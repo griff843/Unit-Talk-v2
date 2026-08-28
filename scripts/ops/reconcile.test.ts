@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
-import { reconcileManifest, selectReconcilableManifests } from './reconcile.js';
-import type { LaneManifest } from './shared.js';
+import {
+  reconcileManifest,
+  selectReconcilableManifestEntries,
+  selectReconcilableManifests,
+} from './reconcile.js';
+import { readAllManifestEntries, writeJsonFile, type LaneManifest } from './shared.js';
 
 const STALE_MS = 4 * 60 * 60 * 1000;
 const STRANDED_MS = 24 * 60 * 60 * 1000;
@@ -381,5 +388,168 @@ test('UTV2-1619: --issue narrows the candidate set to exactly the named lanes', 
     selected.map((m) => m.issue_id),
     ['UTV2-1627', 'UTV2-1684'],
     'targeted reconciliation must not touch unrelated lanes',
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1756: end-to-end reproduction and closure of the `a67a6a59` clobber.
+//
+// The fixture is the real arrangement on `main`: two manifests carrying
+// `issue_id: "UTV2-1512"`, one at the root (terminal `superseded`, ratified by
+// PR #1448) and one under `parked/` (active `blocked`, heartbeat seven weeks
+// stale). Only the parked copy is a reconcile candidate — UTV2-1619's
+// allowlist saw to that, and it worked. The defect was never in the selection;
+// it was that the selected record's content was written to a destination
+// derived from the issue ID, which resolved to the root file.
+//
+// The three arms below are a mutation-test triple, not three restatements of
+// the same assertion. Arm A is the fixed behaviour. Arm B removes ONLY path
+// fidelity and shows the guard still refuses. Arm C removes BOTH and shows the
+// root manifest is clobbered exactly as it was on 2026-08-27 — which is what
+// makes arms A and B load-bearing rather than vacuous.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const STRANDED_HEARTBEAT = '2026-05-16T00:00:00.000Z'; // > 24h before NOW
+
+function duplicateManifestFixture(label: string): {
+  dir: string;
+  rootPath: string;
+  parkedPath: string;
+  rootBefore: string;
+} {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `utv2-1756-e2e-${label}-`));
+  fs.mkdirSync(path.join(dir, 'parked'), { recursive: true });
+
+  const rootPath = path.join(dir, 'UTV2-1512.json');
+  const parkedPath = path.join(dir, 'parked', 'UTV2-1512.json');
+
+  writeJsonFile(rootPath, {
+    ...manifestWithStatus('UTV2-1512', 'superseded'),
+    heartbeat_at: '2026-05-17T11:59:00.000Z',
+  });
+  writeJsonFile(parkedPath, {
+    ...manifestWithStatus('UTV2-1512', 'blocked'),
+    heartbeat_at: STRANDED_HEARTBEAT,
+  });
+
+  return { dir, rootPath, parkedPath, rootBefore: fs.readFileSync(rootPath, 'utf8') };
+}
+
+function reconcileCandidate(dir: string): { manifest: LaneManifest; path: string } {
+  const candidates = selectReconcilableManifestEntries(readAllManifestEntries(dir));
+  assert.strictEqual(
+    candidates.length,
+    1,
+    'exactly one of the two duplicates is active; the superseded root must never be a candidate',
+  );
+  const [candidate] = candidates;
+  assert.ok(candidate.path.includes('parked'), 'the candidate must be the parked copy');
+  return { manifest: candidate.manifest, path: candidate.path };
+}
+
+test('UTV2-1756 ARM A: reconcile writes the parked copy it read and leaves the root manifest untouched', () => {
+  const { dir, rootPath, parkedPath, rootBefore } = duplicateManifestFixture('fixed');
+  const candidate = reconcileCandidate(dir);
+
+  const entry = reconcileManifest(candidate.manifest, {
+    apply: true,
+    now: NOW,
+    manifestPath: candidate.path,
+    branchExists: () => true,
+    resolveMergedPr: () => null,
+  });
+
+  assert.strictEqual(entry.verdict, 'stranded');
+  assert.notStrictEqual(entry.refused, true, 'a same-status write to its own file must not be refused');
+  assert.ok(entry.manifest_path?.endsWith(path.join('parked', 'UTV2-1512.json').replace(/\\/g, '/')));
+
+  const parkedAfter = JSON.parse(fs.readFileSync(parkedPath, 'utf8'));
+  assert.strictEqual(parkedAfter.status, 'blocked');
+  assert.strictEqual(
+    parkedAfter.truth_check_history.length,
+    candidate.manifest.truth_check_history.length + 1,
+    'the parked copy is the record that was reconciled, so it is the record that gains the history entry',
+  );
+
+  assert.strictEqual(
+    fs.readFileSync(rootPath, 'utf8'),
+    rootBefore,
+    'the ratified root manifest must be byte-identical — it was never the write destination',
+  );
+});
+
+test('UTV2-1756 ARM B: with path fidelity removed, the guard still refuses to rewrite the terminal root', () => {
+  const { dir, rootPath, parkedPath, rootBefore } = duplicateManifestFixture('guard-only');
+  const parkedBefore = fs.readFileSync(parkedPath, 'utf8');
+  const candidate = reconcileCandidate(dir);
+
+  // Exactly the pre-fix behaviour: the parked record's content, aimed at the
+  // issue-ID-derived root path.
+  const entry = reconcileManifest(candidate.manifest, {
+    apply: true,
+    now: NOW,
+    manifestPath: rootPath,
+    branchExists: () => true,
+    resolveMergedPr: () => null,
+  });
+
+  assert.strictEqual(entry.verdict, 'stranded', 'the classification is unchanged — the lane really is stranded');
+  assert.strictEqual(entry.refused, true, 'the write must be refused, not silently applied');
+  assert.match(String(entry.refusal_reason), /cannot transition to "blocked"/);
+  assert.match(entry.action_taken, /^REFUSED/);
+
+  assert.strictEqual(fs.readFileSync(rootPath, 'utf8'), rootBefore, 'root must be untouched');
+  assert.strictEqual(fs.readFileSync(parkedPath, 'utf8'), parkedBefore, 'a refused write writes nothing at all');
+});
+
+test('UTV2-1756 ARM C: with both defences removed the root manifest is clobbered, reproducing a67a6a59', () => {
+  // Inversion control. If this arm ever stops clobbering, arms A and B are no
+  // longer proving anything: the fixture, not the fix, would be doing the work.
+  const { dir, rootPath, rootBefore } = duplicateManifestFixture('unprotected');
+  const candidate = reconcileCandidate(dir);
+
+  const entry = reconcileManifest(candidate.manifest, {
+    apply: true,
+    now: NOW,
+    manifestPath: rootPath,
+    branchExists: () => true,
+    resolveMergedPr: () => null,
+    // The pre-UTV2-1756 writer: raw fs, no identity check, no transition check.
+    writeManifest: (manifest, filePath) =>
+      fs.writeFileSync(filePath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8'),
+  });
+
+  assert.notStrictEqual(entry.refused, true, 'the unguarded writer must not refuse — that is the point');
+
+  const rootAfter = JSON.parse(fs.readFileSync(rootPath, 'utf8'));
+  assert.strictEqual(
+    rootAfter.status,
+    'blocked',
+    'unprotected, a ratified `superseded` is reverted to `blocked` — the exact a67a6a59 regression',
+  );
+  assert.strictEqual(rootAfter.heartbeat_at, STRANDED_HEARTBEAT, 'and heartbeat_at is rolled backwards');
+  assert.notStrictEqual(fs.readFileSync(rootPath, 'utf8'), rootBefore);
+});
+
+test('UTV2-1756: selectReconcilableManifestEntries applies the same policy as selectReconcilableManifests', () => {
+  // The two selectors must never carry divergent definitions of "active" —
+  // duplicated authority over one invariant is the failure class this lane
+  // exists to close, and reintroducing it here would be self-defeating.
+  const manifests = [
+    manifestWithStatus('UTV2-1512', 'superseded'),
+    manifestWithStatus('UTV2-1627', 'in_review'),
+    manifestWithStatus('UTV2-1684', 'started'),
+    manifestWithStatus('UTV2-619', LEGACY_CLOSED),
+  ];
+  const entries = manifests.map((manifest, index) => ({ path: `/tmp/fixture-${index}.json`, manifest }));
+
+  assert.deepEqual(
+    selectReconcilableManifestEntries(entries).map((entry) => entry.manifest.issue_id),
+    selectReconcilableManifests(manifests).map((manifest) => manifest.issue_id),
+  );
+  assert.deepEqual(
+    selectReconcilableManifestEntries(entries, new Set(['UTV2-1684'])).map((entry) => entry.path),
+    ['/tmp/fixture-2.json'],
+    'the issue filter must narrow entries exactly as it narrows manifests',
   );
 });
