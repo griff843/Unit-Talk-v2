@@ -1892,9 +1892,21 @@ export function validateScopeReleaseHistory(
  *      the move to the incoming status must be legal under `TRANSITIONS`.
  *      `superseded -> blocked` is not, so the exact clobber performed by
  *      `a67a6a59` is refused here regardless of which caller resolved the path
- *      or how it resolved it. A terminal root manifest is therefore
- *      un-rewritable by any writer, not merely by the one writer whose path
- *      resolution was fixed.
+ *      or how it resolved it -- so the protection is not specific to the one
+ *      writer whose path resolution was fixed.
+ *
+ *      It is NOT yet universal, and must not be described as such. Two writers
+ *      still reach a manifest file without passing through here:
+ *      `writeBoundManifest` in `scripts/ops/lane-link-pr.ts` when
+ *      `allowMissingPreflightToken` is set (it calls `writeJsonFile` directly
+ *      after a filtered `validateManifest`), and the one-off lane-type
+ *      migration CLI (raw `fs.writeFileSync`); both are named with exact paths
+ *      and line numbers in this lane's verification.md, which is deliberately
+ *      where those strings live -- `executable-wiring` reads a path written in
+ *      non-test source as an executable reference and would mark that CLI
+ *      spuriously wired. Both predate this change and are out of this
+ *      lane's frozen scope; both are recorded as follow-up work. Closing them
+ *      is what would make the claim "un-rewritable by any writer" true.
  *
  *      The arm is deliberately scoped to settled statuses rather than to every
  *      status. Applying `TRANSITIONS` to in-flight records would make this

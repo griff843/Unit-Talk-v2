@@ -1412,3 +1412,43 @@ test('UTV2-1756 GUARD: every settled status vetoes a rollback to an active statu
     assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).status, settled);
   }
 });
+
+// UTV2-1756: a deliberate, reviewed behaviour change -- not an accident.
+//
+// `applyPrMergeToManifest` (scripts/ops/lane-manifest.ts) forces `merged` from
+// ANY starting status except `done`, and `recordMergeCommand` then hands that
+// result to `writeManifest`. Before this lane, stamping `merged` onto a lane
+// that had already settled as `failed`/`superseded`/`cancelled` wrote silently.
+// It is now refused.
+//
+// That refusal is the intended reading of the truth model: a merge SHA may not
+// be recorded onto a lane whose settled record says it never merged. It is the
+// same judgement the PM applied by hand when rejecting `record_merge_on_manifest`
+// for UTV2-1512, whose PR #1173 closed unmerged. Locking it in a test so the
+// behaviour is asserted rather than incidental, and so anyone who wants the old
+// silence has to delete an explicit assertion to get it.
+test('UTV2-1756 GUARD: record-merge cannot stamp merged onto a lane that settled as not-merged', () => {
+  const dir = manifestFixtureDir('guard-record-merge');
+  for (const settled of ['failed', 'superseded', 'cancelled'] as const) {
+    const target = path.join(dir, `UTV2-${settled}.json`);
+    writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: settled }));
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'merged' }), target, { validate: false }),
+      /cannot transition to "merged"/,
+      `${settled} must refuse a recorded merge`,
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(target, 'utf8')).status,
+      settled,
+      `${settled} must survive the refused record-merge byte-for-byte`,
+    );
+  }
+
+  // The sanctioned shapes still work: in_review -> merged, and merged -> merged.
+  const live = path.join(dir, 'UTV2-1756.json');
+  writeJsonFile(live, laneManifest({ issue_id: 'UTV2-1756', status: 'in_review' }));
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'merged' }), live, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(live, 'utf8')).status, 'merged');
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'merged' }), live, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(live, 'utf8')).status, 'merged');
+});
