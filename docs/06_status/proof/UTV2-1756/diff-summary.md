@@ -1,5 +1,5 @@
 # Diff summary — UTV2-1756
-MERGE_SHA: c6f86a2c7404b22056e392ecee603b2f4d79d11d
+MERGE_SHA: 06c438f792026b469d5d8e039e74d9c0aadcfa1b
 
 Substantive diff (excludes lane apparatus and the proof bundle itself):
 
@@ -22,7 +22,7 @@ scripts/ops/shared.ts         | 171 ++++++++++++++++++++++++++--
 | `assertManifestWriteIsSafe` | **new**, private — the clobber guard. Refuses on issue-id disagreement; refuses an illegal move out of a settled on-disk status; abstains for an absent, unparseable, or non-settled target. |
 | `WriteManifestOptions` | **new** — `{ validate?: boolean }`, default `true`. |
 | `writeManifestAtPath(manifest, path, options?)` | **new** — the single write chokepoint. Guard always runs; schema validation is opt-out. |
-| `writeManifest(manifest)` | now delegates to `writeManifestAtPath(manifest, issueToManifestPath(manifest.issue_id))`. Behaviour for a single-manifest lane is unchanged. |
+| `writeManifest(manifest)` | now delegates to `writeManifestAtPath(manifest, issueToManifestPath(manifest.issue_id))`. Path resolution is unchanged. Behaviour is unchanged for every caller **except** `ops:lane-manifest record-merge` against a lane that settled as `failed`/`superseded`/`cancelled`, which is now refused rather than written silently — see "Deliberate behaviour change" in `verification.md`. |
 | `issueToManifestPath` | **unchanged.** Still correct, and still the right default, for a lane with exactly one manifest. |
 | `classifyLaneCapacity` | **unchanged.** |
 

@@ -1,5 +1,5 @@
 # PROOF: UTV2-1756 — Verification
-MERGE_SHA: c6f86a2c7404b22056e392ecee603b2f4d79d11d
+MERGE_SHA: 06c438f792026b469d5d8e039e74d9c0aadcfa1b
 
 Issue: UTV2-1756 — Scheduled reconciler overwrites root lane manifests with
 parked-copy content, reverting merged governance decisions every 6 hours.
@@ -243,6 +243,33 @@ Changed files: 7
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
+## Deliberate behaviour change — record-merge onto a settled lane
+
+Surfaced by independent adversarial review of PR #1457, confirmed in source,
+and locked in a test rather than left incidental.
+
+`applyPrMergeToManifest` (`scripts/ops/lane-manifest.ts:348-355`) forces
+`status: 'merged'` from **any** starting status except `done`, and
+`recordMergeCommand` (`:296`) hands that result straight to `writeManifest`.
+`TRANSITIONS` admits only `reopened` or a self-loop out of `failed`,
+`superseded`, and `cancelled`. So with this lane's guard in place,
+`ops:lane-manifest record-merge` against a lane that already settled as
+not-merged now throws where it previously wrote silently.
+
+That is the intended reading of the truth model, not a regression: a merge SHA
+must not be stamped onto a lane whose settled record says it never merged. It
+is also the same judgement the PM applied by hand in rejecting
+`record_merge_on_manifest` for UTV2-1512, whose PR #1173 closed unmerged.
+
+The sanctioned repair shapes are unaffected — `in_review -> merged` and the
+`merged -> merged` idempotent re-record both still write. Asserted by
+`UTV2-1756 GUARD: record-merge cannot stamp merged onto a lane that settled as
+not-merged` in `scripts/ops/shared.test.ts`, which covers all three refusals,
+byte-survival of the on-disk record, and both sanctioned shapes.
+
+The earlier claim in `diff-summary.md` that behaviour was unchanged for
+single-manifest lanes was too broad and has been corrected.
+
 ## Known gaps
 
 - **`started → in_review` is missing from `TRANSITIONS`.** Discovered by this
@@ -260,6 +287,21 @@ Rules matched: (none) — no R-level artifacts required for this diff
   still read `status: "blocked"` on `main`; restoring them to a truthful
   terminal state is UTV2-1757, deliberately out of this lane's frozen scope.
   This lane stops the recurrence; it does not repair the damage already done.
+- **The chokepoint is not universal, and the guard's doc comment no longer
+  claims it is.** Two writers still reach a manifest file without passing
+  through `writeManifestAtPath`: `writeBoundManifest` in
+  `scripts/ops/lane-link-pr.ts:81-88` when `allowMissingPreflightToken` is set
+  (raw `writeJsonFile` after a filtered `validateManifest`), and
+  `scripts/ops/migrate-lane-types.ts:106` (raw `fs.writeFileSync`). Both
+  predate this lane and are outside its frozen scope. Neither has the path
+  fidelity defect — each writes back to the file it resolved for its own
+  issue — so neither can reproduce `a67a6a59`; but neither is guarded.
+  Recorded as follow-up work.
+- **`writeJsonFile` is not atomic.** Plain `fs.writeFileSync`, no
+  temp-file-and-rename as `scripts/ops/proof-rebind.ts` uses for its own
+  writes. A crash mid-write can still truncate a settled manifest. Pre-existing
+  and untouched here; noted because this is exactly the file class the lane
+  sets out to protect.
 - **`ops:reconcile` no longer schema-validates its writes** — as it never did.
   The opt-out is explicit and documented rather than incidental, but a
   reconciler-authored write can still land a record that would fail
