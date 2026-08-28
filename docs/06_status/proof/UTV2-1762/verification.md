@@ -208,7 +208,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
   "unwired" would be false. Splitting the suite back out once `package.json` is
   in scope is follow-up work, and is itself an instance of the same class of
   problem this lane addresses: a frozen scope that cannot admit a file the work
-  needs.
+  needs. Recorded as UTV2-1764 (backlog, unstaffed).
 - **Concurrency detection is manifest-based.** `concurrent_lane_dependency`
   scans other lane manifests' `file_scope_lock`. A lane that has begun editing
   a path without declaring it in a manifest is invisible to this check, exactly
