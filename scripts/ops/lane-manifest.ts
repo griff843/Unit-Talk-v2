@@ -23,6 +23,7 @@ import {
 } from './shared.js';
 import { buildLaneExecutionLocation } from './lane-execution.js';
 import { resolveModelProfile, type ModelRoutingBlock } from './model-routing.js';
+import { runScopeRelease } from './scope-release.js';
 
 interface PullRequestMergeInfo {
   input: string;
@@ -59,6 +60,8 @@ export function main(argv = process.argv.slice(2)): number {
       case 'update':
         updateCommand(positionals[1], flags, bools.has('json'));
         return 0;
+      case 'scope-release':
+        return scopeReleaseCommand(positionals[1], flags, bools.has('json'));
       case 'record-merge':
         recordMergeCommand(positionals[1], flags, bools.has('json'));
         return 0;
@@ -205,6 +208,56 @@ function updateCommand(
     return;
   }
   console.log(`${next.issue_id} ${next.status}`);
+}
+
+/**
+ * The sanctioned narrowing path (UTV2-1762). LANE_MANIFEST_SPEC.md named
+ * `ops:lane:relock` for this and nothing ever implemented it; this is the real
+ * command, and it narrows only -- see scripts/ops/scope-release.ts.
+ *
+ * Every argument below is mandatory by design. The point of the operation is
+ * that the operator restates what they believe to be true (PR, exact head SHA,
+ * pre-change lock hash) and the tool refuses if live state disagrees, so a
+ * release can never be applied to a lane state the operator did not actually
+ * inspect.
+ */
+function scopeReleaseCommand(
+  issueId: string | undefined,
+  flags: Map<string, string[]>,
+  json: boolean,
+): number {
+  if (!issueId) {
+    throw new Error('Missing issue id');
+  }
+  const releasePaths = getFlags(flags, 'release-path');
+  if (releasePaths.length === 0) {
+    throw new Error('Missing --release-path (repeatable, at least one required)');
+  }
+  const prRaw = getRequired(flags, 'pr');
+  const prNumber = Number(prRaw.replace(/^#/, ''));
+  if (!Number.isInteger(prNumber) || prNumber <= 0) {
+    throw new Error(`--pr must be a PR number (got "${prRaw}")`);
+  }
+
+  const result = runScopeRelease({
+    issue_id: issueId.toUpperCase(),
+    pr_number: prNumber,
+    expected_head_sha: getRequired(flags, 'expected-head-sha'),
+    expected_lock_hash: getRequired(flags, 'expected-lock-hash'),
+    release_paths: releasePaths,
+    actor: getRequired(flags, 'actor'),
+    reason: getRequired(flags, 'reason'),
+  });
+
+  if (json) {
+    emitJson(result);
+  } else {
+    console.log(result.message);
+    for (const refusal of result.refusals) {
+      console.error(`  ${refusal.code}: ${refusal.detail}`);
+    }
+  }
+  return result.ok ? 0 : 1;
 }
 
 function recordMergeCommand(
@@ -411,6 +464,7 @@ function usage(): void {
   console.error('  pnpm ops:lane-manifest -- read UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- update UTV2-123 [--status merged] [--pr-url ...] [--commit-sha ...] [--files-changed path]');
   console.error('  pnpm ops:lane-manifest -- record-merge UTV2-123 --pr <url-or-number> [--json]');
+  console.error('  pnpm ops:lane-manifest -- scope-release UTV2-123 --pr 456 --expected-head-sha <sha> --expected-lock-hash <sha256> --release-path <path> [--release-path <path>] --actor <who> --reason <why> [--json]');
   console.error('  pnpm ops:lane-manifest -- validate UTV2-123 [--json]');
   console.error('  pnpm ops:lane-manifest -- status UTV2-123 [--json]');
 }

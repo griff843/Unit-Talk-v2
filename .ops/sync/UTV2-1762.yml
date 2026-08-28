@@ -1,0 +1,320 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1762
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1762
+  objective: Add an audited, fail-closed mechanism for releasing unused paths from
+    an active lane's `file_scope_lock`, without permitting scope expansion,
+    historical rewriting, or concurrent edits.
+  acceptance_criteria:
+    - |-
+      ## Why
+
+      `docs/05_operations/LANE_MANIFEST_SPEC.md` line 178 states that a scope conflict may be resolved "by waiting for the conflicting lane to close, or **to redefine scope**", and line 179 names `ops:lane:relock` as the mechanism. Live inspection shows `ops:lane:relock` **does not exist**: no match in `scripts/`, `package.json`, or `.github/workflows/`. The spec also frames relock as a *widening* mechanism, which is not what conflict resolution requires.
+
+      There is therefore no sanctioned way to release an unused path from an active lane's `file_scope_lock`. The spec itself already records the consequence, at line 343:
+
+      > This let a **merged-but-not-yet-**`done` manifest ... permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288).
+
+      Falsifying `files_changed` was correctly rejected. This lane supplies the honest alternative.
+
+      ### Live blocking instance
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) (PR #1436, head `c3a6de03`, `in_review`) declares `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts` in its `file_scope_lock`. **Neither path appears anywhere in that PR's 18-file, 1740-line diff.** The lock reserves files the lane never touched, and it blocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required) — which cannot avoid `truth-check-lib.ts`, since the defect lives in it. PR #1436 is red on `verify`, `Merge Gate`, and `Readiness Regression Gate`, so waiting is not a path.
+
+      `ops:lane-manifest update` accepts only `--status`, `--pr-url`, `--commit-sha`, `--files-changed`. No narrowing exists.
+
+      ## Objective
+
+      Add an audited, fail-closed mechanism for releasing unused paths from an active lane's `file_scope_lock`, without permitting scope expansion, historical rewriting, or concurrent edits.
+
+      ## Where to look
+
+      * `scripts/ops/lane-manifest.ts` / `.test.ts` — the command surface to extend.
+      * `scripts/ops/shared.ts` line 103 — `LaneManifest`; add `scope_release_history` here. `reopen_history` and `truth_check_history` are the existing append-only precedents to model on.
+      * `scripts/ci/file-scope-guard.ts` / `.test.ts` — the CI PR gate that must accept an audited narrowing and keep rejecting an unaudited one.
+      * `docs/05_operations/schemas/lane_manifest_v1.schema.json` — declares `reopen_history`; add the new field alongside it.
+      * `docs/05_operations/LANE_MANIFEST_SPEC.md` lines 178–179, 343.
+
+      ## Required behavior
+
+      1. The operation may **only remove** existing lock entries. It must never add, replace, glob-expand, or widen scope.
+      2. It must run against the target lane's own worktree and branch, never the main control checkout.
+      3. It must require, as explicit inputs: exact issue ID; exact open PR number; exact expected PR-head SHA; expected pre-change `file_scope_lock` hash; exact paths being released; actor; reason.
+      4. It must refuse unless **all** hold:
+         * manifest issue, branch, and `pr_url` match;
+         * GitHub reports the expected PR at the exact expected head;
+         * each released path currently exists in `file_scope_lock`;
+         * each released path is absent from the PR's actual changed-file list;
+         * each released path is absent from staged, unstaged, untracked, and unpushed target-lane work;
+         * no concurrent lane has begun relying on the proposed release;
+         * the resulting lock remains valid and nonempty.
+      5. It must write an append-only `scope_release_history` entry containing: timestamp; actor and reason; PR and exact head; previous lock hash; resulting lock hash; exact released paths; verification results.
+      6. It must not modify: `files_changed`; issue identity; `status`; `commit_sha`; `pr_url`; proof verdicts; merge state.
+      7. CI and `ops:lane-start` must recognize an audited narrowing as sanctioned, while still rejecting unaudited `file_scope_lock` mutation.
+      8. After release, any future PR diff touching a released path must fail the normal scope guard.
+
+      ## Required tests
+
+      * exact unused path can be released;
+      * multiple exact unused paths can be released atomically;
+      * widening is refused;
+      * replacement is refused;
+      * a path present in the PR diff is refused;
+      * staged / unstaged / untracked / unpushed use is refused (four cases);
+      * wrong PR, wrong head, wrong branch, and wrong lock hash are each refused;
+      * partial failure writes nothing;
+      * `files_changed` and lifecycle state remain byte-identical across a release;
+      * later use of a released path fails scope validation;
+      * missing audit history fails validation;
+      * **mutation control:** removing any single refusal condition makes a test fail.
+
+      ## Verification standard
+
+      Each refusal must be validated by making it fail on the condition it names. A green run proves nothing; the mutation control is required for every refusal in requirement 4.
+
+      ## Documentation
+
+      Update `LANE_MANIFEST_SPEC.md` to describe the command that actually exists. Do **not** write history claiming `ops:lane:relock` was ever implemented — state plainly that the spec named an unimplemented command and that this lane supplies the real, narrowing-only mechanism.
+
+      ## Non-goals
+
+      * Does not touch `scripts/ops/truth-check-lib.ts` or `scripts/ops/truth-check-lib.test.ts` — those belong to [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required) and are the very paths under contention.
+      * Does not repair PR #1436's unrelated red checks.
+      * Does not close, reopen, or hand-edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s manifest.
+      * No widening mechanism. No production, DB, or runtime surface.
+
+      ## Tier
+
+      T2. Governance tooling only.
+
+      ## Follow-on (not part of this lane's diff)
+
+      Once merged, the sanctioned release runs against [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) at PR #1436 head `c3a6de03`, removing exactly `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts`, which then unblocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required).
+  guardrails: []
+  non_goals:
+    - Does not touch `scripts/ops/truth-check-lib.ts` or
+      `scripts/ops/truth-check-lib.test.ts` — those belong to
+      [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required)
+      and are the very paths under contention.
+    - "Does not repair PR #1436's unrelated red checks."
+    - Does not close, reopen, or hand-edit
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s
+      manifest.
+    - No widening mechanism. No production, DB, or runtime surface.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      `docs/05_operations/LANE_MANIFEST_SPEC.md` line 178 states that a scope conflict may be resolved "by waiting for the conflicting lane to close, or **to redefine scope**", and line 179 names `ops:lane:relock` as the mechanism. Live inspection shows `ops:lane:relock` **does not exist**: no match in `scripts/`, `package.json`, or `.github/workflows/`. The spec also frames relock as a *widening* mechanism, which is not what conflict resolution requires.
+
+      There is therefore no sanctioned way to release an unused path from an active lane's `file_scope_lock`. The spec itself already records the consequence, at line 343:
+
+      > This let a **merged-but-not-yet-**`done` manifest ... permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288).
+
+      Falsifying `files_changed` was correctly rejected. This lane supplies the honest alternative.
+
+      ### Live blocking instance
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) (PR #1436, head `c3a6de03`, `in_review`) declares `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts` in its `file_scope_lock`. **Neither path appears anywhere in that PR's 18-file, 1740-line diff.** The lock reserves files the lane never touched, and it blocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required) — which cannot avoid `truth-check-lib.ts`, since the defect lives in it. PR #1436 is red on `verify`, `Merge Gate`, and `Readiness Regression Gate`, so waiting is not a path.
+
+      `ops:lane-manifest update` accepts only `--status`, `--pr-url`, `--commit-sha`, `--files-changed`. No narrowing exists.
+    - >-
+      Where to look
+
+      * `scripts/ops/lane-manifest.ts` / `.test.ts` — the command surface to
+      extend.
+
+      * `scripts/ops/shared.ts` line 103 — `LaneManifest`; add
+      `scope_release_history` here. `reopen_history` and `truth_check_history`
+      are the existing append-only precedents to model on.
+
+      * `scripts/ci/file-scope-guard.ts` / `.test.ts` — the CI PR gate that must
+      accept an audited narrowing and keep rejecting an unaudited one.
+
+      * `docs/05_operations/schemas/lane_manifest_v1.schema.json` — declares
+      `reopen_history`; add the new field alongside it.
+
+      * `docs/05_operations/LANE_MANIFEST_SPEC.md` lines 178–179, 343.
+    - >-
+      Required behavior
+
+      1. The operation may **only remove** existing lock entries. It must never
+      add, replace, glob-expand, or widen scope.
+
+      2. It must run against the target lane's own worktree and branch, never
+      the main control checkout.
+
+      3. It must require, as explicit inputs: exact issue ID; exact open PR
+      number; exact expected PR-head SHA; expected pre-change `file_scope_lock`
+      hash; exact paths being released; actor; reason.
+
+      4. It must refuse unless **all** hold:
+         * manifest issue, branch, and `pr_url` match;
+         * GitHub reports the expected PR at the exact expected head;
+         * each released path currently exists in `file_scope_lock`;
+         * each released path is absent from the PR's actual changed-file list;
+         * each released path is absent from staged, unstaged, untracked, and unpushed target-lane work;
+         * no concurrent lane has begun relying on the proposed release;
+         * the resulting lock remains valid and nonempty.
+      5. It must write an append-only `scope_release_history` entry containing:
+      timestamp; actor and reason; PR and exact head; previous lock hash;
+      resulting lock hash; exact released paths; verification results.
+
+      6. It must not modify: `files_changed`; issue identity; `status`;
+      `commit_sha`; `pr_url`; proof verdicts; merge state.
+
+      7. CI and `ops:lane-start` must recognize an audited narrowing as
+      sanctioned, while still rejecting unaudited `file_scope_lock` mutation.
+
+      8. After release, any future PR diff touching a released path must fail
+      the normal scope guard.
+    - >-
+      Required tests
+
+      * exact unused path can be released;
+
+      * multiple exact unused paths can be released atomically;
+
+      * widening is refused;
+
+      * replacement is refused;
+
+      * a path present in the PR diff is refused;
+
+      * staged / unstaged / untracked / unpushed use is refused (four cases);
+
+      * wrong PR, wrong head, wrong branch, and wrong lock hash are each
+      refused;
+
+      * partial failure writes nothing;
+
+      * `files_changed` and lifecycle state remain byte-identical across a
+      release;
+
+      * later use of a released path fails scope validation;
+
+      * missing audit history fails validation;
+
+      * **mutation control:** removing any single refusal condition makes a test
+      fail.
+    - >-
+      Verification standard
+
+      Each refusal must be validated by making it fail on the condition it
+      names. A green run proves nothing; the mutation control is required for
+      every refusal in requirement 4.
+    - >-
+      Documentation
+
+      Update `LANE_MANIFEST_SPEC.md` to describe the command that actually
+      exists. Do **not** write history claiming `ops:lane:relock` was ever
+      implemented — state plainly that the spec named an unimplemented command
+      and that this lane supplies the real, narrowing-only mechanism.
+    - |-
+      Tier
+      T2. Governance tooling only.
+    - |-
+      Follow-on (not part of this lane's diff)
+      Once merged, the sanctioned release runs against [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) at PR #1436 head `c3a6de03`, removing exactly `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts`, which then unblocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1762/audited-scope-release-implement-the-sanctioned-narrowing-path-that
+    title: "Audited scope release: implement the sanctioned narrowing path that
+      LANE_MANIFEST_SPEC names but never shipped"
+    description: |-
+      ## Why
+
+      `docs/05_operations/LANE_MANIFEST_SPEC.md` line 178 states that a scope conflict may be resolved "by waiting for the conflicting lane to close, or **to redefine scope**", and line 179 names `ops:lane:relock` as the mechanism. Live inspection shows `ops:lane:relock` **does not exist**: no match in `scripts/`, `package.json`, or `.github/workflows/`. The spec also frames relock as a *widening* mechanism, which is not what conflict resolution requires.
+
+      There is therefore no sanctioned way to release an unused path from an active lane's `file_scope_lock`. The spec itself already records the consequence, at line 343:
+
+      > This let a **merged-but-not-yet-**`done` manifest ... permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288).
+
+      Falsifying `files_changed` was correctly rejected. This lane supplies the honest alternative.
+
+      ### Live blocking instance
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) (PR #1436, head `c3a6de03`, `in_review`) declares `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts` in its `file_scope_lock`. **Neither path appears anywhere in that PR's 18-file, 1740-line diff.** The lock reserves files the lane never touched, and it blocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required) — which cannot avoid `truth-check-lib.ts`, since the defect lives in it. PR #1436 is red on `verify`, `Merge Gate`, and `Readiness Regression Gate`, so waiting is not a path.
+
+      `ops:lane-manifest update` accepts only `--status`, `--pr-url`, `--commit-sha`, `--files-changed`. No narrowing exists.
+
+      ## Objective
+
+      Add an audited, fail-closed mechanism for releasing unused paths from an active lane's `file_scope_lock`, without permitting scope expansion, historical rewriting, or concurrent edits.
+
+      ## Where to look
+
+      * `scripts/ops/lane-manifest.ts` / `.test.ts` — the command surface to extend.
+      * `scripts/ops/shared.ts` line 103 — `LaneManifest`; add `scope_release_history` here. `reopen_history` and `truth_check_history` are the existing append-only precedents to model on.
+      * `scripts/ci/file-scope-guard.ts` / `.test.ts` — the CI PR gate that must accept an audited narrowing and keep rejecting an unaudited one.
+      * `docs/05_operations/schemas/lane_manifest_v1.schema.json` — declares `reopen_history`; add the new field alongside it.
+      * `docs/05_operations/LANE_MANIFEST_SPEC.md` lines 178–179, 343.
+
+      ## Required behavior
+
+      1. The operation may **only remove** existing lock entries. It must never add, replace, glob-expand, or widen scope.
+      2. It must run against the target lane's own worktree and branch, never the main control checkout.
+      3. It must require, as explicit inputs: exact issue ID; exact open PR number; exact expected PR-head SHA; expected pre-change `file_scope_lock` hash; exact paths being released; actor; reason.
+      4. It must refuse unless **all** hold:
+         * manifest issue, branch, and `pr_url` match;
+         * GitHub reports the expected PR at the exact expected head;
+         * each released path currently exists in `file_scope_lock`;
+         * each released path is absent from the PR's actual changed-file list;
+         * each released path is absent from staged, unstaged, untracked, and unpushed target-lane work;
+         * no concurrent lane has begun relying on the proposed release;
+         * the resulting lock remains valid and nonempty.
+      5. It must write an append-only `scope_release_history` entry containing: timestamp; actor and reason; PR and exact head; previous lock hash; resulting lock hash; exact released paths; verification results.
+      6. It must not modify: `files_changed`; issue identity; `status`; `commit_sha`; `pr_url`; proof verdicts; merge state.
+      7. CI and `ops:lane-start` must recognize an audited narrowing as sanctioned, while still rejecting unaudited `file_scope_lock` mutation.
+      8. After release, any future PR diff touching a released path must fail the normal scope guard.
+
+      ## Required tests
+
+      * exact unused path can be released;
+      * multiple exact unused paths can be released atomically;
+      * widening is refused;
+      * replacement is refused;
+      * a path present in the PR diff is refused;
+      * staged / unstaged / untracked / unpushed use is refused (four cases);
+      * wrong PR, wrong head, wrong branch, and wrong lock hash are each refused;
+      * partial failure writes nothing;
+      * `files_changed` and lifecycle state remain byte-identical across a release;
+      * later use of a released path fails scope validation;
+      * missing audit history fails validation;
+      * **mutation control:** removing any single refusal condition makes a test fail.
+
+      ## Verification standard
+
+      Each refusal must be validated by making it fail on the condition it names. A green run proves nothing; the mutation control is required for every refusal in requirement 4.
+
+      ## Documentation
+
+      Update `LANE_MANIFEST_SPEC.md` to describe the command that actually exists. Do **not** write history claiming `ops:lane:relock` was ever implemented — state plainly that the spec named an unimplemented command and that this lane supplies the real, narrowing-only mechanism.
+
+      ## Non-goals
+
+      * Does not touch `scripts/ops/truth-check-lib.ts` or `scripts/ops/truth-check-lib.test.ts` — those belong to [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required) and are the very paths under contention.
+      * Does not repair PR #1436's unrelated red checks.
+      * Does not close, reopen, or hand-edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s manifest.
+      * No widening mechanism. No production, DB, or runtime surface.
+
+      ## Tier
+
+      T2. Governance tooling only.
+
+      ## Follow-on (not part of this lane's diff)
+
+      Once merged, the sanctioned release runs against [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) at PR #1436 head `c3a6de03`, removing exactly `scripts/ops/truth-check-lib.ts` and `scripts/ops/truth-check-lib.test.ts`, which then unblocks [UTV2-1759](https://linear.app/unit-talk-v2/issue/UTV2-1759/post-merge-s1-scope-evaluation-rejects-the-lanes-own-required).
+    captured_at: 2026-08-28T02:52:46.805Z
+    description_sha256: 6292b4346d3ce5c87ed95e5e4fc3731c78aa051ac026e5b97805aac8f5bccca0
+  contract_hash: a31500881ce71eb5cf8322047c3f4a24eebfceeb12762f873b01ed713bcec9b2

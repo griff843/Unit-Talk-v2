@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
   evaluateFileScopeGuard,
   matchesLockPattern,
@@ -1032,4 +1033,189 @@ test('resolveApplicableOverride: when two comments match the same head SHA, the 
 
   assert.equal(result.verdict, 'PASS');
   assert.deepEqual(result.outside_scope, []);
+});
+
+// ── UTV2-1762: audited scope release ────────────────────────────────────────
+//
+// The guard must accept a narrowing that the sanctioned `ops:lane-manifest
+// scope-release` command produced, and must ignore any other edit to a
+// manifest's file_scope_lock -- including a narrowing with no audit trail, a
+// rewritten audit trail, and (as before) any widening.
+
+const RELEASE_MANIFEST_PATH = 'docs/06_status/lanes/UTV2-1729.json';
+const RELEASE_BRANCH = 'codex/utv2-1729-proof-generator';
+const KEPT = 'scripts/ops/proof-generate.ts';
+const RELEASED = 'scripts/ops/truth-check-lib.ts';
+
+function releaseBaseline(): Record<string, unknown> {
+  return {
+    issue_id: 'UTV2-1729',
+    branch: RELEASE_BRANCH,
+    status: 'in_review',
+    file_scope_lock: [KEPT, RELEASED],
+    expected_proof_paths: [],
+    files_changed: [KEPT],
+  };
+}
+
+// Independently computed sha256 of JSON.stringify(sorted unique normalized lock),
+// matching hashFileScopeLock in scripts/ops/shared.ts.
+function lockHash(lock: string[]): string {
+  const canonical = [...new Set(lock)].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function auditedRelease(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    released_at: '2026-08-28T03:00:00.000Z',
+    actor: 'griff843',
+    reason: 'never touched by PR #1436',
+    pr_number: 1436,
+    pr_url: 'https://github.com/unit-talk/Unit-Talk-v2/pull/1436',
+    head_sha: 'c3a6de03',
+    previous_lock_hash: lockHash([KEPT, RELEASED]),
+    resulting_lock_hash: lockHash([KEPT]),
+    released_paths: [RELEASED],
+    verifications: [{ check: 'pr_head', status: 'pass', detail: 'ok' }],
+    ...overrides,
+  };
+}
+
+function releaseSource(headManifest: Record<string, unknown>): GitManifestSource {
+  return fakeGitSource({
+    refs: {
+      main: { [RELEASE_MANIFEST_PATH]: JSON.stringify(releaseBaseline()) },
+      head: { [RELEASE_MANIFEST_PATH]: JSON.stringify(headManifest) },
+    },
+  });
+}
+
+test('UTV2-1762: an audited narrowing is trusted over the base-branch baseline', () => {
+  const head = { ...releaseBaseline(), file_scope_lock: [KEPT], scope_release_history: [auditedRelease()] };
+  const [trusted] = resolveTrustedManifests(releaseSource(head), 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT]);
+});
+
+test('UTV2-1762: a narrowing with no audit history is ignored', () => {
+  const head = { ...releaseBaseline(), file_scope_lock: [KEPT] };
+  const [trusted] = resolveTrustedManifests(releaseSource(head), 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED], 'the unaudited edit must not take effect');
+});
+
+test('UTV2-1762: an audit entry that does not chain to the head lock is ignored', () => {
+  const head = {
+    ...releaseBaseline(),
+    file_scope_lock: [KEPT],
+    scope_release_history: [auditedRelease({ resulting_lock_hash: 'not-the-head-hash' })],
+  };
+  const [trusted] = resolveTrustedManifests(releaseSource(head), 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED]);
+});
+
+test('UTV2-1762: an audit entry that does not chain from the baseline lock is ignored', () => {
+  const head = {
+    ...releaseBaseline(),
+    file_scope_lock: [KEPT],
+    scope_release_history: [auditedRelease({ previous_lock_hash: 'not-the-baseline-hash' })],
+  };
+  const [trusted] = resolveTrustedManifests(releaseSource(head), 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED]);
+});
+
+test('UTV2-1762: a removed path not accounted for by any audit entry is ignored', () => {
+  const third = 'scripts/ops/lane-close.ts';
+  const baseline = { ...releaseBaseline(), file_scope_lock: [KEPT, RELEASED, third] };
+  const head = {
+    ...baseline,
+    file_scope_lock: [KEPT],
+    scope_release_history: [
+      auditedRelease({
+        previous_lock_hash: lockHash([KEPT, RELEASED, third]),
+        resulting_lock_hash: lockHash([KEPT]),
+        released_paths: [RELEASED], // silently drops `third` as well
+      }),
+    ],
+  };
+  const source = fakeGitSource({
+    refs: { main: { [RELEASE_MANIFEST_PATH]: JSON.stringify(baseline) }, head: { [RELEASE_MANIFEST_PATH]: JSON.stringify(head) } },
+  });
+  const [trusted] = resolveTrustedManifests(source, 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED, third]);
+});
+
+test('UTV2-1762: an audit trail whose earlier entries were rewritten is ignored', () => {
+  const baseline = { ...releaseBaseline(), scope_release_history: [auditedRelease({ reason: 'original' })] };
+  const head = {
+    ...baseline,
+    file_scope_lock: [KEPT],
+    scope_release_history: [auditedRelease({ reason: 'rewritten after the fact' }), auditedRelease()],
+  };
+  const source = fakeGitSource({
+    refs: { main: { [RELEASE_MANIFEST_PATH]: JSON.stringify(baseline) }, head: { [RELEASE_MANIFEST_PATH]: JSON.stringify(head) } },
+  });
+  const [trusted] = resolveTrustedManifests(source, 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED], 'append-only means earlier entries are frozen');
+});
+
+test('UTV2-1762: a widening dressed up as a release is still refused', () => {
+  const head = {
+    ...releaseBaseline(),
+    file_scope_lock: [KEPT, RELEASED, 'scripts/ops/lane-close.ts'],
+    scope_release_history: [auditedRelease()],
+  };
+  const [trusted] = resolveTrustedManifests(releaseSource(head), 'main', 'head');
+
+  assert.deepEqual(trusted.file_scope_lock, [KEPT, RELEASED], 'widening never comes from the manifest itself');
+});
+
+test('UTV2-1762: after a release, a later PR touching the released path fails scope validation', () => {
+  const released = { ...releaseBaseline(), file_scope_lock: [KEPT], scope_release_history: [auditedRelease()] };
+  const [trusted] = resolveTrustedManifests(releaseSource(released), 'main', 'head');
+
+  // The releasing lane itself may no longer touch the path it gave up.
+  const own = evaluateFileScopeGuard({
+    prBranch: RELEASE_BRANCH,
+    changedFiles: [RELEASED],
+    manifests: [trusted],
+  });
+  assert.equal(own.verdict, 'FAIL');
+  assert.deepEqual(
+    own.outside_scope.map((violation) => violation.file),
+    [RELEASED],
+  );
+
+  // And the released path no longer blocks anybody else.
+  const other = evaluateFileScopeGuard({
+    prBranch: 'claude/utv2-1759-s1-lifecycle-scope',
+    changedFiles: [RELEASED],
+    manifests: [
+      trusted,
+      {
+        issue_id: 'UTV2-1759',
+        branch: 'claude/utv2-1759-s1-lifecycle-scope',
+        status: 'started',
+        file_scope_lock: [RELEASED],
+        expected_proof_paths: [],
+      },
+    ],
+  });
+  assert.equal(other.verdict, 'PASS');
+  assert.deepEqual(other.conflicts, []);
+});
+
+test('UTV2-1762: the guard hash matches scripts/ops/shared.ts hashFileScopeLock', async () => {
+  const { hashFileScopeLock } = await import('../ops/shared.js');
+  for (const lock of [[KEPT], [KEPT, RELEASED], [RELEASED, KEPT], ['./' + KEPT, KEPT]]) {
+    assert.equal(
+      lockHash([...new Set(lock.map((entry) => entry.replace(/^\.\/+/, '')))]),
+      hashFileScopeLock(lock),
+      `duplicated hash must agree for ${JSON.stringify(lock)}`,
+    );
+  }
 });
