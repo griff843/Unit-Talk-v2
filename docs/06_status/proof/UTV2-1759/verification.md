@@ -1,5 +1,5 @@
 # PROOF: UTV2-1759 — Verification
-MERGE_SHA: 09d5068a35074770171d8b40e2fcb8a95e3f5dc0
+MERGE_SHA: c93bd8ffc77da340495c55f85c857beeeab68403
 
 Issue: UTV2-1759 — Post-merge S1 scope evaluation rejects the lane's own
 required lifecycle metadata, making truthful closeout structurally impossible.

@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-28T13:22:10Z",
   "sha_binding": {
-    "verified_source_sha": "09d5068a35074770171d8b40e2fcb8a95e3f5dc0",
+    "verified_source_sha": "c93bd8ffc77da340495c55f85c857beeeab68403",
     "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -17,7 +17,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-28T13:22:10Z"
+    "bound_at": "2026-08-28T13:41:39.237Z"
   },
   "scope": {
     "substantive_diff_stat": "3 files, 359 insertions(+), 7 deletions(-)",
