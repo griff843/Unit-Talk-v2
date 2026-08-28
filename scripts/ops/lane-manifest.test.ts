@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { applyPrMergeToManifest, createCommand } from './lane-manifest.js';
+import { applyPrMergeToManifest, createCommand, main } from './lane-manifest.js';
 import {
   type LaneManifest,
   ROOT,
@@ -11,6 +11,14 @@ import {
   issueToManifestPath,
   worktreePathForBranch,
 } from './shared.js';
+
+// The audited scope-release suite (UTV2-1762) lives in its own module beside
+// the implementation it covers. `package.json`'s `test:ops` script is an
+// explicit file list and is outside this lane's frozen file_scope_lock, so the
+// sibling suite is chained here to guarantee it actually executes under
+// `pnpm test` rather than sitting unwired. Wiring it directly into `test:ops`
+// is tracked as follow-up work.
+import './scope-release.test.js';
 
 const PR_URL = 'https://github.com/unit-talk/Unit-Talk-v2/pull/1066';
 const MERGE_SHA = 'abc123merge456';
@@ -215,5 +223,36 @@ test('lane-manifest create resolves and persists model_routing for a valid Codex
   } finally {
     fs.rmSync(manifestPath, { force: true });
     fs.rmSync(tokenAbsolutePath, { force: true });
+  }
+});
+
+// ── UTV2-1762: scope-release command surface ────────────────────────────────
+
+test('scope-release is a routed subcommand and refuses an incomplete invocation', () => {
+  const captured: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => {
+    captured.push(args.map(String).join(' '));
+  };
+  try {
+    // Unknown subcommands fall through to usage(); a routed one does not.
+    assert.equal(main(['definitely-not-a-command']), 1);
+    const usageText = captured.join('\n');
+    assert.match(usageText, /scope-release UTV2-123 --pr 456/);
+
+    captured.length = 0;
+    // Routed, but missing --release-path: it must fail on its own argument
+    // validation before any git/GitHub call, and must not print usage.
+    assert.equal(main(['scope-release', 'UTV2-1729', '--pr', '1436']), 1);
+    assert.match(captured.join('\n'), /Missing --release-path/);
+
+    captured.length = 0;
+    assert.equal(
+      main(['scope-release', 'UTV2-1729', '--pr', 'not-a-number', '--release-path', 'a.ts']),
+      1,
+    );
+    assert.match(captured.join('\n'), /--pr must be a PR number/);
+  } finally {
+    console.error = originalError;
   }
 });
