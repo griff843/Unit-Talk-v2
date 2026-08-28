@@ -1452,3 +1452,68 @@ test('UTV2-1756 GUARD: record-merge cannot stamp merged onto a lane that settled
   writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'merged' }), live, { validate: false });
   assert.strictEqual(JSON.parse(fs.readFileSync(live, 'utf8')).status, 'merged');
 });
+
+// UTV2-1756: the existing-done restart path must survive the guard.
+//
+// ops:lane-start replaces a `done` manifest with a fresh `started` one when an
+// issue is worked a second time (lane-start.ts, which hard-errors on an
+// existing manifest in any other status). `done -> started` is absent from
+// TRANSITIONS, so an unqualified terminal arm refuses it -- and lane-start
+// creates the branch, the worktree, and the lease BEFORE it reaches its
+// manifest write, on a path with no rollback. A refusal there strands all
+// three on every restart of a completed issue.
+test('UTV2-1756 RESTART: a done manifest accepts the sanctioned replacement by a fresh started lane', () => {
+  const dir = manifestFixtureDir('guard-restart');
+  const target = path.join(dir, 'UTV2-1512.json');
+  const settled = laneManifest({ issue_id: 'UTV2-1512', status: 'done' });
+  writeJsonFile(target, settled);
+
+  const restart = laneManifest({ issue_id: 'UTV2-1512', status: 'started' });
+  writeManifestAtPath(restart, target, { validate: false });
+
+  const after = JSON.parse(fs.readFileSync(target, 'utf8'));
+  assert.strictEqual(after.status, 'started', 'the restart must land, not be refused');
+});
+
+test('UTV2-1756 RESTART: the exception is exactly done->started and nothing wider', () => {
+  const dir = manifestFixtureDir('guard-restart-bounds');
+
+  // No other settled status may be reanimated to started. `done` is the only
+  // record ops:lane-start will replace; the rest are terminal for good.
+  for (const settled of ['merged', 'failed', 'superseded', 'cancelled'] as const) {
+    const target = path.join(dir, `UTV2-${settled}.json`);
+    writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: settled }));
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'started' }), target, { validate: false }),
+      /cannot transition to "started"/,
+      `${settled} must not be reanimated to started`,
+    );
+    assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).status, settled);
+  }
+
+  // And `done` itself only opens for `started` -- not for any other status.
+  for (const illegal of ['blocked', 'in_progress', 'in_review', 'merged', 'parked'] as const) {
+    const target = path.join(dir, `UTV2-done-to-${illegal}.json`);
+    const before = laneManifest({ issue_id: 'UTV2-1512', status: 'done' });
+    writeJsonFile(target, before);
+    const bytes = fs.readFileSync(target, 'utf8');
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: illegal }), target, { validate: false }),
+      new RegExp(`cannot transition to "${illegal}"`),
+      `done -> ${illegal} must stay refused`,
+    );
+    assert.strictEqual(fs.readFileSync(target, 'utf8'), bytes, 'a refused write must leave the file byte-identical');
+  }
+
+  // The identity arm still applies to a restart: a fresh lane for a different
+  // issue may not claim a done record's file.
+  const foreign = path.join(dir, 'UTV2-1157-codex.json');
+  writeJsonFile(foreign, laneManifest({ issue_id: 'UTV2-1157', status: 'done' }));
+  const foreignBytes = fs.readFileSync(foreign, 'utf8');
+  assert.throws(
+    () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'started' }), foreign, { validate: false }),
+    /must be written back to its own file/,
+    'the restart exception must not bypass the identity arm',
+  );
+  assert.strictEqual(fs.readFileSync(foreign, 'utf8'), foreignBytes);
+});

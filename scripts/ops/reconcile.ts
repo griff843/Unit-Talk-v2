@@ -35,6 +35,7 @@
 import { spawnSync } from 'node:child_process';
 import {
   ACTIVE_LOCK_STATUSES,
+  ManifestWritePolicyError,
   ROOT,
   issueToManifestPath,
   parseArgs,
@@ -296,6 +297,16 @@ function writeManifestJson(manifest: LaneManifest, filePath: string): void {
  * outcome instead of an exception that would abort the whole sweep. A refusal
  * is a finding, not a crash: the operator needs to see the other lanes too.
  */
+/**
+ * Perform one manifest write, converting a *policy* refusal into a recorded
+ * outcome so a single protected manifest cannot abort the whole sweep.
+ *
+ * Only `ManifestWritePolicyError` is caught. An operational failure -- ENOSPC,
+ * EACCES, EROFS, a bug in the writer -- propagates, because the alternative is
+ * a scheduled job that reports success having written nothing. Catching
+ * everything here would make this command structurally incapable of failing,
+ * which is exactly the evidence-conflation shape this lane exists to remove.
+ */
 function applyManifestWrite(
   manifest: LaneManifest,
   filePath: string,
@@ -305,7 +316,10 @@ function applyManifestWrite(
     write(manifest, filePath);
     return null;
   } catch (error) {
-    return error instanceof Error ? error.message : String(error);
+    if (error instanceof ManifestWritePolicyError) {
+      return error.message;
+    }
+    throw error;
   }
 }
 

@@ -1881,6 +1881,29 @@ export function validateScopeReleaseHistory(
 }
 
 /**
+ * UTV2-1756: raised by `assertManifestWriteIsSafe`, and by nothing else.
+ *
+ * A manifest write can fail for two unrelated reasons, and a caller that
+ * conflates them is dangerous. One is policy: this write would rewrite settled
+ * truth, and the refusal is a decision the guard made deliberately. The other
+ * is operational: the disk is full, the path is read-only, the process lost a
+ * permission. The first is a normal, reportable outcome for a sweeping caller
+ * like `ops:reconcile`, which should record it and carry on. The second means
+ * the run did not do what it claims and must not be reported as success.
+ *
+ * A bare `catch` cannot tell them apart, so the policy refusal gets its own
+ * type. Catch `ManifestWritePolicyError` to handle a refusal; let everything
+ * else propagate.
+ */
+export class ManifestWritePolicyError extends Error {
+  override readonly name = 'ManifestWritePolicyError';
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/**
  * UTV2-1756: the single fail-closed guard every manifest write passes through.
  *
  * `writeManifestAtPath` is the chokepoint. Before a write can land on a file
@@ -1950,7 +1973,7 @@ function assertManifestWriteIsSafe(manifest: LaneManifest, manifestPath: string)
   const onDiskIssueId = String(onDisk?.issue_id ?? '').trim().toUpperCase();
   const incomingIssueId = String(manifest.issue_id ?? '').trim().toUpperCase();
   if (onDiskIssueId && incomingIssueId && onDiskIssueId !== incomingIssueId) {
-    throw new Error(
+    throw new ManifestWritePolicyError(
       `Refusing to write manifest for ${incomingIssueId} over ${relativeToRoot(manifestPath)}, ` +
         `which holds ${onDiskIssueId}: a manifest must be written back to its own file`,
     );
@@ -1963,10 +1986,31 @@ function assertManifestWriteIsSafe(manifest: LaneManifest, manifestPath: string)
     return;
   }
 
+  // The one sanctioned reanimation: ops:lane-start replaces a `done` manifest
+  // with a fresh `started` one when an issue is worked a second time. It is not
+  // in TRANSITIONS, and adding it there would let anything move a done lane
+  // back to started. Permitting it here instead keeps the exception exactly as
+  // wide as the kernel's own rule: lane-start hard-errors on an existing
+  // manifest in ANY other status, so `done` is the only settled record it will
+  // ever replace, and `started` is the only status it replaces one with.
+  //
+  // This is load-bearing, not cosmetic. Branch, worktree, and lease are all
+  // created before lane-start reaches its manifest write, and that path has no
+  // rollback -- so refusing this write would strand a worktree and a lease on
+  // every restart of a completed issue.
+  //
+  // Nothing else can reach it: ops:reconcile only ever writes `blocked`,
+  // `merged`, or `done`, and only for manifests in ACTIVE_LOCK_STATUSES, which
+  // excludes `done`.
+  const isSanctionedRestart = onDisk.status === 'done' && manifest.status === 'started';
+  if (isSanctionedRestart) {
+    return;
+  }
+
   try {
     assertStatusTransition(onDisk.status, manifest.status);
   } catch {
-    throw new Error(
+    throw new ManifestWritePolicyError(
       `Refusing to overwrite ${relativeToRoot(manifestPath)}: on-disk status "${onDisk.status}" ` +
         `cannot transition to "${manifest.status}". A terminal manifest may only be moved through ` +
         'a legal transition (see TRANSITIONS); reconciling one backwards would rewrite settled truth.',
