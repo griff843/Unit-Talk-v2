@@ -157,6 +157,19 @@
       "verdict": "PASS",
       "changed_files": 8,
       "rules_matched": "none"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "standalone_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "tests": 5123,
+      "pass": 5123,
+      "fail": 0,
+      "skipped": 0,
+      "note": "Run standalone so it carries its own measured receipt. The count differs from verify:static because verify:static runs additional suites beyond pnpm test; both are reported as measured rather than reconciled to a single number."
     }
   },
   "safety_posture": {

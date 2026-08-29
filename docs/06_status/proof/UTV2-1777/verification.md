@@ -160,7 +160,29 @@ verify:static exit=0
 # fail 0
 ```
 
-### 2. Full `pnpm verify` — partial, and why
+### 2. Type-check and full test suite, run standalone
+
+Run separately from `verify:static` so each carries its own measured receipt rather
+than being asserted as transitively covered:
+
+```
+$ pnpm type-check
+type-check exit=0
+
+$ pnpm test
+test exit=0
+
+# tests 5123
+# pass 5123
+# fail 0
+# skipped 0
+```
+
+The count differs from `verify:static` above because `verify:static` runs additional
+suites beyond `pnpm test` (`verify:commands` among them); both are reported as
+measured rather than reconciled to a single number.
+
+### 3. Full `pnpm verify` — partial, and why
 
 ```
 $ pnpm verify
@@ -176,7 +198,7 @@ locally because the staging target is only reachable from the `staging-ci` GitHu
 environment; the required CI `verify` job produces and checks a run-scoped staging
 receipt in-job. Recorded as PARTIAL rather than presented as a pass.
 
-### 3. R-level
+### 4. R-level
 
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -185,7 +207,7 @@ Changed files: 8
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-### 4. Synchronization integrity
+### 5. Synchronization integrity
 
 The branch was rebased onto current `main` through the sanctioned explicit verb, with
 exactly one expected conflict and no others:
