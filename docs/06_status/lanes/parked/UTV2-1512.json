@@ -84,7 +84,17 @@
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1512-command-center-workbench.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-29T20:03:20.074Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1238.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "notes": "Manifest backfilled 2026-07-09 for a pre-existing open PR (#1173) that had no lane manifest, blocking ops:orchestration-reconcile. This is a housekeeping/tracking-correction lane per the Linear issue description (PR content already implemented; issue exists solely to bind correct manifest/tracking), not new work. preflight_token points to a documented backfill record, not a passing token: preflight was run twice against the verified true GitHub branch tip and returned NOT_APPLICABLE both times, with non-waivable-at-T2 failures PG5 (branch is 32 commits behind main), PL3 (Linear state 'In Claude' is not in preflight's hardcoded startable-state allowlist), PX1 (pre-existing root .ops/sync.yml references an unrelated older issue, UTV2-1072), and PX2 (commit history references the branch's original pre-rename issue ID UTV2-1482, expected per the issue text). None of these are fixable without rebasing or rewriting the PR branch, which was explicitly out of scope for this reconciliation.",
   "override": {
