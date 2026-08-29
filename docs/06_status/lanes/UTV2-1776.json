@@ -1,0 +1,51 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1776",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1776-attestation-merge-slot",
+  "branch": "codex/utv2-1776-attestation-merge-slot",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1776.yml",
+    "docs/06_status/proof/UTV2-1776/diff-summary.md",
+    "docs/06_status/proof/UTV2-1776/evidence.json",
+    "docs/06_status/proof/UTV2-1776/model-routing.json",
+    "docs/06_status/proof/UTV2-1776/verification.md",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1776/evidence.json",
+    "docs/06_status/proof/UTV2-1776/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-29T22:40:43.150Z",
+  "heartbeat_at": "2026-08-29T22:40:43.150Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1776-attestation-merge-slot.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1776-attestation-merge-slot",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

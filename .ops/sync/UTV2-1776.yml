@@ -1,0 +1,250 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1776
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1776
+  objective: Post-merge attestation resolver rejects the schema-v2 merge slot and
+    strands UTV2-1729 closeout
+  acceptance_criteria:
+    - "Add an exact regression using the
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so) post-merge shape:
+      explicit `sha_binding.merge_sha = 95ec237f...`, preserved
+      `verified_source_sha = 0c915811...`, GitHub attestation merge SHA
+      `95ec237f...`, original PR head `55b583fd...`. P10/R3 provenance must pass
+      when the existing execution/provenance relationship is valid."
+    - Wrong explicit `sha_binding.merge_sha` versus GitHub merge attestation
+      fails with an attestation mismatch.
+    - "`verified_source_sha` is not required to equal the merge SHA when an
+      explicit valid merge slot exists."
+    - A branch/PR-head SHA placed in `sha_binding.merge_sha` fails merge
+      authority.
+    - Missing or forged GitHub attestation fails closed.
+    - Historical pre-slot positive compatibility remains passing, and
+      wrong/non-authentic historical attestation remains failing.
+    - "Pre-merge bundles still require `sha_binding.merge_sha: null`; no new
+      pre-merge exemption."
+    - Run the actual post-merge truth-check/closeout path in a fixture or
+      equivalent integration regression, not only the leaf resolver, so the
+      exact P10/R3 failure from run `33268421913` flips from fail to pass under
+      the correct schema while negative controls remain red.
+    - "Mutation control: restore the old `verified_source_sha ===
+      attestation.merge_sha` comparison and the
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so) post-merge
+      regression must fail."
+    - Full focused suite + repository verification green on exact PR head.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident
+      PR #1436 for [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) merged successfully at GitHub merge SHA `95ec237f32eebd14c2a37cde477202fd553711cb` on 2026-08-29, but Post-Merge Lane Close run `33268421913` failed and therefore correctly persisted neither proof rebind nor terminal lane state.
+
+      All other merge-SHA workflows were green. The closeout hard gate failed only:
+
+      * P10: `verifier_merge_attestation_mismatch: sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA`
+      * R3: same mismatch
+
+      Current truthful state remains:
+
+      * GitHub PR #1436: merged at `95ec237f...`
+      * [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) manifest: `in_review`, `commit_sha: null`, `closed_at: null`
+      * persisted evidence: still pre-merge, `sha_binding.merge_sha: null`
+      * Linear [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so): In Codex, not Done
+
+      The workflow's temporary `ops:proof-generate --merge-sha 95ec237f...` rebind itself succeeds and produces the intended new schema:
+
+      ```json
+      "sha_binding": {
+        "merge_sha": "95ec237f32eebd14c2a37cde477202fd553711cb",
+        "verified_source_sha": "0c915811cd40b312bd3bdb4094062c29f6632c71",
+        "sha_type": "merge_sha"
+      }
+      ```
+
+      and top-level proof `MERGE_SHA:` is rebound to `95ec237f...`. Persistence is intentionally deferred until the closeout truth gate passes.
+    - |-
+      Root cause
+      `scripts/ops/proof-schema.ts::resolveMergedPrAttestation` still encodes the pre-slot identity model:
+
+      ```ts
+      if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+        return {
+          status: 'attestation-mismatch',
+          detail: 'sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA',
+        };
+      }
+      ```
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) intentionally introduced a distinct authoritative merge slot: `sha_binding.merge_sha`. `verified_source_sha` now preserves execution/source identity. The shared resolver is used by both migration-receipt binding and external-verifier provenance, so the old equality strands every new-slot bundle after merge.
+
+      This defect cannot be observed by pre-merge gates because the merged-PR attestation path executes only under `gate: 'post-merge-read'`.
+    - |-
+      Required contract
+      For schema-v2 bundles that explicitly carry `sha_binding.merge_sha` after merge:
+
+      1. GitHub merge authority must be compared to `sha_binding.merge_sha`, not `sha_binding.verified_source_sha`.
+      2. `sha_binding.merge_sha` must equal the GitHub-recorded merge SHA exactly or fail closed.
+      3. `sha_binding.verified_source_sha` remains execution/source identity and must continue to satisfy the existing exact-source/original-PR-head/ancestry provenance rules; it must not be rewritten or treated as merge authority merely to satisfy closeout.
+      4. A branch SHA or PR head SHA must never satisfy merge authority.
+      5. Missing/incomplete/wrong GitHub merged-PR attestation must still fail closed.
+
+      For genuine historical pre-slot bundles:
+
+      6. Preserve the narrow legacy compatibility already ratified by [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so). Only when there is no explicit merge slot may the old historical identity rule use `verified_source_sha == attested GitHub merge SHA` to establish merge authority.
+      7. Do not broaden missing-slot compatibility to newly generated or pre-merge bundles.
+    - >-
+      Scope
+
+      Primary scope:
+
+
+      * `scripts/ops/proof-schema.ts`
+
+      * `scripts/ops/proof-schema.test.ts`
+
+
+      Allowed only if required to thread the new authoritative merge-slot input
+      through the real P10/R3 consumer and prove the regression end-to-end:
+
+
+      * `scripts/ops/truth-check-lib.ts`
+
+      * `scripts/ops/truth-check-lib.test.ts`
+
+
+      No proof artifacts, lane manifests, workflow files, DB/runtime/delivery
+      code, or production mutation in this repair PR.
+    - |-
+      Recovery after this repair merges
+      Do not hand-edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof or manifest on `main`.
+
+      After the repair PR lands, replay the sanctioned Post-Merge Lane Close workflow for the original [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436 identity. The workflow must itself:
+
+      * rebind proof to `95ec237f...`,
+      * persist manifest `done` with `commit_sha: 95ec237f...`,
+      * pass P10/R3 and full truth-check,
+      * allow Linear to converge to Done,
+      * then independently re-run truth-check and terminal cleanup.
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) is not truthfully complete until that replay converges.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and
+    title: Post-merge attestation resolver rejects the schema-v2 merge slot and
+      strands UTV2-1729 closeout
+    description: |-
+      ## Incident
+
+      PR #1436 for [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) merged successfully at GitHub merge SHA `95ec237f32eebd14c2a37cde477202fd553711cb` on 2026-08-29, but Post-Merge Lane Close run `33268421913` failed and therefore correctly persisted neither proof rebind nor terminal lane state.
+
+      All other merge-SHA workflows were green. The closeout hard gate failed only:
+
+      * P10: `verifier_merge_attestation_mismatch: sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA`
+      * R3: same mismatch
+
+      Current truthful state remains:
+
+      * GitHub PR #1436: merged at `95ec237f...`
+      * [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) manifest: `in_review`, `commit_sha: null`, `closed_at: null`
+      * persisted evidence: still pre-merge, `sha_binding.merge_sha: null`
+      * Linear [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so): In Codex, not Done
+
+      The workflow's temporary `ops:proof-generate --merge-sha 95ec237f...` rebind itself succeeds and produces the intended new schema:
+
+      ```json
+      "sha_binding": {
+        "merge_sha": "95ec237f32eebd14c2a37cde477202fd553711cb",
+        "verified_source_sha": "0c915811cd40b312bd3bdb4094062c29f6632c71",
+        "sha_type": "merge_sha"
+      }
+      ```
+
+      and top-level proof `MERGE_SHA:` is rebound to `95ec237f...`. Persistence is intentionally deferred until the closeout truth gate passes.
+
+      ## Root cause
+
+      `scripts/ops/proof-schema.ts::resolveMergedPrAttestation` still encodes the pre-slot identity model:
+
+      ```ts
+      if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+        return {
+          status: 'attestation-mismatch',
+          detail: 'sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA',
+        };
+      }
+      ```
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) intentionally introduced a distinct authoritative merge slot: `sha_binding.merge_sha`. `verified_source_sha` now preserves execution/source identity. The shared resolver is used by both migration-receipt binding and external-verifier provenance, so the old equality strands every new-slot bundle after merge.
+
+      This defect cannot be observed by pre-merge gates because the merged-PR attestation path executes only under `gate: 'post-merge-read'`.
+
+      ## Required contract
+
+      For schema-v2 bundles that explicitly carry `sha_binding.merge_sha` after merge:
+
+      1. GitHub merge authority must be compared to `sha_binding.merge_sha`, not `sha_binding.verified_source_sha`.
+      2. `sha_binding.merge_sha` must equal the GitHub-recorded merge SHA exactly or fail closed.
+      3. `sha_binding.verified_source_sha` remains execution/source identity and must continue to satisfy the existing exact-source/original-PR-head/ancestry provenance rules; it must not be rewritten or treated as merge authority merely to satisfy closeout.
+      4. A branch SHA or PR head SHA must never satisfy merge authority.
+      5. Missing/incomplete/wrong GitHub merged-PR attestation must still fail closed.
+
+      For genuine historical pre-slot bundles:
+
+      6. Preserve the narrow legacy compatibility already ratified by [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so). Only when there is no explicit merge slot may the old historical identity rule use `verified_source_sha == attested GitHub merge SHA` to establish merge authority.
+      7. Do not broaden missing-slot compatibility to newly generated or pre-merge bundles.
+
+      ## Scope
+
+      Primary scope:
+
+      * `scripts/ops/proof-schema.ts`
+      * `scripts/ops/proof-schema.test.ts`
+
+      Allowed only if required to thread the new authoritative merge-slot input through the real P10/R3 consumer and prove the regression end-to-end:
+
+      * `scripts/ops/truth-check-lib.ts`
+      * `scripts/ops/truth-check-lib.test.ts`
+
+      No proof artifacts, lane manifests, workflow files, DB/runtime/delivery code, or production mutation in this repair PR.
+
+      ## Acceptance criteria
+
+       1. Add an exact regression using the [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) post-merge shape: explicit `sha_binding.merge_sha = 95ec237f...`, preserved `verified_source_sha = 0c915811...`, GitHub attestation merge SHA `95ec237f...`, original PR head `55b583fd...`. P10/R3 provenance must pass when the existing execution/provenance relationship is valid.
+       2. Wrong explicit `sha_binding.merge_sha` versus GitHub merge attestation fails with an attestation mismatch.
+       3. `verified_source_sha` is not required to equal the merge SHA when an explicit valid merge slot exists.
+       4. A branch/PR-head SHA placed in `sha_binding.merge_sha` fails merge authority.
+       5. Missing or forged GitHub attestation fails closed.
+       6. Historical pre-slot positive compatibility remains passing, and wrong/non-authentic historical attestation remains failing.
+       7. Pre-merge bundles still require `sha_binding.merge_sha: null`; no new pre-merge exemption.
+       8. Run the actual post-merge truth-check/closeout path in a fixture or equivalent integration regression, not only the leaf resolver, so the exact P10/R3 failure from run `33268421913` flips from fail to pass under the correct schema while negative controls remain red.
+       9. Mutation control: restore the old `verified_source_sha === attestation.merge_sha` comparison and the [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) post-merge regression must fail.
+      10. Full focused suite + repository verification green on exact PR head.
+
+      ## Recovery after this repair merges
+
+      Do not hand-edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof or manifest on `main`.
+
+      After the repair PR lands, replay the sanctioned Post-Merge Lane Close workflow for the original [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436 identity. The workflow must itself:
+
+      * rebind proof to `95ec237f...`,
+      * persist manifest `done` with `commit_sha: 95ec237f...`,
+      * pass P10/R3 and full truth-check,
+      * allow Linear to converge to Done,
+      * then independently re-run truth-check and terminal cleanup.
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) is not truthfully complete until that replay converges.
+    captured_at: 2026-08-29T22:40:29.041Z
+    description_sha256: 301ed3a029cdb02159fb33d3e91c74dedbdaca5df2286fcabfc1c9a1f7486de6
+  contract_hash: 2fd010640f0373fa39eeef885f31760cb777f57b0127acf36098f3cd6195ff4d
