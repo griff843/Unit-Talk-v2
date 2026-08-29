@@ -1171,3 +1171,149 @@ describe('isProofStale', () => {
     assert.equal(isProofStale(proof, VALID_SHA), true);
   });
 });
+
+// --- UTV2-1729: historical `sha_binding.merge_sha` compatibility -------------
+//
+// The slot is mandatory. A bundle that genuinely predates it may still be read
+// after merge, but only when an authentic merged-PR attestation proves its
+// identity. These regressions pin every edge of that exemption: it is granted
+// on proof of identity, never on profile, never before merge, and never to a
+// branch SHA. The mechanism tests below run against a real Git repository with
+// a real merge commit, so `resolveMergedPrAttestation` is exercised, not stubbed.
+
+/** A governance/static bundle of the pre-slot vintage: no `sha_binding.merge_sha`. */
+function preSlotStaticBundle(verifiedSourceSha: string) {
+  return {
+    schema_version: 2,
+    issue_id: 'UTV2-9000',
+    proof_profile: 'static',
+    sha_binding: {
+      verified_source_sha: verifiedSourceSha,
+      evidence_commit_sha: 'abc1234',
+      current_pr_head_sha: 'def5678',
+    },
+    static_proof: { type_check: { status: 'PASS' }, tests: { status: 'PASS' } },
+  };
+}
+
+const SLOT_MISSING = 'sha_binding_merge_slot_missing';
+const hasSlotMissing = (result: { failures: Array<{ code: string }> }): boolean =>
+  result.failures.some((failure) => failure.code === SLOT_MISSING);
+
+test('pre-slot static bundle is readable post-merge when an authentic merged-PR attestation proves identity', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), false, JSON.stringify(result.failures));
+  assert.equal(result.profile, 'static');
+});
+
+test('pre-slot compatibility is refused when the attestation belongs to a different merge', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      // Authentic in shape, but attests a different PR's merge.
+      mergedPrAttestation: mergedPrAttestation(repo.receiptHead, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+  assert.equal(result.valid, false);
+});
+
+test('pre-slot compatibility is refused when no merged-PR attestation is supplied at all', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    { gate: 'post-merge-read', laneType: 'governance', tier: 'T1', repoRoot: repo.repoRoot },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+});
+
+test('pre-slot compatibility never applies pre-merge, even with an authentic attestation', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'pre-merge',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+  assert.equal(result.valid, false);
+});
+
+test('a branch SHA never satisfies merge authority through the pre-slot compatibility path', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  // verified_source_sha is the lane tip that was merged — a branch SHA, not the
+  // merge SHA — while the attestation itself is entirely authentic.
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.originalHead),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+});
+
+test('a pre-merge bundle must carry sha_binding.merge_sha explicitly null, never a branch SHA', () => {
+  const withBranchSha = migrationEvidence();
+  withBranchSha.sha_binding.merge_sha = VALID_SHA;
+  const premature = validateEvidenceBundleContract(
+    withBranchSha,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(premature.valid, false);
+  assert.ok(premature.failures.some((f) => f.code === 'sha_binding_premature_merge_sha'));
+
+  // The same bundle with the slot correctly null is accepted.
+  const nulled = migrationEvidence();
+  const accepted = validateEvidenceBundleContract(
+    nulled,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(accepted.valid, true, JSON.stringify(accepted.failures));
+});
+
+test('the real UTV2-1720 bundle still has the pre-slot shape this compatibility path exists for', () => {
+  // Pins the fixture the compatibility path was opened for. If UTV2-1720's
+  // evidence.json is ever rewritten to carry the slot, this test fails and the
+  // exemption should be re-examined rather than silently kept alive.
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  const bundle = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/proof/UTV2-1720/evidence.json'), 'utf8'),
+  ) as { schema_version: number; proof_profile: string; sha_binding: Record<string, unknown> };
+
+  assert.equal(bundle.schema_version, 2);
+  assert.equal(bundle.proof_profile, 'static');
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(bundle.sha_binding, 'merge_sha'),
+    false,
+    'UTV2-1720 is expected to predate the reserved merge slot',
+  );
+  assert.equal(bundle.sha_binding['sha_type'], 'merge_sha');
+  assert.equal(
+    bundle.sha_binding['verified_source_sha'],
+    '374261599d63fea9a4112d94e4db18c05532e171',
+    'identity is proven by verified_source_sha equalling the GitHub-recorded merge SHA of PR #1430',
+  );
+});

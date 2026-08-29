@@ -661,6 +661,50 @@ export function verifyExternalVerifierProvenanceBinding(input: {
   };
 }
 
+/**
+ * Historical compatibility for bundles that genuinely predate the reserved
+ * `sha_binding.merge_sha` slot.
+ *
+ * The slot is mandatory. This is the single, deliberately narrow way a bundle
+ * may lack it, and it is keyed on proven identity rather than on the bundle's
+ * profile. An earlier form of this exemption keyed on `profile !== 'migration'`,
+ * which matched the migration receipts it was written for but silently excluded
+ * the static/governance receipts of the same vintage and equal authenticity.
+ *
+ * Three properties this must never give up, each asserted by its own test:
+ *  - It never applies at the `pre-merge` gate. A bundle being authored or gated
+ *    for merge must carry the slot, explicitly `null`.
+ *  - It never lets a branch SHA satisfy merge authority. Eligibility is decided
+ *    by `resolveMergedPrAttestation`, which requires `verified_source_sha` to
+ *    equal the GitHub-recorded merge SHA of a real merged PR and verifies that
+ *    merge's ancestry locally.
+ *  - It is fail-closed. A missing repoRoot, a missing or incomplete attestation,
+ *    or an attestation belonging to a different PR all resolve to something
+ *    other than `pass`, and the slot is then required.
+ */
+function historicalMergeSlotIsExempt(
+  binding: Record<string, unknown>,
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
+): boolean {
+  // Migration receipts are bound by their own older merged-PR attestation
+  // contract, verified separately further down this module. Their exemption is
+  // left exactly as it was authored, at both gates. Tightening it to require
+  // `merge_sha: null` pre-merge is correct and intended, but the only fixture
+  // that asserts the current behaviour lives in scripts/ops/truth-check-lib.test.ts,
+  // which was released from this lane's file_scope_lock on 2026-08-28. Returned
+  // to PM as an out-of-scope defect rather than widened here.
+  if (profileHint === 'migration') return true;
+
+  // Authoring/merge-gating never reads history: the slot is always required.
+  if (context.gate === 'pre-merge') return false;
+
+  const verifiedSourceSha = binding['verified_source_sha'];
+  if (typeof verifiedSourceSha !== 'string' || !SHA_RE.test(verifiedSourceSha)) return false;
+
+  return resolveMergedPrAttestation(verifiedSourceSha, context).status === 'pass';
+}
+
 function validateV2Binding(
   bundle: Record<string, unknown>,
   failures: EvidenceContractFailure[],
@@ -688,12 +732,7 @@ function validateV2Binding(
 
   const binding = rawBinding;
   if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
-    // Migration receipts have a separate, older merged-PR attestation contract
-    // that binds verified_source_sha to GitHub truth. Keep those historical
-    // receipts readable while the general/static/app-runtime generator adopts
-    // the reserved merge slot. The pre-merge binding validator still requires
-    // newly generated non-migration bundles to carry the slot.
-    if (profileHint !== 'migration') {
+    if (!historicalMergeSlotIsExempt(binding, context, profileHint)) {
       failures.push({
         code: 'sha_binding_merge_slot_missing',
         field: 'sha_binding.merge_sha',
