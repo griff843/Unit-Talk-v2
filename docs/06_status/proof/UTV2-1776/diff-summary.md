@@ -7,7 +7,7 @@ Lane type: governance
 Branch: codex/utv2-1776-attestation-merge-slot
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1459
 Head SHA: 1b4d57cd5eaf51fe8de99f15107130ba48ce2737
-Merge SHA: N/A
+Merge SHA: e8b74b3468aac5497994b0408753d81ce1ee7935
 Diff base: a10b8189cfb7dbbf03e2c818393673bccd835933
 Diff target: 1b4d57cd5eaf51fe8de99f15107130ba48ce2737
 
@@ -39,4 +39,4 @@ M	scripts/ops/truth-check-lib.ts
 
 ## SHA Binding
 Head SHA: 1b4d57cd5eaf51fe8de99f15107130ba48ce2737
-Merge SHA: N/A
+Merge SHA: e8b74b3468aac5497994b0408753d81ce1ee7935

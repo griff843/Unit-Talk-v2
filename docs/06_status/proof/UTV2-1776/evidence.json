@@ -6,15 +6,17 @@
   "proof_profile": "static",
   "status": "ready_for_review",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "e8b74b3468aac5497994b0408753d81ce1ee7935",
     "verified_source_sha": "1b4d57cd5eaf51fe8de99f15107130ba48ce2737",
     "verified_source_note": "The last non-proof commit on this branch. It carries the whole implementation and its tests. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets merge_sha. merge_sha is explicitly null pre-merge rather than a branch SHA or a stand-in token.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "1b4d57cd5eaf51fe8de99f15107130ba48ce2737",
+    "current_pr_head_sha": "3620d08f80b0e910eb6b22d2ac077f21cdf78fbc",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-29T23:55:32.986Z"
   },
   "static_proof": {
     "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging cannot resolve the staging identity from a local URL. This lane's proof profile is static: it changes verification logic only, touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",

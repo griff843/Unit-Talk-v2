@@ -1,6 +1,6 @@
 # PROOF: UTV2-1776 — Verification
 
-MERGE_SHA: 1b4d57cd5eaf51fe8de99f15107130ba48ce2737
+MERGE_SHA: e8b74b3468aac5497994b0408753d81ce1ee7935
 
 > Pre-merge the merge anchor is intentionally empty; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -297,9 +297,9 @@ change.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e8b74b3468aac5497994b0408753d81ce1ee7935
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1459
-Approved PR head: pending merge
+Approved PR head: 3620d08f80b0e910eb6b22d2ac077f21cdf78fbc
 Execution SHA: 1b4d57cd5eaf51fe8de99f15107130ba48ce2737
 
 ## Known gaps
