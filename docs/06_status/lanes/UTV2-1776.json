@@ -25,9 +25,9 @@
     "docs/06_status/proof/UTV2-1776/evidence.json",
     "docs/06_status/proof/UTV2-1776/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-29T22:40:43.150Z",
-  "heartbeat_at": "2026-08-29T22:40:43.150Z",
+  "heartbeat_at": "2026-08-29T23:22:20.044Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1776-attestation-merge-slot.json",
