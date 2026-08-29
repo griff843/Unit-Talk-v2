@@ -11,6 +11,7 @@ import {
   evaluateCloseoutTruthGate,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateSchemaV2VerifierProvenanceCheck,
   evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
@@ -2677,4 +2678,180 @@ test('S1/1759 mutation: a BROAD PREFIX implementation fails the cross-lane regre
       // each of the four passes above is a regression that would have failed.
     },
   );
+});
+
+// ── UTV2-1776: the real P10/R3 consumer path from run 33268421913 ─────────────
+//
+// Post-Merge Lane Close run 33268421913 failed P10 and R3 on the UTV2-1729 bundle
+// because merge authority was read off `sha_binding.verified_source_sha`. UTV2-1729
+// was squash-merged, so its merge commit and its verified source commit are
+// necessarily different objects and that equality could never hold honestly.
+//
+// This exercises the production consumers themselves — `evaluateSchemaV2VerifierProvenanceCheck`
+// is the only schema-v2 P10 path inside `runTruthCheck`, and `addUnsupportedRuntimeChecks`
+// is the R3 path — against the real bundle checked in at docs/06_status/proof/UTV2-1729.
+
+const UTV2_1729_MERGE_SHA = '95ec237f32eebd14c2a37cde477202fd553711cb';
+const UTV2_1729_PR_HEAD = '55b583fd57e34ab2047bdf4cc948cca9b617eb83';
+const UTV2_1729_SOURCE_SHA = '0c915811cd40b312bd3bdb4094062c29f6632c71';
+const UTV2_1729_MAIN_REF = '1b5bffad1ce0cb8c9906f8bb0438b6c7c6ceb0cf';
+
+const UTV2_1729_ATTESTATION = {
+  merge_sha: UTV2_1729_MERGE_SHA,
+  head_sha: UTV2_1729_PR_HEAD,
+  pr_number: 1436,
+  source: 'github-api' as const,
+};
+
+// actions/checkout gives the wired CI suite a shallow PR checkout, so these
+// historical objects are not fetchable there (the same constraint that produced
+// AUTHENTIC_SQUASH_GIT above). Every fact below was read from real git in this
+// repository and is recorded verbatim in docs/06_status/proof/UTV2-1776/verification.md:
+//   git rev-list --parents -n1 95ec237f  -> 95ec237f 1b5bffad   (single parent: squash)
+//   git merge-base --is-ancestor 55b583fd 95ec237f -> exit 1    (PR head not in merge)
+//   git merge-base --is-ancestor 0c915811 55b583fd -> exit 0    (source is in the PR)
+//   git merge-base 55b583fd 95ec237f -> 1b5bffad
+// Anything not on that list is an error, so the seam cannot silently invent a fact.
+const UTV2_1729_GIT: EvidenceGitRunner = (args) => {
+  const known = new Set([UTV2_1729_MERGE_SHA, UTV2_1729_PR_HEAD, UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF]);
+  if (args[0] === 'cat-file' && args[1] === '-e') {
+    const sha = String(args[2] ?? '').replace('^{commit}', '');
+    return known.has(sha)
+      ? { status: 0, stdout: '', stderr: '' }
+      : { status: 1, stdout: '', stderr: `unknown object ${sha}` };
+  }
+  if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+    if (args[2] === UTV2_1729_PR_HEAD && args[3] === UTV2_1729_MERGE_SHA) {
+      return { status: 1, stdout: '', stderr: '' };
+    }
+    if (args[2] === UTV2_1729_SOURCE_SHA && args[3] === UTV2_1729_PR_HEAD) {
+      return { status: 0, stdout: '', stderr: '' };
+    }
+    return { status: 1, stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args.length === 3
+      && args[1] === UTV2_1729_PR_HEAD && args[2] === UTV2_1729_MERGE_SHA) {
+    return { status: 0, stdout: `${UTV2_1729_MAIN_REF}\n`, stderr: '' };
+  }
+  return { status: 2, stdout: '', stderr: `unscripted git invocation: git ${args.join(' ')}` };
+};
+
+/**
+ * The real on-main UTV2-1729 bundle with its merge slot populated to the SHA
+ * GitHub recorded — exactly the state `post-merge-lane-close` rebinds it to
+ * before it re-runs the truth check.
+ */
+function utv2_1729Bundle(): EvidenceBundleV1 {
+  const bundle = JSON.parse(fs.readFileSync(
+    path.join(getRepoRoot(), 'docs/06_status/proof/UTV2-1729/evidence.json'),
+    'utf8',
+  )) as EvidenceBundleV1;
+  assert.equal(bundle.schema_version, 2, 'UTV2-1729 must remain a schema-v2 bundle');
+  assert.equal(
+    bundle.sha_binding?.verified_source_sha,
+    UTV2_1729_SOURCE_SHA,
+    'the checked-in UTV2-1729 verified source must still be the execution SHA this regression is about',
+  );
+  assert.ok(
+    bundle.sha_binding && Object.prototype.hasOwnProperty.call(bundle.sha_binding, 'merge_sha'),
+    'UTV2-1729 declares the explicit merge slot, so it is not a pre-slot bundle',
+  );
+  bundle.sha_binding!.merge_sha = UTV2_1729_MERGE_SHA;
+  return bundle;
+}
+
+const UTV2_1729_VERIFIER_PROVENANCE = {
+  source: 'github-required-check' as const,
+  producer: 'github-app:15368:verify',
+  verified_sha: UTV2_1729_PR_HEAD,
+  details_url: null,
+};
+
+test('UTV2-1776 regression: P10 accepts the real UTV2-1729 split identity through the production consumer', () => {
+  const result = evaluateSchemaV2VerifierProvenanceCheck({
+    bundle: utv2_1729Bundle(),
+    verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+    mergedPrAttestation: UTV2_1729_ATTESTATION,
+    laneType: 'governance',
+    tier: 'T1',
+    repoRoot: getRepoRoot(),
+    gitRunner: UTV2_1729_GIT,
+  });
+  assert.equal(result.status, 'pass', result.detail);
+  assert.match(result.detail, /verifier_provenance_bound_merge_slot/);
+});
+
+test('UTV2-1776 regression: R3 accepts the real UTV2-1729 split identity through the production consumer', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: utv2_1729Bundle() },
+    {
+      laneType: 'governance',
+      verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: UTV2_1729_GIT,
+    },
+  );
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [['R1', 'pass'], ['R2', 'pass'], ['R3', 'pass']],
+    JSON.stringify(checks, null, 2),
+  );
+});
+
+test('UTV2-1776: the pre-fix rule is what rejected UTV2-1729, and it is still enforced for pre-slot bundles', () => {
+  // The old rule, stated directly: merge authority read off verified_source_sha.
+  // Against the real UTV2-1729 identities it is false, which is the whole defect.
+  assert.notEqual(UTV2_1729_SOURCE_SHA, UTV2_1729_MERGE_SHA);
+
+  // A bundle that does NOT declare the slot still has to satisfy that old rule,
+  // so the fix did not delete it — it moved merge authority to the slot.
+  const preSlot = verifyExternalVerifierProvenanceBinding({
+    receiptSha: UTV2_1729_PR_HEAD,
+    verifiedSourceSha: UTV2_1729_SOURCE_SHA,
+    context: {
+      gate: 'post-merge-read',
+      repoRoot: getRepoRoot(),
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      gitRunner: UTV2_1729_GIT,
+    },
+  });
+  assert.equal(preSlot.valid, false);
+  assert.equal(preSlot.code, 'verifier_merge_attestation_mismatch');
+});
+
+test('UTV2-1776: P10 fails closed when the real bundle names the wrong merge SHA', () => {
+  for (const wrong of [UTV2_1729_PR_HEAD, UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF]) {
+    const bundle = utv2_1729Bundle();
+    bundle.sha_binding!.merge_sha = wrong;
+    const result = evaluateSchemaV2VerifierProvenanceCheck({
+      bundle,
+      verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: getRepoRoot(),
+      gitRunner: UTV2_1729_GIT,
+    });
+    assert.equal(result.status, 'fail', `merge slot ${wrong} must not bind`);
+    assert.match(result.detail, /verifier_merge_attestation_mismatch/);
+  }
+});
+
+test('UTV2-1776: P10 fails closed when the GitHub merged-PR attestation is missing', () => {
+  const result = evaluateSchemaV2VerifierProvenanceCheck({
+    bundle: utv2_1729Bundle(),
+    verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+    mergedPrAttestation: null,
+    laneType: 'governance',
+    tier: 'T1',
+    repoRoot: getRepoRoot(),
+    gitRunner: UTV2_1729_GIT,
+  });
+  assert.equal(result.status, 'fail');
+  assert.match(result.detail, /verifier_merge_attestation_unverified/);
 });

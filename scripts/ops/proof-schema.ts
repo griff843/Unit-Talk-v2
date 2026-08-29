@@ -398,9 +398,20 @@ function verifyProofOnlyMigrationAncestry(
     : { status: 'pass' };
 }
 
+/**
+ * Resolves the GitHub merged-PR attestation and verifies that `mergeAuthoritySha`
+ * — the SHA the caller claims carries merge authority — is the merge SHA GitHub
+ * actually recorded.
+ *
+ * `authorityField` names the evidence field the caller drew that SHA from, so a
+ * mismatch says which field lied. Callers that predate the explicit
+ * `sha_binding.merge_sha` slot pass `verified_source_sha` and keep the historical
+ * meaning; the schema-v2 consumer passes the explicit slot instead.
+ */
 function resolveMergedPrAttestation(
-  verifiedSourceSha: string,
+  mergeAuthoritySha: string,
   context: EvidenceContractContext,
+  authorityField = 'sha_binding.verified_source_sha',
 ): MergedPrAttestationResolution {
   if (!context.repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
@@ -421,10 +432,10 @@ function resolveMergedPrAttestation(
     };
   }
 
-  if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+  if (mergeAuthoritySha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
     return {
       status: 'attestation-mismatch',
-      detail: 'sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA',
+      detail: `${authorityField} does not equal the GitHub-recorded merge SHA`,
     };
   }
 
@@ -576,27 +587,179 @@ function verifyPostMergeMigrationReceiptBinding(
 export type ExternalVerifierBindingCode =
   | 'verifier_provenance_bound_exact_source'
   | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_provenance_bound_merge_slot'
   | 'verifier_receipt_sha_invalid'
   | 'verifier_source_sha_invalid'
   | 'verifier_receipt_head_mismatch'
+  | 'verifier_merge_slot_invalid'
+  | 'verifier_merge_slot_premature'
+  | 'verifier_source_not_in_merged_pr'
   | 'verifier_merge_attestation_mismatch'
   | 'verifier_merge_attestation_unverified';
 
+type ExternalVerifierBindingSuccessCode =
+  | 'verifier_provenance_bound_exact_source'
+  | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_provenance_bound_merge_slot';
+
 export type ExternalVerifierBindingResult =
-  | { valid: true; code: 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'; detail: string }
-  | { valid: false; code: Exclude<ExternalVerifierBindingCode, 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'>; detail: string };
+  | { valid: true; code: ExternalVerifierBindingSuccessCode; detail: string }
+  | { valid: false; code: Exclude<ExternalVerifierBindingCode, ExternalVerifierBindingSuccessCode>; detail: string };
 
 /**
- * Binds an external required-check receipt to schema-v2 evidence. Before merge,
- * and whenever checks ran on the merge SHA itself, exact-source equality is the
- * only accepted path. After a squash/rebase/two-parent merge, the receipt may
- * instead name the original PR head only when the caller supplies the same
- * authoritative GitHub merged-PR attestation used by migration receipts.
+ * The caller's view of the schema-v2 authoritative merge slot.
+ *
+ * `declared` must be derived with `hasOwnProperty` on `sha_binding`, never from
+ * truthiness: an explicitly-`null` slot is a *declared* slot, and conflating it
+ * with an absent one would route a modern bundle into the historical
+ * pre-slot compatibility path. Omitting `mergeSlot` entirely preserves the
+ * pre-UTV2-1776 behaviour, which is the stricter of the two.
+ */
+export interface EvidenceMergeSlot {
+  declared: boolean;
+  value?: unknown;
+}
+
+/**
+ * Reads the authoritative merge slot off a `sha_binding` block without
+ * collapsing "absent" and "null" into the same state.
+ */
+export function readEvidenceMergeSlot(binding: unknown): EvidenceMergeSlot {
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return { declared: false };
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) return { declared: false };
+  return { declared: true, value: (binding as Record<string, unknown>)['merge_sha'] };
+}
+
+/**
+ * Post-merge verification for a bundle that declares the authoritative merge
+ * slot. Total: every path returns a decision, so a declared slot can never fall
+ * through to source-derived merge authority.
+ */
+function verifyDeclaredMergeSlotBinding(
+  receiptSha: string,
+  verifiedSourceSha: string,
+  slotValue: unknown,
+  context: EvidenceContractContext,
+): ExternalVerifierBindingResult {
+  if (typeof slotValue !== 'string' || !SHA_RE.test(slotValue)) {
+    return {
+      valid: false,
+      code: 'verifier_merge_slot_invalid',
+      detail: 'post-merge evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
+    };
+  }
+
+  const resolution = resolveMergedPrAttestation(slotValue, context, 'sha_binding.merge_sha');
+  if (resolution.status === 'attestation-mismatch') {
+    return { valid: false, code: 'verifier_merge_attestation_mismatch', detail: resolution.detail };
+  }
+  if (resolution.status !== 'pass') {
+    return { valid: false, code: 'verifier_merge_attestation_unverified', detail: resolution.detail };
+  }
+
+  const attestation = resolution.attestation;
+
+  // Execution/source identity keeps its own obligation. Two shapes are honest,
+  // and nothing else is:
+  //   1. the attested merge SHA itself — verification ran on the merge commit.
+  //      This is the pre-UTV2-1776 shape, retained rather than broadened: it is
+  //      no longer what *grants* merge authority, only what a verified source is
+  //      allowed to be.
+  //   2. the attested PR head, or an ancestor of it — verification ran inside
+  //      the PR that GitHub merged. This is the split identity UTV2-1729 has.
+  // Without this check any commit anywhere in the repository could claim to be
+  // the verified source of a legitimately merged PR.
+  if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+    const sourceInPr = verifiedSourceIsWithinAttestedPr(verifiedSourceSha, attestation.head_sha, context);
+    if (sourceInPr !== true) {
+      return {
+        valid: false,
+        code: sourceInPr === false ? 'verifier_source_not_in_merged_pr' : 'verifier_merge_attestation_unverified',
+        detail: sourceInPr === false
+          ? `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA nor the attested PR head ${attestation.head_sha} nor an ancestor of it`
+          : sourceInPr,
+      };
+    }
+  }
+
+  const matchesSource = receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase();
+  const matchesHead = receiptSha.toLowerCase() === attestation.head_sha.toLowerCase();
+  if (!matchesSource && !matchesHead) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'external verifier receipt must match sha_binding.verified_source_sha or the GitHub-attested original PR head',
+    };
+  }
+
+  return {
+    valid: true,
+    code: 'verifier_provenance_bound_merge_slot',
+    detail: `sha_binding.merge_sha ${slotValue} matches the GitHub-recorded merge of PR #${attestation.pr_number}; verified source ${verifiedSourceSha} is within that PR`,
+  };
+}
+
+/**
+ * `true` when the verified source is the attested PR head or an ancestor of it,
+ * `false` when it provably is not, and a diagnostic string when the check could
+ * not be completed — which the caller treats as unverified, never as a pass.
+ */
+function verifiedSourceIsWithinAttestedPr(
+  verifiedSourceSha: string,
+  headSha: string,
+  context: EvidenceContractContext,
+): true | false | string {
+  if (verifiedSourceSha.toLowerCase() === headSha.toLowerCase()) return true;
+  if (!context.repoRoot) return 'verified-source ancestry requires repoRoot';
+
+  const available = verifyCommitAvailable(verifiedSourceSha, 'verified source', context);
+  if (available) return available.detail;
+
+  const ancestry = runEvidenceGit(
+    ['merge-base', '--is-ancestor', verifiedSourceSha, headSha],
+    context.repoRoot,
+    context.gitRunner,
+  );
+  if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
+    return ancestry.error?.message ||
+      String(ancestry.stderr ?? '').trim() ||
+      'verified-source ancestry check did not complete';
+  }
+  return ancestry.status === 0;
+}
+
+/**
+ * Binds an external required-check receipt to schema-v2 evidence.
+ *
+ * Two identities are involved and they are deliberately not the same thing:
+ *
+ *  - **Merge authority** — which commit GitHub actually recorded as the merge.
+ *    In a schema-v2 bundle this lives in the explicit `sha_binding.merge_sha`
+ *    slot and nowhere else. It is checked against the GitHub merged-PR
+ *    attestation, so neither a branch SHA nor the original PR head can satisfy
+ *    it, and a missing/incomplete/foreign attestation fails closed.
+ *  - **Execution/source identity** — which commit the verification actually ran
+ *    on. That is `sha_binding.verified_source_sha`, and it keeps its own
+ *    provenance obligation: it must be the attested PR head or an ancestor of
+ *    it, i.e. genuinely part of the merged PR.
+ *
+ * Before UTV2-1776 there was no explicit slot, so merge authority was read off
+ * `verified_source_sha`, which forced the two identities to be equal. Under a
+ * squash merge they never can be, which is exactly how Post-Merge Lane Close run
+ * 33268421913 rejected a valid UTV2-1729 bundle at P10 and R3.
+ *
+ * When `mergeSlot` is absent the historical behaviour is used unchanged; when it
+ * is declared, merge authority is taken from the slot. The slot branch is
+ * evaluated *before* the exact-source shortcut on purpose: otherwise a bundle
+ * naming the wrong merge SHA would pass unchecked whenever its receipt happened
+ * to be the exact source head.
  */
 export function verifyExternalVerifierProvenanceBinding(input: {
   receiptSha: string | null | undefined;
   verifiedSourceSha: string | null | undefined;
   context: EvidenceContractContext;
+  /** Omit to keep pre-UTV2-1776 semantics. See {@link readEvidenceMergeSlot}. */
+  mergeSlot?: EvidenceMergeSlot;
 }): ExternalVerifierBindingResult {
   const receiptSha = input.receiptSha?.trim() ?? '';
   const verifiedSourceSha = input.verifiedSourceSha?.trim() ?? '';
@@ -614,6 +777,25 @@ export function verifyExternalVerifierProvenanceBinding(input: {
       detail: 'sha_binding.verified_source_sha must be a full 40-character Git SHA',
     };
   }
+
+  // Authoritative merge-slot semantics. Evaluated ahead of the exact-source
+  // shortcut so a wrong slot can never ride in on a matching receipt.
+  const mergeSlot = input.mergeSlot;
+  if (mergeSlot?.declared) {
+    if (input.context.gate === 'post-merge-read') {
+      return verifyDeclaredMergeSlotBinding(receiptSha, verifiedSourceSha, mergeSlot.value, input.context);
+    }
+    if (mergeSlot.value !== null) {
+      return {
+        valid: false,
+        code: 'verifier_merge_slot_premature',
+        detail: 'pre-merge evidence requires sha_binding.merge_sha to be null; a branch SHA is never merge authority',
+      };
+    }
+    // merge_sha: null at a pre-merge gate is the correct authored shape; fall
+    // through to the unchanged exact-source rule below.
+  }
+
   if (receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase()) {
     return {
       valid: true,

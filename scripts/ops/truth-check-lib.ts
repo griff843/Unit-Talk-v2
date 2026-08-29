@@ -83,6 +83,7 @@ import { laneLifecycleScopePatterns, matchesLockPattern } from '../ci/file-scope
 import { readAllLeases, type DispatchLease } from './lease-registry.js';
 import {
   validateEvidenceBundleContract,
+  readEvidenceMergeSlot,
   verifyExternalVerifierProvenanceBinding,
   type MergedPrAttestation,
   type EvidenceContractResult,
@@ -137,6 +138,8 @@ export interface EvidenceBundleV1 {
   proof_profile?: string;
   sha_binding?: {
     verified_source_sha?: string;
+    /** Authoritative merge SHA. Absent = pre-slot bundle; null = declared, pre-merge. */
+    merge_sha?: string | null;
     evidence_commit_sha?: string;
     current_pr_head_sha?: string;
     [key: string]: unknown;
@@ -1328,30 +1331,15 @@ export async function runTruthCheck(
               addCheck('P10', 'fail', 'legacy verifier.identity must be set and not equal to manifest.created_by');
             }
           } else {
-            const verifierBinding = verifyExternalVerifierProvenanceBinding({
-              receiptSha: verifierProvenance?.verified_sha,
-              verifiedSourceSha: evidence.bundle.sha_binding?.verified_source_sha,
-              context: {
-                gate: 'post-merge-read',
-                laneType: manifest.lane_type,
-                tier,
-                repoRoot: ROOT,
-                mergedPrAttestation,
-              },
+            const p10 = evaluateSchemaV2VerifierProvenanceCheck({
+              bundle: evidence.bundle,
+              verifierProvenance,
+              mergedPrAttestation,
+              laneType: manifest.lane_type,
+              tier,
+              repoRoot: ROOT,
             });
-            if (verifierProvenance && verifierBinding.valid) {
-              addCheck(
-                'P10',
-                'pass',
-                `external verifier provenance (${verifierBinding.code}): ${verifierProvenance.producer} at ${verifierProvenance.verified_sha}`,
-              );
-            } else {
-              addCheck(
-                'P10',
-                'fail',
-                `schema-v2 proof requires external exact-head verifier provenance or an attested original-PR-head receipt: ${verifierBinding.code}: ${verifierBinding.detail}`,
-              );
-            }
+            addCheck('P10', p10.status, p10.detail);
           }
         }
       }
@@ -1569,6 +1557,48 @@ export async function runTruthCheck(
   }
 }
 
+/**
+ * P10 for schema-v2 evidence: the external verifier receipt must be bound to the
+ * bundle's identities. Extracted from `runTruthCheck` so the exact production
+ * decision — not a re-implementation of it — is directly testable. `runTruthCheck`
+ * has no other schema-v2 P10 path.
+ */
+export function evaluateSchemaV2VerifierProvenanceCheck(input: {
+  bundle: EvidenceBundleV1;
+  verifierProvenance?: ExternalVerifierProvenance | null;
+  mergedPrAttestation?: MergedPrAttestation | null;
+  laneType?: string | null;
+  tier: LaneTier;
+  repoRoot?: string | null;
+  gitRunner?: EvidenceGitRunner;
+}): { status: 'pass' | 'fail'; detail: string } {
+  const verifierBinding = verifyExternalVerifierProvenanceBinding({
+    receiptSha: input.verifierProvenance?.verified_sha,
+    verifiedSourceSha: input.bundle.sha_binding?.verified_source_sha,
+    // Merge authority comes from the explicit slot when the bundle declares one;
+    // `readEvidenceMergeSlot` keeps absent distinct from null.
+    mergeSlot: readEvidenceMergeSlot(input.bundle.sha_binding),
+    context: {
+      gate: 'post-merge-read',
+      laneType: input.laneType,
+      tier: input.tier,
+      repoRoot: input.repoRoot,
+      mergedPrAttestation: input.mergedPrAttestation,
+      gitRunner: input.gitRunner,
+    },
+  });
+  if (input.verifierProvenance && verifierBinding.valid) {
+    return {
+      status: 'pass',
+      detail: `external verifier provenance (${verifierBinding.code}): ${input.verifierProvenance.producer} at ${input.verifierProvenance.verified_sha}`,
+    };
+  }
+  return {
+    status: 'fail',
+    detail: `schema-v2 proof requires external exact-head verifier provenance or an attested original-PR-head receipt: ${verifierBinding.code}: ${verifierBinding.detail}`,
+  };
+}
+
 export function addUnsupportedRuntimeChecks(
   addCheck: (id: string, status: 'pass' | 'fail' | 'skip', detail: string) => void,
   noRuntime: boolean,
@@ -1637,6 +1667,7 @@ export function addUnsupportedRuntimeChecks(
     const verifierBinding = verifyExternalVerifierProvenanceBinding({
       receiptSha: context.verifierProvenance?.verified_sha,
       verifiedSourceSha: evidence.bundle.sha_binding?.verified_source_sha,
+      mergeSlot: readEvidenceMergeSlot(evidence.bundle.sha_binding),
       context: {
         gate: 'post-merge-read',
         laneType: context.laneType,
