@@ -191,7 +191,7 @@ Rules matched: (none) — no R-level artifacts required for this diff
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1458
 Approved PR head: pending merge
 Execution SHA: 3bf891a901b1bc48a2d2a2829f3022991ec9f56c
 
