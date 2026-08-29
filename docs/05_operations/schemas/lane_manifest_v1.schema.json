@@ -64,6 +64,53 @@
     "created_by": { "enum": ["claude", "codex-cli", "pm"] },
     "truth_check_history": { "type": "array" },
     "reopen_history": { "type": "array" },
+    "scope_release_history": {
+      "type": "array",
+      "description": "Append-only audit trail of narrowing-only file_scope_lock releases (UTV2-1762). Absent on lanes that never released a path. Each entry records exactly which paths left the lock, who released them, against which PR and exact head SHA, and the lock hash before and after. The previous_lock_hash -> resulting_lock_hash chain must terminate at the hash of the manifest's CURRENT file_scope_lock, which is what makes an unaudited edit to the lock detectable. Entries only ever describe removals; this field can never grant scope. See scripts/ops/scope-release.ts and LANE_MANIFEST_SPEC.md.",
+      "items": {
+        "type": "object",
+        "required": [
+          "released_at",
+          "actor",
+          "reason",
+          "pr_number",
+          "pr_url",
+          "head_sha",
+          "previous_lock_hash",
+          "resulting_lock_hash",
+          "released_paths",
+          "verifications"
+        ],
+        "properties": {
+          "released_at": { "type": "string", "format": "date-time" },
+          "actor": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 },
+          "pr_number": { "type": "integer", "minimum": 1 },
+          "pr_url": { "type": "string", "minLength": 1 },
+          "head_sha": { "type": "string", "minLength": 1 },
+          "previous_lock_hash": { "type": "string", "minLength": 1 },
+          "resulting_lock_hash": { "type": "string", "minLength": 1 },
+          "released_paths": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "type": "string", "minLength": 1 }
+          },
+          "verifications": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": ["check", "status", "detail"],
+              "properties": {
+                "check": { "type": "string", "minLength": 1 },
+                "status": { "const": "pass" },
+                "detail": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    },
     "p0_protocol": {
       "type": "object",
       "description": "P0 Runtime Hardening merge protocol fields (UTV2-948). Set when the lane's issue is in the P0 project. Truth-check H-checks consume these fields.",

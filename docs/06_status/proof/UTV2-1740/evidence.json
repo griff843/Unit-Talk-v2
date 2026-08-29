@@ -1,0 +1,129 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1740",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "title": "Pass loaded config into the scheduled alert pass and prove the disabled path writes nothing",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-24T03:26:37Z",
+  "supersedes": {
+    "issue_id": "UTV2-1739",
+    "pr": "#1440 — open and preserved at 17102922c4679856f67ba4b270a8569938768c14",
+    "reason": "T1 approval refused for a fail-open defect: main() loaded the environment then called runScheduledAlertPass without it, so the pass read process.env and a file-configured ALERT_AGENT_ENABLED=false was ignored while detection still wrote to the database. Three evidence contradictions were also correct: two unresolved actionable review threads, a proof claiming a pending review after it had completed, and Linear state disagreeing with the manifest."
+  },
+  "sha_binding": {
+    "verified_source_sha": "934fdb1d7acfc90c0d55120bd7b6e72eeea871a4",
+    "verified_source_note": "Commit carrying the three ported surfaces plus the fix. Later commits in this lane are proof artifacts only.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-24T10:04:11.722Z"
+  },
+  "scope": {
+    "ported_surfaces": [
+      ".github/workflows/ingestor-staleness-alert.yml",
+      "scripts/ingestor-alert-check.ts",
+      "scripts/ingestor-alert-check.test.ts"
+    ],
+    "changed_files": 9,
+    "substantive_diff_stat": "3 files changed, 1430 insertions(+), 162 deletions(-)",
+    "port_fidelity": "Workflow byte-identical to the superseded head. Implementation differs by the call site plus comment corrections. Tests are a pure append.",
+    "changed_files_note": "Count at this head. An earlier revision recorded 6, the count before the proof artifacts were added and the proof-directory placeholder removed. Superseded."
+  },
+  "static_proof": {
+    "verify_static": "PASS (exit 0)",
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ingestor-alert-check.test.ts",
+      "tests": 23,
+      "pass": 23,
+      "fail": 0
+    },
+    "r_level_check": {
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "detail": "9 changed files; rules matched: (none)"
+    },
+    "type_check_scope_caveat": "scripts/ is outside every tsconfig project reference, so pnpm type-check does not enforce types in this file. The regression guards are the focused suite and the wiring guard, not the compiler."
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "defect_fixed": "main() called runScheduledAlertPass(repositories) without the loaded environment, so loadAlertAgentConfig read process.env and file-configured values were ignored. The disabled branch already refused before touching a repository; the flag was simply read from the wrong source.",
+    "queries": [
+      {
+        "name": "disabled path performs zero writes",
+        "method": "counting-repository harness wrapping saveDetection, updateNotified, startRun and completeRun, with a counting fetch",
+        "result": "detections 0, notified 0, runsStarted 0, runsCompleted 0, fetch calls 0; listRecent empty; no alert.detection or alert.notification run recorded",
+        "significance": "Disabled means nothing happened, not merely that the function returned early."
+      },
+      {
+        "name": "config precedence, measured end to end",
+        "method": "loadEnvironment() against a file fixture, then loadAlertAgentConfig on the merged object",
+        "result": "workflow path (process.env=true) -> enabled=true; operator path (variable absent from process) -> enabled=false",
+        "significance": "Records the exact boundary of this fix rather than the broader claim. See known_limitations."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "writes on the disabled path",
+        "value": 0
+      },
+      {
+        "probe": "delivery attempts on the disabled path",
+        "value": 0
+      },
+      {
+        "probe": "focused tests passing",
+        "value": 23
+      },
+      {
+        "probe": "mutations killed (throw removed / throw moved after detection / call site reverted)",
+        "value": 3
+      }
+    ],
+    "mutation_testing": "Three mutations, all killed. Removing the enabled check fails the two zero-write tests. Moving the throw AFTER the detection pass -- so it still rejects with the same message but writes first -- fails on the WRITE COUNTER, not the rejection, which is what shows the zero-write claim is not self-confirming. Reverting the call site to its shipped form fails the wiring guard.",
+    "production_mutation_performed": false,
+    "fabricated_queries_or_row_counts": false
+  },
+  "known_limitations": [
+    {
+      "item": "The fix closes the operator path, not the scheduled-workflow path.",
+      "detail": "ALERT_AGENT_ENABLED is a declared AppEnv key and readEnvValue reads process.env first. The scheduled workflow sets it to 'true' explicitly, so a file-configured false does not disable that job. Measured: workflow path enabled=true, operator path (variable absent from the process) enabled=false. Changing the workflow path means removing that variable from the workflow env, a production-posture change outside this correction."
+    },
+    {
+      "item": "Retry truncation still precedes filtering.",
+      "detail": "listRecent orders by current_snapshot_at and applies its limit before the notified=false and window filters. Raising the limit to 2000 narrows exposure but does not remove it; the repair belongs in the packages/db query, outside this lane. Production holds 176 undelivered rows against that limit."
+    },
+    {
+      "item": "The member-channel policy is enforced in this entry point only.",
+      "detail": "apps/alert-agent calls the notification pass with no injected fetch and would deliver to the member channel unguarded. Dormant — last alerting run 2026-04-28 — and outside this lane."
+    },
+    {
+      "item": "A disabled agent alerts every scheduled run.",
+      "detail": "The disabled path throws, the entrypoint posts an ops finding and exits non-zero, so disabling reds the workflow. Pre-existing and arguably correct: silent disablement is how the previous outage stayed invisible."
+    }
+  ],
+  "safety_posture": {
+    "member_delivery": "ALERT_MEMBER_CHANNELS_ENABLED pinned to 'false'; both guards read process.env deliberately, because that is what Discord delivery resolves against, so they are unaffected by this change and still fail closed.",
+    "system_picks": "SYSTEM_PICKS_ENABLED 'false'",
+    "sgo_and_ingestion": "disabled; zero SGO or ingestion triggers in the workflow",
+    "production": "parked; no mutation, unpark or secret access in this lane"
+  },
+  "independent_review": {
+    "status": "APPROVE",
+    "bound_to": "Full review at 5610e5af; re-bound by bounded delta verification at 9fb6b98c; this head adds only comment and test-name corrections raised by that re-bind.",
+    "correction_cycles_used": 1,
+    "findings_actioned": "The review found the first fix introduced a second config defect -- substituting the allow-list AppEnv for process.env dropped 20 of 22 tuning keys, so ALERT_MIN_TIER=notable would silently become watch. Corrected by merging rather than substituting. The re-bind then found a false comment and an overclaiming test name, both corrected here."
+  },
+  "sign_off": {
+    "static_proof_status": "PASS",
+    "runtime_proof_status": "PASS",
+    "independent_review_status": "APPROVE",
+    "ready_for_pm_review": true,
+    "pending": []
+  }
+}

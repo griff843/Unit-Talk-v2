@@ -152,6 +152,10 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
 | `/lane-management` | starting, progressing, blocking, closing any lane |
 | `/verification` | before any merge claim or `ops:truth-check` call |
+| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree |
+| `/pr-unblock` | a PR is red, BLOCKED, or stalled and the cause is not obvious |
+| `/proof-authoring` | writing or correcting a proof bundle so it is true and passes all three gates |
+| `/mutation-test` | proving a control, guard, or test actually fails on the condition it names |
 | `/code-structure` | touching package/app boundaries, imports, or generated files |
 | `/betting-domain` | touching CanonicalPick, scoring, promotion, lifecycle, CLV, grading |
 | `/outbox-worker` | touching outbox polling, delivery adapter, retry, circuit breaker |

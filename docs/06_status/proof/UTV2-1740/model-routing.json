@@ -1,0 +1,10 @@
+{
+  "issue_id": "UTV2-1740",
+  "executor": "claude",
+  "model": "claude-opus-5",
+  "reasoning_effort": "high",
+  "override_used": false,
+  "lane_type": "runtime",
+  "tier": "T1",
+  "routing_note": "Executed directly by the orchestrator session; no routing profile selected and no model override applied."
+}

@@ -1,0 +1,56 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1759",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1759-s1-lifecycle-scope",
+  "branch": "claude/utv2-1759-s1-lifecycle-scope",
+  "base_branch": "main",
+  "commit_sha": "c93bd8ffc77da340495c55f85c857beeeab68403",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1456",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1759/diff-summary.md",
+    "docs/06_status/proof/UTV2-1759/evidence.json",
+    "docs/06_status/proof/UTV2-1759/verification.md",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1759/diff-summary.md",
+    "docs/06_status/proof/UTV2-1759/evidence.json",
+    "docs/06_status/proof/UTV2-1759/verification.md",
+    "scripts/ci/file-scope-guard.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1759/diff-summary.md",
+    "docs/06_status/proof/UTV2-1759/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-08-28T04:40:21.832Z",
+  "heartbeat_at": "2026-08-28T13:41:42.946Z",
+  "closed_at": "2026-08-28T13:41:42.946Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-28T13:41:41.025Z",
+      "verdict": "pass",
+      "merge_sha": "c93bd8ffc77da340495c55f85c857beeeab68403",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1759-s1-lifecycle-scope",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

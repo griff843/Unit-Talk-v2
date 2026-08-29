@@ -32,7 +32,13 @@ import {
   writeManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import {
+  generateDispatchExecutionPacketResult,
+  generateExecutionPacket,
+  renderTaskContract,
+  type ExecutionPacket,
+  type ExecutionPacketResult,
+} from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import { defaultLeaseOwner, heartbeatLease } from './lease-registry.js';
 
@@ -42,6 +48,7 @@ export interface ClaudeExecResult {
     | 'SUCCESS'
     | 'CLAUDE_UNAVAILABLE'
     | 'PRECONDITION_FAILED'
+    | 'EXECUTION_PACKET_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
     | 'DRY_RUN';
@@ -51,6 +58,23 @@ export interface ClaudeExecResult {
   claude_exit_code?: number;
   transcript_path?: string;
   dry_run?: boolean;
+}
+
+type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
+
+export function resolveClaudeExecutionPacket(
+  manifest: LaneManifest,
+  onReady: (packet: ExecutionPacket) => void,
+  emit: (value: unknown) => void = emitJson,
+  loader: PacketResultLoader = generateDispatchExecutionPacketResult,
+): number {
+  const result = loader(manifest);
+  if (!result.ok) {
+    emit(result);
+    return 2;
+  }
+  onReady(result.packet);
+  return 0;
 }
 
 type CommandRunner = (
@@ -91,6 +115,8 @@ export function buildClaudePrompt(packet: ExecutionPacket): string {
     `Lane type: ${packet.lane_type}`,
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
+    '',
+    renderTaskContract(packet.task_contract),
     '',
     'You are executing inside a dedicated lane worktree. Do not switch branches in the main checkout.',
     '',
@@ -200,7 +226,12 @@ function printDryRun(result: ClaudeExecResult, prompt: string): void {
   process.stdout.write(`${prompt.slice(0, 700)}\n...(truncated)\n`);
 }
 
-function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand): number {
+/**
+ * Exported so regression tests can EXECUTE the dry-run control flow rather than
+ * inspect source text. A textual guard cannot catch a wrong-module import, a
+ * wrong-arity call, or a throw -- all three shipped past a green suite once.
+ */
+export function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand): number {
   const { flags, bools } = parseArgs(argv);
   const issueId = getFlag(flags, 'issue') ?? '';
   const dryRun = bools.has('dry-run');
@@ -263,7 +294,39 @@ function main(argv = process.argv.slice(2), runner: CommandRunner = runCommand):
     return 2;
   }
 
-  const packet = generateExecutionPacket(manifest);
+  // A preview must not mutate. Resolving the packet persists the sync record in
+  // both roots and, for a pre-contract lane, makes a live Linear call -- all
+  // before the dry-run branch below. codex-exec already guards this; claude-exec
+  // did not, so `--dry-run` wrote a git-tracked sync file in the shared control
+  // checkout and fired an outbound call, including while delegation is
+  // suspended. Under --dry-run the packet is now read without capture or
+  // persistence, so the preview claim matches the behaviour.
+  let packet!: ExecutionPacket;
+  if (dryRun) {
+    try {
+      packet = generateExecutionPacket(manifest);
+    } catch (error) {
+      // Structured refusal, not printDryRun: there is no prompt to preview when
+      // the packet could not be built, and printDryRun requires one. An earlier
+      // revision passed a single argument with an `as never` cast, which
+      // suppressed the arity error and made the handler itself throw.
+      emitJson({
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        issue_id: issueId,
+        branch: manifest.branch,
+        message:
+          `dry run cannot preview ${issueId}: ${error instanceof Error ? error.message : String(error)}. ` +
+          'Run without --dry-run to capture the contract.',
+      } satisfies ClaudeExecResult);
+      return 2;
+    }
+  } else {
+    const packetExit = resolveClaudeExecutionPacket(manifest, ready => {
+      packet = ready;
+    });
+    if (packetExit !== 0) return packetExit;
+  }
   const prompt = buildClaudePrompt(packet);
   const transcriptPath = transcriptPathForIssue(issueId);
 

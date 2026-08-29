@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
@@ -68,6 +69,41 @@ export interface ReopenHistoryEntry {
   detected_by: string;
 }
 
+/**
+ * One audited narrowing of a lane's `file_scope_lock` (UTV2-1762).
+ *
+ * `LANE_MANIFEST_SPEC.md` used to name an `ops:lane:relock` command as the way to
+ * "redefine scope" when two lanes contend for a path. That command was never
+ * implemented -- it matched nothing in `scripts/`, `package.json`, or
+ * `.github/workflows/` -- so in practice a lane that declared a path it never
+ * touched held that path hostage until it closed, and the only escape was to
+ * falsify the historical `files_changed` record (correctly rejected, PR #1288).
+ *
+ * This entry is the honest alternative. It is append-only and removal-only: it
+ * records that specific paths were dropped from `file_scope_lock`, who dropped
+ * them, against which PR and exact head SHA, and what the lock hashed to before
+ * and after. `previous_lock_hash` -> `resulting_lock_hash` forms a chain that
+ * `validateScopeReleaseHistory` verifies terminates at the manifest's CURRENT
+ * lock, so a lock cannot be edited without a matching audited entry, and an
+ * entry cannot be forged for a lock state that never existed.
+ *
+ * Nothing here can widen scope: `released_paths` are, by construction, paths
+ * that left the lock. Re-acquiring a released path requires a new lane-start,
+ * not an edit to this array.
+ */
+export interface ScopeReleaseHistoryEntry {
+  released_at: string;
+  actor: string;
+  reason: string;
+  pr_number: number;
+  pr_url: string;
+  head_sha: string;
+  previous_lock_hash: string;
+  resulting_lock_hash: string;
+  released_paths: string[];
+  verifications: Array<{ check: string; status: 'pass'; detail: string }>;
+}
+
 export interface P0ProtocolBlock {
   required: boolean;
   codex_implementation?: { recorded: boolean; pr_url?: string };
@@ -130,6 +166,12 @@ export interface LaneManifest {
   created_by: CreatedBy;
   truth_check_history: TruthCheckHistoryEntry[];
   reopen_history: ReopenHistoryEntry[];
+  /**
+   * Append-only audit trail of narrowing-only `file_scope_lock` releases
+   * (UTV2-1762). Absent on lanes that never released a path. See
+   * ScopeReleaseHistoryEntry and validateScopeReleaseHistory.
+   */
+  scope_release_history?: ScopeReleaseHistoryEntry[];
   stale?: boolean;
   orphaned?: boolean;
   override?: {
@@ -1668,6 +1710,8 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     }
   }
 
+  errors.push(...validateScopeReleaseHistory(manifest, sourcePath));
+
   return errors;
 }
 
@@ -1685,6 +1729,111 @@ function normalizePortableAbsolutePath(value: string): string {
     return path.posix.normalize(normalized);
   }
   return path.resolve(value).replaceAll('\\', '/');
+}
+
+/**
+ * Canonical, order-independent hash of a `file_scope_lock`.
+ *
+ * Normalized + sorted + deduplicated before hashing so that reordering or
+ * re-serializing a lock never reads as a change, and so a release computed on
+ * one machine verifies on another. This is the identity used by
+ * `scope_release_history` chaining; it is NOT a security boundary (the manifest
+ * lives in the PR's own diff), it is a tamper-EVIDENCE boundary: an unaudited
+ * edit to the lock breaks the chain and is detectable.
+ */
+export function hashFileScopeLock(fileScopeLock: readonly string[]): string {
+  const canonical = [...new Set(fileScopeLock.map((entry) => entry.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '')))]
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Validates the shape and the hash chain of `scope_release_history` (UTV2-1762).
+ *
+ * The chain is what makes the audit trail load-bearing rather than decorative:
+ *   - entry[i].previous_lock_hash must equal entry[i-1].resulting_lock_hash
+ *   - the LAST entry's resulting_lock_hash must equal the hash of the manifest's
+ *     current file_scope_lock
+ * so a lock edited without a matching entry, or an entry claiming a lock state
+ * the manifest does not actually hold, both fail closed here.
+ *
+ * A released path must also be absent from the current lock -- otherwise the
+ * entry would be claiming a removal that did not happen.
+ */
+export function validateScopeReleaseHistory(
+  manifest: Pick<LaneManifest, 'file_scope_lock' | 'scope_release_history'>,
+  sourcePath: string,
+): string[] {
+  const errors: string[] = [];
+  const history = manifest.scope_release_history;
+  if (history === undefined) {
+    return errors;
+  }
+  if (!Array.isArray(history)) {
+    errors.push(`${sourcePath}: scope_release_history must be an array`);
+    return errors;
+  }
+
+  const currentLock = Array.isArray(manifest.file_scope_lock) ? manifest.file_scope_lock : [];
+  const currentLockSet = new Set(currentLock);
+
+  history.forEach((entry, index) => {
+    const at = `${sourcePath}: scope_release_history[${index}]`;
+    if (!entry || typeof entry !== 'object') {
+      errors.push(`${at} must be an object`);
+      return;
+    }
+    if (!isNonEmptyString(entry.released_at)) errors.push(`${at}.released_at is required`);
+    if (!isNonEmptyString(entry.actor)) errors.push(`${at}.actor is required`);
+    if (!isNonEmptyString(entry.reason)) errors.push(`${at}.reason is required`);
+    if (!Number.isInteger(entry.pr_number) || entry.pr_number <= 0) {
+      errors.push(`${at}.pr_number must be a positive integer`);
+    }
+    if (!isNonEmptyString(entry.pr_url)) errors.push(`${at}.pr_url is required`);
+    if (!isNonEmptyString(entry.head_sha)) errors.push(`${at}.head_sha is required`);
+    if (!isNonEmptyString(entry.previous_lock_hash)) errors.push(`${at}.previous_lock_hash is required`);
+    if (!isNonEmptyString(entry.resulting_lock_hash)) errors.push(`${at}.resulting_lock_hash is required`);
+    if (!Array.isArray(entry.released_paths) || entry.released_paths.length === 0) {
+      errors.push(`${at}.released_paths must be a non-empty array`);
+    } else {
+      for (const released of entry.released_paths) {
+        if (!isNonEmptyString(released)) {
+          errors.push(`${at}.released_paths contains an empty entry`);
+        } else if (currentLockSet.has(released)) {
+          errors.push(
+            `${at}.released_paths claims "${released}" was released, but it is still present in file_scope_lock`,
+          );
+        }
+      }
+    }
+    if (!Array.isArray(entry.verifications) || entry.verifications.length === 0) {
+      errors.push(`${at}.verifications must be a non-empty array`);
+    }
+    if (index > 0) {
+      const previous = history[index - 1];
+      if (previous && entry.previous_lock_hash !== previous.resulting_lock_hash) {
+        errors.push(
+          `${at}.previous_lock_hash does not chain from scope_release_history[${index - 1}].resulting_lock_hash`,
+        );
+      }
+    }
+  });
+
+  if (errors.length === 0 && history.length > 0) {
+    const last = history[history.length - 1];
+    const expected = hashFileScopeLock(currentLock);
+    if (last.resulting_lock_hash !== expected) {
+      errors.push(
+        `${sourcePath}: scope_release_history tail resulting_lock_hash ${last.resulting_lock_hash} does not match the current file_scope_lock hash ${expected} -- the lock was modified outside the audited release path`,
+      );
+    }
+  }
+
+  return errors;
 }
 
 export function writeManifest(manifest: LaneManifest): void {

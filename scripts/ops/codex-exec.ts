@@ -35,7 +35,13 @@ import {
   readManifest,
   type LaneManifest,
 } from './shared.js';
-import { generateExecutionPacket, type ExecutionPacket } from './execution-packet.js';
+import {
+  generateDispatchExecutionPacketResult,
+  generateExecutionPacket,
+  renderTaskContract,
+  type ExecutionPacket,
+  type ExecutionPacketResult,
+} from './execution-packet.js';
 import { requireDelegationActive } from './delegation-state.js';
 import {
   buildCodexModelArgs,
@@ -65,6 +71,7 @@ interface CodexExecResult {
     | 'SUCCESS'
     | 'CODEX_UNAVAILABLE'
     | 'PRECONDITION_FAILED'
+    | 'EXECUTION_PACKET_INVALID'
     | 'MODEL_ROUTING_INVALID'
     | 'DELEGATION_SUSPENDED'
     | 'EXECUTION_FAILED'
@@ -94,6 +101,23 @@ interface CodexExecResult {
   execution?: ExecutionSummary;
   source_files_changed?: number;
   checkpoint_provenance?: string;
+}
+
+type PacketResultLoader = (manifest: LaneManifest) => ExecutionPacketResult;
+
+export function resolveCodexExecutionPacket(
+  manifest: LaneManifest,
+  onReady: (packet: ExecutionPacket) => void,
+  emit: (value: unknown) => void = emitJson,
+  loader: PacketResultLoader = generateDispatchExecutionPacketResult,
+): number {
+  const result = loader(manifest);
+  if (!result.ok) {
+    emit(result);
+    return 2;
+  }
+  onReady(result.packet);
+  return 0;
 }
 
 /**
@@ -534,6 +558,8 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
     `Branch: ${packet.branch}`,
     `CWD: ${packet.cwd}`,
     ``,
+    renderTaskContract(packet.task_contract),
+    ``,
     `## Allowed file scope`,
     packet.allowed_file_scope.map(f => `- ${f}`).join('\n'),
     ``,
@@ -552,8 +578,12 @@ export function buildCodexPrompt(packet: ExecutionPacket, resumeBrief?: string):
   ].join('\n');
 }
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+/**
+ * Exported, and argv is injectable, so regression tests can EXECUTE the dry-run
+ * control flow instead of asserting on source text.
+ */
+export async function main(argv = process.argv.slice(2)): Promise<void> {
+  const args = parseArgs(argv);
   const issueId = getFlag(args.flags, 'issue');
   const dryRun = args.bools.has('dry-run');
   const rework = args.bools.has('rework');
@@ -694,7 +724,33 @@ async function main(): Promise<void> {
         'No phase validity from the rejected epoch is inherited. Its findings remain as rework inputs.',
       ].join('\n')
     : buildResumeBrief(existingCheckpoint);
-  const packet = generateExecutionPacket(manifest);
+  // A preview must not mutate. Resolving the packet persists the sync record in
+  // both roots and, for a pre-contract lane, makes a live Linear call — all
+  // before the dry-run branch below, while the emitted message says "without
+  // mutating state during this preview". Under --dry-run the packet is read
+  // without capture or persistence, so the claim matches the behaviour.
+  let packet!: ExecutionPacket;
+  if (dryRun) {
+    try {
+      packet = generateExecutionPacket(manifest);
+    } catch (error) {
+      emitJson({
+        ok: false,
+        code: 'PRECONDITION_FAILED',
+        issue_id: issueId,
+        branch: manifest.branch,
+        message:
+          `dry run cannot preview ${issueId}: ${error instanceof Error ? error.message : String(error)}. ` +
+          'Run without --dry-run to capture the contract.',
+      } satisfies CodexExecResult);
+      process.exit(2);
+    }
+  } else {
+    const packetExit = resolveCodexExecutionPacket(manifest, ready => {
+      packet = ready;
+    });
+    if (packetExit !== 0) process.exit(packetExit);
+  }
   const prompt = buildCodexPrompt(packet, resumeBrief);
   const plannedHead = currentHeadSha(resolvedCwd);
   if (!plannedHead) {
