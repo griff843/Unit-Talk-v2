@@ -665,19 +665,28 @@ function verifyDeclaredMergeSlotBinding(
   //      This is the pre-UTV2-1776 shape, retained rather than broadened: it is
   //      no longer what *grants* merge authority, only what a verified source is
   //      allowed to be.
-  //   2. the attested PR head, or an ancestor of it — verification ran inside
-  //      the PR that GitHub merged. This is the split identity UTV2-1729 has.
-  // Without this check any commit anywhere in the repository could claim to be
-  // the verified source of a legitimately merged PR.
+  //   2. a commit the PR itself contributed — reachable from the attested PR
+  //      head and NOT reachable from the base-side reference GitHub merged into.
+  //      This is the split identity UTV2-1729 has.
+  //
+  // The base-side exclusion is not decorative. "Ancestor of the PR head" alone
+  // admits the whole of `main` behind the branch point, including the merge SHA
+  // of every previously merged PR — so a bundle could name a commit containing
+  // none of the lane's work and still be reported as "within that PR".
   if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
-    const sourceInPr = verifiedSourceIsWithinAttestedPr(verifiedSourceSha, attestation.head_sha, context);
+    const sourceInPr = verifiedSourceIsContributedByAttestedPr(
+      verifiedSourceSha,
+      attestation.head_sha,
+      resolution.mainRef,
+      context,
+    );
     if (sourceInPr !== true) {
       return {
         valid: false,
-        code: sourceInPr === false ? 'verifier_source_not_in_merged_pr' : 'verifier_merge_attestation_unverified',
-        detail: sourceInPr === false
-          ? `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA nor the attested PR head ${attestation.head_sha} nor an ancestor of it`
-          : sourceInPr,
+        code: typeof sourceInPr === 'string' ? 'verifier_merge_attestation_unverified' : 'verifier_source_not_in_merged_pr',
+        detail: typeof sourceInPr === 'string'
+          ? sourceInPr
+          : `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA nor a commit contributed by the attested PR (head ${attestation.head_sha}, base ${resolution.mainRef})`,
       };
     }
   }
@@ -700,13 +709,16 @@ function verifyDeclaredMergeSlotBinding(
 }
 
 /**
- * `true` when the verified source is the attested PR head or an ancestor of it,
- * `false` when it provably is not, and a diagnostic string when the check could
- * not be completed — which the caller treats as unverified, never as a pass.
+ * `true` when the verified source is a commit the attested PR actually
+ * contributed — reachable from its head and not already present on the base-side
+ * reference GitHub merged into. `false` when it provably is not, and a
+ * diagnostic string when the check could not be completed, which the caller
+ * treats as unverified rather than as a pass.
  */
-function verifiedSourceIsWithinAttestedPr(
+function verifiedSourceIsContributedByAttestedPr(
   verifiedSourceSha: string,
   headSha: string,
+  mainRef: string,
   context: EvidenceContractContext,
 ): true | false | string {
   if (verifiedSourceSha.toLowerCase() === headSha.toLowerCase()) return true;
@@ -715,9 +727,25 @@ function verifiedSourceIsWithinAttestedPr(
   const available = verifyCommitAvailable(verifiedSourceSha, 'verified source', context);
   if (available) return available.detail;
 
+  const inHead = isAncestorOrDiagnostic(verifiedSourceSha, headSha, context);
+  if (typeof inHead === 'string') return inHead;
+  if (!inHead) return false;
+
+  // Present on the base branch before the PR existed => contributed by some
+  // earlier merge, not by this PR.
+  const inBase = isAncestorOrDiagnostic(verifiedSourceSha, mainRef, context);
+  if (typeof inBase === 'string') return inBase;
+  return !inBase;
+}
+
+function isAncestorOrDiagnostic(
+  candidate: string,
+  descendant: string,
+  context: EvidenceContractContext,
+): boolean | string {
   const ancestry = runEvidenceGit(
-    ['merge-base', '--is-ancestor', verifiedSourceSha, headSha],
-    context.repoRoot,
+    ['merge-base', '--is-ancestor', candidate, descendant],
+    context.repoRoot!,
     context.gitRunner,
   );
   if (ancestry.error || ancestry.status === null || ancestry.status > 1) {

@@ -2711,7 +2711,17 @@ const UTV2_1729_ATTESTATION = {
 //   git merge-base --is-ancestor 55b583fd 95ec237f -> exit 1    (PR head not in merge)
 //   git merge-base --is-ancestor 0c915811 55b583fd -> exit 0    (source is in the PR)
 //   git merge-base 55b583fd 95ec237f -> 1b5bffad
+//   git merge-base --is-ancestor 0c915811 1b5bffad -> exit 1    (source is NOT already on base)
+//   git merge-base --is-ancestor 1b5bffad 55b583fd -> exit 0    (base is behind the PR head)
 // Anything not on that list is an error, so the seam cannot silently invent a fact.
+const UTV2_1729_ANCESTRY: ReadonlyArray<readonly [string, string, 0 | 1]> = [
+  [UTV2_1729_PR_HEAD, UTV2_1729_MERGE_SHA, 1],
+  [UTV2_1729_SOURCE_SHA, UTV2_1729_PR_HEAD, 0],
+  [UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF, 1],
+  [UTV2_1729_MAIN_REF, UTV2_1729_PR_HEAD, 0],
+  [UTV2_1729_MAIN_REF, UTV2_1729_MAIN_REF, 0],
+];
+
 const UTV2_1729_GIT: EvidenceGitRunner = (args) => {
   const known = new Set([UTV2_1729_MERGE_SHA, UTV2_1729_PR_HEAD, UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF]);
   if (args[0] === 'cat-file' && args[1] === '-e') {
@@ -2721,13 +2731,11 @@ const UTV2_1729_GIT: EvidenceGitRunner = (args) => {
       : { status: 1, stdout: '', stderr: `unknown object ${sha}` };
   }
   if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
-    if (args[2] === UTV2_1729_PR_HEAD && args[3] === UTV2_1729_MERGE_SHA) {
-      return { status: 1, stdout: '', stderr: '' };
+    const recorded = UTV2_1729_ANCESTRY.find(([a, b]) => a === args[2] && b === args[3]);
+    if (!recorded) {
+      return { status: 2, stdout: '', stderr: `unrecorded ancestry probe: ${args[2]} -> ${args[3]}` };
     }
-    if (args[2] === UTV2_1729_SOURCE_SHA && args[3] === UTV2_1729_PR_HEAD) {
-      return { status: 0, stdout: '', stderr: '' };
-    }
-    return { status: 1, stdout: '', stderr: '' };
+    return { status: recorded[2], stdout: '', stderr: '' };
   }
   if (args[0] === 'merge-base' && args.length === 3
       && args[1] === UTV2_1729_PR_HEAD && args[2] === UTV2_1729_MERGE_SHA) {

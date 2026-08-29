@@ -1,4 +1,4 @@
-import { describe, it, test } from 'node:test';
+import { after, describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -1332,6 +1332,8 @@ test('the real UTV2-1720 bundle still has the pre-slot shape this compatibility 
 
 function createSquashMergeSplitIdentityRepo(): {
   repoRoot: string;
+  ancientSha: string;
+  forkPoint: string;
   executionSha: string;
   prHead: string;
   mergeSha: string;
@@ -1350,6 +1352,10 @@ function createSquashMergeSplitIdentityRepo(): {
   git('config', 'user.email', 'proof-schema@example.test');
   git('config', 'user.name', 'Proof Schema Test');
   write('base.txt', 'fork point\n');
+  git('add', '.');
+  git('commit', '-m', 'ancient main history');
+  const ancientSha = git('rev-parse', 'HEAD');
+  write('base2.txt', 'later main history\n');
   git('add', '.');
   git('commit', '-m', 'main fork point');
   const forkPoint = git('rev-parse', 'HEAD');
@@ -1387,7 +1393,7 @@ function createSquashMergeSplitIdentityRepo(): {
   const unrelatedSha = git('rev-parse', 'HEAD');
   git('switch', 'main');
 
-  return { repoRoot, executionSha, prHead, mergeSha, mainAdvance, unrelatedSha };
+  return { repoRoot, ancientSha, forkPoint, executionSha, prHead, mergeSha, mainAdvance, unrelatedSha };
 }
 
 describe('UTV2-1776: sha_binding.merge_sha carries merge authority; verified_source_sha carries execution identity', () => {
@@ -1403,6 +1409,10 @@ describe('UTV2-1776: sha_binding.merge_sha carries merge authority; verified_sou
     repoRoot: repo.repoRoot,
     mergedPrAttestation: attestation,
     ...overrides,
+  });
+
+  after(() => {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
   });
 
   it('git really produced the split identity this contract exists for', () => {
@@ -1529,6 +1539,34 @@ describe('UTV2-1776: sha_binding.merge_sha carries merge authority; verified_sou
     });
     assert.equal(result.valid, false);
     assert.equal(result.code, 'verifier_source_not_in_merged_pr');
+  });
+
+  it('negative control 6c: a base-branch commit the PR did not contribute cannot be the verified source', () => {
+    // "Ancestor of the PR head" alone would admit all of main behind the branch
+    // point — including the merge SHA of every earlier PR. Each of these is a
+    // genuine ancestor of the attested head and must still be rejected.
+    for (const baseCommit of [repo.ancientSha, repo.forkPoint]) {
+      const result = verifyExternalVerifierProvenanceBinding({
+        receiptSha: repo.prHead,
+        verifiedSourceSha: baseCommit,
+        mergeSlot: { declared: true, value: repo.mergeSha },
+        context: postMerge(),
+      });
+      assert.equal(result.valid, false, `base commit ${baseCommit} must not bind`);
+      assert.equal(result.code, 'verifier_source_not_in_merged_pr');
+    }
+  });
+
+  it('negative control 6c is not vacuous: those base commits really are ancestors of the attested PR head', () => {
+    const isAncestor = (a: string, b: string): boolean => {
+      const result = spawnSync('git', ['merge-base', '--is-ancestor', a, b], { cwd: repo.repoRoot });
+      assert.ok(result.status === 0 || result.status === 1, 'ancestry probe must complete');
+      return result.status === 0;
+    };
+    assert.equal(isAncestor(repo.ancientSha, repo.prHead), true);
+    assert.equal(isAncestor(repo.forkPoint, repo.prHead), true);
+    // ...and the legitimate execution commit is not on the base side.
+    assert.equal(isAncestor(repo.executionSha, repo.forkPoint), false);
   });
 
   it('negative control 6b: a receipt bound to neither the verified source nor the attested PR head fails closed', () => {
