@@ -1,6 +1,6 @@
 # PROOF: UTV2-1729
 
-MERGE_SHA: 0c915811cd40b312bd3bdb4094062c29f6632c71
+MERGE_SHA: 95ec237f32eebd14c2a37cde477202fd553711cb
 
 Generated at: 2026-08-29T08:20:00Z
 Issue: UTV2-1729
@@ -134,7 +134,7 @@ applies pre-merge for any profile it governs.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 95ec237f32eebd14c2a37cde477202fd553711cb
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1436
-Approved PR head: pending merge
+Approved PR head: 55b583fd57e34ab2047bdf4cc948cca9b617eb83
 Execution SHA: 0c915811cd40b312bd3bdb4094062c29f6632c71
