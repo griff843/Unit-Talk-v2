@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1776-attestation-merge-slot",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1459",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1776.yml",
