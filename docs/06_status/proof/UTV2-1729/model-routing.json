@@ -4,7 +4,7 @@
   "model_profile": "codex-sol-high",
   "model": "gpt-5.6-sol",
   "reasoning_effort": "high",
-  "execution_sha": "02ae0502671effdc59642c038a3caebb7ebaef2d",
+  "execution_sha": "0c915811cd40b312bd3bdb4094062c29f6632c71",
   "policy_version": "1.0.0",
   "codex_cli_version": "codex-cli 0.147.0",
   "legacy_compatibility_used": false,

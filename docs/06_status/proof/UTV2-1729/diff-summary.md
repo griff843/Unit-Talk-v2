@@ -6,10 +6,10 @@ Tier: T1
 Lane type: governance
 Branch: codex/utv2-1729-proof-producing-contract
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1436
-Head SHA: 02ae0502671effdc59642c038a3caebb7ebaef2d
+Head SHA: 0c915811cd40b312bd3bdb4094062c29f6632c71
 Merge SHA: N/A
 Diff base: efdbd298df76e319bc85926c3c16a90240abbf28
-Diff target: 02ae0502671effdc59642c038a3caebb7ebaef2d
+Diff target: 0c915811cd40b312bd3bdb4094062c29f6632c71
 
 ## Git Diff Stat
 ```
@@ -60,5 +60,5 @@ M	scripts/ops/proof-schema.ts
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 02ae0502671effdc59642c038a3caebb7ebaef2d
+Head SHA: 0c915811cd40b312bd3bdb4094062c29f6632c71
 Merge SHA: N/A
