@@ -1,0 +1,13 @@
+{
+  "issue_id": "UTV2-1777",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "execution_sha": "3bf891a901b1bc48a2d2a2829f3022991ec9f56c",
+  "policy_version": "1.0.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-08-29T20:10:00Z"
+}

@@ -1,0 +1,167 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1777",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Persist the stranded implementation lane's merged state so its stale scope lock is released, without claiming Done",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-29T20:30:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3bf891a901b1bc48a2d2a2829f3022991ec9f56c",
+    "verified_source_note": "The last non-proof commit on this branch: the single canonical record-merge write this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets merge_sha. merge_sha is explicitly null pre-merge rather than a branch SHA or a placeholder.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "scope": {
+    "substantive_diff_stat": "1 file, 3 insertions(+), 3 deletions(-)",
+    "files": [
+      "docs/06_status/lanes/UTV2-1729.json"
+    ],
+    "lane_apparatus_only": [
+      ".ops/sync/UTV2-1777.yml",
+      "docs/06_status/lanes/UTV2-1777.json",
+      "docs/06_status/proof/UTV2-1777/"
+    ],
+    "not_touched": [
+      "scripts/ops/proof-schema.ts",
+      "scripts/ops/proof-schema.test.ts",
+      "scripts/ops/scope-release.ts",
+      "scripts/ops/shared.ts",
+      "docs/06_status/proof/UTV2-1729/verification.md",
+      "docs/06_status/proof/UTV2-1729/evidence.json",
+      "docs/06_status/proof/UTV2-1729/model-routing.json",
+      ".ops/sync/UTV2-1729.yml",
+      ".github/workflows/"
+    ]
+  },
+  "premise_check": {
+    "claim": "The predecessor lane's file_scope_lock is held solely because its manifest status is in_review, which is a member of ACTIVE_LOCK_STATUSES; recording the merge that actually happened moves it to merged, which is not, and that alone releases the lock.",
+    "method": "Read ACTIVE_LOCK_STATUSES and the TRANSITIONS table in scripts/ops/shared.ts. Reproduced the admission refusal by executing ops:lane-start for the successor repair lane. Read the post-merge refusal in scripts/ops/scope-release.ts. Read the merge facts from the GitHub API, not from any manifest.",
+    "result": "Confirmed. ACTIVE_LOCK_STATUSES = {started, in_progress, in_review, blocked, parked, reopened} — merged is absent. TRANSITIONS lists in_review -> merged. The admission refusal reproduced with code file_scope_conflict on exactly scripts/ops/proof-schema.ts and scripts/ops/proof-schema.test.ts.",
+    "alternatives_rejected": {
+      "blocked_or_parked": "Both are members of ACTIVE_LOCK_STATUSES, so neither releases the lock; the conflict would be byte-identical and the record less true.",
+      "widen_scope_release": "scope-release refuses on a non-OPEN PR by design (scripts/ops/scope-release.ts:222-224). Those paths were genuinely modified by the merged PR, so releasing them post-merge would change what the safety mechanism means. Not authorized and not attempted.",
+      "reopen_as_multi_pr_lane": "Rejected: the predecessor's implementation is merged; reopening would misrepresent it as in flight."
+    },
+    "verified": true
+  },
+  "merge_facts": {
+    "source": "github-api",
+    "pr_number": 1436,
+    "state": "MERGED",
+    "merged_at": "2026-08-29T18:29:56Z",
+    "approved_head_sha": "55b583fd57e34ab2047bdf4cc948cca9b617eb83",
+    "merge_sha": "95ec237f32eebd14c2a37cde477202fd553711cb",
+    "merge_sha_object_type": "commit",
+    "merge_sha_is_ancestor_of_origin_main": true
+  },
+  "requirements_coverage": {
+    "dod_1_pr_is_merged": "gh pr view 1436 -> state MERGED, mergedAt 2026-08-29T18:29:56Z.",
+    "dod_2_merge_sha_exact": "mergeCommit.oid = 95ec237f32eebd14c2a37cde477202fd553711cb; git cat-file -t resolves it as a commit and it is an ancestor of origin/main.",
+    "dod_3_canonical_command_produced_the_change": "pnpm ops:lane-manifest record-merge UTV2-1729 --pr 1436 --json -> ok true, code merge_sha_recorded. No hand edit was made to the manifest.",
+    "dod_4_transition_valid": "TRANSITIONS.in_review includes 'merged' in scripts/ops/shared.ts; the command applied it through assertStatusTransition rather than bypassing it.",
+    "dod_5_no_fabricated_truth_check": "history_appended: false in the command output; truth_check_history remains empty in the manifest.",
+    "dod_6_closed_at_null": "closed_at is null before and after; it is in the forbidden-change set and did not change.",
+    "dod_7_linear_not_done": "UTV2-1729 status 'Ready to Close', statusType 'started', completedAt null, archivedAt null. Not Done. This lane made no Linear transition.",
+    "dod_8_exact_head_checks": "To be evidenced by the required checks on the stationary PR head before PM authority is requested.",
+    "dod_9_independent_review": "Functional diff is one file and three lines; see scope.substantive_diff_stat and field_delta."
+  },
+  "field_delta": {
+    "method": "The manifest was copied byte-for-byte before the command ran, then compared key-by-key against the result. Not eyeballed from a diff.",
+    "changed_keys": [
+      "status",
+      "commit_sha",
+      "heartbeat_at"
+    ],
+    "changes": {
+      "status": {
+        "before": "in_review",
+        "after": "merged"
+      },
+      "commit_sha": {
+        "before": null,
+        "after": "95ec237f32eebd14c2a37cde477202fd553711cb"
+      },
+      "heartbeat_at": {
+        "before": "2026-08-22T01:15:42.326Z",
+        "after": "2026-08-29T20:06:15.475Z"
+      }
+    },
+    "forbidden_fields_checked": [
+      "file_scope_lock",
+      "expected_proof_paths",
+      "model_routing",
+      "scope_release_history",
+      "truth_check_history",
+      "reopen_history",
+      "closed_at",
+      "branch",
+      "executor",
+      "tier",
+      "lane_type"
+    ],
+    "forbidden_field_violations": "none",
+    "pr_url": "byte-identical before and after (https://github.com/griff843/Unit-Talk-v2/pull/1436)",
+    "history_appended": false
+  },
+  "mutation_testing": {
+    "applicable": false,
+    "reason": "This lane adds no control and changes no code. Its entire functional content is one canonical-command-produced state record. There is no guard here whose failure condition could be inverted. The controls this record relies on — ACTIVE_LOCK_STATUSES membership, the TRANSITIONS table, and record-merge's refusal to fabricate a truth-check receipt — are pre-existing and owned by other lanes; each was verified by reading source and by observing the command's actual output rather than by asserting it.",
+    "negative_observation_recorded": "The admission conflict was reproduced by execution before this lane existed (code file_scope_conflict, overlapping_files exactly the two proof-schema paths). That is the failing condition this record is meant to clear, and it must be observed to clear after merge; if it does not, this lane's premise is wrong and that must be reported rather than overridden."
+  },
+  "static_proof": {
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane's proof profile is static: it touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",
+    "stages": {
+      "env:check": "exit 0",
+      "lint": "exit 0",
+      "type-check": "exit 0",
+      "build": "exit 0",
+      "verify:commands": "exit 0"
+    },
+    "full_test_suite": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "tests": 5237,
+      "pass": 5237,
+      "fail": 0
+    },
+    "lane_suites": [],
+    "lane_suites_note": "This lane changes no source file, so it has no owning test suite. The full static suite was run in place of a targeted one.",
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": "none"
+    }
+  },
+  "safety_posture": {
+    "db_writes": "none",
+    "migrations": "none",
+    "runtime_behaviour_change": "none — one lane manifest state record",
+    "production_surface": "untouched",
+    "workflow_files_edited": "none",
+    "shared_tooling_edited": "none",
+    "other_lane_manifests_edited": "exactly one, docs/06_status/lanes/UTV2-1729.json, which is this lane's authorized target and the sole functional change",
+    "linear_transitions_performed": "none",
+    "note": "This lane records a merge that already happened. It does not close a lane, does not certify a lane Done, and does not repair the defect that stranded it."
+  },
+  "known_gaps": [
+    "No Codex invocation occurred. The lane is registered executor codex-cli, but the entire authorized implementation is one canonical command with no authored code, so it was run directly. The model-routing sidecar declares the lane's registered routing and deliberately omits codex_exit_code and codex_cli_version, which would assert a run that did not happen. Disclosed rather than papered over; re-registering the lane as Claude-executed is a PM call.",
+    "This unblocks admission; it does not prove the successor repair correct. After this lands, the repair lane's ops:lane-start must be re-attempted and observed to succeed. If the predecessor still appears as a file_scope_conflict, this lane's premise is wrong and that must be reported, not overridden.",
+    "The predecessor is left in a state no automation will advance on its own. merged releases the lock but its closeout still fails on P10/R3, so it is reachable only by an explicit sanctioned closeout replay after the repair lands. Intended, but the record will sit visibly incomplete in the interim and nothing will nag about it.",
+    "scope-release remains unusable post-merge. This lane routes around that rather than fixing it, so any future lane whose closeout fails after merge hits the same cycle and needs the same bridge. Widening scope-release was considered and explicitly rejected as a change to the safety mechanism's meaning.",
+    "The root control checkout carries untracked shadow copies of the predecessor's manifest and .ops/sync file that disagree with main (they read 'started'). They are not repository truth, they blocked git pull --ff-only, and one early read in this session came from the shadow before the discrepancy was caught. They are preserved unmodified outside the repository pending separate classification; this lane neither restores nor deletes them."
+  ],
+  "sign_off": {
+    "executor": "claude",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "note": "This bundle is evidence, not certification. The done-gate is ops:truth-check, and T1 authority is PM's."
+  }
+}
