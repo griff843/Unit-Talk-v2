@@ -100,6 +100,9 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'legacy_v1_not_allowed_pre_merge'
     | 'sha_binding_missing'
     | 'sha_binding_invalid'
+    | 'sha_binding_merge_slot_missing'
+    | 'sha_binding_premature_merge_sha'
+    | 'legacy_merge_sha_forbidden'
     | 'proof_profile_missing'
     | 'proof_profile_unknown'
     | 'proof_profile_mismatch'
@@ -160,6 +163,31 @@ export interface EvidenceContractResult {
   profileSource: 'legacy-schema' | 'manifest-lane-type' | 'evidence' | null;
   failures: EvidenceContractFailure[];
   bundle: Record<string, unknown> | null;
+}
+
+/** Line indexes that are part of CommonMark fenced code blocks, including fences. */
+export function markdownFencedLineIndexes(content: string): Set<number> {
+  const fenced = new Set<number>();
+  const lines = content.split(/\r?\n/u);
+  let active: { char: '`' | '~'; length: number } | null = null;
+
+  for (const [index, line] of lines.entries()) {
+    if (active) {
+      fenced.add(index);
+      const closing = line.match(/^[ \t]{0,3}(`+|~+)[ \t]*$/u);
+      if (closing && closing[1]?.[0] === active.char && closing[1].length >= active.length) {
+        active = null;
+      }
+      continue;
+    }
+
+    const opening = line.match(/^[ \t]{0,3}(`{3,}|~{3,}).*$/u);
+    if (!opening) continue;
+    const run = opening[1]!;
+    active = { char: run[0] as '`' | '~', length: run.length };
+    fenced.add(index);
+  }
+  return fenced;
 }
 
 // Ratified T1 precedent treats modeling/analytics and canonical-data lanes as
@@ -633,10 +661,65 @@ export function verifyExternalVerifierProvenanceBinding(input: {
   };
 }
 
+/**
+ * Historical compatibility for bundles that genuinely predate the reserved
+ * `sha_binding.merge_sha` slot.
+ *
+ * The slot is mandatory. This is the single, deliberately narrow way a bundle
+ * may lack it, and it is keyed on proven identity rather than on the bundle's
+ * profile. An earlier form of this exemption keyed on `profile !== 'migration'`,
+ * which matched the migration receipts it was written for but silently excluded
+ * the static/governance receipts of the same vintage and equal authenticity.
+ *
+ * Three properties this must never give up, each asserted by its own test:
+ *  - It never applies at the `pre-merge` gate. A bundle being authored or gated
+ *    for merge must carry the slot, explicitly `null`.
+ *  - It never lets a branch SHA satisfy merge authority. Eligibility is decided
+ *    by `resolveMergedPrAttestation`, which requires `verified_source_sha` to
+ *    equal the GitHub-recorded merge SHA of a real merged PR and verifies that
+ *    merge's ancestry locally.
+ *  - It is fail-closed. A missing repoRoot, a missing or incomplete attestation,
+ *    or an attestation belonging to a different PR all resolve to something
+ *    other than `pass`, and the slot is then required.
+ */
+function historicalMergeSlotIsExempt(
+  binding: Record<string, unknown>,
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
+): boolean {
+  // Migration receipts are bound by their own older merged-PR attestation
+  // contract, verified separately further down this module. Their exemption is
+  // left exactly as it was authored, at both gates. Tightening it to require
+  // `merge_sha: null` pre-merge is correct and intended, but the only fixture
+  // that asserts the current behaviour lives in scripts/ops/truth-check-lib.test.ts,
+  // which was released from this lane's file_scope_lock on 2026-08-28. Returned
+  // to PM as an out-of-scope defect rather than widened here.
+  if (profileHint === 'migration') return true;
+
+  // Authoring/merge-gating never reads history: the slot is always required.
+  if (context.gate === 'pre-merge') return false;
+
+  const verifiedSourceSha = binding['verified_source_sha'];
+  if (typeof verifiedSourceSha !== 'string' || !SHA_RE.test(verifiedSourceSha)) return false;
+
+  return resolveMergedPrAttestation(verifiedSourceSha, context).status === 'pass';
+}
+
 function validateV2Binding(
   bundle: Record<string, unknown>,
   failures: EvidenceContractFailure[],
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
 ): void {
+  if (Object.prototype.hasOwnProperty.call(bundle, 'merge_sha')) {
+    failures.push({
+      code: 'legacy_merge_sha_forbidden',
+      field: 'merge_sha',
+      message:
+        'schema-v2 evidence forbids legacy top-level merge_sha; merge authority lives only at sha_binding.merge_sha',
+    });
+  }
+
   const rawBinding = bundle['sha_binding'];
   if (!isPopulatedRecord(rawBinding)) {
     failures.push({
@@ -648,6 +731,32 @@ function validateV2Binding(
   }
 
   const binding = rawBinding;
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
+    if (!historicalMergeSlotIsExempt(binding, context, profileHint)) {
+      failures.push({
+        code: 'sha_binding_merge_slot_missing',
+        field: 'sha_binding.merge_sha',
+        message:
+          'schema-v2 evidence must declare sha_binding.merge_sha (null before merge, authoritative SHA after merge)',
+      });
+    }
+  } else if (context.gate === 'pre-merge') {
+    if (binding['merge_sha'] !== null) {
+      failures.push({
+        code: 'sha_binding_premature_merge_sha',
+        field: 'sha_binding.merge_sha',
+        message:
+          'pre-merge evidence requires sha_binding.merge_sha to be null; a branch SHA must never be represented as a merge SHA',
+      });
+    }
+  } else if (typeof binding['merge_sha'] !== 'string' || !SHA_RE.test(binding['merge_sha'])) {
+    failures.push({
+      code: 'sha_binding_invalid',
+      field: 'sha_binding.merge_sha',
+      message: 'post-merge evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
+    });
+  }
+
   if (typeof binding['verified_source_sha'] !== 'string' || !SHA_RE.test(binding['verified_source_sha'])) {
     failures.push({
       code: 'sha_binding_invalid',
@@ -886,11 +995,15 @@ export function validateEvidenceBundleContract(
     };
   }
 
-  const failures: EvidenceContractFailure[] = [];
-  validateV2Binding(bundle, failures);
-
   const declaredProfile = declaredProfileForLaneType(context.laneType);
   const authoredProfile = bundle['proof_profile'];
+  const profileHint = declaredProfile ??
+    (typeof authoredProfile === 'string' && AUTHORABLE_PROFILES.has(authoredProfile as EvidenceProofProfile)
+      ? authoredProfile as EvidenceProofProfile
+      : null);
+  const failures: EvidenceContractFailure[] = [];
+  validateV2Binding(bundle, failures, context, profileHint);
+
   let profile: EvidenceProofProfile | null = null;
   let profileSource: EvidenceContractResult['profileSource'] = null;
 

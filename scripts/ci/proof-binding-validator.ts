@@ -32,9 +32,11 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  markdownFencedLineIndexes,
   validateEvidenceBundleContract,
   type EvidenceContractResult,
 } from '../ops/proof-schema.js';
+import { validatePreMergeModelRoutingEvidence, type ModelRoutingBlock } from '../ops/model-routing.js';
 
 const SENTINELS = new Set(['set-by-ci', 'validated-by-ci-at-runtime']);
 const SHA_RE = /^[0-9a-f]{40}$/;
@@ -80,6 +82,42 @@ interface EvidenceRecord extends Record<string, unknown> {
   sha_binding?: unknown;
 }
 
+interface ManifestBindingContext {
+  laneType: string | null;
+  modelRouting: ModelRoutingBlock | null;
+  expectsModelRouting: boolean;
+}
+
+export function validatePreMergeVerificationBinding(content: string): string[] {
+  const violations: string[] = [];
+  const lines = content.split(/\r?\n/u);
+  const fenced = markdownFencedLineIndexes(content);
+  const activeLines = lines.map((line, index) => fenced.has(index) ? '' : line);
+  const top = activeLines.map((line) => line.match(/^MERGE_SHA:\s*(.*)$/u)).filter((match) => match !== null);
+  if (top.length !== 1) {
+    violations.push(`verification.md must contain exactly one top-level MERGE_SHA: row (found ${top.length})`);
+  } else if (top[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
+    violations.push('verification.md MERGE_SHA must be "pending merge" before merge; branch SHAs are execution identity only');
+  }
+  const headingIndexes = activeLines.flatMap((line, index) => /^## Merge SHA Binding\s*$/u.test(line) ? [index] : []);
+  if (headingIndexes.length !== 1) {
+    violations.push(`verification.md must contain exactly one "## Merge SHA Binding" section (found ${headingIndexes.length})`);
+    return violations;
+  }
+  const start = headingIndexes[0]! + 1;
+  const endOffset = activeLines.slice(start).findIndex((line) => /^##\s+/u.test(line));
+  const section = activeLines.slice(start, endOffset === -1 ? undefined : start + endOffset);
+  const mergeRows = section.map((line) => line.match(/^Merge SHA:\s*(.*)$/u)).filter((match) => match !== null);
+  const prRows = section.map((line) => line.match(/^PR:\s*(.*)$/u)).filter((match) => match !== null);
+  if (mergeRows.length !== 1 || mergeRows[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
+    violations.push('Merge SHA Binding section requires exactly one "Merge SHA: pending merge" row before merge');
+  }
+  if (prRows.length !== 1 || !prRows[0]?.[1]?.trim()) {
+    violations.push('Merge SHA Binding section requires exactly one non-empty PR: row');
+  }
+  return violations;
+}
+
 function git(cmd: string): string {
   return execSync(cmd, { encoding: 'utf8', stdio: 'pipe' }).trim();
 }
@@ -112,17 +150,32 @@ function resolveEvidenceCommit(repoRelPath: string): string {
   }
 }
 
-function resolveLaneType(evidence: EvidenceRecord): string | null {
+function resolveManifestBindingContext(evidence: EvidenceRecord): ManifestBindingContext {
   const issueId = typeof evidence.issue_id === 'string' ? evidence.issue_id.toUpperCase() : '';
-  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) return null;
+  if (!/^(UTV2|UNI)-\d+$/.test(issueId)) {
+    return { laneType: null, modelRouting: null, expectsModelRouting: false };
+  }
   const repoRoot = git('git rev-parse --show-toplevel');
   const manifestPath = join(repoRoot, 'docs', '06_status', 'lanes', `${issueId}.json`);
-  if (!existsSync(manifestPath)) return null;
+  if (!existsSync(manifestPath)) return { laneType: null, modelRouting: null, expectsModelRouting: false };
   try {
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { lane_type?: unknown };
-    return typeof manifest.lane_type === 'string' ? manifest.lane_type : null;
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      lane_type?: unknown;
+      model_routing?: unknown;
+      expected_proof_paths?: unknown;
+    };
+    return {
+      laneType: typeof manifest.lane_type === 'string' ? manifest.lane_type : null,
+      modelRouting:
+        manifest.model_routing && typeof manifest.model_routing === 'object' && !Array.isArray(manifest.model_routing)
+          ? manifest.model_routing as ModelRoutingBlock
+          : null,
+      expectsModelRouting:
+        Array.isArray(manifest.expected_proof_paths) &&
+        manifest.expected_proof_paths.some((entry) => typeof entry === 'string' && /(^|\/)model-routing\.json$/.test(entry)),
+    };
   } catch {
-    return null;
+    return { laneType: null, modelRouting: null, expectsModelRouting: false };
   }
 }
 
@@ -161,8 +214,32 @@ function main(): void {
   const violations: string[] = [];
   const head: string = process.env['GITHUB_SHA'] ?? git('git rev-parse HEAD');
 
-  const contract = validateBindingEvidenceContract(evidence, resolveLaneType(evidence));
+  const manifestContext = resolveManifestBindingContext(evidence);
+  const contract = validateBindingEvidenceContract(evidence, manifestContext.laneType);
   violations.push(...contract.failures.map((failure) => `${failure.field}: ${failure.message}`));
+
+  const verificationPath = join(args.proofDir, 'verification.md');
+  if (!existsSync(verificationPath)) {
+    violations.push(`verification.md is missing: ${verificationPath}`);
+  } else {
+    violations.push(...validatePreMergeVerificationBinding(readFileSync(verificationPath, 'utf8')));
+  }
+
+  const modelRoutingPath = join(args.proofDir, 'model-routing.json');
+  if (manifestContext.expectsModelRouting && !existsSync(modelRoutingPath)) {
+    violations.push(`required model-routing.json is missing: ${modelRoutingPath}`);
+  } else if (existsSync(modelRoutingPath)) {
+    try {
+      const modelRouting = JSON.parse(readFileSync(modelRoutingPath, 'utf8')) as unknown;
+      const result = validatePreMergeModelRoutingEvidence(modelRouting, {
+        expectedIssueId: typeof evidence.issue_id === 'string' ? evidence.issue_id : undefined,
+        manifestRouting: manifestContext.modelRouting,
+      });
+      violations.push(...result.violations.map((violation) => `model-routing.json: ${violation}`));
+    } catch (error) {
+      violations.push(`model-routing.json is not valid JSON: ${(error as Error).message}`);
+    }
+  }
 
   // V1 is historical read-only. The explicit pre-merge contract records the
   // named violation before this shape-specific early return.
