@@ -1,0 +1,186 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1777
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1777
+  objective: Persist UTV2-1729 merged state to release its stale scope lock
+    without claiming Done
+  acceptance_criteria:
+    - Diff is exactly `docs/06_status/lanes/UTV2-1729.json` plus this repair
+      lane's own normal lifecycle/proof metadata only; no
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)
+      proof/sync/shared-tooling file changes.
+    - "Candidate merge SHA is fetched from GitHub PR #1436 and equals
+      `95ec237f32eebd14c2a37cde477202fd553711cb`."
+    - "`in_review -> merged` passes canonical status-transition validation."
+    - No truth-check pass is created or appended.
+    - "`closed_at` remains null and
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-produci\
+      ng-contract-is-broken-repair-the-canonical-generator-so) is not
+      represented as Done."
+    - After the bridge PR lands, a live scope/admission check proves
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)
+      no longer participates in `ACTIVE_LOCK_STATUSES` and
+      [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and)
+      can request `scripts/ops/proof-schema.ts` without `file_scope_conflict`
+      from
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+    - If any gate requires changing
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)
+      proof, sync, shared tooling, or Linear state, stop and return evidence
+      rather than widening.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Purpose
+      Break the circular admission deadlock between [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) and [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) without direct-main mutation, scope override, or false completion.
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436 is authoritatively merged on GitHub at:
+
+      `95ec237f32eebd14c2a37cde477202fd553711cb`
+
+      but Post-Merge Lane Close failed on P10/R3 before persistence, so `origin/main` still records [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) as:
+
+      * `status: in_review`
+      * `commit_sha: null`
+      * `closed_at: null`
+      * `pr_url: https://github.com/griff843/Unit-Talk-v2/pull/1436`
+
+      That stale `in_review` status remains in `ACTIVE_LOCK_STATUSES` and therefore keeps [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s file_scope_lock active, blocking [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) from touching `scripts/ops/proof-schema.ts`.
+
+      `blocked` is NOT a valid bridge because current `ACTIVE_LOCK_STATUSES` also includes `blocked`.
+
+      Current lifecycle semantics explicitly allow `in_review -> merged`, and `merged` is a terminal success state excluded from `ACTIVE_LOCK_STATUSES`.
+
+      Current `ops:lane-manifest record-merge` is safe for this purpose: it binds only authoritative GitHub merge state (`status`, `commit_sha`, PR URL, heartbeat) and explicitly does not append or fabricate a truth-check verdict.
+    - >-
+      Scope
+
+      Exactly one tracked target file:
+
+
+      * `docs/06_status/lanes/UTV2-1729.json`
+
+
+      No shared tooling, proof artifacts, sync files, workflow files,
+      production/runtime code, or Linear completion mutation.
+    - |-
+      Required implementation
+      In this lane's governed worktree, run the canonical merge-recording command against original PR #1436 rather than hand-editing the JSON:
+
+      `pnpm ops:lane-manifest -- record-merge UTV2-1729 --pr 1436 --json`
+
+      The resulting candidate must preserve all [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) history/scope/proof declarations and change only the fields mechanically required by the command.
+
+      Expected authoritative result:
+
+      * `status: merged`
+      * `commit_sha: 95ec237f32eebd14c2a37cde477202fd553711cb`
+      * `pr_url` remains original PR #1436
+      * `closed_at` remains null
+      * `truth_check_history` remains unchanged / no synthetic pass
+      * proof bundle remains untouched
+      * Linear [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) remains In Codex / not Done
+    - |-
+      Sequencing
+      This bridge blocks [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and).
+
+      After this bridge lands:
+
+      1. re-run [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) lane-start with its already-approved four-file maximum scope;
+      2. implement the post-merge attestation resolver fix;
+      3. after [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) merges, replay sanctioned Post-Merge Lane Close for original [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436;
+      4. only that replay may move [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) from `merged` to `done` after P10/R3 and full truth-check pass.
+
+      This is a state-truth bridge, not closeout.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1777/persist-utv2-1729-merged-state-to-release-its-stale-scope-lock-without
+    title: Persist UTV2-1729 merged state to release its stale scope lock without
+      claiming Done
+    description: |-
+      ## Purpose
+
+      Break the circular admission deadlock between [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) and [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) without direct-main mutation, scope override, or false completion.
+
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436 is authoritatively merged on GitHub at:
+
+      `95ec237f32eebd14c2a37cde477202fd553711cb`
+
+      but Post-Merge Lane Close failed on P10/R3 before persistence, so `origin/main` still records [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) as:
+
+      * `status: in_review`
+      * `commit_sha: null`
+      * `closed_at: null`
+      * `pr_url: https://github.com/griff843/Unit-Talk-v2/pull/1436`
+
+      That stale `in_review` status remains in `ACTIVE_LOCK_STATUSES` and therefore keeps [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so)'s file_scope_lock active, blocking [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) from touching `scripts/ops/proof-schema.ts`.
+
+      `blocked` is NOT a valid bridge because current `ACTIVE_LOCK_STATUSES` also includes `blocked`.
+
+      Current lifecycle semantics explicitly allow `in_review -> merged`, and `merged` is a terminal success state excluded from `ACTIVE_LOCK_STATUSES`.
+
+      Current `ops:lane-manifest record-merge` is safe for this purpose: it binds only authoritative GitHub merge state (`status`, `commit_sha`, PR URL, heartbeat) and explicitly does not append or fabricate a truth-check verdict.
+
+      ## Scope
+
+      Exactly one tracked target file:
+
+      * `docs/06_status/lanes/UTV2-1729.json`
+
+      No shared tooling, proof artifacts, sync files, workflow files, production/runtime code, or Linear completion mutation.
+
+      ## Required implementation
+
+      In this lane's governed worktree, run the canonical merge-recording command against original PR #1436 rather than hand-editing the JSON:
+
+      `pnpm ops:lane-manifest -- record-merge UTV2-1729 --pr 1436 --json`
+
+      The resulting candidate must preserve all [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) history/scope/proof declarations and change only the fields mechanically required by the command.
+
+      Expected authoritative result:
+
+      * `status: merged`
+      * `commit_sha: 95ec237f32eebd14c2a37cde477202fd553711cb`
+      * `pr_url` remains original PR #1436
+      * `closed_at` remains null
+      * `truth_check_history` remains unchanged / no synthetic pass
+      * proof bundle remains untouched
+      * Linear [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) remains In Codex / not Done
+
+      ## Acceptance criteria
+
+      1. Diff is exactly `docs/06_status/lanes/UTV2-1729.json` plus this repair lane's own normal lifecycle/proof metadata only; no [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof/sync/shared-tooling file changes.
+      2. Candidate merge SHA is fetched from GitHub PR #1436 and equals `95ec237f32eebd14c2a37cde477202fd553711cb`.
+      3. `in_review -> merged` passes canonical status-transition validation.
+      4. No truth-check pass is created or appended.
+      5. `closed_at` remains null and [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) is not represented as Done.
+      6. After the bridge PR lands, a live scope/admission check proves [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) no longer participates in `ACTIVE_LOCK_STATUSES` and [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) can request `scripts/ops/proof-schema.ts` without `file_scope_conflict` from [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+      7. If any gate requires changing [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof, sync, shared tooling, or Linear state, stop and return evidence rather than widening.
+
+      ## Sequencing
+
+      This bridge blocks [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and).
+
+      After this bridge lands:
+
+      1. re-run [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) lane-start with its already-approved four-file maximum scope;
+      2. implement the post-merge attestation resolver fix;
+      3. after [UTV2-1776](https://linear.app/unit-talk-v2/issue/UTV2-1776/post-merge-attestation-resolver-rejects-the-schema-v2-merge-slot-and) merges, replay sanctioned Post-Merge Lane Close for original [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) / PR #1436;
+      4. only that replay may move [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) from `merged` to `done` after P10/R3 and full truth-check pass.
+
+      This is a state-truth bridge, not closeout.
+    captured_at: 2026-08-29T20:05:45.100Z
+    description_sha256: ded40d72ab13a0c5a4627d9cd2a55b404c63b450436dc3f8680579f1a9d5b4fc
+  contract_hash: 0d4d232af96d2898a7f7a99f7935e8f468cc472677b46dfb630cd55899d29207

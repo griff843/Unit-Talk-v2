@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1729-proof-producing-contract",
   "branch": "codex/utv2-1729-proof-producing-contract",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "95ec237f32eebd14c2a37cde477202fd553711cb",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1436",
   "files_changed": [],
   "file_scope_lock": [
@@ -34,9 +34,9 @@
     "docs/06_status/proof/UTV2-1729/evidence.json",
     "docs/06_status/proof/UTV2-1729/model-routing.json"
   ],
-  "status": "blocked",
+  "status": "merged",
   "started_at": "2026-08-22T00:28:26.317Z",
-  "heartbeat_at": "2026-08-22T01:15:42.326Z",
+  "heartbeat_at": "2026-08-29T21:55:45.892Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1729-proof-producing-contract.json",
