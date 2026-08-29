@@ -36,7 +36,7 @@
     ]
   },
   "premise_check": {
-    "claim": "The reconciler's read-side selection was correct; the bypass was that every writer resolved its destination from the issue ID alone, with no knowledge of the file the record was read from.",
+    "claim": "The reconciler's read-side selection was correct; the bypass was that the writers on the reconcile path resolved their destination from the issue ID alone, with no knowledge of the file the record was read from. This is a statement about the reconcile path specifically, not about every writer in the repository: lane-link-pr's writeBoundManifest and migrate-lane-types resolve their own paths and do not share the defect.",
     "method": "Read readAllManifestPaths, issueToManifestPath and writeManifest in scripts/ops/shared.ts, and selectReconcilableManifests, manifestPath and writeManifestJson in scripts/ops/reconcile.ts, at origin/main 44f5fbd7. Enumerated every duplicate issue_id on main by parsing all lane manifests.",
     "result": "Confirmed. selectReconcilableManifests correctly excluded the terminal root and selected the active parked copy; UTV2-1619's fail-closed allowlist is intact and is not the bypass. reconcile.ts carried a private manifestPath(issueId) duplicating issueToManifestPath, and wrote with raw fs.writeFileSync, so neither validateManifest nor assertStatusTransition ever ran on that path.",
     "duplicate_population_measured_on_main": [
@@ -85,11 +85,11 @@
     },
     "in_suite_inversion_control": {
       "arm": "ARM C",
-      "mutation": "both defences removed \u2014 a raw fs.writeFileSync writer injected, aimed at the root path",
+      "mutation": "both defences removed — a raw fs.writeFileSync writer injected, aimed at the root path",
       "observed": "root manifest clobbered: status superseded -> blocked and heartbeat_at rolled backwards, reproducing a67a6a59",
       "why_this_control_matters": "Without it, ARM A and ARM B could both pass against a fixture that was never writable in the first place, and would prove nothing."
     },
-    "collateral_observed_during_mutation": "Mutations 2 and 3 reproduced the defect against the live repository: issueToManifestPath resolved to the real docs/06_status/lanes/UTV2-1512.json inside the lane worktree and the fixture's content was written over it (1 file changed, 17 insertions(+), 125 deletions(-) \u2014 lane_type, commit_sha, pr_url and the entire file_scope_lock replaced). The file was restored from HEAD and the working tree verified clean before this bundle was written. Reported because it measures the blast radius rather than asserting it: the corruption is whole-object, not only the status field.",
+    "collateral_observed_during_mutation": "Mutations 2 and 3 reproduced the defect against the live repository: issueToManifestPath resolved to the real docs/06_status/lanes/UTV2-1512.json inside the lane worktree and the fixture's content was written over it (1 file changed, 17 insertions(+), 125 deletions(-) — lane_type, commit_sha, pr_url and the entire file_scope_lock replaced). The file was restored from HEAD and the working tree verified clean before this bundle was written. Reported because it measures the blast radius rather than asserting it: the corruption is whole-object, not only the status field.",
     "source_restored": true,
     "baseline_after_restore": "111 tests, 111 pass, 0 fail",
     "rounds": [
@@ -162,7 +162,7 @@
   "safety_posture": {
     "db_writes": "none",
     "migrations": "none",
-    "runtime_behaviour_change": "none \u2014 governance tooling only",
+    "runtime_behaviour_change": "none — governance tooling only",
     "production_surface": "untouched",
     "other_lane_manifests_edited": "none; the UTV2-1512 file transiently modified during mutation testing was restored from HEAD and the tree verified clean",
     "workflow_files_edited": "none",
@@ -171,9 +171,10 @@
   "known_gaps": [
     "started -> in_review is missing from the TRANSITIONS table, yet ops:lane-link-pr performs exactly that transition on every lane at PR binding. Discovered by this lane when the un-narrowed guard broke four pre-existing tests. Not fixed here: it is a lifecycle-policy change, not a clobber fix, and closing it under this lane would smuggle a governance change in under a bug fix. Recorded as a separate unstaffed issue.",
     "The guard's identity arm cannot separate same-issue_id aliases. docs/06_status/lanes/UTV2-1157.json and docs/06_status/lanes/UTV2-1157-codex.json are distinct lanes that both declare UTV2-1157, so the identity arm has nothing to compare and only path fidelity and the transition arm apply to that pair. Path fidelity is the primary defence; the guard is the backstop.",
-    "ops:reconcile passes validate:false to writeManifestAtPath, so it still does not schema-validate its writes \u2014 as it never did. The opt-out is explicit and documented rather than incidental, and the clobber guard runs regardless, but a reconciler-authored write can still land a record that would fail validateManifest. Measured on main: two UTV2-1512 manifests fail on a reaped preflight_token file and UTV2-1157-codex.json throws on a null worktree_path. Making legacy manifests schema-clean is separate, larger work.",
+    "ops:reconcile passes validate:false to writeManifestAtPath, so it still does not schema-validate its writes — as it never did. The opt-out is explicit and documented rather than incidental, and the clobber guard runs regardless, but a reconciler-authored write can still land a record that would fail validateManifest. Measured on main: two UTV2-1512 manifests fail on a reaped preflight_token file and UTV2-1157-codex.json throws on a null worktree_path. Making legacy manifests schema-clean is separate, larger work.",
     "The duplicate manifests themselves are untouched. Both UTV2-1512 records still read status blocked on main; restoring them to a truthful terminal state is a separate lane, deliberately outside this lane's frozen scope. This lane stops the recurrence; it does not repair the damage already done.",
-    "The transition arm protects settled statuses only. An in-flight manifest can still be written to any status by a caller that resolves its path correctly; this lane deliberately does not make the write chokepoint a lifecycle authority."
+    "The transition arm protects settled statuses only. An in-flight manifest can still be written to any status by a caller that resolves its path correctly; this lane deliberately does not make writeManifestAtPath a lifecycle authority.",
+    "writeManifestAtPath is not a universal write chokepoint, and this bundle claims no universal un-rewritability. Two writers still reach a manifest file without passing through it: writeBoundManifest in scripts/ops/lane-link-pr.ts:81-88 when allowMissingPreflightToken is set (raw writeJsonFile after a filtered validateManifest), and scripts/ops/migrate-lane-types.ts:106 (raw fs.writeFileSync). Both predate this lane and are outside its frozen file_scope_lock. Neither carries the path fidelity defect, since each writes back to the file it resolved for its own issue, so neither can reproduce a67a6a59; but neither is guarded. The proven result is therefore the narrower one: the UTV2-1756 reconciler incident path is closed by path fidelity plus the guard on the chokepoint the reconciler now routes through, not that a terminal manifest is un-rewritable by any writer."
   ],
   "sign_off": {
     "executor": "claude",

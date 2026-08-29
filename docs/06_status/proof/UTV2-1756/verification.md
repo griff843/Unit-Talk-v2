@@ -50,13 +50,28 @@ copy of the selection rule inside a fix for duplicated authority would be
 self-defeating. `reconcileManifest` writes to the entry's real path. The
 duplicate `manifestPath(issueId)` in `reconcile.ts` is deleted outright.
 
-**2. A fail-closed guard at the single write chokepoint.** Before overwriting an
-existing file, `writeManifestAtPath` gives the record already on disk a vote: it
-refuses a write whose `issue_id` disagrees with the on-disk record, and refuses
-any move out of a *settled* status that `TRANSITIONS` does not permit. A
-terminal manifest is therefore un-rewritable by **any** writer, not only by the
-one whose path resolution was fixed. `superseded → blocked` is not a permitted
-transition, so the exact `a67a6a59` write is refused at the chokepoint.
+**2. A fail-closed guard on the writers that route through
+`writeManifestAtPath`.** Before overwriting an existing file,
+`writeManifestAtPath` gives the record already on disk a vote: it refuses a
+write whose `issue_id` disagrees with the on-disk record, and refuses any move
+out of a *settled* status that `TRANSITIONS` does not permit. `superseded →
+blocked` is not a permitted transition, so the exact `a67a6a59` write is refused
+there.
+
+The truthful scope of that guard is narrower than a universal one, and is
+stated here rather than left to be discovered: it binds every writer that
+routes through `writeManifestAtPath`, which now includes the reconciler, but it
+is **not** a universal chokepoint. Two writers still reach a manifest file
+without passing through it — `writeBoundManifest` in
+`scripts/ops/lane-link-pr.ts:81-88` under `allowMissingPreflightToken`, and
+`scripts/ops/migrate-lane-types.ts:106`. Both predate this lane and are outside
+its frozen scope, and neither carries the path fidelity defect, so neither can
+reproduce `a67a6a59`; but neither is guarded. A terminal manifest is therefore
+**not** un-rewritable by any writer whatsoever. What this lane establishes is
+the narrower result it actually proves: the UTV2-1756 reconciler incident path
+is closed — by path fidelity on the read/write pairing, and by the guard on the
+chokepoint the reconciler now uses. See the unguarded-writer disclosure in
+Known Gaps below, which this paragraph deliberately agrees with.
 
 Path fidelity alone would not have protected the root from a future caller that
 resolves the wrong path. The guard alone would not have got the parked copy
