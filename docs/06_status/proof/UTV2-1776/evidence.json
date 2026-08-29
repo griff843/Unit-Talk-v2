@@ -1,0 +1,285 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1776",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "ready_for_review",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "1b4d57cd5eaf51fe8de99f15107130ba48ce2737",
+    "verified_source_note": "The last non-proof commit on this branch. It carries the whole implementation and its tests. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets merge_sha. merge_sha is explicitly null pre-merge rather than a branch SHA or a stand-in token.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "static_proof": {
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging cannot resolve the staging identity from a local URL. This lane's proof profile is static: it changes verification logic only, touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",
+    "full_test_suite": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "tests": 5263,
+      "pass": 5263,
+      "fail": 0,
+      "skipped": 0
+    },
+    "lane_suites": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts",
+        "tests": 76,
+        "pass": 76,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
+        "tests": 124,
+        "pass": 124,
+        "fail": 0,
+        "skipped": 0
+      }
+    ],
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 7,
+      "rules_matched": "none"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "standalone_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "tests": 5149,
+      "pass": 5149,
+      "fail": 0,
+      "skipped": 0,
+      "note": "Run standalone so it carries its own measured receipt. The count differs from verify:static because verify:static runs additional suites beyond pnpm test; both are reported as measured rather than reconciled to a single number."
+    },
+    "live_db_leg": {
+      "command": "pnpm test:live-db",
+      "exit_code": 1,
+      "refusal": "[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.",
+      "note": "Run directly to record its own refusal rather than inferring it from a pnpm verify chain. The required CI verify job produces and checks a run-scoped staging receipt in-job."
+    }
+  },
+  "title": "Post-merge attestation consumer must read merge authority from sha_binding.merge_sha, not verified_source_sha",
+  "generated_at": "2026-08-29T23:55:00Z",
+  "defect": {
+    "production_failure": "Post-Merge Lane Close run 33268421913 (UTV2-1729 / PR #1436)",
+    "failing_checks": [
+      "P10",
+      "R3"
+    ],
+    "reported_code": "verifier_merge_attestation_mismatch",
+    "reported_detail": "sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA",
+    "root_cause": "scripts/ops/proof-schema.ts::resolveMergedPrAttestation hardcoded verifiedSourceSha === attestation.merge_sha and was shared by three callers with different needs. Merge authority and execution/source identity were forced to be the same commit, which a squash merge makes impossible.",
+    "identities": {
+      "github_recorded_merge_sha": "95ec237f32eebd14c2a37cde477202fd553711cb",
+      "execution_source_sha": "0c915811cd40b312bd3bdb4094062c29f6632c71",
+      "original_pr_head": "55b583fd57e34ab2047bdf4cc948cca9b617eb83",
+      "base_side_reference": "1b5bffad1ce0cb8c9906f8bb0438b6c7c6ceb0cf"
+    },
+    "git_topology_verified_by_execution": {
+      "rev-list --parents -n1 95ec237f": "95ec237f 1b5bffad (single parent: squash merge)",
+      "merge-base --is-ancestor 55b583fd 95ec237f": "exit 1 (PR head not contained in the recorded merge)",
+      "merge-base --is-ancestor 0c915811 55b583fd": "exit 0 (execution SHA is inside the merged PR)",
+      "merge-base 55b583fd 95ec237f": "1b5bffad (base-side reference)",
+      "merge-base --is-ancestor 0c915811 1b5bffad": "exit 1 (execution SHA is not already on the base branch)"
+    }
+  },
+  "contract_coverage": {
+    "1_merge_sha_equals_github_merge": "verifyDeclaredMergeSlotBinding calls resolveMergedPrAttestation(slotValue, context, 'sha_binding.merge_sha').",
+    "2_mismatch_fails_closed": "verifier_merge_attestation_mismatch; negative controls 1, 1b, 2, 3.",
+    "3_verified_source_need_not_equal_merge": "the real UTV2-1729 regression passes with verified_source_sha 0c915811 != merge 95ec237f.",
+    "4_verified_source_keeps_provenance": "must be the attested merge SHA, or reachable from the attested PR head AND not reachable from the base-side reference; negative controls 5, 6, 6c.",
+    "5_head_or_branch_sha_cannot_be_merge_authority": "negative controls 2 and 3.",
+    "6_missing_ambiguous_malformed_forged_attestation_fails_closed": "negative controls 4, 4b, 5; plus verifier_merge_slot_invalid for non-40-hex slots and repoRoot-absent unverified.",
+    "7_compatibility_path_preserved": "historicalMergeSlotIsExempt is byte-identical to its parent commit; only the resolver's new default authorityField label flows in, producing the same message string.",
+    "8_compatibility_only_for_slotless_bundles": "readEvidenceMergeSlot uses hasOwnProperty; declared-but-null post-merge is verifier_merge_slot_invalid, not exempt.",
+    "9_not_broadened_to_new_bundles": "omitting mergeSlot preserves pre-UTV2-1776 semantics exactly, asserted by its own test.",
+    "10_pre_merge_requires_null_slot": "verifier_merge_slot_premature; negative control 9."
+  },
+  "negative_controls": [
+    {
+      "id": "1",
+      "condition": "explicit slot disagrees with GitHub merge SHA",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_mismatch"
+    },
+    {
+      "id": "1b",
+      "condition": "wrong slot AND receipt equals verified source (exact-source shortcut ordering)",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_mismatch"
+    },
+    {
+      "id": "2",
+      "condition": "original PR head placed in merge_sha",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_mismatch"
+    },
+    {
+      "id": "3",
+      "condition": "branch/execution SHA placed in merge_sha",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_mismatch"
+    },
+    {
+      "id": "4",
+      "condition": "merged-PR attestation missing",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_unverified"
+    },
+    {
+      "id": "4b",
+      "condition": "attestation not sourced from github-api",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_unverified"
+    },
+    {
+      "id": "5",
+      "condition": "attestation names a different PR identity",
+      "expected": "FAIL",
+      "code": "verifier_source_not_in_merged_pr"
+    },
+    {
+      "id": "6",
+      "condition": "verified source outside the merged PR (sibling branch)",
+      "expected": "FAIL",
+      "code": "verifier_source_not_in_merged_pr"
+    },
+    {
+      "id": "6b",
+      "condition": "receipt matches neither verified source nor attested head",
+      "expected": "FAIL",
+      "code": "verifier_receipt_head_mismatch"
+    },
+    {
+      "id": "6c",
+      "condition": "verified source is a base-history commit that really is an ancestor of the attested head",
+      "expected": "FAIL",
+      "code": "verifier_source_not_in_merged_pr"
+    },
+    {
+      "id": "7",
+      "condition": "authentic pre-slot bundle",
+      "expected": "PASS",
+      "code": "verifier_provenance_bound_merged_pr_head"
+    },
+    {
+      "id": "8",
+      "condition": "pre-slot bundle with wrong attestation",
+      "expected": "FAIL",
+      "code": "verifier_merge_attestation_mismatch"
+    },
+    {
+      "id": "9",
+      "condition": "pre-merge bundle declaring a non-null merge slot",
+      "expected": "FAIL",
+      "code": "verifier_merge_slot_premature"
+    }
+  ],
+  "mutation_testing": {
+    "applicable": true,
+    "method": "The control was made to FAIL on the condition it names, twice, then restored and re-run green.",
+    "mutation_a": {
+      "change": "resolveMergedPrAttestation(verifiedSourceSha, ...) restored inside verifyDeclaredMergeSlotBinding, i.e. merge authority read from verified_source_sha",
+      "result": "tests 200, pass 192, fail 8",
+      "includes_the_exact_regression": true,
+      "failing": [
+        "UTV2-1776 regression: P10 accepts the real UTV2-1729 split identity through the production consumer",
+        "UTV2-1776 regression: R3 accepts the real UTV2-1729 split identity through the production consumer",
+        "regression: the explicit merge slot binds a squash-merged split identity",
+        "negative control 1",
+        "negative control 5",
+        "negative control 6",
+        "negative control 6b",
+        "negative control 6c"
+      ]
+    },
+    "mutation_b": {
+      "change": "base-side exclusion removed from verifiedSourceIsContributedByAttestedPr",
+      "result": "tests 200, pass 199, fail 1",
+      "failing": [
+        "negative control 6c: a base-branch commit the PR did not contribute cannot be the verified source"
+      ]
+    },
+    "restored": {
+      "result": "tests 200, pass 200, fail 0"
+    }
+  },
+  "independent_review": {
+    "performed": true,
+    "findings": [
+      {
+        "severity": "fail-open",
+        "summary": "verified_source_sha provenance was satisfiable by any base-branch ancestor of the attested PR head, including the merge SHA of previously merged PRs",
+        "reproduced": "working exploit against a real temporary repository with a real squash merge",
+        "disposition": "FIXED in 1b4d57cd before the PR was opened; negative control 6c added; mutation B proves the fix is load-bearing"
+      },
+      {
+        "severity": "latent",
+        "summary": "a JSDoc sentence and a defensive truthiness guard described a null return that would have fallen through to the exact-source shortcut",
+        "disposition": "already corrected before the first commit; the reviewer read a mid-review snapshot"
+      },
+      {
+        "severity": "note",
+        "summary": "verifyPostMergeMigrationReceiptBinding keeps pre-UTV2-1776 semantics, so the repair is not uniform across the two consumers",
+        "disposition": "disclosed as a known gap; fails closed; changing it is an explicitly flagged risk and was not authorized"
+      },
+      {
+        "severity": "hygiene",
+        "summary": "the new fixture leaked a temporary git repository per run",
+        "disposition": "FIXED, reclaimed in an after() hook"
+      }
+    ],
+    "reported_clean_on": [
+      "merge-authority fallback to verified_source_sha on any path",
+      "wrong merge slot riding in on valid execution ancestry",
+      "branch or PR-head SHA satisfying merge authority",
+      "missing/incomplete/non-github-api/forged attestation falling back to a source-provenance pass",
+      "declared-but-null vs absent slot handling",
+      "pre-merge slot handling",
+      "historicalMergeSlotIsExempt byte-identical to parent",
+      "test seam honesty: all hard-coded git facts re-verified against real git"
+    ]
+  },
+  "safety_posture": {
+    "db_writes": "none",
+    "migrations": "none",
+    "runtime_behaviour_change": "none - this lane changes proof/truth-check verification logic only",
+    "production_surface": "untouched",
+    "workflow_files_edited": "none",
+    "other_lane_manifests_edited": "none",
+    "utv2_1729_artifacts_edited": "none",
+    "linear_transitions_performed": "none",
+    "files_changed": [
+      "scripts/ops/proof-schema.ts",
+      "scripts/ops/proof-schema.test.ts",
+      "scripts/ops/truth-check-lib.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "direction_of_change": "one path is loosened (merge authority moves from verified_source_sha to the explicit slot) and the field vacated by it is re-constrained rather than left free; every other path is unchanged or stricter"
+  },
+  "known_gaps": [
+    "No Codex invocation occurred. The lane is registered executor codex-cli with a codex-sol-high routing block, and the Linear description did carry the full contract, so a Codex dispatch was available and was not used - this was implemented directly by Claude Opus 5. The model-routing sidecar declares the lane's registered routing because the validator requires manifest consistency and there is no sanctioned mid-lane routing-update command; it deliberately omits codex_exit_code and codex_cli_version, which would assert a run that did not happen. Re-registering or re-running the lane is a PM call.",
+    "The migration-receipt consumer keeps pre-UTV2-1776 semantics. verifyPostMergeMigrationReceiptBinding still passes verified_source_sha as merge authority, so a squash-merged migration-profile bundle with a split identity still hits the original failure on that path. It fails closed, so it is over-strict rather than unsafe, and widening it is exactly the risk this lane was told to guard against. The repair is therefore not uniform across the two consumers.",
+    "The first cut of this lane shipped a fail-open into review. Checking only 'ancestor of the attested PR head' widened verified_source_sha from an exact-SHA constraint to a whole-base-branch one. It was caught by independent review with a working exploit, not by the fixtures authored here, because the fixture's only out-of-PR commit was a sibling branch rather than base history. Negative control 6c closes that specific case; the general lesson is not mechanically enforced anywhere.",
+    "P10 was extracted from runTruthCheck to make it testable. That is a structural change to the consumer, not a pure addition. runTruthCheck has no other schema-v2 P10 path and the extracted function is called from exactly the site the inline block occupied, but the extraction itself is covered only by the full suite.",
+    "The R3 regression uses a scripted git seam, not live git. actions/checkout gives CI a shallow PR checkout, so the historical UTV2-1729 objects are not fetchable there - the same constraint the pre-existing AUTHENTIC_SQUASH_GIT seam was built for. Every fact in the seam was read from real git in this repository and is recorded in the proof, and the seam errors on any unrecorded probe, but it remains a recorded fact rather than a live one.",
+    "This lane does not close UTV2-1729. It repairs the gate that stranded it. UTV2-1729 is truthfully complete only after the sanctioned Post-Merge Lane Close workflow is replayed for PR #1436 / 95ec237f and observed to converge on its own. If the replay still fails, this repair is incomplete and that must be reported rather than worked around by hand-editing UTV2-1729.",
+    "UTV2-1778 and UTV2-1779 remain unstaffed. The reconciler's missing GitHub read auth and the lane-start --files parser defect are both live and both were encountered in the course of this work."
+  ],
+  "sign_off": {
+    "executor": "claude",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "note": "This bundle is evidence, not certification. The done-gate is ops:truth-check, and T1 authority is PM's."
+  }
+}
