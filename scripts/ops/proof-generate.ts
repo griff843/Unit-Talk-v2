@@ -331,7 +331,20 @@ export function normalizePreMergeVerificationMarkdown(
       `${relPath} must contain exactly one top-level MERGE_SHA: row before merge`,
     );
   }
-  lines[matches[0]!] = 'MERGE_SHA: pending merge';
+  // Pre-merge normalization re-anchors this row to the execution SHA. It must
+  // never write a placeholder: executor-result-validator.yml requires a real
+  // 7-40 hex token that is an ancestor of the PR head, so `pending merge` here
+  // made every normalized bundle fail required Executor Result Validation.
+  if (!executionSha || !/^[0-9a-f]{7,40}$/iu.test(executionSha)) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      'Cannot normalize pre-merge verification.md: no valid execution SHA is available for the '
+      + `required top-level MERGE_SHA: anchor (got ${JSON.stringify(executionSha)}). `
+      + 'Refusing to emit a placeholder.',
+    );
+  }
+  lines[matches[0]!] = `MERGE_SHA: ${executionSha}`;
   let next = lines.join(eol);
   const nextFenced = markdownFencedLineIndexes(next);
   const headings = next.split(/\r?\n/u).flatMap(
@@ -549,14 +562,29 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
   // already come from DEFAULT_VERIFICATION_COMMANDS, so the union is smaller
   // than the four requirement lists suggest.
   //
-  // The SHA anchor takes the merge SHA when it exists and the head SHA before
-  // merge. It must never be a placeholder word: runtime-verifier-gate hard-fails
-  // when the file contains no 40-hex token at all, and only *warns* when the
-  // token differs from the current head. Emitting `N/A` therefore failed the
-  // gate outright on every freshly generated bundle, which is why each lane
-  // repaired this line by hand. `N/A` survives only when neither SHA is known,
-  // where failing is the correct outcome.
-  const mergeAnchor = gitTruth.merge_sha ?? 'pending merge';
+  // The top-level `MERGE_SHA:` row is a legacy-named *anchor*, not authoritative
+  // merge identity. Authoritative merge identity lives only at
+  // `sha_binding.merge_sha`, which stays null until the GitHub-attested
+  // post-merge rebind supplies it — this function never writes it.
+  //
+  // The anchor takes the merge SHA when it exists and the execution SHA before
+  // merge. It must never be a placeholder word. Two required gates read it:
+  // runtime-verifier-gate hard-fails when the file contains no 40-hex token at
+  // all, and executor-result-validator.yml:274 requires this row to match
+  // /^[0-9a-f]{7,40}$/ and to be an ancestor of the PR head. Both `N/A` and
+  // `pending merge` fail that rule, so every freshly generated bundle was
+  // structurally incapable of passing required Executor Result Validation until
+  // the execution-SHA fallback below existed. When neither SHA is resolvable we
+  // fail closed rather than emit any placeholder.
+  const mergeAnchor = gitTruth.merge_sha ?? gitTruth.head_sha;
+  if (!mergeAnchor) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      `docs/06_status/proof/${manifest.issue_id}/verification.md`,
+      'Cannot generate verification.md: neither a merge SHA nor an execution SHA is resolvable, '
+      + 'so the required top-level MERGE_SHA: anchor cannot be written. Refusing to emit a placeholder.',
+    );
+  }
   const executionAnchor = gitTruth.head_sha ?? 'pending';
 
   return [
@@ -600,7 +628,10 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     '',
     '## Merge SHA Binding',
     '',
-    `Merge SHA: ${mergeAnchor}`,
+    // The narrative binding section reports true merge identity, which is
+    // unknown before merge. Only the top-level gate-read anchor above falls
+    // back to the execution SHA; this row must never imply a merge happened.
+    `Merge SHA: ${gitTruth.merge_sha ?? 'pending merge'}`,
     `PR: ${manifest.pr_url ?? 'pending'}`,
     `Approved PR head: ${gitTruth.merge_sha ? executionAnchor : 'pending merge'}`,
     `Execution SHA: ${executionAnchor}`,
