@@ -450,6 +450,19 @@ export function runMergeWrapper(
       runner: CommandRunner;
       cwd: string;
     }) => { cleaned: boolean; aborted: boolean; message?: string };
+    /**
+     * UTV2-1790 (review round 3): the command vector to REPORT, when the command
+     * actually executed is not the one `buildMergeCommand` produces for this
+     * input.
+     *
+     * `runExtendedMergeWrapper` bridges `git-merge-main` / `git-rebase-main`
+     * through the `main-sync` slot and substitutes the real git invocation inside
+     * its runner. Without this option every result -- including the fail-closed
+     * one whose whole job is to tell an operator what left `MERGE_HEAD` behind --
+     * reports `git pull --ff-only origin main`, a command that cannot leave a
+     * merge in progress. Naming it actively misdirects the debugging.
+     */
+    reportedCommand?: string[];
   } = {},
 ): MergeWrapperResult {
   let issueId: string;
@@ -467,7 +480,9 @@ export function runMergeWrapper(
   const cwd = path.resolve(input.cwd ?? ROOT);
   const now = options.now ?? new Date();
   const command = buildMergeCommand(input);
-  const commandVector = [command.command, ...command.args];
+  // What we RUN is always `command`; what we REPORT may differ when the caller
+  // bridged a different operation through this one. See `reportedCommand`.
+  const commandVector = options.reportedCommand ?? [command.command, ...command.args];
   const lock = acquireMergeLock(
     {
       issue_id: issueId,
@@ -631,10 +646,11 @@ export function runMergeWrapper(
         `${input.operation} failed AND the worktree could not be returned to its ` +
         `pre-attempt state, so the merge mutex was deliberately NOT released and the ` +
         `lane-state autostash was deliberately NOT restored.\n` +
-        // UTV2-1790 (review round 2): name the command that actually ran. Sync
-        // verbs are bridged through the `main-sync` slot, so `input.operation`
-        // and `command` above describe the bridge, not the git invocation that
-        // left the residue -- which is the one thing the operator needs.
+        // UTV2-1790 (review rounds 2-3): name the command that actually ran.
+        // Sync verbs are bridged through the `main-sync` slot, so `input.operation`
+        // describes the bridge, not the git invocation that left the residue --
+        // which is the one thing the operator needs. `commandVector` honours the
+        // caller's `reportedCommand` precisely so this line is true.
         `The command that failed was: ${commandVector.join(' ')}\n` +
         `${cleanup.message ?? 'cleanup reported failure without detail.'}\n` +
         `Resolve by hand in ${cwd}: finish or abort the in-progress operation ` +

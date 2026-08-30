@@ -486,6 +486,12 @@ export function runExtendedMergeWrapper(
     runner: interceptingRunner,
     onCommandFailure: ({ cwd: failureCwd }) =>
       abortInProgressSync(syncOperation, realRunner, failureCwd),
+    // UTV2-1790 (review round 3): report the command the intercepting runner
+    // actually executes, not the `main-sync` pull it is bridged through. Without
+    // this, a fail-closed result names `git pull --ff-only origin main` as the
+    // command that left MERGE_HEAD behind -- an invocation that cannot leave a
+    // merge in progress at all.
+    reportedCommand: [cmd.command, ...cmd.args],
   });
   // Only a sync that actually ran and succeeded can have dropped anything.
   if (!result.ok || !preSyncHead) return result;

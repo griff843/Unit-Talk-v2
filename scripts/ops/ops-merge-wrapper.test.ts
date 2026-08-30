@@ -1758,7 +1758,9 @@ test('UTV2-1790: a cleanup failure fails closed — mutex retained, stash held, 
   withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
     withTempOps(({ lockPath, deferredDir }) => {
       let abortAttempted = false;
+      const issued: string[][] = [];
       const runner = realGitRunner((command, args) => {
+        issued.push([command, ...args]);
         if (command === 'git' && args[0] === 'merge' && args[1] === '--abort') {
           abortAttempted = true;
           // Do NOT execute it: the conflicted merge state genuinely survives.
@@ -1804,6 +1806,35 @@ test('UTV2-1790: a cleanup failure fails closed — mutex retained, stash held, 
       // the caller is told where it is.
       assert.strictEqual(result.main_sync_stash?.popped, false, 'the autostash must be left alone');
       assert.notStrictEqual(git(dir, 'stash', 'list'), '', 'the autostash entry must still exist');
+
+      // Review round 3, P3: the two assertions above are satisfied by git's OWN
+      // refusal to pop into an unmerged index, so they would pass even if the
+      // fail-closed branch attempted the pop. Assert the pop was never ISSUED --
+      // that is the control, and only this pins it.
+      assert.ok(
+        !issued.some((c) => c[0] === 'git' && c[1] === 'stash' && c[2] === 'pop'),
+        'the fail-closed branch must not even attempt the pop',
+      );
+
+      // Review round 3, P2: the reported command must be the git invocation that
+      // actually ran, not the `main-sync` pull it is bridged through. Naming
+      // `git pull --ff-only origin main` here would point the operator at a
+      // command that cannot leave MERGE_HEAD behind.
+      assert.deepStrictEqual(
+        result.command,
+        ['git', 'merge', '--no-ff', '--no-edit', 'origin/main'],
+        'the result must report the real invocation, not the bridge',
+      );
+      assert.match(
+        result.message,
+        /The command that failed was: git merge --no-ff --no-edit origin\/main/u,
+        'the operator message must name the real invocation',
+      );
+      assert.doesNotMatch(
+        result.message,
+        /git pull --ff-only/u,
+        'the operator message must not name the bridge command',
+      );
 
       // The message is actionable and preserves the original merge diagnostics.
       assert.match(result.message, /could not abort merge/u, 'names why cleanup failed');
@@ -1973,6 +2004,129 @@ test('UTV2-1790: a cleanup hook that throws fails closed rather than escaping', 
       assert.match(result.message, /cleanup exploded/u, 'the thrown message must be surfaced');
       const lock = readMergeLock(lockPath);
       assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'mutex retained');
+    });
+  });
+});
+
+test('UTV2-1790: a real rebase conflict is aborted with the REBASE verb, not the merge verb', () => {
+  // Review round 3, P3. `abortInProgressSync` picks `rebase` vs `merge` from the
+  // operation, and nothing pinned that choice: hardcoding 'merge' survived the
+  // whole suite, because the only real-git cleanup regression was merge-only and
+  // the rebase coverage was a mock. Against a real conflicted rebase,
+  // `git merge --abort` exits 128 ("There is no merge to abort") and the residue
+  // survives, converting automatic recovery into a manual-recovery incident.
+  withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-rebase-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      // The rebase genuinely conflicted, and cleanup genuinely succeeded.
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_command_failed',
+        'a rebase conflict that was cleanly aborted is an ordinary command failure',
+      );
+
+      // Nothing is left in progress: no REBASE_HEAD, no rebase directory, no
+      // unmerged entries. Under the wrong abort verb every one of these survives.
+      assert.strictEqual(
+        spawnSync('git', ['rev-parse', '--verify', '--quiet', 'REBASE_HEAD'], {
+          cwd: dir,
+          stdio: 'pipe',
+        }).status,
+        1,
+        'REBASE_HEAD must be gone',
+      );
+      assert.ok(!fs.existsSync(path.join(dir, '.git', 'rebase-merge')), 'no rebase-merge dir');
+      assert.ok(!fs.existsSync(path.join(dir, '.git', 'rebase-apply')), 'no rebase-apply dir');
+      assert.deepStrictEqual(unmergedPaths(dir), [], 'no unmerged entries may remain');
+
+      // The lane commit is back, unrewritten -- an aborted rebase must restore it.
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), branchSha, 'lane HEAD restored');
+
+      // The lane-state autostash was restored and the mutex released.
+      assert.strictEqual(result.main_sync_stash?.stashed, true);
+      assert.strictEqual(result.main_sync_stash?.popped, true);
+      assert.ok(
+        fs.existsSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml')),
+        'the untracked lane-state file must be back on disk',
+      );
+      assert.strictEqual(git(dir, 'stash', 'list'), '', 'no stash entry may be left behind');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+
+      // The reported command is the rebase, not the bridged main-sync pull.
+      assert.deepStrictEqual(result.command, ['git', 'rebase', 'origin/main']);
+    });
+  });
+});
+
+test('UTV2-1790: unmerged entries alone block the nothing-to-abort early return', () => {
+  // Review round 3, P3. The early return requires MERGE_HEAD absent AND
+  // REBASE_HEAD absent AND no unmerged paths. Dropping the third term survived
+  // the suite: every real conflict leaves MERGE_HEAD too, so no test ever
+  // isolated it. Here both refs are masked to report ABSENT (git's exit 1, not
+  // the exit 128 of test 51, so the `undetermined` path cannot be what carries
+  // this test) while a real conflicted merge really is in progress. The only
+  // thing left that can stop the early return is the unmerged-paths term.
+  //
+  // The observable is whether the abort is ISSUED. Under the mutant the wrapper
+  // takes the early return, issues nothing, and walks into the pop and the
+  // release with a genuinely conflicted index.
+  withDivergedRepo({ conflicting: true }, ({ dir }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      let abortIssued = false;
+      let unmergedWhenProbed: string[] = [];
+      const runner = realGitRunner((command, args) => {
+        if (command === 'git' && args[0] === 'merge' && args[1] === '--abort') {
+          abortIssued = true;
+          return undefined; // let the real abort run
+        }
+        if (
+          command === 'git' &&
+          args[0] === 'rev-parse' &&
+          (args[3] === 'MERGE_HEAD' || args[3] === 'REBASE_HEAD')
+        ) {
+          // Sample the real state while the merge is genuinely in progress, so
+          // the precondition is proven rather than assumed.
+          if (unmergedWhenProbed.length === 0) unmergedWhenProbed = unmergedPaths(dir);
+          return {
+            status: 1,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from(''),
+            error: undefined,
+          } as ReturnType<CommandRunner>;
+        }
+        return undefined;
+      });
+
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.ok(
+        unmergedWhenProbed.length > 0,
+        'precondition: the worktree really was unmerged when the probe ran',
+      );
+      assert.strictEqual(
+        abortIssued,
+        true,
+        'unmerged entries alone must prevent the nothing-to-abort early return',
+      );
+
+      // Cleanup then succeeds, so this is an ordinary command failure and the
+      // substrate is genuinely restored.
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_command_failed');
+      assert.deepStrictEqual(unmergedPaths(dir), [], 'no unmerged entries may remain');
+      assert.strictEqual(mergeHeadPresent(dir), false, 'MERGE_HEAD must be gone');
+      assert.strictEqual(result.main_sync_stash?.popped, true, 'the autostash was restored');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
     });
   });
 });
