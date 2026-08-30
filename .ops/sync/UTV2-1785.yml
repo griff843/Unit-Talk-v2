@@ -1,0 +1,437 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1785
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1785/evidence.json
+    - docs/06_status/proof/UTV2-1785/model-routing.json
+    - docs/06_status/proof/UTV2-1785/verification.md
+    - docs/06_status/proof/UTV2-1785/diff-summary.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1785
+  objective: Pre-proof commit hook validates inherited merge content as if the
+    lane authored it
+  acceptance_criteria:
+    - |-
+      ## Incident
+
+      [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453 was being synchronized with current `main` after [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) landed. The PR-update path produced exactly one real conflict: `package.json`. Both sides changed only `scripts.test:ops`; the reviewed resolution is current main's landed value plus this lane's `scripts/ops/pick-truth-audit.test.ts` entry.
+
+      Committing the otherwise-resolved merge was then refused by the fail-closed pre-proof validator hook because it validated `docs/06_status/proof/UTV2-1729/evidence.json` inherited from `main`. PR #1453 does not own or modify [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof.
+
+      Current main's [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence is authoritative closed-lane history bound to merge `95ec237f32eebd14c2a37cde477202fd553711cb`. It must not be rewritten merely to satisfy a different lane's merge hook.
+
+      The failure occurs because a merge stages content inherited from the other parent and the hook treats every staged `evidence.json` as authored by the pending commit. Thus an old/closed proof shape on main can block every future branch merge even when the branch neither changes nor owns that proof.
+
+      ## PM disposition
+
+      Fix the hook selection semantics. Do NOT bypass the whole hook and do NOT edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof as the remedy.
+
+      ## Required contract
+
+      1. During a normal commit, validate proof files actually authored/changed by the commit.
+      2. During a merge commit, distinguish lane-authored changes from files merely inherited unchanged from the other parent.
+      3. A proof file identical to the authoritative incoming parent (`origin/main` for a lane sync) and not modified by the lane/conflict resolution must not be reclassified as authored by the lane solely because it is staged as part of the merge transaction.
+      4. Any proof file the lane actually modifies, conflict-resolves, adds, or deletes must still be validated fail-closed.
+      5. The hook must still catch a lane that intentionally edits another lane's evidence during the merge.
+      6. No global `--no-verify` escape is introduced as normal recovery.
+      7. No closed-lane proof is rewritten merely to satisfy the hook.
+      8. Behavior must be based on git parent/diff identity, not filename allowlists or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) special-casing.
+
+      ## Acceptance tests
+
+      * Synthetic merge: main adds `docs/06_status/proof/OLD/evidence.json`; topic branch never touches it. Merge stages it; hook ignores it as inherited-only and allows commit when the topic's own proof is valid.
+      * Same fixture, topic branch modifies the inherited evidence after merge/conflict resolution; hook validates it and refuses invalid content.
+      * Topic branch adds/changes its own `evidence.json`; existing validation still runs.
+      * Non-merge commits retain current fail-closed validation.
+      * Regression reproduces the exact PR #1453 / current-main shape that triggered this incident.
+      * Mutation test restoring the old "validate every staged evidence.json" selection makes the regression fail.
+
+      ## Guardrails
+
+      Control-plane / developer-hook only. No production runtime, DB, delivery, ingestion, SGO, branch-protection weakening, or proof-schema relaxation. Do not special-case [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+
+      ## Sequencing
+
+      Direct support blocker for [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453. This may be the single governance/reliability support lane alongside production-truth work. Keep [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) unstaffed until #1453 is recovered unless its files overlap, in which case return to PM.
+
+      ---
+
+      ## Discovery completed by orchestrator (2026-08-30) — do not redo, do not widen
+
+      Mechanically located the real implementation and its source of truth:
+
+      * `git config --show-origin --get core.hooksPath` -> `file:.git/config` -> `/home/griff843/code/Unit-Talk-v2/.git/hooks`
+      * `.git/hooks/` contains **only **`.sample` files. **There is no git hook.**
+      * No `.husky/`. No installer, generator, or bootstrap script.
+      * The active implementation is the Claude Code `PreToolUse` hook `.claude/hooks/pre-proof-validator.sh` — git-TRACKED and repo-owned (last changed by [UTV2-1721](https://linear.app/unit-talk-v2/issue/UTV2-1721/governed-harness-refresh-re-admit-pr-1429-without-model-routing-policy)) — registered in tracked `.claude/settings.json` as matcher `Bash`, command `bash .claude/hooks/pre-proof-validator.sh`. Single invoker; no other caller in the repo.
+
+      A repo-owned source therefore exists. Fix it there. Do not hand-edit a local generated copy and do not invent a new hook architecture.
+
+      **Note this is an agent-harness hook, not a git hook** — it gates Claude Code Bash calls containing `git commit`, so it does not affect CI or a human's direct `git` usage. Keep that in mind for security item 6 below.
+
+      ## Root cause (exact)
+
+      Line 23: `staged=$(git diff --cached --name-only)`. That diffs the index against `HEAD` only, with no `MERGE_HEAD` awareness. During a merge the index holds the entire merge result, so every file inherited from the incoming parent reads as staged and is validated as lane-authored.
+
+      ## Blast radius (measured on current main)
+
+      **158 of 245 **`evidence.json` files on `main` would trip this hook when merely inherited (most for `ci_sentinels`, many also for `verified_source_sha`). This blocks essentially every `git merge origin/main` into any lane branch — it is not specific to [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+
+      ## Suggested mechanism (verify before adopting)
+
+      Git's own combined-diff semantics: a merge commit authors only what differs from **all** parents. Compute the staged set against `HEAD` and against `MERGE_HEAD` and intersect — a file byte-identical to either parent is inherited.
+
+      Caveat that must be handled: a conflict resolved by taking one parent's version verbatim ("take theirs") is byte-identical to that parent and would be wrongly excluded, yet Test C requires it to count as authored. `.git/MERGE_MSG` retains a `# Conflicts:` block after `git add` clears the unmerged index entries; union that conflict set into the authored set. Verify against real git behavior before relying on it; if unreliable, find a mechanism that is.
+
+      Detect merge state via `MERGE_HEAD`, **worktree-aware**: this repo runs lanes in `git worktree`s where the git dir is NOT `.git/`. Resolve with `git rev-parse --git-dir`.
+
+      ## Regression tests (build real throwaway git repos in a temp dir; do not mock git)
+
+      * **Test A — inherited-only proof.** main contains `docs/06_status/proof/OLD/evidence.json` (invalid, e.g. missing `ci_sentinels`). Topic branched before that file existed and changes only unrelated lane-owned content. Merge main into topic. Expect: OLD present in the merge result, topic never authored it, hook does not validate it, commit allowed when topic-authored proof is valid.
+      * **Test B — inherited proof deliberately changed.** Same setup, but alter OLD/evidence.json after the merge result is constructed. Expect: hook selects it and fails closed.
+      * **Test C — conflict resolution.** Both parents change the same proof path. Expect: resolution counts as authored and is validated. Must cover the "resolved to exactly one parent's bytes" case.
+      * **Test D — ordinary topic proof.** Topic adds/changes its own evidence.json on a normal non-merge commit. Expect: current validation still runs.
+      * **Test E — exact PR #1453 class.** Topic behind main; main carries a closed historical proof bundle the topic never touched; the only real conflict is an unrelated shared file (`package.json`). Old selection logic MUST fail; new selection logic MUST allow the merge while still validating actually-authored files.
+
+      ## Mutation control (required)
+
+      Restore the old "validate every staged evidence.json" selection and prove Test E **fails**. Then restore the fix and prove green. Presence of a test proves nothing; the control must fail on the condition it names.
+
+      ## Security review — independent reviewer must attempt all six
+
+      1. edit another lane's proof after merge;
+      2. make a conflict resolution appear inherited;
+      3. rename/add/delete status tricks;
+      4. stage a proof modification after the merge machinery selected files;
+      5. multi-parent/merge-base case hiding a topic-authored proof edit;
+      6. exploit an untracked/generated hook path to bypass the repo-owned implementation.
+
+      Acceptable only if actually topic-authored proof remains fail-closed.
+
+      ## Explicit prohibitions
+
+      No `git commit --no-verify`. No `HUSKY=0` or equivalent. No temporary hook rename. No edits to [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence. No [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof repair lane. No proof-schema weakening. No branch-protection weakening. No production/runtime/DB changes.
+
+      ## Allowed scope (narrow, derived from discovery)
+
+      * `.claude/hooks/pre-proof-validator.sh`
+      * a new test file for the selection logic plus its `test:ops` wiring in `package.json`
+      * this lane's own `.ops/sync`, lane manifest, and proof paths
+
+      ## Prohibited scope
+
+      * `docs/06_status/proof/UTV2-1729/**` and any other lane's proof bundle
+      * `.github/workflows/**`
+      * production, runtime, or DB code
+
+      ## PR #1453 state while this runs
+
+      The #1453 merge was aborted cleanly. Its worktree is at PR head `5c77131255d6254f4b4dfbb5c5cf00c2c9638fcf`, clean, `0 0` versus its remote branch, not pushed, no `MERGE_HEAD`. The reviewed resolution is preserved as evidence and is deterministic: main's canonical `scripts.test:ops` verbatim plus `scripts/ops/pick-truth-audit.test.ts` (131 tokens, nothing removed). It will be reapplied after this lands.
+
+      Duplicate [UTV2-1786](https://linear.app/unit-talk-v2/issue/UTV2-1786/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) was opened in error and closed as a duplicate of this issue.
+  guardrails:
+    - Control-plane / developer-hook only. No production runtime, DB, delivery,
+      ingestion, SGO, branch-protection weakening, or proof-schema relaxation.
+      Do not special-case
+      [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Incident
+      [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453 was being synchronized with current `main` after [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) landed. The PR-update path produced exactly one real conflict: `package.json`. Both sides changed only `scripts.test:ops`; the reviewed resolution is current main's landed value plus this lane's `scripts/ops/pick-truth-audit.test.ts` entry.
+
+      Committing the otherwise-resolved merge was then refused by the fail-closed pre-proof validator hook because it validated `docs/06_status/proof/UTV2-1729/evidence.json` inherited from `main`. PR #1453 does not own or modify [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof.
+
+      Current main's [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence is authoritative closed-lane history bound to merge `95ec237f32eebd14c2a37cde477202fd553711cb`. It must not be rewritten merely to satisfy a different lane's merge hook.
+
+      The failure occurs because a merge stages content inherited from the other parent and the hook treats every staged `evidence.json` as authored by the pending commit. Thus an old/closed proof shape on main can block every future branch merge even when the branch neither changes nor owns that proof.
+    - |-
+      PM disposition
+      Fix the hook selection semantics. Do NOT bypass the whole hook and do NOT edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof as the remedy.
+    - |-
+      Required contract
+      1. During a normal commit, validate proof files actually authored/changed by the commit.
+      2. During a merge commit, distinguish lane-authored changes from files merely inherited unchanged from the other parent.
+      3. A proof file identical to the authoritative incoming parent (`origin/main` for a lane sync) and not modified by the lane/conflict resolution must not be reclassified as authored by the lane solely because it is staged as part of the merge transaction.
+      4. Any proof file the lane actually modifies, conflict-resolves, adds, or deletes must still be validated fail-closed.
+      5. The hook must still catch a lane that intentionally edits another lane's evidence during the merge.
+      6. No global `--no-verify` escape is introduced as normal recovery.
+      7. No closed-lane proof is rewritten merely to satisfy the hook.
+      8. Behavior must be based on git parent/diff identity, not filename allowlists or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) special-casing.
+    - >-
+      Acceptance tests
+
+      * Synthetic merge: main adds `docs/06_status/proof/OLD/evidence.json`;
+      topic branch never touches it. Merge stages it; hook ignores it as
+      inherited-only and allows commit when the topic's own proof is valid.
+
+      * Same fixture, topic branch modifies the inherited evidence after
+      merge/conflict resolution; hook validates it and refuses invalid content.
+
+      * Topic branch adds/changes its own `evidence.json`; existing validation
+      still runs.
+
+      * Non-merge commits retain current fail-closed validation.
+
+      * Regression reproduces the exact PR #1453 / current-main shape that
+      triggered this incident.
+
+      * Mutation test restoring the old "validate every staged evidence.json"
+      selection makes the regression fail.
+    - |-
+      Sequencing
+      Direct support blocker for [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453. This may be the single governance/reliability support lane alongside production-truth work. Keep [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) unstaffed until #1453 is recovered unless its files overlap, in which case return to PM.
+
+      ---
+    - |-
+      Discovery completed by orchestrator (2026-08-30) — do not redo, do not widen
+      Mechanically located the real implementation and its source of truth:
+
+      * `git config --show-origin --get core.hooksPath` -> `file:.git/config` -> `/home/griff843/code/Unit-Talk-v2/.git/hooks`
+      * `.git/hooks/` contains **only **`.sample` files. **There is no git hook.**
+      * No `.husky/`. No installer, generator, or bootstrap script.
+      * The active implementation is the Claude Code `PreToolUse` hook `.claude/hooks/pre-proof-validator.sh` — git-TRACKED and repo-owned (last changed by [UTV2-1721](https://linear.app/unit-talk-v2/issue/UTV2-1721/governed-harness-refresh-re-admit-pr-1429-without-model-routing-policy)) — registered in tracked `.claude/settings.json` as matcher `Bash`, command `bash .claude/hooks/pre-proof-validator.sh`. Single invoker; no other caller in the repo.
+
+      A repo-owned source therefore exists. Fix it there. Do not hand-edit a local generated copy and do not invent a new hook architecture.
+
+      **Note this is an agent-harness hook, not a git hook** — it gates Claude Code Bash calls containing `git commit`, so it does not affect CI or a human's direct `git` usage. Keep that in mind for security item 6 below.
+    - >-
+      Root cause (exact)
+
+      Line 23: `staged=$(git diff --cached --name-only)`. That diffs the index
+      against `HEAD` only, with no `MERGE_HEAD` awareness. During a merge the
+      index holds the entire merge result, so every file inherited from the
+      incoming parent reads as staged and is validated as lane-authored.
+    - |-
+      Blast radius (measured on current main)
+      **158 of 245 **`evidence.json` files on `main` would trip this hook when merely inherited (most for `ci_sentinels`, many also for `verified_source_sha`). This blocks essentially every `git merge origin/main` into any lane branch — it is not specific to [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+    - >-
+      Suggested mechanism (verify before adopting)
+
+      Git's own combined-diff semantics: a merge commit authors only what
+      differs from **all** parents. Compute the staged set against `HEAD` and
+      against `MERGE_HEAD` and intersect — a file byte-identical to either
+      parent is inherited.
+
+
+      Caveat that must be handled: a conflict resolved by taking one parent's
+      version verbatim ("take theirs") is byte-identical to that parent and
+      would be wrongly excluded, yet Test C requires it to count as authored.
+      `.git/MERGE_MSG` retains a `# Conflicts:` block after `git add` clears the
+      unmerged index entries; union that conflict set into the authored set.
+      Verify against real git behavior before relying on it; if unreliable, find
+      a mechanism that is.
+
+
+      Detect merge state via `MERGE_HEAD`, **worktree-aware**: this repo runs
+      lanes in `git worktree`s where the git dir is NOT `.git/`. Resolve with
+      `git rev-parse --git-dir`.
+    - >-
+      Regression tests (build real throwaway git repos in a temp dir; do not
+      mock git)
+
+      * **Test A — inherited-only proof.** main contains
+      `docs/06_status/proof/OLD/evidence.json` (invalid, e.g. missing
+      `ci_sentinels`). Topic branched before that file existed and changes only
+      unrelated lane-owned content. Merge main into topic. Expect: OLD present
+      in the merge result, topic never authored it, hook does not validate it,
+      commit allowed when topic-authored proof is valid.
+
+      * **Test B — inherited proof deliberately changed.** Same setup, but alter
+      OLD/evidence.json after the merge result is constructed. Expect: hook
+      selects it and fails closed.
+
+      * **Test C — conflict resolution.** Both parents change the same proof
+      path. Expect: resolution counts as authored and is validated. Must cover
+      the "resolved to exactly one parent's bytes" case.
+
+      * **Test D — ordinary topic proof.** Topic adds/changes its own
+      evidence.json on a normal non-merge commit. Expect: current validation
+      still runs.
+
+      * **Test E — exact PR #1453 class.** Topic behind main; main carries a
+      closed historical proof bundle the topic never touched; the only real
+      conflict is an unrelated shared file (`package.json`). Old selection logic
+      MUST fail; new selection logic MUST allow the merge while still validating
+      actually-authored files.
+    - >-
+      Mutation control (required)
+
+      Restore the old "validate every staged evidence.json" selection and prove
+      Test E **fails**. Then restore the fix and prove green. Presence of a test
+      proves nothing; the control must fail on the condition it names.
+    - >-
+      Security review — independent reviewer must attempt all six
+
+      1. edit another lane's proof after merge;
+
+      2. make a conflict resolution appear inherited;
+
+      3. rename/add/delete status tricks;
+
+      4. stage a proof modification after the merge machinery selected files;
+
+      5. multi-parent/merge-base case hiding a topic-authored proof edit;
+
+      6. exploit an untracked/generated hook path to bypass the repo-owned
+      implementation.
+
+
+      Acceptable only if actually topic-authored proof remains fail-closed.
+    - |-
+      Explicit prohibitions
+      No `git commit --no-verify`. No `HUSKY=0` or equivalent. No temporary hook rename. No edits to [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence. No [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof repair lane. No proof-schema weakening. No branch-protection weakening. No production/runtime/DB changes.
+    - >-
+      Allowed scope (narrow, derived from discovery)
+
+      * `.claude/hooks/pre-proof-validator.sh`
+
+      * a new test file for the selection logic plus its `test:ops` wiring in
+      `package.json`
+
+      * this lane's own `.ops/sync`, lane manifest, and proof paths
+    - |-
+      Prohibited scope
+      * `docs/06_status/proof/UTV2-1729/**` and any other lane's proof bundle
+      * `.github/workflows/**`
+      * production, runtime, or DB code
+    - |-
+      PR #1453 state while this runs
+      The #1453 merge was aborted cleanly. Its worktree is at PR head `5c77131255d6254f4b4dfbb5c5cf00c2c9638fcf`, clean, `0 0` versus its remote branch, not pushed, no `MERGE_HEAD`. The reviewed resolution is preserved as evidence and is deterministic: main's canonical `scripts.test:ops` verbatim plus `scripts/ops/pick-truth-audit.test.ts` (131 tokens, nothing removed). It will be reapplied after this lands.
+
+      Duplicate [UTV2-1786](https://linear.app/unit-talk-v2/issue/UTV2-1786/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) was opened in error and closed as a duplicate of this issue.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane
+    title: Pre-proof commit hook validates inherited merge content as if the lane
+      authored it
+    description: |-
+      ## Incident
+
+      [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453 was being synchronized with current `main` after [UTV2-1744](https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe) landed. The PR-update path produced exactly one real conflict: `package.json`. Both sides changed only `scripts.test:ops`; the reviewed resolution is current main's landed value plus this lane's `scripts/ops/pick-truth-audit.test.ts` entry.
+
+      Committing the otherwise-resolved merge was then refused by the fail-closed pre-proof validator hook because it validated `docs/06_status/proof/UTV2-1729/evidence.json` inherited from `main`. PR #1453 does not own or modify [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof.
+
+      Current main's [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence is authoritative closed-lane history bound to merge `95ec237f32eebd14c2a37cde477202fd553711cb`. It must not be rewritten merely to satisfy a different lane's merge hook.
+
+      The failure occurs because a merge stages content inherited from the other parent and the hook treats every staged `evidence.json` as authored by the pending commit. Thus an old/closed proof shape on main can block every future branch merge even when the branch neither changes nor owns that proof.
+
+      ## PM disposition
+
+      Fix the hook selection semantics. Do NOT bypass the whole hook and do NOT edit [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof as the remedy.
+
+      ## Required contract
+
+      1. During a normal commit, validate proof files actually authored/changed by the commit.
+      2. During a merge commit, distinguish lane-authored changes from files merely inherited unchanged from the other parent.
+      3. A proof file identical to the authoritative incoming parent (`origin/main` for a lane sync) and not modified by the lane/conflict resolution must not be reclassified as authored by the lane solely because it is staged as part of the merge transaction.
+      4. Any proof file the lane actually modifies, conflict-resolves, adds, or deletes must still be validated fail-closed.
+      5. The hook must still catch a lane that intentionally edits another lane's evidence during the merge.
+      6. No global `--no-verify` escape is introduced as normal recovery.
+      7. No closed-lane proof is rewritten merely to satisfy the hook.
+      8. Behavior must be based on git parent/diff identity, not filename allowlists or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) special-casing.
+
+      ## Acceptance tests
+
+      * Synthetic merge: main adds `docs/06_status/proof/OLD/evidence.json`; topic branch never touches it. Merge stages it; hook ignores it as inherited-only and allows commit when the topic's own proof is valid.
+      * Same fixture, topic branch modifies the inherited evidence after merge/conflict resolution; hook validates it and refuses invalid content.
+      * Topic branch adds/changes its own `evidence.json`; existing validation still runs.
+      * Non-merge commits retain current fail-closed validation.
+      * Regression reproduces the exact PR #1453 / current-main shape that triggered this incident.
+      * Mutation test restoring the old "validate every staged evidence.json" selection makes the regression fail.
+
+      ## Guardrails
+
+      Control-plane / developer-hook only. No production runtime, DB, delivery, ingestion, SGO, branch-protection weakening, or proof-schema relaxation. Do not special-case [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+
+      ## Sequencing
+
+      Direct support blocker for [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) / PR #1453. This may be the single governance/reliability support lane alongside production-truth work. Keep [UTV2-1783](https://linear.app/unit-talk-v2/issue/UTV2-1783/pre-merge-merge-sha-contract-is-contradictory-between-executor-result) unstaffed until #1453 is recovered unless its files overlap, in which case return to PM.
+
+      ---
+
+      ## Discovery completed by orchestrator (2026-08-30) — do not redo, do not widen
+
+      Mechanically located the real implementation and its source of truth:
+
+      * `git config --show-origin --get core.hooksPath` -> `file:.git/config` -> `/home/griff843/code/Unit-Talk-v2/.git/hooks`
+      * `.git/hooks/` contains **only **`.sample` files. **There is no git hook.**
+      * No `.husky/`. No installer, generator, or bootstrap script.
+      * The active implementation is the Claude Code `PreToolUse` hook `.claude/hooks/pre-proof-validator.sh` — git-TRACKED and repo-owned (last changed by [UTV2-1721](https://linear.app/unit-talk-v2/issue/UTV2-1721/governed-harness-refresh-re-admit-pr-1429-without-model-routing-policy)) — registered in tracked `.claude/settings.json` as matcher `Bash`, command `bash .claude/hooks/pre-proof-validator.sh`. Single invoker; no other caller in the repo.
+
+      A repo-owned source therefore exists. Fix it there. Do not hand-edit a local generated copy and do not invent a new hook architecture.
+
+      **Note this is an agent-harness hook, not a git hook** — it gates Claude Code Bash calls containing `git commit`, so it does not affect CI or a human's direct `git` usage. Keep that in mind for security item 6 below.
+
+      ## Root cause (exact)
+
+      Line 23: `staged=$(git diff --cached --name-only)`. That diffs the index against `HEAD` only, with no `MERGE_HEAD` awareness. During a merge the index holds the entire merge result, so every file inherited from the incoming parent reads as staged and is validated as lane-authored.
+
+      ## Blast radius (measured on current main)
+
+      **158 of 245 **`evidence.json` files on `main` would trip this hook when merely inherited (most for `ci_sentinels`, many also for `verified_source_sha`). This blocks essentially every `git merge origin/main` into any lane branch — it is not specific to [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) or [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so).
+
+      ## Suggested mechanism (verify before adopting)
+
+      Git's own combined-diff semantics: a merge commit authors only what differs from **all** parents. Compute the staged set against `HEAD` and against `MERGE_HEAD` and intersect — a file byte-identical to either parent is inherited.
+
+      Caveat that must be handled: a conflict resolved by taking one parent's version verbatim ("take theirs") is byte-identical to that parent and would be wrongly excluded, yet Test C requires it to count as authored. `.git/MERGE_MSG` retains a `# Conflicts:` block after `git add` clears the unmerged index entries; union that conflict set into the authored set. Verify against real git behavior before relying on it; if unreliable, find a mechanism that is.
+
+      Detect merge state via `MERGE_HEAD`, **worktree-aware**: this repo runs lanes in `git worktree`s where the git dir is NOT `.git/`. Resolve with `git rev-parse --git-dir`.
+
+      ## Regression tests (build real throwaway git repos in a temp dir; do not mock git)
+
+      * **Test A — inherited-only proof.** main contains `docs/06_status/proof/OLD/evidence.json` (invalid, e.g. missing `ci_sentinels`). Topic branched before that file existed and changes only unrelated lane-owned content. Merge main into topic. Expect: OLD present in the merge result, topic never authored it, hook does not validate it, commit allowed when topic-authored proof is valid.
+      * **Test B — inherited proof deliberately changed.** Same setup, but alter OLD/evidence.json after the merge result is constructed. Expect: hook selects it and fails closed.
+      * **Test C — conflict resolution.** Both parents change the same proof path. Expect: resolution counts as authored and is validated. Must cover the "resolved to exactly one parent's bytes" case.
+      * **Test D — ordinary topic proof.** Topic adds/changes its own evidence.json on a normal non-merge commit. Expect: current validation still runs.
+      * **Test E — exact PR #1453 class.** Topic behind main; main carries a closed historical proof bundle the topic never touched; the only real conflict is an unrelated shared file (`package.json`). Old selection logic MUST fail; new selection logic MUST allow the merge while still validating actually-authored files.
+
+      ## Mutation control (required)
+
+      Restore the old "validate every staged evidence.json" selection and prove Test E **fails**. Then restore the fix and prove green. Presence of a test proves nothing; the control must fail on the condition it names.
+
+      ## Security review — independent reviewer must attempt all six
+
+      1. edit another lane's proof after merge;
+      2. make a conflict resolution appear inherited;
+      3. rename/add/delete status tricks;
+      4. stage a proof modification after the merge machinery selected files;
+      5. multi-parent/merge-base case hiding a topic-authored proof edit;
+      6. exploit an untracked/generated hook path to bypass the repo-owned implementation.
+
+      Acceptable only if actually topic-authored proof remains fail-closed.
+
+      ## Explicit prohibitions
+
+      No `git commit --no-verify`. No `HUSKY=0` or equivalent. No temporary hook rename. No edits to [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) evidence. No [UTV2-1729](https://linear.app/unit-talk-v2/issue/UTV2-1729/proof-producing-contract-is-broken-repair-the-canonical-generator-so) proof repair lane. No proof-schema weakening. No branch-protection weakening. No production/runtime/DB changes.
+
+      ## Allowed scope (narrow, derived from discovery)
+
+      * `.claude/hooks/pre-proof-validator.sh`
+      * a new test file for the selection logic plus its `test:ops` wiring in `package.json`
+      * this lane's own `.ops/sync`, lane manifest, and proof paths
+
+      ## Prohibited scope
+
+      * `docs/06_status/proof/UTV2-1729/**` and any other lane's proof bundle
+      * `.github/workflows/**`
+      * production, runtime, or DB code
+
+      ## PR #1453 state while this runs
+
+      The #1453 merge was aborted cleanly. Its worktree is at PR head `5c77131255d6254f4b4dfbb5c5cf00c2c9638fcf`, clean, `0 0` versus its remote branch, not pushed, no `MERGE_HEAD`. The reviewed resolution is preserved as evidence and is deterministic: main's canonical `scripts.test:ops` verbatim plus `scripts/ops/pick-truth-audit.test.ts` (131 tokens, nothing removed). It will be reapplied after this lands.
+
+      Duplicate [UTV2-1786](https://linear.app/unit-talk-v2/issue/UTV2-1786/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) was opened in error and closed as a duplicate of this issue.
+    captured_at: 2026-08-30T09:08:23.782Z
+    description_sha256: 5e75dae7b00f1a9671b3621d150fec40868209fd59d65c4bb0a850fd20f4643e
+  contract_hash: 9c8aaa9b5a4a1f07625469c7891f2c7fc38009546b52a81a4d48fb3d471f906f

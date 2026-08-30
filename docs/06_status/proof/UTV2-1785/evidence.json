@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1785",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Pre-proof hook validates only the files a commit authors",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-30T11:40:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b36cbfa532422c56008db44c3764d60c5a7acb7a",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. Re-anchored for Bounce 1: the P1 cross-repository fail-open fix moved the anchor from 69b69d528b3919c072e529d4e23a5490690cb1c4. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T11:40:00Z",
+    "previous_verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4"
+  },
+  "verdict": {
+    "selection_validates_only_authored_files": true,
+    "no_check_weakened": true,
+    "detection_is_superset_of_prior_behaviour": true,
+    "statement": "The pre-proof validator now validates the files a commit authors, in the repository that commit targets. Inherited-unchanged content is exempt; every other path -- including a conflict resolved to bytes equal to one parent, a post-merge edit, a delete, and a rename -- is still validated. Global options that select a repository (-C, --git-dir, --work-tree) are resolved and honoured, and commit forms whose target cannot be safely resolved are refused rather than guessed. Three pre-existing fail-open gaps were closed; two further fail-opens introduced or missed by earlier rounds -- shell-wrapped command detection and cross-repository resolution -- were found in adversarial review and PM review respectively, and fixed in-lane.",
+    "validates_repository_the_commit_targets": true
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-check.test.ts",
+      "tests": 51,
+      "pass": 51,
+      "fail": 0,
+      "skipped": 0
+    },
+    "ops_suite": {
+      "command": "pnpm test:ops",
+      "tests": 2653,
+      "suites": 20,
+      "pass": 2653,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "definition": "pnpm verify:static && pnpm test:live-db",
+      "verify_static_leg": "PASS",
+      "test_live_db_leg": "REFUSED locally by ci:assert-staging under production containment (SUPABASE_URL=http://127.0.0.1:1); the writable-DB receipt is produced inside the required CI verify job against staging xskgrzbteyqdufktjrjx, which is the only sanctioned source.",
+      "lane_has_live_db_surface": false
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1785",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": [],
+      "artifacts_required": []
+    }
+  },
+  "mutation_controls": [
+    {
+      "name": "PR #1453 regression allows inherited history while the legacy staged-file mutation blocks it",
+      "mutation": "Replace the # BEGIN/END MERGE-AWARE SELECTION block with the pre-fix `git diff --cached --name-only` selection.",
+      "shipped_hook_exit": 0,
+      "mutant_exit": 2,
+      "non_vacuous": true
+    },
+    {
+      "name": "the raw-command fallback is load-bearing for untokenizable commands",
+      "mutation": "Delete the raw-command fallback block; drive it with `git commit -m \"unterminated`, which shlex cannot lex.",
+      "shipped_hook_exit": 2,
+      "mutant_exit": 0,
+      "non_vacuous": true
+    },
+    {
+      "name": "cross-repository resolution is load-bearing, not decorative",
+      "mutation": "Remove the -C application from target resolution so the hook resolves from its own cwd, reproducing the reported P1 shape.",
+      "shipped_hook_exit": 2,
+      "mutant_exit": 0,
+      "non_vacuous": true
+    }
+  ],
+  "adversarial_review": {
+    "performed_by": "orchestrator, independent of the executor",
+    "round_1": {
+      "vectors_attempted": 6,
+      "bypassed_after_fix": 0,
+      "finding": "Argv tokenization silently stopped engaging on shell-wrapped commits (bash -c / sh -c / eval) that the prior substring match caught. Fixed in-lane."
+    },
+    "round_2": {
+      "trigger": "PM review, Bounce 1, P1 cross-repository fail-open",
+      "reproduced_before_fix": "cwd A, invalid proof staged only in B, `git -C <B> commit -m test` -> exit 0",
+      "probes_after_fix": 13,
+      "bypassed": 0,
+      "covered": [
+        "relative -C",
+        "chained -C",
+        "attached -C<path>",
+        "-C through a symlink",
+        "-C into a path containing a space",
+        "-C with an interleaved -c k=v",
+        "nested wrapper with inner -C",
+        "-C before a -- terminator",
+        "--work-tree alone",
+        "bare repository target",
+        "control: clean repo plain commit",
+        "control: non-commit verb",
+        "control: unrelated command"
+      ]
+    }
+  },
+  "scope_refusals": [
+    "package.json was not touched; scripts/ops/proof-check.test.ts was already wired into test:ops.",
+    "UTV2-1729 evidence was not modified and is not special-cased.",
+    "No proof-schema weakening, no workflow change, no branch-protection change, no --no-verify or equivalent bypass."
+  ],
+  "known_gaps": [
+    "A git alias for commit (e.g. a user-configured `git ci`) is not detected. This is unchanged from the pre-fix hook and outside the authorized scope of this lane.",
+    "Because unresolvable targets are now refused, an ordinary shell command whose text contains `git -C <path> commit` for a path that does not exist is blocked as well. This is the conservative branch behaving as specified; it was observed live during this lane and is covered by regressions."
+  ]
+}
