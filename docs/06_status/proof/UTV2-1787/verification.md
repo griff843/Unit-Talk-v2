@@ -31,6 +31,12 @@ result: passed_with_staging_db_pending
 $ pnpm verify:static
 PASS: env:check, lint, type-check, build, monorepo tests, smart-form verification, command checks
 
+$ pnpm type-check
+PASS
+
+$ pnpm test
+PASS
+
 $ pnpm exec tsx --test apps/api/src/smart-form-validation.test.ts
 PASS: 14/14
 
