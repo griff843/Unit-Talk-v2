@@ -7,9 +7,16 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1777-merged-state-bridge",
   "branch": "codex/utv2-1777-merged-state-bridge",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "a10b8189cfb7dbbf03e2c818393673bccd835933",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1458",
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/lanes/UTV2-1729.json",
+    "docs/06_status/proof/UTV2-1777/.gitkeep",
+    "docs/06_status/proof/UTV2-1777/diff-summary.md",
+    "docs/06_status/proof/UTV2-1777/evidence.json",
+    "docs/06_status/proof/UTV2-1777/model-routing.json",
+    "docs/06_status/proof/UTV2-1777/verification.md"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1777.yml",
     "docs/06_status/lanes/UTV2-1729.json",
@@ -22,14 +29,22 @@
     "docs/06_status/proof/UTV2-1777/evidence.json",
     "docs/06_status/proof/UTV2-1777/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-29T20:05:57.248Z",
-  "heartbeat_at": "2026-08-29T20:27:30.945Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-30T02:10:30.795Z",
+  "closed_at": "2026-08-30T02:10:30.795Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1777-merged-state-bridge.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-30T02:10:28.105Z",
+      "verdict": "pass",
+      "merge_sha": "a10b8189cfb7dbbf03e2c818393673bccd835933",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

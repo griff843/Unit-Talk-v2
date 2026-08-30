@@ -8,11 +8,11 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-29T22:05:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "a10b8189cfb7dbbf03e2c818393673bccd835933",
     "verified_source_sha": "37da0de239ee528783221b3201c6329bb63f98f6",
     "verified_source_note": "The last non-proof commit on this branch after the sanctioned rebase onto current main. It carries the single canonical record-merge write this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets merge_sha. merge_sha is explicitly null pre-merge rather than a branch SHA or a stand-in token.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "37da0de239ee528783221b3201c6329bb63f98f6",
+    "current_pr_head_sha": "4a7669ac2800566e5cce503f99fcc0790feecf6a",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
