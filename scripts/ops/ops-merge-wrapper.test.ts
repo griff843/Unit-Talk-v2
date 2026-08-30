@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import {
   buildExtendedCommand,
   runExtendedMergeWrapper,
@@ -199,7 +200,7 @@ test('buildExtendedCommand constructs git-merge-main command', () => {
   const cmd = buildExtendedCommand('git-merge-main', {});
   assert.deepStrictEqual(cmd, {
     command: 'git',
-    args: ['merge', '--ff-only', 'origin/main'],
+    args: ['merge', '--no-ff', 'origin/main'],
     deferred: false,
   });
 });
@@ -635,7 +636,7 @@ test('git-merge-main releases the lock after command failure', () => {
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
       HEAD_PROBE_CALL,
-      ['git', 'merge', '--ff-only', 'origin/main'],
+      ['git', 'merge', '--no-ff', 'origin/main'],
       STASH_POP_CALL,
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
@@ -745,7 +746,7 @@ test('git-merge-main completes successfully and releases the lock', () => {
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
       HEAD_PROBE_CALL,
-      ['git', 'merge', '--ff-only', 'origin/main'],
+      ['git', 'merge', '--no-ff', 'origin/main'],
       STASH_POP_CALL,
       DIFF_BEFORE_CALL,
       DIFF_AFTER_CALL,
@@ -1435,4 +1436,192 @@ test('merge-train timing: a 3-PR batch completes in under half the simulated ser
       `expected train (${trainDurationMs}ms) to complete in under half the serial baseline (${serialDurationMs}ms)`,
     );
   });
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1790 — git-merge-main against a REAL, genuinely diverged repository
+//
+// The mocked-runner tests above prove the command *shape* and the mutex
+// contract, but they cannot prove the command actually works: a runner that
+// returns status 0 for anything would have happily "passed" the broken
+// `--ff-only` build for as long as it existed. These tests run the real git
+// binary against real divergent history, which is the only thing that
+// distinguishes a merge that works from one that cannot.
+// ---------------------------------------------------------------------------
+
+function git(cwd: string, ...args: string[]): string {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+  if (r.status !== 0) {
+    throw new Error(`git ${args.join(' ')} failed in ${cwd}: ${r.stderr || r.stdout}`);
+  }
+  return r.stdout.trim();
+}
+
+/**
+ * Build a repository whose current branch has genuinely diverged from
+ * `origin/main`: both refs share a base commit and each has a commit the other
+ * does not. `conflicting` decides whether the two sides touch the same line.
+ *
+ * `origin/main` is created as a real remote-tracking ref so the wrapper's
+ * `origin/main` revision resolves exactly as it does in a cloned repo.
+ */
+function withDivergedRepo(
+  opts: { conflicting: boolean },
+  run: (repo: { dir: string; baseSha: string; branchSha: string; mainSha: string }) => void,
+): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-diverged-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+
+    // The wrapper autostashes these two pathspecs; they must exist as real
+    // tracked paths or `git stash push -- <pathspec>` fails on no match.
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'shared.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // Side 1: the "remote" main advances.
+    fs.writeFileSync(path.join(dir, 'shared.txt'), 'base\nfrom-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    const mainSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', mainSha);
+
+    // Side 2: the lane branch advances from the SAME base, so the two diverge.
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    if (opts.conflicting) {
+      // Same line as main's change -> a real content conflict.
+      fs.writeFileSync(path.join(dir, 'shared.txt'), 'base\nfrom-lane\n');
+    } else {
+      fs.writeFileSync(path.join(dir, 'lane-only.txt'), 'lane work\n');
+    }
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane advances');
+    const branchSha = git(dir, 'rev-parse', 'HEAD');
+
+    // Precondition: genuinely diverged, so --ff-only could never succeed here.
+    const counts = git(dir, 'rev-list', '--left-right', '--count', 'origin/main...HEAD');
+    assert.strictEqual(counts.replace(/\s+/u, ' '), '1 1', 'fixture must be genuinely diverged');
+
+    run({ dir, baseSha, branchSha, mainSha });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)', () => {
+  withDivergedRepo({ conflicting: false }, ({ dir, branchSha, mainSha }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(
+        result.ok,
+        true,
+        `expected the history-preserving merge to succeed; got ${result.code}: ${result.message ?? ''} ${result.stderr ?? ''}`,
+      );
+      assert.strictEqual(result.code, 'merge_wrapper_completed');
+
+      // Criterion: no history rewriting. Both pre-existing heads must still
+      // exist unchanged and both must be parents of the new merge commit.
+      const head = git(dir, 'rev-parse', 'HEAD');
+      assert.notStrictEqual(head, branchSha, 'a merge commit should have been created');
+      const parents = git(dir, 'rev-list', '--parents', '-n', '1', 'HEAD').split(/\s+/u).slice(1);
+      assert.deepStrictEqual(
+        parents.sort(),
+        [branchSha, mainSha].sort(),
+        'merge commit parents must be the two pre-existing heads, byte-identical',
+      );
+
+      // Both original commits remain reachable and their SHAs are untouched.
+      assert.strictEqual(git(dir, 'rev-parse', `${branchSha}^{commit}`), branchSha);
+      assert.strictEqual(git(dir, 'rev-parse', `${mainSha}^{commit}`), mainSha);
+
+      // Content from both sides survived.
+      assert.ok(fs.existsSync(path.join(dir, 'lane-only.txt')), 'lane-side file preserved');
+      assert.match(fs.readFileSync(path.join(dir, 'shared.txt'), 'utf8'), /from-main/u);
+
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released', 'mutex must be released');
+    });
+  });
+});
+
+test('UTV2-1790: git-merge-main fails actionably on a real conflict and releases the mutex', () => {
+  withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false, 'a genuine content conflict must not report success');
+      // Actionable: the caller can see it was a conflict, not a bare status code.
+      const diagnostic = `${result.message ?? ''} ${result.stdout ?? ''} ${result.stderr ?? ''}`;
+      assert.match(
+        diagnostic,
+        /conflict|CONFLICT|Automatic merge failed/u,
+        `failure must name the conflict; got: ${diagnostic}`,
+      );
+
+      // Fail-safe: the mutex is released even though the command failed.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released', 'mutex must be released on failure');
+
+      // The lane's own commit is not rewritten or lost by the failed attempt.
+      assert.strictEqual(git(dir, 'rev-parse', `${branchSha}^{commit}`), branchSha);
+    });
+  });
+});
+
+test('UTV2-1790: --no-ff still records a merge commit when the branch is merely behind', () => {
+  // Guards the reason this is `--no-ff` rather than a bare `git merge`: on a
+  // non-diverged branch a bare merge fast-forwards and silently moves the
+  // branch with no merge commit, making the verb's effect depend on divergence
+  // state. The operation must behave identically in both cases.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-behind-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\ntwo\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    const mainSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', mainSha);
+    // Branch sits at base: strictly behind, not diverged.
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+      assert.strictEqual(result.ok, true, `expected success; got ${result.code}: ${result.message ?? ''}`);
+      const merges = git(dir, 'rev-list', '--merges', 'HEAD');
+      assert.notStrictEqual(merges, '', 'a merge commit must be recorded even when merely behind');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

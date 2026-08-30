@@ -91,9 +91,24 @@ export function buildExtendedCommand(
 ): { command: 'git' | 'gh'; args: string[]; deferred: boolean } {
   switch (operation) {
     case 'git-merge-main':
+      // UTV2-1790: this was `--ff-only`, which cannot merge a diverged branch
+      // by definition -- so the one verb `main-sync` recommends *for* a
+      // diverged branch ("preserves history and SHAs") failed on exactly the
+      // condition it exists for. Both sanctioned exits dead-ended and the only
+      // operable verb left was `git-rebase-main`, which rewrites history and
+      // moves the head SHA, invalidating pm-verdict, t1-approved evidence and
+      // executor-result. UTV2-1678 removed the *silent* rebase substitution;
+      // leaving this unusable reintroduced the same risk by omission.
+      //
+      // `--no-ff` always records a merge commit: existing commit SHAs on both
+      // sides are preserved byte-for-byte and nothing is replayed. It is also
+      // deliberately not a bare `git merge` -- on a branch that happens to be
+      // merely behind, a bare merge would fast-forward and silently move the
+      // branch with no merge commit, making the operation's effect depend on
+      // divergence state. `--no-ff` behaves identically in both cases.
       return {
         command: 'git',
-        args: ['merge', '--ff-only', 'origin/main'],
+        args: ['merge', '--no-ff', 'origin/main'],
         deferred: false,
       };
     case 'git-rebase-main':
