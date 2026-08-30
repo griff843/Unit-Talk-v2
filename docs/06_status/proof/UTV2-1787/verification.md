@@ -1,6 +1,6 @@
 # PROOF: UTV2-1787
 
-MERGE_SHA: b18a0b829d1804eb604cf03dacba2b0454ae6431
+MERGE_SHA: pending merge
 
 > Pre-merge the merge anchor is intentionally empty; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
