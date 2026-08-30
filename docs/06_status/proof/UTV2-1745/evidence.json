@@ -132,26 +132,82 @@
     "lane_tests": {
       "command": "pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts",
       "status": "PASS",
-      "tests": 4,
+      "tests": 23,
       "fail": 0,
-      "detail": "Wired into test:ops under a PM-authorized scope extension. Re-run on the synchronized head 149b60ee: 4 pass, 0 fail."
+      "detail": "Wired into test:ops under a PM-authorized scope extension. 23 tests: the original 4; 7 covering the P1-A game_result identity proof (wrong event, wrong participant, incompatible market, proven triple, event-level null participant, a negative control proving the wrong-event row would otherwise have agreed, and a structural non-circularity control using a decoy event that exists in the events map); 7 covering the P1-B canonical closing-line source (table identity, closing cutoff exclusion, latest-eligible selection, event-level null participant, participant-scoped matching, pinnacle-then-consensus preference, and a negative control reverting the lookup to provider_offers); 3 covering cohort and report integrity (superseded correction, deterministic alias priority, measured read_only transport evidence); and 2 isolating the P1-A hardening mechanisms individually, because the combined attack is blocked by either one alone and a single scenario cannot show that both are load-bearing."
     },
     "suite": {
       "command": "pnpm test:ops",
       "status": "PASS",
-      "tests": 2657,
+      "tests": 2676,
       "fail": 0,
-      "detail": "Full ops suite re-run on the synchronized head 149b60ee."
+      "detail": "Full ops suite re-run after the round-2 P1-A/P1-B corrections: 2676 pass, 0 fail (2657 before the lane, +19 new lane tests)."
     },
     "static_verification": {
       "command": "pnpm verify:static",
       "status": "PASS",
-      "detail": "Re-run on the synchronized head 149b60ee."
+      "detail": "Re-run after the round-2 corrections."
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
       "status": "PASS",
       "detail": "Changed files: 11. Rules matched: none."
+    },
+    "mutation_controls": {
+      "method": "Each mutation was applied to scripts/ops/pick-truth-audit.ts in isolation, the suite re-run, and the file restored byte-exact. A control that cannot fail proves nothing. An earlier round of this battery left two mutations SURVIVING \u2014 removing the event-scoped drift guard, and removing market-identity conflict detection \u2014 because the single combined scenario was blocked by either mechanism alone; the two isolating tests above were added specifically to kill them.",
+      "baseline": "23 pass, 0 fail",
+      "results": [
+        {
+          "mutation": "identity check removed from the grade ladder",
+          "result": "17 pass, 6 fail"
+        },
+        {
+          "mutation": "game_result event match dropped",
+          "result": "20 pass, 3 fail"
+        },
+        {
+          "mutation": "game_result participant match dropped",
+          "result": "21 pass, 2 fail"
+        },
+        {
+          "mutation": "game_result market match dropped",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "event-scoped drift guard removed",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "market identity conflict detection removed",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "closing table reverted to provider_offers",
+          "result": "21 pass, 2 fail"
+        },
+        {
+          "mutation": "snapshot_at closing cutoff dropped",
+          "result": "21 pass, 2 fail"
+        },
+        {
+          "mutation": "pinnacle bookmaker preference pass dropped",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "superseded-correction check removed",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "alias priority ordering removed (last-wins Map)",
+          "result": "22 pass, 1 fail"
+        },
+        {
+          "mutation": "read_only reverted to asserted literals",
+          "result": "22 pass, 1 fail"
+        }
+      ],
+      "surviving_mutations": 0,
+      "restored": "23 pass, 0 fail"
     }
   },
   "scope_refusals": [
@@ -172,5 +228,188 @@
     ],
     "inherited_proof_revalidated": false,
     "hook_behaviour": "The UTV2-1785 repaired pre-proof validator allowed this merge commit without --no-verify and without editing any inherited historical proof. A positive control that corrupted this lane's own evidence.json was blocked with exit 2 naming that file, then reverted byte-exact."
+  },
+  "corrections": {
+    "P1_A": {
+      "defect": "resolveEvent consulted gameResult.event_id first, so the referenced game_results row manufactured the event identity it was then validated against; the grade ladder performed no identity validation at all before recomputing. A wrong-but-real game_results id could produce an apparent grading agreement.",
+      "correction": "buildPickIdentityContext establishes event, participant and market identity from the pick, its metadata, its market_universe provenance row, the canonical events/participants tables and provider_market_aliases. It takes no game result argument. validateGameResultIdentity then validates the referenced row against that context and fails closed.",
+      "named_reasons": [
+        "game_result_event_mismatch",
+        "game_result_participant_mismatch",
+        "game_result_market_mismatch",
+        "game_result_identity_unverifiable"
+      ],
+      "scope": "scripts/ops/pick-truth-audit.ts only; read-only; no packages/db, apps/api, migration or runtime change",
+      "round_2_hardening": [
+        "isEventScopedTotalPick now ports clv-service.ts's drift guard in full: a pick whose market_type_id is a game total but which carries player_* market, participant_id, or player/playerId/providerParticipantId metadata is NOT treated as event-scoped. Without the guard a drifted pick was allowed a null-participant game_results row and could still agree.",
+        "market identity candidates are narrowed to {pick-side provider market key, canonical market key} instead of a union of every claim the pick makes, and any additional, non-aliasable market claim sets marketIdentityConflict, which fails closed as game_result_identity_unverifiable.",
+        "provider market alias resolution is deterministic: buildProviderMarketKeyIndex sorts by production's providerMarketKeyPriority then localeCompare instead of last-wins Map insertion, and the alias page limit was raised from 4x to 8x per market_type_id so an added alias cannot silently truncate the winner."
+      ]
+    },
+    "P1_B": {
+      "defect": "the CLV fallback read the legacy/frozen provider_offers surface with a provider_key/is_closing filter and no closing-time cutoff, which is not what production resolves against.",
+      "correction": "the lookup reads provider_offer_history and mirrors DatabaseProviderOfferRepository.findClosingLine filter-for-filter (provider event identity, provider market identity, participant eq/is-null semantics, snapshot_at <= before, order snapshot_at desc limit 1) plus apps/api/src/clv-service.ts's pinnacle-then-consensus bookmaker preference with the market_universe fallback last. The cutoff mirrors production's readEventStartTime: metadata.starts_at, else event_date + 'T23:59:59Z'.",
+      "production_reference": [
+        "packages/db/src/runtime-repositories.ts DatabaseProviderOfferRepository.findClosingLine",
+        "apps/api/src/clv-service.ts closing-line resolution order and PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS",
+        "apps/api/src/clv-service.ts readEventStartTime"
+      ],
+      "scope": "scripts/ops/pick-truth-audit.ts only; read-only; no packages/db, apps/api, migration or runtime change",
+      "round_2_hardening": [
+        "the CLV path now mirrors clv-service.ts's resolution order exactly, including the market_universe provenance short-circuit that runs BEFORE event context, cutoff and participant resolution, and the moneyline side gate (moneyline_side_not_independently_resolvable).",
+        "the offer-lookup market key is resolved the way production resolves it \u2014 through the alias table only, never through pick metadata \u2014 via resolveProductionMarketKey.",
+        "the late market_universe provider-key fallback is modelled explicitly rather than folded into the primary lookup."
+      ]
+    },
+    "cohort_and_report_integrity": {
+      "defect": "three report fields asserted rather than measured, and the cohort ignored corrections that supersede a sampled settlement.",
+      "corrections": [
+        "settlement_records rows whose id appears as a later row's corrects_id are collected and fail closed as settlement_superseded_by_correction. corrects_id IS NULL only excludes the corrections themselves, not the settlements they supersede. Measured incidence in this sample: 0.",
+        "read_only is now derived from ReadOnlyPostgrestClient.transportEvidence(), a tally of the HTTP methods actually issued, instead of the literals database_writes_performed: 0 / write_method_reachable: false / transport_method: 'GET'.",
+        "runtime_proof.queries[2].row_count reports closing rows actually returned rather than restating the CLV resolvable count.",
+        "structural.affected_picks counts distinct pick ids rather than itemised entries.",
+        "readByIds no longer caps a non-unique-column lookup at one row per id; events-by-external_id and the corrections lookup request 8x headroom, so a shared external_id cannot truncate into a false orphaned_event."
+      ],
+      "scope": "scripts/ops/pick-truth-audit.ts only; read-only"
+    }
+  },
+  "post_fix_validation": {
+    "measured_at": "2026-08-30",
+    "relationship_to_historical_evidence": "Separate from and additional to the 2026-08-26 population decomposition in runtime_proof, which is unchanged and remains the historical measurement. The two must not be conflated.",
+    "method": "Direct replay. The 200-settlement cohort and every row the loader reads (picks, game_results, events, participants, market_universe, provider_market_aliases, and the pre-cutoff provider_offer_history snapshots) were exported read-only from production zfzdnfwdarxucxtaojxm through the Supabase MCP read path, then both the pre-fix and the corrected buildPickTruthAuditReport were executed over that identical dataset. Both columns therefore come from running the shipped code, not from a SQL re-derivation of its semantics. No write of any kind was issued.",
+    "method_change_note": "An earlier revision of this block reported the pre-fix CLV column as 44 resolvable (22%), obtained by re-deriving the audit's semantics in SQL. That figure is superseded: executing the pre-fix code itself over the same rows yields 4 resolvable. The direct replay is authoritative because it exercises the real resolution order rather than a restatement of it.",
+    "writes_performed": 0,
+    "cohort": "settlement_records where status='settled', source='grading', corrects_id IS NULL, result IN ('win','loss','push'), evidence_ref LIKE 'game-result:%'",
+    "population": {
+      "grading_settlements": 8620,
+      "independently_auditable": 1571,
+      "sampled": 200
+    },
+    "closing_line_evidence": {
+      "table": "provider_offer_history",
+      "rows_returned_to_the_corrected_lookup": 126,
+      "pinnacle_rows": 17,
+      "triples_requested": 95,
+      "triples_with_at_least_one_eligible_snapshot": 94,
+      "legacy_provider_offers_rows_total": 8191206,
+      "legacy_provider_offers_rows_for_sampled_events": 0,
+      "note": "provider_offers holds 8,191,206 rows but none for any provider_event_id in the sample, which is why the pre-fix lookup resolved almost nothing. The one triple with no eligible snapshot was re-queried with no lower time bound and genuinely has no pre-cutoff row."
+    },
+    "grading": {
+      "old": {
+        "resolvable": 200,
+        "agreements": 200,
+        "disagreements": 0,
+        "unresolvable": 0,
+        "agreement_rate_pct": 100.0
+      },
+      "corrected": {
+        "resolvable": 100,
+        "agreements": 100,
+        "disagreements": 0,
+        "unresolvable": 100,
+        "agreement_rate_pct": 100.0
+      },
+      "corrected_unresolvable_by_reason": {
+        "game_result_identity_unverifiable": 100,
+        "game_result_event_mismatch": 0,
+        "game_result_participant_mismatch": 0,
+        "game_result_market_mismatch": 0
+      },
+      "unverifiable_breakdown": {
+        "no_pick_side_event_identity": 99,
+        "no_pick_side_market_identity": 1
+      },
+      "apparent_agreements_revoked": 100,
+      "transitions": {
+        "resolvable -> game_result_identity_unverifiable": 100,
+        "resolvable -> resolvable": 100
+      },
+      "interpretation": "Half of the sampled picks previously produced an apparent independent agreement that the corrected audit refuses to claim, because the referenced game_results row cannot be proven to belong to the pick. No sampled pick produced an event, participant or market MISMATCH: the failure is absent pick-side identity, not contradicted identity."
+    },
+    "clv": {
+      "old": {
+        "resolvable": 4,
+        "unresolvable": 196,
+        "resolvability_rate_pct": 2.0,
+        "failure_classes": {
+          "missing_closing_line": 193,
+          "missing_priced_side": 2,
+          "missing_participant_context": 1
+        }
+      },
+      "corrected": {
+        "resolvable": 98,
+        "unresolvable": 102,
+        "resolvability_rate_pct": 49.0,
+        "failure_classes": {
+          "missing_event_context": 99,
+          "missing_priced_side": 2,
+          "missing_closing_line": 1
+        }
+      },
+      "persisted_computed_but_currently_unresolvable": {
+        "old": 176,
+        "corrected": 82
+      },
+      "transitions": [
+        {
+          "old": "missing_closing_line",
+          "corrected": "missing_event_context",
+          "n": 98
+        },
+        {
+          "old": "missing_closing_line",
+          "corrected": "resolvable",
+          "n": 94
+        },
+        {
+          "old": "resolvable",
+          "corrected": "resolvable",
+          "n": 4
+        },
+        {
+          "old": "missing_priced_side",
+          "corrected": "missing_priced_side",
+          "n": 2
+        },
+        {
+          "old": "missing_closing_line",
+          "corrected": "missing_closing_line",
+          "n": 1
+        },
+        {
+          "old": "missing_participant_context",
+          "corrected": "missing_event_context",
+          "n": 1
+        }
+      ],
+      "interpretation": "Reading the canonical source raises CLV resolvability from 2% to 49%. The residual 51% is almost entirely one defect \u2014 absent pick-side event identity (99 of 102) \u2014 not absent closing-line data, which now accounts for a single pick."
+    },
+    "structural": {
+      "old": {
+        "orphaned_event": 0,
+        "missing_participant": 1,
+        "unresolvable_market": 0,
+        "affected_picks": 1
+      },
+      "corrected": {
+        "orphaned_event": 99,
+        "missing_participant": 4,
+        "unresolvable_market": 4,
+        "affected_picks": 100
+      }
+    },
+    "verdict_impact": {
+      "old": {
+        "can_currently_produce_trustworthy_pick": false
+      },
+      "corrected": {
+        "can_currently_produce_trustworthy_pick": false
+      },
+      "changed": false,
+      "stated_cause_changed": true,
+      "note": "The answer is unchanged, but the reason it is unchanged is now truthful. Before the correction the audit reported a fully trustworthy grading path (200/200 agreement) blocked only by missing closing-line data. After the correction the grading path is shown to be independently unverifiable for half the sample, and the CLV shortfall is attributed to the same root cause \u2014 absent pick-side event identity \u2014 rather than to the closing-line store."
+    }
   }
 }

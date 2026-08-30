@@ -128,12 +128,25 @@ export class ReadOnlyPostgrestClient {
   readonly #restBase: URL;
   readonly #key: string;
   readonly #fetch: FetchLike;
+  /** Measured transport evidence. Asserting `writes: 0` proves nothing; counting does. */
+  readonly #methodsUsed = new Map<string, number>();
 
   constructor(baseUrl: string, key: string, fetchImpl: FetchLike = fetch) {
     const normalized = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
     this.#restBase = new URL('rest/v1/', normalized);
     this.#key = key;
     this.#fetch = fetchImpl;
+  }
+
+  /** Every HTTP method this client has actually issued, with its call count. */
+  transportEvidence(): { methods: Record<string, number>; requests: number } {
+    const methods: Record<string, number> = {};
+    let requests = 0;
+    for (const [method, count] of this.#methodsUsed) {
+      methods[method] = count;
+      requests += count;
+    }
+    return { methods, requests };
   }
 
   async read<T>(request: ReadRequest): Promise<ReadResponse<T>> {
@@ -153,6 +166,7 @@ export class ReadOnlyPostgrestClient {
     };
     if (request.exactCount) headers['Prefer'] = 'count=exact';
 
+    this.#methodsUsed.set('GET', (this.#methodsUsed.get('GET') ?? 0) + 1);
     const response = await this.#fetch(url, {
       method: 'GET',
       headers,
@@ -204,6 +218,11 @@ function asRecord(value: unknown): JsonRecord {
     : {};
 }
 
+/** `??` falls back only on null/undefined; an empty string must not survive as an identity. */
+function nonEmpty(value: string | null | undefined): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
 function readString(record: JsonRecord, key: string): string | null {
   const value = record[key];
   return typeof value === 'string' && value.trim().length > 0
@@ -253,50 +272,134 @@ function gameResultReference(settlement: SettlementRow): {
   };
 }
 
-function isGameTotal(pick: PickRow): boolean {
+/**
+ * Markets that production treats as event-scoped when it queries the closing
+ * line: apps/api/src/clv-service.ts PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.
+ * Mirrored verbatim — no synonyms, no normalization, no metadata fallback.
+ */
+const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
+  'game_total_ou',
+  '1h_total_ou',
+  '2h_total_ou',
+]);
+
+/** Production's canonical market key: `pick.market_type_id ?? pick.market`. */
+export function canonicalMarketKey(pick: PickRow): string {
+  return pick.market_type_id ?? pick.market;
+}
+
+export function isMoneyline(pick: PickRow): boolean {
+  return pick.market === 'moneyline';
+}
+
+/**
+ * Whether the closing-line lookup must send a null participant. Exact mirror of
+ * apps/api/src/clv-service.ts:
+ *   isMoneyline || PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey)
+ * Production applies NO drift guard here, so neither does the audit: sending a
+ * participant where production sends null would deny CLV production resolves.
+ */
+export function usesNullParticipantForClosingLookup(pick: PickRow): boolean {
+  return isMoneyline(pick) || PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey(pick));
+}
+
+/**
+ * Whether a null `game_results.participant_id` is the CORRECT value for this
+ * pick. Exact port of production's isEventScopedTotalPick
+ * (apps/api/src/clv-service.ts), drift guard included: historical data contains
+ * player props incorrectly tagged `game_total_ou`, and treating one as an event
+ * total would let the game's own total row masquerade as the player's result.
+ */
+export function isEventScopedTotalPick(pick: PickRow): boolean {
+  if (!PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey(pick))) {
+    return false;
+  }
   const metadata = asRecord(pick.metadata);
-  const candidates = [
-    pick.market,
-    pick.market_type_id,
-    readString(metadata, 'marketTypeId'),
-  ]
-    .filter((value): value is string => Boolean(value))
-    .map((value) => value.toLowerCase().replace(/[.-]/g, '_'));
-  return candidates.some((value) =>
-    value === 'game_total' || value === 'game_total_ou' || value === 'total' || value === 'totals'
+  return !(
+    pick.market.startsWith('player_') ||
+    pick.participant_id ||
+    readString(metadata, 'player') ||
+    readString(metadata, 'playerId') ||
+    readString(metadata, 'providerParticipantId')
   );
 }
 
-function resolveProviderMarketKey(
+/**
+ * Closing cutoff, mirroring production's readEventStartTime
+ * (apps/api/src/clv-service.ts): metadata.starts_at when present, otherwise the
+ * end of the event date. Production passes exactly this value as
+ * ClosingLineLookupCriteria.before.
+ */
+export function resolveEventStartTime(event: EventRow): string | null {
+  const startsAt = readString(asRecord(event.metadata), 'starts_at');
+  if (startsAt) return startsAt;
+  const eventDate = nonEmpty(event.event_date);
+  return eventDate ? `${eventDate}T23:59:59Z` : null;
+}
+
+function normalizeMarketKey(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase().replace(/[.-]/g, '_');
+  return normalized.length > 0 ? normalized : null;
+}
+
+/**
+ * Pick-side market identity. It deliberately never consults the referenced
+ * game_results row: that row is the thing being validated, so letting it
+ * supply the market key would make the market check circular (UTV2-1745 P1-A).
+ */
+export function resolveProviderMarketKey(
   pick: PickRow,
-  gameResult: GameResultRow | null,
   universe: MarketUniverseRow | null,
   providerMarketKeysByType: ReadonlyMap<string, string>,
 ): string | null {
-  if (universe?.provider_market_key) return universe.provider_market_key;
+  const fromUniverse = nonEmpty(universe?.provider_market_key);
+  if (fromUniverse) return fromUniverse;
   const metadata = asRecord(pick.metadata);
   const explicit = readString(metadata, 'providerMarketKey');
   if (explicit) return explicit;
-  for (const candidate of [pick.market_type_id, pick.market, gameResult?.market_key]) {
+  for (const candidate of [pick.market_type_id, pick.market]) {
     if (!candidate) continue;
-    const alias = providerMarketKeysByType.get(candidate);
+    const alias = nonEmpty(providerMarketKeysByType.get(candidate));
     if (alias) return alias;
   }
-  const resultKey = gameResult?.market_key ?? null;
-  return resultKey?.endsWith('-all-game-ou') ? resultKey : null;
+  return null;
 }
 
-function resolveEvent(
+/**
+ * The market key production actually sends to the closing-line lookup. Exact
+ * mirror of apps/api/src/clv-service.ts:
+ *   alias(market_type_id ?? market) ?? alias(pick.market) ?? pick.market
+ * Production never resolves to null here, so the audit must not either: emitting
+ * `missing_market_context` where production issues a query would deny CLV
+ * availability production has.
+ */
+export function resolveProductionMarketKey(
   pick: PickRow,
-  gameResult: GameResultRow | null,
+  providerMarketKeysByType: ReadonlyMap<string, string>,
+): string {
+  const canonical = canonicalMarketKey(pick);
+  const primary = nonEmpty(providerMarketKeysByType.get(canonical));
+  if (primary) return primary;
+  if (canonical !== pick.market) {
+    const secondary = nonEmpty(providerMarketKeysByType.get(pick.market));
+    if (secondary) return secondary;
+  }
+  return pick.market;
+}
+
+/**
+ * Pick-side event identity. It deliberately never consults the referenced
+ * game_results row. Deriving the event from `gameResult.event_id` and then
+ * validating that same row against it is circular: any real-but-wrong
+ * game_results id would manufacture its own approval (UTV2-1745 P1-A).
+ */
+export function resolveEvent(
+  pick: PickRow,
   eventsById: ReadonlyMap<string, EventRow>,
   eventsByExternalId: ReadonlyMap<string, EventRow>,
   universe: MarketUniverseRow | null,
 ): EventRow | null {
-  if (gameResult) {
-    const event = eventsById.get(gameResult.event_id);
-    if (event) return event;
-  }
   if (universe?.event_id) {
     const event = eventsById.get(universe.event_id);
     if (event) return event;
@@ -331,6 +434,148 @@ function resolveParticipantExternalId(
     : null;
 }
 
+/**
+ * Internal (participants.id) participant identity derived from the pick and its
+ * market_universe row only. game_results.participant_id is an internal id, so
+ * this is the side of the comparison that must be established independently.
+ */
+export function resolveParticipantInternalId(
+  pick: PickRow,
+  universe: MarketUniverseRow | null,
+): string | null {
+  const metadata = asRecord(pick.metadata);
+  return (
+    pick.participant_id ??
+    universe?.participant_id ??
+    readString(metadata, 'participantId') ??
+    readString(metadata, 'playerId') ??
+    null
+  );
+}
+
+/** Named, fail-closed outcomes of validating a referenced game_results row. */
+export type GameResultIdentityFailure =
+  | 'game_result_event_mismatch'
+  | 'game_result_participant_mismatch'
+  | 'game_result_market_mismatch'
+  | 'game_result_identity_unverifiable';
+
+export interface PickIdentityContext {
+  /** Event resolved from pick metadata / market_universe only. */
+  event: EventRow | null;
+  /** Provider market key resolved from pick metadata / market_universe / aliases only. */
+  providerMarketKey: string | null;
+  /** Internal participant id resolved from the pick / market_universe only. */
+  participantInternalId: string | null;
+  /** True when a null `game_results.participant_id` is the correct value. */
+  eventScoped: boolean;
+  /**
+   * The pick's single market identity, in its canonical and provider-native
+   * forms. `game_results.market_key` holds both forms in production, so both
+   * are accepted -- but nothing else is.
+   */
+  marketKeyCandidates: ReadonlySet<string>;
+  /**
+   * True when the pick asserts two market identities that do not agree (a
+   * `market_type_id` that drifted away from `market`, say). Identity cannot be
+   * proven against a contradictory claim, so this fails closed rather than
+   * accepting a game result that matches either half.
+   */
+  marketIdentityConflict: boolean;
+}
+
+/**
+ * Builds the pick-side identity context WITHOUT reading the referenced
+ * game_results row. Everything here comes from the pick, its metadata, its
+ * market_universe provenance row, the canonical event/participant tables and
+ * the provider market alias table.
+ */
+export function buildPickIdentityContext(
+  pick: PickRow,
+  universe: MarketUniverseRow | null,
+  eventsById: ReadonlyMap<string, EventRow>,
+  eventsByExternalId: ReadonlyMap<string, EventRow>,
+  providerMarketKeysByType: ReadonlyMap<string, string>,
+): PickIdentityContext {
+  const metadata = asRecord(pick.metadata);
+  const providerMarketKey = resolveProviderMarketKey(pick, universe, providerMarketKeysByType);
+  const canonical = canonicalMarketKey(pick);
+
+  // The pick's ONE market identity, in its two legitimate spellings. Widening
+  // this to every market string the pick carries would let a pick that asserts
+  // two different markets accept a game result matching either -- which is how
+  // a drifted `market_type_id` could admit the game's own total row for a
+  // player prop.
+  const candidates = new Set<string>();
+  for (const candidate of [providerMarketKey, canonical]) {
+    const normalized = normalizeMarketKey(candidate);
+    if (normalized) candidates.add(normalized);
+  }
+
+  // Every other market claim the pick makes must agree with that identity,
+  // directly or through the alias table. One that does not is a contradiction.
+  let marketIdentityConflict = false;
+  for (const claim of [
+    pick.market,
+    pick.market_type_id,
+    readString(metadata, 'providerMarketKey'),
+    readString(metadata, 'marketTypeId'),
+    universe?.provider_market_key ?? null,
+  ]) {
+    const normalized = normalizeMarketKey(claim);
+    if (!normalized || candidates.has(normalized)) continue;
+    const aliased = normalizeMarketKey(
+      claim ? providerMarketKeysByType.get(claim) ?? null : null,
+    );
+    if (aliased && candidates.has(aliased)) continue;
+    marketIdentityConflict = true;
+    break;
+  }
+
+  return {
+    event: resolveEvent(pick, eventsById, eventsByExternalId, universe),
+    providerMarketKey,
+    participantInternalId: resolveParticipantInternalId(pick, universe),
+    eventScoped: isEventScopedTotalPick(pick),
+    marketKeyCandidates: candidates,
+    marketIdentityConflict,
+  };
+}
+
+/**
+ * Proves the referenced game_results row actually belongs to the pick.
+ *
+ * Fails closed: any identity that cannot be established from the pick side
+ * returns a named unresolvable reason. A real-but-wrong game_results id can
+ * therefore never reach grade recomputation and can never be counted as an
+ * agreement (UTV2-1745 P1-A).
+ */
+export function validateGameResultIdentity(
+  identity: PickIdentityContext,
+  gameResult: GameResultRow,
+): GameResultIdentityFailure | null {
+  if (!identity.event) return 'game_result_identity_unverifiable';
+  if (gameResult.event_id !== identity.event.id) return 'game_result_event_mismatch';
+
+  if (identity.eventScoped) {
+    if (gameResult.participant_id !== null) return 'game_result_participant_mismatch';
+  } else {
+    if (!identity.participantInternalId) return 'game_result_identity_unverifiable';
+    if (gameResult.participant_id !== identity.participantInternalId) {
+      return 'game_result_participant_mismatch';
+    }
+  }
+
+  if (identity.marketIdentityConflict) return 'game_result_identity_unverifiable';
+  if (!identity.providerMarketKey) return 'game_result_identity_unverifiable';
+  const resultMarketKey = normalizeMarketKey(gameResult.market_key);
+  if (!resultMarketKey) return 'game_result_identity_unverifiable';
+  if (!identity.marketKeyCandidates.has(resultMarketKey)) {
+    return 'game_result_market_mismatch';
+  }
+  return null;
+}
+
 export interface GradeDisagreement {
   settlement_id: string;
   pick_id: string;
@@ -363,17 +608,57 @@ export interface TruthAuditDataset {
   participantsById: ReadonlyMap<string, ParticipantRow>;
   marketUniverseById: ReadonlyMap<string, MarketUniverseRow>;
   providerMarketKeysByType: ReadonlyMap<string, string>;
+  /**
+   * Sampled settlement ids that a LATER settlement_records row corrects
+   * (`corrects_id`). `corrects_id is null` only excludes the corrections
+   * themselves; without this the audit would grade a superseded settlement as
+   * if it were the pick's current truth.
+   */
+  supersededSettlementIds: ReadonlySet<string>;
 }
 
 export interface ClosingLookupCriteria {
   providerEventId: string;
   providerMarketKey: string;
   providerParticipantId: string | null;
+  /**
+   * Closing cutoff. Mirrors production's ClosingLineLookupCriteria.before
+   * (apps/api/src/clv-service.ts passes eventContext.eventStartTime): only
+   * snapshots at or before the event start are eligible.
+   */
+  before: string;
+  /**
+   * undefined  -> no bookmaker filter (production's consensus pass)
+   * 'pinnacle' -> production's preferred first pass
+   * null       -> bookmaker_key is null
+   */
+  bookmakerKey?: string | null;
 }
 
 export type ClosingOfferLookup = (
   criteria: ClosingLookupCriteria,
 ) => Promise<ClosingOfferRow[]>;
+
+/** Shape returned by production's marketUniverse.findClosingLineByProviderKey. */
+export interface MarketUniverseClosingRow {
+  closing_line: number | null;
+  closing_over_odds: number | null;
+  closing_under_odds: number | null;
+  provider_key: string | null;
+  last_offer_snapshot_at: string | null;
+}
+
+/**
+ * Production's LATE closing-line fallback
+ * (IMarketUniverseRepository.findClosingLineByProviderKey). Keyed by provider
+ * identity rather than by the pick's metadata pointer, so a pick with no
+ * `metadata.marketUniverseId` can still resolve.
+ */
+export type MarketUniverseClosingLookup = (criteria: {
+  providerEventId: string;
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+}) => Promise<MarketUniverseClosingRow | null>;
 
 export interface RowCountEvidence {
   table: string;
@@ -434,9 +719,11 @@ export interface PickTruthAuditReport {
     row_counts: RowCountEvidence[];
   };
   read_only: {
-    database_writes_performed: 0;
-    write_method_reachable: false;
-    transport_method: 'GET';
+    /** Derived from the transport's own method tally, not asserted. */
+    database_writes_performed: number;
+    http_methods_issued: Record<string, number>;
+    requests_issued: number;
+    non_get_requests: number;
   };
 }
 
@@ -447,6 +734,11 @@ interface AuditBuildOptions {
   auditablePopulation: number;
   rowCounts: RowCountEvidence[];
   generatedAt?: string;
+  /**
+   * Measured transport tally from ReadOnlyPostgrestClient.transportEvidence().
+   * Omitted only by unit tests that drive the builder with fake lookups.
+   */
+  transportEvidence?: () => { methods: Record<string, number>; requests: number };
 }
 
 function roundPercent(numerator: number, denominator: number): number {
@@ -458,15 +750,22 @@ function increment(counts: Record<string, number>, key: string): void {
   counts[key] = (counts[key] ?? 0) + 1;
 }
 
-function chooseClosingOffer(
+/**
+ * Deterministic latest-eligible selection. Production's findClosingLine issues
+ * `.order('snapshot_at', {ascending:false}).limit(1)`, so the newest eligible
+ * snapshot wins; the id tie-break keeps the audit deterministic when two rows
+ * share a timestamp. It deliberately does NOT require is_closing: production
+ * does not filter on it either, and requiring it would make the audit report
+ * CLV unavailable where production would resolve it.
+ */
+export function selectLatestClosingOffer(
   offers: readonly ClosingOfferRow[],
 ): ClosingOfferRow | null {
-  const eligible = offers.filter((offer) => offer.is_closing === true);
-  const pinnacle = eligible.filter((offer) => offer.bookmaker_key === 'pinnacle');
-  const candidates = pinnacle.length > 0 ? pinnacle : eligible;
-  return [...candidates].sort((left, right) =>
-    (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? '')
-  )[0] ?? null;
+  return [...offers].sort((left, right) => {
+    const bySnapshot = (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? '');
+    if (bySnapshot !== 0) return bySnapshot;
+    return (left.id ?? '').localeCompare(right.id ?? '');
+  })[0] ?? null;
 }
 
 function pricedSideAvailable(
@@ -482,6 +781,7 @@ export async function buildPickTruthAuditReport(
   dataset: TruthAuditDataset,
   closingOfferLookup: ClosingOfferLookup,
   options: AuditBuildOptions,
+  marketUniverseClosingLookup?: MarketUniverseClosingLookup,
 ): Promise<PickTruthAuditReport> {
   const disagreements: GradeDisagreement[] = [];
   const gradeFailures: AuditFailure[] = [];
@@ -491,6 +791,12 @@ export async function buildPickTruthAuditReport(
   const structuralItems: StructuralItem[] = [];
   let agreements = 0;
   let clvResolvable = 0;
+  /** Rows the closing-line lookups actually returned — a measurement, not the verdict count. */
+  let closingRowsObserved = 0;
+  const observeClosingRows = (rows: readonly ClosingOfferRow[]): readonly ClosingOfferRow[] => {
+    closingRowsObserved += rows.length;
+    return rows;
+  };
 
   for (const settlement of dataset.settlements) {
     const pick = dataset.picksById.get(settlement.pick_id);
@@ -524,19 +830,15 @@ export async function buildPickTruthAuditReport(
     const universe = universeId
       ? dataset.marketUniverseById.get(universeId) ?? null
       : null;
-    const event = resolveEvent(
+    const identity = buildPickIdentityContext(
       pick,
-      gameResult,
+      universe,
       dataset.eventsById,
       dataset.eventsByExternalId,
-      universe,
-    );
-    const providerMarketKey = resolveProviderMarketKey(
-      pick,
-      gameResult,
-      universe,
       dataset.providerMarketKeysByType,
     );
+    const event = identity.event;
+    const providerMarketKey = identity.providerMarketKey;
     const participantExternalId = resolveParticipantExternalId(
       pick,
       dataset.participantsById,
@@ -546,7 +848,7 @@ export async function buildPickTruthAuditReport(
 
     const structuralClasses: string[] = [];
     if (!event) structuralClasses.push('orphaned_event');
-    if (!isGameTotal(pick) && !participantExternalId) {
+    if (!identity.eventScoped && !participantExternalId) {
       structuralClasses.push('missing_participant');
     }
     if (!providerMarketKey || !side || !Number.isFinite(pick.line ?? null)) {
@@ -561,11 +863,20 @@ export async function buildPickTruthAuditReport(
     }
 
     const recordedResult = settlementResult(settlement.result);
+    // Proven independently of the referenced row itself; see P1-A above.
+    const identityFailure = gameResult
+      ? validateGameResultIdentity(identity, gameResult)
+      : null;
     let gradeFailureReason: string | null = null;
-    if (!recordedResult) gradeFailureReason = 'invalid_recorded_result';
+    if (dataset.supersededSettlementIds.has(settlement.id)) {
+      gradeFailureReason = 'settlement_superseded_by_correction';
+    } else if (!recordedResult) gradeFailureReason = 'invalid_recorded_result';
     else if (reference.conflict) gradeFailureReason = 'conflicting_game_result_reference';
     else if (!reference.id) gradeFailureReason = 'missing_game_result_reference';
     else if (!gameResult) gradeFailureReason = 'missing_game_result';
+    // Fail closed: the referenced row must be proven to belong to this pick
+    // before any recomputation can count as agreement or disagreement.
+    else if (identityFailure) gradeFailureReason = identityFailure;
     else if (!Number.isFinite(gameResult.actual_value)) gradeFailureReason = 'invalid_actual_value';
     else if (!Number.isFinite(pick.line ?? null)) gradeFailureReason = 'missing_line';
     else if (!side) gradeFailureReason = 'missing_selection_side';
@@ -598,38 +909,86 @@ export async function buildPickTruthAuditReport(
       }
     }
 
+    // Mirrors apps/api/src/clv-service.ts computeCLVOutcome in order:
+    //   0. odds gate
+    //   1. side gate (non-moneyline)
+    //   2. market_universe PROVENANCE short-circuit -- before event context,
+    //      before any cutoff, before any participant (resolveClosingLineFromPickProvenance)
+    //   3. event context
+    //   4. provider market key (alias chain; production never resolves to null)
+    //   5. participant (null for moneyline and PARTICIPANT_FORBIDDEN markets)
+    //   6. provider_offer_history: pinnacle pass, then consensus pass
+    //   7. market_universe fallback by provider key
     let clvReason: string | null = null;
+    const productionMarketKey = resolveProductionMarketKey(
+      pick,
+      dataset.providerMarketKeysByType,
+    );
+    const closingParticipantId = usesNullParticipantForClosingLookup(pick)
+      ? null
+      : participantExternalId;
+
     if (!Number.isFinite(pick.odds ?? null) || pick.odds === 0) {
       clvReason = 'missing_pick_odds';
+    } else if (isMoneyline(pick)) {
+      // Production has a dedicated moneyline path that takes the side from the
+      // participant's home/away role in event_participants. The audit does not
+      // read that table, so it declines rather than guessing -- named, so it is
+      // never mistaken for a production failure.
+      clvReason = 'moneyline_side_not_independently_resolvable';
     } else if (!side) {
       clvReason = 'missing_selection_side';
-    } else if (!event?.external_id && !universe?.provider_event_id) {
-      clvReason = 'missing_event_context';
-    } else if (!providerMarketKey) {
-      clvReason = 'missing_market_context';
-    } else if (!isGameTotal(pick) && !participantExternalId) {
-      clvReason = 'missing_participant_context';
-    } else if (
-      universe?.closing_line !== null &&
-      universe?.closing_line !== undefined
-    ) {
-      if (!pricedSideAvailable(
-        side,
-        universe.closing_over_odds,
-        universe.closing_under_odds,
-      )) {
+    } else if (universe?.closing_line !== null && universe?.closing_line !== undefined) {
+      // Step 2: production returns `computed` here without resolving anything
+      // else. Placing this later would deny CLV that production does compute.
+      if (!pricedSideAvailable(side, universe.closing_over_odds, universe.closing_under_odds)) {
         clvReason = 'missing_priced_side';
       }
+    } else if (!nonEmpty(event?.external_id) && !nonEmpty(universe?.provider_event_id)) {
+      clvReason = 'missing_event_context';
+    } else if (!nonEmpty(productionMarketKey)) {
+      clvReason = 'missing_market_context';
+    } else if (closingParticipantId === null && !usesNullParticipantForClosingLookup(pick)) {
+      clvReason = 'missing_participant_context';
+    } else if (!event || !resolveEventStartTime(event)) {
+      // Production passes eventContext.eventStartTime as the closing cutoff.
+      // Without a start time there is no cutoff, and an audit that dropped the
+      // cutoff would claim CLV availability production does not have.
+      clvReason = 'missing_closing_cutoff';
     } else {
-      const offers = await closingOfferLookup({
-        providerEventId: universe?.provider_event_id ?? event!.external_id!,
-        providerMarketKey,
-        providerParticipantId: isGameTotal(pick) ? null : participantExternalId,
-      });
-      const closing = chooseClosingOffer(offers);
-      if (!closing) clvReason = 'missing_closing_line';
-      else if (!pricedSideAvailable(side, closing.over_odds, closing.under_odds)) {
-        clvReason = 'missing_priced_side';
+      const baseCriteria = {
+        providerEventId: nonEmpty(universe?.provider_event_id) ?? nonEmpty(event.external_id)!,
+        providerMarketKey: productionMarketKey,
+        providerParticipantId: closingParticipantId,
+        before: resolveEventStartTime(event)!,
+      };
+      let closing = selectLatestClosingOffer(
+        observeClosingRows(await closingOfferLookup({ ...baseCriteria, bookmakerKey: 'pinnacle' })),
+      );
+      if (!closing) {
+        closing = selectLatestClosingOffer(observeClosingRows(await closingOfferLookup(baseCriteria)));
+      }
+      if (closing) {
+        if (!pricedSideAvailable(side, closing.over_odds, closing.under_odds)) {
+          clvReason = 'missing_priced_side';
+        }
+      } else {
+        // Step 7: production's late market_universe fallback is keyed by
+        // provider identity, not by the pick's metadata pointer, so a pick with
+        // no marketUniverseId can still resolve here.
+        const fallback = marketUniverseClosingLookup
+          ? await marketUniverseClosingLookup({
+              providerEventId: baseCriteria.providerEventId,
+              providerMarketKey: baseCriteria.providerMarketKey,
+              providerParticipantId: baseCriteria.providerParticipantId,
+            })
+          : null;
+        if (fallback) closingRowsObserved += 1;
+        if (!fallback || fallback.closing_line === null) {
+          clvReason = 'missing_closing_line';
+        } else if (!pricedSideAvailable(side, fallback.closing_over_odds, fallback.closing_under_odds)) {
+          clvReason = 'missing_priced_side';
+        }
       }
     }
 
@@ -698,6 +1057,12 @@ export async function buildPickTruthAuditReport(
     unresolvable_market: structuralItems.filter((item) => item.classes.includes('unresolvable_market')).length,
   };
 
+  // Evaluated here, after every lookup has issued its requests.
+  const transport = options.transportEvidence?.() ?? { methods: {}, requests: 0 };
+  const nonGetRequests = Object.entries(transport.methods)
+    .filter(([method]) => method !== 'GET')
+    .reduce((total, [, count]) => total + count, 0);
+
   return {
     schema_version: 1,
     issue_id: ISSUE_ID,
@@ -739,7 +1104,7 @@ export async function buildPickTruthAuditReport(
     },
     structural: {
       ...structuralCounts,
-      affected_picks: structuralItems.length,
+      affected_picks: new Set(structuralItems.map((item) => item.pick_id)).size,
       items: structuralItems,
     },
     systemic_defect: {
@@ -770,19 +1135,50 @@ export async function buildPickTruthAuditReport(
           row_count: dataset.gameResultsById.size,
         },
         {
-          table: 'provider_offers/market_universe',
+          table: 'provider_offer_history/market_universe',
           description: 'Resolved current closing-line availability without persisting recomputed CLV.',
-          row_count: clvResolvable,
+          row_count: closingRowsObserved,
         },
       ],
       row_counts: options.rowCounts,
     },
     read_only: {
-      database_writes_performed: 0,
-      write_method_reachable: false,
-      transport_method: 'GET',
+      database_writes_performed: nonGetRequests,
+      http_methods_issued: transport.methods,
+      requests_issued: transport.requests,
+      non_get_requests: nonGetRequests,
     },
   };
+}
+
+/**
+ * Mirrors DatabaseProviderOfferRepository.resolveProviderMarketKey's ordering:
+ * `providerMarketKeyPriority` (`-all-game-` < `-game-` < `-all-` < other) then
+ * localeCompare. A plain Map build is last-wins and non-deterministic when a
+ * market_type_id has several sgo aliases, which would silently pick a different
+ * provider key than production.
+ */
+export function buildProviderMarketKeyIndex(
+  rows: readonly ProviderMarketAliasRow[],
+): ReadonlyMap<string, string> {
+  const priority = (key: string): number => {
+    if (key.includes('-all-game-')) return 0;
+    if (key.includes('-game-')) return 1;
+    if (key.includes('-all-')) return 2;
+    return 3;
+  };
+  const byType = new Map<string, string[]>();
+  for (const row of rows) {
+    const bucket = byType.get(row.market_type_id);
+    if (bucket) bucket.push(row.provider_market_key);
+    else byType.set(row.market_type_id, [row.provider_market_key]);
+  }
+  const index = new Map<string, string>();
+  for (const [marketTypeId, keys] of byType) {
+    keys.sort((left, right) => (priority(left) - priority(right)) || left.localeCompare(right));
+    index.set(marketTypeId, keys[0]!);
+  }
+  return index;
 }
 
 async function readExactCount(
@@ -801,12 +1197,19 @@ async function readExactCount(
   return result.count;
 }
 
+/**
+ * `limit` is only safe as `idsChunk.length` when the column is unique. For a
+ * non-unique column (events.external_id, say) several rows can share one value
+ * and a tight limit truncates the result, surfacing as a false
+ * `orphaned_event` / `game_result_identity_unverifiable`.
+ */
 async function readByIds<T>(
   client: ReadOnlyPostgrestClient,
   table: string,
   select: string,
   ids: readonly string[],
   column = 'id',
+  rowsPerId = 1,
 ): Promise<T[]> {
   const rows: T[] = [];
   for (const idsChunk of chunk(unique(ids))) {
@@ -815,7 +1218,7 @@ async function readByIds<T>(
       table,
       select,
       filters: { [column]: inFilter(idsChunk) },
-      limit: idsChunk.length,
+      limit: idsChunk.length * rowsPerId,
     });
     rows.push(...page.rows);
   }
@@ -834,7 +1237,7 @@ async function loadAuditDataset(
   const rowCountTables = [
     'picks',
     'events',
-    'provider_offers',
+    'provider_offer_history',
     'settlement_records',
     'game_results',
     'participants',
@@ -908,6 +1311,22 @@ async function loadAuditDataset(
   );
   const gameResultsById = new Map(gameResults.map((row) => [row.id, row]));
 
+  // Corrections that supersede a sampled settlement. A pick may carry several,
+  // so allow generous headroom per sampled id rather than one row each.
+  const corrections = await readByIds<{ corrects_id: string | null }>(
+    client,
+    'settlement_records',
+    'id,corrects_id',
+    settlements.map((row) => row.id),
+    'corrects_id',
+    8,
+  );
+  const supersededSettlementIds = new Set(
+    corrections
+      .map((row) => row.corrects_id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0),
+  );
+
   const universeIds = unique(
     picks.map((pick) => {
       const metadata = asRecord(pick.metadata);
@@ -944,6 +1363,7 @@ async function loadAuditDataset(
       'id,external_id,event_name,event_date,metadata',
       providerEventIds,
       'external_id',
+      8,
     ),
   ]);
   const events = [
@@ -980,7 +1400,10 @@ async function loadAuditDataset(
         provider: 'eq.sgo',
         market_type_id: inFilter(typeIds),
       },
-      limit: typeIds.length * 4,
+      // ×8 headroom: production tops out at 4 aliases per market_type_id, and now
+      // that priority ordering decides the winner a truncated page would change
+      // the resolved provider key rather than merely shorten the list.
+      limit: typeIds.length * 8,
     });
     providerMarketAliases.push(...page.rows);
   }
@@ -990,6 +1413,7 @@ async function loadAuditDataset(
       settlements,
       picksById,
       gameResultsById,
+      supersededSettlementIds,
       eventsById: new Map(events.map((row) => [row.id, row])),
       eventsByExternalId: new Map(
         events
@@ -998,9 +1422,7 @@ async function loadAuditDataset(
       ),
       participantsById: new Map(participants.map((row) => [row.id, row])),
       marketUniverseById,
-      providerMarketKeysByType: new Map(
-        providerMarketAliases.map((row) => [row.market_type_id, row.provider_market_key]),
-      ),
+      providerMarketKeysByType: buildProviderMarketKeyIndex(providerMarketAliases),
     },
     gradingPopulation,
     auditablePopulation,
@@ -1008,28 +1430,78 @@ async function loadAuditDataset(
   };
 }
 
-function createClosingOfferLookup(
+/**
+ * Canonical closing-line source (UTV2-1745 P1-B).
+ *
+ * `provider_offers` is the legacy/frozen surface; production's CLV resolver
+ * (DatabaseProviderOfferRepository.findClosingLine in
+ * packages/db/src/runtime-repositories.ts) reads `provider_offer_history`.
+ * This mirrors it filter-for-filter so the audit can neither claim CLV
+ * availability production would not have nor deny availability it would:
+ *
+ *   .eq('provider_event_id')      .eq('provider_market_key')
+ *   .lte('snapshot_at', before)   participant: eq / is null
+ *   bookmaker_key: only filtered when the criteria declare it
+ *   .order('snapshot_at', desc).limit(1)
+ *
+ * Note production applies no provider_key filter and does not require
+ * is_closing; neither does this lookup.
+ */
+export const CLOSING_LINE_TABLE = 'provider_offer_history';
+
+export function createClosingOfferLookup(
   client: ReadOnlyPostgrestClient,
 ): ClosingOfferLookup {
   return async (criteria) => {
     const filters: Record<string, string> = {
       provider_event_id: `eq.${criteria.providerEventId}`,
       provider_market_key: `eq.${criteria.providerMarketKey}`,
-      provider_key: 'eq.sgo',
       provider_participant_id: criteria.providerParticipantId
         ? `eq.${criteria.providerParticipantId}`
         : 'is.null',
-      is_closing: 'eq.true',
+      snapshot_at: `lte.${criteria.before}`,
     };
+    if (criteria.bookmakerKey !== undefined) {
+      filters['bookmaker_key'] = criteria.bookmakerKey === null
+        ? 'is.null'
+        : `eq.${criteria.bookmakerKey}`;
+    }
     const response = await client.read<ClosingOfferRow>({
-      table: 'provider_offers',
+      table: CLOSING_LINE_TABLE,
       select:
         'id,provider_event_id,provider_market_key,provider_participant_id,provider_key,bookmaker_key,is_closing,line,over_odds,under_odds,snapshot_at',
       filters,
       order: 'snapshot_at.desc',
-      limit: 100,
+      limit: 1,
     });
     return response.rows;
+  };
+}
+
+/**
+ * Mirrors DatabaseMarketUniverseRepository.findClosingLineByProviderKey:
+ * eq provider_event_id, eq provider_market_key, closing_line not null,
+ * participant eq / is null, limit 1.
+ */
+export function createMarketUniverseClosingLookup(
+  client: ReadOnlyPostgrestClient,
+): MarketUniverseClosingLookup {
+  return async (criteria) => {
+    const response = await client.read<MarketUniverseClosingRow>({
+      table: 'market_universe',
+      select:
+        'closing_line,closing_over_odds,closing_under_odds,provider_key,last_offer_snapshot_at',
+      filters: {
+        provider_event_id: `eq.${criteria.providerEventId}`,
+        provider_market_key: `eq.${criteria.providerMarketKey}`,
+        closing_line: 'not.is.null',
+        provider_participant_id: criteria.providerParticipantId
+          ? `eq.${criteria.providerParticipantId}`
+          : 'is.null',
+      },
+      limit: 1,
+    });
+    return response.rows[0] ?? null;
   };
 }
 
@@ -1084,7 +1556,9 @@ export async function runPickTruthAudit(options: CliOptions): Promise<PickTruthA
       gradingPopulation: loaded.gradingPopulation,
       auditablePopulation: loaded.auditablePopulation,
       rowCounts: loaded.rowCounts,
+      transportEvidence: () => client.transportEvidence(),
     },
+    createMarketUniverseClosingLookup(client),
   );
 }
 
