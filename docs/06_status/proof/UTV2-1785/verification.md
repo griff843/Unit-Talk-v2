@@ -1,6 +1,6 @@
 # PROOF: UTV2-1785
 
-MERGE_SHA: 69b69d528b3919c072e529d4e23a5490690cb1c4
+MERGE_SHA: b36cbfa532422c56008db44c3764d60c5a7acb7a
 
 Fix the pre-proof validator hook's file-selection semantics so it validates the
 files a commit actually authors, instead of every path `git diff --cached`
@@ -45,6 +45,17 @@ ASSERTIONS:
 - [x] `MERGE_HEAD` is resolved through `git rev-parse --git-dir`, so detection
       works in a linked worktree, where `.git` is a file and the real git dir
       lives under `.git/worktrees/<name>`.
+- [x] The hook resolves and operates on the repository the commit TARGETS, not
+      the hook's own cwd. With cwd in worktree A and an invalid proof staged only
+      in worktree B, `git -C <absolute B> commit -m test` exits 2 and names B's
+      proof. Chained, attached, relative and symlinked `-C`, a matching
+      `--git-dir`/`--work-tree` pair, and a wrapped `bash -c "git -C B commit"`
+      all resolve to B as well.
+- [x] Commit forms whose target repository cannot be safely resolved are refused
+      rather than guessed: `-C` into a missing directory or a non-work-tree, a
+      bare repository, an explicit `--git-dir` whose git dir does not belong to
+      the resolved work tree, and a command carrying commits into two different
+      repositories.
 - [x] The hook validated by these tests is the tracked, repo-owned file that
       `.claude/settings.json` actually invokes. There is no generated or local
       `.git/hooks` copy: `.git/hooks` contains only `*.sample` files, and the
@@ -64,10 +75,18 @@ mutant against the same fixture, and asserts the mutant behaves differently.
    naming `docs/06_status/proof/OLD/evidence.json`. The mutant reproduces the
    incident; the fix removes it.
 
-2. `the indirect-invocation fallback is load-bearing, not decorative` — deletes
-   the indirect-invocation fallback block. The mutant exits 0 on
-   `bash -c "git commit -m indirect"` with an invalid proof staged; the shipped
-   hook exits 2. Without the fallback the gate is bypassable.
+2. `the raw-command fallback is load-bearing for untokenizable commands` —
+   deletes the raw-command fallback block. On `git commit -m "unterminated`,
+   which shlex cannot lex at all, the mutant exits 0 and the shipped hook exits
+   2. (Wrapper forms such as `bash -c` and `eval` no longer depend on this
+   fallback: tokenization now descends into quoted wrapper arguments, which is
+   both more precise and what lets a wrapped commit's own `-C` be honoured.)
+
+3. `cross-repository resolution is load-bearing, not decorative` — removes the
+   `-C` application from target resolution so the hook falls back to its own
+   cwd, which is exactly the shape of the reported P1. On the A/B fixture the
+   mutant exits 0 while the shipped hook exits 2. The fail-open returns the
+   moment the fix is removed.
 
 ### Adversarial review (orchestrator, independent of the executor)
 
@@ -82,6 +101,40 @@ test suite, in throwaway git repositories.
 | 4 | Resolve a conflicted proof to `MERGE_HEAD` bytes, then delete `.git/MERGE_MSG` to erase the conflict record | BLOCKED; the automatic-merge-tree comparison does not depend on `MERGE_MSG` |
 | 5 | Indirect invocation: `bash -c "git commit"`, `sh -c '...'`, `eval "..."` | **INITIALLY BYPASSED — defect found and fixed in this lane. See below.** |
 | 6 | Command-spelling variants: `git -c user.name=z commit`, `GIT_AUTHOR_NAME=z git commit`, `cd X && git commit`, `/usr/bin/git --no-pager commit` | BLOCKED |
+
+### Adversarial review, round 2 — cross-repository resolution (Bounce 1)
+
+PM review found a P1 the first round missed: detection recognised
+`git -C <dir> commit`, but `repo_root` and `git_dir` were still resolved from the
+hook process cwd, so a commit into worktree B was validated against worktree A's
+index. Reproduced before the fix — cwd A, invalid proof staged only in B,
+`git -C <B> commit -m test` — exit 0, fail-open confirmed.
+
+Thirteen further probes were run against the corrected resolution, all from a
+cwd in repo A with the invalid proof staged only in repo B:
+
+| Probe | Expected | Result |
+|---|---|---|
+| relative `-C` into B | block | exit 2 |
+| chained `-C <dirname> -C <basename>` | block | exit 2 |
+| attached `-C<path>` form | block | exit 2 |
+| `-C` through a symlink to B | block | exit 2 |
+| `-C` into a path containing a space | block | exit 2 |
+| `-C B` with an interleaved `-c k=v` | block | exit 2 |
+| nested wrapper `bash -c "bash -c 'git -C B commit'"` | block | exit 2 |
+| `-C B -- commit` (`--` terminator) | block | exit 2 |
+| `--work-tree=B` alone | block | exit 2 |
+| bare repository target | refuse | exit 2 |
+| control: A clean, plain `git commit` | allow | exit 0 |
+| control: non-commit verb `git -C B status` | allow | exit 0 |
+| control: unrelated command `pnpm test` | allow | exit 0 |
+
+Note the operational consequence, observed live: because the hook now refuses
+commit forms whose target cannot be resolved, an ordinary shell command whose
+*text* contains `git -C <path> commit` for a path that does not exist is blocked
+too. That is the conservative branch behaving as specified, not a defect; the
+regressions for it are in `commit forms whose target repository cannot be
+resolved are refused`.
 
 **Vector 5 was a real regression introduced by the rewrite.** The pre-existing
 hook detected commits with a raw substring match (`grep -q 'git commit'`), which
@@ -137,10 +190,15 @@ ok 13 - pre-proof hook conservatively blocks proof edits hidden in an octopus me
 ok 14 - merge selection resolves MERGE_HEAD through a linked worktree git directory
 ok 15 - the configured hook is the tracked repo-owned implementation
 ok 16 - pre-proof hook engages on commits invoked indirectly through a shell wrapper
-ok 17 - the indirect-invocation fallback is load-bearing, not decorative
-# tests 42
+ok 17 - the raw-command fallback is load-bearing for untokenizable commands
+ok 18 - pre-proof hook validates the repository the commit targets, not its own cwd
+ok 19 - cross-repository resolution is load-bearing, not decorative
+ok 20 - a wrapped cross-repository commit honours its own -C
+ok 21 - --git-dir with a matching --work-tree resolves to that work tree
+ok 22 - commit forms whose target repository cannot be resolved are refused
+# tests 51
 # suites 3
-# pass 42
+# pass 51
 # fail 0
 # cancelled 0
 # skipped 0
@@ -194,8 +252,9 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1785
 Full ops suite, `pnpm test:ops`:
 
 ```
+# tests 2653
 # suites 20
-# pass 2644
+# pass 2653
 # fail 0
 # cancelled 0
 # skipped 0

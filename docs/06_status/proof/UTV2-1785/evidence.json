@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "title": "Pre-proof hook validates only the files a commit authors",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-30T08:50:00Z",
+  "generated_at": "2026-08-30T11:40:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4",
-    "verified_source_note": "Last commit on this branch touching a non-proof path. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml. The MERGE_SHA: anchor in verification.md and diff-summary.md carries this branch anchor so the rebinder can find and rewrite it.",
+    "verified_source_sha": "b36cbfa532422c56008db44c3764d60c5a7acb7a",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. Re-anchored for Bounce 1: the P1 cross-repository fail-open fix moved the anchor from 69b69d528b3919c072e529d4e23a5490690cb1c4. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,13 +18,15 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-30T08:50:00Z"
+    "bound_at": "2026-08-30T11:40:00Z",
+    "previous_verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4"
   },
   "verdict": {
     "selection_validates_only_authored_files": true,
     "no_check_weakened": true,
     "detection_is_superset_of_prior_behaviour": true,
-    "statement": "The pre-proof validator now validates the files a commit authors rather than every staged path. Inherited-unchanged content is exempt; every other path -- including a conflict resolved to bytes equal to one parent, a post-merge edit, a delete, and a rename -- is still validated. Three pre-existing fail-open gaps were closed and one detection regression introduced by the rewrite was found in adversarial review and fixed in-lane."
+    "statement": "The pre-proof validator now validates the files a commit authors, in the repository that commit targets. Inherited-unchanged content is exempt; every other path -- including a conflict resolved to bytes equal to one parent, a post-merge edit, a delete, and a rename -- is still validated. Global options that select a repository (-C, --git-dir, --work-tree) are resolved and honoured, and commit forms whose target cannot be safely resolved are refused rather than guessed. Three pre-existing fail-open gaps were closed; two further fail-opens introduced or missed by earlier rounds -- shell-wrapped command detection and cross-repository resolution -- were found in adversarial review and PM review respectively, and fixed in-lane.",
+    "validates_repository_the_commit_targets": true
   },
   "static_proof": {
     "type_check": {
@@ -37,16 +39,16 @@
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/proof-check.test.ts",
-      "tests": 42,
-      "pass": 42,
+      "tests": 51,
+      "pass": 51,
       "fail": 0,
       "skipped": 0
     },
     "ops_suite": {
       "command": "pnpm test:ops",
-      "tests": 2644,
+      "tests": 2653,
       "suites": 20,
-      "pass": 2644,
+      "pass": 2653,
       "fail": 0,
       "skipped": 0
     },
@@ -78,8 +80,15 @@
       "non_vacuous": true
     },
     {
-      "name": "the indirect-invocation fallback is load-bearing, not decorative",
-      "mutation": "Delete the indirect-invocation fallback block.",
+      "name": "the raw-command fallback is load-bearing for untokenizable commands",
+      "mutation": "Delete the raw-command fallback block; drive it with `git commit -m \"unterminated`, which shlex cannot lex.",
+      "shipped_hook_exit": 2,
+      "mutant_exit": 0,
+      "non_vacuous": true
+    },
+    {
+      "name": "cross-repository resolution is load-bearing, not decorative",
+      "mutation": "Remove the -C application from target resolution so the hook resolves from its own cwd, reproducing the reported P1 shape.",
       "shipped_hook_exit": 2,
       "mutant_exit": 0,
       "non_vacuous": true
@@ -87,34 +96,32 @@
   ],
   "adversarial_review": {
     "performed_by": "orchestrator, independent of the executor",
-    "vectors_attempted": 6,
-    "vectors_bypassed_after_fix": 0,
-    "findings": [
-      {
-        "vector": "symlink smuggle",
-        "result": "blocked"
-      },
-      {
-        "vector": "deeply nested proof path",
-        "result": "blocked"
-      },
-      {
-        "vector": "proof path containing a space",
-        "result": "blocked"
-      },
-      {
-        "vector": "conflict resolved to MERGE_HEAD bytes with MERGE_MSG deleted",
-        "result": "blocked"
-      },
-      {
-        "vector": "indirect invocation via bash -c / sh -c / eval",
-        "result": "initially bypassed; regression fixed in-lane; now blocked"
-      },
-      {
-        "vector": "command spelling variants (-c k=v, env prefix, absolute path, && chain)",
-        "result": "blocked"
-      }
-    ]
+    "round_1": {
+      "vectors_attempted": 6,
+      "bypassed_after_fix": 0,
+      "finding": "Argv tokenization silently stopped engaging on shell-wrapped commits (bash -c / sh -c / eval) that the prior substring match caught. Fixed in-lane."
+    },
+    "round_2": {
+      "trigger": "PM review, Bounce 1, P1 cross-repository fail-open",
+      "reproduced_before_fix": "cwd A, invalid proof staged only in B, `git -C <B> commit -m test` -> exit 0",
+      "probes_after_fix": 13,
+      "bypassed": 0,
+      "covered": [
+        "relative -C",
+        "chained -C",
+        "attached -C<path>",
+        "-C through a symlink",
+        "-C into a path containing a space",
+        "-C with an interleaved -c k=v",
+        "nested wrapper with inner -C",
+        "-C before a -- terminator",
+        "--work-tree alone",
+        "bare repository target",
+        "control: clean repo plain commit",
+        "control: non-commit verb",
+        "control: unrelated command"
+      ]
+    }
   },
   "scope_refusals": [
     "package.json was not touched; scripts/ops/proof-check.test.ts was already wired into test:ops.",
@@ -122,6 +129,7 @@
     "No proof-schema weakening, no workflow change, no branch-protection change, no --no-verify or equivalent bypass."
   ],
   "known_gaps": [
-    "A git alias for commit (e.g. `git ci`) is not detected. This is unchanged from the pre-fix hook and outside the authorized scope of this lane."
+    "A git alias for commit (e.g. a user-configured `git ci`) is not detected. This is unchanged from the pre-fix hook and outside the authorized scope of this lane.",
+    "Because unresolvable targets are now refused, an ordinary shell command whose text contains `git -C <path> commit` for a path that does not exist is blocked as well. This is the conservative branch behaving as specified; it was observed live during this lane and is covered by regressions."
   ]
 }

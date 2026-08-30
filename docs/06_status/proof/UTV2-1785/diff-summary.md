@@ -1,24 +1,34 @@
 # Diff summary — UTV2-1785
 
-MERGE_SHA: 69b69d528b3919c072e529d4e23a5490690cb1c4
+MERGE_SHA: b36cbfa532422c56008db44c3764d60c5a7acb7a
 
 Two code files. No `package.json`, no workflow, no runtime/DB code.
 
 | File | Change |
 |---|---|
-| `.claude/hooks/pre-proof-validator.sh` | +250 / −19 |
-| `scripts/ops/proof-check.test.ts` | +442 / −1 |
+| `.claude/hooks/pre-proof-validator.sh` | +396 / −19 |
+| `scripts/ops/proof-check.test.ts` | +586 / −1 |
 | `docs/06_status/proof/UTV2-1785/.gitkeep` | deleted (created by `ops:lane-start`, not in `file_scope_lock`) |
 
 ## `.claude/hooks/pre-proof-validator.sh`
 
-1. **Command detection.** `grep -q 'git commit'` on the raw command is replaced
-   by `shlex`-based argv walking that skips git's own options (`-c k=v`,
-   `--git-dir=...`, env prefixes, absolute paths, `--` terminator) and stops at
-   a shell operator. A fail-closed fallback re-checks the raw command with a
-   regex when argv walking finds nothing, so shell-wrapped commits
-   (`bash -c "git commit ..."`) remain covered. Net detection is a strict
-   superset of the previous behaviour.
+1. **Command detection and repository resolution (one step).**
+   `grep -q 'git commit'` on the raw command is replaced by `shlex`-based argv
+   walking that skips git's own options (`-c k=v`, env prefixes, absolute paths,
+   `--` terminator), stops at a shell operator, and descends into quoted wrapper
+   arguments so `bash -c "git ... commit"` is walked as an argv chain rather
+   than a string. A fail-closed fallback re-checks the raw command with a regex
+   when tokenization yields nothing at all (an unbalanced quote), so those forms
+   stay covered. Net detection is a strict superset of the previous behaviour.
+
+   Detection also collects the global options that choose the target repository
+   -- `-C` (chained, attached, relative and symlinked forms), `--git-dir` and
+   `--work-tree` -- and resolves the work tree with them applied. Everything
+   downstream then addresses that repository. Forms whose target cannot be
+   safely resolved are refused rather than guessed: a `-C` into a missing
+   directory or a non-work-tree, a bare repository, an explicit `--git-dir`
+   whose git dir does not belong to the resolved work tree, and a command
+   carrying commits into two different repositories.
 
 2. **File selection (`# BEGIN/END MERGE-AWARE SELECTION`).** New. Resolves the
    worktree git dir with `git rev-parse --git-dir`, so `MERGE_HEAD` is found in
@@ -43,8 +53,8 @@ least one proof block, `status` present; verification files need a
 
 ## `scripts/ops/proof-check.test.ts`
 
-Adds 17 top-level tests (42 assertions-level subtests) driving the real hook
+Adds 22 top-level tests (51 including subtests) driving the real hook
 against real git repositories — real merges, real conflicts, a real linked
-worktree. Nothing about git is mocked. Includes both mutation controls and a
+worktree. Nothing about git is mocked. Includes all three mutation controls and a
 test asserting the hook under test is the tracked file `.claude/settings.json`
 actually invokes.
