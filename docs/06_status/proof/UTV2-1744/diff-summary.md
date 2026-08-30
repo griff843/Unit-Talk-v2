@@ -1,6 +1,6 @@
 # UTV2-1744 — diff summary
 
-MERGE_SHA: 4e912e88b175d3bdacb4e0b4c7b9063c7a137890
+MERGE_SHA: e7557b54451ddf7cb78add4a39bf406d461989a7
 
 ## Files changed
 
@@ -49,5 +49,5 @@ status exported as `TERMINAL_STATUS` and pinned by two regression tests.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: `e7557b54451ddf7cb78add4a39bf406d461989a7`
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1452

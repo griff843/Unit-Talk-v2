@@ -1,6 +1,6 @@
 # PROOF: UTV2-1744
 
-MERGE_SHA: 4e912e88b175d3bdacb4e0b4c7b9063c7a137890
+MERGE_SHA: e7557b54451ddf7cb78add4a39bf406d461989a7
 
 Read-only triage of the production `distribution_outbox`. This lane ships a
 classifier, a target verifier, a stuck-claim analyser, and a replay verdict

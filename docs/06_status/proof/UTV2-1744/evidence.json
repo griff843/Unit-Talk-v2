@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-27T02:20:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "e7557b54451ddf7cb78add4a39bf406d461989a7",
     "verified_source_sha": "4e912e88b175d3bdacb4e0b4c7b9063c7a137890",
     "verified_source_note": "Anchor moved during branch synchronization on 2026-08-30. The original anchor was cb4581c8241a2b302aa456f53194d108998d3f6a (the substantive branch head as authored on 2026-08-26). The lane had fallen 39 commits behind main and was synchronized via the non-rewriting PR update path (gh pr update-branch 1452) onto main at 4f7ae5109325fc11999f77e8b57adc20ba7cdccd, producing merge commit 4e912e88b175d3bdacb4e0b4c7b9063c7a137890. That merge commit is now the last commit touching any path outside PROOF_ONLY_PREFIXES (docs/06_status/proof/, docs/06_status/lanes/); every commit after it changes only the lane manifest heartbeat and these proof artifacts. No lane history was rewritten: all seven original lane commits remain ancestors of the new head. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "set-by-ci",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-30T04:05:00Z",
+    "bound_at": "2026-08-30T06:55:39.847Z",
     "previous_verified_source_sha": "cb4581c8241a2b302aa456f53194d108998d3f6a"
   },
   "verdict": {

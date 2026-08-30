@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1744-outbox-triage",
   "branch": "codex/utv2-1744-outbox-triage",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e7557b54451ddf7cb78add4a39bf406d461989a7",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1452",
   "files_changed": [],
   "file_scope_lock": [
@@ -25,14 +25,22 @@
     "docs/06_status/proof/UTV2-1744/evidence.json",
     "docs/06_status/proof/UTV2-1744/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-26T20:09:05.212Z",
-  "heartbeat_at": "2026-08-30T03:57:21.496Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-30T06:55:42.617Z",
+  "closed_at": "2026-08-30T06:55:42.617Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1744-outbox-triage.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-30T06:55:41.007Z",
+      "verdict": "pass",
+      "merge_sha": "e7557b54451ddf7cb78add4a39bf406d461989a7",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
