@@ -1,0 +1,109 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1785",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Pre-proof hook validates only the files a commit authors",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-30T08:50:00Z",
+  "sha_binding": {
+    "merge_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4",
+    "verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. merge_sha carries the same value pre-merge and is rebound to the real merge commit by post-merge-lane-close.yml.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T08:50:00Z"
+  },
+  "verdict": {
+    "selection_validates_only_authored_files": true,
+    "no_check_weakened": true,
+    "detection_is_superset_of_prior_behaviour": true,
+    "statement": "The pre-proof validator now validates the files a commit authors rather than every staged path. Inherited-unchanged content is exempt; every other path -- including a conflict resolved to bytes equal to one parent, a post-merge edit, a delete, and a rename -- is still validated. Three pre-existing fail-open gaps were closed and one detection regression introduced by the rewrite was found in adversarial review and fixed in-lane."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/proof-check.test.ts",
+      "tests": 42,
+      "pass": 42,
+      "fail": 0,
+      "skipped": 0
+    },
+    "ops_suite": {
+      "command": "pnpm test:ops",
+      "tests": 2644,
+      "suites": 20,
+      "pass": 2644,
+      "fail": 0,
+      "skipped": 0
+    }
+  },
+  "mutation_controls": [
+    {
+      "name": "PR #1453 regression allows inherited history while the legacy staged-file mutation blocks it",
+      "mutation": "Replace the # BEGIN/END MERGE-AWARE SELECTION block with the pre-fix `git diff --cached --name-only` selection.",
+      "shipped_hook_exit": 0,
+      "mutant_exit": 2,
+      "non_vacuous": true
+    },
+    {
+      "name": "the indirect-invocation fallback is load-bearing, not decorative",
+      "mutation": "Delete the indirect-invocation fallback block.",
+      "shipped_hook_exit": 2,
+      "mutant_exit": 0,
+      "non_vacuous": true
+    }
+  ],
+  "adversarial_review": {
+    "performed_by": "orchestrator, independent of the executor",
+    "vectors_attempted": 6,
+    "vectors_bypassed_after_fix": 0,
+    "findings": [
+      {
+        "vector": "symlink smuggle",
+        "result": "blocked"
+      },
+      {
+        "vector": "deeply nested proof path",
+        "result": "blocked"
+      },
+      {
+        "vector": "proof path containing a space",
+        "result": "blocked"
+      },
+      {
+        "vector": "conflict resolved to MERGE_HEAD bytes with MERGE_MSG deleted",
+        "result": "blocked"
+      },
+      {
+        "vector": "indirect invocation via bash -c / sh -c / eval",
+        "result": "initially bypassed; regression fixed in-lane; now blocked"
+      },
+      {
+        "vector": "command spelling variants (-c k=v, env prefix, absolute path, && chain)",
+        "result": "blocked"
+      }
+    ]
+  },
+  "scope_refusals": [
+    "package.json was not touched; scripts/ops/proof-check.test.ts was already wired into test:ops.",
+    "UTV2-1729 evidence was not modified and is not special-cased.",
+    "No proof-schema weakening, no workflow change, no branch-protection change, no --no-verify or equivalent bypass."
+  ],
+  "known_gaps": [
+    "A git alias for commit (e.g. `git ci`) is not detected. This is unchanged from the pre-fix hook and outside the authorized scope of this lane."
+  ]
+}
