@@ -1,17 +1,17 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 3ed0be33fc37ee95a3d274dbe7dc1626dcc7f0a9
+MERGE_SHA: 1486d510ffd6aff27fbc34fc89daedf1949e03f8
 
 Three code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/ops-merge-wrapper.ts` | +132 / −2 |
-| `scripts/ops/merge-wrapper.ts` | +90 / −1 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +366 / −15 |
+| `scripts/ops/ops-merge-wrapper.ts` | +138 / −2 |
+| `scripts/ops/merge-wrapper.ts` | +107 / −2 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +520 / −15 |
 
-(`git diff --numstat 11920f2d..3ed0be33 -- scripts/ops/`, the full lane diff.)
+(`git diff --numstat 11920f2d..1486d510 -- scripts/ops/`, the full lane diff.)
 
 Plus lane metadata: `docs/06_status/lanes/UTV2-1790.json` (`file_scope_lock` extended
 by exactly one path, `scripts/ops/merge-wrapper.ts`, under explicit PM approval),
@@ -92,10 +92,17 @@ is about live here and nowhere else.
    That message (round-3 correction) names `pnpm ops:merge-lock release --issue <id>
    --branch <branch>` — `scripts/ops/merge-mutex.ts:614`, a verb that actually
    releases — and states explicitly that `pnpm ops:merge-wrapper guard`, which it
-   named before, only ASSERTS the lock is held. It also prints the git command that
-   actually ran, because the sync verbs are bridged through the `main-sync` slot and
-   `operation`/`command` otherwise describe the bridge rather than the invocation that
-   left the residue.
+   named before, only ASSERTS the lock is held.
+
+4. **New option `reportedCommand`** (round 4). What the wrapper RUNS is always
+   `command`; what it REPORTS is this vector when the caller bridged a different
+   operation through this one. `runExtendedMergeWrapper` bridges `git-merge-main` /
+   `git-rebase-main` through the `main-sync` slot and substitutes the real invocation
+   inside its runner, so without this every result — including the fail-closed one
+   whose whole job is to tell an operator what left `MERGE_HEAD` behind — reported
+   `git pull --ff-only origin main`, a command that cannot leave a merge in progress.
+   Round 3's proof asserted the opposite of what the code did; see finding 10 in
+   `verification.md`.
 
 No existing caller passes `onCommandFailure`, so every other operation's behaviour is
 unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
@@ -108,7 +115,7 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
    genuinely issues them. The four remaining `--ff-only` occurrences belong to
    `main-sync`'s legitimate `git pull --ff-only origin main` and are unchanged.
 
-2. **Six real-git regressions.** Helpers `git(cwd, ...args)`,
+2. **Eight real-git regressions.** Helpers `git(cwd, ...args)`,
    `withDivergedRepo({conflicting}, run)`, `realGitRunner(hook)`, `unmergedPaths(dir)`
    and `mergeHeadPresent(dir)` build a temporary repository with a real
    `refs/remotes/origin/main` ref and genuine divergence, asserted mechanically before
@@ -147,7 +154,17 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
      propagate, the structured `merge_wrapper_cleanup_failed` result is returned with
      the thrown message surfaced, and the lock is still `held`.
 
-3. **Three harness defects fixed in this suite (round 3).** Tests 23 and 24 drove a
+3. **Round 4 additions.** Test 53 is a real conflicted `git rebase`, pinning the
+   abort verb (`git merge --abort` during a rebase exits 128 and the residue
+   survives; hardcoding `merge` survived the entire 52-test suite before this).
+   Test 54 masks both refs to ABSENT over a genuinely conflicted index, isolating
+   the unmerged-paths term of the nothing-to-abort early return. Test 49 gained
+   three pins: the `git stash pop` call was never ISSUED (its previous assertions
+   were satisfied by git's own refusal to pop into an unmerged index, so they
+   passed with a pop added), and `result.command` / the operator message name the
+   real invocation and not the bridge.
+
+4. **Three harness defects fixed in this suite (round 3).** Tests 23 and 24 drove a
    blanket mock returning exit 128 for *every* command including the new probes;
    under the corrected code that is an undeterminable repository, so those tests were
    asserting the ordinary released-lock path through a mock that no longer described

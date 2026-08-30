@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "title": "main-sync git-merge-main uses --no-ff so a diverged branch can sync, and its failure path is transactional",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-31T02:10:00Z",
+  "generated_at": "2026-08-31T04:30:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "3ed0be33fc37ee95a3d274dbe7dc1626dcc7f0a9",
-    "verified_source_note": "Last commit on this branch touching a non-proof path (round-3 remediation). merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
+    "verified_source_sha": "1486d510ffd6aff27fbc34fc89daedf1949e03f8",
+    "verified_source_note": "Last commit on this branch touching a non-proof path (round-4 remediation). merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,8 +18,8 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-31T02:10:00Z",
-    "previous_verified_source_sha": "77028bb54f53fe0d5aab7414c55d276159c59c5d",
+    "bound_at": "2026-08-31T04:30:00Z",
+    "previous_verified_source_sha": "3ed0be33fc37ee95a3d274dbe7dc1626dcc7f0a9",
     "verified_source_sha_history": [
       {
         "sha": "54e03d861d5c53d0990bffd933d5a75f2148f6a5",
@@ -28,6 +28,10 @@
       {
         "sha": "77028bb54f53fe0d5aab7414c55d276159c59c5d",
         "superseded_reason": "Round-2 head. Superseded by the round-3 remediation commit: independent review found that abortInProgressSync collapsed an undeterminable probe result into 'the ref is absent', so a repository that could not answer took the 'nothing to abort' early return and the wrapper popped the autostash and released the mutex anyway -- the same fail-open class as the P1, one layer down; and that the caller-supplied onCommandFailure hook was called unguarded, so a throwing hook escaped runMergeWrapper with the lock held and no structured result."
+      },
+      {
+        "sha": "3ed0be33fc37ee95a3d274dbe7dc1626dcc7f0a9",
+        "superseded_reason": "Round-3 head. Superseded by the round-4 remediation commit: an independent reviewer demonstrated that the round-3 proof asserted the fail-closed message 'names the git command that actually ran' when commandVector rendered the bridged `git pull --ff-only origin main` instead -- a command that cannot leave MERGE_HEAD behind -- and that three further controls (the abort verb, the not-attempted stash pop, and the unmerged-paths term of the early return) were pinned by no test or mutant."
       }
     ]
   },
@@ -39,7 +43,7 @@
     "protected_path_refusal_preserved": true,
     "head_move_invalidation_reporting_preserved": true,
     "actionable_failure_behaviour_preserved": true,
-    "statement": "git-merge-main built `git merge --ff-only origin/main`, which cannot merge a diverged branch by definition, so main-sync's recommended exit for divergence failed on exactly the condition it exists for -- leaving git-rebase-main, which rewrites history and invalidates every head-pinned governance artifact, as the only operable path. The command is now `git merge --no-ff --no-edit origin/main`: it merges a genuinely diverged branch while preserving both sides' commit SHAs byte-for-byte, is deliberately not a bare `git merge` (which would fast-forward a merely-behind branch and make the verb's effect depend on divergence state), and is noninteractive. Permitting a non-fast-forward merge also permits a conflicting one, which exposed a second defect on the same path and was raised as a review P1: the wrapper popped its lane-state autostash and released the merge mutex while MERGE_HEAD and unmerged index entries were still present, stranding lane state in the stash and letting the next lane acquire a mutex over a half-merged worktree. The failure path is now transactional: abortInProgressSync aborts the in-progress merge/rebase and verifies the result before the stash is restored and before the lock is released, and a cleanup that cannot restore the pre-attempt state fails closed with the distinct merge_wrapper_cleanup_failed code, the mutex retained and the stash left intact. All five wrapper safety invariants are preserved; the mutex ordering is hardened, not weakened. Round 3 closed two fail-open residuals found by independent review: an undeterminable probe result (git exit 128) was being read as 'the ref is absent', which sent an unreadable repository down the 'nothing to abort' early return; and the caller-supplied onCommandFailure hook was called unguarded, so a throwing hook escaped runMergeWrapper with the lock held and no structured result. Both now force the fail-closed branch. The fail-closed recovery message also named `pnpm ops:merge-wrapper guard`, which only asserts the lock is held; it now names `pnpm ops:merge-lock release` and prints the git command that actually ran.",
+    "statement": "git-merge-main built `git merge --ff-only origin/main`, which cannot merge a diverged branch by definition, so main-sync's recommended exit for divergence failed on exactly the condition it exists for -- leaving git-rebase-main, which rewrites history and invalidates every head-pinned governance artifact, as the only operable path. The command is now `git merge --no-ff --no-edit origin/main`: it merges a genuinely diverged branch while preserving both sides' commit SHAs byte-for-byte, is deliberately not a bare `git merge` (which would fast-forward a merely-behind branch and make the verb's effect depend on divergence state), and is noninteractive. Permitting a non-fast-forward merge also permits a conflicting one, which exposed a second defect on the same path and was raised as a review P1: the wrapper popped its lane-state autostash and released the merge mutex while MERGE_HEAD and unmerged index entries were still present, stranding lane state in the stash and letting the next lane acquire a mutex over a half-merged worktree. The failure path is now transactional: abortInProgressSync aborts the in-progress merge/rebase and verifies the result before the stash is restored and before the lock is released, and a cleanup that cannot restore the pre-attempt state fails closed with the distinct merge_wrapper_cleanup_failed code, the mutex retained and the stash left intact. All five wrapper safety invariants are preserved; the mutex ordering is hardened, not weakened. Round 3 closed two fail-open residuals found by independent review: an undeterminable probe result (git exit 128) was being read as 'the ref is absent', which sent an unreadable repository down the 'nothing to abort' early return; and the caller-supplied onCommandFailure hook was called unguarded, so a throwing hook escaped runMergeWrapper with the lock held and no structured result. Both now force the fail-closed branch. The fail-closed recovery message also named `pnpm ops:merge-wrapper guard`, which only asserts the lock is held; it now names `pnpm ops:merge-lock release`. Round 4 corrected a FALSE claim that round 3's proof made and three controls that nothing pinned, all found by a second independent reviewer. The false claim: the fail-closed message was asserted to name the git command that actually ran, but commandVector was built from the bridged input, so it rendered `git pull --ff-only origin main` -- an invocation that cannot leave MERGE_HEAD behind -- and pointed the operator away from the residue. runMergeWrapper now takes a reportedCommand option: what is run is still `command`, what is reported is the caller's real vector. The three unpinned controls were the abort verb (hardcoding `merge` survived the whole suite; `git merge --abort` during a rebase exits 128 and the residue survives), the not-attempted autostash pop (test 49's assertions were satisfied by git's own refusal to pop into an unmerged index, not by the control), and the unmerged-paths term of the nothing-to-abort early return. Each is now pinned by a test and a mutant (M9-M12).",
     "merge_is_noninteractive": true,
     "failed_merge_is_transactional": true,
     "cleanup_failure_fails_closed": true,
@@ -47,7 +51,9 @@
     "original_conflict_diagnostics_preserved": true,
     "undeterminable_state_never_reported_clean": true,
     "throwing_cleanup_hook_fails_closed": true,
-    "recovery_message_names_a_real_release_command": true
+    "recovery_message_names_a_real_release_command": true,
+    "reported_command_is_the_invocation_that_actually_ran": true,
+    "abort_verb_follows_the_operation": true
   },
   "static_proof": {
     "type_check": {
@@ -57,8 +63,8 @@
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts",
-      "tests": 52,
-      "pass": 52,
+      "tests": 54,
+      "pass": 54,
       "fail": 0,
       "skipped": 0
     },
@@ -94,9 +100,9 @@
     },
     "ops_suite": {
       "command": "pnpm test:ops",
-      "tests": 2659,
+      "tests": 2661,
       "suites": 20,
-      "pass": 2659,
+      "pass": 2661,
       "fail": 0,
       "skipped": 0,
       "verified_in_session": true
@@ -105,9 +111,9 @@
   "mutation_controls": {
     "executed_by": "the certifying session, in this worktree",
     "method": "each control inverted individually, focused suite re-run against the mutant, source restored from a pre-mutation backup after each and the restored baseline re-confirmed green",
-    "baseline": "52 pass, 0 fail",
-    "restored": "52 pass, 0 fail",
-    "count": 8,
+    "baseline": "54 pass, 0 fail",
+    "restored": "54 pass, 0 fail",
+    "count": 12,
     "surviving": 0,
     "mutants": [
       {
@@ -205,9 +211,50 @@
           "52"
         ],
         "note": "Proves the fail-closed branch must not release the mutex on its way out."
+      },
+      {
+        "id": "M9",
+        "name": "reportedCommand removed, so results name the bridged main-sync pull",
+        "result": "KILLED",
+        "mutant_fail_count": 2,
+        "failing_tests": [
+          "49",
+          "53"
+        ],
+        "note": "Round 4. Reproduces the reviewed P2 exactly: the fail-closed result names `git pull --ff-only origin main`, a command that cannot leave MERGE_HEAD behind, pointing the operator away from the residue."
+      },
+      {
+        "id": "M10",
+        "name": "the abort verb hardcoded to 'merge' regardless of operation",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          "53"
+        ],
+        "note": "Round 4. `git merge --abort` during a rebase exits 128 and the residue survives. It fails closed rather than open, but it converts automatic recovery into a manual-recovery incident for git-rebase-main. Survived the entire 52-test suite before test 53 existed."
+      },
+      {
+        "id": "M11",
+        "name": "a `git stash pop` attempted inside the fail-closed branch",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          "49"
+        ],
+        "note": "Round 4. Test 49's `popped === false` and 'stash entry still listed' were satisfied by git's own refusal to pop into an unmerged index, so they passed under this mutant; the test now asserts the call was never issued."
+      },
+      {
+        "id": "M12",
+        "name": "`&& before.unmerged.length === 0` dropped from the nothing-to-abort early return",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          "54"
+        ],
+        "note": "Round 4. Every real conflict leaves MERGE_HEAD too, so no test isolated the third term until test 54 masked both refs to ABSENT over a genuinely conflicted index."
       }
     ],
-    "corroboration": "All eight mutants were executed in this session against the current source. No mutation result from the unattributed diff (see provenance) is carried forward."
+    "corroboration": "All twelve mutants were executed in this session against the current source, with the restored baseline re-confirmed green after each. No mutation result from the unattributed diff (see provenance) is carried forward. M9-M12 exist because an independent reviewer demonstrated those four controls were unpinned -- M9's was not merely unpinned but asserted and false."
   },
   "regression_fixtures": {
     "type": "real git subprocesses, nothing mocked",
@@ -278,6 +325,28 @@
           "the thrown message is surfaced in the result message",
           "the merge lock is still held"
         ]
+      },
+      {
+        "name": "a real rebase conflict is aborted with the REBASE verb, not the merge verb",
+        "asserts": [
+          "a real conflicted `git rebase origin/main` against a genuinely diverged temp repo",
+          "code is merge_wrapper_command_failed -- cleanly aborted, so an ordinary failure",
+          "REBASE_HEAD gone; no .git/rebase-merge and no .git/rebase-apply directory",
+          "no unmerged entries remain",
+          "lane HEAD restored to the pre-rebase commit (an aborted rebase must restore it)",
+          "autostash stashed and popped; the untracked lane-state file is back on disk; git stash list empty",
+          "mutex released",
+          "result.command is ['git','rebase','origin/main'], not the bridged main-sync pull"
+        ]
+      },
+      {
+        "name": "unmerged entries alone block the nothing-to-abort early return",
+        "asserts": [
+          "both refs are masked to report ABSENT (git exit 1, NOT the exit 128 of test 51, so the undetermined path cannot be what carries this test)",
+          "precondition sampled from the live worktree: it really was unmerged when the probe ran",
+          "the abort was ISSUED -- under the mutant the early return fires and nothing is issued",
+          "cleanup then succeeds: no unmerged entries, MERGE_HEAD gone, autostash popped, mutex released"
+        ]
       }
     ]
   },
@@ -291,7 +360,9 @@
     "BLOCKED_RAW_COMMANDS unchanged",
     "no other operation receives the cleanup hook; pr-merge, main-sync and the deferred path have unchanged call sequences, and merge-wrapper.test.ts passes 21/21 unmodified",
     "an undeterminable repository state is never reported clean: `git rev-parse --verify --quiet` exit 1 (absent) and exit 128 (unanswerable) are distinguished, and the second always forces the fail-closed branch",
-    "the caller-supplied onCommandFailure hook cannot escape runMergeWrapper: a throw becomes the fail-closed result rather than an unwind with the lock held"
+    "the caller-supplied onCommandFailure hook cannot escape runMergeWrapper: a throw becomes the fail-closed result rather than an unwind with the lock held",
+    "the reported command is the invocation that actually ran: `reportedCommand` carries the real vector through the main-sync bridge, so result.command and the fail-closed message never name `git pull --ff-only origin main` for a merge or rebase",
+    "the abort verb follows the operation, pinned by a real conflicted rebase rather than a mock"
   ],
   "scope_refusals": [
     "scripts/ops/merge-wrapper.ts was added to file_scope_lock for the P1 remediation only: the stash pop and the mutex release live there and nowhere else, and correcting the ordering elsewhere would have required re-acquiring a released lock, which is racy. One new optional option, one new result code, one guarded early return.",
@@ -304,7 +375,8 @@
     "A merge that conflicts still requires manual resolution by the operator. The wrapper now leaves the worktree exactly as it found it and reports actionably, but it does not resolve the conflict.",
     "A --no-ff merge advances the branch head by one merge commit, which still moves the PR head SHA and therefore still invalidates head-pinned governance artifacts. This lane makes the sanctioned exit operable and SHA-preserving for existing commits; it does not eliminate re-authorization after a sync.",
     "The cleanup-failure path deliberately leaves the mutex held. Recovery is manual and the message says so; there is no automatic lock expiry short of the lock TTL.",
-    "--no-edit is pinned by command-shape assertions only (see mutation M2); it cannot be made behaviourally load-bearing under piped stdio."
+    "--no-edit is pinned by command-shape assertions only (see mutation M2); it cannot be made behaviourally load-bearing under piped stdio.",
+    "Rounds 2, 3 and 4 each installed the next defect, and two of the four found in round 4 were proof-integrity failures rather than product failures: a claim with no test behind it, and an assertion that could not fail. Recorded because the pattern is the finding."
   ],
   "provenance": {
     "summary": "Part of the implementation proven here was authored by a different session and adopted as untrusted input after review and re-execution, not as authored work.",
@@ -358,5 +430,35 @@
     "not_adopted_on_trust": "the unattributed diff arrived with a seven-mutation battery transcript from a `battery.py` script that is not part of this repository and was not run here; NONE of its results are carried forward. The eight mutants asserted above were each executed in this session against the current source.",
     "noted": "the duplicate left a 0-byte docs/06_status/lanes/UTV2-99102.json (test pollution into the live manifest directory) which it then cleaned up; it is absent from the final tree and from this PR",
     "authorship_statement": "Acceptance of the retained portions rests on review and re-execution in this session, not on assumed authorship. Where a claim could not be reproduced here, it is not made."
+  },
+  "independent_review": {
+    "round_4": {
+      "head_reviewed": "da425fada3b1a9d8f8297a5d993f15049c097238",
+      "reviewer": "a session that authored none of this implementation or proof",
+      "verdict": "FAIL",
+      "measurements_reproduced": "52/52 focused, 21/21 sibling, type-check exit 0, test:ops 2659/2659, and the entire eight-mutant battery byte-for-byte -- every mutant_fail_count and failing_tests list matched",
+      "findings": [
+        "P2: the proof claimed the fail-closed message names the git command that actually ran; it named the bridged main-sync pull",
+        "P3: the abort verb selection was unpinned",
+        "P3: 'the stash is deliberately NOT popped' was a vacuous assertion",
+        "P3: the unmerged-paths term of the early return was unpinned"
+      ],
+      "all_findings_fixed_at": "1486d510ffd6aff27fbc34fc89daedf1949e03f8",
+      "could_not_break": [
+        "no fail-open path where the stash pops or the mutex releases with MERGE_HEAD, REBASE_HEAD or unmerged entries surviving",
+        "mutex retention is real: a second lane against the same lockfile was genuinely refused with merge_wrapper_lock_held",
+        "the undetermined classification is not over-broad: a healthy real repository returns cleaned:true with no needless retention, and the inverted mutant was killed",
+        "abortInProgressSync does not destroy legitimate uncommitted work, tracked or untracked, involved in the merge or not",
+        "cleanup-before-release ordering is genuinely pinned, and the residue re-probe is load-bearing",
+        "hook coverage is complete rather than lucky: main-sync and the gh operations cannot leave a merge in progress",
+        "file scope is honest: 9 paths vs main, the only one outside file_scope_lock being the lane's own manifest",
+        "no false claim of completed independent review anywhere in the PR or the bundle"
+      ]
+    },
+    "current_head": {
+      "sha": "1486d510ffd6aff27fbc34fc89daedf1949e03f8",
+      "status": "PENDING",
+      "note": "The round-4 corrections moved the head, so the round-4 review does not cover the code now proposed for merge. No claim of completed independent review at this head is made."
+    }
   }
 }
