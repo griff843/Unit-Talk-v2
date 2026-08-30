@@ -53,20 +53,15 @@ export default async function ReviewQueuePage({
   const { picks, total } = queue;
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
-  const lifecycleAwaitingApproval = picks.filter(
-    (pick) => pick.governanceQueueState === 'awaiting_approval' || pick.status === 'awaiting_approval',
-  ).length;
-  const legacyPending = Math.max(total - lifecycleAwaitingApproval, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
-          <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} awaiting review</span>
+          <span className="text-sm text-gray-400">{picks.length} review candidate{picks.length !== 1 ? 's' : ''} loaded</span>
           <p className="text-xs text-gray-500">
-            Governance queue truth: {lifecycleAwaitingApproval} lifecycle-gated awaiting_approval
-            {', '}
-            {legacyPending} legacy pending-review pick{legacyPending !== 1 ? 's' : ''}.
+            Source query reported {total} matching row{total !== 1 ? 's' : ''} before local fixture exclusion.
+            Lifecycle and approval state are shown per row; no full-queue split is inferred from this page.
           </p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />

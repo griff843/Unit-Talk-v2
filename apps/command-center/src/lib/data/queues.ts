@@ -207,6 +207,10 @@ function asBooleanOrNull(v: unknown): boolean | null {
   return typeof v === 'boolean' ? v : null;
 }
 
+function isMissingSingleRowError(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && (error as Record<string, unknown>)['code'] === 'PGRST116';
+}
+
 /**
  * picks_current_state has no event_name/event_start_time columns — event
  * context lives in picks.metadata. Fail-closed: null when absent.
@@ -491,7 +495,7 @@ export async function searchPicks(
 
     let query = client
       .from('picks_current_state')
-      .select(selectCols, { count: 'estimated' });
+      .select(selectCols, { count: 'exact' });
 
     // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
@@ -586,7 +590,11 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       .eq('id', pickId)
       .single();
 
-    if (pickResult.error || !pickResult.data) {
+    if (isMissingSingleRowError(pickResult.error)) {
+      return null;
+    }
+    assertQuerySucceeded(pickResult, 'getPickDetail pick');
+    if (!pickResult.data) {
       return null;
     }
 
@@ -619,6 +627,11 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .order('created_at', { ascending: false }),
     ]);
 
+    assertQuerySucceeded(lifecycleResult, 'getPickDetail lifecycle');
+    assertQuerySucceeded(promotionHistResult, 'getPickDetail promotion history');
+    assertQuerySucceeded(outboxResult, 'getPickDetail distribution outbox');
+    assertQuerySucceeded(settlementResult, 'getPickDetail settlements');
+
     const lifecycleRows = (lifecycleResult.data ?? []) as JsonObject[];
     const promotionHistRows = (promotionHistResult.data ?? []) as JsonObject[];
     const outboxRows = (outboxResult.data ?? []) as JsonObject[];
@@ -649,6 +662,10 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .limit(1)
         .maybeSingle(),
     ]);
+
+    assertQuerySucceeded(receiptsResult, 'getPickDetail distribution receipts');
+    assertQuerySucceeded(auditResult, 'getPickDetail audit trail');
+    assertQuerySucceeded(submissionResult, 'getPickDetail submission');
 
     const receiptRows = (receiptsResult.data ?? []) as JsonObject[];
     const auditRows = (auditResult.data ?? []) as JsonObject[];
@@ -876,7 +893,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     };
   } catch (err) {
     console.error('getPickDetail exception:', err);
-    return null;
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

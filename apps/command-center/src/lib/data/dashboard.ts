@@ -237,15 +237,16 @@ function deriveSignals(
 
 // ── Lifecycle / promotion / delivery / settlement status mapping ──────────────
 
-function mapLifecycleStatus(status: string): PickRow['lifecycleStatus'] {
+export function mapLifecycleStatus(status: string): PickRow['lifecycleStatus'] {
   switch (status) {
     case 'submitted': return 'submitted';
     case 'validated': return 'validated';
+    case 'awaiting_approval': return 'awaiting_approval';
     case 'queued': return 'queued';
     case 'posted': return 'posted';
     case 'settled': return 'settled';
     case 'voided': return 'voided';
-    default: return 'validated';
+    default: return 'unknown';
   }
 }
 

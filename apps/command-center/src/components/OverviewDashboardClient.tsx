@@ -251,7 +251,11 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
         title: `${pick.tier === '—' ? 'Unscored' : `${pick.tier} tier`} ${pick.player}`,
         detail: `${pick.market} • ${pick.status}`,
         timestamp: relativeTimestamp(pick.submittedAt),
-        tone: pick.tier === 'D' ? 'warning' as const : 'success' as const,
+        tone: pick.tier === '—'
+          ? 'info' as const
+          : pick.tier === 'D'
+            ? 'warning' as const
+            : 'success' as const,
       })),
     [feedRows],
   );

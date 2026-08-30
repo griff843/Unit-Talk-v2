@@ -4,6 +4,7 @@
 // packages/db/src/database.types.ts.
 
 import { getDataClient } from './client';
+import { readAuthoritativeCount } from '../query-result';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -73,7 +74,18 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
   const settlementColumns =
     'id, pick_id, status, result, source, confidence, review_reason, settled_by, corrects_id, settled_at, created_at';
 
-  const [recentResult, manualResult, correctionsResult, settled24hResult, stuckResult, gameLatestResult, game24hResult] =
+  const [
+    recentResult,
+    manualResult,
+    manualCountResult,
+    correctionsResult,
+    correctionsCountResult,
+    settled24hResult,
+    stuckResult,
+    stuckCountResult,
+    gameLatestResult,
+    game24hResult,
+  ] =
     await Promise.all([
       client.from('settlement_records').select(settlementColumns).order('settled_at', { ascending: false }).limit(50),
       client
@@ -84,10 +96,18 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
         .limit(50),
       client
         .from('settlement_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'manual_review'),
+      client
+        .from('settlement_records')
         .select(settlementColumns)
         .not('corrects_id', 'is', null)
         .order('created_at', { ascending: false })
         .limit(50),
+      client
+        .from('settlement_records')
+        .select('id', { count: 'exact', head: true })
+        .not('corrects_id', 'is', null),
       client
         .from('settlement_records')
         .select('id', { count: 'exact', head: true })
@@ -103,17 +123,30 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
         .lte('created_at', dayAgo)
         .order('created_at', { ascending: true })
         .limit(50),
+      client
+        .from('picks_current_state')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'posted')
+        .lte('created_at', dayAgo),
       client.from('game_results').select('sourced_at').order('sourced_at', { ascending: false }).limit(1),
       client.from('game_results').select('id', { count: 'exact', head: true }).gte('sourced_at', dayAgo),
     ]);
 
-  for (const result of [recentResult, manualResult, correctionsResult, settled24hResult, stuckResult, gameLatestResult, game24hResult]) {
+  for (const result of [
+    recentResult,
+    manualResult,
+    correctionsResult,
+    stuckResult,
+    gameLatestResult,
+  ]) {
     if (result.error) throw result.error;
   }
 
-  if (typeof settled24hResult.count !== 'number' || typeof game24hResult.count !== 'number') {
-    throw new Error('Settlement count telemetry was not measured');
-  }
+  const settled24h = readAuthoritativeCount(settled24hResult, 'settled in 24h');
+  const manualReviewOpen = readAuthoritativeCount(manualCountResult, 'manual review settlements');
+  const correctionCount = readAuthoritativeCount(correctionsCountResult, 'settlement corrections');
+  const stuckPostedCount = readAuthoritativeCount(stuckCountResult, 'stuck posted picks');
+  const gameResults24h = readAuthoritativeCount(game24hResult, 'game results in 24h');
 
   const manualReview = ((manualResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
   const corrections = ((correctionsResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
@@ -137,10 +170,10 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
 
   return {
     counts: {
-      settled24h: settled24hResult.count,
-      manualReviewOpen: manualReview.length,
-      corrections: corrections.length,
-      stuckPosted: stuckPosted.length,
+      settled24h,
+      manualReviewOpen,
+      corrections: correctionCount,
+      stuckPosted: stuckPostedCount,
     },
     recentSettlements: ((recentResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow),
     manualReview,
@@ -148,7 +181,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     stuckPosted,
     gameResults: {
       latestSourcedAt: typeof latestGameRow?.['sourced_at'] === 'string' ? latestGameRow['sourced_at'] : null,
-      count24h: game24hResult.count,
+      count24h: gameResults24h,
     },
   };
 }

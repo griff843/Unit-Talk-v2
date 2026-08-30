@@ -4,6 +4,7 @@ import { getResultsOpsSnapshot, type ResultsOpsSnapshot, type SettlementOpsRow }
 import { formatRelativeAge } from '@/lib/fire-board-model';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import { SettlementWorkbench } from '@/components/SettlementWorkbench';
+import { getPickDetail } from '@/lib/data';
 
 export const metadata = { title: 'Settlement — Unit Talk Command Center' };
 
@@ -56,7 +57,15 @@ function SettlementTable({ rows, nowMs }: { rows: SettlementOpsRow[]; nowMs: num
   );
 }
 
-export default async function SettlementPage() {
+export default async function SettlementPage({
+  searchParams: searchParamsPromise,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const searchParams = await searchParamsPromise;
+  const requestedPickId = typeof searchParams['pickId'] === 'string'
+    ? searchParams['pickId'].trim() || null
+    : null;
   const nowMs = Date.now();
   const observedAt = new Date(nowMs).toISOString();
 
@@ -68,6 +77,21 @@ export default async function SettlementPage() {
     loadError = describeOperatorFailure(error, 'Settlement truth could not be loaded.');
   }
 
+  let isAlreadySettled: boolean | null = null;
+  let pickLoadError: string | null = null;
+  if (snapshot && requestedPickId) {
+    try {
+      const detail = await getPickDetail(requestedPickId);
+      if (!detail) {
+        pickLoadError = 'Canonical pick was not found.';
+      } else {
+        isAlreadySettled = detail.pick.status === 'settled' || detail.settlements.length > 0;
+      }
+    } catch (error) {
+      pickLoadError = describeOperatorFailure(error, 'Canonical pick state could not be loaded.');
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="space-y-1">
@@ -76,8 +100,6 @@ export default async function SettlementPage() {
           Observed {observedAt}.
         </p>
       </div>
-
-      <SettlementWorkbench />
 
       {loadError ? (
         <div className="cc-surface p-5 border border-red-500/30">
@@ -89,6 +111,11 @@ export default async function SettlementPage() {
         </div>
       ) : snapshot ? (
         <>
+          <SettlementWorkbench
+            pickId={requestedPickId}
+            isAlreadySettled={isAlreadySettled}
+            pickLoadError={pickLoadError}
+          />
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <StatCard label="Settled (24h)" value={snapshot.counts.settled24h} />
             <StatCard label="Manual Review Open" value={snapshot.counts.manualReviewOpen} />

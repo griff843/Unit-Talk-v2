@@ -5,6 +5,8 @@ import Link from 'next/link';
 
 interface PicksExplorerClientProps {
   picks: Array<Record<string, unknown>>;
+  /** Exact source-query count before local proof-fixture exclusion. */
+  sourceTotal: number;
   /** Retained for call-site compatibility; the shell TopBar owns the timestamp. */
   observedAt?: string;
 }
@@ -41,7 +43,7 @@ function formatOdds(odds: number | null): string {
   return odds > 0 ? `+${odds}` : String(odds);
 }
 
-export function PicksExplorerClient({ picks }: PicksExplorerClientProps) {
+export function PicksExplorerClient({ picks, sourceTotal }: PicksExplorerClientProps) {
   const [statusFilter, setStatusFilter] = useState('all');
 
   const statuses = useMemo(() => {
@@ -62,7 +64,7 @@ export function PicksExplorerClient({ picks }: PicksExplorerClientProps) {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
-          {visible.length} of {picks.length} picks · lifecycle index with drill-in
+          {visible.length} of {picks.length} loaded picks · source query count {sourceTotal} before fixture exclusion
         </p>
         <select
           value={statusFilter}
@@ -76,6 +78,12 @@ export function PicksExplorerClient({ picks }: PicksExplorerClientProps) {
           ))}
         </select>
       </div>
+      {sourceTotal > picks.length ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          This view loaded the first {picks.length} non-fixture rows from a {sourceTotal}-row source query.
+          Additional canonical picks exist; no complete-index total is inferred from the loaded window.
+        </div>
+      ) : null}
       <div className="cc-surface overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>

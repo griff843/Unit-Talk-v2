@@ -1,18 +1,16 @@
-'use client';
-
-import { FormEvent, useState } from 'react';
 import { SettlementForm } from '@/components/SettlementForm';
 
-export function SettlementWorkbench() {
-  const [input, setInput] = useState('');
-  const [pickId, setPickId] = useState<string | null>(null);
+type SettlementWorkbenchProps = {
+  pickId: string | null;
+  isAlreadySettled: boolean | null;
+  pickLoadError: string | null;
+};
 
-  function openPick(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalized = input.trim();
-    setPickId(normalized.length > 0 ? normalized : null);
-  }
-
+export function SettlementWorkbench({
+  pickId,
+  isAlreadySettled,
+  pickLoadError,
+}: SettlementWorkbenchProps) {
   return (
     <section className="cc-surface p-5" aria-labelledby="settlement-workbench-heading">
       <div className="max-w-3xl">
@@ -20,18 +18,19 @@ export function SettlementWorkbench() {
           Governed settlement action
         </h2>
         <p className="mt-2 text-sm cc-text-muted">
-          Enter a canonical pick ID. Submitting uses the existing Command Center server action and canonical API;
-          correction records append and never overwrite the original.
+          Load a canonical pick before settlement controls are enabled. Submitting uses the existing Command Center
+          server action and canonical API; correction records append and never overwrite the original.
         </p>
-        <form className="mt-4 flex flex-col gap-3 sm:flex-row" onSubmit={openPick}>
+        <form className="mt-4 flex flex-col gap-3 sm:flex-row" action="/settlement" method="get">
           <label className="sr-only" htmlFor="settlement-pick-id">Canonical pick ID</label>
           <input
             id="settlement-pick-id"
+            name="pickId"
             className="cc-input min-w-0 flex-1 font-mono"
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
+            defaultValue={pickId ?? ''}
             placeholder="Canonical pick ID"
             autoComplete="off"
+            required
           />
           <button
             type="submit"
@@ -41,10 +40,17 @@ export function SettlementWorkbench() {
           </button>
         </form>
       </div>
-      {pickId ? (
+
+      {pickLoadError ? (
+        <div className="mt-6 rounded-md border border-amber-500/35 bg-amber-500/10 p-4 text-sm text-amber-100">
+          {pickLoadError} Settlement controls remain disabled.
+        </div>
+      ) : pickId && isAlreadySettled !== null ? (
         <div className="mt-6 border-t border-gray-800 pt-5">
-          <p className="mb-3 text-xs cc-text-muted">Target pick: <span className="font-mono text-gray-300">{pickId}</span></p>
-          <SettlementForm pickId={pickId} isAlreadySettled={false} />
+          <p className="mb-3 text-xs cc-text-muted">
+            Authoritative target: <span className="font-mono text-gray-300">{pickId}</span>
+          </p>
+          <SettlementForm pickId={pickId} isAlreadySettled={isAlreadySettled} />
         </div>
       ) : null}
     </section>

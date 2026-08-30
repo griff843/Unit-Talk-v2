@@ -7,9 +7,9 @@ export const metadata = { title: 'Picks Explorer — Unit Talk Command Center' }
 
 export default async function PicksPage() {
   try {
-    const { picks } = await searchPicks({ limit: '250' });
+    const { picks, total } = await searchPicks({ limit: '200' });
 
-    return <PicksExplorerClient picks={picks} observedAt={new Date().toISOString()} />;
+    return <PicksExplorerClient picks={picks} sourceTotal={total} observedAt={new Date().toISOString()} />;
   } catch (error) {
     return (
       <DegradedState
