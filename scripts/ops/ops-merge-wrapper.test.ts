@@ -2130,3 +2130,150 @@ test('UTV2-1790: unmerged entries alone block the nothing-to-abort early return'
     });
   });
 });
+
+test('UTV2-1790: a conflicting autostash pop after a SUCCESSFUL merge retains the mutex', () => {
+  // Review round 5, P1. Every regression above enters through the command
+  // FAILURE path. This one enters through the success path: the merge completes,
+  // and then `git stash pop` conflicts because the commit just merged from main
+  // touches a path that was autostashed. That leaves unmerged index entries and
+  // conflict markers in the worktree -- and the wrapper released the serializing
+  // mutex over it anyway, which is the same fail-open this lane exists to close,
+  // reached from the other side.
+  //
+  // It was unreachable while `git-merge-main` was `--ff-only` and could never
+  // complete a diverged merge at all. Making that verb work is what made it
+  // reachable, so it is this lane's to close.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-poppop-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+
+    // A TRACKED lane-state file, so main can change it and the stash can collide.
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'base\n');
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // main advances and changes the SAME lane-state file.
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main touches lane state');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+
+    // The lane diverges on an unrelated path, so the MERGE itself succeeds.
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'base\nfrom-lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane advances');
+
+    // Uncommitted lane-state edit -> autostashed, then collides on pop.
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'local-uncommitted\n');
+
+    assert.strictEqual(
+      git(dir, 'rev-list', '--left-right', '--count', 'origin/main...HEAD').replace(/\s+/u, ' '),
+      '1 1',
+      'fixture must be genuinely diverged',
+    );
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      // The merge itself succeeded; the pop is what failed.
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_stash_pop_conflict');
+      assert.strictEqual(result.main_sync_stash?.popped, false);
+
+      // The danger is real, not simulated: unmerged entries survive.
+      assert.ok(unmergedPaths(dir).length > 0, 'the pop really did leave unmerged entries');
+
+      // THE CONTROL: the serializing mutex is NOT handed to the next lane over a
+      // conflicted index.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'held',
+        'the mutex must NOT be released while unmerged entries survive the pop',
+      );
+      assert.strictEqual(result.release, undefined, 'no release may be reported');
+
+      // The operator is told the truth: the lock is retained, and how to release it.
+      assert.match(result.message, /NOT released/u, 'says the mutex was retained');
+      assert.match(result.message, /ops:merge-lock release/u, 'names a real release command');
+      assert.match(result.message, /--diff-filter=U/u, 'points at the unmerged entries');
+      assert.notStrictEqual(git(dir, 'stash', 'list'), '', 'the stash entry must be kept');
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: an undeterminable state AFTER the abort also fails closed', () => {
+  // Review round 5, P2. `residue` has three terms and the third --
+  // `after.undetermined.length > 0` -- was pinned by nothing: test 51 masks ALL
+  // probes, so the BEFORE-probe fail-closed fires first and the after-probe is
+  // never reached. Here the before-probe answers truthfully (a real conflict is
+  // detected), the abort reports success but is not executed, and only the
+  // post-abort probes are unanswerable. Without the third term the wrapper reads
+  // "abort succeeded, no residue detected", pops the stash into a still-conflicted
+  // index and releases the mutex.
+  withDivergedRepo({ conflicting: true }, ({ dir }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      let aborted = false;
+      const runner = realGitRunner((command, args) => {
+        if (command === 'git' && args[0] === 'merge' && args[1] === '--abort') {
+          // Report success WITHOUT executing it, so the conflict genuinely survives.
+          aborted = true;
+          return {
+            status: 0,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from(''),
+            error: undefined,
+          } as ReturnType<CommandRunner>;
+        }
+        // Only the probes issued AFTER the abort are unanswerable.
+        if (
+          aborted &&
+          command === 'git' &&
+          ((args[0] === 'rev-parse' && args.includes('--verify')) ||
+            (args[0] === 'diff' && args.includes('--diff-filter=U')))
+        ) {
+          return {
+            status: 128,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from('fatal: not a git repository'),
+            error: undefined,
+          } as ReturnType<CommandRunner>;
+        }
+        return undefined;
+      });
+
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(aborted, true, 'the before-probe must have detected the conflict');
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_cleanup_failed',
+        'an unverifiable post-abort state must not be reported clean',
+      );
+      assert.match(result.message, /could not be determined/u);
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'mutex retained');
+      assert.strictEqual(result.main_sync_stash?.popped, false, 'the autostash must be left alone');
+
+      spawnSync('git', ['merge', '--abort'], { cwd: dir });
+    });
+  });
+});

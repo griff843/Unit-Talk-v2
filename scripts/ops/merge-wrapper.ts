@@ -242,7 +242,11 @@ function popMainSyncStash(runner: CommandRunner, cwd: string): StashPopOutcome {
       stderr,
       message:
         `git stash pop failed after main-sync pull, so the autostashed lane-state ` +
-        `files (${MAIN_SYNC_STASH_PATHS.join(', ')}) are still stashed and were NOT restored. ` +
+        `files (${MAIN_SYNC_STASH_PATHS.join(', ')}) were NOT cleanly restored and the ` +
+        `stash entry was kept. UTV2-1790: if the pop CONFLICTED rather than refusing ` +
+        `outright, the worktree now also contains conflict markers and unmerged index ` +
+        `entries for those paths -- 'git stash pop' will fail again until they are ` +
+        `resolved; check 'git diff --name-only --diff-filter=U' first. ` +
         `This usually means the pulled commit now tracks a path that was stashed. ` +
         `Resolve manually: run 'git stash list' to find the ` +
         `"${MAIN_SYNC_STASH_MESSAGE}" entry, inspect the conflict, and run 'git stash pop' ` +
@@ -676,15 +680,21 @@ export function runMergeWrapper(
     }
   }
 
-  const release = releaseMergeLock(
-    { issue_id: issueId, branch: input.branch },
-    { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
-  );
-
   // A stash-pop conflict means lane-state data is sitting in the stash and
   // may now collide with what was just pulled. Surface it as a hard failure
   // instead of letting the pull's own success/failure mask it, and never
   // drop the stash entry ourselves.
+  //
+  // UTV2-1790 (review round 5): the mutex is NOT released here, and the release
+  // now happens after this branch rather than before it. A conflicting
+  // `git stash pop` leaves unmerged index entries and conflict markers in the
+  // worktree -- releasing the serializing mutex over that tree is the same
+  // fail-open this lane exists to close, just reached from the SUCCESS side of
+  // the sync rather than the failure side. It was unreachable while
+  // `git-merge-main` was `--ff-only` and could never complete a diverged merge;
+  // making that verb work is what made it reachable, so it is this lane's to
+  // close. Demonstrated by execution, not by inspection: see the regression in
+  // ops-merge-wrapper.test.ts.
   if (stashPopFailure) {
     return {
       ok: false,
@@ -693,13 +703,23 @@ export function runMergeWrapper(
       operation: input.operation,
       command: commandVector,
       lock,
-      release,
       stdout,
       stderr,
-      message: stashPopFailure,
+      message:
+        `${stashPopFailure}\n` +
+        `The merge mutex was deliberately NOT released: the pop left the worktree ` +
+        `with unmerged entries, and handing the serializing lock to the next lane ` +
+        `over a conflicted index is the failure this lane exists to prevent. ` +
+        `After resolving, release it with ` +
+        `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`,
       main_sync_stash: mainSyncStash,
     };
   }
+
+  const release = releaseMergeLock(
+    { issue_id: issueId, branch: input.branch },
+    { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+  );
 
   if (!release.ok) {
     return {

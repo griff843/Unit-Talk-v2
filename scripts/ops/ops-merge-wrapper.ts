@@ -478,8 +478,12 @@ export function runExtendedMergeWrapper(
   // UTV2-1678 criteria 3-4: prove the sync destroyed nothing before reporting
   // success. Applied to every sync verb, not just rebase — a merge with a bad
   // conflict resolution can drop a file just as permanently.
-  // UTV2-1790: cleanup is bound to the REAL runner, not the intercepting one,
-  // and runs inside runMergeWrapper before the autostash pop and the release.
+  // UTV2-1790: cleanup runs inside runMergeWrapper before the autostash pop and
+  // the release. It is bound to the REAL runner for clarity rather than for
+  // behaviour -- no call abortInProgressSync makes matches the main-sync pull
+  // vector, so passing the intercepting runner would be equivalent. Review round
+  // 5 confirmed that by mutation; the binding is documentation of intent, not a
+  // load-bearing control, and is described as such rather than claimed as one.
   const syncOperation = input.operation;
   const result = runMergeWrapper(bridgedInput, {
     ...options,
