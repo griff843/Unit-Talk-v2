@@ -15,6 +15,24 @@ MERGE_SHA: cbe7069295f435652c3fa68c0243fd4dd7d1ae5a
 
 ---
 
+## Definition of Done
+
+- [x] Root historical manifest is a truthful terminal `superseded` tombstone
+- [x] Parked historical manifest is a truthful terminal `superseded` tombstone
+- [x] Neither record participates in `ACTIVE_LOCK_STATUSES`
+- [x] Neither record consumes dispatch capacity (`ops:execution-state` 5 active -> 4, slots 5/10 -> 4/10)
+- [x] The 54-path self `FILE_OVERLAP` disappears (`ops:merge-risk` block 1 -> 0)
+- [x] Deleted-Linear orphan is no longer dispatch-blocking (`dispatch_blocking_failures: 0`; reclassified to advisory `ORCH-HISTORICAL-DECAY`)
+- [x] Scheduled `ops:reconcile` no longer rewrites either record (dry-run planned mutations 4 -> 0, zero entries for the record)
+- [x] No `record_merge_on_manifest` repair proposed or needed; PR #1448 recorded as governance evidence only, not bound as `commit_sha` or `pr_url`
+- [x] Stale per-issue sync file removed after its orchestration authority was tested and found negative
+- [x] Branch and PR statements are truthful, verified against `git ls-remote` and the GitHub API rather than restated
+- [x] No truth-check pass, Done state, or synthetic merge SHA fabricated
+- [x] Full relevant verification green
+- [x] Independent review verified BOTH manifest copies separately, including a byte-exact `truth_check_history` comparison
+
+---
+
 ## ASSERTIONS:
 
 1. Both on-disk copies of the historical superseded lane record — the root
