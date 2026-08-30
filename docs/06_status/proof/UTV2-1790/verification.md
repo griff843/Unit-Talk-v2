@@ -1,6 +1,6 @@
 # PROOF: UTV2-1790
 
-MERGE_SHA: 77028bb54f53fe0d5aab7414c55d276159c59c5d
+MERGE_SHA: 3ed0be33fc37ee95a3d274dbe7dc1626dcc7f0a9
 
 `pnpm ops:merge-wrapper main-sync` is the only sanctioned way to bring `origin/main`
 into a lane branch. When it detects divergence it refuses and names two explicit
@@ -65,9 +65,9 @@ execution in this session:
   `merge_wrapper_cleanup_failed` result code; the real-git conflict and
   cleanup-failure regressions. Type-check was re-run (exit 0, which also proves the
   `ExtendedMergeWrapperOperation` → `'git-merge-main' | 'git-rebase-main'` narrowing
-  is sound rather than assumed), the suite was re-run (50/50), and four mutations
-  were executed in this session to prove each control load-bearing (M2, M3, M4/M6,
-  M7 below).
+  is sound rather than assumed), the suite was re-run (52/52), and the full
+  eight-mutant battery below (M1-M8) was executed in this session to prove each
+  retained control load-bearing.
 - **Corrected** — the file-scope lock had been widened to **two** paths; PM approved
   only `scripts/ops/merge-wrapper.ts`, so `docs/06_status/lanes/UTV2-1790.json` was
   removed, leaving exactly one added entry.
@@ -75,9 +75,10 @@ execution in this session:
   carrying an unfilled exit-code token for that same command. The duplicate's
   `verify:static` run was interrupted mid-flight and never produced a result, so the
   PASS was unsupported. It is replaced below by a run executed in this session.
-- **Not adopted on trust** — every mutation result. Four were re-executed here
-  (M2, M3, M4/M6, M7); M1 was executed earlier in this session. Any row not
-  independently reproduced is marked as such in the mutation table.
+- **Not adopted on trust** — every mutation result. All eight rows of the table
+  below (M1-M8) were executed in this session against the current source. No
+  mutation result from the unattributed diff is carried forward; see **Not
+  asserted** under the mutation table.
 - **Noted** — the duplicate left a 0-byte `docs/06_status/lanes/UTV2-99102.json`,
   test pollution into the live manifest directory, which it then cleaned up. It is
   absent from the final tree and from this PR.
@@ -142,33 +143,70 @@ ASSERTIONS:
 - [x] No other operation's behaviour changes. The cleanup hook is passed only for
       `git-merge-main` and `git-rebase-main`; `pr-merge`, `main-sync` and the deferred
       path never receive it and their call sequences are unchanged in the suite.
+- [x] An **undeterminable** worktree state is never reported clean. `git rev-parse
+      --verify --quiet MERGE_HEAD` exits non-zero both when the ref is absent
+      (status 1) and when the question could not be answered at all (status 128, a
+      broken repository or missing git). `abortInProgressSync` tracks the second case
+      separately and fails closed on it, rather than taking the "nothing to abort"
+      early return. Proven by test 51 (real conflicted merge, probes forced to 128)
+      and by mutant M6.
+- [x] A **throwing** cleanup hook fails closed rather than escaping.
+      `onCommandFailure` is a caller-supplied injection point; the call is wrapped so
+      that a thrown error becomes the `merge_wrapper_cleanup_failed` result with the
+      thrown message surfaced, instead of unwinding out of `runMergeWrapper` with the
+      lock held and no structured result. Proven by test 52 and by mutant M7.
+- [x] The fail-closed message names a **real** recovery verb. It directs the operator
+      to `pnpm ops:merge-lock release --issue <id> --branch <branch>`
+      (`scripts/ops/merge-mutex.ts:614`) and states explicitly that
+      `pnpm ops:merge-wrapper guard` only ASSERTS the lock is held and does not
+      release it. It also names the git command that actually ran, because the sync
+      verbs are bridged through the `main-sync` slot and `operation`/`command` would
+      otherwise describe the bridge rather than the invocation that left the residue.
+- [x] **Scope note on `main-sync`.** `runMergeWrapper` accepts `onCommandFailure`
+      from any caller, but the only caller that supplies one is
+      `runExtendedMergeWrapper`, and only for the two git sync verbs. A direct
+      `main-sync` call therefore receives no cleanup hook. That is safe rather than
+      an omission: `main-sync` delegates the merge to `ops:merge-wrapper`'s own
+      bridged path, and a `main-sync` invocation that runs no merge leaves no
+      `MERGE_HEAD` to abort. Documented here rather than broadened, per the scope
+      constraint on this lane.
 
 ### Mutation evidence
 
 Every control this lane adds was inverted individually **in this session**, the
 focused suite re-run against the mutant, and the source restored and re-hashed to
 prove the revert was byte-exact (`md5sum -c` OK after each). Baseline and restored
-state both report `# fail 0` (50/50).
+state both report `# fail 0` (52/52).
 
 | # | Mutation | Result | Tests killed |
 |---|---|---|---|
 | M1 | `['merge','--no-ff','--no-edit','origin/main']` → `['merge','--ff-only','origin/main']` | KILLED, `# fail 7` | 2, 23, 27, 47, 48, 49, 50 |
 | M2 | `--no-edit` removed | KILLED, `# fail 3` | 2, 23, 27 |
-| M3 | `onCommandFailure` wiring removed from the sync path (pre-fix behaviour) | KILLED, `# fail 4` | 23, 24, 48, 49 |
+| M3 | `onCommandFailure` wiring removed from the sync path (pre-fix behaviour) | KILLED, `# fail 5` | 23, 24, 48, 49, 51 |
 | M4 | `abortInProgressSync`'s failure return reports `cleaned: true` | KILLED, `# fail 1` | 49 |
-| M5 | the mutex is released *before* cleanup runs | KILLED, `# fail 2` | 48, 49 |
+| M5 | the `if (cleanup && !cleanup.cleaned)` fail-closed branch removed, so the wrapper pops and releases anyway | KILLED, `# fail 3` | 49, 51, 52 |
+| M6 | an undeterminable probe treated as absence (`if (before.undetermined.length > 0)` → `if (false)`) | KILLED, `# fail 1` | 51 |
+| M7 | the `try`/`catch` around the `onCommandFailure` call removed, so a throwing hook escapes | KILLED, `# fail 1` | 52 |
+| M8 | the mutex released anyway inside the fail-closed branch, before returning | KILLED, `# fail 3` | 49, 51, 52 |
 
 Survivors: 0.
 
 **What each mutation proves.** M1 is killed behaviourally, not just by shape: tests
-47–50 fail because the merge genuinely does not happen under `--ff-only` against a
+47-50 fail because the merge genuinely does not happen under `--ff-only` against a
 real diverged repository. **M3 reproduces the reviewed P1 exactly** — with cleanup
 unwired, a conflicted merge again releases the mutex and attempts the autostash pop
 with `MERGE_HEAD` and unmerged entries still present. M4 proves the fail-closed
 `cleaned` computation is load-bearing: a tree that could not be cleaned must never be
-reported clean. M5 proves the *ordering* requirement specifically — the assertion
-that samples the lock at the instant `git merge --abort` runs fails the moment the
-release is moved ahead of cleanup.
+reported clean. M5 and M8 prove the two halves of the fail-closed contract
+separately — M5 that the branch must exist at all, M8 that it must not release the
+mutex on its way out. **M6 reproduces the reviewed round-2 P2 exactly**: collapsing
+"the probe could not answer" into "the ref is absent" sends an undeterminable tree
+down the "nothing to abort" early return, pops the autostash into a possibly-unmerged
+index and releases the mutex — the same fail-open class as the original P1, one layer
+down. M7 proves the hook boundary is guarded: `onCommandFailure` is caller-supplied,
+and without the `try`/`catch` a throwing hook exits `runMergeWrapper` with the lock
+held, the stash unpopped and no structured result — a stack trace instead of recovery
+instructions.
 
 **Honest scope note on M2.** M2 is killed only by command-shape assertions, not
 behaviourally. `git merge --no-ff` opens `$GIT_EDITOR` only when run from a terminal,
@@ -181,10 +219,9 @@ depending on an editor being available at all.
 
 **Not asserted.** The unattributed diff (see Provenance) arrived with a
 seven-mutation battery transcript produced by a `battery.py` script that is not part
-of this repository and was not run by this session. Two of its variants were not
-reproduced here and are therefore **not claimed**; two of its counts differ from the
-measurements above because the mutations are not identical. Only the five rows in the
-table — each executed here, with the restore verified by hash — are asserted.
+of this repository and was not run by this session. **None of its results are
+carried forward.** The eight rows above were each executed here against the current
+source, with the restore verified by hash; they are the only mutation claims made.
 
 ## Runtime Verification
 
@@ -192,9 +229,10 @@ This is a `hygiene` lane on the `static` proof profile. It changes orchestrator
 tooling scripts and their tests. It issues no database query, performs no network
 I/O, and touches no runtime, delivery, ingestion or application code. Runtime proof
 is therefore the executed behaviour of the wrapper against real git repositories:
-the four regressions spawn actual `git` processes, create real commits on both sides,
+the six regressions spawn actual `git` processes, create real commits on both sides,
 create a real conflict, and drive the real (non-injected) git binary. Nothing about
-git is mocked. The two cleanup regressions inspect the on-disk repository directly —
+git is mocked. Three of the cleanup regressions (48, 49, 51) inspect the on-disk
+repository directly —
 `MERGE_HEAD`, `git diff --diff-filter=U`, `git stash list`, `git status --porcelain`
 — rather than trusting the wrapper's own report.
 
@@ -212,9 +250,11 @@ ok 47 - UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)
 ok 48 - UTV2-1790: a real conflict fails, aborts the merge, restores the stash, and only then releases the mutex
 ok 49 - UTV2-1790: a cleanup failure fails closed — mutex retained, stash held, distinct code
 ok 50 - UTV2-1790: --no-ff still records a merge commit when the branch is merely behind
-# tests 50
+ok 51 - UTV2-1790: an undeterminable worktree state fails closed instead of reporting clean
+ok 52 - UTV2-1790: a cleanup hook that throws fails closed rather than escaping
+# tests 52
 # suites 0
-# pass 50
+# pass 52
 # fail 0
 # cancelled 0
 # skipped 0
@@ -228,9 +268,9 @@ Full ops suite:
 
 ```
 $ pnpm test:ops
-# tests 2657
+# tests 2659
 # suites 20
-# pass 2657
+# pass 2659
 # fail 0
 # cancelled 0
 # skipped 0
@@ -274,7 +314,7 @@ $ pnpm verify
 
 $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
   Verdict: PASS
-  Changed files: 9
+  Changed files: 10
   Rules matched: (none) -- no R-level artifacts required for this diff
 ```
 
@@ -337,7 +377,43 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
    `main-sync`'s legitimate `git pull --ff-only origin main` and were deliberately
    left unchanged.
 
-8. **Not fixed, out of scope.** The two other substrate defects observed alongside
+8. **Round 3 — two fail-open residuals found by the independent reviewer, both
+   closed.** The reviewer's P1 was clean, but two P2s were reproduced by execution
+   and fixed here.
+   (a) `abortInProgressSync` read *any* non-zero `git rev-parse` as "the ref is
+   absent" and any non-zero `git diff` as "no unmerged paths". A repository that
+   could not answer the question (git exit 128) therefore took the "nothing to
+   abort" early return, and the wrapper popped the autostash into a possibly-unmerged
+   index and released the mutex — **the same fail-open class as the P1, one layer
+   down**. The probe now tracks an `undetermined` list separately and forces the
+   fail-closed branch whenever it is non-empty, before *and* after the abort. Test 51
+   and mutant M6.
+   (b) `onCommandFailure` is a caller-supplied injection point and was called
+   unguarded; a hook that threw unwound out of `runMergeWrapper` with the lock held,
+   the stash unpopped and no structured result. The call is now wrapped, and a throw
+   becomes `merge_wrapper_cleanup_failed` with the thrown message surfaced. Test 52
+   and mutant M7.
+   The reviewer also found the fail-closed message named `pnpm ops:merge-wrapper
+   guard`, which only *asserts* the lock is held. It now names
+   `pnpm ops:merge-lock release --issue <id> --branch <branch>`
+   (`scripts/ops/merge-mutex.ts:614`), says so explicitly, and additionally prints
+   the git command that actually ran.
+
+9. **Round 3 — three test-harness defects in this lane's own suite.** Found while
+   fixing the above, and worth recording because each one made a test weaker than it
+   read. Tests 23 and 24 drove a blanket mock that returned exit 128 for *every*
+   command, including the new cleanup probes; under the corrected code that is an
+   undeterminable repository, so those tests were asserting the ordinary
+   released-lock path through a mock that no longer described it. They now answer the
+   probes realistically (`rev-parse` exit 1 with no output, `diff` exit 0), which is
+   what a command that failed leaving nothing behind actually produces. Test 52's
+   first draft failed the `git stash push` too, so it returned
+   `merge_wrapper_stash_failed` before the sync command ever ran and never reached
+   the hook it existed to test. And `CLEANUP_PROBE_CALLS` listed the probes in the
+   pre-rewrite order. None of these were product defects, but two of them were
+   vacuous-test risks of exactly the kind this lane's P1 came from.
+
+10. **Not fixed, out of scope.** The two other substrate defects observed alongside
    this one -- the dual-root sync-contract persistence in `codex-exec.ts` and CPU/RAM
    scheduling contention during E2E runs -- are deliberately NOT bundled into this
    blocker fix, per the governing order.
