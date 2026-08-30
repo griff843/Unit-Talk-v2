@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1671-admit-contract-paths",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1465",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/runtime.yml",
@@ -18,9 +18,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1671/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-30T21:35:18.106Z",
-  "heartbeat_at": "2026-08-30T21:35:18.106Z",
+  "heartbeat_at": "2026-08-30T21:48:11.797Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1671-admit-contract-paths.json",
