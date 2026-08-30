@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "title": "Retrospective pick trustworthiness audit: the current population cannot support a trustworthy-pick claim",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-27T02:25:00Z",
-  "merge_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
+  "generated_at": "2026-08-30T11:30:00Z",
   "sha_binding": {
-    "verified_source_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
-    "verified_source_note": "Exact substantive branch head: the last commit carrying non-proof changes (the script, its tests, and the PM-authorized package.json test:ops wiring). Every commit after this anchor changes only proof artifacts. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "merge_sha": null,
+    "verified_source_sha": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+    "verified_source_note": "Exact substantive branch head: the merge commit that synchronized this lane with main (daad7b00 -> 149b60ee) and resolved the sole package.json test:ops conflict. It is the last commit carrying a non-proof change; every later commit touches proof artifacts only. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,7 +18,8 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-27T02:25:00Z"
+    "bound_at": "2026-08-30T11:30:00Z",
+    "previous_verified_source_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5"
   },
   "verdict": {
     "can_currently_produce_trustworthy_pick": false,
@@ -29,7 +30,9 @@
       "project_ref": "zfzdnfwdarxucxtaojxm",
       "access": "read_only_select",
       "writes_performed": 0,
-      "note": "The CLI could not run locally: production containment neuters local.env and this session holds no PICK_TRUTH_AUDIT_READ_KEY. Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
+      "note": "The CLI could not run locally: production containment neuters local.env and this session holds no PICK_TRUTH_AUDIT_READ_KEY. Live reads were issued through the Supabase MCP read path. Every statement was a SELECT. These counts are a read-only production measurement taken on 2026-08-26. They were deliberately NOT re-measured during the 2026-08-30 main synchronization; the historical measurement is preserved verbatim.",
+      "measured_at": "2026-08-26",
+      "re_measured_on_sync": false
     },
     "row_counts": [
       {
@@ -131,7 +134,24 @@
       "status": "PASS",
       "tests": 4,
       "fail": 0,
-      "detail": "Now wired into test:ops under a PM-authorized scope extension."
+      "detail": "Wired into test:ops under a PM-authorized scope extension. Re-run on the synchronized head 149b60ee: 4 pass, 0 fail."
+    },
+    "suite": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 2657,
+      "fail": 0,
+      "detail": "Full ops suite re-run on the synchronized head 149b60ee."
+    },
+    "static_verification": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Re-run on the synchronized head 149b60ee."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Changed files: 11. Rules matched: none."
     }
   },
   "scope_refusals": [
@@ -139,5 +159,18 @@
     "No regrade, backfill, CLV persistence, replay, production write, or schema change.",
     "No attempt to repair the 107858 historical picks; the population must not be represented as trustworthy.",
     "Forward-flow trustworthiness is a separate successor requiring explicit event identity, participant identity, standardized selection, line/source provenance, settlement traceability, and closing-line capture as first-class fields at admission time."
-  ]
+  ],
+  "main_synchronization": {
+    "merged_parent": "e9f62e5e164edd861606334d479eb4c7ef1762f3",
+    "merge_commit": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+    "conflicts": [
+      "package.json"
+    ],
+    "resolution": "current main's complete scripts['test:ops'] (130 entries, including scripts/ops/outbox-triage.test.ts landed by UTV2-1744) plus this lane's scripts/ops/pick-truth-audit.test.ts = 131 entries. Nothing removed, no formatting churn, no dependency or other script change.",
+    "authored_paths": [
+      "package.json"
+    ],
+    "inherited_proof_revalidated": false,
+    "hook_behaviour": "The UTV2-1785 repaired pre-proof validator allowed this merge commit without --no-verify and without editing any inherited historical proof. A positive control that corrupted this lane's own evidence.json was blocked with exit 2 naming that file, then reverted byte-exact."
+  }
 }

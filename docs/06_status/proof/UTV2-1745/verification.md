@@ -1,6 +1,6 @@
 # PROOF: UTV2-1745
 
-MERGE_SHA: daad7b0080bfaa87bf10989c2dc93996ba0591a5
+MERGE_SHA: 149b60ee39eb662fe8c30757e7f1d8bbd7464814
 
 Retrospective, read-only audit of whether the production pick population can
 support a trustworthy-pick claim.
@@ -43,6 +43,12 @@ read through the Supabase MCP read path against project `zfzdnfwdarxucxtaojxm`
 on 2026-08-26. Every statement below is a `SELECT`.
 
 EVIDENCE:
+
+> **Historical measurement — read-only production measurement from 2026-08-26.**
+> Every count below was read once, on 2026-08-26, through the Supabase MCP read
+> path against production `zfzdnfwdarxucxtaojxm`. They were deliberately NOT
+> re-measured during the 2026-08-30 synchronization with `main`; the historical
+> measurement is preserved verbatim and no new SELECT was issued.
 
 ```text
 SELECT count(*) AS total_picks,
@@ -190,3 +196,112 @@ forward-flow picks trustworthy is a separate successor and requires, at
 admission time and as first-class fields rather than free-form metadata:
 explicit event identity, participant identity, standardized selection, line and
 source provenance, settlement traceability, and closing-line capture.
+
+## Main synchronization (2026-08-30)
+
+This lane was behind `main` and was resynchronized after UTV2-1785 landed the
+pre-proof validator repair. The record below is what the merge actually did.
+
+```text
+$ git merge --no-ff --no-commit origin/main     # origin/main = e9f62e5e
+Auto-merging package.json
+CONFLICT (content): Merge conflict in package.json
+$ git diff --name-only --diff-filter=U
+package.json
+```
+
+`package.json` was the only conflict, and inside it only `scripts.test:ops`.
+Both sides append to the same hardcoded list: `main` had gained
+`scripts/ops/outbox-triage.test.ts` from UTV2-1744, this lane had added
+`scripts/ops/pick-truth-audit.test.ts`. The resolution takes current main's file
+verbatim and appends this lane's one entry — 131 entries, nothing removed, no
+formatting churn, no dependency change, no other script changed.
+
+```text
+$ git show --format="" HEAD --stat -- package.json
+ package.json | 2 +-
+$ git show --format="" HEAD          # combined diff: what the merge AUTHORED
+diff --cc package.json
+++    "test:ops": "... scripts/ops/outbox-triage.test.ts scripts/ops/pick-truth-audit.test.ts",
+```
+
+The combined diff of merge commit `149b60ee` contains exactly one file. Nothing
+inherited from `main` was re-authored, and
+`git diff HEAD origin/main -- docs/06_status/proof/UTV2-1729/` is empty — the
+closed historical bundle that originally blocked this merge is untouched.
+
+### Repaired-hook behaviour (both directions)
+
+```text
+$ git -C <lane worktree> commit -m "UTV2-1745: sync lane with main; ..."
+[codex/utv2-1745-pick-truth-audit 149b60ee] UTV2-1745: sync lane with main; resolve test:ops registration conflict
+EXIT=0
+```
+
+The merge commit was permitted with no `--no-verify` and no edit to any closed
+lane's proof — the inherited-proof false positive is gone.
+
+Positive control, to show the hook did not simply stop validating: this lane's
+own `docs/06_status/proof/UTV2-1745/evidence.json` was corrupted
+(`verified_source_sha` set to `deadbeef`, `ci_sentinels` removed) and staged.
+
+```text
+PROOF VALIDATOR: commit blocked — staged proof bundle has issues (fix and re-commit):
+  - [docs/06_status/proof/UTV2-1745/evidence.json] sha_binding.verified_source_sha must be 40 hex chars (got: 'deadbeef')
+  - [docs/06_status/proof/UTV2-1745/evidence.json] sha_binding.ci_sentinels missing or empty
+```
+
+The file was then restored byte-exact (sha256
+`c7bd926da3f028bc0c342df8837c3858b2b7ae60672da30dc1391eeb6c4e8ae7`), as were the
+other three artifacts in this bundle. Lane-authored proof remains fail-closed;
+inherited proof is correctly ignored.
+
+### Re-verification on the synchronized head
+
+```text
+$ pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts
+# tests 4
+# pass 4
+# fail 0
+
+$ pnpm test:ops
+# tests 2657
+# suites 20
+# pass 2657
+# fail 0
+# skipped 0
+
+$ pnpm verify:static
+ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
+ops:automation-coverage-check, env:check, lint, type-check, build,
+pnpm test, smart-form verify, verify:commands
+[executable-wiring] verdict=PASS required_roots=verify
+[command-manifest] Verified 14 command definition(s)
+[lint-migrations] 6 migration file(s) checked — no findings.
+EXIT=0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 11
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+`pnpm verify` is `verify:static && test:live-db`; the live-DB half still refuses
+locally under production containment, exactly as recorded above, and its receipt
+is produced by CI's `staging-ci` environment inside the required `verify` job.
+
+### Proof re-anchor
+
+`verified_source_sha` moves from `daad7b00` to `149b60ee` — the merge commit is
+now the last commit carrying a non-proof change. `sha_binding.merge_sha` is
+`null`, as the shared schema-v2 evidence contract requires before a merge exists
+(CEP-E7); the previous bundle carried a legacy top-level `merge_sha` holding a
+branch SHA, which is exactly the "synthetic merge authority" the contract
+forbids. No production count, finding, or verdict was altered.
+
+### Product truth is unchanged
+
+The lane verdict stands as originally measured: **the historical production pick
+population cannot support a trustworthy-pick claim.** Of 107,858 picks, exactly
+1 is simultaneously non-fixture, fully identity- and provenance-complete, and
+settled. Nothing in this synchronization softens that.

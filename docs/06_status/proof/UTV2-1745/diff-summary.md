@@ -1,6 +1,6 @@
 # UTV2-1745 — diff summary
 
-MERGE_SHA: daad7b0080bfaa87bf10989c2dc93996ba0591a5
+MERGE_SHA: 149b60ee39eb662fe8c30757e7f1d8bbd7464814
 
 ## Files changed
 
@@ -44,3 +44,19 @@ MERGE_SHA: daad7b0080bfaa87bf10989c2dc93996ba0591a5
 
 None. Merging this PR adds a read-only script and its tests. No production
 mutation is performed or enabled, and no runtime path changes.
+
+## Main synchronization (2026-08-30)
+
+Merge commit `149b60ee39eb662fe8c30757e7f1d8bbd7464814` merges
+`origin/main` (`e9f62e5e164edd861606334d479eb4c7ef1762f3`) into this lane.
+
+| File | Change | Purpose |
+|---|---|---|
+| `package.json` | 1 line | Sole conflict. Resolved to current main's complete `scripts.test:ops` (130 entries, incl. `scripts/ops/outbox-triage.test.ts` from UTV2-1744) plus this lane's `scripts/ops/pick-truth-audit.test.ts` = 131 entries. Nothing removed. |
+
+The merge's combined diff contains that one file and nothing else: no content
+inherited from `main` was re-authored, and no other lane's proof bundle was
+touched. Proof artifacts were re-anchored to the merge commit
+(`verified_source_sha` `daad7b00` -> `149b60ee`) and `sha_binding.merge_sha`
+remains `null` pre-merge. Production counts from the 2026-08-26 read-only
+measurement are unchanged.
