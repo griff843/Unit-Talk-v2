@@ -1,0 +1,158 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1744",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "title": "Read-only distribution_outbox triage: no dead-letter class approved for replay",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-27T02:20:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "4e912e88b175d3bdacb4e0b4c7b9063c7a137890",
+    "verified_source_note": "Anchor moved during branch synchronization on 2026-08-30. The original anchor was cb4581c8241a2b302aa456f53194d108998d3f6a (the substantive branch head as authored on 2026-08-26). The lane had fallen 39 commits behind main and was synchronized via the non-rewriting PR update path (gh pr update-branch 1452) onto main at 4f7ae5109325fc11999f77e8b57adc20ba7cdccd, producing merge commit 4e912e88b175d3bdacb4e0b4c7b9063c7a137890. That merge commit is now the last commit touching any path outside PROOF_ONLY_PREFIXES (docs/06_status/proof/, docs/06_status/lanes/); every commit after it changes only the lane manifest heartbeat and these proof artifacts. No lane history was rewritten: all seven original lane commits remain ancestors of the new head. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T04:05:00Z",
+    "previous_verified_source_sha": "cb4581c8241a2b302aa456f53194d108998d3f6a"
+  },
+  "verdict": {
+    "any_dead_letter_class_approved_for_replay": false,
+    "live_queue_target_safe": true,
+    "statement": "No dead-letter class is approved for replay. replayVerdict has no reachable approving branch and TriageReport.anyClassApprovedForReplay is typed as the literal false."
+  },
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0,
+      "note": "The local CLI path is unavailable under production containment (local.env carries SUPABASE_URL=http://127.0.0.1:1). Live reads were issued through the Supabase MCP read path. Every statement was a SELECT."
+    },
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "metric": "dead_letter",
+        "value": 1954
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "pending",
+        "value": 3
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "processing",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "sent",
+        "value": 3758
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "stuck_claims",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "distinct_stuck_workers",
+        "value": 32
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "distinct_stuck_targets",
+        "value": 4
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "max_held_ms",
+        "value": 2361129093
+      },
+      {
+        "table": "distribution_outbox",
+        "metric": "max_threshold_multiple",
+        "value": 7870
+      }
+    ],
+    "dead_letter_classes": [
+      {
+        "class": "proof_pick_blocked",
+        "target": "discord:canary",
+        "rows": 1614,
+        "replay_approved": false
+      },
+      {
+        "class": "stale_pending_operator_review",
+        "target": "discord:best-bets",
+        "rows": 199,
+        "replay_approved": false
+      },
+      {
+        "class": "operator_disposition_voided",
+        "target": "discord:best-bets",
+        "rows": 97,
+        "replay_approved": false
+      },
+      {
+        "class": "governance_public_delivery_suppressed",
+        "target": "discord:best-bets",
+        "rows": 40,
+        "replay_approved": false
+      },
+      {
+        "class": "unclassified_null_reason",
+        "target": "discord:best-bets",
+        "rows": 4,
+        "replay_approved": false
+      }
+    ]
+  },
+  "static_proof": {
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/outbox-triage.test.ts",
+      "status": "PASS",
+      "tests": 12,
+      "fail": 0,
+      "detail": "Each control proven by making it fail on the condition it names. Wired into test:ops so the suite runs under required verify. That wiring edits package.json, which the lane's trusted (first-commit) file_scope_lock snapshot does not declare, so the advisory File scope lock check fails. No scope-override/v1 comment exists on PR #1452; an earlier revision of this bundle wrongly described the widening as PM-authorized and that claim is withdrawn."
+    }
+  },
+  "corrections_made_in_lane": [
+    "The first draft filtered the read with .neq('status','delivered'). Production has no 'delivered' status; the terminal status is 'sent'. The filter matched nothing and pulled all 3758 terminal rows into the triage read. Fixed to .in('status',['pending','processing','dead_letter']) and pinned by two regression tests."
+  ],
+  "scope_refusals": [
+    "Read-only. The only database verb issued is SELECT.",
+    "No replay, requeue, release, delete, regrade, or backfill.",
+    "The 1954 dead letters are never to be replayed or modified.",
+    "Cleanup of the 32 orphaned processing rows and 3 pending canary rows is out of scope and belongs to a separate bounded successor."
+  ],
+  "branch_synchronization": {
+    "synchronized_at": "2026-08-30T04:00:00Z",
+    "method": "gh pr update-branch 1452 (non-rewriting; no rebase, no admin merge)",
+    "main_sha_synced_to": "4f7ae5109325fc11999f77e8b57adc20ba7cdccd",
+    "resulting_head": "4e912e88b175d3bdacb4e0b4c7b9063c7a137890",
+    "conflicts": "none — git merge-tree --write-tree reported no conflicted paths",
+    "history_rewritten": false,
+    "original_lane_commits_still_ancestors": [
+      "83e92730",
+      "16d40bb7",
+      "fd5e0598",
+      "df4cf115",
+      "cb4581c8",
+      "9b443982",
+      "954333b2"
+    ],
+    "production_counts_remeasured": false,
+    "production_counts_note": "All row counts in this bundle remain the 2026-08-26 read against zfzdnfwdarxucxtaojxm. The read-only classifier was deliberately NOT re-run during synchronization, so no fresher numbers were substituted for the evidence the verdict was formed on. The verdict does not depend on population size: replayVerdict has no reachable approving branch."
+  },
+  "known_gaps": [
+    "Advisory File scope lock fails on package.json (trusted first-commit snapshot). Not a required check; clearing it needs an externally authored scope-override/v1 comment, which is PM's to grant.",
+    "Advisory Return review packet fails for the same scope reason.",
+    "test:live-db cannot run in this worktree under production containment; the live-DB receipt is produced by CI's staging-ci environment inside the required verify job."
+  ]
+}

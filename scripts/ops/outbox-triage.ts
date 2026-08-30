@@ -1,0 +1,331 @@
+#!/usr/bin/env tsx
+
+/**
+ * UTV2-1744 — read-only distribution_outbox triage.
+ *
+ * This script classifies the live outbox, verifies delivery targets, and
+ * analyses stuck claims. It NEVER replays, requeues, releases, deletes, or
+ * otherwise mutates the queue: the only database verb it issues is SELECT.
+ *
+ * PM verdict this lane encodes: no dead-letter class is approved for replay.
+ * That is not a default the caller can override — see `replayVerdict`, which
+ * has no reachable "approved" branch.
+ */
+
+import { pathToFileURL } from 'node:url';
+
+import { loadEnvironment } from '@unit-talk/config';
+import { createPrivilegedClient } from '@unit-talk/db/privileged-client-boundary';
+
+export const ISSUE_ID = 'UTV2-1744';
+
+/**
+ * Targets that are known-safe canaries. Anything else is treated as
+ * member-facing: the classifier fails CLOSED on an unknown target rather than
+ * assuming it is safe.
+ */
+export const CANARY_TARGET_PREFIXES = ['discord:canary', 'utv2-1497-canary-'] as const;
+
+/** Default worker stale-claim threshold (apps/worker/src/runner.ts). */
+export const DEFAULT_STALE_CLAIM_MS = 300000;
+
+/**
+ * The terminal success status in this schema is `sent`, NOT `delivered`.
+ * Verified against production 2026-08-26: the only statuses present are
+ * dead_letter (1954), pending (3), processing (32), sent (3758). A filter
+ * written against `delivered` silently matches nothing and drags every
+ * terminal row into the read.
+ */
+export const TERMINAL_STATUS = 'sent' as const;
+
+/** Statuses this triage reads. Deliberately excludes the terminal status. */
+export const TRIAGE_STATUSES = ['pending', 'processing', 'dead_letter'] as const;
+
+export type OutboxStatus = 'pending' | 'processing' | 'sent' | 'dead_letter' | string;
+
+export interface OutboxRow {
+  id: string;
+  pick_id: string;
+  target: string;
+  status: OutboxStatus;
+  attempt_count: number;
+  last_error: string | null;
+  claimed_at: string | null;
+  claimed_by: string | null;
+  updated_at: string;
+}
+
+export type DeadLetterClass =
+  | 'proof_pick_blocked'
+  | 'stale_pending_operator_review'
+  | 'operator_disposition_voided'
+  | 'governance_public_delivery_suppressed'
+  | 'unclassified_null_reason'
+  | 'unrecognised';
+
+export interface ClassificationCount {
+  class: DeadLetterClass;
+  reason: string | null;
+  target: string;
+  count: number;
+}
+
+/**
+ * Reason-string classification. Substring matching is deliberate: the live
+ * reasons embed dates and issue IDs that must not become part of the key.
+ */
+export function classifyDeadLetter(reason: string | null): DeadLetterClass {
+  if (reason === null || reason.trim() === '') {
+    return 'unclassified_null_reason';
+  }
+  if (reason.includes('is not a live source')) {
+    return 'proof_pick_blocked';
+  }
+  if (reason.includes('stale_pending_operator_review')) {
+    return 'stale_pending_operator_review';
+  }
+  if (reason.includes('operator-disposition')) {
+    return 'operator_disposition_voided';
+  }
+  if (reason.includes('governance_public_delivery_suppressed')) {
+    return 'governance_public_delivery_suppressed';
+  }
+  return 'unrecognised';
+}
+
+export function isCanaryTarget(target: string): boolean {
+  return CANARY_TARGET_PREFIXES.some((prefix) => target.startsWith(prefix));
+}
+
+export function isMemberFacingTarget(target: string): boolean {
+  return !isCanaryTarget(target);
+}
+
+export interface TargetVerification {
+  safe: boolean;
+  liveStatuses: readonly OutboxStatus[];
+  memberFacingTargets: string[];
+  canaryTargets: string[];
+}
+
+/**
+ * "Live" means a row the delivery pipeline could still act on: pending or
+ * processing. Dead letters are excluded here on purpose — they are inert
+ * unless something replays them, and nothing in this lane replays them.
+ */
+export function verifyTargets(
+  rows: readonly OutboxRow[],
+  liveStatuses: readonly OutboxStatus[] = ['pending', 'processing'],
+): TargetVerification {
+  const live = rows.filter((row) => liveStatuses.includes(row.status));
+  const memberFacingTargets = [
+    ...new Set(live.filter((row) => isMemberFacingTarget(row.target)).map((row) => row.target)),
+  ].sort();
+  const canaryTargets = [
+    ...new Set(live.filter((row) => isCanaryTarget(row.target)).map((row) => row.target)),
+  ].sort();
+
+  return {
+    safe: memberFacingTargets.length === 0,
+    liveStatuses,
+    memberFacingTargets,
+    canaryTargets,
+  };
+}
+
+export interface StuckClaim {
+  id: string;
+  target: string;
+  claimedBy: string;
+  claimedAt: string;
+  heldMs: number;
+  thresholdMultiple: number;
+  /**
+   * True when a normally-configured worker would ever attempt to reap this
+   * row. reapStaleClaims(target, ...) is per-target and iterates the worker's
+   * own configured targets, so a claim on a target no worker is configured for
+   * is orphaned permanently rather than eventually reaped.
+   */
+  reachableByReaper: boolean;
+}
+
+export interface StuckClaimAnalysis {
+  claims: StuckClaim[];
+  orphaned: StuckClaim[];
+  distinctWorkers: string[];
+  distinctTargets: string[];
+  maxHeldMs: number;
+}
+
+export function analyseStuckClaims(
+  rows: readonly OutboxRow[],
+  options: {
+    now: Date;
+    staleClaimMs?: number | undefined;
+    /** Targets the running workers are actually configured for. */
+    configuredTargets: readonly string[];
+  },
+): StuckClaimAnalysis {
+  const staleClaimMs = options.staleClaimMs ?? DEFAULT_STALE_CLAIM_MS;
+  const configured = new Set(options.configuredTargets);
+
+  const claims = rows
+    .filter(
+      (row) => row.status === 'processing' && row.claimed_at !== null && row.claimed_by !== null,
+    )
+    .map((row): StuckClaim => {
+      const claimedAt = row.claimed_at as string;
+      const heldMs = options.now.getTime() - new Date(claimedAt).getTime();
+      return {
+        id: row.id,
+        target: row.target,
+        claimedBy: row.claimed_by as string,
+        claimedAt,
+        heldMs,
+        thresholdMultiple: Math.round(heldMs / staleClaimMs),
+        reachableByReaper: configured.has(row.target),
+      };
+    })
+    .filter((claim) => claim.heldMs > staleClaimMs);
+
+  return {
+    claims,
+    orphaned: claims.filter((claim) => !claim.reachableByReaper),
+    distinctWorkers: [...new Set(claims.map((claim) => claim.claimedBy))].sort(),
+    distinctTargets: [...new Set(claims.map((claim) => claim.target))].sort(),
+    maxHeldMs: claims.reduce((max, claim) => Math.max(max, claim.heldMs), 0),
+  };
+}
+
+export interface ReplayVerdict {
+  class: DeadLetterClass;
+  approved: false;
+  reason: string;
+}
+
+const REPLAY_REFUSALS: Record<DeadLetterClass, string> = {
+  proof_pick_blocked:
+    'Fixture block, not a transport failure: the source was rejected as non-live. Replay re-runs a blocked fixture.',
+  stale_pending_operator_review:
+    'Withheld pending an operator review that never happened. Replay would deliver content no operator released.',
+  operator_disposition_voided:
+    'Explicitly voided by operator disposition. Replay would resurrect content an operator deliberately killed.',
+  governance_public_delivery_suppressed:
+    'Suppressed by the governance brake. Replay would bypass the brake that suppressed it.',
+  unclassified_null_reason:
+    'No recorded reason. An unexplained dead letter cannot be shown safe, so it is refused (fail closed).',
+  unrecognised:
+    'Reason does not match any reviewed class. Unreviewed dead letters are refused (fail closed).',
+};
+
+/**
+ * There is no approving branch. Every dead-letter class is refused, and an
+ * unknown class is refused too — a new reason string cannot silently become
+ * replayable by failing to match anything.
+ */
+export function replayVerdict(deadLetterClass: DeadLetterClass): ReplayVerdict {
+  return {
+    class: deadLetterClass,
+    approved: false,
+    reason: REPLAY_REFUSALS[deadLetterClass] ?? REPLAY_REFUSALS.unrecognised,
+  };
+}
+
+export interface TriageReport {
+  issueId: string;
+  generatedAt: string;
+  classifications: ClassificationCount[];
+  totalDeadLetters: number;
+  maxDeadLetterAttempts: number;
+  targetVerification: TargetVerification;
+  stuckClaims: StuckClaimAnalysis;
+  replayVerdicts: ReplayVerdict[];
+  anyClassApprovedForReplay: false;
+}
+
+export function buildTriageReport(
+  rows: readonly OutboxRow[],
+  options: { now: Date; configuredTargets: readonly string[]; staleClaimMs?: number | undefined },
+): TriageReport {
+  const deadLetters = rows.filter((row) => row.status === 'dead_letter');
+
+  const buckets = new Map<string, ClassificationCount>();
+  for (const row of deadLetters) {
+    const deadLetterClass = classifyDeadLetter(row.last_error);
+    const key = `${deadLetterClass} ${row.last_error ?? ''} ${row.target}`;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      buckets.set(key, {
+        class: deadLetterClass,
+        reason: row.last_error,
+        target: row.target,
+        count: 1,
+      });
+    }
+  }
+
+  const classifications = [...buckets.values()].sort((a, b) => b.count - a.count);
+  const classes = [...new Set(classifications.map((entry) => entry.class))];
+
+  return {
+    issueId: ISSUE_ID,
+    generatedAt: options.now.toISOString(),
+    classifications,
+    totalDeadLetters: deadLetters.length,
+    maxDeadLetterAttempts: deadLetters.reduce((max, row) => Math.max(max, row.attempt_count), 0),
+    targetVerification: verifyTargets(rows),
+    stuckClaims: analyseStuckClaims(rows, options),
+    replayVerdicts: classes.map(replayVerdict),
+    anyClassApprovedForReplay: false,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CLI — read-only
+// ---------------------------------------------------------------------------
+
+export async function main(): Promise<number> {
+  const environment = loadEnvironment();
+  const db = createPrivilegedClient(
+    environment.SUPABASE_URL as string,
+    environment.SUPABASE_SERVICE_ROLE_KEY as string,
+    { auth: { persistSession: false } },
+  );
+
+  const response = await db
+    .from('distribution_outbox')
+    .select(
+      'id, pick_id, target, status, attempt_count, last_error, claimed_at, claimed_by, updated_at',
+    )
+    .in('status', [...TRIAGE_STATUSES]);
+
+  if (response.error) {
+    throw new Error(`${ISSUE_ID}: outbox read failed: ${response.error.message}`);
+  }
+
+  const configuredTargets = (process.env.UNIT_TALK_WORKER_TARGETS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+  const report = buildTriageReport((response.data ?? []) as OutboxRow[], {
+    now: new Date(),
+    configuredTargets,
+  });
+
+  console.log(JSON.stringify(report, null, 2));
+  return report.targetVerification.safe ? 0 : 1;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  main()
+    .then((code) => {
+      process.exitCode = code;
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+}
