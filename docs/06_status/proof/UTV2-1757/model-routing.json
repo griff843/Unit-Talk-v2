@@ -1,0 +1,14 @@
+{
+  "issue_id": "UTV2-1757",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "execution_sha": "cbe7069295f435652c3fa68c0243fd4dd7d1ae5a",
+  "policy_version": "1.0.0",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "generated_at": "2026-08-30T02:45:00Z",
+  "note": "codex_exit_code and codex_cli_version are deliberately omitted: no Codex CLI invocation occurred. The lane is registered to this profile, and the authorized change is a bounded mechanical state correction with no authored code, so it was performed directly. Disclosed in the bundle's Known gaps rather than asserted as a run that did not happen."
+}

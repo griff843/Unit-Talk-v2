@@ -25,9 +25,9 @@
     "docs/06_status/proof/UTV2-1757/verification.md",
     "docs/06_status/proof/UTV2-1757/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_progress",
   "started_at": "2026-08-30T02:23:08.928Z",
-  "heartbeat_at": "2026-08-30T02:23:08.928Z",
+  "heartbeat_at": "2026-08-30T02:47:23.891Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1757-supersede-tombstone.json",
