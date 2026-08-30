@@ -1,0 +1,356 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1757",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Make both copies of the historical superseded lane record truthful and terminal, releasing the self file-scope block that aborted dispatch Phase 0",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-30T02:45:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "cbe7069295f435652c3fa68c0243fd4dd7d1ae5a",
+    "verified_source_note": "The last non-proof commit on this branch; it carries the entire functional change. It is the anchor only because a file cannot contain its own SHA. merge_sha is explicitly null pre-merge rather than a branch SHA or a stand-in token, and is set by post-merge rebinding.",
+    "evidence_commit_sha": "cbe7069295f435652c3fa68c0243fd4dd7d1ae5a",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "base_sha": "c92e922f88083122dfd6c073954a6f84d7d0ff55"
+  },
+  "scope": {
+    "substantive_diff_stat": "3 files, 68 insertions(+), 18 deletions(-)",
+    "files": [
+      "docs/06_status/lanes/UTV2-1512.json",
+      "docs/06_status/lanes/parked/UTV2-1512.json",
+      ".ops/sync/UTV2-1512.yml"
+    ],
+    "lane_apparatus_only": [
+      ".ops/sync/UTV2-1757.yml",
+      "docs/06_status/lanes/UTV2-1757.json",
+      "docs/06_status/proof/UTV2-1757/"
+    ],
+    "not_touched": [
+      "scripts/ops/reconcile.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/lane-close.ts",
+      "scripts/ops/lane-manifest.ts",
+      ".github/workflows/",
+      "apps/command-center/",
+      "docs/06_status/proof/UTV2-1512/"
+    ]
+  },
+  "premise_check": {
+    "claim": "Both historical copies hold a dispatch slot and a 54-path file_scope_lock solely because their status `blocked` is a member of ACTIVE_LOCK_STATUSES. Moving both to `superseded`, a non-success terminal status outside that set, releases the capacity and the lock, removes the only repository-wide `block` condition, and removes both records from the scheduled reconciler's selection.",
+    "method": "Read ACTIVE_LOCK_STATUSES and the transition table in scripts/ops/shared.ts. Applied the transition to the root record with the canonical `ops:lane-manifest update` command to confirm it is accepted rather than asserting legality from the table. Executed ops:merge-risk, ops:execution-state, ops:reconcile, ops:substrate-guard and ops:orchestration-reconcile on this branch and, as a negative control, on the unmodified control checkout at the same base.",
+    "result": "Confirmed on every tool. See negative_control and positive_observation."
+  },
+  "negative_control": {
+    "checkout": "control checkout at c92e922f, both copies still `blocked`",
+    "merge_risk": {
+      "total_active_lanes": 5,
+      "summary": {
+        "hard_fail": 0,
+        "block": 1,
+        "warning": 8
+      },
+      "block_condition": {
+        "code": "FILE_OVERLAP",
+        "lanes": [
+          "UTV2-1512",
+          "UTV2-1512"
+        ],
+        "detail": "Shared file_scope_lock paths: 54 paths, self-overlap between the root and parked copies"
+      }
+    },
+    "execution_state": {
+      "active_lanes": [
+        "UTV2-1512 blocked",
+        "UTV2-1736 in_review",
+        "UTV2-1744 in_review",
+        "UTV2-1745 in_review",
+        "UTV2-1757 started"
+      ],
+      "dispatch_slots_total_used": 5
+    },
+    "reconcile_dry_run": {
+      "manifests_total": 716,
+      "active": 5,
+      "planned_mutations": 4,
+      "utv2_1512_entries": 2,
+      "entry": "[DRY-RUN WOULD MUTATE] UTV2-1512: heartbeat_at 1245.5h old (threshold: 24h) -> status -> blocked, truth_check_history appended"
+    }
+  },
+  "positive_observation": {
+    "checkout": "this branch at cbe70692",
+    "merge_risk": {
+      "total_active_lanes": 1,
+      "summary": {
+        "hard_fail": 0,
+        "block": 0,
+        "warning": 4
+      },
+      "remaining_warnings": "4x PR_NO_ACTIVE_LANE for chore/harness-model-depin, UTV2-1736, UTV2-1744, UTV2-1745 — pre-existing and unrelated"
+    },
+    "execution_state": {
+      "active_lanes": [
+        "UTV2-1736 in_review",
+        "UTV2-1744 in_review",
+        "UTV2-1745 in_review",
+        "UTV2-1757 started"
+      ],
+      "blocked_lanes": [],
+      "dispatch_slots_total_used": 4
+    },
+    "reconcile_dry_run": {
+      "manifests_total": 710,
+      "active": 1,
+      "planned_mutations": 0,
+      "utv2_1512_entries": 0
+    },
+    "substrate_guard": {
+      "ok": true,
+      "checks": {
+        "lease_dir": "pass",
+        "merge_lock": "pass",
+        "active_lane_worktrees": "pass",
+        "board_hard_fail": "pass"
+      },
+      "hard_fail": 0
+    },
+    "orchestration_reconcile": {
+      "dispatch_blocking_failures": 0,
+      "utv2_1512_classification": "ORCH-HISTORICAL-DECAY, requirement advisory, classification warning, 'Linear entity UTV2-1512 is deleted; referenced only by historical artifacts', lane_manifest 'no manifest'",
+      "utv2_1512_in_repair_plan": false,
+      "exit_code": 3,
+      "exit_code_cause": "3 transient Linear lookup timeouts on UTV2-1282, UTV2-1300, UTV2-1303 — unrelated to this lane and not claimed as fixed"
+    }
+  },
+  "field_delta": {
+    "method": "Both post-edit files were compared key-by-key against their base blobs extracted from the lane's base commit, in a script, not eyeballed from a diff. truth_check_history was compared by exact JSON serialisation.",
+    "base": "c92e922f88083122dfd6c073954a6f84d7d0ff55",
+    "changed_keys": [
+      "status",
+      "superseded.reason",
+      "superseded.tombstone"
+    ],
+    "changes": {
+      "status": {
+        "before": "blocked",
+        "after": "superseded"
+      },
+      "superseded.reason": {
+        "before": "asserted the branch was deleted",
+        "after": "corrected: branch exists on origin at d57d1023, preserved inert"
+      },
+      "superseded.tombstone": {
+        "before": "<absent>",
+        "after": "added"
+      }
+    },
+    "verified_identical": [
+      "truth_check_history",
+      "closed_at",
+      "file_scope_lock",
+      "override",
+      "parked",
+      "branch",
+      "commit_sha",
+      "pr_url",
+      "started_at",
+      "heartbeat_at",
+      "executor",
+      "tier",
+      "lane_type",
+      "expected_proof_paths",
+      "reopen_history",
+      "schema_version",
+      "base_branch",
+      "blocked_by",
+      "created_by",
+      "execution_location",
+      "files_changed",
+      "issue_id",
+      "notes",
+      "preflight_token",
+      "worktree_path",
+      "superseded.at",
+      "superseded.by",
+      "superseded.superseded_by"
+    ],
+    "truth_check_history_byte_equal": true,
+    "truth_check_history_entries": {
+      "root": 12,
+      "parked": 2
+    },
+    "file_scope_lock_paths": {
+      "root": 54,
+      "parked": 54
+    },
+    "heartbeat_at": "unchanged at the historical 2026-07-09T05:15:00.000Z. The canonical command bumps it to now; that bump was deliberately reverted, because a 2026-08-30 heartbeat on a record whose purpose is to preserve when the lane stopped would be a new false statement. The command's acceptance of the transition is used only as proof that blocked -> superseded is legal.",
+    "encoding_note": "An intermediate revision of the edit script serialised with ensure_ascii=True, which re-encoded the em dash in every preserved reconcile receipt as \\u2014. That is a mutation of preserved history, was caught in the diff audit, and was corrected before commit; the committed diff removes no receipt line."
+  },
+  "historical_facts": {
+    "source": "github-api and git ls-remote, not restated from the manifest",
+    "branch": {
+      "name": "claude/utv2-1512-command-center-workbench",
+      "exists_on_origin": true,
+      "sha": "d57d1023bffcf1f815c77c6b9e488e9ad43a762c",
+      "disposition": "preserved as an inert reference; deliberately NOT deleted"
+    },
+    "implementation_pr": {
+      "number": 1173,
+      "state": "CLOSED",
+      "merged": false,
+      "merge_commit": null,
+      "closed_at": "2026-07-14T01:32:09Z"
+    },
+    "superseding_pr": {
+      "number": 1190,
+      "state": "MERGED",
+      "merge_commit": "b0a9002be3dfae89ee1abb49ed17c15f2addd741",
+      "merged_at": "2026-07-13T19:10:40Z",
+      "issue": "UTV2-1522"
+    },
+    "governance_evidence_pr": {
+      "number": 1448,
+      "state": "MERGED",
+      "merge_commit": "3399b271fc13cd39dc03e12f38a73fb1a46e0679",
+      "merged_at": "2026-08-26T20:01:19Z",
+      "role": "Ratified the superseded disposition. Governance evidence only. NOT bound as commit_sha or pr_url on either historical record; record-merge was not run against it.",
+      "files_touched": [
+        ".ops/sync/UTV2-1512.yml",
+        "docs/06_status/lanes/UTV2-1512.json",
+        "docs/06_status/proof/UTV2-1512/diff-summary.md",
+        "docs/06_status/proof/UTV2-1512/verification.md"
+      ],
+      "parked_copy_touched": false
+    },
+    "linear_identity": {
+      "issue_id": "UTV2-1512",
+      "state": "deleted",
+      "recreated": false,
+      "successor_record": "UTV2-1757",
+      "successor_is_original_implementation_issue": false
+    }
+  },
+  "why_the_prior_correction_did_not_hold": {
+    "prior_correction": "PR #1448 moved the root record to superseded on 2026-08-26 and did not touch the parked copy.",
+    "reversion": "git show a67a6a59 -- docs/06_status/lanes/UTV2-1512.json shows '- \"status\": \"superseded\"' / '+ \"status\": \"blocked\"' on the next scheduled reconcile run, 2026-08-27T05:16:34Z.",
+    "root_cause": "The defect UTV2-1756 fixed: writeManifest always resolved to the root path, so reading the still-blocked parked copy overwrote the root record.",
+    "consequence_for_this_lane": "With that fix on main each copy is written to its own path — visible in the negative control as two separate planned mutations. Correcting one copy alone would leave the other selected and re-asserting an active lane. Both are corrected here."
+  },
+  "sync_file_disposition": {
+    "path": ".ops/sync/UTV2-1512.yml",
+    "action": "removed",
+    "orchestration_authority_test": "NEGATIVE",
+    "method": "Grepped every orchestration consumer for directory enumeration of .ops/sync. substrate-guard.ts, reconcile.ts, execution-state.ts and merge-risk.ts contain zero references. sync-check.mjs resolves exactly one path from the current branch's issue ID. lane-start.ts, file-scope-guard.ts and proof-schema.ts use per-issue paths for the lane being processed. housekeeping-fast-ci.yml iterates the directory but only warns on YAML well-formedness.",
+    "conclusion": "Its presence was NOT keeping orchestration authority alive, and its removal is not what clears any condition above. Removed because it is stale per-issue coordination state for a terminal record and because removal is the canonical terminal action: lane-close.ts deletes exactly .ops/sync/<issue>.yml at terminal state. The negative authority result is reported rather than omitted so the removal is not credited with an effect it did not have.",
+    "replacement_sync_state_fabricated": false
+  },
+  "not_claimed": [
+    "done",
+    "merge receipt for the historical record",
+    "synthetic merge SHA",
+    "passing truth-check receipt for the historical record",
+    "recreated Linear issue",
+    "record_merge_on_manifest against PR #1448",
+    "a fix for the reconciler read-auth defect",
+    "a fix for the closeout replay race"
+  ],
+  "mutation_testing": {
+    "applicable": true,
+    "form": "negative control by unmodified checkout rather than by inverted guard",
+    "reason": "This lane adds no control and changes no code, so there is no guard whose failure condition could be inverted. The property under test is that five independent orchestration tools stop reporting a condition. That is proven by running each tool against both the modified tree and an unmodified checkout at the same base and showing the condition present in one and absent in the other.",
+    "observed_before": "ops:merge-risk block=1 FILE_OVERLAP on ['UTV2-1512','UTV2-1512']; ops:execution-state 5 active lanes including UTV2-1512 blocked; ops:reconcile 4 planned mutations, 2 of them UTV2-1512",
+    "observed_after": "ops:merge-risk block=0; ops:execution-state 4 active lanes, blocked_lanes empty; ops:reconcile 0 planned mutations, 0 UTV2-1512 entries",
+    "control_is_not_a_sibling_branch": "The control is the repository's own main checkout at the lane's base commit, so the only difference between the two observations is this lane's diff."
+  },
+  "static_proof": {
+    "verify_full": "PARTIAL - pnpm verify:static runs to completion; pnpm verify additionally runs test:live-db, which refuses locally because ci:assert-staging reports a non-staging host. This lane's proof profile is static: it touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": "none"
+    },
+    "sync_check": "[sync-check] OK (per-issue): branch \"codex/utv2-1757-supersede-tombstone\" <-> .ops/sync/UTV2-1757.yml",
+    "system_alignment": "[system-alignment] verdict=PASS fail=0 warn=0",
+    "full_static_suite": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "tests": 5263,
+      "pass": 5263,
+      "fail": 0,
+      "skipped": 0,
+      "counting_method": "sum over every TAP block the run emitted, not a single suite summary",
+      "stages_all_exit_zero": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "only_warning": "WIRING_GLOB_SHADOWED on apps/qa-agent/src/**/*.test.ts — pre-existing on main, unrelated to this lane"
+    },
+    "proof_auditor_gate": {
+      "command": "pnpm ops:proof-auditor-gate --proof-dir docs/06_status/proof/UTV2-1757 --sha cbe7069295f435652c3fa68c0243fd4dd7d1ae5a --require-executed-command \"pnpm test:db\" --json",
+      "note": "run with the exact flags .github/workflows/proof-gate.yml uses, including the test:db requirement, rather than the flagless local form",
+      "verdict": "PASS",
+      "failures": [],
+      "warnings": [
+        "Writable DB execution is not audited from proof text: pnpm test:db. Enforcement is the CI-produced ci-db-proof-receipt/v2, verified in the required `verify` context."
+      ]
+    },
+    "standalone_type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "standalone_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "tests": 5149,
+      "pass": 5149,
+      "fail": 0,
+      "skipped": 0,
+      "counting_method": "sum over every TAP block the run emitted",
+      "note": "Run standalone, separately from verify:static, so it carries its own measured receipt. The count is lower than the verify:static total because verify:static additionally runs the @unit-talk/smart-form package suite."
+    },
+    "proof_format_gates": {
+      "note": "The proof format gates disagree on their contracts, and passing one does not imply passing the others. proof-auditor-gate requires '## Summary'/'## Evidence'/'## Verification'; the close-eligibility preflight (CEP-E3) requires the literal tokens '# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'; CEP-E5 requires a line matching ^\\s*MERGE_SHA: or ^\\s*Merge SHA: in EVERY markdown artifact; proof-rebind additionally requires exactly one such line plus a '## Merge SHA Binding' heading per file it rebinds.",
+      "first_submission_defect": "The first pushed revision wrote the anchor as '**Merge SHA:** `<sha>`'. The leading '**' defeats the ^\\s*Merge SHA: anchor regex, so CEP-E5 reported both markdown artifacts as unbindable: post-merge rebinding would have been impossible and the lane would have been strandable. proof-auditor-gate passed on that same revision, locally and in CI. Corrected to a bare 'MERGE_SHA: <sha>' line in both artifacts, each paired with a '## Merge SHA Binding' section.",
+      "verification_method": "The close-eligibility evaluator (evaluateCloseEligibilityPreflight) was executed locally against this bundle with the same inputs the workflow supplies, rather than inferred from the CI log."
+    }
+  },
+  "safety_posture": {
+    "db_writes": "none",
+    "migrations": "none",
+    "runtime_behaviour_change": "none",
+    "production_surface": "untouched",
+    "workflow_files_edited": "none",
+    "shared_tooling_edited": "none",
+    "other_lane_manifests_edited": "exactly the two authorized historical copies",
+    "linear_transitions_performed": "UTV2-1757 only, through its own admitted lane lifecycle",
+    "linear_issues_created": "none",
+    "branches_deleted": "none"
+  },
+  "known_gaps": [
+    "No Codex CLI invocation occurred. The lane is registered executor codex with profile codex-sol-high, but the authorized change is a bounded mechanical state correction with no authored code, so it was performed directly. The model-routing sidecar omits codex_exit_code and codex_cli_version rather than asserting a run that did not happen. Re-registering the lane as Claude-executed is a PM call.",
+    "The two historical copies remain duplicated. This lane makes both truthful and terminal; it does not deduplicate them, and does not change the rule that a parked copy and a root copy sharing an issue_id are read as two lanes. That duplication is the mechanism that produced the self-overlap, and it is still the shape of the substrate for every other parked record.",
+    "The reconciler's stranded rule still does not converge for any record it selects: it preserves heartbeat_at, so it re-fires every six hours and appends another identical receipt. This lane removes two records from that rule's selection; it does not fix the rule.",
+    "ops:orchestration-reconcile still exits 3 from three transient Linear lookup timeouts, unrelated to this lane."
+  ],
+  "sign_off": {
+    "executor": "codex (registered); performed directly, see known_gaps",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "note": "This bundle is evidence, not certification. The done-gate is ops:truth-check and merge authority is the merge gate's."
+  }
+}

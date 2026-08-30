@@ -1,0 +1,229 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1757
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1757/verification.md
+    - docs/06_status/proof/UTV2-1757/evidence.json
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1757
+  objective: Recover and formally retire the deleted Linear issue UTV2-1512
+  acceptance_criteria:
+    - |-
+      ## Why this issue exists
+
+      The Linear issue **UTV2-1512** no longer exists. This issue is its successor record. It does not impersonate or recreate UTV2-1512 — it preserves the identifier, the shipped evidence, and the supersession history so the repository's references remain resolvable to a truthful record.
+
+      **UTV2-1512 is deleted, not archived.** Verified three ways on 2026-08-27:
+
+      1. `Entity not found: Issue` through the reconciler's `LINEAR_API_TOKEN`.
+      2. The same failure through an independent MCP OAuth session — so not a credential or scope defect.
+      3. Positive control: [UTV2-1683](https://linear.app/unit-talk-v2/issue/UTV2-1683/repair-ci-db-proof-harvest-so-runtime-evidence-binds-to-the-merge-sha), archived 2026-08-11, resolves in full with complete state history. Archival is not the mechanism.
+
+      It is not an isolated deletion. A full reconciliation scan found **623 issue identifiers referenced by repository artifacts that no longer resolve**, spanning UTV2-570 through UTV2-1566, classified `ORCH-HISTORICAL-DECAY`. UTV2-1512 is classified `ORCH-INFRA` rather than `ORCH-HISTORICAL-DECAY` only because it still holds an active lane manifest.
+
+      ## Shipped evidence for UTV2-1512
+
+      | Artifact | Value |
+      | -- | -- |
+      | Implementation PR | [griff843/Unit-Talk-v2#1448](https://linear.app/unit-talk-v2/review/chorelanes-utv2-1512-correct-terminal-status-to-superseded-d1a90b43674f) — `chore(lanes): UTV2-1512 correct terminal status to superseded` |
+      | PR head | `e8bd8846f12aebe6dda91f0b79918eff0445a388` |
+      | Merge commit on `main` | `3399b271fc13cd39dc03e12f38a73fb1a46e0679` |
+      | Merged at | 2026-08-26T20:01:19Z |
+      | Lane PR of record (manifest) | [griff843/Unit-Talk-v2#1173](https://linear.app/unit-talk-v2/review/utv2-1512-command-center-internal-intelligence-workbench-foundation-4015362f96bf) |
+
+      ## Supersession history — ratified, then destroyed by automation
+
+      PR #1448 was the authorized decision that UTV2-1512's terminal status is `superseded`. Merge commit `3399b271` applied it to both the root and parked manifests:
+
+      ```
+      -  "status": "blocked",
+      +  "status": "superseded",
+      ```
+
+      Approximately nine hours later, commit `a67a6a59` — authored by `github-actions[bot]`, message `chore(lanes): auto-reconcile stale manifests`, 2026-08-27T05:16:34Z — reverted it on the **root** manifest only, removing 58 lines:
+
+      ```
+      -  "status": "superseded",
+      +  "status": "blocked",
+      ```
+
+      Two further automated commits (`a6a4a7dd` 16:55, `b667c702` 17:11) appended on top. On current `main` both root and parked manifests read `blocked` with byte-identical 54-path `file_scope_lock`.
+
+      This is the [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **defect**: `writeManifest` resolves through `issueToManifestPath`, which always returns the root path regardless of which path was read, so a parked copy overwrites the root manifest on every scheduled reconcile. A ratified decision was destroyed by automation on protected `main`.
+
+      ## Current damage
+
+      * `ORCH-INFRA` fails on every reconcile run — blocking, and unactionable in its current classification.
+      * `ops:merge-risk` **BLOCKS** on `FILE_OVERLAP` between lanes `["UTV2-1512","UTV2-1512"]` across all 54 declared paths — the duplicate active manifest overlaps itself.
+      * Both together keep the Phase 0 dispatch gate red.
+
+      ## Definition of done
+
+      1. **UTV2-1512 is formally retired.** Its identifier resolves to this successor record. No attempt is made to recreate it in Linear.
+      2. [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **lands first.** The root write-path defect must be fixed before any terminal manifest correction, or the correction will be destroyed exactly as `a67a6a59` destroyed the last one.
+      3. **After** [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **merges**, restore both the root and parked UTV2-1512 manifests to truthful historical **superseded tombstones** through the governed recovery path — carrying the deleted-identifier note, PR #1448, merge commit `3399b271`, and this successor's identifier.
+      4. `ORCH-INFRA` and the `merge-risk` self-overlap both clear as a consequence.
+
+      ## Explicit prohibitions
+
+      * **Do not run** `record_merge_on_manifest` on UTV2-1512.
+      * Do not recreate, impersonate, or fabricate the deleted Linear issue.
+      * Do not fabricate a merge, done state, or truth pass.
+      * Do not hand-edit the manifests on `main` ahead of [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy).
+
+      ## Related
+
+      * [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) — root manifest write-path fix. Hard prerequisite.
+      * The bounded P0 reconciler-correctness lane, which must classify a deleted Linear entity distinctly from archival, transient API failure, and authentication failure.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why this issue exists
+      The Linear issue **UTV2-1512** no longer exists. This issue is its successor record. It does not impersonate or recreate UTV2-1512 — it preserves the identifier, the shipped evidence, and the supersession history so the repository's references remain resolvable to a truthful record.
+
+      **UTV2-1512 is deleted, not archived.** Verified three ways on 2026-08-27:
+
+      1. `Entity not found: Issue` through the reconciler's `LINEAR_API_TOKEN`.
+      2. The same failure through an independent MCP OAuth session — so not a credential or scope defect.
+      3. Positive control: [UTV2-1683](https://linear.app/unit-talk-v2/issue/UTV2-1683/repair-ci-db-proof-harvest-so-runtime-evidence-binds-to-the-merge-sha), archived 2026-08-11, resolves in full with complete state history. Archival is not the mechanism.
+
+      It is not an isolated deletion. A full reconciliation scan found **623 issue identifiers referenced by repository artifacts that no longer resolve**, spanning UTV2-570 through UTV2-1566, classified `ORCH-HISTORICAL-DECAY`. UTV2-1512 is classified `ORCH-INFRA` rather than `ORCH-HISTORICAL-DECAY` only because it still holds an active lane manifest.
+    - |-
+      Shipped evidence for UTV2-1512
+      | Artifact | Value |
+      | -- | -- |
+      | Implementation PR | [griff843/Unit-Talk-v2#1448](https://linear.app/unit-talk-v2/review/chorelanes-utv2-1512-correct-terminal-status-to-superseded-d1a90b43674f) — `chore(lanes): UTV2-1512 correct terminal status to superseded` |
+      | PR head | `e8bd8846f12aebe6dda91f0b79918eff0445a388` |
+      | Merge commit on `main` | `3399b271fc13cd39dc03e12f38a73fb1a46e0679` |
+      | Merged at | 2026-08-26T20:01:19Z |
+      | Lane PR of record (manifest) | [griff843/Unit-Talk-v2#1173](https://linear.app/unit-talk-v2/review/utv2-1512-command-center-internal-intelligence-workbench-foundation-4015362f96bf) |
+    - |-
+      Supersession history — ratified, then destroyed by automation
+      PR #1448 was the authorized decision that UTV2-1512's terminal status is `superseded`. Merge commit `3399b271` applied it to both the root and parked manifests:
+
+      ```
+      -  "status": "blocked",
+      +  "status": "superseded",
+      ```
+
+      Approximately nine hours later, commit `a67a6a59` — authored by `github-actions[bot]`, message `chore(lanes): auto-reconcile stale manifests`, 2026-08-27T05:16:34Z — reverted it on the **root** manifest only, removing 58 lines:
+
+      ```
+      -  "status": "superseded",
+      +  "status": "blocked",
+      ```
+
+      Two further automated commits (`a6a4a7dd` 16:55, `b667c702` 17:11) appended on top. On current `main` both root and parked manifests read `blocked` with byte-identical 54-path `file_scope_lock`.
+
+      This is the [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **defect**: `writeManifest` resolves through `issueToManifestPath`, which always returns the root path regardless of which path was read, so a parked copy overwrites the root manifest on every scheduled reconcile. A ratified decision was destroyed by automation on protected `main`.
+    - >-
+      Current damage
+
+      * `ORCH-INFRA` fails on every reconcile run — blocking, and unactionable
+      in its current classification.
+
+      * `ops:merge-risk` **BLOCKS** on `FILE_OVERLAP` between lanes
+      `["UTV2-1512","UTV2-1512"]` across all 54 declared paths — the duplicate
+      active manifest overlaps itself.
+
+      * Both together keep the Phase 0 dispatch gate red.
+    - |-
+      Definition of done
+      1. **UTV2-1512 is formally retired.** Its identifier resolves to this successor record. No attempt is made to recreate it in Linear.
+      2. [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **lands first.** The root write-path defect must be fixed before any terminal manifest correction, or the correction will be destroyed exactly as `a67a6a59` destroyed the last one.
+      3. **After** [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **merges**, restore both the root and parked UTV2-1512 manifests to truthful historical **superseded tombstones** through the governed recovery path — carrying the deleted-identifier note, PR #1448, merge commit `3399b271`, and this successor's identifier.
+      4. `ORCH-INFRA` and the `merge-risk` self-overlap both clear as a consequence.
+    - |-
+      Explicit prohibitions
+      * **Do not run** `record_merge_on_manifest` on UTV2-1512.
+      * Do not recreate, impersonate, or fabricate the deleted Linear issue.
+      * Do not fabricate a merge, done state, or truth pass.
+      * Do not hand-edit the manifests on `main` ahead of [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy).
+    - |-
+      Related
+      * [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) — root manifest write-path fix. Hard prerequisite.
+      * The bounded P0 reconciler-correctness lane, which must classify a deleted Linear entity distinctly from archival, transient API failure, and authentication failure.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1757/recover-and-formally-retire-the-deleted-linear-issue-utv2-1512
+    title: Recover and formally retire the deleted Linear issue UTV2-1512
+    description: |-
+      ## Why this issue exists
+
+      The Linear issue **UTV2-1512** no longer exists. This issue is its successor record. It does not impersonate or recreate UTV2-1512 — it preserves the identifier, the shipped evidence, and the supersession history so the repository's references remain resolvable to a truthful record.
+
+      **UTV2-1512 is deleted, not archived.** Verified three ways on 2026-08-27:
+
+      1. `Entity not found: Issue` through the reconciler's `LINEAR_API_TOKEN`.
+      2. The same failure through an independent MCP OAuth session — so not a credential or scope defect.
+      3. Positive control: [UTV2-1683](https://linear.app/unit-talk-v2/issue/UTV2-1683/repair-ci-db-proof-harvest-so-runtime-evidence-binds-to-the-merge-sha), archived 2026-08-11, resolves in full with complete state history. Archival is not the mechanism.
+
+      It is not an isolated deletion. A full reconciliation scan found **623 issue identifiers referenced by repository artifacts that no longer resolve**, spanning UTV2-570 through UTV2-1566, classified `ORCH-HISTORICAL-DECAY`. UTV2-1512 is classified `ORCH-INFRA` rather than `ORCH-HISTORICAL-DECAY` only because it still holds an active lane manifest.
+
+      ## Shipped evidence for UTV2-1512
+
+      | Artifact | Value |
+      | -- | -- |
+      | Implementation PR | [griff843/Unit-Talk-v2#1448](https://linear.app/unit-talk-v2/review/chorelanes-utv2-1512-correct-terminal-status-to-superseded-d1a90b43674f) — `chore(lanes): UTV2-1512 correct terminal status to superseded` |
+      | PR head | `e8bd8846f12aebe6dda91f0b79918eff0445a388` |
+      | Merge commit on `main` | `3399b271fc13cd39dc03e12f38a73fb1a46e0679` |
+      | Merged at | 2026-08-26T20:01:19Z |
+      | Lane PR of record (manifest) | [griff843/Unit-Talk-v2#1173](https://linear.app/unit-talk-v2/review/utv2-1512-command-center-internal-intelligence-workbench-foundation-4015362f96bf) |
+
+      ## Supersession history — ratified, then destroyed by automation
+
+      PR #1448 was the authorized decision that UTV2-1512's terminal status is `superseded`. Merge commit `3399b271` applied it to both the root and parked manifests:
+
+      ```
+      -  "status": "blocked",
+      +  "status": "superseded",
+      ```
+
+      Approximately nine hours later, commit `a67a6a59` — authored by `github-actions[bot]`, message `chore(lanes): auto-reconcile stale manifests`, 2026-08-27T05:16:34Z — reverted it on the **root** manifest only, removing 58 lines:
+
+      ```
+      -  "status": "superseded",
+      +  "status": "blocked",
+      ```
+
+      Two further automated commits (`a6a4a7dd` 16:55, `b667c702` 17:11) appended on top. On current `main` both root and parked manifests read `blocked` with byte-identical 54-path `file_scope_lock`.
+
+      This is the [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **defect**: `writeManifest` resolves through `issueToManifestPath`, which always returns the root path regardless of which path was read, so a parked copy overwrites the root manifest on every scheduled reconcile. A ratified decision was destroyed by automation on protected `main`.
+
+      ## Current damage
+
+      * `ORCH-INFRA` fails on every reconcile run — blocking, and unactionable in its current classification.
+      * `ops:merge-risk` **BLOCKS** on `FILE_OVERLAP` between lanes `["UTV2-1512","UTV2-1512"]` across all 54 declared paths — the duplicate active manifest overlaps itself.
+      * Both together keep the Phase 0 dispatch gate red.
+
+      ## Definition of done
+
+      1. **UTV2-1512 is formally retired.** Its identifier resolves to this successor record. No attempt is made to recreate it in Linear.
+      2. [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **lands first.** The root write-path defect must be fixed before any terminal manifest correction, or the correction will be destroyed exactly as `a67a6a59` destroyed the last one.
+      3. **After** [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) **merges**, restore both the root and parked UTV2-1512 manifests to truthful historical **superseded tombstones** through the governed recovery path — carrying the deleted-identifier note, PR #1448, merge commit `3399b271`, and this successor's identifier.
+      4. `ORCH-INFRA` and the `merge-risk` self-overlap both clear as a consequence.
+
+      ## Explicit prohibitions
+
+      * **Do not run** `record_merge_on_manifest` on UTV2-1512.
+      * Do not recreate, impersonate, or fabricate the deleted Linear issue.
+      * Do not fabricate a merge, done state, or truth pass.
+      * Do not hand-edit the manifests on `main` ahead of [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy).
+
+      ## Related
+
+      * [UTV2-1756](https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy) — root manifest write-path fix. Hard prerequisite.
+      * The bounded P0 reconciler-correctness lane, which must classify a deleted Linear entity distinctly from archival, transient API failure, and authentication failure.
+    captured_at: 2026-08-30T02:22:52.367Z
+    description_sha256: 8ba49b0c4e8a631dc48eb27a038d239bbfef65f0d7bf152c0181382d1794d52c
+  contract_hash: 417f2b053d9138bb0b30c9a259bf8a9fe2311fe06ee62122f9cfbff2aed91d77
