@@ -19,6 +19,7 @@ import { spawnSync } from 'node:child_process';
 import {
   buildExtendedCommand,
   runExtendedMergeWrapper,
+  runMergeWrapper,
   isNotFastForwardFailure,
   classifyDroppedPaths,
   PROTECTED_SYNC_PATH_PREFIXES,
@@ -134,7 +135,8 @@ const HEAD_PROBE_CALL = ['git', 'rev-parse', 'HEAD'];
 const UNMERGED_PROBE_CALL = ['git', 'diff', '--name-only', '--diff-filter=U'];
 const MERGE_HEAD_PROBE_CALL = ['git', 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD'];
 const REBASE_HEAD_PROBE_CALL = ['git', 'rev-parse', '--verify', '--quiet', 'REBASE_HEAD'];
-const CLEANUP_PROBE_CALLS = [UNMERGED_PROBE_CALL, MERGE_HEAD_PROBE_CALL, REBASE_HEAD_PROBE_CALL];
+// Order matches abortInProgressSync's probe(): MERGE_HEAD, REBASE_HEAD, then unmerged paths.
+const CLEANUP_PROBE_CALLS = [MERGE_HEAD_PROBE_CALL, REBASE_HEAD_PROBE_CALL, UNMERGED_PROBE_CALL];
 const DIFF_BEFORE_CALL = ['git', 'diff', '--name-only', 'origin/main...ok'];
 const DIFF_AFTER_CALL = ['git', 'diff', '--name-only', 'origin/main..HEAD'];
 
@@ -168,6 +170,32 @@ function stashAwareRunner(
       stderr: Buffer.from(outcome.stderr),
       error: undefined,
     };
+  };
+}
+
+// UTV2-1790: answer the post-failure cleanup probes realistically. A blanket
+// failing mock makes `git rev-parse --verify --quiet MERGE_HEAD` exit 128, which
+// abortInProgressSync now (correctly) reads as "the worktree state could not be
+// determined" and fails closed on. The tests below cover the ordinary case
+// instead: the command failed and left nothing behind, so MERGE_HEAD/REBASE_HEAD
+// are absent (git exit 1, no output) and there are no unmerged paths (exit 0).
+function withCleanCleanupProbes(calls: string[][], inner: CommandRunner): CommandRunner {
+  return (command, args, options) => {
+    const isRefProbe =
+      command === 'git' &&
+      args[0] === 'rev-parse' &&
+      (args[3] === 'MERGE_HEAD' || args[3] === 'REBASE_HEAD');
+    const isUnmergedProbe = command === 'git' && args[0] === 'diff' && args.includes('--diff-filter=U');
+    if (isRefProbe || isUnmergedProbe) {
+      calls.push([command, ...args]);
+      return {
+        status: isRefProbe ? 1 : 0,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    return inner(command, args, options);
   };
 }
 
@@ -633,7 +661,10 @@ test('git-merge-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })) },
+      { lockPath, deferredDir, runner: withCleanCleanupProbes(
+          calls,
+          stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })),
+        ) },
     );
     const lock = readMergeLock(lockPath);
 
@@ -656,7 +687,10 @@ test('git-rebase-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-rebase-main' },
-      { lockPath, deferredDir, runner: stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })) },
+      { lockPath, deferredDir, runner: withCleanCleanupProbes(
+          calls,
+          stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })),
+        ) },
     );
     const lock = readMergeLock(lockPath);
 
@@ -1831,4 +1865,114 @@ test('UTV2-1790: --no-ff still records a merge commit when the branch is merely 
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('UTV2-1790: an undeterminable worktree state fails closed instead of reporting clean', () => {
+  // Review round 2, P2. `git rev-parse --verify --quiet MERGE_HEAD` exits non-zero
+  // both when the ref is ABSENT and when the command could not run at all. Reading
+  // those as the same thing let an undeterminable tree take the "nothing to abort"
+  // early return -- so the autostash would be popped into a possibly-unmerged index
+  // and the mutex released, which is precisely the P1 this lane closes.
+  //
+  // Here a real conflicted merge IS in progress, but every state probe fails with
+  // git's fatal exit 128. The wrapper must refuse to call that clean.
+  withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const runner = realGitRunner((command, args) => {
+        const isProbe =
+          command === 'git' &&
+          ((args[0] === 'rev-parse' && args.includes('--verify')) ||
+            (args[0] === 'diff' && args.includes('--diff-filter=U')));
+        if (isProbe) {
+          return {
+            status: 128,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from('fatal: not a git repository'),
+            error: undefined,
+          } as ReturnType<CommandRunner>;
+        }
+        return undefined;
+      });
+
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_cleanup_failed',
+        'an undeterminable state must fail closed, not be reported as an ordinary command failure',
+      );
+      assert.match(
+        result.message,
+        /could not be determined|Could not determine/u,
+        'the message must say the state could not be determined',
+      );
+
+      // Fail-closed guarantees hold: mutex retained, stash not popped.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'held',
+        'the mutex must NOT be released when the state is unknown',
+      );
+      assert.strictEqual(result.main_sync_stash?.popped, false, 'the autostash must be left alone');
+
+      // The recovery instruction must name a command that can actually release
+      // the lock -- `guard` only asserts it is held.
+      assert.match(result.message, /ops:merge-lock release/u, 'names a real release command');
+
+      // The lane's own commit is untouched: refusing to clean up must not mean
+      // half-cleaning up. The conflicted merge is still in progress (that is the
+      // point), so HEAD is still the pre-attempt lane commit.
+      assert.strictEqual(
+        git(dir, 'rev-parse', 'HEAD').trim(),
+        branchSha,
+        'the lane HEAD must be unchanged after a refused cleanup',
+      );
+
+      spawnSync('git', ['merge', '--abort'], { cwd: dir });
+    });
+  });
+});
+
+test('UTV2-1790: a cleanup hook that throws fails closed rather than escaping', () => {
+  // Review round 2, P3. `onCommandFailure` is a caller-supplied injection point.
+  // If it throws and nothing catches it, runMergeWrapper exits with the lock held,
+  // the stash unpopped and no structured result at all -- the operator gets a stack
+  // trace instead of recovery instructions.
+  withDivergedRepo({ conflicting: true }, ({ dir }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        {
+          lockPath,
+          deferredDir,
+          // The stash push must succeed, otherwise the wrapper returns
+          // merge_wrapper_stash_failed before the sync command ever runs and the
+          // cleanup hook is never reached.
+          runner: stashAwareRunner([], () => ({
+            status: 1,
+            stdout: '',
+            stderr: 'simulated failure',
+          })),
+          onCommandFailure: () => {
+            throw new Error('cleanup exploded');
+          },
+        },
+      );
+
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_cleanup_failed',
+        'a throwing cleanup hook must produce the fail-closed result, not propagate',
+      );
+      assert.match(result.message, /cleanup exploded/u, 'the thrown message must be surfaced');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'mutex retained');
+    });
+  });
 });

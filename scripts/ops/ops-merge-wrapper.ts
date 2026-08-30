@@ -273,21 +273,61 @@ export function abortInProgressSync(
   runner: CommandRunner,
   cwd: string,
 ): { cleaned: boolean; aborted: boolean; message?: string } {
-  const probe = (): { mergeHead: boolean; rebaseHead: boolean; unmerged: string[] } => {
-    const ref = (name: string): boolean =>
-      runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd }).status === 0;
+  // UTV2-1790 (review round 2): a probe that cannot DETERMINE the state must
+  // never be read as "clean". `git rev-parse --verify --quiet MERGE_HEAD` exits
+  // non-zero both when the ref is absent and when the command could not run at
+  // all (a broken repository, a permissions failure, git missing). Collapsing
+  // those two into `false` reintroduced the very fail-open this function exists
+  // to close: an undeterminable tree would take the "nothing to abort" early
+  // return, the autostash would be popped into a possibly-unmerged index and the
+  // mutex released. `undetermined` is therefore tracked separately and always
+  // forces the fail-closed branch.
+  const probe = (): {
+    mergeHead: boolean;
+    rebaseHead: boolean;
+    unmerged: string[];
+    undetermined: string[];
+  } => {
+    const undetermined: string[] = [];
+    const ref = (name: string): boolean => {
+      const r = runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd });
+      // Absent ref: status 1 and no output. Anything else non-zero -- notably
+      // git's fatal exit 128 -- means the question was not answered.
+      if (r.error || (r.status !== 0 && r.status !== 1)) {
+        undetermined.push(`${name} (git rev-parse exited ${r.status ?? 'with an error'})`);
+        return false;
+      }
+      return r.status === 0;
+    };
+    const mergeHead = ref('MERGE_HEAD');
+    const rebaseHead = ref('REBASE_HEAD');
     const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
-    const unmerged =
-      unmergedRun.status === 0
-        ? bufferToText(unmergedRun.stdout)
-            .split('\n')
-            .map((line) => line.trim())
-            .filter(Boolean)
-        : [];
-    return { mergeHead: ref('MERGE_HEAD'), rebaseHead: ref('REBASE_HEAD'), unmerged };
+    let unmerged: string[] = [];
+    if (unmergedRun.error || unmergedRun.status !== 0) {
+      undetermined.push(
+        `unmerged paths (git diff exited ${unmergedRun.status ?? 'with an error'})`,
+      );
+    } else {
+      unmerged = bufferToText(unmergedRun.stdout)
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+    }
+    return { mergeHead, rebaseHead, unmerged, undetermined };
   };
 
   const before = probe();
+  if (before.undetermined.length > 0) {
+    // Fail closed: we do not know whether anything is in progress, so we may not
+    // claim the tree is clean, and we must not guess by firing a blind --abort.
+    return {
+      cleaned: false,
+      aborted: false,
+      message:
+        `Could not determine the worktree state after the failed ${operation}, so it ` +
+        `cannot be reported clean: ${before.undetermined.join('; ')}.`,
+    };
+  }
   if (!before.mergeHead && !before.rebaseHead && before.unmerged.length === 0) {
     // The command failed without starting anything -- e.g. `git merge` refused
     // up front. There is nothing to abort and nothing left behind.
@@ -299,7 +339,10 @@ export function abortInProgressSync(
   const abortOk = !abort.error && abort.status === 0;
   const after = probe();
   const residue =
-    after.mergeHead || after.rebaseHead || after.unmerged.length > 0;
+    after.mergeHead ||
+    after.rebaseHead ||
+    after.unmerged.length > 0 ||
+    after.undetermined.length > 0;
 
   if (abortOk && !residue) {
     return { cleaned: true, aborted: true };
@@ -316,6 +359,9 @@ export function abortInProgressSync(
   if (after.rebaseHead) detail.push('REBASE_HEAD is still present');
   if (after.unmerged.length > 0) {
     detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
+  }
+  if (after.undetermined.length > 0) {
+    detail.push(`state could not be determined: ${after.undetermined.join('; ')}`);
   }
   return {
     cleaned: false,

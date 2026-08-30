@@ -589,10 +589,27 @@ export function runMergeWrapper(
   // release -- so neither of those two steps can ever observe a worktree that is
   // still mid-merge. Ordering is the whole point; see `onCommandFailure`.
   const commandFailed = Boolean(run.error) || run.status !== 0;
-  const cleanup =
-    commandFailed && options.onCommandFailure
-      ? options.onCommandFailure({ run, runner, cwd })
-      : undefined;
+  // UTV2-1790 (review round 2): the hook is a caller-supplied injection point, so
+  // it can throw. Letting that propagate would exit runMergeWrapper with the lock
+  // held, the stash unpopped and NO structured result -- the CLI would never reach
+  // emitJson, so the operator would be left with a leaked mutex and a stack trace
+  // instead of recovery instructions. A throwing cleanup is treated as a cleanup
+  // failure, which is the fail-closed branch and does produce those instructions.
+  let cleanup: { cleaned: boolean; aborted: boolean; message?: string } | undefined;
+  if (commandFailed && options.onCommandFailure) {
+    try {
+      cleanup = options.onCommandFailure({ run, runner, cwd });
+    } catch (error) {
+      cleanup = {
+        cleaned: false,
+        aborted: false,
+        message:
+          `The post-failure cleanup hook itself threw, so the worktree state is ` +
+          `unknown and cannot be reported clean: ` +
+          `${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
 
   if (cleanup && !cleanup.cleaned) {
     // Fail closed. The stash is NOT popped (popping into an unmerged index can
@@ -614,13 +631,20 @@ export function runMergeWrapper(
         `${input.operation} failed AND the worktree could not be returned to its ` +
         `pre-attempt state, so the merge mutex was deliberately NOT released and the ` +
         `lane-state autostash was deliberately NOT restored.\n` +
+        // UTV2-1790 (review round 2): name the command that actually ran. Sync
+        // verbs are bridged through the `main-sync` slot, so `input.operation`
+        // and `command` above describe the bridge, not the git invocation that
+        // left the residue -- which is the one thing the operator needs.
+        `The command that failed was: ${commandVector.join(' ')}\n` +
         `${cleanup.message ?? 'cleanup reported failure without detail.'}\n` +
         `Resolve by hand in ${cwd}: finish or abort the in-progress operation ` +
         `(git merge --abort / git rebase --abort), confirm ` +
         `'git diff --name-only --diff-filter=U' is empty, restore the autostash ` +
         `("${MAIN_SYNC_STASH_MESSAGE}" in 'git stash list')` +
         `${mainSyncStash?.stashed ? '' : ' if one exists'}, then release the lock with ` +
-        `'pnpm ops:merge-wrapper guard' / the merge-mutex release path.`,
+        `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'. ` +
+        `('pnpm ops:merge-wrapper guard' only ASSERTS the lock is held; it does not ` +
+        `release it.)`,
     };
   }
 
