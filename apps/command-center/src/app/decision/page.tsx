@@ -1,73 +1,11 @@
 import Link from 'next/link';
+import { getWorkspaceRoutes } from '@/lib/command-center-nav';
 
 export const metadata = { title: 'Decision — Unit Talk Command Center' };
 
-interface DecisionModule {
-  name: string;
-  href: string;
-  description: string;
-  status: 'live' | 'shell' | 'not-connected';
-  statusDetail: string;
-}
-
-const modules: DecisionModule[] = [
-  {
-    name: 'Board Queue',
-    href: '/decision/board-queue',
-    description: 'Review governed board candidates before picks are written.',
-    status: 'live',
-    statusDetail: 'Connected to board queue and write-surface workflows.',
-  },
-  {
-    name: 'Score Breakdown',
-    href: '/decision/scores',
-    description: 'Inspect promotion score components and operator-facing rationale.',
-    status: 'live',
-    statusDetail: 'Useful when a capper asks why a pick qualified or failed.',
-  },
-  {
-    name: 'Promotion Preview',
-    href: '/decision/preview',
-    description: 'Preview qualification, target routing, and intervention options.',
-    status: 'not-connected',
-    statusDetail: 'Not connected — requires read-only promotion re-evaluation API endpoint. Tracked in UTV2-583/608.',
-  },
-  {
-    name: 'Routing Preview',
-    href: '/decision/routing',
-    description: 'Validate downstream channel routing and guardrail decisions.',
-    status: 'not-connected',
-    statusDetail: 'Not connected — requires pick-level routing resolution API endpoint. Tracked in UTV2-583/608.',
-  },
-  {
-    name: 'Board Saturation',
-    href: '/decision/board',
-    description: 'Monitor slate capacity and risk of overloading a board.',
-    status: 'live',
-    statusDetail: 'Supports board-cap management and sequencing decisions.',
-  },
-  {
-    name: 'Hedge Overlays',
-    href: '/decision/hedges',
-    description: 'Reserved for hedge-specific overlays and counter-position guidance.',
-    status: 'shell',
-    statusDetail: 'Route exists, but the workflow is still a shell.',
-  },
-];
-
-const statusClasses: Record<DecisionModule['status'], string> = {
-  live: 'border-emerald-700 bg-emerald-900/40 text-emerald-300',
-  shell: 'border-gray-700 bg-gray-800 text-gray-300',
-  'not-connected': 'border-yellow-800 bg-yellow-900/20 text-yellow-500',
-};
-
-const statusLabels: Record<DecisionModule['status'], string> = {
-  live: 'Live',
-  shell: 'Shell',
-  'not-connected': 'Not Connected',
-};
-
 export default function DecisionPage() {
+  const modules = getWorkspaceRoutes('decision');
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -86,16 +24,16 @@ export default function DecisionPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-gray-200 group-hover:text-white">
-                {module.name}
+                {module.label}
               </h2>
               <span
-                className={`inline-flex rounded border px-2 py-0.5 text-[10px] font-medium ${statusClasses[module.status]}`}
+                className="inline-flex rounded border border-gray-700 bg-gray-800 px-2 py-0.5 text-[10px] font-medium text-gray-300"
               >
-                {statusLabels[module.status]}
+                {module.classification}
               </span>
             </div>
             <p className="text-xs text-gray-400">{module.description}</p>
-            <p className="text-[10px] text-gray-600">{module.statusDetail}</p>
+            <p className="text-[10px] text-gray-600">{module.classificationReason}</p>
           </Link>
         ))}
       </div>

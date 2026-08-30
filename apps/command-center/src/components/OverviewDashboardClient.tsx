@@ -15,7 +15,7 @@ type OverviewDashboardClientProps = {
 
 type FeedRow = {
   id: string;
-  tier: 'S' | 'A' | 'B' | 'C' | 'D';
+  tier: 'S' | 'A' | 'B' | 'C' | 'D' | '—';
   player: string;
   market: string;
   submittedAt: string;
@@ -28,6 +28,7 @@ const TIER_CLASSES: Record<FeedRow['tier'], string> = {
   B: 'border-emerald-400/40 bg-emerald-500/12 text-emerald-100',
   C: 'border-amber-400/40 bg-amber-500/12 text-amber-100',
   D: 'border-rose-400/40 bg-rose-500/12 text-rose-100',
+  '—': 'border-slate-500/40 bg-slate-500/10 text-slate-300',
 };
 
 const ALERT_TONE_CLASSES = {
@@ -55,6 +56,7 @@ function scoreSignal(signal: LifecycleSignal) {
 }
 
 function apiHealthLabel(signals: LifecycleSignal[]) {
+  if (signals.length === 0) return { label: 'Unknown', tone: 'text-slate-300' };
   const min = Math.min(...signals.map(scoreSignal));
   if (min === 0) return { label: 'Down', tone: 'text-red-300' };
   if (min === 1) return { label: 'Degraded', tone: 'text-amber-300' };
@@ -62,7 +64,8 @@ function apiHealthLabel(signals: LifecycleSignal[]) {
 }
 
 function deriveTier(pick: PickRow): FeedRow['tier'] {
-  const score = pick.score ?? 0;
+  if (pick.score == null) return '—';
+  const score = pick.score;
   if (score >= 90) return 'S';
   if (score >= 80) return 'A';
   if (score >= 70) return 'B';
@@ -83,6 +86,12 @@ function relativeTimestamp(value: string) {
   const diffHours = Math.round(diffMinutes / 60);
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${Math.round(diffHours / 24)}d ago`;
+}
+
+function formatObservedTimestamp(value: string | null) {
+  if (!value) return 'No observation timestamp';
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toLocaleString() : value;
 }
 
 function alertSeverity(exception: OperationalException) {
@@ -115,8 +124,8 @@ function PicksTicker({ picks }: { picks: FeedRow[] }) {
     <section className="cc-surface overflow-hidden">
       <header className="flex items-center justify-between border-b border-[var(--cc-border-subtle)] px-5 py-4">
         <div>
-          <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Live Picks Feed</h2>
-          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">Most recent 10 picks with tier-badged rows.</p>
+          <h2 className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Recent Picks</h2>
+          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">Most recent 10 measured picks; an em dash means no promotion score was observed.</p>
         </div>
         <button
           type="button"
@@ -218,9 +227,9 @@ function AlertLog({ events }: { events: AlertLogEntry[] }) {
 export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: OverviewDashboardClientProps) {
   const [feedPaused, setFeedPaused] = useState(false);
   const apiHealth = useMemo(() => apiHealthLabel(data.signals), [data.signals]);
-  const yesterdayPicks = Math.max(0, data.stats.total - data.picks.length);
-  const todayPickDelta = data.picks.length - yesterdayPicks;
-  const activeAgentsHealthy = runtime.worker.drainState === 'running' || runtime.worker.drainState === 'idle';
+  const todayPickDelta = dailyPickCounts && dailyPickCounts.length >= 2
+    ? dailyPickCounts[dailyPickCounts.length - 1]! - dailyPickCounts[dailyPickCounts.length - 2]!
+    : null;
   const pipelineStages = useMemo(() => buildPipelineStages(data, runtime), [data, runtime]);
   const feedRows = useMemo(() => buildFeedRows(data.picks), [data.picks]);
   const alertEvents = useMemo(
@@ -239,7 +248,7 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
     () =>
       feedRows.map((pick) => ({
         id: pick.id,
-        title: `${pick.tier} tier ${pick.player}`,
+        title: `${pick.tier === '—' ? 'Unscored' : `${pick.tier} tier`} ${pick.player}`,
         detail: `${pick.market} • ${pick.status}`,
         timestamp: relativeTimestamp(pick.submittedAt),
         tone: pick.tier === 'D' ? 'warning' as const : 'success' as const,
@@ -259,33 +268,48 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
         <StatCard
           label="Today's Picks"
           value={data.picks.length}
-          delta={formatDelta(todayPickDelta)}
+          delta={todayPickDelta == null ? undefined : formatDelta(todayPickDelta)}
           liveUpdate
           sparkline={dailyPickCounts ?? undefined}
           sparklineLabel="Pick submissions, last 7 days"
         />
         <article className="cc-surface p-5">
-          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Active Agents</p>
-          <div className="mt-4 flex items-end gap-3">
-            <span className="text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]">4</span>
-            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${activeAgentsHealthy ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border-amber-400/20 bg-amber-500/10 text-amber-200'}`}>
-              {activeAgentsHealthy ? '4/4 healthy' : '3/4 healthy'}
-            </span>
-          </div>
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Worker State</p>
+          <p className="mt-4 text-2xl font-semibold capitalize tracking-[-0.03em] text-[var(--cc-text-primary)]">
+            {runtime.worker.drainState || 'unknown'}
+          </p>
+          <p className="mt-2 text-xs text-[var(--cc-text-secondary)]">
+            Last run: {formatObservedTimestamp(runtime.worker.latestRunAt)}
+          </p>
         </article>
-        <StatCard
-          label="Pipeline Lag Avg"
-          value={runtime.observability.pendingOutboxAgeMaxMinutes ?? 0}
-          delta={formatLagDelta(runtime)}
-          unit="m"
-          liveUpdate
-        />
+        <article className="cc-surface p-5">
+          <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Pending Outbox Age</p>
+          {runtime.observability.pendingOutboxAgeMaxMinutes == null ? (
+            <>
+              <p className="mt-4 text-2xl font-semibold text-slate-300">Unavailable</p>
+              <p className="mt-2 text-xs text-[var(--cc-text-secondary)]">No authoritative age measurement was returned.</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-4 text-4xl font-semibold tracking-[-0.05em] text-[var(--cc-text-primary)]">
+                {runtime.observability.pendingOutboxAgeMaxMinutes}<span className="text-xl">m</span>
+              </p>
+              <p className="mt-2 text-xs text-[var(--cc-text-secondary)]">{formatLagDelta(runtime)}</p>
+            </>
+          )}
+        </article>
         <article className="cc-surface p-5">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">API Health</p>
           <div className="mt-4 flex items-center gap-3">
             <span
               className={`inline-block h-3 w-3 rounded-full ${
-                apiHealth.label === 'Healthy' ? 'bg-emerald-400' : apiHealth.label === 'Degraded' ? 'bg-amber-400' : 'bg-rose-400'
+                apiHealth.label === 'Healthy'
+                  ? 'bg-emerald-400'
+                  : apiHealth.label === 'Degraded'
+                    ? 'bg-amber-400'
+                    : apiHealth.label === 'Unknown'
+                      ? 'bg-slate-400'
+                      : 'bg-rose-400'
               }`}
               aria-hidden="true"
             />

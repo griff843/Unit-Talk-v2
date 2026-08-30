@@ -139,7 +139,7 @@ export function buildFireBoard(inputs: FireBoardInputs): FireBoardItem[] {
         lastSeen: nowIso,
         impact: 'Grading truth incomplete',
         nextAction: 'Resolve in results ops',
-        href: '/operations/results',
+        href: '/settlement',
       });
     }
     if (ex.awaitingApprovalDrift > 0) {
@@ -233,7 +233,7 @@ export function buildFireBoard(inputs: FireBoardInputs): FireBoardItem[] {
       lastSeen: nowIso,
       impact: 'Blind spot: API runtime state unknown',
       nextAction: 'Check apps/api process and API_BASE_URL',
-      href: '/runtime-dashboard',
+      href: '/api-health',
     });
   } else if (inputs.runtime) {
     if (inputs.runtime.apiStatus === 'down') {
@@ -245,7 +245,7 @@ export function buildFireBoard(inputs: FireBoardInputs): FireBoardItem[] {
         lastSeen: nowIso,
         impact: 'All mutations and delivery blocked',
         nextAction: 'Restart / inspect apps/api',
-        href: '/runtime-dashboard',
+        href: '/api-health',
       });
     } else if (inputs.runtime.apiStatus === 'degraded') {
       items.push({
@@ -256,7 +256,7 @@ export function buildFireBoard(inputs: FireBoardInputs): FireBoardItem[] {
         lastSeen: nowIso,
         impact: 'Runtime warnings active',
         nextAction: 'Open runtime dashboard',
-        href: '/runtime-dashboard',
+        href: '/api-health',
       });
     } else if (inputs.runtime.warnings.length > 0) {
       items.push({
@@ -267,7 +267,7 @@ export function buildFireBoard(inputs: FireBoardInputs): FireBoardItem[] {
         lastSeen: nowIso,
         impact: 'Informational',
         nextAction: 'Open runtime dashboard',
-        href: '/runtime-dashboard',
+        href: '/api-health',
       });
     }
   }

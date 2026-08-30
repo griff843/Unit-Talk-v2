@@ -29,7 +29,7 @@ export interface StuckPostedPick {
   sportDisplayName: string | null;
   postedAt: string | null;
   createdAt: string | null;
-  ageHours: number;
+  ageHours: number | null;
 }
 
 export interface ResultsOpsSnapshot {
@@ -107,8 +107,12 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
       client.from('game_results').select('id', { count: 'exact', head: true }).gte('sourced_at', dayAgo),
     ]);
 
-  for (const result of [recentResult, manualResult, correctionsResult, stuckResult, gameLatestResult]) {
+  for (const result of [recentResult, manualResult, correctionsResult, settled24hResult, stuckResult, gameLatestResult, game24hResult]) {
     if (result.error) throw result.error;
+  }
+
+  if (typeof settled24hResult.count !== 'number' || typeof game24hResult.count !== 'number') {
+    throw new Error('Settlement count telemetry was not measured');
   }
 
   const manualReview = ((manualResult.data ?? []) as Array<Record<string, unknown>>).map(mapSettlementRow);
@@ -123,7 +127,9 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
       sportDisplayName: typeof row['sport_display_name'] === 'string' ? row['sport_display_name'] : null,
       postedAt: typeof row['posted_at'] === 'string' ? row['posted_at'] : null,
       createdAt,
-      ageHours: createdAt ? Math.max(0, Math.floor((nowMs - Date.parse(createdAt)) / 3_600_000)) : 0,
+      ageHours: createdAt && Number.isFinite(Date.parse(createdAt))
+        ? Math.max(0, Math.floor((nowMs - Date.parse(createdAt)) / 3_600_000))
+        : null,
     };
   });
 
@@ -131,7 +137,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
 
   return {
     counts: {
-      settled24h: settled24hResult.count ?? 0,
+      settled24h: settled24hResult.count,
       manualReviewOpen: manualReview.length,
       corrections: corrections.length,
       stuckPosted: stuckPosted.length,
@@ -142,7 +148,7 @@ export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
     stuckPosted,
     gameResults: {
       latestSourcedAt: typeof latestGameRow?.['sourced_at'] === 'string' ? latestGameRow['sourced_at'] : null,
-      count24h: game24hResult.count ?? 0,
+      count24h: game24hResult.count,
     },
   };
 }

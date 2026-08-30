@@ -1,0 +1,115 @@
+# UTV2-1788 — Command Center stabilization verification
+
+## Verification
+
+| Check | Result | Evidence |
+| --- | --- | --- |
+| Command Center type-check | PASS | `pnpm --filter @unit-talk/command-center type-check`, exit 0 |
+| Command Center build | PASS | `pnpm --filter @unit-talk/command-center build`, exit 0; 56 dynamic routes including `/settlement` |
+| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 126 passed, 0 failed |
+| Static repository gate | PASS | `pnpm verify:static`, exit 0 |
+| Full repository gate | PARTIAL / EXPECTED REFUSAL | All static stages passed; writable DB leg refused the unidentified loopback target before constructing a client |
+| Desktop/mobile E2E | PASS | `pnpm exec playwright test e2e/utv2-1788-primary-workflows.spec.ts`; 2 passed, all six workflows at 1440x1000 and 390x844 |
+| Screenshots | PASS | 12 PNGs under `screenshots/`, one desktop and one mobile capture for each primary workflow |
+| Standalone Docker attempt | BLOCKED BY HOST | Docker client 29.7.2 present; daemon socket unavailable, so no Dockerfile instruction executed |
+| Diff whitespace | PASS | `git diff --check`, exit 0 |
+| R-level compliance | PENDING EXACT COMMIT | Run after the implementation commit is frozen |
+| Independent exact-head review | PENDING EXACT COMMIT | Run after the implementation commit is frozen |
+
+### Static gate evidence
+
+`pnpm verify:static` completed the canonical sequence: privileged-client boundary, sync/alignment/automation gates, environment validation, lint, `pnpm type-check`, `pnpm build`, `pnpm test`, Smart Form verification, and command/migration checks. The automation gate reported only the repository's pre-existing baselined QA-agent glob warning and no new unwired tests.
+
+### Focused test evidence
+
+```text
+1..126
+# tests 126
+# pass 126
+# fail 0
+# cancelled 0
+# skipped 0
+```
+
+New focused coverage is placed under `src/lib/`, which the existing package script executes:
+
+- `command-center-nav.test.ts`: filesystem/registry equality, all classifications, exact six primary routes, parent mapping, workspace derivation.
+- `operator-truth-rendering.test.ts`: unavailable metrics never render as healthy zeroes.
+- `describe-error.test.ts`: operator-safe bounded degradation messages.
+- `fire-board-model.test.ts`: consolidated navigation targets.
+
+### Full gate and writable DB disposition
+
+`pnpm verify` ran `pnpm verify:static` successfully and then reached `test:live-db`. The staging assertion refused the configured loopback target:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx.
+Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+```
+
+Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable/loopback). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials. No database write was attempted, and this app-only T2 lane makes no DB change.
+
+### E2E and screenshots
+
+The focused Playwright spec navigates via the rendered primary navigation, asserts the H1 and final URL for every primary workflow, and captures full-page screenshots.
+
+| Workflow | Desktop | Mobile |
+| --- | --- | --- |
+| Overview | `screenshots/desktop-overview.png` | `screenshots/mobile-overview.png` |
+| Review | `screenshots/desktop-review.png` | `screenshots/mobile-review.png` |
+| Active Picks | `screenshots/desktop-active-picks.png` | `screenshots/mobile-active-picks.png` |
+| Settlement | `screenshots/desktop-settlement.png` | `screenshots/mobile-settlement.png` |
+| Exceptions | `screenshots/desktop-exceptions.png` | `screenshots/mobile-exceptions.png` |
+| System Health | `screenshots/desktop-system-health.png` | `screenshots/mobile-system-health.png` |
+
+The local capture used the existing `COMMAND_CENTER_AUTH_MODE=fail_open` override only as an ephemeral process environment so an uncredentialed workstation could render the internal UI. This is not production authorization evidence and did not change any env or auth file.
+
+### Docker attempt
+
+Command attempted from the repository root:
+
+```text
+docker build -f apps/command-center/Dockerfile -t unit-talk/command-center:utv2-1788-proof .
+```
+
+Result: blocked before build-context processing because `/var/run/docker.sock` is unavailable. `docker version` confirmed a 29.7.2 client and no reachable daemon; Podman, Buildah, and nerdctl are not installed. The in-scope Dockerfile corrections are static and buildable in shape: Node 22, repository-root workspace context, workspace package copy, filtered build, and no nonexistent `public/` copy. A hosted Docker-capable runner must execute the image build before any deployment lane may rely on it.
+
+## Assertions
+
+- The primary navigation contains exactly six workflows and is derived from the route registry.
+- All 55 baseline page routes are classified; the added `/settlement` route is also classified.
+- `/settlement` uses the existing `SettlementForm` and `actions/settle.ts` path to `POST /api/picks/{id}/settle`; no API authority is added.
+- Every Command Center mutation remains a server action that posts to the canonical API. No new direct write path exists.
+- Primary workflow fetch failures render degraded/unavailable states; fabricated catch payloads and inferred zero health are removed.
+- Deferred routes are absent from primary navigation and receive an explicit classification banner when directly visited.
+- Request-time privileged reads are forced dynamic, preventing image build from presenting build-time data as runtime truth.
+- The Tier C auth/config files named in the authorization correction are byte-unchanged.
+- No file overlaps Smart Form Phase 1 or the production deployment/recovery lanes.
+
+## Residual risks and deferred work
+
+### Tier C authentication defect — unchanged
+
+Production normally requires auth, but an explicit `COMMAND_CENTER_AUTH_MODE=fail_open` (or its aliases) is evaluated before environment mode and can authenticate an uncredentialed production request as a full operator through `dev_bypass`. Both the app and root example env files expose the unsafe default. Fixing precedence, middleware behavior, tests, or env defaults is a security/configuration posture change and belongs to the PM-directed Claude Tier C successor. This lane does not modify `server-api.ts`, `middleware.ts`, `.env.example`, auth behavior, or auth tests.
+
+### Privileged reads — deployment blocker
+
+Command Center continues to read Supabase through service-role `getDataClient()` across its data modules. `/intel/teams` constructs that client at page level, and `storage-health.ts` calls the Supabase Management API database-query endpoint. These existing read authorities were not expanded or redesigned. They must be reviewed before a deployment lane can expose Command Center.
+
+### Structurally unwired tests
+
+The unchanged package test glob still excludes four existing files: the governance route test, `command-center-pages.test.tsx`, stale `command-center-rebuild.test.tsx`, and `shared-components.test.tsx`. Deleting the stale rebuild test caused the repository automation baseline to demand an out-of-scope governance/config update, so it was restored unchanged. Fixing the glob or baseline requires the separately authorized package/build-config lane. All new tests in this lane are wired under `src/lib/`.
+
+### Deployment status
+
+Command Center is **still not production-deployed**. No workflow publishes its image and no production compose or deployment configuration is changed here. Deployment requires a separate lane after authentication, privileged-read, hosted Docker-build, and production-configuration review.
+
+## Scope and overlap evidence
+
+- Changed implementation path: `apps/command-center/**` only.
+- Authorized control/proof paths: `.ops/sync/UTV2-1788.yml`, `docs/06_status/lanes/UTV2-1788.json`, `docs/06_status/proof/UTV2-1788/**`.
+- Smart Form lane UTV2-1787 owns `apps/smart-form/**`, selected API/contracts/DB paths, and shares zero files.
+- Open PRs identified in the captured work order share zero Command Center files.
+- No `deploy/production/**`, workflow, API, worker, contracts, domain, DB package, migration, env, or secret path is changed.

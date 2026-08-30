@@ -48,7 +48,8 @@ function ThemeIcon({ dark }: { dark: boolean }) {
   );
 }
 
-export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenNavigation, onOpenPalette }: TopBarProps) {
+export function TopBar({ title, breadcrumb, lastUpdatedAt, onOpenNavigation, onOpenPalette }: TopBarProps) {
+  const [openedAt] = useState(Date.now());
   const [now, setNow] = useState(Date.now());
   const [dark, setDark] = useState(true);
 
@@ -61,7 +62,8 @@ export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenNa
     return () => window.clearInterval(id);
   }, []);
 
-  const updatedLabel = useMemo(() => formatElapsed(now - lastUpdatedAt), [lastUpdatedAt, now]);
+  const statusTimestamp = lastUpdatedAt ?? openedAt;
+  const updatedLabel = useMemo(() => formatElapsed(now - statusTimestamp), [now, statusTimestamp]);
 
   const toggleTheme = () => {
     const root = document.documentElement;
@@ -113,7 +115,7 @@ export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenNa
           </button>
         )}
         <div className="rounded-full border border-[var(--cc-border-subtle)] bg-[var(--cc-bg-surface-elevated)] px-3 py-2 text-xs text-[var(--cc-text-secondary)]">
-          Updated {updatedLabel}
+          {lastUpdatedAt ? 'Updated' : 'Page opened'} {updatedLabel}
         </div>
         <button type="button" className="cc-icon-button" aria-label="Open alerts">
           <BellIcon />

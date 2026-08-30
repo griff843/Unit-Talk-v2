@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { describeThrown } from './describe-error.js';
+import { describeOperatorFailure, describeThrown } from './describe-error.js';
 
 test('Error instances render their message', () => {
   assert.equal(describeThrown(new Error('boom')), 'boom');
@@ -28,4 +28,14 @@ test('primitives pass through', () => {
   assert.equal(describeThrown(42), '42');
   assert.equal(describeThrown(null), 'null');
   assert.equal(describeThrown(undefined), 'undefined');
+});
+
+test('operator failure text omits verbose transport details and is bounded', () => {
+  const out = describeOperatorFailure({
+    message: 'TypeError: fetch failed',
+    code: '',
+    details: `stack ${'frame '.repeat(100)}`,
+  });
+  assert.equal(out, 'TypeError: fetch failed');
+  assert.ok(describeOperatorFailure({ weird: 'x'.repeat(300) }).length <= 180);
 });

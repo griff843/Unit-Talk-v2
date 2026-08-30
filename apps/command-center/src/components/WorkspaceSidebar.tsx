@@ -81,9 +81,9 @@ function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
       </div>
       {!collapsed && (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Internal control plane</div>
+          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Internal operator</div>
           <div className="mt-1 inline-flex items-center rounded-full border border-[var(--cc-border-strong)] px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
-            Operator access only
+            Access restricted
           </div>
         </div>
       )}

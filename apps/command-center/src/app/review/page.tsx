@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/Card';
+import { DegradedState } from '@/components/ui';
 import { QueueFilters } from '@/components/QueueFilters';
 import { ReviewQueueClient } from '@/components/ReviewQueueClient';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Suspense } from 'react';
 import { getReviewQueue } from '@/lib/data';
+import { describeOperatorFailure } from '@/lib/describe-error';
 
 export const metadata = { title: 'Review Queue — Unit Talk Command Center' };
 
@@ -29,7 +31,26 @@ export default async function ReviewQueuePage({
     if (typeof val === 'string' && val.trim()) params[key] = val.trim();
   }
 
-  const { picks, total } = await getReviewQueue(params);
+  let queue: Awaited<ReturnType<typeof getReviewQueue>> | null = null;
+  let loadError: string | null = null;
+  try {
+    queue = await getReviewQueue(params);
+  } catch (error) {
+    loadError = describeOperatorFailure(error, 'The governed review queue could not be loaded.');
+  }
+
+  if (!queue) {
+    return (
+      <DegradedState
+        severity="critical"
+        title="Review queue unavailable"
+        causes={[loadError ?? 'The governed review queue could not be loaded. No queue count was inferred.']}
+        action={{ label: 'System Health', href: '/api-health' }}
+      />
+    );
+  }
+
+  const { picks, total } = queue;
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
   const lifecycleAwaitingApproval = picks.filter(

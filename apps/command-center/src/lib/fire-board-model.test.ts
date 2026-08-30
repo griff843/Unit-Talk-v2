@@ -53,7 +53,7 @@ test('manual review settlements are needs-pm', () => {
   );
   assert.equal(items.length, 1);
   assert.equal(items[0]!.severity, 'needs-pm');
-  assert.equal(items[0]!.href, '/operations/results');
+  assert.equal(items[0]!.href, '/settlement');
 });
 
 test('provider failed/stale lanes rank critical; blocked lanes rank warning', () => {
