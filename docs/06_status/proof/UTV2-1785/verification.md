@@ -149,8 +149,47 @@ ok 17 - the indirect-invocation fallback is load-bearing, not decorative
 
 ### Static verification
 
-    pnpm type-check   -> exit 0 (no output)
-    pnpm lint         -> exit 0 (no output)
+EVIDENCE:
+
+```text
+$ pnpm type-check
+  exit 0 (no diagnostics)
+
+$ pnpm lint
+  exit 0 (no findings)
+
+$ pnpm verify:static
+  exit 0
+  (ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
+   ops:automation-coverage-check, env:check, lint, type-check, build, test,
+   smart-form verify, verify:commands -- all green)
+  # tests 114 / # pass 114 / # fail 0 / # skipped 0   (smart-form verify leg)
+  [command-manifest] Verified 14 command definition(s)
+  [check-migration-versions] 7 migration file(s) verified — no duplicate versions.
+  [lint-migrations] 6 migration file(s) checked — no findings.
+
+$ pnpm verify
+  pnpm verify = `pnpm verify:static && pnpm test:live-db`.
+  verify:static leg: PASS (transcript above).
+  test:live-db leg: REFUSED locally, by design, not by defect:
+
+    [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+    [assert-staging] REFUSED: target identity could not be resolved from its URL
+    (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.
+    Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+
+  Under production containment `local.env` carries SUPABASE_URL=http://127.0.0.1:1,
+  so `ci:assert-staging` fails closed rather than letting a writable DB test reach
+  an unidentified target. The writable-DB receipt for this PR is produced inside
+  the required CI `verify` job against the staging project, which is the only
+  sanctioned source for it. This lane changes no database, runtime, delivery, or
+  ingestion code, so it has no live-DB surface of its own to exercise.
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1785
+  Verdict: PASS
+  Changed files: 8
+  Rules matched: (none) — no R-level artifacts required for this diff
+```
 
 Full ops suite, `pnpm test:ops`:
 

@@ -8,9 +8,9 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-30T08:50:00Z",
   "sha_binding": {
-    "merge_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4",
+    "merge_sha": null,
     "verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4",
-    "verified_source_note": "Last commit on this branch touching a non-proof path. merge_sha carries the same value pre-merge and is rebound to the real merge commit by post-merge-lane-close.yml.",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml. The MERGE_SHA: anchor in verification.md and diff-summary.md carries this branch anchor so the rebinder can find and rewrite it.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -49,6 +49,24 @@
       "pass": 2644,
       "fail": 0,
       "skipped": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "definition": "pnpm verify:static && pnpm test:live-db",
+      "verify_static_leg": "PASS",
+      "test_live_db_leg": "REFUSED locally by ci:assert-staging under production containment (SUPABASE_URL=http://127.0.0.1:1); the writable-DB receipt is produced inside the required CI verify job against staging xskgrzbteyqdufktjrjx, which is the only sanctioned source.",
+      "lane_has_live_db_surface": false
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1785",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": [],
+      "artifacts_required": []
     }
   },
   "mutation_controls": [

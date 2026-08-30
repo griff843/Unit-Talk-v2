@@ -1,5 +1,7 @@
 # Diff summary — UTV2-1785
 
+MERGE_SHA: 69b69d528b3919c072e529d4e23a5490690cb1c4
+
 Two code files. No `package.json`, no workflow, no runtime/DB code.
 
 | File | Change |
