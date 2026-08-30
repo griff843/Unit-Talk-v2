@@ -18,7 +18,6 @@
     "docs/06_status/proof/UTV2-1736/evidence.json",
     "docs/06_status/proof/UTV2-1736/model-routing.json",
     "docs/06_status/proof/UTV2-1736/verification.md",
-    "package.json",
     "scripts/ops/partition-provisioner.test.ts",
     "scripts/ops/partition-provisioner.ts",
     "supabase/migrations/20260824000000_utv2_1736_offer_history_forward_partitions.sql"
@@ -58,5 +57,62 @@
       "package.json"
     ],
     "reason": "test:ops is a hardcoded file list, not a glob, so scripts/ops/partition-provisioner.test.ts was unreachable from any executable command and pnpm verify failed with WIRING_TEST_UNWIRED_NEW. PM authorized extending file scope to package.json to wire the lane's own tests into test:ops rather than suppressing the guard via the wiring baseline. Additionally, migration-reversibility-gate and the schema round-trip drill both require db/migrations-rollback/<migration>.down.sql for this lane's own migration; that path is derived from a file this lane creates and is part of the same deliverable."
-  }
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-08-30T08:44:32.683Z",
+      "actor": "claude-orchestrator",
+      "reason": "PM-authorized temporary release of shared test-wiring path while UTV2-1736 is held on UTV2-1783. UTV2-1736 no longer changes package.json. Final partition-provisioner test wiring will be restored at final convergence under exact-head PM scope authority.",
+      "pr_number": 1451,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1451",
+      "head_sha": "6ce342f28adfe9ad0cd19c8f24c69f100038b449",
+      "previous_lock_hash": "be873ebb7bea15564cf1d52074c59fba538647c40017c596cc7cf00b4da2f7e1",
+      "resulting_lock_hash": "34061b32f9896a3660289cc5d0b6c7ecc840d2f9d403921ddf997429af387812",
+      "released_paths": [
+        "package.json"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1736-offer-history-partitions on branch codex/utv2-1736-offer-history-partitions"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue UTV2-1736, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1451"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1451 OPEN at 6ce342f28adfe9ad0cd19c8f24c69f100038b449"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "be873ebb7bea15564cf1d52074c59fba538647c40017c596cc7cf00b4da2f7e1"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "11 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "702 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "10 entries remain"
+        }
+      ]
+    }
+  ]
 }
