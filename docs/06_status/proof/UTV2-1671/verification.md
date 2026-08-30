@@ -46,7 +46,8 @@ between the two columns is attributable to this change alone.
       reports `migration_lane_required` at HEAD.
 - [x] **N6** `packages/db/src/database.types.ts` remains `forbidden_path` and
       still reports `migration_lane_required` at HEAD.
-- [x] **Exhaustive non-broadening control**: every on-disk module in
+- [x] **Exhaustive non-broadening control** (path-admission sense; see the
+      independent review finding below for the limit of this claim): every on-disk module in
       `packages/contracts/src/` was checked against lane `runtime` at HEAD.
       Exactly 2 are admitted -- `index.ts` (this change) and `promotion.ts`
       (pre-existing) -- and 16 are refused. `smart-form.ts` does not yet exist
@@ -74,7 +75,9 @@ between the two columns is attributable to this change alone.
 | `pnpm lane:check --lane runtime` over all 18 on-disk contracts modules | pass -- 2 admitted / 16 refused |
 | `pnpm lane:check --lane governance --file <this lane's 6 files>` | pass |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS, no rules matched |
-| `pnpm verify` | exit 0 (see EVIDENCE) |
+| `pnpm type-check` (standalone) | exit 0, no diagnostics |
+| `pnpm test` (standalone) | exit 0, 97 suites, 5193 assertions, 0 fail/skip/cancel |
+| `pnpm verify:static` | exit 0 -- see EVIDENCE. The full `pnpm verify` is `verify:static && test:live-db`; its `test:live-db` half is refused locally by `ci:assert-staging` and is produced by the required `verify` CI job instead. |
 
 ### Why these controls are sufficient
 
@@ -90,6 +93,36 @@ N4-N6 are a weaker class by construction: they are refused by
 `forbidden_path_globs`, which an `allowed_path_globs` addition structurally
 cannot override. They are reported for completeness, not as the proof of
 non-broadening.
+
+### `pnpm type-check` and `pnpm test` -- run standalone, exit 0
+
+`verify:static` runs both as constituent steps, but CEP-E4/P12 requires them
+named directly, so both were also executed standalone with their own exit codes
+captured from the `pnpm` process.
+
+```text
+$ pnpm type-check; echo "TYPE_CHECK_EXIT=$?"
+
+> @unit-talk/v2@0.1.0 type-check
+> pnpm exec tsc -b tsconfig.json
+
+TYPE_CHECK_EXIT=0
+```
+
+`tsc -b` emitted no diagnostics.
+
+```text
+$ pnpm test; echo "TEST_EXIT=$?"
+
+  aggregate over 97 node:test suites
+  # pass       5193
+  # fail       0
+  # skipped    0
+  # cancelled  0
+  occurrences of "not ok" / "# fail <n>0" / ELIFECYCLE: 0
+
+TEST_EXIT=0
+```
 
 ## Runtime Verification
 
@@ -242,6 +275,54 @@ VERIFY_STATIC_EXIT=0
 The exit code is captured directly from the `pnpm` process, not from a pipeline
 tail -- a piped invocation reports the exit status of the last stage and can
 mask a failing verify.
+
+## Independent review finding -- recorded, not silently absorbed
+
+An independent adversarial review of this PR was asked specifically to falsify
+the non-broadening claim. It confirmed the literal path-level claim byte for
+byte, and it also identified a real limitation in what these controls can
+prove. Both are recorded here rather than only the favourable half.
+
+**The claim these controls actually establish** is *path-admission*
+non-broadening: no glob was widened, no `forbidden_path_globs` entry was
+weakened, and exactly two paths became admissible. That is what the controls
+test and it holds.
+
+**What they do not establish** is *semantic capability* non-broadening.
+`scripts/lane-contract.ts` matches changed file paths only -- it never inspects
+file content or the import graph. `packages/contracts/src/index.ts` is not a
+passive shim: it declares governance-relevant literals (`memberTiers`,
+`canonicalWriter`, `writerRoles`) and carries 13 `export * from` lines. A
+runtime lane that can edit it can therefore alter those literals, and can
+change the public surface of contract modules it cannot edit directly, without
+lane-check observing it. No control in this bundle detects that, and none
+could, because the check being verified is itself path-only.
+
+**Why the admission is still the minimal one available.** The obvious narrower
+alternative -- have `apps/api` deep-import the module and leave `index.ts`
+alone -- is not available. `packages/contracts/package.json` declares
+`"exports": { ".": "./src/index.ts" }` with no subpath entries, and all 65
+`@unit-talk/contracts` imports in `apps/api/src` use the bare specifier. Adding
+a subpath export would require admitting `packages/contracts/package.json`,
+which is strictly worse on two counts: any `package.json` change is on the
+`DELEGATION_POLICY.md` always-escalate list, and that file governs the entire
+package's public surface rather than one module. Admitting `index.ts` is the
+smaller of the two available admissions.
+
+**Severity context.** The capability described above is not created by this
+change. `packages/contracts/src/**` -- the full glob, `index.ts` included -- is
+already granted to the `hygiene` lane (`.lane/lanes/hygiene.yml:22`) and the
+`data-canonical` lane (`.lane/lanes/data-canonical.yml:19`). This change gives
+the runtime lane strictly less than what two lane types already hold. It is an
+incremental extension of a pre-existing structural gap, admitted in the
+narrowest form available, not a new hole.
+
+**Unstaffed follow-up.** That lane authority is path-only, and so cannot see a
+barrel file re-exporting or redefining content from modules the lane may not
+touch, is a governance gap worth its own issue. It is outside this lane's
+authorized scope -- the objective in `.ops/sync/UTV2-1671.yml` restricts this
+lane to path admission and excludes any executor-policy or delegation-policy
+amendment -- so it is reported for PM triage rather than fixed here.
 
 ## Merge SHA Binding
 

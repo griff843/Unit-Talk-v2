@@ -52,6 +52,16 @@
       "detail": "Verdict PASS, 4 changed files, no rules matched, no R-level artifacts required."
     },
     {
+      "gate": "pnpm type-check",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0. tsc -b tsconfig.json emitted no diagnostics."
+    },
+    {
+      "gate": "pnpm test",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0. 97 node:test suites, 5193 passing assertions, 0 fail, 0 skipped, 0 cancelled, no 'not ok' lines."
+    },
+    {
       "gate": "pnpm verify:static",
       "verdict": "PASS",
       "detail": "exit 0. 98 node:test suites, 0 fail, 0 cancelled, 0 skipped, 0 ELIFECYCLE. Exit code captured from the pnpm process directly, not from a pipeline tail."
@@ -60,6 +70,11 @@
       "gate": "pnpm test:live-db",
       "verdict": "SKIP",
       "detail": "Structurally unrunnable locally: ci:assert-staging refuses any target that is not staging ref xskgrzbteyqdufktjrjx (local resolves to host=127.0.0.1). The required verify CI job in the staging-ci environment is the authoritative producer of this evidence on PR #1465."
+    },
+    {
+      "gate": "independent-adversarial-review",
+      "verdict": "PASS",
+      "detail": "Independent review confirmed the path-level claim byte for byte and identified a real limit: lane-check is path-only, so admitting the packages/contracts/src/index.ts barrel confers semantic capability (governance literals memberTiers/canonicalWriter/writerRoles, and 13 export * lines) that no control in this bundle can detect. Recorded in verification.md rather than absorbed. Not created by this change: packages/contracts/src/** including index.ts is already granted to the hygiene and data-canonical lanes, so runtime receives strictly less than two lane types already hold. index.ts is the minimal available admission because packages/contracts/package.json declares exports {\".\": \"./src/index.ts\"} with no subpath entries, and admitting that package.json instead is an always-escalate change governing the whole package surface. Follow-up reported for PM triage, outside this lane's authorized scope."
     }
   ],
   "reviewer_verdict": null,
@@ -121,6 +136,12 @@
       "ingestion_unpark": "none",
       "direct_main_work": "none",
       "detail": "Lane executed entirely in an isolated worktree on branch claude/utv2-1671-admit-contract-paths."
+    },
+    "independent_review": {
+      "performed": true,
+      "scope": "adversarial falsification of the non-broadening claim",
+      "outcome": "path-admission claim upheld; semantic-capability limit identified and recorded",
+      "unstaffed_followup": "lane authority is path-only and cannot see a barrel file re-exporting or redefining content from modules the lane may not touch"
     }
   }
 }
