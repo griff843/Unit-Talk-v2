@@ -53,9 +53,13 @@ green run alone:
 | Replay refusal | a fabricated class `'brand_new_class'` | `approved: false`, reason matches `/fail closed/` |
 | Stale threshold | offsets of −1 ms, exactly 0 ms, +1 ms | 0, 0, 1 claims |
 
-The fixture mirrors the real `distribution_outbox` Row type field for field.
-Inventing a field would make every filter vacuously true — see the note at the
-top of `scripts/ops/outbox-triage.test.ts`.
+The fixture is a faithful **subset** of the real `distribution_outbox` Row type:
+every field it does carry (`id`, `pick_id`, `target`, `status`, `attempt_count`,
+`last_error`, `claimed_at`, `claimed_by`, `updated_at`) is a genuine column with
+the correct type, and it invents none. It omits `created_at`, `idempotency_key`,
+`next_attempt_at`, and `payload`, which no classifier, verifier, or analyser in
+this lane reads. Inventing a field would make every filter vacuously true — see
+the note at the top of `scripts/ops/outbox-triage.test.ts`.
 
 ## Runtime Verification
 
@@ -273,8 +277,10 @@ heartbeat and these proof artifacts.
 
 4. **The live queue is target-safe.** No `pending` or `processing` row targets a
    member-facing channel; the 3 pending rows are on `discord:canary` and the 32
-   processing rows are on canary fixtures. The 336 member-facing dead letters
-   are inert unless something replays them, and nothing in this lane does.
+   processing rows are on canary fixtures. The 340 member-facing dead letters
+   (199 + 97 + 40 + 4, equivalently 1,954 total less the 1,614 canary-targeted
+   `proof_pick_blocked` rows) are inert unless something replays them, and
+   nothing in this lane does.
 
 ## Scope
 
