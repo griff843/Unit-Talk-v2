@@ -8,11 +8,11 @@
   "status": "pre_merge",
   "generated_at": "2026-08-30T21:50:06.160915Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "41341ba8dd8b09e0b78223268acfcef980410250",
     "verified_source_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
     "verified_source_note": "Last commit on this branch touching a non-proof path -- it carries the entire substantive change, the two added entries in .lane/lanes/runtime.yml. Every commit after it changes only docs/06_status/proof/ and docs/06_status/lanes/. It is the anchor rather than the PR head only because a file cannot contain its own SHA. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
+    "current_pr_head_sha": "e7a2cde013bb511a8fb899ced50c9fc19eb2cd8d",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
