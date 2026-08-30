@@ -599,7 +599,11 @@ test('pre-proof hook engages on commits invoked indirectly through a shell wrapp
   }
 });
 
-test('the indirect-invocation fallback is load-bearing, not decorative', () => {
+test('the raw-command fallback is load-bearing for untokenizable commands', () => {
+  // Tokenization now descends into quoted wrapper arguments, so `bash -c "git
+  // commit"` no longer needs the fallback. What still does is a command shlex
+  // cannot lex at all -- an unbalanced quote yields zero tokens, so without the
+  // fallback the hook would see "not a commit" and wave it through.
   const repo = initGitFixture();
   const proofPath = 'docs/06_status/proof/TOPIC/evidence.json';
   try {
@@ -607,15 +611,155 @@ test('the indirect-invocation fallback is load-bearing, not decorative', () => {
     runGit(repo, ['add', proofPath]);
 
     const current = fs.readFileSync(PRE_PROOF_HOOK, 'utf8');
-    const fallback = /if \[ "\$is_git_commit" != yes \]; then[\s\S]*?\nfi\n/;
+    const fallback = /if \[ "\$verdict" != yes \]; then[\s\S]*?\nfi\n/;
     assert.match(current, fallback, 'fallback block must exist to be mutated');
     const mutatedHook = path.join(repo, 'no-fallback-pre-proof-validator.sh');
     fs.writeFileSync(mutatedHook, current.replace(fallback, ''));
 
-    const command = 'bash -c "git commit -m indirect"';
-    assert.equal(runPreProofHook(repo, mutatedHook, command).status, 0);
-    assert.equal(runPreProofHook(repo, PRE_PROOF_HOOK, command).status, 2);
+    const untokenizable = 'git commit -m "unterminated';
+    assert.equal(runPreProofHook(repo, mutatedHook, untokenizable).status, 0);
+    assert.equal(runPreProofHook(repo, PRE_PROOF_HOOK, untokenizable).status, 2);
+
+    // And the wrapper forms stay blocked either way, now via tokenization.
+    const wrapped = 'bash -c "git commit -m x"';
+    assert.equal(runPreProofHook(repo, PRE_PROOF_HOOK, wrapped).status, 2);
   } finally {
     fs.rmSync(repo, { recursive: true, force: true });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Cross-repository resolution: the repository a commit TARGETS, not the cwd
+// ---------------------------------------------------------------------------
+
+interface TwoRepoFixture {
+  a: string;
+  b: string;
+  proofPath: string;
+}
+
+function setupTwoRepos(): TwoRepoFixture {
+  const a = initGitFixture();
+  const b = initGitFixture();
+  const proofPath = 'docs/06_status/proof/CROSS/evidence.json';
+  // Only B carries an invalid staged proof. A is clean.
+  writeFixture(b, proofPath, invalidEvidence('cross-worktree'));
+  runGit(b, ['add', proofPath]);
+  return { a, b, proofPath };
+}
+
+function cleanupTwoRepos({ a, b }: TwoRepoFixture): void {
+  fs.rmSync(a, { recursive: true, force: true });
+  fs.rmSync(b, { recursive: true, force: true });
+}
+
+test('pre-proof hook validates the repository the commit targets, not its own cwd', () => {
+  // P1: detection recognized `git -C <dir> commit`, but resolution still ran
+  // from the hook's cwd, so a commit into worktree B was checked against
+  // worktree A's index -- a fail-open for every bad proof staged in B.
+  const fixture = setupTwoRepos();
+  try {
+    const result = runPreProofHook(fixture.a, PRE_PROOF_HOOK, `git -C ${fixture.b} commit -m test`);
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /ci_sentinels missing or empty/);
+    assert.match(result.stderr, /docs\/06_status\/proof\/CROSS\/evidence\.json/);
+  } finally {
+    cleanupTwoRepos(fixture);
+  }
+});
+
+test('cross-repository resolution is load-bearing, not decorative', () => {
+  const fixture = setupTwoRepos();
+  try {
+    const current = fs.readFileSync(PRE_PROOF_HOOK, 'utf8');
+    // Mutate -C application away so resolution falls back to the hook's cwd,
+    // which is exactly the shape of the reported P1.
+    const chdirChain = `    directory = os.getcwd()
+    for value in opts['C']:
+        if value is MISSING or value == '':
+            return None, '-C given without a directory'
+        directory = value if os.path.isabs(value) else os.path.join(directory, value)
+`;
+    assert.ok(current.includes(chdirChain), '-C resolution block must exist to be mutated');
+    const mutatedHook = path.join(fixture.a, 'cwd-bound-pre-proof-validator.sh');
+    fs.writeFileSync(mutatedHook, current.replace(chdirChain, '    directory = os.getcwd()\n'));
+
+    const command = `git -C ${fixture.b} commit -m test`;
+    assert.equal(runPreProofHook(fixture.a, mutatedHook, command).status, 0);
+    assert.equal(runPreProofHook(fixture.a, PRE_PROOF_HOOK, command).status, 2);
+  } finally {
+    cleanupTwoRepos(fixture);
+  }
+});
+
+test('a wrapped cross-repository commit honours its own -C', () => {
+  const fixture = setupTwoRepos();
+  try {
+    const result = runPreProofHook(
+      fixture.a,
+      PRE_PROOF_HOOK,
+      `bash -c "git -C ${fixture.b} commit -m test"`,
+    );
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /docs\/06_status\/proof\/CROSS\/evidence\.json/);
+  } finally {
+    cleanupTwoRepos(fixture);
+  }
+});
+
+test('--git-dir with a matching --work-tree resolves to that work tree', () => {
+  const fixture = setupTwoRepos();
+  try {
+    const result = runPreProofHook(
+      fixture.a,
+      PRE_PROOF_HOOK,
+      `git --git-dir=${fixture.b}/.git --work-tree=${fixture.b} commit -m test`,
+    );
+    assert.equal(result.status, 2, result.stderr);
+    assert.match(result.stderr, /ci_sentinels missing or empty/);
+    assert.match(result.stderr, /docs\/06_status\/proof\/CROSS\/evidence\.json/);
+  } finally {
+    cleanupTwoRepos(fixture);
+  }
+});
+
+test('commit forms whose target repository cannot be resolved are refused', async t => {
+  const cases: Array<{ name: string; command: (f: TwoRepoFixture) => string; reason: RegExp }> = [
+    {
+      // `git --git-dir=B/.git` from A commits B's index while treating A as the
+      // work tree. The pair disagrees, so neither index can be validated safely.
+      name: '--git-dir without a matching work tree',
+      command: f => `git --git-dir=${f.b}/.git commit -m test`,
+      reason: /does not belong to the resolved work tree/,
+    },
+    {
+      name: '-C into a directory that does not exist',
+      command: () => 'git -C /nonexistent-proof-validator-target commit -m test',
+      reason: /target directory does not exist/,
+    },
+    {
+      name: '-C into a directory that is not a git work tree',
+      command: () => `git -C ${os.tmpdir()} commit -m test`,
+      reason: /not a resolvable work tree|target directory does not exist/,
+    },
+    {
+      name: 'two different repositories in one command',
+      command: f => `git -C ${f.a} commit -m x && git -C ${f.b} commit -m y`,
+      reason: /more than one repository/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, () => {
+      const fixture = setupTwoRepos();
+      try {
+        const result = runPreProofHook(fixture.a, PRE_PROOF_HOOK, testCase.command(fixture));
+        assert.equal(result.status, 2, `${testCase.name}\n${result.stderr}`);
+        assert.match(result.stderr, /cannot safely resolve the repository this commit targets/);
+        assert.match(result.stderr, testCase.reason);
+      } finally {
+        cleanupTwoRepos(fixture);
+      }
+    });
   }
 });

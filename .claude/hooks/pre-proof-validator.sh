@@ -18,86 +18,232 @@ except Exception:
 
 [ -z "$command" ] && exit 0
 
-is_git_commit=$(python3 - "$command" <<'PY'
+detection_file=$(mktemp) || {
+  echo "PROOF VALIDATOR: commit blocked — cannot allocate detection workspace" >&2
+  exit 2
+}
+trap 'rm -f "$detection_file"' EXIT
+
+# Detection and repository resolution are one step on purpose. Git's global
+# options (-C, --git-dir, --work-tree) choose which repository `git commit`
+# writes to, so a validator that detects the commit but then resolves paths from
+# its own cwd will inspect the wrong index -- allowing a bad proof through in
+# worktree B while it reads worktree A.
+python3 - "$command" >"$detection_file" <<'PY'
 import os
+import re
 import shlex
+import subprocess
 import sys
 
 command = sys.argv[1]
-options_with_values = {
+
+VALUE_OPTIONS = {
     '-C', '-c', '--config-env', '--exec-path', '--git-dir', '--namespace',
     '--super-prefix', '--work-tree',
 }
+GIT_COMMIT_RE = re.compile(r'git[\s]+([-_./=\w]+[\s]+)*commit(\s|$)')
+MISSING = object()
 
-try:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars=';&|()')
-    lexer.whitespace_split = True
-    lexer.commenters = ''
-    tokens = list(lexer)
-except ValueError:
-    tokens = []
 
-found = False
-for index, token in enumerate(tokens):
-    if os.path.basename(token).lower() not in ('git', 'git.exe'):
-        continue
+def emit(*fields):
+    out = sys.stdout.buffer
+    for field in fields:
+        out.write(os.fsencode(field) + b"\0")
+    out.flush()
+    raise SystemExit(0)
+
+
+def walk(tokens, index):
+    """Walk one `git ... commit` argv chain, collecting the options that choose
+    the target repository. Returns None when this `git` is not a commit."""
+    opts = {'C': [], 'git_dir': None, 'work_tree': None}
+
+    def record(name, value):
+        if name == '-C':
+            opts['C'].append(value)
+        elif name == '--git-dir':
+            opts['git_dir'] = value
+        elif name == '--work-tree':
+            opts['work_tree'] = value
+
     cursor = index + 1
     while cursor < len(tokens):
         candidate = tokens[cursor]
         if candidate in (';', '&&', '||', '|', '(', ')'):
-            break
+            return None
         if candidate == '--':
             cursor += 1
             if cursor < len(tokens) and tokens[cursor] == 'commit':
-                found = True
-            break
-        if candidate in options_with_values:
+                return opts
+            return None
+        if candidate in VALUE_OPTIONS:
+            value = tokens[cursor + 1] if cursor + 1 < len(tokens) else MISSING
+            record(candidate, value)
             cursor += 2
             continue
-        if candidate.startswith(('-C', '-c')) and candidate not in ('-C', '-c'):
+        if candidate.startswith('-C') and candidate != '-C':
+            record('-C', candidate[2:])
+            cursor += 1
+            continue
+        if candidate.startswith('-c') and candidate != '-c':
             cursor += 1
             continue
         if candidate.startswith('--') and '=' in candidate:
+            name, _, value = candidate.partition('=')
+            record(name, value)
             cursor += 1
             continue
         if candidate.startswith('-'):
             cursor += 1
             continue
         if candidate == 'commit':
-            found = True
-        break
-    if found:
-        break
+            return opts
+        return None
+    return None
 
-print('yes' if found else 'no')
+
+def tokenize(text):
+    try:
+        lexer = shlex.shlex(text, posix=True, punctuation_chars=';&|()')
+        lexer.whitespace_split = True
+        lexer.commenters = ''
+        return list(lexer)
+    except ValueError:
+        return []
+
+
+def find_invocations(text, depth=0):
+    """Collect every `git ... commit` in the command, descending into quoted
+    wrapper arguments (`bash -c "git -C /b commit"`) so a wrapped commit's own
+    -C/--git-dir are honoured rather than silently dropped."""
+    tokens = tokenize(text)
+    found = []
+    for index, token in enumerate(tokens):
+        if os.path.basename(token).lower() in ('git', 'git.exe'):
+            opts = walk(tokens, index)
+            if opts is not None:
+                found.append(opts)
+        elif (
+            depth < 4
+            and token.strip() != text.strip()
+            and GIT_COMMIT_RE.search(token)
+        ):
+            found.extend(find_invocations(token, depth + 1))
+    return found
+
+
+def resolve(opts):
+    """Resolve one invocation to (repo_root, git_dir), or (None, reason)."""
+    directory = os.getcwd()
+    for value in opts['C']:
+        if value is MISSING or value == '':
+            return None, '-C given without a directory'
+        directory = value if os.path.isabs(value) else os.path.join(directory, value)
+
+    env = dict(os.environ)
+    env.pop('GIT_DIR', None)
+    env.pop('GIT_WORK_TREE', None)
+    for option, variable in (('git_dir', 'GIT_DIR'), ('work_tree', 'GIT_WORK_TREE')):
+        value = opts[option]
+        if value is None:
+            continue
+        if value is MISSING or value == '':
+            return None, '--' + option.replace('_', '-') + ' given without a path'
+        env[variable] = value if os.path.isabs(value) else os.path.join(directory, value)
+
+    if not os.path.isdir(directory):
+        return None, 'target directory does not exist: ' + directory
+
+    def rev_parse(flag):
+        result = subprocess.run(
+            ['git', 'rev-parse', flag],
+            cwd=directory, env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        if result.returncode != 0:
+            return None
+        return result.stdout.decode('utf-8', 'surrogateescape').strip()
+
+    repo_root = rev_parse('--show-toplevel')
+    git_dir = rev_parse('--absolute-git-dir')
+    if not repo_root or not git_dir:
+        # Covers a --git-dir with no usable work tree, a bare repository, and a
+        # path that is not a repository at all. Refuse rather than guess.
+        return None, 'target is not a resolvable work tree: ' + directory
+
+    if opts['git_dir'] is not None or opts['work_tree'] is not None:
+        # Everything downstream addresses the repository as `git -C <repo_root>`,
+        # which picks up that work tree's own git dir. `git --git-dir=B/.git`
+        # run from A commits B's index while treating A as the work tree, so the
+        # pair would disagree and we would validate A's index for a commit that
+        # writes B's. Refuse that split rather than inspect the wrong one.
+        natural = subprocess.run(
+            ['git', '-C', repo_root, 'rev-parse', '--absolute-git-dir'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        natural_git_dir = (
+            natural.stdout.decode('utf-8', 'surrogateescape').strip()
+            if natural.returncode == 0 else ''
+        )
+        if os.path.realpath(natural_git_dir or '') != os.path.realpath(git_dir):
+            return None, (
+                'explicit --git-dir/--work-tree select a git dir (' + git_dir
+                + ') that does not belong to the resolved work tree (' + repo_root + ')'
+            )
+
+    return (repo_root, git_dir), None
+
+
+invocations = find_invocations(command)
+if not invocations:
+    emit('no', '', '')
+
+targets = set()
+for opts in invocations:
+    resolved, reason = resolve(opts)
+    if resolved is None:
+        emit('unresolvable', reason, '')
+    targets.add(resolved)
+
+if len(targets) != 1:
+    emit('unresolvable', 'commit targets more than one repository in a single command', '')
+
+repo_root, git_dir = targets.pop()
+emit('yes', repo_root, git_dir)
 PY
-)
-if [ "$is_git_commit" != yes ]; then
+
+mapfile -d '' -t detection <"$detection_file"
+verdict=${detection[0]:-no}
+repo_root=${detection[1]:-}
+git_dir=${detection[2]:-}
+
+if [ "$verdict" = unresolvable ]; then
+  echo "PROOF VALIDATOR: commit blocked — cannot safely resolve the repository this commit targets (${repo_root}). Refusing rather than validating a different worktree's index." >&2
+  exit 2
+fi
+
+if [ "$verdict" != yes ]; then
   # A commit invoked indirectly -- bash -c "git commit ...", sh -c, eval -- is
   # not an argv chain the tokenizer above can walk, so it would read as "not a
   # commit". The legacy substring detection did cover those forms; keep it as a
   # fail-closed fallback so this rewrite is a strict superset, never a bypass.
   if echo "$command" | grep -Eq 'git[[:space:]]+([-_./=[:alnum:]]+[[:space:]]+)*commit([[:space:]]|$)'; then
-    is_git_commit=yes
+    verdict=yes
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+      echo "PROOF VALIDATOR: commit blocked — cannot resolve repository root" >&2
+      exit 2
+    }
+    git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null) || {
+      echo "PROOF VALIDATOR: commit blocked — cannot resolve worktree git directory" >&2
+      exit 2
+    }
   fi
 fi
 
-[ "$is_git_commit" = yes ] || exit 0
+[ "$verdict" = yes ] || exit 0
 
 # BEGIN MERGE-AWARE SELECTION
-repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-  echo "PROOF VALIDATOR: commit blocked — cannot resolve repository root" >&2
-  exit 2
-}
-git_dir=$(git rev-parse --git-dir 2>/dev/null) || {
-  echo "PROOF VALIDATOR: commit blocked — cannot resolve worktree git directory" >&2
-  exit 2
-}
-
-case "$git_dir" in
-  /*) ;;
-  *) git_dir="$repo_root/$git_dir" ;;
-esac
 
 # A merge result contains files inherited from each parent. Parent identity
 # excludes inherited content; Git's automatic merge tree additionally exposes
@@ -106,7 +252,7 @@ selection_file=$(mktemp) || {
   echo "PROOF VALIDATOR: commit blocked — cannot allocate selection workspace" >&2
   exit 2
 }
-trap 'rm -f "$selection_file"' EXIT
+trap 'rm -f "$detection_file" "$selection_file"' EXIT
 
 if ! python3 - "$repo_root" "$git_dir" >"$selection_file" <<'PY'
 import ast
