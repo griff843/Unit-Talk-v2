@@ -1,6 +1,6 @@
 # PROOF: UTV2-1790
 
-MERGE_SHA: 1486d510ffd6aff27fbc34fc89daedf1949e03f8
+MERGE_SHA: 9162d2c926856ccef5a1b26372140ac4106fab5b
 
 `pnpm ops:merge-wrapper main-sync` is the only sanctioned way to bring `origin/main`
 into a lane branch. When it detects divergence it refuses and names two explicit
@@ -65,8 +65,8 @@ execution in this session:
   `merge_wrapper_cleanup_failed` result code; the real-git conflict and
   cleanup-failure regressions. Type-check was re-run (exit 0, which also proves the
   `ExtendedMergeWrapperOperation` → `'git-merge-main' | 'git-rebase-main'` narrowing
-  is sound rather than assumed), the suite was re-run (54/54), and the full
-  twelve-mutant battery below (M1-M12) was executed in this session to prove each
+  is sound rather than assumed), the suite was re-run (56/56), and the full
+  fourteen-mutant battery below (M1-M14) was executed in this session to prove each
   retained control load-bearing.
 - **Corrected** — the file-scope lock had been widened to **two** paths; PM approved
   only `scripts/ops/merge-wrapper.ts`, so `docs/06_status/lanes/UTV2-1790.json` was
@@ -75,8 +75,8 @@ execution in this session:
   carrying an unfilled exit-code token for that same command. The duplicate's
   `verify:static` run was interrupted mid-flight and never produced a result, so the
   PASS was unsupported. It is replaced below by a run executed in this session.
-- **Not adopted on trust** — every mutation result. All twelve rows of the table
-  below (M1-M12) were executed in this session against the current source. No
+- **Not adopted on trust** — every mutation result. All fourteen rows of the table
+  below (M1-M14) were executed in this session against the current source. No
   mutation result from the unattributed diff is carried forward; see **Not
   asserted** under the mutation table.
 - **Noted** — the duplicate left a 0-byte `docs/06_status/lanes/UTV2-99102.json`,
@@ -181,6 +181,21 @@ ASSERTIONS:
       refusal to pop into an unmerged index, so they passed with a pop added to that
       branch — the control was unpinned by a vacuous assertion. Test 49 now asserts
       the `git stash pop` call was never issued. Proven by mutant M11.
+- [x] The mutex is retained when the **autostash pop** leaves a conflicted index.
+      Every other assertion here concerns the command-FAILURE path; this one is the
+      success path. When the merge succeeds and `git stash pop` then conflicts —
+      because the commit just merged from main touches a path that was autostashed —
+      the worktree carries unmerged entries and conflict markers, and the wrapper
+      released the serializing mutex over it. Round 4's proof certified that this
+      could not happen. It could; a round-5 reviewer built it. The release now
+      happens after that branch, and the branch returns without releasing. Proven by
+      test 55, which drives real git end to end, and by mutant M14.
+- [x] An undeterminable state **after** the abort also fails closed. `residue` has
+      three terms and the third, `after.undetermined.length > 0`, was pinned by
+      nothing: test 51 masks ALL probes, so the before-probe fail-closed fires first
+      and the after-probe is never reached. Test 56 lets the before-probe answer
+      truthfully, reports abort success without executing it, and makes only the
+      post-abort probes unanswerable. Proven by mutant M13.
 - [x] Unmerged entries ALONE block the nothing-to-abort early return. Every real
       conflict leaves `MERGE_HEAD` too, so no test isolated the third term and
       dropping it survived. Test 54 masks both refs to ABSENT (git exit 1, not the
@@ -201,28 +216,37 @@ ASSERTIONS:
 Every control this lane adds was inverted individually **in this session**, the
 focused suite re-run against the mutant, and the source restored and re-hashed to
 prove the revert was byte-exact (`md5sum -c` OK after each). Baseline and restored
-state both report `# fail 0` (54/54).
+state both report `# fail 0` (56/56).
 
 | # | Mutation | Result | Tests killed |
 |---|---|---|---|
-| M1 | `['merge','--no-ff','--no-edit','origin/main']` → `['merge','--ff-only','origin/main']` | KILLED, `# fail 7` | 2, 23, 27, 47, 48, 49, 50 |
-| M2 | `--no-edit` removed | KILLED, `# fail 3` | 2, 23, 27 |
-| M3 | `onCommandFailure` wiring removed from the sync path (pre-fix behaviour) | KILLED, `# fail 5` | 23, 24, 48, 49, 51 |
-| M4 | `abortInProgressSync`'s failure return reports `cleaned: true` | KILLED, `# fail 1` | 49 |
-| M5 | the `if (cleanup && !cleanup.cleaned)` fail-closed branch removed, so the wrapper pops and releases anyway | KILLED, `# fail 3` | 49, 51, 52 |
-| M6 | an undeterminable probe treated as absence (`if (before.undetermined.length > 0)` → `if (false)`) | KILLED, `# fail 1` | 51 |
+| M1 | `['merge','--no-ff','--no-edit','origin/main']` → `['merge','--ff-only','origin/main']` | KILLED, `# fail 10` | 2, 23, 27, 47, 48, 49, 50, 54, 55, 56 |
+| M2 | `--no-edit` removed | KILLED, `# fail 4` | 2, 23, 27, 49 |
+| M3 | `onCommandFailure` wiring removed from the sync path (pre-fix behaviour) | KILLED, `# fail 8` | 23, 24, 48, 49, 51, 53, 54, 56 |
+| M4 | `abortInProgressSync`'s failure return reports `cleaned: true` | KILLED, `# fail 2` | 49, 56 |
+| M5 | the `if (cleanup && !cleanup.cleaned)` fail-closed branch removed, so the wrapper pops and releases anyway | KILLED, `# fail 4` | 49, 51, 52, 56 |
+| M6 | a BEFORE-abort undeterminable probe treated as absence (`if (before.undetermined.length > 0)` → `if (false)`) | KILLED, `# fail 1` | 51 |
 | M7 | the `try`/`catch` around the `onCommandFailure` call removed, so a throwing hook escapes | KILLED, `# fail 1` | 52 |
-| M8 | the mutex released anyway inside the fail-closed branch, before returning | KILLED, `# fail 3` | 49, 51, 52 |
+| M8 | the mutex released anyway inside the fail-closed branch, before returning | KILLED, `# fail 4` | 49, 51, 52, 56 |
 | M9 | `reportedCommand` removed, so results name the bridged `main-sync` pull | KILLED, `# fail 2` | 49, 53 |
 | M10 | the abort verb hardcoded to `merge` regardless of operation | KILLED, `# fail 1` | 53 |
 | M11 | a `git stash pop` attempted inside the fail-closed branch | KILLED, `# fail 1` | 49 |
 | M12 | `&& before.unmerged.length === 0` dropped from the nothing-to-abort early return | KILLED, `# fail 1` | 54 |
+| M13 | `after.undetermined.length > 0` dropped from `residue`, so an unverifiable POST-abort state reads clean | KILLED, `# fail 1` | 56 |
+| M14 | the mutex released on a conflicting autostash pop | KILLED, `# fail 1` | 55 |
+
+**M1, M2 and M3's counts were WRONG in the round-3 and round-4 bundles** — 7/3/5,
+carried forward unchanged while the suite grew, so they described a source tree that
+no longer existed. A round-5 reviewer caught it. Every row above was re-measured at
+the current source in one pass; the counts moved because tests 49, 53, 54 and 56 now
+also kill those mutants. The lesson is recorded in finding 11: a mutation row is a
+measurement, and a measurement not retaken is not evidence.
 
 Survivors: 0.
 
-**M9-M12 are round 4**, added because an independent reviewer demonstrated that each
-of those four controls was unpinned — M9's was not merely unpinned but asserted and
-false. See finding 10.
+**M9–M12 are round 4** and **M13–M14 round 5**, each added because an independent
+reviewer demonstrated the control was unpinned. M9's and M14's were not merely
+unpinned but asserted and false. See findings 10 and 11.
 
 **What each mutation proves.** M1 is killed behaviourally, not just by shape: tests
 47-50 fail because the merge genuinely does not happen under `--ff-only` against a
@@ -245,7 +269,11 @@ cannot leave `MERGE_HEAD` behind, so the operator is pointed away from the resid
 **M10** proves the abort verb follows the operation — `git merge --abort` during a
 rebase exits 128 and the residue survives. **M11** proves the fail-closed branch never
 attempts the pop, which git's own refusal would otherwise disguise. **M12** proves
-unmerged entries alone block the nothing-to-abort early return.
+unmerged entries alone block the nothing-to-abort early return. **M13** proves the
+third term of `residue` is load-bearing: without it an unverifiable POST-abort state
+reads clean, the stash pops into a still-conflicted index and the mutex is released.
+**M14** proves the mutex is retained when the autostash pop leaves a conflicted
+index — the round-5 P1.
 
 **Honest scope note on M2.** M2 is killed only by command-shape assertions, not
 behaviourally. `git merge --no-ff` opens `$GIT_EDITOR` only when run from a terminal,
@@ -259,9 +287,9 @@ depending on an editor being available at all.
 **Not asserted.** The unattributed diff (see Provenance) arrived with a
 seven-mutation battery transcript produced by a `battery.py` script that is not part
 of this repository and was not run by this session. **None of its results are
-carried forward.** The twelve rows above were each executed here against the current
-source, with the restored baseline re-confirmed green after each; they are the only
-mutation claims made.
+carried forward.** The fourteen rows above were each re-executed against the CURRENT
+source in a single round-5 pass, with the restored baseline re-confirmed green after
+each; they are the only mutation claims made.
 
 ## Runtime Verification
 
@@ -269,7 +297,7 @@ This is a `hygiene` lane on the `static` proof profile. It changes orchestrator
 tooling scripts and their tests. It issues no database query, performs no network
 I/O, and touches no runtime, delivery, ingestion or application code. Runtime proof
 is therefore the executed behaviour of the wrapper against real git repositories:
-the eight regressions spawn actual `git` processes, create real commits on both sides,
+the ten regressions spawn actual `git` processes, create real commits on both sides,
 create a real conflict, and drive the real (non-injected) git binary. Nothing about
 git is mocked. Three of the cleanup regressions (48, 49, 51) inspect the on-disk
 repository directly —
@@ -294,9 +322,11 @@ ok 51 - UTV2-1790: an undeterminable worktree state fails closed instead of repo
 ok 52 - UTV2-1790: a cleanup hook that throws fails closed rather than escaping
 ok 53 - UTV2-1790: a real rebase conflict is aborted with the REBASE verb, not the merge verb
 ok 54 - UTV2-1790: unmerged entries alone block the nothing-to-abort early return
-# tests 54
+ok 55 - UTV2-1790: a conflicting autostash pop after a SUCCESSFUL merge retains the mutex
+ok 56 - UTV2-1790: an undeterminable state AFTER the abort also fails closed
+# tests 56
 # suites 0
-# pass 54
+# pass 56
 # fail 0
 # cancelled 0
 # skipped 0
@@ -310,9 +340,9 @@ Full ops suite:
 
 ```
 $ pnpm test:ops
-# tests 2661
+# tests 2663
 # suites 20
-# pass 2661
+# pass 2663
 # fail 0
 # cancelled 0
 # skipped 0
@@ -492,7 +522,52 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     test behind it, and an assertion that could not fail. The reviewer's negative
     results are in **Independent review** below.
 
-11. **Not fixed, out of scope.** The two other substrate defects observed alongside
+11. **Round 5 — a fail-open the previous round's proof certified as impossible, and
+    three stale measurements.** A third independent reviewer, which authored none of
+    this, reproduced all four headline measurements and every one of the twelve
+    mutants — 0 survivors — and then found four things.
+
+    **P1, and it is a claim failure as much as a code one.** `evidence.json` asserted
+    `mutex_released_only_after_cleanup_succeeds: true`, and this document recorded a
+    prior reviewer's conclusion that *"no fail-open path exists"*. The reviewer built
+    one. Every regression in this lane entered through the command FAILURE path; this
+    one enters through the SUCCESS path. The merge completes, then `git stash pop`
+    conflicts because the commit just merged from main touches a path that was
+    autostashed, leaving unmerged index entries and conflict markers — and the wrapper
+    released the mutex anyway, handing the next lane a conflicted worktree. It
+    degrades to fail-closed on the *next* attempt rather than corrupting, so the code
+    severity is moderate; the **certification** severity is not, because this lane's
+    entire subject is "the mutex is not released while unmerged entries survive".
+    The ordering is pre-existing (UTV2-1678), but it was unreachable while
+    `git-merge-main` was `--ff-only` and could never complete a diverged merge, so
+    making that verb work is what made it reachable. Fixed, not documented away: the
+    release moved after the branch, and the branch returns without releasing. Test 55
+    and mutant M14. `popMainSyncStash`'s message was corrected too — it said the files
+    "are still stashed and were NOT restored", which understates a *conflicting* pop
+    and suggests a `git stash pop` that fails again.
+
+    **P2 — `residue`'s third term was killed by nothing** (see the assertion above).
+    Same class as M6 and M12, one layer further down. Test 56 and mutant M13.
+
+    **P2 — three mutation rows were stale, and the bundle called them fresh.** M1, M2
+    and M3 carried 7/3/5 from round 3 into the round-4 table while `corroboration`
+    claimed all twelve were "executed in this session against the current source".
+    They were not; the suite had grown and the real counts are 10/4/8. Every row is
+    now re-measured in one pass at the current source.
+
+    **P3s** — a stale "eight mutants" sentence in `provenance` contradicting its own
+    `count: 12`; the `aborted` field returned by `abortInProgressSync` is read by
+    nobody; and a comment claimed binding cleanup to the real runner was load-bearing
+    when the intercepting runner is behaviourally equivalent. The first two are
+    recorded below, the third is corrected in the source.
+
+    This is the fourth consecutive round in which review found a defect the previous
+    round installed, and the second in which the defect was **something the proof
+    asserted rather than something the code did**. That is the durable finding of
+    this lane, and it is why every claim above now names the test and the mutant that
+    make it fail.
+
+12. **Not fixed, out of scope.** The two other substrate defects observed alongside
    this one -- the dual-root sync-contract persistence in `codex-exec.ts` and CPU/RAM
    scheduling contention during E2E runs -- are deliberately NOT bundled into this
    blocker fix, per the governing order.
@@ -511,9 +586,13 @@ pinned by M9–M12.
 adversarial pass is evidence, and because it is the part of a review that usually goes
 unrecorded:
 
-- **No fail-open path exists.** It could construct no route where the stash pops or
-  the mutex releases with `MERGE_HEAD`, `REBASE_HEAD` or unmerged entries surviving.
-  Real conflicted merge and real conflicted rebase both ended fully clean.
+- ~~**No fail-open path exists.**~~ **FALSIFIED in round 5** — see finding 11. The
+  round-4 reviewer searched the command-failure path and found no route there, which
+  was correct as far as it went; the route runs through the SUCCESS path, where a
+  conflicting autostash pop left unmerged entries and the mutex was released anyway.
+  Recorded here unedited, with its refutation, rather than quietly deleted: a
+  negative result from a review is evidence about what that review covered, not a
+  guarantee about what it did not.
 - **Mutex retention is real, not merely "unreleased".** Under a forced cleanup failure
   a second lane against the same lockfile was genuinely refused
   (`merge_wrapper_lock_held`); on every clean path the release was reported `ok`.
@@ -525,8 +604,10 @@ unrecorded:
   and untracked files survive a conflicted merge plus abort verbatim. An uncommitted
   edit to a file involved in the merge is also safe: git refuses the merge up front,
   cleanup takes the nothing-to-abort path, and the work is preserved.
-- **Ordering is genuinely pinned**, by test 48's lock read from inside the abort call;
-  the residue re-probe is load-bearing (neutering it was killed).
+- **Ordering is genuinely pinned**, by test 48's lock read from inside the abort call.
+  (Its accompanying claim that "the residue re-probe is load-bearing" was **too
+  strong**: two of the three terms were pinned, the third was killed by nothing until
+  round 5 added M13.)
 - **Hook coverage is complete rather than lucky.** `main-sync` is `git pull --ff-only`
   and `pr-merge`/`pr-update-branch` are remote `gh` calls, none of which can leave a
   merge in progress, so the absence of a hook there is safe — confirming the scope
@@ -536,9 +617,23 @@ unrecorded:
   widening recorded in provenance.
 - **No false review claim** anywhere in the PR or the bundle.
 
-**Review of the current head is PENDING.** The round-4 corrections moved the head, so
-the review above does not cover the code that is now proposed for merge. No claim of
-completed independent review at this head is made.
+**Round 5 review, of head `009cfe46`.** A third reviewer, again authoring none of this,
+reproduced all four headline measurements and the full twelve-mutant battery with 0
+survivors, and returned **FAIL** on the four findings recorded in finding 11 — all of
+which are fixed above and pinned by M13, M14 and the corrected table. Its own negative
+results: the cleanup-before-pop-before-release ordering could not be broken by
+reordering (killed by 9 tests) or by releasing early (killed by 4); `reportedCommand`
+has no consumer outside this file and makes the success, failure, dry-run and
+lock-held paths consistent with the protected-dropped-path branch that already
+hardcoded the real vector; tests 49, 53 and 54 are each non-vacuous, demonstrated by
+removing exactly the control each names; test 54 does not accidentally ride the
+`undetermined` path (it masks with git's exit 1, classified as absent, not the exit
+128 of test 51); and `abortInProgressSync` could not be made to destroy legitimate
+uncommitted work on either the merge or the rebase path.
+
+**Review of the current head is PENDING.** The round-5 corrections moved the head, so
+neither review above covers the code now proposed for merge. No claim of completed
+independent review at this head is made.
 
 ## Scope
 

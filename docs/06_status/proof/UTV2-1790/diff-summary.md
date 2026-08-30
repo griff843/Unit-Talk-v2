@@ -1,17 +1,17 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 1486d510ffd6aff27fbc34fc89daedf1949e03f8
+MERGE_SHA: 9162d2c926856ccef5a1b26372140ac4106fab5b
 
 Three code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/ops-merge-wrapper.ts` | +138 / −2 |
-| `scripts/ops/merge-wrapper.ts` | +107 / −2 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +520 / −15 |
+| `scripts/ops/ops-merge-wrapper.ts` | +142 / −2 |
+| `scripts/ops/merge-wrapper.ts` | +135 / −10 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +667 / −15 |
 
-(`git diff --numstat 11920f2d..1486d510 -- scripts/ops/`, the full lane diff.)
+(`git diff --numstat 11920f2d..9162d2c9 -- scripts/ops/`, the full lane diff.)
 
 Plus lane metadata: `docs/06_status/lanes/UTV2-1790.json` (`file_scope_lock` extended
 by exactly one path, `scripts/ops/merge-wrapper.ts`, under explicit PM approval),
@@ -115,7 +115,7 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
    genuinely issues them. The four remaining `--ff-only` occurrences belong to
    `main-sync`'s legitimate `git pull --ff-only origin main` and are unchanged.
 
-2. **Eight real-git regressions.** Helpers `git(cwd, ...args)`,
+2. **Ten real-git regressions.** Helpers `git(cwd, ...args)`,
    `withDivergedRepo({conflicting}, run)`, `realGitRunner(hook)`, `unmergedPaths(dir)`
    and `mergeHeadPresent(dir)` build a temporary repository with a real
    `refs/remotes/origin/main` ref and genuine divergence, asserted mechanically before
@@ -154,7 +154,23 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
      propagate, the structured `merge_wrapper_cleanup_failed` result is returned with
      the thrown message surfaced, and the lock is still `held`.
 
-3. **Round 4 additions.** Test 53 is a real conflicted `git rebase`, pinning the
+3. **Round 5 additions.** Test 55 drives real git end to end through the SUCCESS
+   path: main advances on a tracked lane-state file, the lane diverges on an
+   unrelated path so the merge succeeds, and an uncommitted lane-state edit is
+   autostashed and then collides on pop. It asserts the mutex is still `held` — the
+   fail-open a round-5 reviewer demonstrated, which the round-4 bundle had certified
+   impossible. Test 56 pins `residue`'s third term: the before-probe answers
+   truthfully, the abort reports success without being executed, and only the
+   post-abort probes are unanswerable.
+
+   In `merge-wrapper.ts` the `releaseMergeLock` call moved **after** the
+   stash-pop-conflict branch, and that branch now returns without releasing.
+   `popMainSyncStash`'s message was corrected: it said the files "are still stashed
+   and were NOT restored", which understates a *conflicting* pop — the worktree also
+   carries conflict markers and unmerged entries, and the `git stash pop` it
+   suggested fails again until they are resolved.
+
+4. **Round 4 additions.** Test 53 is a real conflicted `git rebase`, pinning the
    abort verb (`git merge --abort` during a rebase exits 128 and the residue
    survives; hardcoding `merge` survived the entire 52-test suite before this).
    Test 54 masks both refs to ABSENT over a genuinely conflicted index, isolating
@@ -164,7 +180,7 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
    passed with a pop added), and `result.command` / the operator message name the
    real invocation and not the bridge.
 
-4. **Three harness defects fixed in this suite (round 3).** Tests 23 and 24 drove a
+5. **Three harness defects fixed in this suite (round 3).** Tests 23 and 24 drove a
    blanket mock returning exit 128 for *every* command including the new probes;
    under the corrected code that is an undeterminable repository, so those tests were
    asserting the ordinary released-lock path through a mock that no longer described
