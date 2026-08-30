@@ -1,0 +1,245 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1671
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1671/verification.md
+    - docs/06_status/proof/UTV2-1671/diff-summary.md
+    - docs/06_status/proof/UTV2-1671/evidence.json
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1671
+  objective: >-
+    Admission-correct `.lane/lanes/runtime.yml` so the Smart Form backend
+    runtime lane can carry exactly:
+
+    `packages/contracts/src/smart-form.ts`
+
+    `packages/contracts/src/index.ts`
+
+    This is an admission correction only. It does not change tier
+    classification, executor authority, taxonomy, production state, or delivery
+    permissions.
+  acceptance_criteria:
+    - |-
+      ## Controlled issue reshape
+
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Admission-correct `.lane/lanes/runtime.yml` so the Smart Form backend runtime lane can carry exactly:
+
+      * `packages/contracts/src/smart-form.ts`
+      * `packages/contracts/src/index.ts`
+
+      This is an admission correction only. It does not change tier classification, executor authority, taxonomy, production state, or delivery permissions.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: governance
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 0 of 3
+
+      ## Exact allowed paths
+
+      * `.lane/lanes/runtime.yml`
+      * `.ops/sync/UTV2-1671.yml`
+      * `docs/06_status/lanes/UTV2-1671.json`
+      * `docs/06_status/proof/UTV2-1671/**`
+
+      ## Required change
+
+      Add only the two named Smart Form contract paths to the runtime lane admission surface, with an admission-correction comment consistent with current precedent.
+
+      ## Explicit exclusions
+
+      * every other `.lane/**` file;
+      * any additional contract path or broad contract glob;
+      * all source implementation files;
+      * `packages/contracts/src/promotion.ts`;
+      * production, runtime, database, deployment, ingestion, worker, Discord, and delivery changes;
+      * any executor-policy or delegation-policy amendment.
+
+      ## Definition of done
+
+      * `pnpm lane:check --lane runtime` accepts both named Smart Form contract paths;
+      * it continues to refuse `packages/contracts/src/submission.ts`;
+      * it continues to refuse `packages/domain/src/**`;
+      * it continues to refuse `supabase/migrations/**`;
+      * `pnpm lane:check --lane governance` accepts this lane's exact file set;
+      * all required proof and exact-head checks pass;
+      * independent review confirms no admission broadening.
+
+      ## Stop conditions
+
+      Stop if:
+
+      * any additional path must be admitted;
+      * a broad glob is required;
+      * any negative control becomes accepted;
+      * current main no longer reproduces the two-path-only refusal;
+      * another governance/runtime lane creates a live authority conflict.
+
+      No production write, member delivery, ingestion unpark, direct-main action, or scope override is authorized.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Controlled issue reshape
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+    - |-
+      Classification
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: governance
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 0 of 3
+    - |-
+      Exact allowed paths
+      * `.lane/lanes/runtime.yml`
+      * `.ops/sync/UTV2-1671.yml`
+      * `docs/06_status/lanes/UTV2-1671.json`
+      * `docs/06_status/proof/UTV2-1671/**`
+    - >-
+      Required change
+
+      Add only the two named Smart Form contract paths to the runtime lane
+      admission surface, with an admission-correction comment consistent with
+      current precedent.
+    - >-
+      Explicit exclusions
+
+      * every other `.lane/**` file;
+
+      * any additional contract path or broad contract glob;
+
+      * all source implementation files;
+
+      * `packages/contracts/src/promotion.ts`;
+
+      * production, runtime, database, deployment, ingestion, worker, Discord,
+      and delivery changes;
+
+      * any executor-policy or delegation-policy amendment.
+    - >-
+      Definition of done
+
+      * `pnpm lane:check --lane runtime` accepts both named Smart Form contract
+      paths;
+
+      * it continues to refuse `packages/contracts/src/submission.ts`;
+
+      * it continues to refuse `packages/domain/src/**`;
+
+      * it continues to refuse `supabase/migrations/**`;
+
+      * `pnpm lane:check --lane governance` accepts this lane's exact file set;
+
+      * all required proof and exact-head checks pass;
+
+      * independent review confirms no admission broadening.
+    - >-
+      Stop conditions
+
+      Stop if:
+
+
+      * any additional path must be admitted;
+
+      * a broad glob is required;
+
+      * any negative control becomes accepted;
+
+      * current main no longer reproduces the two-path-only refusal;
+
+      * another governance/runtime lane creates a live authority conflict.
+
+
+      No production write, member delivery, ingestion unpark, direct-main
+      action, or scope override is authorized.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane
+    title: Smart Form recovery Lane 0 — admit exact contract paths to runtime lane
+    description: |-
+      ## Controlled issue reshape
+
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Admission-correct `.lane/lanes/runtime.yml` so the Smart Form backend runtime lane can carry exactly:
+
+      * `packages/contracts/src/smart-form.ts`
+      * `packages/contracts/src/index.ts`
+
+      This is an admission correction only. It does not change tier classification, executor authority, taxonomy, production state, or delivery permissions.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: governance
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 0 of 3
+
+      ## Exact allowed paths
+
+      * `.lane/lanes/runtime.yml`
+      * `.ops/sync/UTV2-1671.yml`
+      * `docs/06_status/lanes/UTV2-1671.json`
+      * `docs/06_status/proof/UTV2-1671/**`
+
+      ## Required change
+
+      Add only the two named Smart Form contract paths to the runtime lane admission surface, with an admission-correction comment consistent with current precedent.
+
+      ## Explicit exclusions
+
+      * every other `.lane/**` file;
+      * any additional contract path or broad contract glob;
+      * all source implementation files;
+      * `packages/contracts/src/promotion.ts`;
+      * production, runtime, database, deployment, ingestion, worker, Discord, and delivery changes;
+      * any executor-policy or delegation-policy amendment.
+
+      ## Definition of done
+
+      * `pnpm lane:check --lane runtime` accepts both named Smart Form contract paths;
+      * it continues to refuse `packages/contracts/src/submission.ts`;
+      * it continues to refuse `packages/domain/src/**`;
+      * it continues to refuse `supabase/migrations/**`;
+      * `pnpm lane:check --lane governance` accepts this lane's exact file set;
+      * all required proof and exact-head checks pass;
+      * independent review confirms no admission broadening.
+
+      ## Stop conditions
+
+      Stop if:
+
+      * any additional path must be admitted;
+      * a broad glob is required;
+      * any negative control becomes accepted;
+      * current main no longer reproduces the two-path-only refusal;
+      * another governance/runtime lane creates a live authority conflict.
+
+      No production write, member delivery, ingestion unpark, direct-main action, or scope override is authorized.
+    captured_at: 2026-08-30T21:35:08.388Z
+    description_sha256: 343c24bcf723f96e9c73b6242ef3e09f5617f05f91a73b9b1020f55c91ac5c93
+  contract_hash: ba6a5bf2e277332b36a427a890bc685d43bf1c2cca35b7db3faed97ce53a488a
