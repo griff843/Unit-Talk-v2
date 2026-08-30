@@ -7,7 +7,7 @@
 **Executor:** codex (lane registration) — see Known gaps
 **Branch:** `codex/utv2-1757-supersede-tombstone`
 **Base:** `c92e922f88083122dfd6c073954a6f84d7d0ff55`
-MERGE_SHA: cbe7069295f435652c3fa68c0243fd4dd7d1ae5a
+MERGE_SHA: 325ee096c91a70130d3b15f5185a613ebcecd5f1
 
 > The MERGE_SHA line above carries the branch anchor commit — the last non-proof
 > commit on this branch. A file cannot contain its own SHA; post-merge rebinding

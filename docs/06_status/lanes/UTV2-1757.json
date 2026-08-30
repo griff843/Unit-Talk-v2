@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1757-supersede-tombstone",
   "branch": "codex/utv2-1757-supersede-tombstone",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "325ee096c91a70130d3b15f5185a613ebcecd5f1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1460",
   "files_changed": [],
   "file_scope_lock": [
@@ -25,14 +25,22 @@
     "docs/06_status/proof/UTV2-1757/verification.md",
     "docs/06_status/proof/UTV2-1757/model-routing.json"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-08-30T02:23:08.928Z",
-  "heartbeat_at": "2026-08-30T02:49:09.448Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-30T03:09:20.926Z",
+  "closed_at": "2026-08-30T03:09:20.926Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1757-supersede-tombstone.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-30T03:09:19.377Z",
+      "verdict": "pass",
+      "merge_sha": "325ee096c91a70130d3b15f5185a613ebcecd5f1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

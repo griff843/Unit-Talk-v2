@@ -8,7 +8,7 @@
   "status": "ready_for_review",
   "generated_at": "2026-08-30T02:45:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "325ee096c91a70130d3b15f5185a613ebcecd5f1",
     "verified_source_sha": "cbe7069295f435652c3fa68c0243fd4dd7d1ae5a",
     "verified_source_note": "The last non-proof commit on this branch; it carries the entire functional change. It is the anchor only because a file cannot contain its own SHA. merge_sha is explicitly null pre-merge rather than a branch SHA or a stand-in token, and is set by post-merge rebinding.",
     "evidence_commit_sha": "cbe7069295f435652c3fa68c0243fd4dd7d1ae5a",
@@ -17,7 +17,9 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "base_sha": "c92e922f88083122dfd6c073954a6f84d7d0ff55"
+    "base_sha": "c92e922f88083122dfd6c073954a6f84d7d0ff55",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T03:09:18.062Z"
   },
   "scope": {
     "substantive_diff_stat": "3 files, 68 insertions(+), 18 deletions(-)",
