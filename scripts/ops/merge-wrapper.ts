@@ -100,7 +100,16 @@ export type MergeWrapperResult =
         | 'merge_wrapper_diverged_requires_explicit_sync'
         // UTV2-1678: a sync completed but dropped a governance artifact from the
         // working tree. Reported after the tree has been restored.
-        | 'merge_wrapper_sync_dropped_protected_paths';
+        | 'merge_wrapper_sync_dropped_protected_paths'
+        // UTV2-1790: the sync command failed AND the post-failure cleanup could
+        // not return the worktree to its pre-attempt state -- an in-progress
+        // merge/rebase or unmerged index entries are still present. This is the
+        // fail-closed code: the mutex is deliberately NOT released and the
+        // lane-state autostash is deliberately NOT popped, because both would
+        // hand a half-merged worktree to the next caller. It is distinct from
+        // `merge_wrapper_command_failed`, which means the command failed and the
+        // substrate is clean.
+        | 'merge_wrapper_cleanup_failed';
       issue_id?: string;
       operation?: MergeWrapperOperation;
       command?: string[];
@@ -424,6 +433,23 @@ export function runMergeWrapper(
     lockPath?: string;
     deferredDir?: string;
     now?: Date;
+    /**
+     * UTV2-1790: invoked when the operation's command exits non-zero, BEFORE the
+     * lane-state autostash is popped and BEFORE the mutex is released. A failed
+     * `git merge` leaves `MERGE_HEAD` and unmerged index entries behind; popping
+     * a stash into that tree fails with "needs merge" and releasing the mutex
+     * lets another lane acquire the supposedly-serializing lock while this
+     * worktree is still inside the previous lane's merge.
+     *
+     * The hook returns `cleaned: false` when it could not restore the
+     * pre-attempt state. That is treated as fail-closed: the pop is skipped, the
+     * lock is retained, and `merge_wrapper_cleanup_failed` is returned.
+     */
+    onCommandFailure?: (ctx: {
+      run: ReturnType<CommandRunner>;
+      runner: CommandRunner;
+      cwd: string;
+    }) => { cleaned: boolean; aborted: boolean; message?: string };
   } = {},
 ): MergeWrapperResult {
   let issueId: string;
@@ -558,6 +584,45 @@ export function runMergeWrapper(
   }
   const stdout = bufferToText(run.stdout);
   const stderr = bufferToText(run.stderr);
+
+  // UTV2-1790: cleanup runs FIRST -- before the autostash pop and before the
+  // release -- so neither of those two steps can ever observe a worktree that is
+  // still mid-merge. Ordering is the whole point; see `onCommandFailure`.
+  const commandFailed = Boolean(run.error) || run.status !== 0;
+  const cleanup =
+    commandFailed && options.onCommandFailure
+      ? options.onCommandFailure({ run, runner, cwd })
+      : undefined;
+
+  if (cleanup && !cleanup.cleaned) {
+    // Fail closed. The stash is NOT popped (popping into an unmerged index can
+    // only make the tree harder to recover) and the lock is NOT released, so no
+    // other lane can enter this worktree. The original command diagnostics are
+    // preserved verbatim in stdout/stderr -- the caller still needs to see what
+    // the merge actually said, not just what the cleanup said.
+    return {
+      ok: false,
+      code: 'merge_wrapper_cleanup_failed',
+      issue_id: issueId,
+      operation: input.operation,
+      command: commandVector,
+      lock,
+      stdout,
+      stderr,
+      main_sync_stash: mainSyncStash,
+      message:
+        `${input.operation} failed AND the worktree could not be returned to its ` +
+        `pre-attempt state, so the merge mutex was deliberately NOT released and the ` +
+        `lane-state autostash was deliberately NOT restored.\n` +
+        `${cleanup.message ?? 'cleanup reported failure without detail.'}\n` +
+        `Resolve by hand in ${cwd}: finish or abort the in-progress operation ` +
+        `(git merge --abort / git rebase --abort), confirm ` +
+        `'git diff --name-only --diff-filter=U' is empty, restore the autostash ` +
+        `("${MAIN_SYNC_STASH_MESSAGE}" in 'git stash list')` +
+        `${mainSyncStash?.stashed ? '' : ' if one exists'}, then release the lock with ` +
+        `'pnpm ops:merge-wrapper guard' / the merge-mutex release path.`,
+    };
+  }
 
   // Restore the autostash regardless of whether the pull succeeded, so a
   // failed pull never leaves lane-state files stuck in the stash.

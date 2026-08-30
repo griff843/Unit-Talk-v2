@@ -129,6 +129,12 @@ const STASH_POP_CALL = ['git', 'stash', 'pop'];
 // was dropped. With okRunner every command returns stdout 'ok', so the captured
 // pre-sync head is the literal string 'ok'.
 const HEAD_PROBE_CALL = ['git', 'rev-parse', 'HEAD'];
+// UTV2-1790: the post-failure cleanup probe, in the order abortInProgressSync
+// issues it. A clean probe means there is nothing to abort.
+const UNMERGED_PROBE_CALL = ['git', 'diff', '--name-only', '--diff-filter=U'];
+const MERGE_HEAD_PROBE_CALL = ['git', 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD'];
+const REBASE_HEAD_PROBE_CALL = ['git', 'rev-parse', '--verify', '--quiet', 'REBASE_HEAD'];
+const CLEANUP_PROBE_CALLS = [UNMERGED_PROBE_CALL, MERGE_HEAD_PROBE_CALL, REBASE_HEAD_PROBE_CALL];
 const DIFF_BEFORE_CALL = ['git', 'diff', '--name-only', 'origin/main...ok'];
 const DIFF_AFTER_CALL = ['git', 'diff', '--name-only', 'origin/main..HEAD'];
 
@@ -200,7 +206,7 @@ test('buildExtendedCommand constructs git-merge-main command', () => {
   const cmd = buildExtendedCommand('git-merge-main', {});
   assert.deepStrictEqual(cmd, {
     command: 'git',
-    args: ['merge', '--no-ff', 'origin/main'],
+    args: ['merge', '--no-ff', '--no-edit', 'origin/main'],
     deferred: false,
   });
 });
@@ -636,7 +642,8 @@ test('git-merge-main releases the lock after command failure', () => {
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
       HEAD_PROBE_CALL,
-      ['git', 'merge', '--no-ff', 'origin/main'],
+      ['git', 'merge', '--no-ff', '--no-edit', 'origin/main'],
+      ...CLEANUP_PROBE_CALLS,
       STASH_POP_CALL,
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
@@ -659,6 +666,7 @@ test('git-rebase-main releases the lock after command failure', () => {
       STASH_PUSH_CALL,
       HEAD_PROBE_CALL,
       ['git', 'rebase', 'origin/main'],
+      ...CLEANUP_PROBE_CALLS,
       STASH_POP_CALL,
     ]);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
@@ -746,7 +754,7 @@ test('git-merge-main completes successfully and releases the lock', () => {
     assert.deepStrictEqual(calls, [
       STASH_PUSH_CALL,
       HEAD_PROBE_CALL,
-      ['git', 'merge', '--no-ff', 'origin/main'],
+      ['git', 'merge', '--no-ff', '--no-edit', 'origin/main'],
       STASH_POP_CALL,
       DIFF_BEFORE_CALL,
       DIFF_AFTER_CALL,
@@ -1506,6 +1514,12 @@ function withDivergedRepo(
     git(dir, 'commit', '-q', '-m', 'lane advances');
     const branchSha = git(dir, 'rev-parse', 'HEAD');
 
+    // UTV2-1790: an UNTRACKED lane-state file, so the wrapper's autostash
+    // actually creates a stash entry. Without this the stash push is a no-op and
+    // every "the lane-state stash was restored" assertion below would be
+    // vacuously true -- it would pass just as happily if the restore never ran.
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'lane: state\n');
+
     // Precondition: genuinely diverged, so --ff-only could never succeed here.
     const counts = git(dir, 'rev-list', '--left-right', '--count', 'origin/main...HEAD');
     assert.strictEqual(counts.replace(/\s+/u, ' '), '1 1', 'fixture must be genuinely diverged');
@@ -1516,13 +1530,66 @@ function withDivergedRepo(
   }
 }
 
+/**
+ * A CommandRunner that really executes git, but lets a test observe every call
+ * (and optionally substitute an outcome for one). Used to prove ORDER: the
+ * mutex must still be held at the moment cleanup runs.
+ */
+function realGitRunner(
+  hook: (command: string, args: string[]) => ReturnType<CommandRunner> | undefined,
+): CommandRunner {
+  return (command, args, options) => {
+    const substituted = hook(command, args);
+    if (substituted) return substituted;
+    return spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' }) as ReturnType<
+      CommandRunner
+    >;
+  };
+}
+
+function unmergedPaths(dir: string): string[] {
+  const r = spawnSync('git', ['diff', '--name-only', '--diff-filter=U'], {
+    cwd: dir,
+    encoding: 'utf8',
+  });
+  return (r.stdout ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+function mergeHeadPresent(dir: string): boolean {
+  return (
+    spawnSync('git', ['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], { cwd: dir }).status === 0
+  );
+}
+
 test('UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)', () => {
   withDivergedRepo({ conflicting: false }, ({ dir, branchSha, mainSha }) => {
     withTempOps(({ lockPath, deferredDir }) => {
-      const result = runExtendedMergeWrapper(
-        { ...BASE, operation: 'git-merge-main', cwd: dir },
-        { lockPath, deferredDir },
-      );
+      // Point GIT_EDITOR at a command that always fails, so this test proves the
+      // merge completes without depending on an editor at all.
+      //
+      // Honest scope note: this does NOT make `--no-edit` load-bearing here.
+      // `git merge --no-ff` only opens the editor when it is run from a
+      // terminal, and the wrapper spawns git with piped stdio, so dropping
+      // `--no-edit` still passes this test. `--no-edit` is the guarantee for the
+      // callers that DO have a tty (a developer running `pnpm ops:merge-wrapper`
+      // interactively), where a `--no-ff` merge would otherwise stop in vi. The
+      // command-shape assertion in `buildExtendedCommand constructs
+      // git-merge-main command` is what pins the flag.
+      const priorEditor = process.env['GIT_EDITOR'];
+      process.env['GIT_EDITOR'] = 'false';
+      let result;
+      try {
+        result = runExtendedMergeWrapper(
+          { ...BASE, operation: 'git-merge-main', cwd: dir },
+          { lockPath, deferredDir },
+        );
+      } finally {
+        if (priorEditor === undefined) delete process.env['GIT_EDITOR'];
+        else process.env['GIT_EDITOR'] = priorEditor;
+      }
 
       assert.strictEqual(
         result.ok,
@@ -1556,16 +1623,33 @@ test('UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)', 
   });
 });
 
-test('UTV2-1790: git-merge-main fails actionably on a real conflict and releases the mutex', () => {
+test('UTV2-1790: a real conflict fails, aborts the merge, restores the stash, and only then releases the mutex', () => {
   withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
     withTempOps(({ lockPath, deferredDir }) => {
+      // Order proof: capture the mutex state at the instant the abort runs.
+      let lockStatusDuringAbort: string | null = null;
+      const runner = realGitRunner((command, args) => {
+        if (command === 'git' && args[0] === 'merge' && args[1] === '--abort') {
+          const held = readMergeLock(lockPath);
+          lockStatusDuringAbort = held.ok ? held.lock.status : 'unreadable';
+        }
+        return undefined;
+      });
+
       const result = runExtendedMergeWrapper(
         { ...BASE, operation: 'git-merge-main', cwd: dir },
-        { lockPath, deferredDir },
+        { lockPath, deferredDir, runner },
       );
 
+      // 1. Failure is reported.
       assert.strictEqual(result.ok, false, 'a genuine content conflict must not report success');
-      // Actionable: the caller can see it was a conflict, not a bare status code.
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_command_failed',
+        'cleanup succeeded, so this is an ordinary command failure, not a cleanup failure',
+      );
+
+      // Original merge diagnostics are preserved -- not replaced by the abort's.
       const diagnostic = `${result.message ?? ''} ${result.stdout ?? ''} ${result.stderr ?? ''}`;
       assert.match(
         diagnostic,
@@ -1573,12 +1657,135 @@ test('UTV2-1790: git-merge-main fails actionably on a real conflict and releases
         `failure must name the conflict; got: ${diagnostic}`,
       );
 
-      // Fail-safe: the mutex is released even though the command failed.
-      const lock = readMergeLock(lockPath);
-      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released', 'mutex must be released on failure');
-
-      // The lane's own commit is not rewritten or lost by the failed attempt.
+      // 2. The original lane HEAD is unchanged.
+      assert.strictEqual(
+        git(dir, 'rev-parse', 'HEAD'),
+        branchSha,
+        'the failed merge must leave the lane head exactly where it was',
+      );
       assert.strictEqual(git(dir, 'rev-parse', `${branchSha}^{commit}`), branchSha);
+
+      // 3. No in-progress merge remains.
+      assert.strictEqual(mergeHeadPresent(dir), false, 'MERGE_HEAD must be gone after cleanup');
+
+      // 4. No unmerged index entries remain.
+      assert.deepStrictEqual(
+        unmergedPaths(dir),
+        [],
+        'git diff --name-only --diff-filter=U must return nothing',
+      );
+
+      // 5. The lane-state stash was restored.
+      assert.strictEqual(
+        result.main_sync_stash?.stashed,
+        true,
+        'fixture precondition: the autostash must actually have stashed something',
+      );
+      assert.strictEqual(result.main_sync_stash?.popped, true, 'the autostash must be restored');
+      assert.ok(
+        fs.existsSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml')),
+        'the untracked lane-state file must be back on disk',
+      );
+      assert.strictEqual(
+        git(dir, 'stash', 'list'),
+        '',
+        'no autostash entry may be left behind',
+      );
+
+      // 6. The worktree is back to its pre-attempt state: the lane's own content,
+      //    with no conflict markers written by the failed merge.
+      const shared = fs.readFileSync(path.join(dir, 'shared.txt'), 'utf8');
+      assert.strictEqual(shared, 'base\nfrom-lane\n', 'lane content restored verbatim');
+      assert.doesNotMatch(shared, /<<<<<<<|>>>>>>>/u, 'no conflict markers may survive');
+      assert.strictEqual(
+        git(dir, 'status', '--porcelain', '--untracked-files=all'),
+        '?? .ops/sync/UTV2-1790.yml',
+        'the tree must differ from the pre-attempt state only by the untracked lane-state file it started with',
+      );
+
+      // 7. The mutex was still HELD while cleanup ran, and is released after it.
+      assert.strictEqual(
+        lockStatusDuringAbort,
+        'held',
+        'the mutex must not be released until cleanup has finished',
+      );
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released', 'mutex released after cleanup');
+    });
+  });
+});
+
+test('UTV2-1790: a cleanup failure fails closed — mutex retained, stash held, distinct code', () => {
+  // The dangerous case the P1 names: the merge conflicts AND the abort does not
+  // work. Reporting an ordinary `merge_wrapper_command_failed` here would tell
+  // the caller "the command failed, substrate is fine" while MERGE_HEAD and an
+  // unmerged index are still sitting in the worktree and the mutex is open for
+  // the next lane to walk into.
+  withDivergedRepo({ conflicting: true }, ({ dir, branchSha }) => {
+    withTempOps(({ lockPath, deferredDir }) => {
+      let abortAttempted = false;
+      const runner = realGitRunner((command, args) => {
+        if (command === 'git' && args[0] === 'merge' && args[1] === '--abort') {
+          abortAttempted = true;
+          // Do NOT execute it: the conflicted merge state genuinely survives.
+          return {
+            status: 1,
+            stdout: Buffer.from(''),
+            stderr: Buffer.from('fatal: could not abort merge'),
+            error: undefined,
+          } as ReturnType<CommandRunner>;
+        }
+        return undefined;
+      });
+
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(abortAttempted, true, 'cleanup must at least have tried to abort');
+
+      // Distinct, fail-closed code — NOT the ordinary command failure.
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_cleanup_failed',
+        'an uncleaned worktree must not be reported as an ordinary completed failure',
+      );
+
+      // The substrate really is unsafe — this test is not simulating the danger.
+      assert.strictEqual(mergeHeadPresent(dir), true, 'the merge really is still in progress');
+      assert.ok(unmergedPaths(dir).length > 0, 'unmerged entries really do remain');
+
+      // The mutex is RETAINED, so no other lane can enter this worktree.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'held',
+        'the mutex must NOT be released while the worktree is mid-merge',
+      );
+      assert.strictEqual(result.release, undefined, 'no release may be reported');
+
+      // The stash is NOT popped into the conflicted index; it is left intact and
+      // the caller is told where it is.
+      assert.strictEqual(result.main_sync_stash?.popped, false, 'the autostash must be left alone');
+      assert.notStrictEqual(git(dir, 'stash', 'list'), '', 'the autostash entry must still exist');
+
+      // The message is actionable and preserves the original merge diagnostics.
+      assert.match(result.message, /could not abort merge/u, 'names why cleanup failed');
+      assert.match(result.message, /MERGE_HEAD is still present/u, 'names the residue');
+      assert.match(result.message, /NOT released/u, 'says the mutex was retained');
+      assert.match(
+        `${result.stdout ?? ''} ${result.stderr ?? ''}`,
+        /conflict|CONFLICT|Automatic merge failed/u,
+        'the original merge diagnostics must survive the cleanup path',
+      );
+
+      // The lane commit itself is still intact.
+      assert.strictEqual(git(dir, 'rev-parse', `${branchSha}^{commit}`), branchSha);
+
+      // Leave the fixture recoverable for the temp-dir teardown.
+      spawnSync('git', ['merge', '--abort'], { cwd: dir });
     });
   });
 });

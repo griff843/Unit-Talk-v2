@@ -106,9 +106,14 @@ export function buildExtendedCommand(
       // merely behind, a bare merge would fast-forward and silently move the
       // branch with no merge commit, making the operation's effect depend on
       // divergence state. `--no-ff` behaves identically in both cases.
+      //
+      // `--no-edit` keeps it noninteractive: without it `git merge --no-ff`
+      // opens $GIT_EDITOR for the merge commit message, and this runs under
+      // spawnSync with piped stdio, where an editor cannot be driven and the
+      // call would hang or fail depending on the configured editor.
       return {
         command: 'git',
-        args: ['merge', '--no-ff', 'origin/main'],
+        args: ['merge', '--no-ff', '--no-edit', 'origin/main'],
         deferred: false,
       };
     case 'git-rebase-main':
@@ -249,6 +254,77 @@ export function isNotFastForwardFailure(result: MergeWrapperResult): boolean {
 }
 
 /**
+ * UTV2-1790: return the worktree to its pre-attempt state after a failed
+ * `git-merge-main` / `git-rebase-main`.
+ *
+ * A conflicted `git merge` exits non-zero and leaves `MERGE_HEAD` plus unmerged
+ * index entries in place. If the wrapper then pops its lane-state autostash and
+ * releases the merge mutex -- which is what it did before this function existed
+ * -- the pop fails with "needs merge" and the next lane acquires a mutex that is
+ * supposed to serialize merges while this worktree is still inside the previous
+ * lane's. Every subsequent wrapper run also fails until a human aborts by hand.
+ *
+ * Fail-closed by construction: `cleaned` is true only when the abort command
+ * itself succeeded AND a fresh probe shows no `MERGE_HEAD`, no `REBASE_HEAD` and
+ * no unmerged paths. A dirty tree we could not clean is never reported as clean.
+ */
+export function abortInProgressSync(
+  operation: 'git-merge-main' | 'git-rebase-main',
+  runner: CommandRunner,
+  cwd: string,
+): { cleaned: boolean; aborted: boolean; message?: string } {
+  const probe = (): { mergeHead: boolean; rebaseHead: boolean; unmerged: string[] } => {
+    const ref = (name: string): boolean =>
+      runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd }).status === 0;
+    const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
+    const unmerged =
+      unmergedRun.status === 0
+        ? bufferToText(unmergedRun.stdout)
+            .split('\n')
+            .map((line) => line.trim())
+            .filter(Boolean)
+        : [];
+    return { mergeHead: ref('MERGE_HEAD'), rebaseHead: ref('REBASE_HEAD'), unmerged };
+  };
+
+  const before = probe();
+  if (!before.mergeHead && !before.rebaseHead && before.unmerged.length === 0) {
+    // The command failed without starting anything -- e.g. `git merge` refused
+    // up front. There is nothing to abort and nothing left behind.
+    return { cleaned: true, aborted: false };
+  }
+
+  const verb = operation === 'git-rebase-main' ? 'rebase' : 'merge';
+  const abort = runner('git', [verb, '--abort'], { cwd });
+  const abortOk = !abort.error && abort.status === 0;
+  const after = probe();
+  const residue =
+    after.mergeHead || after.rebaseHead || after.unmerged.length > 0;
+
+  if (abortOk && !residue) {
+    return { cleaned: true, aborted: true };
+  }
+
+  const detail: string[] = [];
+  if (!abortOk) {
+    detail.push(
+      `git ${verb} --abort exited ${abort.status ?? 'with an error'}: ` +
+        `${abort.error?.message ?? (bufferToText(abort.stderr) || bufferToText(abort.stdout) || '(no output)')}`,
+    );
+  }
+  if (after.mergeHead) detail.push('MERGE_HEAD is still present');
+  if (after.rebaseHead) detail.push('REBASE_HEAD is still present');
+  if (after.unmerged.length > 0) {
+    detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
+  }
+  return {
+    cleaned: false,
+    aborted: false,
+    message: `Could not clean up the failed ${operation}: ${detail.join('; ')}.`,
+  };
+}
+
+/**
  * Run an extended merge wrapper operation through the merge mutex.
  *
  * For the base operations (pr-merge, pr-update-branch, main-sync),
@@ -356,7 +432,15 @@ export function runExtendedMergeWrapper(
   // UTV2-1678 criteria 3-4: prove the sync destroyed nothing before reporting
   // success. Applied to every sync verb, not just rebase — a merge with a bad
   // conflict resolution can drop a file just as permanently.
-  const result = runMergeWrapper(bridgedInput, { ...options, runner: interceptingRunner });
+  // UTV2-1790: cleanup is bound to the REAL runner, not the intercepting one,
+  // and runs inside runMergeWrapper before the autostash pop and the release.
+  const syncOperation = input.operation;
+  const result = runMergeWrapper(bridgedInput, {
+    ...options,
+    runner: interceptingRunner,
+    onCommandFailure: ({ cwd: failureCwd }) =>
+      abortInProgressSync(syncOperation, realRunner, failureCwd),
+  });
   // Only a sync that actually ran and succeeded can have dropped anything.
   if (!result.ok || !preSyncHead) return result;
 
