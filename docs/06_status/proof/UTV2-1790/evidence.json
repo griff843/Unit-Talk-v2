@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1790",
+  "tier": "T2",
+  "lane_type": "hygiene",
+  "proof_profile": "static",
+  "title": "main-sync git-merge-main uses --no-ff so a diverged branch can sync",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-30T21:30:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "54e03d861d5c53d0990bffd933d5a75f2148f6a5",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T21:30:00Z"
+  },
+  "verdict": {
+    "recommended_divergence_exit_is_operable": true,
+    "commit_shas_preserved_on_both_sides": true,
+    "no_history_rewriting": true,
+    "mutex_acquire_release_preserved": true,
+    "protected_path_refusal_preserved": true,
+    "head_move_invalidation_reporting_preserved": true,
+    "actionable_failure_behaviour_preserved": true,
+    "statement": "git-merge-main built `git merge --ff-only origin/main`, which cannot merge a diverged branch by definition, so main-sync's recommended exit for divergence failed on exactly the condition it exists for -- leaving git-rebase-main, which rewrites history and invalidates every head-pinned governance artifact, as the only operable path. The command is now `git merge --no-ff origin/main`, which merges a genuinely diverged branch while preserving both sides' commit SHAs byte-for-byte, and which is deliberately not a bare `git merge` because that would fast-forward a merely-behind branch and make the verb's effect depend on divergence state. All five wrapper safety invariants live outside buildExtendedCommand and are structurally unaffected."
+  },
+  "static_proof": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "focused_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts",
+      "tests": 49,
+      "pass": 49,
+      "fail": 0,
+      "skipped": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "suites_reporting_zero_failures": 98,
+      "suites_reporting_failures": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "definition": "pnpm verify:static && pnpm test:live-db",
+      "verify_static_leg": "PASS",
+      "test_live_db_leg": "REFUSED locally by ci:assert-staging under production containment (SUPABASE_URL=http://127.0.0.1:1); the writable-DB receipt is produced inside the required CI verify job against staging xskgrzbteyqdufktjrjx, which is the only sanctioned source.",
+      "lane_has_live_db_surface": false
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790",
+      "verdict": "PASS",
+      "changed_files": 6,
+      "rules_matched": [],
+      "artifacts_required": []
+    }
+  },
+  "mutation_controls": [
+    {
+      "name": "reverting --no-ff to --ff-only reintroduces the defect",
+      "mutation": "buildExtendedCommand git-merge-main args ['merge','--no-ff','origin/main'] -> ['merge','--ff-only','origin/main']",
+      "shipped_result": "49 pass / 0 fail",
+      "mutant_result": "6 fail",
+      "mutant_failing_tests": [
+        "2 - buildExtendedCommand constructs git-merge-main command",
+        "23 - git-merge-main releases the lock after command failure",
+        "27 - git-merge-main completes successfully and releases the lock",
+        "47 - UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)",
+        "48 - UTV2-1790: git-merge-main fails actionably on a real conflict and releases the mutex",
+        "49 - UTV2-1790: --no-ff still records a merge commit when the branch is merely behind"
+      ],
+      "non_vacuous": true,
+      "note": "Only test 2 is a command-shape assertion. Tests 47-49 fail because the merge genuinely does not occur under --ff-only against a real diverged git repository, so the control is proven behaviourally and not by string comparison."
+    }
+  ],
+  "regression_fixtures": {
+    "type": "real git subprocesses, nothing mocked",
+    "divergence_asserted_mechanically": "git rev-list --left-right --count origin/main...HEAD == '1\\t1'",
+    "tests": [
+      {
+        "name": "git-merge-main merges a genuinely diverged branch (real git)",
+        "asserts": [
+          "wrapper returns ok",
+          "a merge commit is created",
+          "git rev-list --parents -n 1 HEAD parents equal the pre-merge branch SHA and pre-merge origin/main SHA",
+          "both original SHAs still resolve (no rewriting)",
+          "the lane-side file is preserved and main-side content is present",
+          "merge mutex released"
+        ]
+      },
+      {
+        "name": "git-merge-main fails actionably on a real conflict and releases the mutex",
+        "asserts": [
+          "wrapper returns not ok",
+          "diagnostic matches /conflict|CONFLICT|Automatic merge failed/u",
+          "merge mutex released",
+          "branch SHA unchanged"
+        ]
+      },
+      {
+        "name": "--no-ff still records a merge commit when the branch is merely behind",
+        "asserts": [
+          "guards against a bare `git merge` silently fast-forwarding"
+        ]
+      }
+    ]
+  },
+  "invariants_preserved": [
+    "merge mutex acquisition and release (asserted on both the success and failure paths)",
+    "no history rewriting (parent SHAs asserted byte-for-byte)",
+    "protected proof/manifest dropped-path refusal (PROTECTED_PREFIXES / classifyDroppedPaths untouched, outside buildExtendedCommand)",
+    "head-move invalidation reporting (buildHeadMoveInvalidation / renderHeadMoveNotice / HEAD_MOVE_REAUTHORIZATION_ORDER untouched)",
+    "actionable failure behaviour (conflict diagnostic asserted)",
+    "main-sync's merge_wrapper_diverged_requires_explicit_sync refusal is retained; no automatic rebase substitution is restored",
+    "BLOCKED_RAW_COMMANDS unchanged"
+  ],
+  "scope_refusals": [
+    "The dual-root sync-contract persistence defect in scripts/ops/codex-exec.ts was NOT bundled into this blocker fix.",
+    "The CPU/RAM scheduling contention observed during E2E runs was NOT bundled into this blocker fix.",
+    "No package.json, lockfile, tsconfig or build-config change. No workflow, branch-protection, proof-schema or bypass-flag change.",
+    "Four --ff-only occurrences belonging to main-sync's legitimate `git pull --ff-only origin main` were deliberately left unchanged."
+  ],
+  "known_gaps": [
+    "A merge that conflicts still requires manual resolution by the operator; the wrapper reports it actionably and releases the mutex but does not resolve it.",
+    "A --no-ff merge advances the branch head by one merge commit, which still moves the PR head SHA and therefore still invalidates head-pinned governance artifacts. This lane makes the sanctioned exit operable and SHA-preserving for existing commits; it does not eliminate re-authorization after a sync."
+  ]
+}
