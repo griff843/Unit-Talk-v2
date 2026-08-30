@@ -5,6 +5,7 @@ import {
   findAllowedCapper,
   normalizeEmail,
   parseAllowedCapperEmails,
+  resolveAllowedCappers,
 } from '../lib/auth-allowlist.ts';
 
 test('normalizeEmail trims and lowercases emails', () => {
@@ -30,6 +31,28 @@ test('findAllowedCapper matches only allowlisted emails', () => {
   });
   assert.equal(findAllowedCapper('unknown@unittalk.com', allowed), null);
   assert.equal(findAllowedCapper(null, allowed), null);
+});
+
+test('resolveAllowedCappers includes Griff Gmail with the canonical capper id', () => {
+  const allowed = resolveAllowedCappers(undefined);
+
+  assert.deepEqual(findAllowedCapper('GRIFFADAVI@gmail.com', allowed), {
+    email: 'griffadavi@gmail.com',
+    capperId: 'griff843',
+  });
+});
+
+test('the approved canonical mapping wins over a derived environment mapping', () => {
+  const allowed = resolveAllowedCappers('griffadavi@gmail.com,another@unittalk.com');
+
+  assert.deepEqual(findAllowedCapper('griffadavi@gmail.com', allowed), {
+    email: 'griffadavi@gmail.com',
+    capperId: 'griff843',
+  });
+  assert.deepEqual(findAllowedCapper('another@unittalk.com', allowed), {
+    email: 'another@unittalk.com',
+    capperId: 'another',
+  });
 });
 
 test('deriveCapperIdFromEmail returns a stable local-part id', () => {

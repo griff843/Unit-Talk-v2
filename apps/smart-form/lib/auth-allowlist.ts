@@ -3,6 +3,10 @@ export interface AllowedCapper {
   capperId: string;
 }
 
+export const APPROVED_CAPPERS: readonly AllowedCapper[] = [
+  { email: 'griffadavi@gmail.com', capperId: 'griff843' },
+];
+
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
@@ -24,6 +28,17 @@ export function parseAllowedCapperEmails(value: string | undefined): AllowedCapp
     .filter((capper) => capper.capperId);
 
   return Array.from(new Map(cappers.map((capper) => [capper.email, capper])).values());
+}
+
+export function resolveAllowedCappers(value: string | undefined): AllowedCapper[] {
+  const configured = parseAllowedCapperEmails(value);
+  const merged = new Map(configured.map((capper) => [capper.email, capper]));
+
+  for (const capper of APPROVED_CAPPERS) {
+    merged.set(capper.email, capper);
+  }
+
+  return Array.from(merged.values());
 }
 
 export function findAllowedCapper(

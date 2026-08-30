@@ -1,4 +1,4 @@
-import type { CanonicalPick, PickLifecycleState } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type CanonicalPick, type PickLifecycleState } from '@unit-talk/contracts';
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
 import { errorResponse, successResponse, type ApiResponse } from '../http.js';
 import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
@@ -19,6 +19,10 @@ export async function requeuePickController(
 
   if (!pick) {
     return errorResponse(404, 'PICK_NOT_FOUND', `Pick not found: ${pickId}`);
+  }
+
+  if (isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null)) {
+    return errorResponse(409, 'TRACK_ONLY_DELIVERY_BLOCKED', `Pick ${pickId} is track-only and cannot be re-queued`);
   }
 
   if (pick.promotion_status !== 'qualified' || pick.promotion_target == null) {

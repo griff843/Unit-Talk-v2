@@ -2,9 +2,9 @@ import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import { resolveAuthSecret } from './lib/auth-config';
 import { createCapperSessionToken } from './lib/auth-session-token';
-import { findAllowedCapper, parseAllowedCapperEmails } from './lib/auth-allowlist';
+import { findAllowedCapper, resolveAllowedCappers } from './lib/auth-allowlist';
 
-const allowedCappers = parseAllowedCapperEmails(process.env.ALLOWED_CAPPER_EMAILS);
+const allowedCappers = resolveAllowedCappers(process.env.ALLOWED_CAPPER_EMAILS);
 const authSecret = resolveAuthSecret();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

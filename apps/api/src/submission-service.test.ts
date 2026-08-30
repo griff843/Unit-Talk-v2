@@ -249,6 +249,11 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
         confidence: 0.9,
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Suns vs Nuggets', enteredParticipants: [],
+          },
           eventName: 'Suns vs Nuggets',
           // edge=78 < 85 → trader-insights suppressed; bb qualifies (score ≥ 70).
           promotionScores: { edge: 78, trust: 79, readiness: 88, uniqueness: 82, boardFit: 90 },
@@ -340,6 +345,11 @@ test('handleSubmitPick smart-form pick below promotion threshold still enqueues 
         eventName: 'Knicks vs Celtics',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Knicks vs Celtics', enteredParticipants: [],
+          },
           capper: 'griff843',
           capperConviction: 4,
           promotionScores: { edge: 45, trust: 40, readiness: 50, uniqueness: 40, boardFit: 35 },
@@ -383,6 +393,11 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
         eventName: 'Lakers vs Celtics',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Lakers vs Celtics', enteredParticipants: [],
+          },
           capper: 'griff843',
           capperConviction: 8,
           promotionScores: { edge: 78, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
@@ -409,6 +424,11 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
         eventName: 'Lakers vs Celtics',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Lakers vs Celtics', enteredParticipants: [],
+          },
           capper: 'griff843',
           capperConviction: 7,
           promotionScores: { edge: 55, trust: 70, readiness: 65, uniqueness: 50, boardFit: 45 },

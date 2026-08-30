@@ -17,7 +17,7 @@ import {
   createApiServer,
   type ApiRuntimeDependencies,
 } from './server.js';
-import { loadAuthConfig } from './auth.js';
+import { loadAuthConfig, signCapperToken } from './auth.js';
 import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 
 test('createApiRuntimeDependencies fails closed when database config is unavailable', () => {
@@ -332,6 +332,92 @@ test('POST /api/submissions resists body identity spoofing when keyed by authent
 
     assert.equal(second.status, 429);
     assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
+  } finally {
+    server.close();
+  }
+});
+
+test('capper JWT submissions cannot spoof source or opt into member delivery', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const jwtSecret = 'utv2-1787-test-secret-that-is-long-enough';
+  const token = await signCapperToken(
+    { sub: 'capper-user', capperId: 'capper-canonical', displayName: 'Canonical Capper' },
+    jwtSecret,
+    '5m',
+  );
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      repositories,
+      authConfig: {
+        enabled: true,
+        keys: new Map([['operator-key', { role: 'operator', identity: 'operator:test' }]]),
+        jwtSecret,
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+  const request = (body: Record<string, unknown>) => fetch(
+    `http://127.0.0.1:${address.port}/api/submissions`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const basePayload = {
+    source: 'smart-form',
+    submittedBy: 'spoofed-capper',
+    market: 'NBA moneyline',
+    selection: 'Celtics ML',
+    stakeUnits: 1,
+    eventName: 'Celtics vs Knicks',
+    metadata: {
+      sport: 'NBA',
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NBA',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Celtics vs Knicks',
+        enteredParticipants: [],
+      },
+    },
+  };
+
+  try {
+    const spoofedSource = await request({ ...basePayload, source: 'api' });
+    assert.equal(spoofedSource.status, 403);
+    assert.equal(
+      ((await spoofedSource.json()) as { error?: { code?: string } }).error?.code,
+      'CAPPER_SOURCE_FORBIDDEN',
+    );
+
+    const deliveryEligible = await request({
+      ...basePayload,
+      metadata: { ...basePayload.metadata, distributionMode: 'delivery-eligible' },
+    });
+    assert.equal(deliveryEligible.status, 403);
+    assert.equal(
+      ((await deliveryEligible.json()) as { error?: { code?: string } }).error?.code,
+      'CAPPER_TRACK_ONLY_REQUIRED',
+    );
+
+    const accepted = await request(basePayload);
+    assert.equal(accepted.status, 201);
+    const acceptedBody = (await accepted.json()) as { data?: { pickId?: string; outboxEnqueued?: boolean } };
+    const pickId = acceptedBody.data?.pickId;
+    assert.ok(pickId);
+    assert.equal(acceptedBody.data?.outboxEnqueued, false);
+    const pick = await repositories.picks.findPickById(pickId);
+    assert.equal((pick?.metadata as Record<string, unknown>)['capper'], 'capper-canonical');
+    assert.equal((pick?.metadata as Record<string, unknown>)['distributionMode'], 'track-only');
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
   } finally {
     server.close();
   }

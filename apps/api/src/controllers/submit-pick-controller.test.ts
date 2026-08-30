@@ -136,7 +136,22 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const repositories = createInMemoryRepositoryBundle();
 
   const result = await submitPickController(
-    makePayload('smart-form'),
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'delivery-eligible',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [],
+        },
+      },
+    }),
     repositories,
   );
 
@@ -150,6 +165,36 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const pick = await repositories.picks.findPickById(result.body.data.pickId);
   assert.ok(pick);
   assert.notEqual(pick.status, 'awaiting_approval');
+});
+
+test('submit-pick-controller: track-only smart-form pick persists without outbox work', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await submitPickController(
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'track-only',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [],
+        },
+      },
+    }),
+    repositories,
+  );
+  assert.equal(result.status, 201);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.outboxEnqueued, false);
+  assert.equal((await repositories.outbox.listByPickId(result.body.data.pickId)).length, 0);
+  const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.equal((persisted?.metadata as Record<string, unknown>)['distributionMode'], 'track-only');
 });
 
 test('submit-pick-controller: api source is NOT braked (human path preserved)', async () => {

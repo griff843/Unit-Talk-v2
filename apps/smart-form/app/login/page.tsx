@@ -43,11 +43,12 @@ export default function LoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <div className="w-full max-w-md space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Capper Login</h1>
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground">Unit Talk</p>
+          <h1 className="mt-2 text-3xl font-bold text-foreground">Capper Portal</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in with your approved Google account or paste your capper token.
+            Sign in with an approved capper account to open the Smart Form.
           </p>
         </div>
 
@@ -56,19 +57,19 @@ export default function LoginPage() {
           className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
           onClick={() => void signIn('google', { callbackUrl: '/submit' })}
         >
-          Sign in with Google
+          Continue with Google
         </Button>
 
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs font-semibold uppercase text-muted-foreground">Fallback token</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
+        <p className="text-center text-xs text-muted-foreground">Only allowlisted Google accounts can continue.</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <details className="rounded-lg border border-border bg-background px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+            Operator recovery access
+          </summary>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="space-y-2">
             <label htmlFor="token" className="text-sm font-medium text-foreground">
-              Capper Token
+              Operator-issued recovery token
             </label>
             <Input
               id="token"
@@ -100,13 +101,10 @@ export default function LoginPage() {
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
             disabled={!token.trim()}
           >
-            Enter
+            Use recovery token
           </Button>
-        </form>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Don&apos;t have a token? Contact your operator to get one issued.
-        </p>
+          </form>
+        </details>
       </div>
     </main>
   );

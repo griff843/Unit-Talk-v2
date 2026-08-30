@@ -1,4 +1,4 @@
-import type { SubmissionPayload } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type SubmissionPayload } from '@unit-talk/contracts';
 import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
 import { transitionPickLifecycle } from '@unit-talk/db';
 import type { RepositoryBundle } from '@unit-talk/db';
@@ -10,6 +10,7 @@ import { isGovernanceBrakeSource } from '../distribution-service.js';
 import {
   type Logger,
 } from '@unit-talk/observability';
+import { validateSmartFormRelationships } from '../smart-form-validation.js';
 
 export interface SubmitPickControllerResult {
   submissionId: string;
@@ -31,6 +32,7 @@ export async function submitPickController(
     logger?: Logger | undefined;
   } = {},
 ): Promise<ApiResponse<SubmitPickControllerResult>> {
+  await validateSmartFormRelationships(payload, repositories.referenceData);
   const routingShadowEnabled = isModelDrivenRoutingShadowEnabled(payload);
   const result = routingShadowEnabled
     ? await processShadowSubmission(payload, repositories)
@@ -58,6 +60,23 @@ export async function submitPickController(
   // is the only way out of awaiting_approval.
   const governanceBrakeApplied =
     !routingShadowEnabled && isGovernanceBrakeSource(result.pick.source);
+
+  if (!routingShadowEnabled && isTrackOnlyPickMetadata(result.pick.metadata)) {
+    return {
+      status: 201,
+      body: {
+        ok: true,
+        data: {
+          submissionId: result.submission.id,
+          pickId: result.pick.id,
+          lifecycleState: result.pick.lifecycleState,
+          promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+          promotionTarget: result.pick.promotionTarget ?? null,
+          outboxEnqueued: false,
+        },
+      },
+    };
+  }
 
   if (governanceBrakeApplied) {
     // UTV2-1611: the brake is STATE-AWARE. An automated production admitted by

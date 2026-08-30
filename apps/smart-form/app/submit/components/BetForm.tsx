@@ -62,6 +62,10 @@ import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
+import type {
+  CanonicalParticipantIdentity,
+  SmartFormParticipantResolution,
+} from '@unit-talk/contracts';
 import { BetSlipPanel } from './BetSlipPanel';
 import { MarketTypeGrid } from './MarketTypeGrid';
 import { SuccessReceipt } from './SuccessReceipt';
@@ -84,7 +88,7 @@ const CAPPER_SESSION_KEY = 'ut_last_capper';
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
 type OfferSelectionSide = 'over' | 'under' | 'side';
-type ParticipantFieldName = 'playerName' | 'team';
+type ParticipantFieldName = 'playerName' | 'team' | 'awayParticipantName' | 'homeParticipantName';
 
 interface SelectedOfferState {
   offer: EventOfferBrowseResult;
@@ -707,7 +711,7 @@ function SportsbookPillField({
       control={form.control}
       name="sportsbook"
       render={({ field }) => (
-        <FormItem>
+        <FormItem data-testid="smart-form-book-select">
           <FormLabel>Sportsbook</FormLabel>
           <div className="flex flex-wrap gap-1.5">
             {primaryBooks.map((sb) => (
@@ -770,13 +774,18 @@ function SportsbookPillField({
   );
 }
 
-export function BetForm() {
+export function BetForm({
+  authenticatedCapper,
+}: {
+  authenticatedCapper?: { capperId: string; displayName: string } | null;
+}) {
   const { toast } = useToast();
   // Capper identity from stored JWT (display only — API validates on each submission)
   const [capperClaims] = useState(() => {
     if (typeof window === 'undefined') return null;
     return getStoredCapperClaims();
   });
+  const effectiveCapper = authenticatedCapper ?? capperClaims;
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
@@ -795,6 +804,9 @@ export function BetForm() {
   const [sessionPickKeys, setSessionPickKeys] = useState<Set<string>>(new Set());
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
+  const [awayParticipantId, setAwayParticipantId] = useState<string | null>(null);
+  const [homeParticipantId, setHomeParticipantId] = useState<string | null>(null);
+  const [manualIdentityOverride, setManualIdentityOverride] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
   const [selectedOfferParticipantId, setSelectedOfferParticipantId] = useState<string | null>(null);
   const [suspendMarketReset, setSuspendMarketReset] = useState(false);
@@ -811,6 +823,8 @@ export function BetForm() {
     defaultValues: {
       sport: '',
       eventName: '',
+      awayParticipantName: '',
+      homeParticipantName: '',
       playerName: '',
       statType: '',
       team: '',
@@ -820,6 +834,7 @@ export function BetForm() {
       odds: undefined,
       line: undefined,
       gameDate: TODAY,
+      trackOnly: true,
     },
   });
 
@@ -1089,6 +1104,9 @@ export function BetForm() {
     setSelectedOfferParticipantId(null);
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
+    setAwayParticipantId(null);
+    setHomeParticipantId(null);
+    setManualIdentityOverride(false);
     setBrowseSearchQuery('');
     setBrowseSearchResults([]);
     setBrowseSearchError(null);
@@ -1096,6 +1114,8 @@ export function BetForm() {
 
     form.resetField('marketType');
     form.setValue('eventName', '');
+    form.setValue('awayParticipantName', '');
+    form.setValue('homeParticipantName', '');
     form.setValue('playerName', '');
     form.setValue('statType', '');
     form.setValue('team', '');
@@ -1296,17 +1316,24 @@ export function BetForm() {
   }
 
   function applyMatchupSelection(matchup: MatchupBrowseResult) {
+    const away = matchup.teams.find((team) => team.role === 'away') ?? null;
+    const home = matchup.teams.find((team) => team.role === 'home') ?? null;
     upsertMatchup(matchup);
     setSelectedMatchupId(matchup.eventId);
     setSelectedOffer(null);
     setSelectedOfferParticipantId(null);
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
+    setAwayParticipantId(away ? matchupTeamKey(away) : null);
+    setHomeParticipantId(home ? matchupTeamKey(home) : null);
+    setManualIdentityOverride(false);
     form.setValue('eventName', matchup.eventName, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
+    form.setValue('awayParticipantName', away?.displayName ?? '', { shouldDirty: true });
+    form.setValue('homeParticipantName', home?.displayName ?? '', { shouldDirty: true });
     form.setValue('playerName', '', {
       shouldDirty: true,
       shouldTouch: true,
@@ -1341,11 +1368,15 @@ export function BetForm() {
     setSelectedOfferParticipantId(null);
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
+    setAwayParticipantId(null);
+    setHomeParticipantId(null);
     form.setValue('eventName', '', {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: false,
     });
+    form.setValue('awayParticipantName', '', { shouldDirty: true });
+    form.setValue('homeParticipantName', '', { shouldDirty: true });
     form.setValue('playerName', '', {
       shouldDirty: true,
       shouldTouch: true,
@@ -1566,7 +1597,19 @@ export function BetForm() {
     });
 
     if (derivedMarketType === 'player-prop') {
+      const playerParticipant = eventBrowse?.participants.find((participant) => (
+        participant.participantType === 'player' &&
+        (participant.participantId === offer.participantId || participant.canonicalId === offer.participantId)
+      )) ?? null;
+      const playerTeam = playerParticipant?.teamId
+        ? matchupTeams.find((team) => matchupTeamKey(team) === playerParticipant.teamId)
+        : null;
       form.setValue('playerName', offer.participantName ?? '', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      form.setValue('team', playerTeam?.displayName ?? playerParticipant?.teamName ?? '', {
         shouldDirty: true,
         shouldTouch: true,
         shouldValidate: true,
@@ -1581,8 +1624,8 @@ export function BetForm() {
         shouldTouch: true,
         shouldValidate: true,
       });
-      setSelectedPlayerId(offer.participantId);
-      setSelectedTeamId(null);
+      setSelectedPlayerId(playerParticipant?.canonicalId ?? offer.participantId);
+      setSelectedTeamId(playerParticipant?.teamId ?? null);
       setSelectedOfferParticipantId(offer.participantId);
       return;
     }
@@ -1674,6 +1717,115 @@ export function BetForm() {
     });
   }
 
+  function applyStructuredSideSelection(
+    role: 'away' | 'home',
+    suggestion: ParticipantSuggestion,
+  ) {
+    const otherId = role === 'away' ? homeParticipantId : awayParticipantId;
+    if (suggestion.participantId === otherId) {
+      toast({
+        title: 'Choose a different participant',
+        description: 'The same canonical participant cannot occupy both event sides.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (role === 'away') setAwayParticipantId(suggestion.participantId);
+    else setHomeParticipantId(suggestion.participantId);
+
+    const awayName = role === 'away'
+      ? suggestion.displayName
+      : form.getValues('awayParticipantName') ?? '';
+    const homeName = role === 'home'
+      ? suggestion.displayName
+      : form.getValues('homeParticipantName') ?? '';
+    if (awayName && homeName) {
+      form.setValue('eventName', `${awayName} @ ${homeName}`, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }
+
+  function buildCanonicalIdentity(
+    participantId: string | null,
+    displayName: string | null | undefined,
+    participantType: CanonicalParticipantIdentity['participantType'],
+    teamId?: string | null,
+  ): CanonicalParticipantIdentity | null {
+    if (!participantId || !displayName?.trim()) return null;
+    return {
+      participantId,
+      displayName: displayName.trim(),
+      participantType,
+      teamId: teamId ?? null,
+    };
+  }
+
+  function buildParticipantResolution(values: BetFormValues): SmartFormParticipantResolution {
+    if (manualIdentityOverride) {
+      return {
+        resolution: 'manual',
+        sportId: values.sport,
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: values.eventName,
+        enteredParticipants: [
+          values.awayParticipantName
+            ? { role: 'away' as const, displayName: values.awayParticipantName, canonicalParticipantId: null }
+            : null,
+          values.homeParticipantName
+            ? { role: 'home' as const, displayName: values.homeParticipantName, canonicalParticipantId: null }
+            : null,
+          values.team ? { role: 'team' as const, displayName: values.team, canonicalParticipantId: null } : null,
+          values.playerName ? { role: 'player' as const, displayName: values.playerName, canonicalParticipantId: null } : null,
+        ].filter((value): value is NonNullable<typeof value> => value !== null),
+      };
+    }
+
+    const awayTeam = selectedMatchup?.teams.find((team) => team.role === 'away') ?? null;
+    const homeTeam = selectedMatchup?.teams.find((team) => team.role === 'home') ?? null;
+    const selectedTeamParticipant = eventBrowse?.participants.find((participant) =>
+      participant.participantType === 'team' &&
+      (participant.participantId === selectedTeamId || participant.canonicalId === selectedTeamId),
+    ) ?? null;
+    const selectedPlayerParticipant = eventBrowse?.participants.find((participant) =>
+      participant.participantType === 'player' &&
+      (participant.participantId === selectedPlayerId || participant.canonicalId === selectedPlayerId),
+    ) ?? null;
+
+    return {
+      resolution: 'canonical',
+      sportId: values.sport,
+      eventId: selectedMatchup?.eventId ?? null,
+      eventName: values.eventName,
+      away: buildCanonicalIdentity(
+        awayTeam ? matchupTeamKey(awayTeam) : awayParticipantId,
+        awayTeam?.displayName ?? values.awayParticipantName,
+        'team',
+      ),
+      home: buildCanonicalIdentity(
+        homeTeam ? matchupTeamKey(homeTeam) : homeParticipantId,
+        homeTeam?.displayName ?? values.homeParticipantName,
+        'team',
+      ),
+      team: buildCanonicalIdentity(
+        selectedTeamId,
+        selectedTeamParticipant?.displayName ?? values.team,
+        'team',
+      ),
+      player: buildCanonicalIdentity(
+        selectedPlayerId,
+        selectedPlayerParticipant?.displayName ?? values.playerName,
+        'player',
+        selectedPlayerParticipant?.teamId ?? selectedTeamId,
+      ),
+    };
+  }
+
   function buildPickKey(values: BetFormValues): string {
     return [
       selectedMatchupId ?? values.eventName,
@@ -1687,6 +1839,23 @@ export function BetForm() {
 
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
+      return;
+    }
+
+    if (!manualIdentityOverride && !selectedMatchup && (!awayParticipantId || !homeParticipantId)) {
+      toast({
+        title: 'Select canonical participants',
+        description: 'Choose both event sides from search results, or explicitly use manual participant override.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!manualIdentityOverride && awayParticipantId === homeParticipantId) {
+      toast({ title: 'Invalid matchup', description: 'Event sides must be different.', variant: 'destructive' });
+      return;
+    }
+    if (!manualIdentityOverride && selectedMarketType === 'player-prop' && !selectedPlayerId) {
+      toast({ title: 'Select a canonical player', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
       return;
     }
 
@@ -1726,6 +1895,8 @@ export function BetForm() {
             ? ['sportsbook']
             : [],
         selectedOffer: selectedOffer?.offer ?? null,
+        distributionMode: values.trackOnly ? 'track-only' : 'delivery-eligible',
+        participantResolution: buildParticipantResolution(values),
       });
       const result = await submitPick(payload);
       setSessionPickKeys((prev) => { const next = new Set(prev); next.add(buildPickKey(values)); return next; });
@@ -1791,9 +1962,9 @@ export function BetForm() {
 
   if (!catalog) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6" role="status" aria-live="polite">
         <div className="text-muted-foreground text-sm">Loading...</div>
-      </main>
+      </div>
     );
   }
 
@@ -3401,7 +3572,7 @@ export function BetForm() {
                       <FormItem>
                         <FormLabel>Sport</FormLabel>
                         <FormControl>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div data-testid="smart-form-sport-select" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                             {catalog.sports.map((sport: SportDefinition) => {
                               const isSelected = field.value === sport.id;
                               return (
@@ -3466,7 +3637,7 @@ export function BetForm() {
                 </div>
 
                 {!hasSelectedBrowseMatchup ? (
-                  <div className="space-y-3">
+                  <div data-testid="smart-form-market-select" className="space-y-3">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Market Family
                     </p>
@@ -3490,8 +3661,75 @@ export function BetForm() {
                 ) : null}
 
                 {!selectedMatchup && browseMode === 'manual' ? (
-                  <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-                    Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.
+                  <div className="space-y-4 rounded-xl border border-border bg-background/60 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {manualIdentityOverride ? 'Manual participant override' : 'Build canonical matchup'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {manualIdentityOverride
+                            ? 'Manual identities are explicitly tagged unresolved and never stored as canonical IDs.'
+                            : 'Select both participants from sport-filtered records. The matchup name is derived for you.'}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          const next = !manualIdentityOverride;
+                          setManualIdentityOverride(next);
+                          setAwayParticipantId(null);
+                          setHomeParticipantId(null);
+                          setSelectedTeamId(null);
+                          setSelectedPlayerId(null);
+                          setSelectedOfferParticipantId(null);
+                          setSelectedOffer(null);
+                          form.setValue('awayParticipantName', '');
+                          form.setValue('homeParticipantName', '');
+                          form.setValue('eventName', '');
+                          form.setValue('team', '');
+                          form.setValue('playerName', '');
+                          form.setValue('statType', '');
+                          form.resetField('direction');
+                          form.resetField('line');
+                          form.resetField('odds');
+                        }}
+                      >
+                        {manualIdentityOverride ? 'Use canonical search' : "Can't find participants? Add manually"}
+                      </Button>
+                    </div>
+
+                    {!manualIdentityOverride ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <ParticipantAutocompleteField
+                          form={form}
+                          name="awayParticipantName"
+                          label="Away participant"
+                          placeholder="Search canonical participant"
+                          searchType="team"
+                          sport={selectedSport ?? ''}
+                          onSuggestionSelected={(suggestion) => applyStructuredSideSelection('away', suggestion)}
+                          onManualChange={() => setAwayParticipantId(null)}
+                        />
+                        <ParticipantAutocompleteField
+                          form={form}
+                          name="homeParticipantName"
+                          label="Home participant"
+                          placeholder="Search canonical participant"
+                          searchType="team"
+                          sport={selectedSport ?? ''}
+                          onSuggestionSelected={(suggestion) => applyStructuredSideSelection('home', suggestion)}
+                          onManualChange={() => setHomeParticipantId(null)}
+                        />
+                        {watchedValues.eventName ? (
+                          <div className="sm:col-span-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Derived matchup</p>
+                            <p className="font-medium text-foreground">{watchedValues.eventName}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -3501,6 +3739,15 @@ export function BetForm() {
 
               <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-foreground">Book, Odds, and Submission</h2>
+                <div className="flex items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3">
+                  <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-amber-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Internal Tracking · Track Only</p>
+                    <p className="text-xs text-muted-foreground">
+                      This pick will be persisted for internal use. Member delivery is disabled and cannot be enabled from this form.
+                    </p>
+                  </div>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -3615,17 +3862,20 @@ export function BetForm() {
                     )}
                   />
 
-                  {capperClaims && (
+                  {effectiveCapper && (
                     <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Capper</p>
-                        <p className="text-sm font-medium text-foreground">{capperClaims.displayName}</p>
-                        <p className="text-xs text-muted-foreground">{capperClaims.capperId}</p>
+                        <p className="text-sm font-medium text-foreground">{effectiveCapper.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{effectiveCapper.capperId}</p>
                       </div>
                       <button
                         type="button"
                         className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                        onClick={() => { clearStoredToken(); window.location.href = '/login'; }}
+                        onClick={() => {
+                          clearStoredToken();
+                          window.location.href = '/api/auth/signout';
+                        }}
                       >
                         Sign out
                       </button>

@@ -11,7 +11,7 @@ const qaAuthBypassEnabled = isQaAuthBypassEnabled();
 
 export default function SubmitPage() {
   const router = useRouter();
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -25,18 +25,26 @@ export default function SubmitPage() {
       return;
     }
 
+    const claims = getStoredCapperClaims();
+    if (claims) {
+      setReady(true);
+      return;
+    }
+
     if (status === 'loading') {
       return;
     }
 
-    const claims = getStoredCapperClaims();
-    if (!claims) {
-      router.replace('/login');
-    } else {
-      setReady(true);
-    }
+    router.replace('/login');
   }, [router, status]);
 
   if (!ready) return null;
-  return <BetForm />;
+  return (
+    <BetForm
+      authenticatedCapper={session?.capperId ? {
+        capperId: session.capperId,
+        displayName: session.user?.name ?? session.capperId,
+      } : null}
+    />
+  );
 }

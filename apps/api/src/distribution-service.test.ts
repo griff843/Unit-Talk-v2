@@ -4,6 +4,7 @@ import type { CanonicalPick } from '@unit-talk/contracts';
 import { InMemoryOutboxRepository } from '@unit-talk/db';
 import {
   AwaitingApprovalBrakeError,
+  TrackOnlyDistributionError,
   DistributionTargetMismatchError,
   UnsupportedDeliveryTargetError,
   enqueueDistributionWork,
@@ -15,6 +16,7 @@ import {
   type DistributionSkippedResult,
 } from './distribution-service.js';
 import { retryDeliveryController } from './controllers/retry-delivery-controller.js';
+import { requeuePickController } from './controllers/requeue-controller.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 // ---------------------------------------------------------------------------
@@ -96,6 +98,24 @@ test('enqueueDistributionWork: refuses picks in awaiting_approval (defense-in-de
   // Outbox must remain empty — no enqueue should have been attempted
   const outboxRows = await outbox.listByPickId(pick.id);
   assert.equal(outboxRows.length, 0);
+});
+
+test('enqueueDistributionWork: track-only metadata blocks direct enqueue', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({ metadata: { distributionMode: 'track-only' } });
+  await assert.rejects(() => enqueueDistributionWork(pick, outbox, TARGET_CANARY), TrackOnlyDistributionError);
+  assert.equal((await outbox.listByPickId(pick.id)).length, 0);
+});
+
+test('requeuePickController: track-only pick cannot be requeued', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makePick({ id: 'pick-track-only-requeue', metadata: { distributionMode: 'track-only' } });
+  await repositories.picks.savePick(pick);
+  const result = await requeuePickController(pick.id, repositories);
+  assert.equal(result.status, 409);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'TRACK_ONLY_DELIVERY_BLOCKED');
+  assert.equal((await repositories.outbox.listByPickId(pick.id)).length, 0);
 });
 
 test('resolveDeliveryTarget rewrites governed discord targets to canary in local env', () => {
@@ -397,6 +417,25 @@ test('retryDeliveryController: succeeds for failed row with no active conflict',
   if (!result.body.ok) throw new Error('expected ok');
   assert.equal(result.body.data.previousStatus, 'dead_letter');
   assert.equal(result.body.data.newStatus, 'pending');
+});
+
+test('retryDeliveryController: track-only pick cannot revive a dead-letter delivery', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makePick({ id: 'pick-track-only-retry', metadata: { distributionMode: 'track-only' } });
+  await repositories.picks.savePick(pick);
+  const row = await repositories.outbox.enqueue({
+    pickId: pick.id,
+    target: TARGET_CANARY,
+    payload: {},
+    idempotencyKey: 'track-only-dead-letter',
+  });
+  await repositories.outbox.claimNext(TARGET_CANARY, 'worker');
+  await repositories.outbox.markDeadLetter(row.id, 'synthetic failure');
+
+  const result = await retryDeliveryController(pick.id, { reason: 'retry', actor: 'operator' }, repositories);
+  assert.equal(result.status, 409);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'TRACK_ONLY_DELIVERY_BLOCKED');
 });
 
 // ---------------------------------------------------------------------------

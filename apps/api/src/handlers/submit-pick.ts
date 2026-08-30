@@ -51,8 +51,9 @@ export async function handleSubmitPick(
  * Coerce raw request body into a typed SubmissionPayload.
  *
  * When the authenticated role is 'capper', the capperId from the JWT claim
- * takes precedence over whatever submittedBy the form sent — the form field
- * is ignored entirely. This is the trust boundary enforcement for UTV2-658.
+ * takes precedence over whatever submittedBy the form sent. Capper requests
+ * are also pinned to source=smart-form and distributionMode=track-only so a
+ * modified client cannot opt into member delivery.
  */
 function coerceSubmissionPayload(
   body: unknown,
@@ -63,12 +64,34 @@ function coerceSubmissionPayload(
   },
 ): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
-  const source = readString(payload.source) as SubmissionPayload['source'];
+  const requestedSource = readString(payload.source) as SubmissionPayload['source'];
+  const isAuthenticatedCapper = auth?.role === 'capper' && Boolean(auth.capperId);
+  if (isAuthenticatedCapper && requestedSource !== 'smart-form') {
+    throw new ApiError(
+      403,
+      'CAPPER_SOURCE_FORBIDDEN',
+      'Authenticated capper submissions must use the Smart Form source.',
+    );
+  }
+  const source = isAuthenticatedCapper ? 'smart-form' : requestedSource;
   const stakeUnits = resolveStakeUnits(payload, source);
   if (stakeUnits.value === undefined || stakeUnits.value <= 0) {
     throw new ApiError(400, 'INVALID_SUBMISSION', 'stakeUnits must be a positive number.');
   }
   const metadata = isRecord(payload.metadata) ? { ...payload.metadata } : {};
+
+  if (isAuthenticatedCapper) {
+    if (metadata['distributionMode'] !== undefined && metadata['distributionMode'] !== 'track-only') {
+      throw new ApiError(
+        403,
+        'CAPPER_TRACK_ONLY_REQUIRED',
+        'Authenticated capper submissions are restricted to Track Only internal tracking.',
+      );
+    }
+    // Server authority, not client intent, decides whether a capper pick can
+    // produce delivery work during the recovery phase.
+    metadata['distributionMode'] = 'track-only';
+  }
 
   if (stakeUnits.defaulted) {
     // Keep the default explicit for machine-generated request paths.
