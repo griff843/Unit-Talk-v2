@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1785-preproof-hook-selection",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1461",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/hooks/pre-proof-validator.sh",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/UTV2-1785/evidence.json",
     "docs/06_status/proof/UTV2-1785/model-routing.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-30T09:08:34.682Z",
-  "heartbeat_at": "2026-08-30T09:08:34.682Z",
+  "heartbeat_at": "2026-08-30T09:51:30.352Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1785-preproof-hook-selection.json",
