@@ -6,14 +6,14 @@
 | --- | --- | --- |
 | Command Center type-check | PASS | `pnpm --filter @unit-talk/command-center type-check`, exit 0 |
 | Command Center build | PASS | `pnpm --filter @unit-talk/command-center build`, exit 0; 56 dynamic routes including `/settlement` |
-| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 126 passed, 0 failed |
+| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 128 passed, 0 failed |
 | Static repository gate | PASS | `pnpm verify:static`, exit 0 |
 | Full repository gate | PARTIAL / EXPECTED REFUSAL | All static stages passed; writable DB leg refused the unidentified loopback target before constructing a client |
-| Desktop/mobile E2E | PASS | `pnpm exec playwright test e2e/utv2-1788-primary-workflows.spec.ts`; 2 passed, all six workflows at 1440x1000 and 390x844 |
+| Desktop/mobile E2E | PASS | `COMMAND_CENTER_AUTH_MODE=fail_open pnpm exec playwright test e2e/command-center.spec.ts`; 2 passed against the production build, all six workflows at 1440x1000 and 390x844 |
 | Screenshots | PASS | 12 PNGs under `screenshots/`, one desktop and one mobile capture for each primary workflow |
 | Standalone Docker attempt | BLOCKED BY HOST | Docker client 29.7.2 present; daemon socket unavailable, so no Dockerfile instruction executed |
 | Diff whitespace | PASS | `git diff --check`, exit 0 |
-| R-level compliance | PENDING EXACT COMMIT | Run after the implementation commit is frozen |
+| R-level compliance | PENDING EXACT COMMIT | `operator-ui` requires `qa-experience`; the repository artifact requirement is present and the exact-head checker runs after the proof commit |
 | Independent exact-head review | PENDING EXACT COMMIT | Run after the implementation commit is frozen |
 
 ### Static gate evidence
@@ -23,9 +23,9 @@
 ### Focused test evidence
 
 ```text
-1..126
-# tests 126
-# pass 126
+1..128
+# tests 128
+# pass 128
 # fail 0
 # cancelled 0
 # skipped 0
@@ -53,7 +53,9 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 ### E2E and screenshots
 
-The focused Playwright spec navigates via the rendered primary navigation, asserts the H1 and final URL for every primary workflow, and captures full-page screenshots.
+The focused Playwright spec navigates via the rendered primary navigation, asserts the H1 and final URL for every primary workflow, waits for the mobile drawer transition, and captures full-page screenshots. The final capture ran against `next start` after a successful production build, so framework development diagnostics are not present in the evidence.
+
+The wired `e2e/command-center.spec.ts` previously asserted the superseded Phase 1 dashboard contract (including health cards and a lifecycle table on `/`). It was replaced rather than retained as false coverage. The replacement exercises the current product boundary on desktop and mobile; focused component and state transformations remain covered by the 128 package tests.
 
 | Workflow | Desktop | Mobile |
 | --- | --- | --- |
