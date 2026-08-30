@@ -9,8 +9,8 @@
   "generated_at": "2026-08-30T11:30:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
-    "verified_source_note": "Exact substantive branch head: the merge commit that synchronized this lane with main (daad7b00 -> 149b60ee) and resolved the sole package.json test:ops conflict. It is the last commit carrying a non-proof change; every later commit touches proof artifacts only. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
+    "verified_source_sha": "f616d5cb88e414303ae3d43063421c85df450b4a",
+    "verified_source_note": "Final non-proof substantive branch head: the round-10 commit that scoped the participant fallback by sport and mirrored the asClosingLineLike and untrimmed-starts_at gates. It is the last commit on this branch authoring a change to any non-proof file. The one commit after it (87f93bf6) is the sanctioned synchronization with origin/main d847fbae; git diff --name-status f616d5cb 87f93bf6 reports exactly one path, docs/06_status/readiness/readiness-score.json, an upstream [skip ci] bot ledger refresh that this lane did not author, and scripts/ops/pick-truth-audit.ts, its test file and all three proof artifacts are byte-identical across the two commits. Every receipt in this bundle was captured on that tree. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,8 +18,18 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-30T11:30:00Z",
-    "previous_verified_source_sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5"
+    "bound_at": "2026-08-30T17:05:00Z",
+    "previous_verified_source_sha": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+    "verified_source_sha_history": [
+      {
+        "sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
+        "superseded_reason": "Original proof bundle anchor, before the lane synchronized with main."
+      },
+      {
+        "sha": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+        "superseded_reason": "Sync merge that resolved the package.json test:ops conflict. It was CORRECT when written and became STALE when rounds 8-10 landed substantive code after it. The note it carried -- \"every later commit touches proof artifacts only\" -- was false by a wide margin at the time the seventh adversarial review measured it: at 149b60ee the audit is 1105 lines with 4 tests, while the tree it described has 2120 lines and 52 tests. The entire P1-A/P1-B hardening was outside the bound SHA. Retracted here rather than silently overwritten."
+      }
+    ]
   },
   "verdict": {
     "can_currently_produce_trustworthy_pick": false,

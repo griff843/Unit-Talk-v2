@@ -1,6 +1,6 @@
 # PROOF: UTV2-1745
 
-MERGE_SHA: 149b60ee39eb662fe8c30757e7f1d8bbd7464814
+MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
 
 Retrospective, read-only audit of whether the production pick population can
 support a trustworthy-pick claim.
@@ -402,6 +402,19 @@ ok 52 - a whitespace-padded starts_at is passed through untrimmed, as production
 ```
 
 ### Mutation controls — each correction is load-bearing
+
+> **Harness note.** The mutation harness was rebuilt on 2026-08-30 after the
+> system reaped `/tmp`, destroying the battery scripts and their result files
+> mid-sequence. All 39 mutations were reconstructed from source and the harness
+> now lives at `.out/mutation/battery.py` (gitignored, inside the repo) so a
+> `/tmp` reap cannot break the evidence chain again. The reconstruction is
+> recorded because it is weaker evidence than a continuously-maintained battery:
+> its first run left ONE survivor, `read_only reverted to asserted literals`,
+> and the fault was the reconstruction's — it patched the untested CLI wiring
+> site instead of the `read_only` block in the report builder that the test
+> actually covers. Repointed at the covered site, it dies. The table below is
+> the corrected run.
+
 
 Every mutation below was applied to `scripts/ops/pick-truth-audit.ts` in
 isolation, the suite re-run, and the file restored byte-exact. A control that
@@ -857,6 +870,9 @@ $ pnpm test:ops
 # fail 0
 # skipped 0
 
+$ python3 .out/mutation/battery.py   # 39 semantic mutations
+baseline 52 pass, 0 fail surviving 0 restored 52 pass, 0 fail count 39
+
 $ pnpm verify:static
 ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
 ops:automation-coverage-check, env:check, lint, type-check, build,
@@ -878,12 +894,36 @@ is produced by CI's `staging-ci` environment inside the required `verify` job.
 
 ### Proof re-anchor
 
-`verified_source_sha` moves from `daad7b00` to `149b60ee` — the merge commit is
-now the last commit carrying a non-proof change. `sha_binding.merge_sha` is
-`null`, as the shared schema-v2 evidence contract requires before a merge exists
-(CEP-E7); the previous bundle carried a legacy top-level `merge_sha` holding a
-branch SHA, which is exactly the "synthetic merge authority" the contract
-forbids. No production count, finding, or verdict was altered.
+**Final binding: `verified_source_sha` = `f616d5cb`.** `sha_binding.merge_sha`
+is `null`, as the shared schema-v2 evidence contract requires before a merge
+exists (CEP-E7).
+
+The binding history is preserved in `sha_binding.verified_source_sha_history`:
+`daad7b00` (original bundle) → `149b60ee` (first main sync) → `f616d5cb`
+(final substantive head).
+
+**The `149b60ee` anchor became stale and its note was false.** It read "every
+later commit touches proof artifacts only." The seventh adversarial review
+measured that claim and it failed by a wide margin: at `149b60ee` the audit is
+**1,105 lines with 4 tests**, while the tree the bundle describes has **2,120
+lines and 52 tests**. The entire P1-A/P1-B hardening — rounds 8, 9 and 10 —
+landed *after* that anchor. A PM approving the bundle in that state would have
+been approving code no SHA on the branch contained. The claim is retracted here
+rather than quietly overwritten.
+
+`f616d5cb` is the last commit on this branch authoring a change to any non-proof
+file. The single commit after it, `87f93bf6`, is the sanctioned synchronization
+with `origin/main` `d847fbae`:
+
+```text
+$ git diff --name-status f616d5cb 87f93bf6
+M	docs/06_status/readiness/readiness-score.json
+```
+
+That is an upstream `[skip ci]` bot ledger refresh this lane did not author. The
+audit script, its test file, and all three proof artifacts are byte-identical
+across the two commits, so every receipt in this bundle describes the tree at the
+bound SHA. No production count, finding, or verdict was altered.
 
 ### Product truth is unchanged
 

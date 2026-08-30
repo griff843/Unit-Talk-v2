@@ -1,6 +1,6 @@
 # UTV2-1745 — diff summary
 
-MERGE_SHA: 149b60ee39eb662fe8c30757e7f1d8bbd7464814
+MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
 
 ## Files changed
 
@@ -275,7 +275,36 @@ Merge commit `149b60ee39eb662fe8c30757e7f1d8bbd7464814` merges
 
 The merge's combined diff contains that one file and nothing else: no content
 inherited from `main` was re-authored, and no other lane's proof bundle was
-touched. Proof artifacts were re-anchored to the merge commit
-(`verified_source_sha` `daad7b00` -> `149b60ee`) and `sha_binding.merge_sha`
-remains `null` pre-merge. Production counts from the 2026-08-26 read-only
+touched. Proof artifacts were re-anchored to that merge commit at the time
+(`verified_source_sha` `daad7b00` -> `149b60ee`). **That anchor is no longer the
+binding**: rounds 8-10 landed substantive code after it, so the final binding is
+`f616d5cb` — see "Final proof binding" below. `sha_binding.merge_sha` remains
+`null` pre-merge. Production counts from the 2026-08-26 read-only
 measurement are unchanged.
+
+## Final proof binding
+
+`sha_binding.verified_source_sha` = **`f616d5cb88e414303ae3d43063421c85df450b4a`**,
+the last commit on this branch authoring a change to any non-proof file. Binding
+history is preserved in `verified_source_sha_history`: `daad7b00` -> `149b60ee`
+-> `f616d5cb`.
+
+The earlier `149b60ee` anchor carried the note "every later commit touches proof
+artifacts only." That was false once rounds 8-10 landed: at `149b60ee` the audit
+is 1,105 lines with 4 tests, against the 2,120 lines and 52 tests this bundle
+describes. The seventh adversarial review caught it. It is retracted in
+`verified_source_sha_history` rather than silently replaced.
+
+The one commit after the binding, `87f93bf6`, is the final main synchronization
+(`origin/main` `d847fbae`). Its entire delta against the bound SHA is one
+upstream bot ledger file:
+
+```text
+$ git diff --name-status f616d5cb 87f93bf6
+M	docs/06_status/readiness/readiness-score.json
+```
+
+`scripts/ops/pick-truth-audit.ts`, `scripts/ops/pick-truth-audit.test.ts` and all
+three proof artifacts are byte-identical across `f616d5cb` and `87f93bf6`.
+`sha_binding.merge_sha` stays `null` pre-merge; `post-merge-lane-close.yml` binds
+it to the real merge commit.
