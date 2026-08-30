@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Command Center type-check | PASS | `pnpm --filter @unit-talk/command-center type-check`, exit 0 |
 | Command Center build | PASS | `pnpm --filter @unit-talk/command-center build`, exit 0; 56 dynamic routes including `/settlement` |
-| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 128 passed, 0 failed |
+| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 129 passed, 0 failed |
 | Static repository gate | PASS | `pnpm verify:static`, exit 0 |
 | Full repository gate | PARTIAL / EXPECTED REFUSAL | All static stages passed; writable DB leg refused the unidentified loopback target before constructing a client |
 | Desktop/mobile E2E | PASS | `COMMAND_CENTER_AUTH_MODE=fail_open pnpm exec playwright test e2e/command-center.spec.ts`; 2 passed against the production build, all six workflows at 1440x1000 and 390x844 |
@@ -23,9 +23,9 @@
 ### Focused test evidence
 
 ```text
-1..128
-# tests 128
-# pass 128
+1..129
+# tests 129
+# pass 129
 # fail 0
 # cancelled 0
 # skipped 0
@@ -37,6 +37,7 @@ New focused coverage is placed under `src/lib/`, which the existing package scri
 - `operator-truth-rendering.test.ts`: unavailable metrics never render as healthy zeroes.
 - `describe-error.test.ts`: operator-safe bounded degradation messages.
 - `fire-board-model.test.ts`: consolidated navigation targets.
+- `data/dashboard.test.ts`: governed review lifecycle state is preserved and unknown states stay unknown.
 
 ### Full gate and writable DB disposition
 
