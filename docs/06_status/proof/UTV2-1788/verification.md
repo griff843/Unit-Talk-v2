@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | Command Center type-check | PASS | `pnpm --filter @unit-talk/command-center type-check`, exit 0 |
 | Command Center build | PASS | `pnpm --filter @unit-talk/command-center build`, exit 0; 56 dynamic routes including `/settlement` |
-| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 131 passed, 0 failed |
+| Command Center unit tests | PASS | `pnpm --filter @unit-talk/command-center test`; 132 passed, 0 failed |
 | Static repository gate | PASS | `pnpm verify:static`, exit 0 |
 | Full repository gate | PARTIAL / EXPECTED REFUSAL | All static stages passed; writable DB leg refused the unidentified loopback target before constructing a client |
 | Desktop/mobile E2E | PASS | `COMMAND_CENTER_AUTH_MODE=fail_open pnpm exec playwright test e2e/command-center.spec.ts`; 2 passed against the production build, all six workflows at 1440x1000 and 390x844 |
@@ -23,9 +23,9 @@
 ### Focused test evidence
 
 ```text
-1..131
-# tests 131
-# pass 131
+1..132
+# tests 132
+# pass 132
 # fail 0
 # cancelled 0
 # skipped 0
@@ -37,7 +37,7 @@ New focused coverage is placed under `src/lib/`, which the existing package scri
 - `operator-truth-rendering.test.ts`: unavailable metrics never render as healthy zeroes.
 - `describe-error.test.ts`: operator-safe bounded degradation messages.
 - `fire-board-model.test.ts`: consolidated navigation targets.
-- `data/dashboard.test.ts`: governed review lifecycle state is preserved and unknown states stay unknown.
+- `data/dashboard.test.ts`: governed review lifecycle state is preserved, unknown states stay unknown, and the daily KPI uses complete UTC calendar windows.
 - `primary-metrics.test.ts`: Today's Picks uses the measured daily bucket and preserves a missing measurement as unknown.
 
 ### Full gate and writable DB disposition
@@ -57,7 +57,7 @@ Writable live-DB proof is blocked/deferred: target identity could not be resolve
 
 The focused Playwright spec navigates via the rendered primary navigation, asserts the H1 and final URL for every primary workflow, waits for the mobile drawer transition, and captures full-page screenshots. The final capture ran against `next start` after a successful production build, so framework development diagnostics are not present in the evidence.
 
-The wired `e2e/command-center.spec.ts` previously asserted the superseded Phase 1 dashboard contract (including health cards and a lifecycle table on `/`). It was replaced rather than retained as false coverage. The replacement exercises the current product boundary on desktop and mobile; focused component and state transformations remain covered by the 131 package tests.
+The wired `e2e/command-center.spec.ts` previously asserted the superseded Phase 1 dashboard contract (including health cards and a lifecycle table on `/`). It was replaced rather than retained as false coverage. The replacement exercises the current product boundary on desktop and mobile; focused component and state transformations remain covered by the 132 package tests.
 
 | Workflow | Desktop | Mobile |
 | --- | --- | --- |
@@ -87,7 +87,7 @@ Result: blocked before build-context processing because `/var/run/docker.sock` i
 - `/settlement` uses the existing `SettlementForm` and `actions/settle.ts` path to `POST /api/picks/{id}/settle`; no API authority is added.
 - Every Command Center mutation remains a server action that posts to the canonical API. No new direct write path exists.
 - Primary workflow fetch failures render degraded/unavailable states; fabricated catch payloads and inferred zero health are removed.
-- Overview's Today's Picks KPI uses the authoritative current-day measurement rather than the capped recent-picks window; Review and Active Picks require authoritative query counts.
+- Overview's Today's Picks KPI uses an exact current-day count from complete UTC day bounds rather than a capped row window; any unavailable daily count degrades the entire series. Review and Active Picks likewise require authoritative exact query counts.
 - Deferred routes are absent from primary navigation and receive an explicit classification banner when directly visited.
 - Request-time privileged reads are forced dynamic, preventing image build from presenting build-time data as runtime truth.
 - The Tier C auth/config files named in the authorization correction are byte-unchanged.

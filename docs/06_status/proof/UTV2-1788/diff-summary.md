@@ -16,7 +16,7 @@ Command Center remains **not production-deployed**. Deployment, production confi
 | Exceptions | `/exceptions` redirected to a separate Results Ops concept | Authoritative exception triage; `/fire-board` redirects to it |
 | Settlement history | `/operations/results` was a competing primary concept | Consolidated under `/settlement`; old route redirects |
 | Unavailable data | Several catch paths emitted invented counts, model economics, health, or zeroes | Primary routes render explicit degraded/unavailable states |
-| Primary counts | Today's Picks used a capped all-time recent-picks window; queue totals could fall back to visible row counts | Today's Picks uses the measured daily bucket, and primary queue totals require exact authoritative counts |
+| Primary counts | Today's Picks used a capped all-time recent-picks window; its trend query was separately capped at 10,000 rows; queue totals could fall back to visible row counts | Today's Picks and its seven-day series use exact UTC-day counts, and primary queue totals require exact authoritative counts |
 | Headers | `/events` and `/intelligence` rendered a second incompatible header | One application header |
 | Container recipe | App-only context omitted workspace packages, copied nonexistent `public/`, Node 20 | Repo-root context, workspace packages present, no nonexistent copy, Node 22 |
 
