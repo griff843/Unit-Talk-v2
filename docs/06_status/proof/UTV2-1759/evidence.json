@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1759",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Post-merge S1 scope evaluation rejects the lane's own required lifecycle metadata, making truthful closeout structurally impossible",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-28T13:22:10Z",
+  "sha_binding": {
+    "verified_source_sha": "c93bd8ffc77da340495c55f85c857beeeab68403",
+    "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-28T13:41:39.237Z"
+  },
+  "scope": {
+    "substantive_diff_stat": "3 files, 359 insertions(+), 7 deletions(-)",
+    "files": [
+      "scripts/ci/file-scope-guard.ts",
+      "scripts/ops/truth-check-lib.ts",
+      "scripts/ops/truth-check-lib.test.ts"
+    ],
+    "diff_stat_note": "Measured with git diff origin/main --numstat -- scripts/ at the anchor SHA. The whole-diff total is deliberately not quoted because it would count this proof bundle."
+  },
+  "premise_check": {
+    "claim": "The pre-merge file-scope guard already granted the lane's own lifecycle paths unconditionally, while post-merge S1 did not know about them.",
+    "method": "Read ownLaneControlPlanePatterns in scripts/ci/file-scope-guard.ts and evaluateScopeDiff in scripts/ops/truth-check-lib.ts at origin/main.",
+    "result": "Confirmed. The pre-merge guard returned ['.ops/sync/<id>.yml','docs/06_status/lanes/<id>.json','docs/06_status/proof/<id>/**'] since UTV2-1518. evaluateScopeDiff's allowed patterns were [...file_scope_lock, ...expected_proof_paths] only.",
+    "consequence": "The fix is a single shared definition rather than a second copy, which is why ownLaneControlPlanePatterns now delegates to the exported laneLifecycleScopePatterns.",
+    "verified": true
+  },
+  "requirements_coverage": {
+    "exact_lane_only": "laneLifecycleScopePatterns keys every pattern to a specific issue ID validated by ISSUE_ID_PATTERN (^UTV2-\\d+$). Regressions 1-3.",
+    "no_directory_exemptions": "No 'docs/06_status/lanes/**' and no '.ops/sync/**' is ever produced; asserted directly by the shared-definition test and by mutation Control B.",
+    "other_issue_metadata_fails": "Regressions 4 and 5.",
+    "arbitrary_files_fail": "Regressions 6 and 7.",
+    "fails_closed_on_bad_id": "Regression 8 covers undefined, null, empty, whitespace, 'UTV2-', 'utv2', 'UTV2-1759-extra', '**' and '../../etc'.",
+    "existing_proof_exemptions_unchanged": "Regression 9.",
+    "real_blocked_lane_unblocked": "Regression 10 asserts UTV2-1758's actual files_changed and file_scope_lock now pass, and that withholding the grant reproduces the historical failure detail byte-for-byte.",
+    "one_shared_policy": "Asserted by the shared-definition test; ownLaneControlPlanePatterns delegates rather than duplicating."
+  },
+  "mutation_testing": {
+    "method": "Both mutants were applied to scripts/ops/truth-check-lib.ts itself and the full suite re-run, then the source was restored. Both are ALSO encoded as executable tests (118, 119) that write a mutant module beside the original, import it, and assert the named regressions flip.",
+    "control_a_exemption_removed": {
+      "mutation": "deleted ', ...laneLifecycleScopePatterns(issueId)' from evaluateScopeDiff's allowed patterns",
+      "result": "6 failures",
+      "regressions_that_flipped": [
+        107,
+        108,
+        109,
+        116,
+        118,
+        119
+      ]
+    },
+    "control_b_broad_prefix": {
+      "mutation": "replaced '...laneLifecycleScopePatterns(issueId)' with 'docs/06_status/lanes/**', '.ops/sync/**'",
+      "result": "8 failures",
+      "regressions_that_flipped": [
+        110,
+        111,
+        112,
+        113,
+        114,
+        116,
+        118,
+        119
+      ],
+      "why_this_control_matters": "The broad-prefix mutant passes every happy-path test while silently admitting every other lane's lifecycle metadata. A happy-path-only suite cannot distinguish it from the real fix."
+    },
+    "source_restored": true
+  },
+  "static_proof": {
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane is T2, touches no DB surface, and changes no runtime behaviour.",
+    "stages": {
+      "env:check": "exit 0",
+      "lint": "exit 0",
+      "type-check": "exit 0",
+      "build": "exit 0"
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "suites": 97,
+      "fail": 0,
+      "exit_code": 0
+    },
+    "lane_suites": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
+        "exit_code": 0,
+        "tests": 119,
+        "pass": 119,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ci/file-scope-guard.test.ts",
+        "exit_code": 0,
+        "tests": 46,
+        "pass": 46,
+        "fail": 0,
+        "skipped": 0
+      }
+    ],
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 3,
+      "rules_matched": "none"
+    }
+  },
+  "safety_posture": {
+    "db_writes": "none",
+    "migrations": "none",
+    "runtime_behaviour_change": "none",
+    "production_surface": "untouched",
+    "other_lane_manifests_edited": "none",
+    "note": "Governance tooling only. This lane changes which files S1 accepts as a lane's own lifecycle metadata; it does not change lane execution, delivery, ingestion, grading, or any production path."
+  },
+  "known_gaps": [
+    "The grant is derived from the manifest's own issue_id, not re-derived from the manifest's filename. A manifest whose issue_id disagreed with its filename would grant against the field. That mismatch is already rejected upstream by ops:truth-check M3 and by manifest schema validation, so it is not reachable through the close path.",
+    "docs/06_status/proof/<issue>/** is included in the shared patterns and is redundant inside S1, which already exempts the whole docs/06_status/proof/ prefix unconditionally. It is kept so the pre-merge and post-merge callers share one list rather than two subsets. The pre-existing broader S1 proof exemption is deliberately unchanged.",
+    "ownLaneControlPlanePatterns (pre-merge) previously used manifest.issue_id verbatim and now goes through laneLifecycleScopePatterns, which uppercases and requires ^UTV2-\\d+$. Strictly safer -- a malformed ID now grants nothing -- but a real behaviour change on the pre-merge path. It is a no-op on every manifest that exists: the manifest schema already constrains issue_id to ^UTV2-[0-9]+$ and a sweep of all lane manifests found zero non-canonical IDs. All 46 pre-merge guard tests pass unchanged.",
+    "This lane changes S1 only. file_scope_lock freezing, scope-override/v1 resolution, and the audited narrowing path (ops:lane-manifest scope-release, UTV2-1762) are untouched. Widening still requires an external override.",
+    "UTV2-1760, UTV2-1761, UTV2-1763 and UTV2-1764 remain recorded and unstaffed. None was folded into this lane."
+  ],
+  "sign_off": {
+    "executor": "claude",
+    "self_certified_done": false,
+    "note": "This bundle is evidence, not certification. The done-gate is ops:truth-check."
+  }
+}

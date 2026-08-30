@@ -6,19 +6,24 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   assertExecutionPacketCwd,
+  assertSufficientTaskContract,
   assertTaskContract,
   buildSyncYmlWithTaskContract,
   buildTaskContract,
+  deriveSkillRouting,
   fetchLinearTaskSource,
   generateExecutionPacket as generateExecutionPacketRaw,
   generateExecutionPacketResult,
   generateDispatchExecutionPacketResult,
+  InsufficientTaskContractError,
   packetContractFieldSpecs,
   packetParseSectionsForTest as parseSectionsForTest,
   packetSectionLinesForTest as sectionLinesForTest,
   PREAMBLE_KEY,
   readTaskContract,
   renderTaskContract,
+  skillRoutingSpecsForTest,
+  taskContractFullText,
   TaskContractError,
   type TaskContract,
 } from './execution-packet.js';
@@ -75,6 +80,10 @@ function testTaskContract(issueId = 'UTV2-969') {
         '',
         '## Guardrails',
         '- Do not infer work from the branch name.',
+        '',
+        '## Where to look',
+        '- scripts/ops/execution-packet.ts',
+        '- scripts/ops/execution-packet.test.ts',
         '',
         '## Explicitly out of scope — follow-ups',
         '- Bulk migration of old sync records.',
@@ -755,7 +764,7 @@ test('the standalone packet CLI produces a packet for a newly admitted pre-contr
   const payload = JSON.stringify({ data: { issue: {
     identifier: issueId, title: 'CLI fixture',
     url: `https://linear.app/unit-talk/issue/${issueId}`,
-    description: `## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet`,
+    description: `## Objective\n${objective}\n\n## Acceptance criteria\n- the CLI emits a packet\n\n## Where to look\n- scripts/ops/fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- the CLI emits a packet`,
   } } });
   fs.writeFileSync(path.join(bin, 'curl'),
     `#!/bin/sh\ncat >/dev/null 2>&1\ncat <<'JSON'\n${payload}\nJSON\nexit 0\n`, { mode: 0o755 });
@@ -992,7 +1001,7 @@ test('F2: an empty configured LINEAR_API_TOKEN does not mask LINEAR_API_KEY', ()
             identifier: issueId,
             title: 'Fixture',
             url: 'https://linear.app/unit-talk/issue/x',
-            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured',
+            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured\n\n## Where to look\n- fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- fixture is captured',
           },
         },
       }),
@@ -1129,7 +1138,7 @@ test('F6: a whitespace-only LINEAR_API_TOKEN does not mask LINEAR_API_KEY', () =
             identifier: issueId,
             title: 'Fixture',
             url: 'https://linear.app/unit-talk/issue/x',
-            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured',
+            description: '## Objective\ncapture must proceed\n\n## Acceptance criteria\n- captured\n\n## Where to look\n- fixture.ts\n\n## Required evidence\n- tests pass\n\n## Exit criteria\n- fixture is captured',
           },
         },
       }),
@@ -2387,4 +2396,451 @@ test('G45/G46: readTaskContract refuses a wrong schema_version and an empty crit
     /is missing acceptance criteria/u,
     'an empty criteria list must be refused BY THE CRITERIA GUARD, not by a later hash check',
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1750: deterministic operational-skill routing + task-contract
+// sufficiency. One positive AND one negative fixture per skill, an
+// INSUFFICIENT_TASK_CONTRACT mutation battery (each sub-check proven to FAIL
+// on the condition it names, not merely present), and a real production-lane
+// fixture (UTV2-1736) proving nothing is lost or falsely routed.
+// ---------------------------------------------------------------------------
+
+/** A sufficient, otherwise-neutral contract: satisfies routing preconditions
+ * without itself matching any of the four skill triggers. */
+function skillFixtureContract(issueId: string, description: string): TaskContract {
+  return buildTaskContract(
+    {
+      identifier: issueId,
+      title: 'Fixture',
+      url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
+      description,
+    },
+    '2000-01-01T00:00:00.000Z',
+  );
+}
+
+const NEUTRAL_SUFFICIENT_TAIL = [
+  '',
+  '## Where to look',
+  '- scripts/ops/execution-packet.ts',
+  '',
+  '## Exit criteria',
+  '- the fixture is complete',
+  '',
+  '## Required evidence',
+  '- focused tests pass',
+].join('\n');
+
+test('skill routing table stays the single source (four skills, stable slugs)', () => {
+  const specs = skillRoutingSpecsForTest();
+  assert.deepEqual(
+    specs.map((s) => s.skill),
+    ['/lane-recovery', '/pr-unblock', '/proof-authoring', '/mutation-test'],
+    'skill routing must be driven from exactly this table -- a routing prose ' +
+      'copy elsewhere (e.g. dispatch.md) that drifts from it is a defect in ' +
+      'the copy, not in this table',
+  );
+});
+
+test('DoD 6: an ordinary narrow implementation selects no operational skill', () => {
+  // testTaskContract() is the default fixture used across this whole file --
+  // an unremarkable, narrow implementation task. It must not accidentally
+  // route to any of the four skills.
+  const routing = deriveSkillRouting(testTaskContract());
+  assert.deepEqual(routing.selected_skills, []);
+  assert.match(routing.note, /No operational skill trigger matched/u);
+});
+
+test('positive: a ghost/stuck lane description routes to /lane-recovery', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999830',
+    [
+      '## Objective',
+      'Repair UTV2-888 -- the PR merged but the lane manifest is still in_progress.',
+      '',
+      '## Acceptance criteria',
+      '- The ghost lane is reconciled to done.',
+      '',
+      '## Guardrails',
+      'This is a merged-but-unclosed lane; do not re-run implementation.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(
+    routing.selected_skills.includes('/lane-recovery'),
+    `expected /lane-recovery to be selected; got ${JSON.stringify(routing.selected_skills)}`,
+  );
+  assert.match(routing.reasons['/lane-recovery'] ?? '', /broken, ghosted, parked, or merged-but-unclosed/u);
+});
+
+test('negative: an ordinary bug fix does not route to /lane-recovery', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999831',
+    [
+      '## Objective',
+      'Fix an off-by-one error in the outbox retry counter.',
+      '',
+      '## Acceptance criteria',
+      '- The retry counter increments correctly.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(!routing.selected_skills.includes('/lane-recovery'));
+});
+
+test('positive: a merge-gate/head-binding mismatch routes to /pr-unblock', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999832',
+    [
+      '## Objective',
+      'The PR is BLOCKED: required-context Executor Result Validation is stuck pending on a stale head.',
+      '',
+      '## Acceptance criteria',
+      '- The PR is unblocked and mergeable.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(
+    routing.selected_skills.includes('/pr-unblock'),
+    `expected /pr-unblock to be selected; got ${JSON.stringify(routing.selected_skills)}`,
+  );
+});
+
+test('negative: an ordinary bug fix does not route to /pr-unblock', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999833',
+    [
+      '## Objective',
+      'Add a missing null check in the CLV resolver.',
+      '',
+      '## Acceptance criteria',
+      '- The resolver no longer throws on a null offer.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(!routing.selected_skills.includes('/pr-unblock'));
+});
+
+test('positive: proof bundle creation/correction routes to /proof-authoring', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999834',
+    [
+      '## Objective',
+      'Correct the proof bundle for UTV2-1743: verification.md is missing the MERGE_SHA token.',
+      '',
+      '## Acceptance criteria',
+      '- The proof bundle passes all three proof gates.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(
+    routing.selected_skills.includes('/proof-authoring'),
+    `expected /proof-authoring to be selected; got ${JSON.stringify(routing.selected_skills)}`,
+  );
+});
+
+test('negative: an ordinary bug fix does not route to /proof-authoring', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999835',
+    [
+      '## Objective',
+      'Rename an internal helper for clarity.',
+      '',
+      '## Acceptance criteria',
+      '- The rename compiles and all call sites are updated.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(!routing.selected_skills.includes('/proof-authoring'));
+});
+
+test('positive: a control claimed by tests routes to /mutation-test', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999836',
+    [
+      '## Objective',
+      'Prove the control in the substrate guard actually fails on the condition it names -- run a mutation test battery.',
+      '',
+      '## Acceptance criteria',
+      '- Every claimed guard has a mutation that kills it.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(
+    routing.selected_skills.includes('/mutation-test'),
+    `expected /mutation-test to be selected; got ${JSON.stringify(routing.selected_skills)}`,
+  );
+});
+
+test('negative: an ordinary bug fix does not route to /mutation-test', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999837',
+    [
+      '## Objective',
+      'Add a new field to the daily digest output.',
+      '',
+      '## Acceptance criteria',
+      '- The digest includes the new field.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(!routing.selected_skills.includes('/mutation-test'));
+});
+
+test('DoD 7: multiple skills are selected when triggers genuinely overlap', () => {
+  const contract = skillFixtureContract(
+    'UTV2-999838',
+    [
+      '## Objective',
+      'This ghost lane is merged-but-unclosed, and separately its PR is BLOCKED on a stale head-binding mismatch.',
+      '',
+      '## Acceptance criteria',
+      '- The lane is reconciled and the PR unblocked.',
+      NEUTRAL_SUFFICIENT_TAIL,
+    ].join('\n'),
+  );
+  const routing = deriveSkillRouting(contract);
+  assert.ok(routing.selected_skills.includes('/lane-recovery'));
+  assert.ok(routing.selected_skills.includes('/pr-unblock'));
+  assert.equal(routing.selected_skills.length, 2);
+});
+
+// --- INSUFFICIENT_TASK_CONTRACT: mutation battery ---------------------------
+//
+// Baseline first (per /mutation-test): a sufficient contract must pass. Each
+// mutation below removes exactly one of the three required signals and
+// asserts the refusal is the SPECIFIC missing key, not a generic failure --
+// proving the check fails on the condition it names, not merely that it can
+// fail.
+
+const SUFFICIENT_DESCRIPTION = [
+  '## Objective',
+  'Implement the thing.',
+  '',
+  '## Acceptance criteria',
+  '- The thing works.',
+  '',
+  '## Where to look',
+  '- scripts/ops/fixture.ts',
+  '',
+  '## Exit criteria',
+  '- The thing is merged.',
+  '',
+  '## Required evidence',
+  '- Focused tests pass.',
+].join('\n');
+
+test('mutation baseline: a fully sufficient contract passes', () => {
+  const contract = skillFixtureContract('UTV2-999840', SUFFICIENT_DESCRIPTION);
+  assert.doesNotThrow(() => assertSufficientTaskContract(contract));
+});
+
+test('mutation 1: removing "Where to look" content fails closed on where_to_look only', () => {
+  const description = [
+    '## Objective', 'Implement the thing.', '',
+    '## Acceptance criteria', '- The thing works.', '',
+    '## Exit criteria', '- The thing is merged.', '',
+    '## Required evidence', '- Focused tests pass.',
+  ].join('\n');
+  const contract = skillFixtureContract('UTV2-999841', description);
+  let caught: unknown;
+  try {
+    assertSufficientTaskContract(contract);
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof InsufficientTaskContractError, 'must throw InsufficientTaskContractError');
+  assert.deepEqual((caught as InstanceType<typeof InsufficientTaskContractError>).missing, ['where_to_look']);
+});
+
+test('mutation 2: removing definition-of-done content fails closed on definition_of_done only', () => {
+  const description = [
+    '## Objective', 'Implement the thing.', '',
+    '## Acceptance criteria', '- The thing works.', '',
+    '## Where to look', '- scripts/ops/fixture.ts', '',
+    '## Required evidence', '- Focused tests pass.',
+  ].join('\n');
+  const contract = skillFixtureContract('UTV2-999842', description);
+  let caught: unknown;
+  try {
+    assertSufficientTaskContract(contract);
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof InsufficientTaskContractError, 'must throw InsufficientTaskContractError');
+  assert.deepEqual((caught as InstanceType<typeof InsufficientTaskContractError>).missing, ['definition_of_done']);
+});
+
+test('mutation 3: removing verification/self-check content fails closed on verification_self_check only', () => {
+  const description = [
+    '## Objective', 'Implement the thing.', '',
+    '## Acceptance criteria', '- The thing works.', '',
+    '## Where to look', '- scripts/ops/fixture.ts', '',
+    '## Exit criteria', '- The thing is merged.',
+  ].join('\n');
+  const contract = skillFixtureContract('UTV2-999843', description);
+  let caught: unknown;
+  try {
+    assertSufficientTaskContract(contract);
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof InsufficientTaskContractError, 'must throw InsufficientTaskContractError');
+  assert.deepEqual((caught as InstanceType<typeof InsufficientTaskContractError>).missing, ['verification_self_check']);
+});
+
+test('mutation 4: removing all three fails closed on all three, named together', () => {
+  const description = [
+    '## Objective', 'Implement the thing.', '',
+    '## Acceptance criteria', '- The thing works.',
+  ].join('\n');
+  const contract = skillFixtureContract('UTV2-999844', description);
+  let caught: unknown;
+  try {
+    assertSufficientTaskContract(contract);
+  } catch (error) {
+    caught = error;
+  }
+  assert.ok(caught instanceof InsufficientTaskContractError, 'must throw InsufficientTaskContractError');
+  assert.deepEqual((caught as InstanceType<typeof InsufficientTaskContractError>).missing, [
+    'where_to_look',
+    'definition_of_done',
+    'verification_self_check',
+  ]);
+});
+
+test('INSUFFICIENT_TASK_CONTRACT propagates through generateExecutionPacketResult with the missing list', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-insufficient-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const issueId = 'UTV2-999845';
+  const contract = skillFixtureContract(
+    issueId,
+    ['## Objective', 'Implement the thing.', '', '## Acceptance criteria', '- The thing works.'].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(syncDir, `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, contract, undefined),
+    'utf8',
+  );
+  const manifest = createTestManifest({ issue_id: issueId });
+  const result = generateExecutionPacketResult(manifest, {}, undefined, root, {
+    enforceSufficiency: true,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.code, 'INSUFFICIENT_TASK_CONTRACT');
+    assert.deepEqual(result.missing, [
+      'where_to_look',
+      'definition_of_done',
+      'verification_self_check',
+    ]);
+  }
+});
+
+test('sufficiency is opt-in: without enforceSufficiency the same insufficient contract still produces a packet', () => {
+  // claude-exec.ts, codex-exec.ts, and lane-start.ts call these functions
+  // directly against contracts predating this requirement and are out of this
+  // lane's file scope -- enforcement defaults OFF so they are not broken by a
+  // stricter default. Only the standalone CLI's main() turns it on, as the
+  // preflight gate /dispatch's Phase 1.5 runs before any executor launches.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-insufficient-optin-'));
+  const syncDir = path.join(root, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  const issueId = 'UTV2-999846';
+  const contract = skillFixtureContract(
+    issueId,
+    ['## Objective', 'Implement the thing.', '', '## Acceptance criteria', '- The thing works.'].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(syncDir, `${issueId}.yml`),
+    buildSyncYmlWithTaskContract(issueId, contract, undefined),
+    'utf8',
+  );
+  const manifest = createTestManifest({ issue_id: issueId });
+  const result = generateExecutionPacketResult(manifest, {}, undefined, root);
+  assert.equal(result.ok, true, `packet must still succeed with default options; got ${JSON.stringify(result)}`);
+});
+
+// --- UTV2-1736: a real, currently-active production migration lane ---------
+//
+// UTV2-1736 is a live Tier C migration lane (supabase/migrations/
+// 20260824000000_x.sql) tracked elsewhere in this repo's merge-risk tests.
+// This is a read-only fixture modeled on that lane's shape -- objective,
+// constraints, an explicit mutation boundary, and proof requirements -- to
+// prove the new sufficiency/routing logic does not truncate, corrupt, or
+// falsely reroute a real production-tier work order. This lane's own branch,
+// worktree, and manifest are never touched by this test.
+
+const UTV2_1736_DESCRIPTION = [
+  '## Objective',
+  'Apply the pending schema migration 20260824000000_x.sql to add the settlement audit column.',
+  '',
+  '## Acceptance criteria',
+  '- The migration applies cleanly against a staging clone.',
+  '- No existing row is mutated by the migration itself.',
+  '',
+  '## Constraints',
+  '- This is a Tier C migration lane and remains singleton for the duration of execution.',
+  '- No other Tier C lane may execute concurrently against the same migration file.',
+  '',
+  '## Mutation boundary',
+  'No production DDL beyond the single declared migration file. No backfill, no data mutation,',
+  'no ingestion restart, no delivery activation. Any scope beyond the declared file requires a',
+  'new lane, not an expansion of this one.',
+  '',
+  '## Where to look',
+  '- supabase/migrations/20260824000000_x.sql',
+  '- packages/db/src/database.types.ts',
+  '',
+  '## Exit criteria',
+  '- Migration is applied and pnpm supabase:types is regenerated.',
+  '',
+  '## Required evidence',
+  '- pnpm test:db pass',
+  '- Migration dry-run diff attached to the proof bundle',
+].join('\n');
+
+test('UTV2-1736 fixture: objective, constraints, mutation boundary, and proof requirements all survive', () => {
+  const contract = skillFixtureContract('UTV2-1736', UTV2_1736_DESCRIPTION);
+  assert.doesNotThrow(() => assertSufficientTaskContract(contract));
+
+  const fullText = taskContractFullText(contract);
+  for (const mustSurvive of [
+    'Apply the pending schema migration 20260824000000_x.sql',
+    'remains singleton for the duration of execution',
+    'No production DDL beyond the single declared migration file',
+    'no ingestion restart, no delivery activation',
+    'pnpm test:db pass',
+    'Migration dry-run diff attached to the proof bundle',
+  ]) {
+    assert.ok(
+      fullText.includes(mustSurvive),
+      `production lane content must survive verbatim: ${JSON.stringify(mustSurvive)}`,
+    );
+  }
+
+  const rendered = renderTaskContract(contract);
+  assert.match(rendered, /No production DDL beyond the single declared migration file/u,
+    'the mutation boundary must reach the rendered prompt, not only the structured contract');
+});
+
+test('UTV2-1736 fixture does not falsely trigger any of the four operational skills', () => {
+  const contract = skillFixtureContract('UTV2-1736', UTV2_1736_DESCRIPTION);
+  const routing = deriveSkillRouting(contract);
+  assert.deepEqual(
+    routing.selected_skills,
+    [],
+    `a routine (if high-stakes) migration lane must not falsely route; got ${JSON.stringify(routing.selected_skills)}`,
+  );
+  assert.match(routing.note, /No operational skill trigger matched/u);
 });

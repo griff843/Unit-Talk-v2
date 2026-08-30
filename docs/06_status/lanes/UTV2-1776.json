@@ -1,0 +1,59 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1776",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1776-attestation-merge-slot",
+  "branch": "codex/utv2-1776-attestation-merge-slot",
+  "base_branch": "main",
+  "commit_sha": "e8b74b3468aac5497994b0408753d81ce1ee7935",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1459",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1776.yml",
+    "docs/06_status/proof/UTV2-1776/diff-summary.md",
+    "docs/06_status/proof/UTV2-1776/evidence.json",
+    "docs/06_status/proof/UTV2-1776/model-routing.json",
+    "docs/06_status/proof/UTV2-1776/verification.md",
+    "scripts/ops/proof-schema.test.ts",
+    "scripts/ops/proof-schema.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1776/evidence.json",
+    "docs/06_status/proof/UTV2-1776/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-29T22:40:43.150Z",
+  "heartbeat_at": "2026-08-29T23:55:35.970Z",
+  "closed_at": "2026-08-29T23:55:35.970Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-29T23:55:34.320Z",
+      "verdict": "pass",
+      "merge_sha": "e8b74b3468aac5497994b0408753d81ce1ee7935",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1776-attestation-merge-slot",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

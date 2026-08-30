@@ -1,0 +1,348 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1744
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1744/evidence.json
+    - docs/06_status/proof/UTV2-1744/model-routing.json
+    - docs/06_status/proof/UTV2-1744/verification.md
+    - docs/06_status/proof/UTV2-1744/diff-summary.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1744
+  objective: >-
+    Make the delivery queue safe to drain. Today nobody can say which of the
+    1,954 dead letters are replayable, which are poison, or why 32 claims are
+    stuck — so no canary delivery can proceed without risking a mass replay of
+    stale content.
+
+    **Deliverable is a read-only classifier and report. This lane performs no
+    writes.**
+  acceptance_criteria:
+    - >-
+      ## Objective
+
+
+      Make the delivery queue safe to drain. Today nobody can say which of the
+      1,954 dead letters are replayable, which are poison, or why 32 claims are
+      stuck — so no canary delivery can proceed without risking a mass replay of
+      stale content.
+
+
+      **Deliverable is a read-only classifier and report. This lane performs no
+      writes.**
+
+
+      ## Why this is on the production critical path
+
+
+      An end-to-end internal canary requires the worker to process exactly one
+      bounded item and produce exactly one `DeliveryOutcome`. That cannot be
+      attempted while the queue holds unexplained stuck claims and a two-month
+      dead-letter backlog. This is a hard prerequisite for the canary milestone.
+
+
+      ## Live evidence (read-only, production `zfzdnfwdarxucxtaojxm`)
+
+
+      ```text
+
+      distribution_outbox:  sent 3758 | dead_letter 1954 | processing 32 |
+      pending 3
+
+      dead_letter window:   2026-05-28 23:45 -> 2026-07-30 20:03
+
+      stuck processing:     32 rows, all 2026-07-30 17:55 -> 20:04
+
+      pending/processing targets: discord:canary, utv2-1497-canary-2d4eb56e,
+                                  utv2-1497-canary-3a2ca3ff, utv2-1497-canary-adb6af4f,
+                                  utv2-1497-canary-c0aae7fd
+      ```
+
+
+      Every queued row targets **canary**. Zero member-facing targets. Confirm
+      that independently — it is the single most important safety fact here, and
+      if it is ever false the canary plan changes.
+
+
+      ## Allowed scope
+
+
+      * `scripts/ops/outbox-triage.ts` and its test
+
+      * Its own `.ops/sync` and proof paths
+
+
+      ## Prohibited scope
+
+
+      * **No writes of any kind** — no UPDATE, DELETE, INSERT, no status
+      transitions, no requeue, no purge
+
+      * No `apps/worker/**` (Tier C, and owned by the canary milestone)
+
+      * No `packages/db/src/repositories.ts` or `runtime-repositories.ts` (Tier
+      C)
+
+      * No `.github/workflows/**` (Tier C — would collide with the active
+      migration lane)
+
+      * No SGO, ingestion, delivery, unpark, or production mutation
+
+
+      ## Acceptance tests
+
+
+      1. Classifies all 1,954 dead letters into named failure classes with
+      counts, using real column values — not guesses.
+
+      2. Explains the 32 stuck `processing` claims: how long held, what claimed
+      them, whether a lease/claim timeout exists, and whether they are
+      recoverable or orphaned.
+
+      3. Emits a per-class **replay-safety verdict**: `safe_to_replay`,
+      `poison_discard`, `needs_decision` — with the evidence behind each.
+
+      4. Independently verifies the target claim above and **fails loudly** if
+      any non-canary target is found in `pending`/`processing`.
+
+      5. Runs read-only. Prove it: the test asserts no write method is reachable
+      from the code path.
+
+
+      ## Required proof
+
+
+      `app-runtime` profile with real `runtime_proof.queries` and `row_counts`
+      from production reads. Include the classification table. `pnpm
+      verify:static` exit 0.
+
+
+      ## Stop conditions
+
+
+      Stop and return if: any non-canary target appears in the live queue; the
+      data implies a member was ever delivered stale content; or classification
+      would require a write to determine.
+
+
+      ## Production mutation boundary
+
+
+      **This lane makes no production mutation.** It produces the evidence a
+      later, separately-authorized lane would need. Do not implement the
+      remediation.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why this is on the production critical path
+
+      An end-to-end internal canary requires the worker to process exactly one
+      bounded item and produce exactly one `DeliveryOutcome`. That cannot be
+      attempted while the queue holds unexplained stuck claims and a two-month
+      dead-letter backlog. This is a hard prerequisite for the canary milestone.
+    - >-
+      Live evidence (read-only, production `zfzdnfwdarxucxtaojxm`)
+
+      ```text
+
+      distribution_outbox:  sent 3758 | dead_letter 1954 | processing 32 |
+      pending 3
+
+      dead_letter window:   2026-05-28 23:45 -> 2026-07-30 20:03
+
+      stuck processing:     32 rows, all 2026-07-30 17:55 -> 20:04
+
+      pending/processing targets: discord:canary, utv2-1497-canary-2d4eb56e,
+                                  utv2-1497-canary-3a2ca3ff, utv2-1497-canary-adb6af4f,
+                                  utv2-1497-canary-c0aae7fd
+      ```
+
+
+      Every queued row targets **canary**. Zero member-facing targets. Confirm
+      that independently — it is the single most important safety fact here, and
+      if it is ever false the canary plan changes.
+    - |-
+      Allowed scope
+      * `scripts/ops/outbox-triage.ts` and its test
+      * Its own `.ops/sync` and proof paths
+    - >-
+      Prohibited scope
+
+      * **No writes of any kind** — no UPDATE, DELETE, INSERT, no status
+      transitions, no requeue, no purge
+
+      * No `apps/worker/**` (Tier C, and owned by the canary milestone)
+
+      * No `packages/db/src/repositories.ts` or `runtime-repositories.ts` (Tier
+      C)
+
+      * No `.github/workflows/**` (Tier C — would collide with the active
+      migration lane)
+
+      * No SGO, ingestion, delivery, unpark, or production mutation
+    - >-
+      Acceptance tests
+
+      1. Classifies all 1,954 dead letters into named failure classes with
+      counts, using real column values — not guesses.
+
+      2. Explains the 32 stuck `processing` claims: how long held, what claimed
+      them, whether a lease/claim timeout exists, and whether they are
+      recoverable or orphaned.
+
+      3. Emits a per-class **replay-safety verdict**: `safe_to_replay`,
+      `poison_discard`, `needs_decision` — with the evidence behind each.
+
+      4. Independently verifies the target claim above and **fails loudly** if
+      any non-canary target is found in `pending`/`processing`.
+
+      5. Runs read-only. Prove it: the test asserts no write method is reachable
+      from the code path.
+    - >-
+      Required proof
+
+      `app-runtime` profile with real `runtime_proof.queries` and `row_counts`
+      from production reads. Include the classification table. `pnpm
+      verify:static` exit 0.
+    - >-
+      Stop conditions
+
+      Stop and return if: any non-canary target appears in the live queue; the
+      data implies a member was ever delivered stale content; or classification
+      would require a write to determine.
+    - >-
+      Production mutation boundary
+
+      **This lane makes no production mutation.** It produces the evidence a
+      later, separately-authorized lane would need. Do not implement the
+      remediation.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1744/outbox-dead-letter-and-stuck-claim-triage-make-the-delivery-queue-safe
+    title: "Outbox dead-letter and stuck-claim triage: make the delivery queue safe
+      to drain"
+    description: >-
+      ## Objective
+
+
+      Make the delivery queue safe to drain. Today nobody can say which of the
+      1,954 dead letters are replayable, which are poison, or why 32 claims are
+      stuck — so no canary delivery can proceed without risking a mass replay of
+      stale content.
+
+
+      **Deliverable is a read-only classifier and report. This lane performs no
+      writes.**
+
+
+      ## Why this is on the production critical path
+
+
+      An end-to-end internal canary requires the worker to process exactly one
+      bounded item and produce exactly one `DeliveryOutcome`. That cannot be
+      attempted while the queue holds unexplained stuck claims and a two-month
+      dead-letter backlog. This is a hard prerequisite for the canary milestone.
+
+
+      ## Live evidence (read-only, production `zfzdnfwdarxucxtaojxm`)
+
+
+      ```text
+
+      distribution_outbox:  sent 3758 | dead_letter 1954 | processing 32 |
+      pending 3
+
+      dead_letter window:   2026-05-28 23:45 -> 2026-07-30 20:03
+
+      stuck processing:     32 rows, all 2026-07-30 17:55 -> 20:04
+
+      pending/processing targets: discord:canary, utv2-1497-canary-2d4eb56e,
+                                  utv2-1497-canary-3a2ca3ff, utv2-1497-canary-adb6af4f,
+                                  utv2-1497-canary-c0aae7fd
+      ```
+
+
+      Every queued row targets **canary**. Zero member-facing targets. Confirm
+      that independently — it is the single most important safety fact here, and
+      if it is ever false the canary plan changes.
+
+
+      ## Allowed scope
+
+
+      * `scripts/ops/outbox-triage.ts` and its test
+
+      * Its own `.ops/sync` and proof paths
+
+
+      ## Prohibited scope
+
+
+      * **No writes of any kind** — no UPDATE, DELETE, INSERT, no status
+      transitions, no requeue, no purge
+
+      * No `apps/worker/**` (Tier C, and owned by the canary milestone)
+
+      * No `packages/db/src/repositories.ts` or `runtime-repositories.ts` (Tier
+      C)
+
+      * No `.github/workflows/**` (Tier C — would collide with the active
+      migration lane)
+
+      * No SGO, ingestion, delivery, unpark, or production mutation
+
+
+      ## Acceptance tests
+
+
+      1. Classifies all 1,954 dead letters into named failure classes with
+      counts, using real column values — not guesses.
+
+      2. Explains the 32 stuck `processing` claims: how long held, what claimed
+      them, whether a lease/claim timeout exists, and whether they are
+      recoverable or orphaned.
+
+      3. Emits a per-class **replay-safety verdict**: `safe_to_replay`,
+      `poison_discard`, `needs_decision` — with the evidence behind each.
+
+      4. Independently verifies the target claim above and **fails loudly** if
+      any non-canary target is found in `pending`/`processing`.
+
+      5. Runs read-only. Prove it: the test asserts no write method is reachable
+      from the code path.
+
+
+      ## Required proof
+
+
+      `app-runtime` profile with real `runtime_proof.queries` and `row_counts`
+      from production reads. Include the classification table. `pnpm
+      verify:static` exit 0.
+
+
+      ## Stop conditions
+
+
+      Stop and return if: any non-canary target appears in the live queue; the
+      data implies a member was ever delivered stale content; or classification
+      would require a write to determine.
+
+
+      ## Production mutation boundary
+
+
+      **This lane makes no production mutation.** It produces the evidence a
+      later, separately-authorized lane would need. Do not implement the
+      remediation.
+    captured_at: 2026-08-26T20:08:57.725Z
+    description_sha256: 20de567f49ae9bd643bb1b6bb358349c0b023203d0672a683392553c6e6568fc
+  contract_hash: 55a60d4dcffa1bab30eb8195e7de3d0d774ac179628f16a2600cb7a8f9d73843

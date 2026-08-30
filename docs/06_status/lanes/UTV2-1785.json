@@ -1,0 +1,74 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1785",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1785-preproof-hook-selection",
+  "branch": "codex/utv2-1785-preproof-hook-selection",
+  "base_branch": "main",
+  "commit_sha": "9a1038a73be1bd439dcc6cdea9f2ce318dd6766e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1461",
+  "files_changed": [
+    ".claude/hooks/pre-proof-validator.sh",
+    "docs/06_status/proof/UTV2-1785/diff-summary.md",
+    "docs/06_status/proof/UTV2-1785/evidence.json",
+    "docs/06_status/proof/UTV2-1785/model-routing.json",
+    "docs/06_status/proof/UTV2-1785/verification.md",
+    "scripts/ops/proof-check.test.ts"
+  ],
+  "file_scope_lock": [
+    ".claude/hooks/pre-proof-validator.sh",
+    ".ops/sync/UTV2-1785.yml",
+    "docs/06_status/lanes/UTV2-1785.json",
+    "docs/06_status/proof/UTV2-1785/diff-summary.md",
+    "docs/06_status/proof/UTV2-1785/evidence.json",
+    "docs/06_status/proof/UTV2-1785/model-routing.json",
+    "docs/06_status/proof/UTV2-1785/verification.md",
+    "scripts/ops/proof-check.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1785/evidence.json",
+    "docs/06_status/proof/UTV2-1785/model-routing.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-30T09:08:34.682Z",
+  "heartbeat_at": "2026-08-30T11:04:51.095Z",
+  "closed_at": "2026-08-30T11:04:51.095Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-30T11:00:20.558Z",
+      "verdict": "fail",
+      "merge_sha": "9a1038a73be1bd439dcc6cdea9f2ce318dd6766e",
+      "failures": [
+        "ghost lane: PR https://github.com/griff843/Unit-Talk-v2/pull/1461 merged while manifest status was \"in_review\"; merge binding reconciled from GitHub and locks released. NOT closed — closing still requires a passing ops:truth-check."
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-30T11:04:49.246Z",
+      "verdict": "pass",
+      "merge_sha": "9a1038a73be1bd439dcc6cdea9f2ce318dd6766e",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1785-preproof-hook-selection",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

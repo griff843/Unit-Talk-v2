@@ -1,0 +1,349 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1756
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1756
+  objective: Scheduled reconciler overwrites root lane manifests with parked-copy
+    content, reverting merged governance decisions every 6 hours
+  acceptance_criteria:
+    - |-
+      ## Staffing constraint
+
+      Unstarted record. Do not staff without PM direction. Do not combine with [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry), [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked), [UTV2-1753](https://linear.app/unit-talk-v2/issue/UTV2-1753/merge-wrapper-git-merge-main-is-unrunnable-ff-only-cannot-merge-a), or [UTV2-1755](https://linear.app/unit-talk-v2/issue/UTV2-1755/proof-binding-validator-reads-the-pr-merge-ref-so-any-lane-that-falls).
+
+      Discovered 2026-08-27 while running [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop-condition checks. It blocks [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) from reaching its approved Definition of Done — see "Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)" below.
+
+      ## Symptom (observed, not hypothetical)
+
+      PR #1448 (`3399b271`, merged) ratified `docs/06_status/lanes/UTV2-1512.json` to the terminal status `superseded`.
+
+      Roughly 20 hours later, commit `a67a6a59` — `chore(lanes): auto-reconcile stale manifests`, authored by `github-actions[bot]`, pushed directly to protected `main` at 2026-08-27T05:16:34Z — reverted it:
+
+      ```diff
+      -  "status": "superseded",
+      +  "status": "blocked",
+      -  "heartbeat_at": "2026-08-26T19:13:36.615Z",
+      +  "heartbeat_at": "2026-07-09T05:15:00.000Z",
+      ```
+
+      The same commit deleted 58 lines of accumulated `truth_check_history` and rolled `heartbeat_at` **backwards** by seven weeks. Net: `1 file changed, 4 insertions(+), 58 deletions(-)`.
+
+      No human action, no PR, no review. A merged governance decision was silently undone by a scheduled job.
+
+      ## Root cause — path aliasing between read and write
+
+      Two files carry `issue_id: "UTV2-1512"`:
+
+      * `docs/06_status/lanes/UTV2-1512.json` (root) — was `superseded`
+      * `docs/06_status/lanes/parked/UTV2-1512.json` (parked) — is `blocked`
+
+      The three pieces that combine:
+
+      1. `readAllManifestPaths` (`scripts/ops/shared.ts:872`) recurses into subdirectories and returns root and parked copies **as peers, with no precedence**.
+      2. `selectReconcilableManifests` (`scripts/ops/reconcile.ts:83`) correctly filters to `ACTIVE_LOCK_STATUSES`. `superseded` is excluded, so root was never eligible — but the **parked** copy is `blocked`, which IS active, so the parked copy became the reconcile candidate.
+      3. `writeManifest` (`scripts/ops/shared.ts:1690`) resolves its destination through `issueToManifestPath` (`scripts/ops/shared.ts:487`):
+
+      ```ts
+      export function issueToManifestPath(issueId: string): string {
+        return path.join(MANIFEST_DIR, `${issueId.toUpperCase()}.json`);
+      }
+      ```
+
+      That function is a pure function of the issue ID. It has **no knowledge of the path the manifest was read from**, and always returns the root path.
+
+      So the reconciler reads the parked copy, builds `{...manifest, status: 'blocked', truth_check_history: [...]}` from *its* content, and writes that whole object to the **root** file. The parked file is never written — it stays `blocked` forever, remains a candidate on every run, and the clobber repeats.
+
+      `.github/workflows/reconcile-stale-lanes.yml` runs `cron: '0 */6 * * *'` with `SYNC_BOT_TOKEN`, which can push to protected `main`. So this recurs four times a day, indefinitely, for any issue that has both a root and a parked manifest.
+
+      Note the irony: [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) hardened `selectReconcilableManifests` from a denylist to a fail-closed allowlist specifically so terminal manifests could never be rewritten to `blocked`. That fix is correct and still holds — the candidate here was never the terminal manifest. The bypass is on the **write** side, which [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) did not touch.
+
+      ## Blast radius
+
+      Any issue with a manifest in both `docs/06_status/lanes/` and a subdirectory of it. The corruption is not limited to `status`: the write is a whole-object replacement, so the parked copy's `file_scope_lock`, `expected_proof_paths`, `merge_sha`, `pr_url`, and history all overwrite the root's. A stale parked copy can therefore resurrect a stale file scope over a current one.
+
+      This also silently destroys audit history — the 58 deleted lines were `truth_check_history` entries, which the truth model treats as evidence.
+
+      ## Why this rates Urgent
+
+      It writes to protected `main` unattended, it reverses merged and reviewed governance decisions, it destroys audit evidence, and it re-fires every six hours. `main` is rank 1 in the truth hierarchy; a bot that rewrites rank-1 state from a stale duplicate undermines the hierarchy itself.
+
+      ## Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)
+
+      [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was approved on the diagnosed state "root = `superseded`, parked = `blocked`", with a Definition of Done of "Both UTV2-1512 records resolve terminally as superseded" and an implementation boundary permitting only the parked file plus 1754's own lane apparatus.
+
+      Because `a67a6a59` reverted root to `blocked`, that DoD now requires a **root-manifest** edit — explicitly named in [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop conditions and explicitly outside its implementation boundary. [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was therefore halted before `ops:lane-start`, not begun and abandoned.
+
+      Fixing the parked copy alone would still be worth doing (it removes the reconciler's candidate and stops the recurring clobber), but it cannot satisfy 1754's stated DoD on its own, and re-ratifying root is a PM decision.
+
+      ## Suggested direction (for the implementing lane to evaluate, not prescriptive)
+
+      The invariant to restore is that a manifest is written back to the file it was read from. Options worth weighing:
+
+      * Carry the source path on the manifest record (or return `{path, manifest}` pairs from the read layer) and have `writeManifest` use it, keeping `issueToManifestPath` only for genuinely new manifests.
+      * Make duplicate `issue_id`s across the manifest tree a fail-closed error in the read layer, so the ambiguity is refused rather than silently resolved.
+
+      Whichever is chosen, note that `classifyLaneCapacity` documents "Manifest location is intentionally absent from this API so relocating a lane can never alter its arithmetic" — that property is deliberate and must be preserved. This defect is about write destination, not capacity arithmetic; do not fix one by breaking the other.
+
+      ## Definition of done
+
+      1. Reconciling a manifest read from a subdirectory writes back to that subdirectory, never to the root path.
+      2. A root manifest with a terminal status cannot be mutated by a reconcile run under any duplicate-`issue_id` arrangement — proven by execution against a fixture with both copies present, not by inspection.
+      3. Mutation-tested: the guard must be shown to fail on the condition it names.
+      4. `classifyLaneCapacity`'s location-independence property is preserved and still covered by its tests.
+
+      ## Evidence
+
+      * Reverting commit: `a67a6a590d7995034872654f6cb133891715607c`
+      * Ratifying commit it reverted: `3399b271` (PR #1448)
+      * Workflow: `.github/workflows/reconcile-stale-lanes.yml`
+      * Code: `scripts/ops/shared.ts:487`, `scripts/ops/shared.ts:1690`, `scripts/ops/shared.ts:872`, `scripts/ops/reconcile.ts:83`, `scripts/ops/reconcile.ts:330-346`
+      * Verified on `origin/main` 2026-08-27: root `blocked`, parked `blocked`, both 54-path `file_scope_lock`, no active UTV2-1512 lease, no open UTV2-1512 PR.
+  guardrails: []
+  non_goals: []
+  required_evidence:
+    - "Reverting commit: `a67a6a590d7995034872654f6cb133891715607c`"
+    - "Ratifying commit it reverted: `3399b271` (PR #1448)"
+    - "Workflow: `.github/workflows/reconcile-stale-lanes.yml`"
+    - "Code: `scripts/ops/shared.ts:487`, `scripts/ops/shared.ts:1690`,
+      `scripts/ops/shared.ts:872`, `scripts/ops/reconcile.ts:83`,
+      `scripts/ops/reconcile.ts:330-346`"
+    - "Verified on `origin/main` 2026-08-27: root `blocked`, parked `blocked`,
+      both 54-path `file_scope_lock`, no active UTV2-1512 lease, no open
+      UTV2-1512 PR."
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Staffing constraint
+      Unstarted record. Do not staff without PM direction. Do not combine with [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry), [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked), [UTV2-1753](https://linear.app/unit-talk-v2/issue/UTV2-1753/merge-wrapper-git-merge-main-is-unrunnable-ff-only-cannot-merge-a), or [UTV2-1755](https://linear.app/unit-talk-v2/issue/UTV2-1755/proof-binding-validator-reads-the-pr-merge-ref-so-any-lane-that-falls).
+
+      Discovered 2026-08-27 while running [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop-condition checks. It blocks [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) from reaching its approved Definition of Done — see "Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)" below.
+    - >-
+      Symptom (observed, not hypothetical)
+
+      PR #1448 (`3399b271`, merged) ratified
+      `docs/06_status/lanes/UTV2-1512.json` to the terminal status `superseded`.
+
+
+      Roughly 20 hours later, commit `a67a6a59` — `chore(lanes): auto-reconcile
+      stale manifests`, authored by `github-actions[bot]`, pushed directly to
+      protected `main` at 2026-08-27T05:16:34Z — reverted it:
+
+
+      ```diff
+
+      -  "status": "superseded",
+
+      +  "status": "blocked",
+
+      -  "heartbeat_at": "2026-08-26T19:13:36.615Z",
+
+      +  "heartbeat_at": "2026-07-09T05:15:00.000Z",
+
+      ```
+
+
+      The same commit deleted 58 lines of accumulated `truth_check_history` and
+      rolled `heartbeat_at` **backwards** by seven weeks. Net: `1 file changed,
+      4 insertions(+), 58 deletions(-)`.
+
+
+      No human action, no PR, no review. A merged governance decision was
+      silently undone by a scheduled job.
+    - |-
+      Root cause — path aliasing between read and write
+      Two files carry `issue_id: "UTV2-1512"`:
+
+      * `docs/06_status/lanes/UTV2-1512.json` (root) — was `superseded`
+      * `docs/06_status/lanes/parked/UTV2-1512.json` (parked) — is `blocked`
+
+      The three pieces that combine:
+
+      1. `readAllManifestPaths` (`scripts/ops/shared.ts:872`) recurses into subdirectories and returns root and parked copies **as peers, with no precedence**.
+      2. `selectReconcilableManifests` (`scripts/ops/reconcile.ts:83`) correctly filters to `ACTIVE_LOCK_STATUSES`. `superseded` is excluded, so root was never eligible — but the **parked** copy is `blocked`, which IS active, so the parked copy became the reconcile candidate.
+      3. `writeManifest` (`scripts/ops/shared.ts:1690`) resolves its destination through `issueToManifestPath` (`scripts/ops/shared.ts:487`):
+
+      ```ts
+      export function issueToManifestPath(issueId: string): string {
+        return path.join(MANIFEST_DIR, `${issueId.toUpperCase()}.json`);
+      }
+      ```
+
+      That function is a pure function of the issue ID. It has **no knowledge of the path the manifest was read from**, and always returns the root path.
+
+      So the reconciler reads the parked copy, builds `{...manifest, status: 'blocked', truth_check_history: [...]}` from *its* content, and writes that whole object to the **root** file. The parked file is never written — it stays `blocked` forever, remains a candidate on every run, and the clobber repeats.
+
+      `.github/workflows/reconcile-stale-lanes.yml` runs `cron: '0 */6 * * *'` with `SYNC_BOT_TOKEN`, which can push to protected `main`. So this recurs four times a day, indefinitely, for any issue that has both a root and a parked manifest.
+
+      Note the irony: [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) hardened `selectReconcilableManifests` from a denylist to a fail-closed allowlist specifically so terminal manifests could never be rewritten to `blocked`. That fix is correct and still holds — the candidate here was never the terminal manifest. The bypass is on the **write** side, which [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) did not touch.
+    - >-
+      Blast radius
+
+      Any issue with a manifest in both `docs/06_status/lanes/` and a
+      subdirectory of it. The corruption is not limited to `status`: the write
+      is a whole-object replacement, so the parked copy's `file_scope_lock`,
+      `expected_proof_paths`, `merge_sha`, `pr_url`, and history all overwrite
+      the root's. A stale parked copy can therefore resurrect a stale file scope
+      over a current one.
+
+
+      This also silently destroys audit history — the 58 deleted lines were
+      `truth_check_history` entries, which the truth model treats as evidence.
+    - >-
+      Why this rates Urgent
+
+      It writes to protected `main` unattended, it reverses merged and reviewed
+      governance decisions, it destroys audit evidence, and it re-fires every
+      six hours. `main` is rank 1 in the truth hierarchy; a bot that rewrites
+      rank-1 state from a stale duplicate undermines the hierarchy itself.
+    - |-
+      Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)
+      [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was approved on the diagnosed state "root = `superseded`, parked = `blocked`", with a Definition of Done of "Both UTV2-1512 records resolve terminally as superseded" and an implementation boundary permitting only the parked file plus 1754's own lane apparatus.
+
+      Because `a67a6a59` reverted root to `blocked`, that DoD now requires a **root-manifest** edit — explicitly named in [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop conditions and explicitly outside its implementation boundary. [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was therefore halted before `ops:lane-start`, not begun and abandoned.
+
+      Fixing the parked copy alone would still be worth doing (it removes the reconciler's candidate and stops the recurring clobber), but it cannot satisfy 1754's stated DoD on its own, and re-ratifying root is a PM decision.
+    - >-
+      Suggested direction (for the implementing lane to evaluate, not
+      prescriptive)
+
+      The invariant to restore is that a manifest is written back to the file it
+      was read from. Options worth weighing:
+
+
+      * Carry the source path on the manifest record (or return `{path,
+      manifest}` pairs from the read layer) and have `writeManifest` use it,
+      keeping `issueToManifestPath` only for genuinely new manifests.
+
+      * Make duplicate `issue_id`s across the manifest tree a fail-closed error
+      in the read layer, so the ambiguity is refused rather than silently
+      resolved.
+
+
+      Whichever is chosen, note that `classifyLaneCapacity` documents "Manifest
+      location is intentionally absent from this API so relocating a lane can
+      never alter its arithmetic" — that property is deliberate and must be
+      preserved. This defect is about write destination, not capacity
+      arithmetic; do not fix one by breaking the other.
+    - >-
+      Definition of done
+
+      1. Reconciling a manifest read from a subdirectory writes back to that
+      subdirectory, never to the root path.
+
+      2. A root manifest with a terminal status cannot be mutated by a reconcile
+      run under any duplicate-`issue_id` arrangement — proven by execution
+      against a fixture with both copies present, not by inspection.
+
+      3. Mutation-tested: the guard must be shown to fail on the condition it
+      names.
+
+      4. `classifyLaneCapacity`'s location-independence property is preserved
+      and still covered by its tests.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1756/scheduled-reconciler-overwrites-root-lane-manifests-with-parked-copy
+    title: Scheduled reconciler overwrites root lane manifests with parked-copy
+      content, reverting merged governance decisions every 6 hours
+    description: |-
+      ## Staffing constraint
+
+      Unstarted record. Do not staff without PM direction. Do not combine with [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry), [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked), [UTV2-1753](https://linear.app/unit-talk-v2/issue/UTV2-1753/merge-wrapper-git-merge-main-is-unrunnable-ff-only-cannot-merge-a), or [UTV2-1755](https://linear.app/unit-talk-v2/issue/UTV2-1755/proof-binding-validator-reads-the-pr-merge-ref-so-any-lane-that-falls).
+
+      Discovered 2026-08-27 while running [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop-condition checks. It blocks [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) from reaching its approved Definition of Done — see "Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)" below.
+
+      ## Symptom (observed, not hypothetical)
+
+      PR #1448 (`3399b271`, merged) ratified `docs/06_status/lanes/UTV2-1512.json` to the terminal status `superseded`.
+
+      Roughly 20 hours later, commit `a67a6a59` — `chore(lanes): auto-reconcile stale manifests`, authored by `github-actions[bot]`, pushed directly to protected `main` at 2026-08-27T05:16:34Z — reverted it:
+
+      ```diff
+      -  "status": "superseded",
+      +  "status": "blocked",
+      -  "heartbeat_at": "2026-08-26T19:13:36.615Z",
+      +  "heartbeat_at": "2026-07-09T05:15:00.000Z",
+      ```
+
+      The same commit deleted 58 lines of accumulated `truth_check_history` and rolled `heartbeat_at` **backwards** by seven weeks. Net: `1 file changed, 4 insertions(+), 58 deletions(-)`.
+
+      No human action, no PR, no review. A merged governance decision was silently undone by a scheduled job.
+
+      ## Root cause — path aliasing between read and write
+
+      Two files carry `issue_id: "UTV2-1512"`:
+
+      * `docs/06_status/lanes/UTV2-1512.json` (root) — was `superseded`
+      * `docs/06_status/lanes/parked/UTV2-1512.json` (parked) — is `blocked`
+
+      The three pieces that combine:
+
+      1. `readAllManifestPaths` (`scripts/ops/shared.ts:872`) recurses into subdirectories and returns root and parked copies **as peers, with no precedence**.
+      2. `selectReconcilableManifests` (`scripts/ops/reconcile.ts:83`) correctly filters to `ACTIVE_LOCK_STATUSES`. `superseded` is excluded, so root was never eligible — but the **parked** copy is `blocked`, which IS active, so the parked copy became the reconcile candidate.
+      3. `writeManifest` (`scripts/ops/shared.ts:1690`) resolves its destination through `issueToManifestPath` (`scripts/ops/shared.ts:487`):
+
+      ```ts
+      export function issueToManifestPath(issueId: string): string {
+        return path.join(MANIFEST_DIR, `${issueId.toUpperCase()}.json`);
+      }
+      ```
+
+      That function is a pure function of the issue ID. It has **no knowledge of the path the manifest was read from**, and always returns the root path.
+
+      So the reconciler reads the parked copy, builds `{...manifest, status: 'blocked', truth_check_history: [...]}` from *its* content, and writes that whole object to the **root** file. The parked file is never written — it stays `blocked` forever, remains a candidate on every run, and the clobber repeats.
+
+      `.github/workflows/reconcile-stale-lanes.yml` runs `cron: '0 */6 * * *'` with `SYNC_BOT_TOKEN`, which can push to protected `main`. So this recurs four times a day, indefinitely, for any issue that has both a root and a parked manifest.
+
+      Note the irony: [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) hardened `selectReconcilableManifests` from a denylist to a fail-closed allowlist specifically so terminal manifests could never be rewritten to `blocked`. That fix is correct and still holds — the candidate here was never the terminal manifest. The bypass is on the **write** side, which [UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be) did not touch.
+
+      ## Blast radius
+
+      Any issue with a manifest in both `docs/06_status/lanes/` and a subdirectory of it. The corruption is not limited to `status`: the write is a whole-object replacement, so the parked copy's `file_scope_lock`, `expected_proof_paths`, `merge_sha`, `pr_url`, and history all overwrite the root's. A stale parked copy can therefore resurrect a stale file scope over a current one.
+
+      This also silently destroys audit history — the 58 deleted lines were `truth_check_history` entries, which the truth model treats as evidence.
+
+      ## Why this rates Urgent
+
+      It writes to protected `main` unattended, it reverses merged and reviewed governance decisions, it destroys audit evidence, and it re-fires every six hours. `main` is rank 1 in the truth hierarchy; a bot that rewrites rank-1 state from a stale duplicate undermines the hierarchy itself.
+
+      ## Effect on [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)
+
+      [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was approved on the diagnosed state "root = `superseded`, parked = `blocked`", with a Definition of Done of "Both UTV2-1512 records resolve terminally as superseded" and an implementation boundary permitting only the parked file plus 1754's own lane apparatus.
+
+      Because `a67a6a59` reverted root to `blocked`, that DoD now requires a **root-manifest** edit — explicitly named in [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked)'s Stop conditions and explicitly outside its implementation boundary. [UTV2-1754](https://linear.app/unit-talk-v2/issue/UTV2-1754/utv2-1512-duplicate-manifest-remains-active-after-1448-release-parked) was therefore halted before `ops:lane-start`, not begun and abandoned.
+
+      Fixing the parked copy alone would still be worth doing (it removes the reconciler's candidate and stops the recurring clobber), but it cannot satisfy 1754's stated DoD on its own, and re-ratifying root is a PM decision.
+
+      ## Suggested direction (for the implementing lane to evaluate, not prescriptive)
+
+      The invariant to restore is that a manifest is written back to the file it was read from. Options worth weighing:
+
+      * Carry the source path on the manifest record (or return `{path, manifest}` pairs from the read layer) and have `writeManifest` use it, keeping `issueToManifestPath` only for genuinely new manifests.
+      * Make duplicate `issue_id`s across the manifest tree a fail-closed error in the read layer, so the ambiguity is refused rather than silently resolved.
+
+      Whichever is chosen, note that `classifyLaneCapacity` documents "Manifest location is intentionally absent from this API so relocating a lane can never alter its arithmetic" — that property is deliberate and must be preserved. This defect is about write destination, not capacity arithmetic; do not fix one by breaking the other.
+
+      ## Definition of done
+
+      1. Reconciling a manifest read from a subdirectory writes back to that subdirectory, never to the root path.
+      2. A root manifest with a terminal status cannot be mutated by a reconcile run under any duplicate-`issue_id` arrangement — proven by execution against a fixture with both copies present, not by inspection.
+      3. Mutation-tested: the guard must be shown to fail on the condition it names.
+      4. `classifyLaneCapacity`'s location-independence property is preserved and still covered by its tests.
+
+      ## Evidence
+
+      * Reverting commit: `a67a6a590d7995034872654f6cb133891715607c`
+      * Ratifying commit it reverted: `3399b271` (PR #1448)
+      * Workflow: `.github/workflows/reconcile-stale-lanes.yml`
+      * Code: `scripts/ops/shared.ts:487`, `scripts/ops/shared.ts:1690`, `scripts/ops/shared.ts:872`, `scripts/ops/reconcile.ts:83`, `scripts/ops/reconcile.ts:330-346`
+      * Verified on `origin/main` 2026-08-27: root `blocked`, parked `blocked`, both 54-path `file_scope_lock`, no active UTV2-1512 lease, no open UTV2-1512 PR.
+    captured_at: 2000-01-01T00:00:00.000Z
+    description_sha256: 541107160b6e432f6aaff62dd6af7a3ce727bb34ccfe9c59d14d83c439d6b353
+  contract_hash: 501433ef094e2f6e9ebca08c56f23cb57e63beba12bfef2b60fe7134a9f00efb

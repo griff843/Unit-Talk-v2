@@ -79,72 +79,117 @@
   ],
   "status": "superseded",
   "started_at": "2026-07-08T17:00:01Z",
-  "heartbeat_at": "2026-08-26T19:13:36.615Z",
+  "heartbeat_at": "2026-07-09T05:15:00.000Z",
   "closed_at": "2026-07-14T01:32:24.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1512-command-center-workbench.json",
   "created_by": "claude",
   "truth_check_history": [
     {
-      "checked_at": "2026-08-25T12:20:54.052Z",
+      "checked_at": "2026-08-27T05:16:33.867Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1135.1h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1176h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-25T18:20:01.676Z",
+      "checked_at": "2026-08-27T16:55:39.041Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1141.1h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1187.7h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-26T00:30:24.265Z",
+      "checked_at": "2026-08-27T17:11:39.460Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1147.3h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1187.9h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-26T06:24:16.520Z",
+      "checked_at": "2026-08-28T01:49:17.090Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1153.2h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1196.6h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-26T06:35:47.625Z",
+      "checked_at": "2026-08-28T17:45:54.604Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1153.3h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1212.5h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-26T12:22:54.903Z",
+      "checked_at": "2026-08-28T17:58:21.787Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1159.1h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1212.7h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     },
     {
-      "checked_at": "2026-08-26T19:27:49.794Z",
+      "checked_at": "2026-08-29T01:13:00.719Z",
       "verdict": "fail",
       "merge_sha": null,
       "failures": [
-        "heartbeat_at 1166.2h old — exceeded 24h stranded threshold"
+        "heartbeat_at 1220h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-29T11:50:20.940Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1230.6h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-29T12:04:36.624Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1230.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-29T15:48:26.079Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1234.6h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-29T20:03:20.432Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1238.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-30T01:55:06.014Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1244.7h old — exceeded 24h stranded threshold"
       ],
       "runner": "ops:reconcile"
     }
@@ -163,9 +208,40 @@
     "mechanism": "Manifest relocated from docs/06_status/lanes/ to docs/06_status/lanes/parked/ (no schema-supported 'abandoned'/'parked' status value exists as of this writing) so it drops out of readAllManifestPaths()'s non-recursive scan and no longer counts toward the Claude executor slot cap. Lifecycle status field left as-is (in_review) since it is not actually done or merged. The associated open PR and branch remain untouched for later product reuse. No lease existed to release. Landed via a governed PR after an initial direct-main push of this same change was reverted for policy compliance."
   },
   "superseded": {
-    "reason": "OS v1 Lock ratified (UTV2-1530). This foundation branch's scope is fully superseded by the merged UTV2-1522 Command Center v2 redesign (PR #1190, b0a9002b, 2026-07-13). PR #1173 closed (not merged) and branch claude/utv2-1512-command-center-workbench deleted. No further action expected on this issue.",
+    "reason": "OS v1 Lock ratified (UTV2-1530). This foundation branch's scope is fully superseded by the merged UTV2-1522 Command Center v2 redesign (PR #1190, b0a9002b, 2026-07-13). PR #1173 is CLOSED and was never merged. The historical branch claude/utv2-1512-command-center-workbench still EXISTS on origin at d57d1023bffcf1f815c77c6b9e488e9ad43a762c and is deliberately preserved as an inert reference. A previous version of this text asserted the branch had been deleted; that assertion was false. It is corrected here rather than made true by deleting the branch. This record is a historical tombstone: the lane is terminal and superseded, NOT done, and no merge, completion, or truth-check pass is claimed for it.",
     "superseded_by": "UTV2-1522",
     "by": "pm",
-    "at": "2026-07-14T01:32:24.000Z"
+    "at": "2026-07-14T01:32:24.000Z",
+    "tombstone": {
+      "recorded_by": "UTV2-1757",
+      "recorded_at": "2026-08-30T02:25:08.144Z",
+      "linear_identity": {
+        "issue_id": "UTV2-1512",
+        "state": "deleted",
+        "recreated": false,
+        "note": "The Linear issue UTV2-1512 is DELETED, not archived. It is not recreated and must not be. References to the identifier UTV2-1512 resolve to successor record UTV2-1757, which is a recovery/tombstone issue and is NOT the original implementation issue.",
+        "successor_issue_id": "UTV2-1757"
+      },
+      "historical_lane_facts": {
+        "branch": "claude/utv2-1512-command-center-workbench",
+        "branch_state": "exists on origin, inert, preserved",
+        "commit_sha": "d57d1023bffcf1f815c77c6b9e488e9ad43a762c",
+        "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1173",
+        "pr_state": "closed, never merged",
+        "superseded_by": "UTV2-1522"
+      },
+      "governance_evidence": {
+        "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1448",
+        "merge_commit": "3399b271fc13cd39dc03e12f38a73fb1a46e0679",
+        "merged_at": "2026-08-26T20:01:19Z",
+        "role": "Ratification of the superseded disposition ONLY. PR #1448 is governance evidence, not the implementation merge identity for UTV2-1512. It is deliberately NOT bound as commit_sha or pr_url on this manifest, and record-merge must never be run against it."
+      },
+      "not_claimed": [
+        "done",
+        "merge receipt",
+        "truth-check pass",
+        "recreated Linear issue"
+      ]
+    }
   }
 }

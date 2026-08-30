@@ -608,10 +608,14 @@ import {
   activeManifestOverlap,
   classifyLaneCapacity,
   issueIdFromBranchName,
+  issueToManifestPath,
+  readAllManifestEntries,
   readAllManifestPaths,
   readAllManifests,
   readManifestAtRef,
   resolveActiveLaneManifests,
+  writeJsonFile,
+  writeManifestAtPath,
   type LaneManifest,
   type LaneManifestLocation,
   type OpenPullRequestRef,
@@ -1158,4 +1162,358 @@ test('UTV2-1634 retry: transport and server faults are retryable, and unknown er
   ]) {
     assert.strictEqual(isRetryableDiscoveryFailure(stderr, 1), true, `${stderr} should be retryable`);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1756: manifest write path fidelity + the fail-closed write guard.
+//
+// The defect: `a67a6a59` (github-actions[bot], direct push to protected `main`)
+// reverted PR #1448's ratified `superseded` on
+// `docs/06_status/lanes/UTV2-1512.json` back to `blocked` and deleted 58 lines
+// of `truth_check_history`. The reconciler had read
+// `docs/06_status/lanes/parked/UTV2-1512.json` -- a distinct record that
+// happens to share the `issue_id` -- and written that record's content to a
+// destination resolved from the issue ID alone.
+//
+// Two independent defences are asserted below, and they are independent on
+// purpose. Path fidelity stops the write from being aimed at the wrong file.
+// The guard stops the wrong file from accepting a write even when some future
+// caller aims badly. Either alone leaves a hole; the pair is what closes it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function manifestFixtureDir(label: string): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), `utv2-1756-${label}-`));
+}
+
+test('UTV2-1756: readAllManifestEntries pairs every manifest with the file it was read from', () => {
+  const dir = manifestFixtureDir('entries');
+  fs.mkdirSync(path.join(dir, 'parked'), { recursive: true });
+
+  // The exact duplicate arrangements present on `main` today: a root/parked
+  // pair sharing a filename, and a same-directory alias pair sharing an
+  // issue_id under two different filenames.
+  writeJsonFile(path.join(dir, 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+  writeJsonFile(path.join(dir, 'parked', 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }));
+  writeJsonFile(path.join(dir, 'UTV2-1157.json'), laneManifest({ issue_id: 'UTV2-1157', status: 'in_progress' }));
+  writeJsonFile(path.join(dir, 'UTV2-1157-codex.json'), laneManifest({ issue_id: 'UTV2-1157', status: 'blocked' }));
+
+  const entries = readAllManifestEntries(dir);
+  assert.strictEqual(entries.length, 4);
+
+  for (const entry of entries) {
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(entry.path, 'utf8')).status,
+      entry.manifest.status,
+      `${entry.path} must be paired with its OWN record, not another record sharing its issue_id`,
+    );
+  }
+
+  // Same issue_id, three distinct files, three distinct destinations.
+  const byPath = new Map(entries.map((entry) => [entry.path, entry.manifest.status]));
+  assert.strictEqual(byPath.get(path.join(dir, 'UTV2-1512.json')), 'superseded');
+  assert.strictEqual(byPath.get(path.join(dir, 'parked', 'UTV2-1512.json')), 'blocked');
+  assert.strictEqual(byPath.get(path.join(dir, 'UTV2-1157.json')), 'in_progress');
+  assert.strictEqual(byPath.get(path.join(dir, 'UTV2-1157-codex.json')), 'blocked');
+});
+
+test('UTV2-1756: readAllManifests output is unchanged by the entry refactor', () => {
+  const dir = manifestFixtureDir('compat');
+  fs.mkdirSync(path.join(dir, 'parked'), { recursive: true });
+  writeJsonFile(path.join(dir, 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+  writeJsonFile(path.join(dir, 'parked', 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }));
+
+  assert.deepStrictEqual(
+    readAllManifests(dir),
+    readAllManifestEntries(dir).map((entry) => entry.manifest),
+    'existing callers must observe exactly the same manifests, in the same order',
+  );
+  assert.deepStrictEqual(
+    readAllManifestPaths(dir),
+    readAllManifestEntries(dir).map((entry) => entry.path),
+  );
+});
+
+test('UTV2-1756: writeManifestAtPath writes to the subdirectory it was given, not the root path', () => {
+  const dir = manifestFixtureDir('subdir');
+  fs.mkdirSync(path.join(dir, 'parked'), { recursive: true });
+  const rootPath = path.join(dir, 'UTV2-1512.json');
+  const parkedPath = path.join(dir, 'parked', 'UTV2-1512.json');
+
+  writeJsonFile(rootPath, laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+  writeJsonFile(parkedPath, laneManifest({ issue_id: 'UTV2-1512', status: 'in_progress' }));
+  const rootBefore = fs.readFileSync(rootPath, 'utf8');
+
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }), parkedPath, { validate: false });
+
+  assert.strictEqual(JSON.parse(fs.readFileSync(parkedPath, 'utf8')).status, 'blocked');
+  assert.strictEqual(
+    fs.readFileSync(rootPath, 'utf8'),
+    rootBefore,
+    'the root manifest must be byte-identical: it was never the destination',
+  );
+});
+
+test('UTV2-1756: writeManifest still resolves the canonical root path for a genuinely new manifest', () => {
+  // `writeManifest` is now a thin delegation to `writeManifestAtPath` over the
+  // issue-ID-derived path. That derivation is still correct -- and still the
+  // right default -- for a lane that has exactly one manifest.
+  assert.strictEqual(
+    issueToManifestPath('utv2-9999'),
+    issueToManifestPath('UTV2-9999'),
+    'issueToManifestPath must stay case-insensitive on the issue ID',
+  );
+  assert.ok(issueToManifestPath('UTV2-9999').endsWith(path.join('lanes', 'UTV2-9999.json')));
+});
+
+test('UTV2-1756 GUARD: a superseded manifest refuses a write back to blocked (the a67a6a59 condition)', () => {
+  const dir = manifestFixtureDir('guard-terminal');
+  const target = path.join(dir, 'UTV2-1512.json');
+  writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+
+  assert.throws(
+    () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }), target, { validate: false }),
+    /cannot transition to "blocked"/,
+    'reconciling a ratified terminal manifest backwards must be refused',
+  );
+  assert.strictEqual(
+    JSON.parse(fs.readFileSync(target, 'utf8')).status,
+    'superseded',
+    'a refused write must leave the file untouched',
+  );
+});
+
+test('UTV2-1756 MUTATION CONTROL: without the guard the same write lands, so the guard is what refuses it', () => {
+  // Inversion control for the test above. If this assertion ever fails, the
+  // refusal above is being produced by something other than the guard -- a
+  // read-only file, a bad fixture -- and that test proves nothing.
+  const dir = manifestFixtureDir('guard-mutation');
+  const target = path.join(dir, 'UTV2-1512.json');
+  writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+
+  // The pre-UTV2-1756 write: no identity check, no transition check.
+  writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }));
+
+  assert.strictEqual(
+    JSON.parse(fs.readFileSync(target, 'utf8')).status,
+    'blocked',
+    'the unguarded write must succeed — otherwise the guard test is vacuous',
+  );
+});
+
+test('UTV2-1756 GUARD: legal transitions still pass — merged to done, and a terminal self-transition', () => {
+  const dir = manifestFixtureDir('guard-legal');
+
+  const closeout = path.join(dir, 'UTV2-1759.json');
+  writeJsonFile(closeout, laneManifest({ issue_id: 'UTV2-1759', status: 'merged' }));
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1759', status: 'done' }), closeout, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(closeout, 'utf8')).status, 'done');
+
+  const terminal = path.join(dir, 'UTV2-1512.json');
+  writeJsonFile(terminal, laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }));
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'superseded' }), terminal, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(terminal, 'utf8')).status, 'superseded');
+});
+
+test('UTV2-1756 GUARD: refuses a write whose issue_id differs from the record already at that path', () => {
+  const dir = manifestFixtureDir('guard-identity');
+  // An ALIASED filename on purpose. validateManifest already refuses a write
+  // whose basename disagrees with issue_id, so a plainly-named target would
+  // prove nothing about the guard. `UTV2-1157-codex.json` is a real filename
+  // on `main` whose basename encodes no usable identity, which is exactly
+  // where filename-based validation has nothing to say and the guard does.
+  const target = path.join(dir, 'UTV2-1157-codex.json');
+  writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1157', status: 'in_progress' }));
+
+  assert.throws(
+    () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'in_progress' }), target, { validate: false }),
+    /must be written back to its own file/,
+  );
+  assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).issue_id, 'UTV2-1157');
+});
+
+test('UTV2-1756: writeManifestAtPath validates the outgoing manifest by default', () => {
+  // The reconciler opts out of schema validation (see WriteManifestOptions);
+  // nothing else does, and this asserts the default has not drifted.
+  const dir = manifestFixtureDir('validate-default');
+  const target = path.join(dir, 'UTV2-9996.json');
+  assert.throws(
+    () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-9996', status: 'started' }), target),
+    /file_scope_lock must contain at least one file/,
+  );
+  assert.strictEqual(fs.existsSync(target), false, 'a rejected write must not create the file');
+});
+
+test('UTV2-1756 GUARD: abstains when there is nothing to protect — a new file, or an unreadable one', () => {
+  const dir = manifestFixtureDir('guard-abstain');
+
+  // A genuinely new lane: no on-disk record, so no vote to cast.
+  const fresh = path.join(dir, 'UTV2-9999.json');
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-9999', status: 'started' }), fresh, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(fresh, 'utf8')).status, 'started');
+
+  // A corrupt record must stay repairable — refusing to overwrite garbage
+  // would brick the only path that fixes it.
+  const corrupt = path.join(dir, 'UTV2-9998.json');
+  fs.writeFileSync(corrupt, '{ not json at all', 'utf8');
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-9998', status: 'started' }), corrupt, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(corrupt, 'utf8')).status, 'started');
+
+  // A record whose status predates the current schema: same reasoning.
+  const legacy = path.join(dir, 'UTV2-9997.json');
+  writeJsonFile(legacy, { ...laneManifest({ issue_id: 'UTV2-9997' }), status: 'closed' });
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-9997', status: 'blocked' }), legacy, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(legacy, 'utf8')).status, 'blocked');
+});
+
+test('UTV2-1756: classifyLaneCapacity stays location-independent', () => {
+  // classifyLaneCapacity documents that manifest location is deliberately
+  // absent from its API, so relocating a lane can never alter its arithmetic.
+  // UTV2-1756 makes location matter for the WRITE destination; this asserts it
+  // still does not leak into capacity, which is the property that would break
+  // if the two concerns were conflated.
+  const dir = manifestFixtureDir('capacity');
+  fs.mkdirSync(path.join(dir, 'parked'), { recursive: true });
+  writeJsonFile(path.join(dir, 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }));
+  writeJsonFile(path.join(dir, 'parked', 'UTV2-1512.json'), laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }));
+
+  const [rootEntry, parkedEntry] = readAllManifestEntries(dir);
+  assert.notStrictEqual(rootEntry?.path, parkedEntry?.path, 'fixture must hold two distinct files');
+  assert.deepStrictEqual(
+    classifyLaneCapacity(rootEntry!.manifest.status),
+    classifyLaneCapacity(parkedEntry!.manifest.status),
+    'the same status must classify identically regardless of where the manifest lives',
+  );
+});
+
+test('UTV2-1756 GUARD: an in-flight record is not transition-gated, so PR binding still works', () => {
+  // The guard protects settled records; it is not a lifecycle authority.
+  // `ops:lane-link-pr` moves every lane `started -> in_review` on PR binding —
+  // a transition TRANSITIONS does not list. Gating in-flight writes on that
+  // table would break PR binding for every lane, which is a lifecycle change
+  // this lane did not ratify. The narrowing is deliberate; this asserts it.
+  const dir = manifestFixtureDir('guard-inflight');
+  const target = path.join(dir, 'UTV2-1756.json');
+  writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1756', status: 'started' }));
+
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'in_review' }), target, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).status, 'in_review');
+});
+
+test('UTV2-1756 GUARD: every settled status vetoes a rollback to an active status', () => {
+  const dir = manifestFixtureDir('guard-settled');
+  for (const settled of ['merged', 'done', 'failed', 'superseded', 'cancelled'] as const) {
+    const target = path.join(dir, `UTV2-${settled}.json`);
+    writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: settled }));
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'blocked' }), target, { validate: false }),
+      /cannot transition to "blocked"/,
+      `${settled} must veto a rollback to blocked`,
+    );
+    assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).status, settled);
+  }
+});
+
+// UTV2-1756: a deliberate, reviewed behaviour change -- not an accident.
+//
+// `applyPrMergeToManifest` (scripts/ops/lane-manifest.ts) forces `merged` from
+// ANY starting status except `done`, and `recordMergeCommand` then hands that
+// result to `writeManifest`. Before this lane, stamping `merged` onto a lane
+// that had already settled as `failed`/`superseded`/`cancelled` wrote silently.
+// It is now refused.
+//
+// That refusal is the intended reading of the truth model: a merge SHA may not
+// be recorded onto a lane whose settled record says it never merged. It is the
+// same judgement the PM applied by hand when rejecting `record_merge_on_manifest`
+// for UTV2-1512, whose PR #1173 closed unmerged. Locking it in a test so the
+// behaviour is asserted rather than incidental, and so anyone who wants the old
+// silence has to delete an explicit assertion to get it.
+test('UTV2-1756 GUARD: record-merge cannot stamp merged onto a lane that settled as not-merged', () => {
+  const dir = manifestFixtureDir('guard-record-merge');
+  for (const settled of ['failed', 'superseded', 'cancelled'] as const) {
+    const target = path.join(dir, `UTV2-${settled}.json`);
+    writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: settled }));
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'merged' }), target, { validate: false }),
+      /cannot transition to "merged"/,
+      `${settled} must refuse a recorded merge`,
+    );
+    assert.strictEqual(
+      JSON.parse(fs.readFileSync(target, 'utf8')).status,
+      settled,
+      `${settled} must survive the refused record-merge byte-for-byte`,
+    );
+  }
+
+  // The sanctioned shapes still work: in_review -> merged, and merged -> merged.
+  const live = path.join(dir, 'UTV2-1756.json');
+  writeJsonFile(live, laneManifest({ issue_id: 'UTV2-1756', status: 'in_review' }));
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'merged' }), live, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(live, 'utf8')).status, 'merged');
+  writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1756', status: 'merged' }), live, { validate: false });
+  assert.strictEqual(JSON.parse(fs.readFileSync(live, 'utf8')).status, 'merged');
+});
+
+// UTV2-1756: the existing-done restart path must survive the guard.
+//
+// ops:lane-start replaces a `done` manifest with a fresh `started` one when an
+// issue is worked a second time (lane-start.ts, which hard-errors on an
+// existing manifest in any other status). `done -> started` is absent from
+// TRANSITIONS, so an unqualified terminal arm refuses it -- and lane-start
+// creates the branch, the worktree, and the lease BEFORE it reaches its
+// manifest write, on a path with no rollback. A refusal there strands all
+// three on every restart of a completed issue.
+test('UTV2-1756 RESTART: a done manifest accepts the sanctioned replacement by a fresh started lane', () => {
+  const dir = manifestFixtureDir('guard-restart');
+  const target = path.join(dir, 'UTV2-1512.json');
+  const settled = laneManifest({ issue_id: 'UTV2-1512', status: 'done' });
+  writeJsonFile(target, settled);
+
+  const restart = laneManifest({ issue_id: 'UTV2-1512', status: 'started' });
+  writeManifestAtPath(restart, target, { validate: false });
+
+  const after = JSON.parse(fs.readFileSync(target, 'utf8'));
+  assert.strictEqual(after.status, 'started', 'the restart must land, not be refused');
+});
+
+test('UTV2-1756 RESTART: the exception is exactly done->started and nothing wider', () => {
+  const dir = manifestFixtureDir('guard-restart-bounds');
+
+  // No other settled status may be reanimated to started. `done` is the only
+  // record ops:lane-start will replace; the rest are terminal for good.
+  for (const settled of ['merged', 'failed', 'superseded', 'cancelled'] as const) {
+    const target = path.join(dir, `UTV2-${settled}.json`);
+    writeJsonFile(target, laneManifest({ issue_id: 'UTV2-1512', status: settled }));
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'started' }), target, { validate: false }),
+      /cannot transition to "started"/,
+      `${settled} must not be reanimated to started`,
+    );
+    assert.strictEqual(JSON.parse(fs.readFileSync(target, 'utf8')).status, settled);
+  }
+
+  // And `done` itself only opens for `started` -- not for any other status.
+  for (const illegal of ['blocked', 'in_progress', 'in_review', 'merged', 'parked'] as const) {
+    const target = path.join(dir, `UTV2-done-to-${illegal}.json`);
+    const before = laneManifest({ issue_id: 'UTV2-1512', status: 'done' });
+    writeJsonFile(target, before);
+    const bytes = fs.readFileSync(target, 'utf8');
+    assert.throws(
+      () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: illegal }), target, { validate: false }),
+      new RegExp(`cannot transition to "${illegal}"`),
+      `done -> ${illegal} must stay refused`,
+    );
+    assert.strictEqual(fs.readFileSync(target, 'utf8'), bytes, 'a refused write must leave the file byte-identical');
+  }
+
+  // The identity arm still applies to a restart: a fresh lane for a different
+  // issue may not claim a done record's file.
+  const foreign = path.join(dir, 'UTV2-1157-codex.json');
+  writeJsonFile(foreign, laneManifest({ issue_id: 'UTV2-1157', status: 'done' }));
+  const foreignBytes = fs.readFileSync(foreign, 'utf8');
+  assert.throws(
+    () => writeManifestAtPath(laneManifest({ issue_id: 'UTV2-1512', status: 'started' }), foreign, { validate: false }),
+    /must be written back to its own file/,
+    'the restart exception must not bypass the identity arm',
+  );
+  assert.strictEqual(fs.readFileSync(foreign, 'utf8'), foreignBytes);
 });

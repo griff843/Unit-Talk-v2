@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   addUnsupportedRuntimeChecks,
   checkCommitReachableFromMain,
@@ -10,6 +11,7 @@ import {
   evaluateCloseoutTruthGate,
   evaluateRequiredCheckResults,
   evaluateRequiredChecksWithHeadFallback,
+  evaluateSchemaV2VerifierProvenanceCheck,
   evaluateScopeDiff,
   evaluateT2ProofEvidence,
   evaluateTestRunLogEvidence,
@@ -28,6 +30,7 @@ import {
   finalizeWithManifest,
   evaluateTerminalLeaseInvariant,
 } from './truth-check-lib.js';
+import { laneLifecycleScopePatterns } from '../ci/file-scope-guard.js';
 import type { DispatchLease } from './lease-registry.js';
 import { rebindModelRoutingJsonSha } from './proof-generate.js';
 import {
@@ -2377,4 +2380,486 @@ test('M8 passes only after terminal lease cleanup, while merged closeout remains
     ).status,
     'pass',
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1759 — S1 must recognise the lane's OWN lifecycle metadata, exactly.
+//
+// `ops:lane-start` creates `docs/06_status/lanes/<ISSUE>.json` and
+// `.ops/sync/<ISSUE>.yml`, and the dispatch procedure requires committing them.
+// Neither is normally in `file_scope_lock`, which is frozen at lane-start. So
+// they landed in the merged diff of essentially every lane and S1 rejected them:
+// a truthful closeout was structurally impossible for doing exactly what the
+// lane procedure prescribes.
+//
+// The grant is EXACT-LANE ONLY. There is no `docs/06_status/lanes/**` and no
+// `.ops/sync/**`; a directory exemption would let any lane's merged diff carry
+// any other lane's lifecycle metadata, which is the cross-lane scope bleed both
+// guards exist to catch.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The real UTV2-1758 lane, whose closeout this repair unblocks. */
+const UTV2_1758_LOCK = [
+  '.ops/sync/UTV2-1758.yml',
+  'docs/06_status/proof/UTV2-1758/diff-summary.md',
+  'docs/06_status/proof/UTV2-1758/evidence.json',
+  'docs/06_status/proof/UTV2-1758/model-routing.json',
+  'docs/06_status/proof/UTV2-1758/verification.md',
+  'scripts/ops/orchestration-reconciler.test.ts',
+  'scripts/ops/orchestration-reconciler.ts',
+];
+const UTV2_1758_FILES_CHANGED = [
+  '.ops/sync/UTV2-1758.yml',
+  'docs/06_status/lanes/UTV2-1758.json',
+  'docs/06_status/proof/UTV2-1758/diff-summary.md',
+  'docs/06_status/proof/UTV2-1758/evidence.json',
+  'docs/06_status/proof/UTV2-1758/model-routing.json',
+  'docs/06_status/proof/UTV2-1758/verification.md',
+  'scripts/ops/orchestration-reconciler.test.ts',
+  'scripts/ops/orchestration-reconciler.ts',
+];
+const UTV2_1758_PROOF_PATHS = [
+  'docs/06_status/proof/UTV2-1758/diff-summary.md',
+  'docs/06_status/proof/UTV2-1758/verification.md',
+];
+
+// 1
+test('S1/1759: the lane\'s own manifest passes even though file_scope_lock never declares it', () => {
+  const result = evaluateScopeDiff(
+    ['docs/06_status/lanes/UTV2-1759.json', 'scripts/ops/truth-check-lib.ts'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'pass', result.detail);
+});
+
+// 2
+test('S1/1759: the lane\'s own sync file passes even though file_scope_lock never declares it', () => {
+  const result = evaluateScopeDiff(
+    ['.ops/sync/UTV2-1759.yml', 'scripts/ops/truth-check-lib.ts'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'pass', result.detail);
+});
+
+// 3
+test('S1/1759: both lifecycle files together pass, and the issue ID is matched case-insensitively', () => {
+  const result = evaluateScopeDiff(
+    ['docs/06_status/lanes/UTV2-1759.json', '.ops/sync/UTV2-1759.yml'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'utv2-1759',
+  );
+  assert.strictEqual(result.status, 'pass', result.detail);
+});
+
+// 4
+test('S1/1759: ANOTHER issue\'s manifest still fails — the grant is not a directory exemption', () => {
+  const result = evaluateScopeDiff(
+    ['docs/06_status/lanes/UTV2-1758.json'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /docs\/06_status\/lanes\/UTV2-1758\.json/);
+});
+
+// 5
+test('S1/1759: ANOTHER issue\'s sync file still fails', () => {
+  const result = evaluateScopeDiff(
+    ['.ops/sync/UTV2-1758.yml'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /\.ops\/sync\/UTV2-1758\.yml/);
+});
+
+// 6
+test('S1/1759: an arbitrary file under docs/06_status/lanes/ still fails', () => {
+  const result = evaluateScopeDiff(
+    ['docs/06_status/lanes/README.md', 'docs/06_status/lanes/UTV2-1759.json.bak'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /docs\/06_status\/lanes\/README\.md/);
+  assert.match(result.detail, /docs\/06_status\/lanes\/UTV2-1759\.json\.bak/);
+});
+
+// 7
+test('S1/1759: an arbitrary file under .ops/sync/ still fails', () => {
+  const result = evaluateScopeDiff(
+    ['.ops/sync/sync.yml', '.ops/sync/UTV2-1759.yml.orig'],
+    ['scripts/ops/truth-check-lib.ts'],
+    [],
+    'UTV2-1759',
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /\.ops\/sync\/sync\.yml/);
+  assert.match(result.detail, /\.ops\/sync\/UTV2-1759\.yml\.orig/);
+});
+
+// 8
+test('S1/1759: a missing or malformed issue ID grants nothing — the exemption fails closed', () => {
+  for (const badId of [undefined, null, '', '   ', 'UTV2-', 'utv2', 'UTV2-1759-extra', '**', '../../etc']) {
+    const result = evaluateScopeDiff(
+      ['docs/06_status/lanes/UTV2-1759.json'],
+      ['scripts/ops/truth-check-lib.ts'],
+      [],
+      badId as string | null | undefined,
+    );
+    assert.strictEqual(result.status, 'fail', `issue id ${JSON.stringify(badId)} must grant nothing`);
+  }
+});
+
+// 9
+test('S1/1759: the pre-existing proof exemptions are unchanged', () => {
+  // Any lane's proof directory was already exempt before this change, via the
+  // unconditional `docs/06_status/proof/` prefix in evaluateScopeDiff. That
+  // behaviour is deliberately untouched here.
+  assert.strictEqual(
+    evaluateScopeDiff(['docs/06_status/proof/UTV2-1640/evidence.json'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+    'pass',
+  );
+  // deleted-file markers and expected_proof_paths keep working too...
+  assert.strictEqual(
+    evaluateScopeDiff(['some/deleted-file/marker.ts'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+    'pass',
+  );
+  // ...and a genuinely out-of-scope source file still fails.
+  assert.strictEqual(
+    evaluateScopeDiff(['apps/api/src/submission-service.ts'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+    'fail',
+  );
+});
+
+// 10
+test('S1/1759: the real UTV2-1758 lane now passes S1, and failed before only on its own manifest', () => {
+  const withGrant = evaluateScopeDiff(
+    UTV2_1758_FILES_CHANGED,
+    UTV2_1758_LOCK,
+    UTV2_1758_PROOF_PATHS,
+    'UTV2-1758',
+  );
+  assert.strictEqual(withGrant.status, 'pass', withGrant.detail);
+
+  // Same inputs with no issue ID reproduce the historical failure exactly, and
+  // name only the manifest -- proving the manifest was the sole blocker rather
+  // than one of several.
+  const withoutGrant = evaluateScopeDiff(UTV2_1758_FILES_CHANGED, UTV2_1758_LOCK, UTV2_1758_PROOF_PATHS);
+  assert.strictEqual(withoutGrant.status, 'fail');
+  assert.strictEqual(
+    withoutGrant.detail,
+    'files_changed outside file_scope_lock: docs/06_status/lanes/UTV2-1758.json',
+  );
+});
+
+test('S1/1759: pre-merge and post-merge guards share ONE lifecycle-scope definition', () => {
+  // Not "the same list written twice" -- the same function. The duplicated-
+  // authority class this program keeps finding is exactly two gates carrying
+  // divergent definitions of one invariant.
+  assert.deepStrictEqual(laneLifecycleScopePatterns('UTV2-1759'), [
+    '.ops/sync/UTV2-1759.yml',
+    'docs/06_status/lanes/UTV2-1759.json',
+    'docs/06_status/proof/UTV2-1759/**',
+  ]);
+  assert.deepStrictEqual(laneLifecycleScopePatterns('UTV2-1759'), laneLifecycleScopePatterns('utv2-1759'));
+  assert.deepStrictEqual(laneLifecycleScopePatterns(''), []);
+  // No directory-wide pattern is ever produced.
+  for (const pattern of laneLifecycleScopePatterns('UTV2-1759')) {
+    assert.ok(
+      !['docs/06_status/lanes/**', '.ops/sync/**'].includes(pattern),
+      `directory-wide exemption leaked: ${pattern}`,
+    );
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutation control (UTV2-1759).
+//
+// A green suite proves nothing about a guard. These tests rewrite the exemption
+// in this module's own source, import the mutant, and assert the suite above
+// would have caught that mutant. Two mutants, because there are two distinct
+// ways to get this wrong:
+//
+//   REMOVED       -- no exemption at all: the historical UTV2-1758 failure.
+//   BROAD_PREFIX  -- directory-wide `docs/06_status/lanes/**` + `.ops/sync/**`:
+//                    passes every happy-path test while silently admitting every
+//                    OTHER lane's lifecycle metadata. This is the mutant a
+//                    happy-path-only suite cannot tell from the real fix.
+//
+// The mutant is written beside the original so its relative imports resolve, and
+// removed in a `finally`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SCOPE_DIFF_EXEMPTION_CALL = '...laneLifecycleScopePatterns(issueId)';
+
+async function withMutatedScopeDiff<T>(
+  label: string,
+  replacement: string,
+  body: (evaluate: typeof evaluateScopeDiff) => Promise<T> | T,
+): Promise<T> {
+  const repoRoot = getRepoRoot();
+  const originalPath = path.join(repoRoot, 'scripts/ops/truth-check-lib.ts');
+  const source = fs.readFileSync(originalPath, 'utf8');
+  assert.ok(
+    source.includes(SCOPE_DIFF_EXEMPTION_CALL),
+    `mutation target "${SCOPE_DIFF_EXEMPTION_CALL}" not found — the harness is stale, not the code`,
+  );
+
+  const mutantPath = path.join(repoRoot, `scripts/ops/truth-check-lib.__mutant_${label}__.ts`);
+  fs.writeFileSync(mutantPath, source.replace(SCOPE_DIFF_EXEMPTION_CALL, replacement), 'utf8');
+  try {
+    const mutant = (await import(`${pathToFileURL(mutantPath).href}?v=${label}`)) as {
+      evaluateScopeDiff: typeof evaluateScopeDiff;
+    };
+    return await body(mutant.evaluateScopeDiff);
+  } finally {
+    fs.rmSync(mutantPath, { force: true });
+  }
+}
+
+test('S1/1759 mutation: REMOVING the exact-lane exemption makes the UTV2-1758 fixture fail again', async () => {
+  await withMutatedScopeDiff('removed', '', (evaluate) => {
+    const result = evaluate(UTV2_1758_FILES_CHANGED, UTV2_1758_LOCK, UTV2_1758_PROOF_PATHS, 'UTV2-1758');
+    assert.strictEqual(result.status, 'fail', 'mutant survived: regression 10 is not load-bearing');
+    assert.match(result.detail, /docs\/06_status\/lanes\/UTV2-1758\.json/);
+
+    // Regressions 1 and 2 must also flip, or they are decorative.
+    assert.strictEqual(
+      evaluate(['docs/06_status/lanes/UTV2-1759.json'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+      'fail',
+      'mutant survived: regression 1 is not load-bearing',
+    );
+    assert.strictEqual(
+      evaluate(['.ops/sync/UTV2-1759.yml'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+      'fail',
+      'mutant survived: regression 2 is not load-bearing',
+    );
+  });
+});
+
+test('S1/1759 mutation: a BROAD PREFIX implementation fails the cross-lane regressions', async () => {
+  await withMutatedScopeDiff(
+    'broad_prefix',
+    "'docs/06_status/lanes/**', '.ops/sync/**'",
+    (evaluate) => {
+      // The broad mutant passes every happy path...
+      assert.strictEqual(
+        evaluate(['docs/06_status/lanes/UTV2-1759.json'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+        'pass',
+        'broad mutant should still pass the happy path — otherwise this control proves nothing',
+      );
+
+      // ...and is caught only by the cross-lane and arbitrary-file regressions.
+      assert.strictEqual(
+        evaluate(['docs/06_status/lanes/UTV2-1758.json'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+        'pass',
+        'broad mutant unexpectedly rejected another lane\'s manifest',
+      );
+      assert.strictEqual(
+        evaluate(['.ops/sync/UTV2-1758.yml'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+        'pass',
+        'broad mutant unexpectedly rejected another lane\'s sync file',
+      );
+      assert.strictEqual(
+        evaluate(['docs/06_status/lanes/README.md'], ['scripts/ops/truth-check-lib.ts'], [], 'UTV2-1759').status,
+        'pass',
+        'broad mutant unexpectedly rejected an arbitrary lanes/ file',
+      );
+      // Regressions 4, 5, 6 and 7 assert 'fail' for exactly these inputs, so
+      // each of the four passes above is a regression that would have failed.
+    },
+  );
+});
+
+// ── UTV2-1776: the real P10/R3 consumer path from run 33268421913 ─────────────
+//
+// Post-Merge Lane Close run 33268421913 failed P10 and R3 on the UTV2-1729 bundle
+// because merge authority was read off `sha_binding.verified_source_sha`. UTV2-1729
+// was squash-merged, so its merge commit and its verified source commit are
+// necessarily different objects and that equality could never hold honestly.
+//
+// This exercises the production consumers themselves — `evaluateSchemaV2VerifierProvenanceCheck`
+// is the only schema-v2 P10 path inside `runTruthCheck`, and `addUnsupportedRuntimeChecks`
+// is the R3 path — against the real bundle checked in at docs/06_status/proof/UTV2-1729.
+
+const UTV2_1729_MERGE_SHA = '95ec237f32eebd14c2a37cde477202fd553711cb';
+const UTV2_1729_PR_HEAD = '55b583fd57e34ab2047bdf4cc948cca9b617eb83';
+const UTV2_1729_SOURCE_SHA = '0c915811cd40b312bd3bdb4094062c29f6632c71';
+const UTV2_1729_MAIN_REF = '1b5bffad1ce0cb8c9906f8bb0438b6c7c6ceb0cf';
+
+const UTV2_1729_ATTESTATION = {
+  merge_sha: UTV2_1729_MERGE_SHA,
+  head_sha: UTV2_1729_PR_HEAD,
+  pr_number: 1436,
+  source: 'github-api' as const,
+};
+
+// actions/checkout gives the wired CI suite a shallow PR checkout, so these
+// historical objects are not fetchable there (the same constraint that produced
+// AUTHENTIC_SQUASH_GIT above). Every fact below was read from real git in this
+// repository and is recorded verbatim in docs/06_status/proof/UTV2-1776/verification.md:
+//   git rev-list --parents -n1 95ec237f  -> 95ec237f 1b5bffad   (single parent: squash)
+//   git merge-base --is-ancestor 55b583fd 95ec237f -> exit 1    (PR head not in merge)
+//   git merge-base --is-ancestor 0c915811 55b583fd -> exit 0    (source is in the PR)
+//   git merge-base 55b583fd 95ec237f -> 1b5bffad
+//   git merge-base --is-ancestor 0c915811 1b5bffad -> exit 1    (source is NOT already on base)
+//   git merge-base --is-ancestor 1b5bffad 55b583fd -> exit 0    (base is behind the PR head)
+// Anything not on that list is an error, so the seam cannot silently invent a fact.
+const UTV2_1729_ANCESTRY: ReadonlyArray<readonly [string, string, 0 | 1]> = [
+  [UTV2_1729_PR_HEAD, UTV2_1729_MERGE_SHA, 1],
+  [UTV2_1729_SOURCE_SHA, UTV2_1729_PR_HEAD, 0],
+  [UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF, 1],
+  [UTV2_1729_MAIN_REF, UTV2_1729_PR_HEAD, 0],
+  [UTV2_1729_MAIN_REF, UTV2_1729_MAIN_REF, 0],
+];
+
+const UTV2_1729_GIT: EvidenceGitRunner = (args) => {
+  const known = new Set([UTV2_1729_MERGE_SHA, UTV2_1729_PR_HEAD, UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF]);
+  if (args[0] === 'cat-file' && args[1] === '-e') {
+    const sha = String(args[2] ?? '').replace('^{commit}', '');
+    return known.has(sha)
+      ? { status: 0, stdout: '', stderr: '' }
+      : { status: 1, stdout: '', stderr: `unknown object ${sha}` };
+  }
+  if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+    const recorded = UTV2_1729_ANCESTRY.find(([a, b]) => a === args[2] && b === args[3]);
+    if (!recorded) {
+      return { status: 2, stdout: '', stderr: `unrecorded ancestry probe: ${args[2]} -> ${args[3]}` };
+    }
+    return { status: recorded[2], stdout: '', stderr: '' };
+  }
+  if (args[0] === 'merge-base' && args.length === 3
+      && args[1] === UTV2_1729_PR_HEAD && args[2] === UTV2_1729_MERGE_SHA) {
+    return { status: 0, stdout: `${UTV2_1729_MAIN_REF}\n`, stderr: '' };
+  }
+  return { status: 2, stdout: '', stderr: `unscripted git invocation: git ${args.join(' ')}` };
+};
+
+/**
+ * The real on-main UTV2-1729 bundle with its merge slot populated to the SHA
+ * GitHub recorded — exactly the state `post-merge-lane-close` rebinds it to
+ * before it re-runs the truth check.
+ */
+function utv2_1729Bundle(): EvidenceBundleV1 {
+  const bundle = JSON.parse(fs.readFileSync(
+    path.join(getRepoRoot(), 'docs/06_status/proof/UTV2-1729/evidence.json'),
+    'utf8',
+  )) as EvidenceBundleV1;
+  assert.equal(bundle.schema_version, 2, 'UTV2-1729 must remain a schema-v2 bundle');
+  assert.equal(
+    bundle.sha_binding?.verified_source_sha,
+    UTV2_1729_SOURCE_SHA,
+    'the checked-in UTV2-1729 verified source must still be the execution SHA this regression is about',
+  );
+  assert.ok(
+    bundle.sha_binding && Object.prototype.hasOwnProperty.call(bundle.sha_binding, 'merge_sha'),
+    'UTV2-1729 declares the explicit merge slot, so it is not a pre-slot bundle',
+  );
+  bundle.sha_binding!.merge_sha = UTV2_1729_MERGE_SHA;
+  return bundle;
+}
+
+const UTV2_1729_VERIFIER_PROVENANCE = {
+  source: 'github-required-check' as const,
+  producer: 'github-app:15368:verify',
+  verified_sha: UTV2_1729_PR_HEAD,
+  details_url: null,
+};
+
+test('UTV2-1776 regression: P10 accepts the real UTV2-1729 split identity through the production consumer', () => {
+  const result = evaluateSchemaV2VerifierProvenanceCheck({
+    bundle: utv2_1729Bundle(),
+    verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+    mergedPrAttestation: UTV2_1729_ATTESTATION,
+    laneType: 'governance',
+    tier: 'T1',
+    repoRoot: getRepoRoot(),
+    gitRunner: UTV2_1729_GIT,
+  });
+  assert.equal(result.status, 'pass', result.detail);
+  assert.match(result.detail, /verifier_provenance_bound_merge_slot/);
+});
+
+test('UTV2-1776 regression: R3 accepts the real UTV2-1729 split identity through the production consumer', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    { bundle: utv2_1729Bundle() },
+    {
+      laneType: 'governance',
+      verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      repoRoot: getRepoRoot(),
+      gitRunner: UTV2_1729_GIT,
+    },
+  );
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [['R1', 'pass'], ['R2', 'pass'], ['R3', 'pass']],
+    JSON.stringify(checks, null, 2),
+  );
+});
+
+test('UTV2-1776: the pre-fix rule is what rejected UTV2-1729, and it is still enforced for pre-slot bundles', () => {
+  // The old rule, stated directly: merge authority read off verified_source_sha.
+  // Against the real UTV2-1729 identities it is false, which is the whole defect.
+  assert.notEqual(UTV2_1729_SOURCE_SHA, UTV2_1729_MERGE_SHA);
+
+  // A bundle that does NOT declare the slot still has to satisfy that old rule,
+  // so the fix did not delete it — it moved merge authority to the slot.
+  const preSlot = verifyExternalVerifierProvenanceBinding({
+    receiptSha: UTV2_1729_PR_HEAD,
+    verifiedSourceSha: UTV2_1729_SOURCE_SHA,
+    context: {
+      gate: 'post-merge-read',
+      repoRoot: getRepoRoot(),
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      gitRunner: UTV2_1729_GIT,
+    },
+  });
+  assert.equal(preSlot.valid, false);
+  assert.equal(preSlot.code, 'verifier_merge_attestation_mismatch');
+});
+
+test('UTV2-1776: P10 fails closed when the real bundle names the wrong merge SHA', () => {
+  for (const wrong of [UTV2_1729_PR_HEAD, UTV2_1729_SOURCE_SHA, UTV2_1729_MAIN_REF]) {
+    const bundle = utv2_1729Bundle();
+    bundle.sha_binding!.merge_sha = wrong;
+    const result = evaluateSchemaV2VerifierProvenanceCheck({
+      bundle,
+      verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+      mergedPrAttestation: UTV2_1729_ATTESTATION,
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: getRepoRoot(),
+      gitRunner: UTV2_1729_GIT,
+    });
+    assert.equal(result.status, 'fail', `merge slot ${wrong} must not bind`);
+    assert.match(result.detail, /verifier_merge_attestation_mismatch/);
+  }
+});
+
+test('UTV2-1776: P10 fails closed when the GitHub merged-PR attestation is missing', () => {
+  const result = evaluateSchemaV2VerifierProvenanceCheck({
+    bundle: utv2_1729Bundle(),
+    verifierProvenance: UTV2_1729_VERIFIER_PROVENANCE,
+    mergedPrAttestation: null,
+    laneType: 'governance',
+    tier: 'T1',
+    repoRoot: getRepoRoot(),
+    gitRunner: UTV2_1729_GIT,
+  });
+  assert.equal(result.status, 'fail');
+  assert.match(result.detail, /verifier_merge_attestation_unverified/);
 });

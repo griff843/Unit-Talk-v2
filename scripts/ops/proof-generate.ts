@@ -20,8 +20,9 @@ import {
   requireIssueId,
   type LaneManifest,
 } from './shared.js';
-import type { ModelRoutingBlock } from './model-routing.js';
-import { declaredProfileForLaneType } from './proof-schema.js';
+import { validatePreMergeModelRoutingEvidence, type ModelRoutingBlock } from './model-routing.js';
+import { declaredProfileForLaneType, markdownFencedLineIndexes } from './proof-schema.js';
+import { duplicateKeysInSameObject } from './proof-rebind.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
 
@@ -205,6 +206,221 @@ export function standardProofPaths(issueId: string): Record<ProofArtifactName, s
   };
 }
 
+/** Canonical schema-v2 evidence scaffold. It is bindable, but never claims verification ran. */
+export function buildEvidenceSkeleton(input: ProofGenerateInput): string {
+  const profile = declaredProfileForLaneType(input.manifest.lane_type);
+  if (!profile || profile === 'legacy-v1') {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      `docs/06_status/proof/${input.manifest.issue_id}/evidence.json`,
+      `Lane type ${JSON.stringify(input.manifest.lane_type)} has no authorable proof profile`,
+    );
+  }
+  if (!input.gitTruth.head_sha) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      `docs/06_status/proof/${input.manifest.issue_id}/evidence.json`,
+      'Cannot generate bindable evidence without an execution head SHA',
+    );
+  }
+  return `${JSON.stringify({
+    schema_version: 2,
+    issue_id: input.manifest.issue_id,
+    tier: input.manifest.tier,
+    lane_type: input.manifest.lane_type,
+    proof_profile: profile,
+    status: 'pre_merge',
+    sha_binding: {
+      merge_sha: null,
+      verified_source_sha: input.gitTruth.head_sha,
+      evidence_commit_sha: 'set-by-ci',
+      current_pr_head_sha: 'set-by-ci',
+    },
+    static_proof: {
+      status: 'not_run',
+      note: 'Populate with measured gate results before review; proof-generate does not execute verification.',
+    },
+  }, null, 2)}\n`;
+}
+
+export function normalizePreMergeEvidenceJson(
+  content: string,
+  relPath: string,
+  expectedIssueId: string,
+): string {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    throw new ProofPreservationError('malformed_evidence_json', relPath, `Evidence bundle is not valid JSON: ${relPath}`);
+  }
+  if (!isJsonObject(parsed) || parsed['schema_version'] !== 2) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      `Pre-merge structural normalization is restricted to schema-v2 evidence: ${relPath}`,
+    );
+  }
+  if (String(parsed['issue_id'] ?? '').toUpperCase() !== expectedIssueId.toUpperCase()) {
+    throw new ProofPreservationError('unbindable_proof_artifact', relPath, `Evidence issue_id does not match ${expectedIssueId}: ${relPath}`);
+  }
+  if (Object.prototype.hasOwnProperty.call(parsed, 'merge_sha')) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      `Schema-v2 evidence carries forbidden legacy top-level merge_sha: ${relPath}`,
+    );
+  }
+  const binding = parsed['sha_binding'];
+  if (!isJsonObject(binding)) {
+    throw new ProofPreservationError('unbindable_proof_artifact', relPath, `Evidence is missing sha_binding: ${relPath}`);
+  }
+  for (const key of ['sha_binding', 'merge_sha', 'verified_source_sha', 'evidence_commit_sha', 'current_pr_head_sha']) {
+    if (duplicateKeysInSameObject(content, key) > 1) {
+      throw new ProofPreservationError(
+        'unbindable_proof_artifact',
+        relPath,
+        `Evidence carries a duplicate binding key ${JSON.stringify(key)} and cannot be normalized safely: ${relPath}`,
+      );
+    }
+  }
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
+    const eol = content.includes('\r\n') ? '\r\n' : '\n';
+    const lines = content.split(/\r?\n/u);
+    const openings = lines.flatMap((line, index) => {
+      const match = line.match(/^(\s*)"sha_binding"\s*:\s*\{\s*$/u);
+      return match ? [{ index, indent: match[1] ?? '' }] : [];
+    });
+    if (openings.length !== 1) {
+      throw new ProofPreservationError(
+        'unbindable_proof_artifact',
+        relPath,
+        `Evidence sha_binding must use one expanded JSON object before surgical merge-slot insertion: ${relPath}`,
+      );
+    }
+    const opening = openings[0]!;
+    const childIndent = lines.slice(opening.index + 1)
+      .map((line) => line.match(/^(\s+)"/u)?.[1] ?? null)
+      .find((indent) => indent !== null && indent.length > opening.indent.length) ?? `${opening.indent}  `;
+    lines.splice(opening.index + 1, 0, `${childIndent}"merge_sha": null,`);
+    return lines.join(eol);
+  } else if (binding['merge_sha'] !== null) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      `Pre-merge sha_binding.merge_sha must be null; branch identity belongs in verified_source_sha: ${relPath}`,
+    );
+  }
+  return content;
+}
+
+export function normalizePreMergeVerificationMarkdown(
+  content: string,
+  relPath: string,
+  executionSha: string | null,
+  prUrl: string | null,
+): string {
+  const eol = content.includes('\r\n') ? '\r\n' : '\n';
+  const lines = content.split(/\r?\n/u);
+  const fenced = markdownFencedLineIndexes(content);
+  const matches = lines.flatMap((line, index) => !fenced.has(index) && /^MERGE_SHA:\s*(.*)$/u.test(line) ? [index] : []);
+  if (matches.length !== 1) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      `${relPath} must contain exactly one top-level MERGE_SHA: row before merge`,
+    );
+  }
+  // Pre-merge normalization re-anchors this row to the execution SHA. It must
+  // never write a placeholder: executor-result-validator.yml requires a real
+  // 7-40 hex token that is an ancestor of the PR head, so `pending merge` here
+  // made every normalized bundle fail required Executor Result Validation.
+  if (!executionSha || !/^[0-9a-f]{7,40}$/iu.test(executionSha)) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      'Cannot normalize pre-merge verification.md: no valid execution SHA is available for the '
+      + `required top-level MERGE_SHA: anchor (got ${JSON.stringify(executionSha)}). `
+      + 'Refusing to emit a placeholder.',
+    );
+  }
+  lines[matches[0]!] = `MERGE_SHA: ${executionSha}`;
+  let next = lines.join(eol);
+  const nextFenced = markdownFencedLineIndexes(next);
+  const headings = next.split(/\r?\n/u).flatMap(
+    (line, index) => !nextFenced.has(index) && /^## Merge SHA Binding\s*$/u.test(line) ? [index] : [],
+  );
+  if (headings.length > 1) {
+    throw new ProofPreservationError('unbindable_proof_artifact', relPath, `${relPath} has duplicate Merge SHA Binding sections`);
+  }
+  if (headings.length === 0) {
+    const suffix = [
+      '## Merge SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      `PR: ${prUrl ?? 'pending'}`,
+      'Approved PR head: pending merge',
+      `Execution SHA: ${executionSha ?? 'pending'}`,
+      '',
+    ].join(eol);
+    next = `${next.replace(/\r?\n?$/, '')}${eol}${eol}${suffix}`;
+  }
+  return next;
+}
+
+export function normalizePreMergeModelRoutingJson(
+  content: string,
+  relPath: string,
+  expectedIssueId: string,
+  executionSha: string | null,
+): string {
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    throw new ModelRoutingRebindError('malformed_required_sidecar', relPath, `Required model-routing sidecar is not valid JSON: ${relPath}`);
+  }
+  if (!isJsonObject(parsed) || String(parsed['issue_id'] ?? '').toUpperCase() !== expectedIssueId.toUpperCase()) {
+    throw new ModelRoutingRebindError('sidecar_identity_mismatch', relPath, `Model-routing sidecar does not belong to ${expectedIssueId}: ${relPath}`);
+  }
+  if (parsed['closeout_binding'] !== undefined) {
+    throw new ModelRoutingRebindError('binding_conflict', relPath, `Pre-merge model-routing sidecar already carries closeout_binding: ${relPath}`);
+  }
+  const legacyMergeSha = parsed['merge_sha'];
+  if (legacyMergeSha === undefined) {
+    const contract = validatePreMergeModelRoutingEvidence(parsed, { expectedIssueId });
+    if (!contract.valid) {
+      throw new ModelRoutingRebindError(
+        'malformed_required_sidecar',
+        relPath,
+        `Model-routing sidecar is not pre-merge bindable (${contract.violations.join('; ')}): ${relPath}`,
+      );
+    }
+    return content;
+  }
+  if (typeof legacyMergeSha !== 'string' || !/^[0-9a-f]{40}$/.test(legacyMergeSha) || legacyMergeSha !== executionSha) {
+    throw new ModelRoutingRebindError(
+      'legacy_binding_conflict',
+      relPath,
+      `Top-level merge_sha is not the attested execution SHA and cannot be normalized: ${relPath}`,
+    );
+  }
+  if (parsed['execution_sha'] !== undefined && parsed['execution_sha'] !== legacyMergeSha) {
+    throw new ModelRoutingRebindError('legacy_binding_conflict', relPath, `Model-routing execution_sha conflicts with legacy merge_sha: ${relPath}`);
+  }
+  delete parsed['merge_sha'];
+  parsed['execution_sha'] = legacyMergeSha;
+  const contract = validatePreMergeModelRoutingEvidence(parsed, { expectedIssueId });
+  if (!contract.valid) {
+    throw new ModelRoutingRebindError(
+      'malformed_required_sidecar',
+      relPath,
+      `Model-routing sidecar is not pre-merge bindable (${contract.violations.join('; ')}): ${relPath}`,
+    );
+  }
+  return `${JSON.stringify(parsed, null, 2)}\n`;
+}
+
 export function collectProofGitTruth(
   manifest: LaneManifest,
   options: {
@@ -346,23 +562,39 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
   // already come from DEFAULT_VERIFICATION_COMMANDS, so the union is smaller
   // than the four requirement lists suggest.
   //
-  // The SHA anchor takes the merge SHA when it exists and the head SHA before
-  // merge. It must never be a placeholder word: runtime-verifier-gate hard-fails
-  // when the file contains no 40-hex token at all, and only *warns* when the
-  // token differs from the current head. Emitting `N/A` therefore failed the
-  // gate outright on every freshly generated bundle, which is why each lane
-  // repaired this line by hand. `N/A` survives only when neither SHA is known,
-  // where failing is the correct outcome.
-  const shaAnchor = gitTruth.merge_sha ?? gitTruth.head_sha ?? 'N/A';
+  // The top-level `MERGE_SHA:` row is a legacy-named *anchor*, not authoritative
+  // merge identity. Authoritative merge identity lives only at
+  // `sha_binding.merge_sha`, which stays null until the GitHub-attested
+  // post-merge rebind supplies it — this function never writes it.
+  //
+  // The anchor takes the merge SHA when it exists and the execution SHA before
+  // merge. It must never be a placeholder word. Two required gates read it:
+  // runtime-verifier-gate hard-fails when the file contains no 40-hex token at
+  // all, and executor-result-validator.yml:274 requires this row to match
+  // /^[0-9a-f]{7,40}$/ and to be an ancestor of the PR head. Both `N/A` and
+  // `pending merge` fail that rule, so every freshly generated bundle was
+  // structurally incapable of passing required Executor Result Validation until
+  // the execution-SHA fallback below existed. When neither SHA is resolvable we
+  // fail closed rather than emit any placeholder.
+  const mergeAnchor = gitTruth.merge_sha ?? gitTruth.head_sha;
+  if (!mergeAnchor) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      `docs/06_status/proof/${manifest.issue_id}/verification.md`,
+      'Cannot generate verification.md: neither a merge SHA nor an execution SHA is resolvable, '
+      + 'so the required top-level MERGE_SHA: anchor cannot be written. Refusing to emit a placeholder.',
+    );
+  }
+  const executionAnchor = gitTruth.head_sha ?? 'pending';
 
   return [
     `# PROOF: ${manifest.issue_id}`,
     '',
-    `MERGE_SHA: ${shaAnchor}`,
+    `MERGE_SHA: ${mergeAnchor}`,
     '',
-    '> Pre-merge this anchor carries the verified implementation SHA; the merge SHA does',
-    '> not exist yet. `post-merge-lane-close.yml` rebinds it to the authoritative merge',
-    '> SHA via `ops:proof-generate --merge-sha`.',
+    '> Pre-merge the merge anchor is intentionally empty; the Execution SHA row carries',
+    '> the verified implementation identity. `post-merge-lane-close.yml` rebinds merge',
+    '> authority only after GitHub supplies the merged-PR attestation.',
     '',
     `Generated at: ${input.generatedAt}`,
     `Issue: ${manifest.issue_id}`,
@@ -394,9 +626,15 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     '## Runtime Verification',
     ...notes.map((note) => `- ${note}`),
     '',
-    '## SHA Binding',
-    `Head SHA: ${gitTruth.head_sha ?? 'N/A'}`,
-    `Merge SHA: ${gitTruth.merge_sha ?? 'N/A'}`,
+    '## Merge SHA Binding',
+    '',
+    // The narrative binding section reports true merge identity, which is
+    // unknown before merge. Only the top-level gate-read anchor above falls
+    // back to the execution SHA; this row must never imply a merge happened.
+    `Merge SHA: ${gitTruth.merge_sha ?? 'pending merge'}`,
+    `PR: ${manifest.pr_url ?? 'pending'}`,
+    `Approved PR head: ${gitTruth.merge_sha ? executionAnchor : 'pending merge'}`,
+    `Execution SHA: ${executionAnchor}`,
     '',
   ].join('\n');
 }
@@ -574,6 +812,13 @@ export function rebindEvidenceJsonSha(
     // doing nothing, so this is not an error — just a no-op.
     return { path: relPath, status: 'unchanged' };
   }
+  if (shaBinding && !Object.prototype.hasOwnProperty.call(shaBinding, 'merge_sha')) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      relPath,
+      `Evidence bundle is missing required sha_binding.merge_sha and cannot be rebound without re-attestation: ${relPath}`,
+    );
+  }
 
   // UTV2-1631: `sha_binding.merge_sha` and the legacy top-level `merge_sha` are
   // merge-SHA-bearing fields too. Rebinding only `verified_source_sha` left the
@@ -583,8 +828,7 @@ export function rebindEvidenceJsonSha(
   const shaBindingAlreadyBound =
     !shaBinding ||
     (shaBinding['sha_type'] === 'merge_sha' &&
-      shaBinding['verified_source_sha'] === mergeSha &&
-      (!('merge_sha' in shaBinding) || shaBinding['merge_sha'] === mergeSha));
+      shaBinding['merge_sha'] === mergeSha);
   const topLevelAlreadyBound = !hasLegacyTopLevelMergeSha || parsed['merge_sha'] === mergeSha;
   if (shaBindingAlreadyBound && topLevelAlreadyBound) {
     // Already bound to this exact merge SHA — leave bound_at alone so re-running
@@ -596,13 +840,10 @@ export function rebindEvidenceJsonSha(
   if (shaBinding) {
     const nextShaBinding: Record<string, unknown> = {
       ...shaBinding,
-      verified_source_sha: mergeSha,
       sha_type: 'merge_sha',
       bound_at: generatedAt,
+      merge_sha: mergeSha,
     };
-    if ('merge_sha' in shaBinding) {
-      nextShaBinding['merge_sha'] = mergeSha;
-    }
     nextParsed['sha_binding'] = nextShaBinding;
   }
   if (hasLegacyTopLevelMergeSha) {
@@ -663,6 +904,9 @@ export function rebindModelRoutingJsonSha(
     relPath?: string;
     expectedIssueId?: string;
     manifestModelRouting?: ModelRoutingBlock | null;
+    /** GitHub-attested recovery for the broken active generator only. */
+    allowLegacyExecutionReattestation?: boolean;
+    executionSha?: string | null;
   } = {},
 ): ShaRebindOutcome {
   const relPath = options.relPath ?? absolutePath;
@@ -827,12 +1071,14 @@ export function rebindModelRoutingJsonSha(
   // internally consistent (independent review finding).
   const legacyMergeSha = parsed['merge_sha'];
   if (typeof legacyMergeSha === 'string' && legacyMergeSha.trim() !== '' && legacyMergeSha !== mergeSha) {
-    throw new ModelRoutingRebindError(
-      'legacy_binding_conflict',
-      relPath,
-      `Sidecar legacy top-level merge_sha ${JSON.stringify(legacyMergeSha)} conflicts with the ` +
-        `authoritative merge SHA ${JSON.stringify(mergeSha)}: ${relPath}`,
-    );
+    if (!options.allowLegacyExecutionReattestation || legacyMergeSha !== options.executionSha) {
+      throw new ModelRoutingRebindError(
+        'legacy_binding_conflict',
+        relPath,
+        `Sidecar legacy top-level merge_sha ${JSON.stringify(legacyMergeSha)} conflicts with the ` +
+          `authoritative merge SHA ${JSON.stringify(mergeSha)}: ${relPath}`,
+      );
+    }
   }
 
   const existingBinding = parsed['closeout_binding'];
@@ -865,7 +1111,7 @@ export function rebindModelRoutingJsonSha(
     return { path: relPath, status: 'unchanged' };
   }
 
-  const nextParsed = {
+  const nextParsed: Record<string, unknown> = {
     ...parsed,
     closeout_binding: {
       sha_type: 'merge_sha',
@@ -874,6 +1120,10 @@ export function rebindModelRoutingJsonSha(
       bound_at: generatedAt,
     },
   };
+  if (options.allowLegacyExecutionReattestation && legacyMergeSha === options.executionSha) {
+    delete nextParsed['merge_sha'];
+    nextParsed['execution_sha'] = options.executionSha;
+  }
   const nextContent = `${JSON.stringify(nextParsed, null, 2)}\n`;
   if (options.write ?? true) {
     fs.writeFileSync(absolutePath, nextContent, 'utf8');
@@ -978,6 +1228,70 @@ export function generateProofArtifacts(
   const modelRoutingPaths = input.manifest.expected_proof_paths.filter(
     (proofPath) => path.posix.basename(proofPath) === 'model-routing.json',
   );
+  const evidencePath = input.manifest.expected_proof_paths.find(
+    (proofPath) => path.posix.basename(proofPath) === 'evidence.json',
+  ) ?? null;
+
+  type ExtraPlan = {
+    proofPath: string;
+    absolutePath: string;
+    nextContent: string | null;
+    exists: boolean;
+  };
+  const extraPlans: ExtraPlan[] = [];
+  let preMergeExecutionSha = input.gitTruth.head_sha;
+
+  if (!input.gitTruth.merge_sha && evidencePath) {
+    const absolutePath = safeRepoPath(root, evidencePath);
+    const exists = fs.existsSync(absolutePath);
+    const previous = exists ? fs.readFileSync(absolutePath, 'utf8') : null;
+    const nextContent = previous === null
+      ? buildEvidenceSkeleton(input)
+      : normalizePreMergeEvidenceJson(previous, evidencePath, input.manifest.issue_id);
+    const parsed = JSON.parse(nextContent) as { sha_binding?: { verified_source_sha?: unknown } };
+    const captured = parsed.sha_binding?.verified_source_sha;
+    if (typeof captured === 'string' && /^[0-9a-f]{40}$/.test(captured)) {
+      preMergeExecutionSha = captured;
+    }
+    extraPlans.push({
+      proofPath: evidencePath,
+      absolutePath,
+      nextContent: previous === nextContent ? null : nextContent,
+      exists,
+    });
+  } else if (input.gitTruth.merge_sha && evidencePath && !fs.existsSync(safeRepoPath(root, evidencePath))) {
+    throw new ProofPreservationError(
+      'unbindable_proof_artifact',
+      evidencePath,
+      `Required evidence bundle is missing after merge; refusing to invent measured proof: ${evidencePath}`,
+    );
+  }
+
+  if (!input.gitTruth.merge_sha) {
+    for (const modelRoutingPath of modelRoutingPaths) {
+      const absolutePath = safeRepoPath(root, modelRoutingPath);
+      if (!fs.existsSync(absolutePath)) {
+        throw new ModelRoutingRebindError(
+          'missing_required_sidecar',
+          modelRoutingPath,
+          `Required model-routing sidecar is missing: ${modelRoutingPath}`,
+        );
+      }
+      const previous = fs.readFileSync(absolutePath, 'utf8');
+      const nextContent = normalizePreMergeModelRoutingJson(
+        previous,
+        modelRoutingPath,
+        input.manifest.issue_id,
+        preMergeExecutionSha,
+      );
+      extraPlans.push({
+        proofPath: modelRoutingPath,
+        absolutePath,
+        nextContent: previous === nextContent ? null : nextContent,
+        exists: true,
+      });
+    }
+  }
 
   // Validate every required routing sidecar before mutating any proof artifact
   // so conflicts and malformed historical authority fail as one atomic
@@ -1027,12 +1341,21 @@ export function generateProofArtifacts(
     }
 
     const previousContent = fs.readFileSync(absolutePath, 'utf8');
-    const { nextContent } = planExistingProofArtifact(
-      previousContent,
-      proofPath,
-      input.gitTruth.merge_sha,
-      input.manifest.pr_url,
-    );
+    const { nextContent } = !input.gitTruth.merge_sha && proofFile === 'verification.md'
+      ? {
+          nextContent: normalizePreMergeVerificationMarkdown(
+            previousContent,
+            proofPath,
+            preMergeExecutionSha,
+            input.manifest.pr_url,
+          ),
+        }
+      : planExistingProofArtifact(
+          previousContent,
+          proofPath,
+          input.gitTruth.merge_sha,
+          input.manifest.pr_url,
+        );
     standardPlans.push({ proofPath, absolutePath, nextContent, exists });
   }
 
@@ -1046,6 +1369,24 @@ export function generateProofArtifacts(
     input.manifest.pr_url,
     { write: false },
   );
+
+  for (const plan of extraPlans) {
+    if (plan.nextContent === null) {
+      pushUnique(preservedPaths, plan.proofPath);
+      pushUnique(unchangedPaths, plan.proofPath);
+      continue;
+    }
+    if (shouldWrite) {
+      ensureDir(path.dirname(plan.absolutePath));
+      fs.writeFileSync(plan.absolutePath, plan.nextContent, 'utf8');
+    }
+    if (plan.exists) {
+      pushUnique(preservedPaths, plan.proofPath);
+      pushUnique(updatedPaths, plan.proofPath);
+    } else {
+      pushUnique(generatedPaths, plan.proofPath);
+    }
+  }
 
   for (const plan of standardPlans) {
     if (plan.nextContent === null) {

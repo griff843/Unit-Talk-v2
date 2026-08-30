@@ -1,6 +1,6 @@
-import { describe, it, test } from 'node:test';
+import { after, describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,11 +8,15 @@ import {
   validateProofSchema,
   isProofStale,
   PROOF_SCHEMA_VERSION,
+  readEvidenceMergeSlot,
   validateEvidenceBundleContract,
   verifyExternalVerifierProvenanceBinding,
   type ProofSchemaV2,
 } from './proof-schema.js';
-import { validateBindingEvidenceContract } from '../ci/proof-binding-validator.js';
+import {
+  validateBindingEvidenceContract,
+  validatePreMergeVerificationBinding,
+} from '../ci/proof-binding-validator.js';
 
 const VALID_SHA = 'a'.repeat(40);
 const OTHER_SHA = 'b'.repeat(40);
@@ -138,6 +142,7 @@ function migrationEvidence() {
     schema_version: 2,
     issue_id: 'UTV2-9000',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
@@ -187,6 +192,44 @@ test('schema-v2 evidence fails without valid sha_binding', () => {
   assert.ok(result.failures.some((failure) => failure.code === 'sha_binding_missing'));
 });
 
+test('schema-v2 evidence requires a nullable merge slot before merge and forbids branch SHAs in it', () => {
+  const missing = migrationEvidence();
+  (missing as { proof_profile: string }).proof_profile = 'static';
+  Reflect.deleteProperty(missing.sha_binding, 'merge_sha');
+  const missingResult = validateEvidenceBundleContract(missing, { gate: 'pre-merge', laneType: 'governance' });
+  assert.ok(missingResult.failures.some((failure) => failure.code === 'sha_binding_merge_slot_missing'));
+
+  const premature = migrationEvidence();
+  (premature as { proof_profile: string }).proof_profile = 'static';
+  premature.sha_binding.merge_sha = OTHER_SHA;
+  const prematureResult = validateEvidenceBundleContract(premature, { gate: 'pre-merge', laneType: 'governance' });
+  assert.ok(prematureResult.failures.some((failure) => failure.code === 'sha_binding_premature_merge_sha'));
+});
+
+test('schema-v2 evidence has one merge authority and requires a concrete post-merge binding', () => {
+  const legacy = migrationEvidence() as ReturnType<typeof migrationEvidence> & { merge_sha?: string };
+  legacy.merge_sha = VALID_SHA;
+  const legacyResult = validateEvidenceBundleContract(legacy, { gate: 'pre-merge', laneType: 'migration' });
+  assert.ok(legacyResult.failures.some((failure) => failure.code === 'legacy_merge_sha_forbidden'));
+
+  const rebound = migrationEvidence();
+  rebound.sha_binding.merge_sha = OTHER_SHA;
+  const reboundResult = validateEvidenceBundleContract(rebound, { gate: 'post-merge-read', laneType: 'migration' });
+  assert.ok(!reboundResult.failures.some((failure) => failure.field === 'sha_binding.merge_sha'));
+
+  const missingStatic = migrationEvidence();
+  (missingStatic as { proof_profile: string }).proof_profile = 'static';
+  Reflect.deleteProperty(missingStatic.sha_binding, 'merge_sha');
+  const missingStaticResult = validateEvidenceBundleContract(
+    missingStatic,
+    { gate: 'post-merge-read', laneType: 'governance' },
+  );
+  assert.ok(
+    missingStaticResult.failures.some((failure) => failure.code === 'sha_binding_merge_slot_missing'),
+    'post-merge non-migration evidence cannot omit its authoritative merge slot',
+  );
+});
+
 test('app-runtime profile fails closed without queries and row_counts', () => {
   const evidence = {
     ...migrationEvidence(),
@@ -233,6 +276,7 @@ function bindingMigrationBundle() {
     schema_version: 2,
     issue_id: 'UTV2-1718',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
@@ -276,6 +320,62 @@ describe('proof-binding-validator', () => {
     assert.equal(result.valid, false);
     assert.equal(result.profile, 'legacy-v1');
     assert.ok(result.failures.some((failure) => failure.code === 'legacy_v1_not_allowed_pre_merge'));
+  });
+
+  test('bindability gate rejects the real #1434/#1435 Markdown shape before merge', () => {
+    for (const branchSha of [
+      'a6bc5c99cc58166321f35d1e0e2aa751450056a8',
+      'fb4aa9d90152e0a2dadc6bf0a2013eaf630fbe8a',
+    ]) {
+      const violations = validatePreMergeVerificationBinding(
+        `# PROOF: lane\n\nMERGE_SHA: ${branchSha}\n\n## Verification\n\nmeasured\n`,
+      );
+      assert.ok(violations.some((violation) => /branch SHAs are execution identity only/.test(violation)));
+      assert.ok(violations.some((violation) => /Merge SHA Binding/.test(violation)));
+    }
+  });
+
+  test('bindability gate accepts the canonical generated Markdown contract', () => {
+    const content = [
+      '# PROOF: UTV2-1729',
+      '',
+      'MERGE_SHA: pending merge',
+      '',
+      '## Verification',
+      '',
+      'measured',
+      '',
+      '## Merge SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending',
+      'Approved PR head: pending merge',
+      `Execution SHA: ${VALID_SHA}`,
+      '',
+    ].join('\n');
+    assert.deepEqual(validatePreMergeVerificationBinding(content), []);
+  });
+
+  test('bindability gate ignores MERGE_SHA-looking rows inside fenced command evidence', () => {
+    const content = [
+      '# PROOF: UTV2-1729',
+      '',
+      'MERGE_SHA: pending merge',
+      '',
+      '## Verification',
+      '',
+      '```text',
+      `MERGE_SHA: ${OTHER_SHA}`,
+      '## Merge SHA Binding',
+      '```',
+      '',
+      '## Merge SHA Binding',
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending',
+      '',
+    ].join('\n');
+    assert.deepEqual(validatePreMergeVerificationBinding(content), []);
   });
 });
 
@@ -366,6 +466,7 @@ function createReceiptBindingRepo(): {
 function migrationEvidenceAt(receiptHead: string, verifiedSourceSha: string) {
   const evidence = migrationEvidence();
   evidence.sha_binding.verified_source_sha = verifiedSourceSha;
+  evidence.sha_binding.merge_sha = verifiedSourceSha;
   evidence.runtime_proof.head = receiptHead;
   return evidence;
 }
@@ -1035,6 +1136,7 @@ test('governance evidence remains on the static proof profile', () => {
     issue_id: 'UTV2-9000',
     proof_profile: 'static',
     sha_binding: {
+      merge_sha: null,
       verified_source_sha: VALID_SHA,
       evidence_commit_sha: 'set-by-ci',
       current_pr_head_sha: 'set-by-ci',
@@ -1068,5 +1170,503 @@ describe('isProofStale', () => {
   it('returns true when source_sha is malformed', () => {
     const proof = { ...makeValid(), source_sha: 'bad' };
     assert.equal(isProofStale(proof, VALID_SHA), true);
+  });
+});
+
+// --- UTV2-1729: historical `sha_binding.merge_sha` compatibility -------------
+//
+// The slot is mandatory. A bundle that genuinely predates it may still be read
+// after merge, but only when an authentic merged-PR attestation proves its
+// identity. These regressions pin every edge of that exemption: it is granted
+// on proof of identity, never on profile, never before merge, and never to a
+// branch SHA. The mechanism tests below run against a real Git repository with
+// a real merge commit, so `resolveMergedPrAttestation` is exercised, not stubbed.
+
+/** A governance/static bundle of the pre-slot vintage: no `sha_binding.merge_sha`. */
+function preSlotStaticBundle(verifiedSourceSha: string) {
+  return {
+    schema_version: 2,
+    issue_id: 'UTV2-9000',
+    proof_profile: 'static',
+    sha_binding: {
+      verified_source_sha: verifiedSourceSha,
+      evidence_commit_sha: 'abc1234',
+      current_pr_head_sha: 'def5678',
+    },
+    static_proof: { type_check: { status: 'PASS' }, tests: { status: 'PASS' } },
+  };
+}
+
+const SLOT_MISSING = 'sha_binding_merge_slot_missing';
+const hasSlotMissing = (result: { failures: Array<{ code: string }> }): boolean =>
+  result.failures.some((failure) => failure.code === SLOT_MISSING);
+
+test('pre-slot static bundle is readable post-merge when an authentic merged-PR attestation proves identity', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), false, JSON.stringify(result.failures));
+  assert.equal(result.profile, 'static');
+});
+
+test('pre-slot compatibility is refused when the attestation belongs to a different merge', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      // Authentic in shape, but attests a different PR's merge.
+      mergedPrAttestation: mergedPrAttestation(repo.receiptHead, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+  assert.equal(result.valid, false);
+});
+
+test('pre-slot compatibility is refused when no merged-PR attestation is supplied at all', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    { gate: 'post-merge-read', laneType: 'governance', tier: 'T1', repoRoot: repo.repoRoot },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+});
+
+test('pre-slot compatibility never applies pre-merge, even with an authentic attestation', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.mergeSha),
+    {
+      gate: 'pre-merge',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+  assert.equal(result.valid, false);
+});
+
+test('a branch SHA never satisfies merge authority through the pre-slot compatibility path', () => {
+  const repo = createMergeCommitReceiptBindingRepo({ laneAuthoredDelta: false });
+  // verified_source_sha is the lane tip that was merged — a branch SHA, not the
+  // merge SHA — while the attestation itself is entirely authentic.
+  const result = validateEvidenceBundleContract(
+    preSlotStaticBundle(repo.originalHead),
+    {
+      gate: 'post-merge-read',
+      laneType: 'governance',
+      tier: 'T1',
+      repoRoot: repo.repoRoot,
+      mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.originalHead),
+    },
+  );
+  assert.equal(hasSlotMissing(result), true, JSON.stringify(result.failures));
+});
+
+test('a pre-merge bundle must carry sha_binding.merge_sha explicitly null, never a branch SHA', () => {
+  const withBranchSha = migrationEvidence();
+  withBranchSha.sha_binding.merge_sha = VALID_SHA;
+  const premature = validateEvidenceBundleContract(
+    withBranchSha,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(premature.valid, false);
+  assert.ok(premature.failures.some((f) => f.code === 'sha_binding_premature_merge_sha'));
+
+  // The same bundle with the slot correctly null is accepted.
+  const nulled = migrationEvidence();
+  const accepted = validateEvidenceBundleContract(
+    nulled,
+    { gate: 'pre-merge', laneType: 'migration', tier: 'T1' },
+  );
+  assert.equal(accepted.valid, true, JSON.stringify(accepted.failures));
+});
+
+test('the real UTV2-1720 bundle still has the pre-slot shape this compatibility path exists for', () => {
+  // Pins the fixture the compatibility path was opened for. If UTV2-1720's
+  // evidence.json is ever rewritten to carry the slot, this test fails and the
+  // exemption should be re-examined rather than silently kept alive.
+  const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+  const bundle = JSON.parse(
+    fs.readFileSync(path.join(repoRoot, 'docs/06_status/proof/UTV2-1720/evidence.json'), 'utf8'),
+  ) as { schema_version: number; proof_profile: string; sha_binding: Record<string, unknown> };
+
+  assert.equal(bundle.schema_version, 2);
+  assert.equal(bundle.proof_profile, 'static');
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(bundle.sha_binding, 'merge_sha'),
+    false,
+    'UTV2-1720 is expected to predate the reserved merge slot',
+  );
+  assert.equal(bundle.sha_binding['sha_type'], 'merge_sha');
+  assert.equal(
+    bundle.sha_binding['verified_source_sha'],
+    '374261599d63fea9a4112d94e4db18c05532e171',
+    'identity is proven by verified_source_sha equalling the GitHub-recorded merge SHA of PR #1430',
+  );
+});
+
+// ── UTV2-1776: authoritative merge slot vs execution/source identity ──────────
+//
+// Regression coverage for Post-Merge Lane Close run 33268421913, where P10 and R3
+// rejected a structurally valid UTV2-1729 bundle because merge authority was read
+// off `sha_binding.verified_source_sha`. Under a squash merge the merge commit and
+// the verified source commit are necessarily different objects, so the old rule
+// could only ever be satisfied by a bundle that misreported one of the two.
+//
+// Every fixture below runs against a real temporary Git repository with a real
+// squash merge, so the ancestry facts are produced by git, not asserted by the test.
+
+function createSquashMergeSplitIdentityRepo(): {
+  repoRoot: string;
+  ancientSha: string;
+  forkPoint: string;
+  executionSha: string;
+  prHead: string;
+  mergeSha: string;
+  mainAdvance: string;
+  unrelatedSha: string;
+} {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-proof-merge-slot-'));
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'proof-schema@example.test');
+  git('config', 'user.name', 'Proof Schema Test');
+  write('base.txt', 'fork point\n');
+  git('add', '.');
+  git('commit', '-m', 'ancient main history');
+  const ancientSha = git('rev-parse', 'HEAD');
+  write('base2.txt', 'later main history\n');
+  git('add', '.');
+  git('commit', '-m', 'main fork point');
+  const forkPoint = git('rev-parse', 'HEAD');
+
+  // The lane: an implementation commit (the execution/source identity), then a
+  // proof-only commit that becomes the PR head GitHub records.
+  git('switch', '-c', 'lane');
+  write('scripts/ops/lane-change.ts', 'export const laneChange = true;\n');
+  git('add', '.');
+  git('commit', '-m', 'UTV2-9000 implementation');
+  const executionSha = git('rev-parse', 'HEAD');
+
+  write('docs/06_status/proof/UTV2-9000/verification.md', 'proof commit\n');
+  git('add', '.');
+  git('commit', '-m', 'UTV2-9000 proof');
+  const prHead = git('rev-parse', 'HEAD');
+
+  // Main advances, then the PR is squash-merged: one parent, and the PR head is
+  // NOT an ancestor of the result.
+  git('switch', 'main');
+  write('main-advance.txt', 'main advanced before merge\n');
+  git('add', '.');
+  git('commit', '-m', 'unrelated main advance');
+  const mainAdvance = git('rev-parse', 'HEAD');
+
+  git('merge', '--squash', 'lane');
+  git('commit', '-m', 'UTV2-9000 squashed (#9000)');
+  const mergeSha = git('rev-parse', 'HEAD');
+
+  // A commit that belongs to neither the PR nor main's merge lineage.
+  git('switch', '-c', 'unrelated', forkPoint);
+  write('unrelated.txt', 'not part of the merged PR\n');
+  git('add', '.');
+  git('commit', '-m', 'unrelated work');
+  const unrelatedSha = git('rev-parse', 'HEAD');
+  git('switch', 'main');
+
+  return { repoRoot, ancientSha, forkPoint, executionSha, prHead, mergeSha, mainAdvance, unrelatedSha };
+}
+
+describe('UTV2-1776: sha_binding.merge_sha carries merge authority; verified_source_sha carries execution identity', () => {
+  const repo = createSquashMergeSplitIdentityRepo();
+  const attestation = {
+    merge_sha: repo.mergeSha,
+    head_sha: repo.prHead,
+    pr_number: 9000,
+    source: 'github-api' as const,
+  };
+  const postMerge = (overrides: Record<string, unknown> = {}) => ({
+    gate: 'post-merge-read' as const,
+    repoRoot: repo.repoRoot,
+    mergedPrAttestation: attestation,
+    ...overrides,
+  });
+
+  after(() => {
+    fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+  });
+
+  it('git really produced the split identity this contract exists for', () => {
+    const git = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: repo.repoRoot, encoding: 'utf8' }).trim();
+    const isAncestor = (a: string, b: string): boolean => {
+      const result = spawnSync('git', ['merge-base', '--is-ancestor', a, b], { cwd: repo.repoRoot });
+      assert.ok(result.status === 0 || result.status === 1, 'ancestry probe must complete');
+      return result.status === 0;
+    };
+    assert.notEqual(repo.mergeSha, repo.prHead);
+    assert.notEqual(repo.mergeSha, repo.executionSha);
+    // A squash merge: one parent, and neither the PR head nor the execution
+    // commit is an ancestor of the recorded merge. This is precisely why the old
+    // `verified_source_sha === merge_sha` rule could not be satisfied honestly.
+    assert.equal(git('rev-list', '--parents', '-n', '1', repo.mergeSha).split(/\s+/).length, 2);
+    assert.equal(isAncestor(repo.prHead, repo.mergeSha), false);
+    assert.equal(isAncestor(repo.executionSha, repo.mergeSha), false);
+    // ...while the execution commit genuinely is inside the merged PR.
+    assert.equal(isAncestor(repo.executionSha, repo.prHead), true);
+    assert.equal(isAncestor(repo.unrelatedSha, repo.prHead), false);
+  });
+
+  it('regression: the explicit merge slot binds a squash-merged split identity', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, true, JSON.stringify(result));
+    assert.equal(result.code, 'verifier_provenance_bound_merge_slot');
+  });
+
+  it('negative control 1: an explicit merge slot that disagrees with the GitHub-recorded merge fails closed', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mainAdvance },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+    assert.match(result.detail, /sha_binding\.merge_sha/);
+  });
+
+  it('negative control 1b: a wrong merge slot is rejected even when the receipt matches the verified source exactly', () => {
+    // The fail-open PM named explicitly: the exact-source shortcut must not be
+    // reachable before the slot is checked.
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.executionSha,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mainAdvance },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+  });
+
+  it('negative control 2: the original PR head cannot satisfy merge authority', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.prHead },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+  });
+
+  it('negative control 3: a branch/execution SHA cannot satisfy merge authority', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.executionSha },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+  });
+
+  it('negative control 4: a missing GitHub merged-PR attestation fails closed rather than falling back to source provenance', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge({ mergedPrAttestation: null }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_unverified');
+  });
+
+  it('negative control 4b: an attestation that is not sourced from the GitHub API fails closed', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge({
+        mergedPrAttestation: { ...attestation, source: 'lane-manifest' as unknown as 'github-api' },
+      }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_unverified');
+  });
+
+  it('negative control 5: an attestation naming a different PR identity fails closed', () => {
+    const forged = { ...attestation, head_sha: repo.unrelatedSha, pr_number: 9999 };
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge({ mergedPrAttestation: forged }),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_source_not_in_merged_pr');
+  });
+
+  it('negative control 6: a verified source outside the merged PR fails closed even with a correct merge slot', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.unrelatedSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_source_not_in_merged_pr');
+  });
+
+  it('negative control 6c: a base-branch commit the PR did not contribute cannot be the verified source', () => {
+    // "Ancestor of the PR head" alone would admit all of main behind the branch
+    // point — including the merge SHA of every earlier PR. Each of these is a
+    // genuine ancestor of the attested head and must still be rejected.
+    for (const baseCommit of [repo.ancientSha, repo.forkPoint]) {
+      const result = verifyExternalVerifierProvenanceBinding({
+        receiptSha: repo.prHead,
+        verifiedSourceSha: baseCommit,
+        mergeSlot: { declared: true, value: repo.mergeSha },
+        context: postMerge(),
+      });
+      assert.equal(result.valid, false, `base commit ${baseCommit} must not bind`);
+      assert.equal(result.code, 'verifier_source_not_in_merged_pr');
+    }
+  });
+
+  it('negative control 6c is not vacuous: those base commits really are ancestors of the attested PR head', () => {
+    const isAncestor = (a: string, b: string): boolean => {
+      const result = spawnSync('git', ['merge-base', '--is-ancestor', a, b], { cwd: repo.repoRoot });
+      assert.ok(result.status === 0 || result.status === 1, 'ancestry probe must complete');
+      return result.status === 0;
+    };
+    assert.equal(isAncestor(repo.ancientSha, repo.prHead), true);
+    assert.equal(isAncestor(repo.forkPoint, repo.prHead), true);
+    // ...and the legitimate execution commit is not on the base side.
+    assert.equal(isAncestor(repo.executionSha, repo.forkPoint), false);
+  });
+
+  it('negative control 6b: a receipt bound to neither the verified source nor the attested PR head fails closed', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.mainAdvance,
+      verifiedSourceSha: repo.executionSha,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_receipt_head_mismatch');
+  });
+
+  it('negative control 7: an authentic pre-slot bundle keeps the historical verified_source == merge SHA path', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.mergeSha,
+      // No mergeSlot: this is what a genuinely pre-slot bundle looks like.
+      context: postMerge(),
+    });
+    assert.equal(result.valid, true, JSON.stringify(result));
+    assert.equal(result.code, 'verifier_provenance_bound_merged_pr_head');
+  });
+
+  it('negative control 8: a pre-slot bundle with a wrong attestation still fails closed', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.mainAdvance,
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+    assert.match(result.detail, /verified_source_sha/);
+  });
+
+  it('negative control 9: a pre-merge bundle declaring a non-null merge slot fails closed', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.prHead,
+      mergeSlot: { declared: true, value: repo.mergeSha },
+      context: { gate: 'pre-merge', repoRoot: repo.repoRoot },
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_slot_premature');
+  });
+
+  it('a pre-merge bundle declaring merge_sha: null still binds by exact source', () => {
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.prHead,
+      mergeSlot: { declared: true, value: null },
+      context: { gate: 'pre-merge', repoRoot: repo.repoRoot },
+    });
+    assert.equal(result.valid, true, JSON.stringify(result));
+    assert.equal(result.code, 'verifier_provenance_bound_exact_source');
+  });
+
+  it('a post-merge bundle declaring merge_sha: null is invalid, not exempt', () => {
+    // The declared-but-null slot must never be mistaken for an absent slot and
+    // routed into the historical compatibility path.
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.mergeSha,
+      mergeSlot: { declared: true, value: null },
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_slot_invalid');
+  });
+
+  it('a post-merge bundle whose merge slot is not a full Git SHA is invalid', () => {
+    for (const value of ['deadbeef', repo.mergeSha.slice(0, 39), 42, {}, []]) {
+      const result = verifyExternalVerifierProvenanceBinding({
+        receiptSha: repo.prHead,
+        verifiedSourceSha: repo.executionSha,
+        mergeSlot: { declared: true, value },
+        context: postMerge(),
+      });
+      assert.equal(result.valid, false, `slot ${JSON.stringify(value)} must not bind`);
+      assert.equal(result.code, 'verifier_merge_slot_invalid');
+    }
+  });
+
+  it('omitting mergeSlot preserves pre-UTV2-1776 semantics exactly', () => {
+    // The split identity that the slot legitimises is still rejected when the
+    // caller does not opt in, so the new path can never widen an old caller.
+    const result = verifyExternalVerifierProvenanceBinding({
+      receiptSha: repo.prHead,
+      verifiedSourceSha: repo.executionSha,
+      context: postMerge(),
+    });
+    assert.equal(result.valid, false);
+    assert.equal(result.code, 'verifier_merge_attestation_mismatch');
+  });
+
+  it('readEvidenceMergeSlot keeps absent, null, and populated slots distinct', () => {
+    assert.deepEqual(readEvidenceMergeSlot({ verified_source_sha: VALID_SHA }), { declared: false });
+    assert.deepEqual(readEvidenceMergeSlot({ merge_sha: null }), { declared: true, value: null });
+    assert.deepEqual(readEvidenceMergeSlot({ merge_sha: VALID_SHA }), { declared: true, value: VALID_SHA });
+    assert.deepEqual(readEvidenceMergeSlot(undefined), { declared: false });
+    assert.deepEqual(readEvidenceMergeSlot(null), { declared: false });
   });
 });

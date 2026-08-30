@@ -129,6 +129,7 @@ export interface RebindResult {
   shas: ShaSet;
   changes: BindingChange[];
   checksums: FileChecksum[];
+  structural_repairs?: Array<{ file: string; locator: string; action: string }>;
   errors: string[];
   rollback?: {
     performed: boolean;
@@ -1263,6 +1264,86 @@ export interface RebindInput {
   root?: string;
 }
 
+export interface StructuralRepair {
+  file: string;
+  locator: string;
+  action: string;
+}
+
+/**
+ * Repairs only the two omissions produced by the broken active schema-v2
+ * generator. This is deliberately not part of the ordinary surgical planner:
+ * callers may enable it only after validating a merged-PR attestation.
+ * Legacy, schema-v1, migration and app-runtime evidence remain unrepairable.
+ */
+export function repairActiveSchemaV2Structure(
+  relPath: string,
+  content: string,
+  shas: ShaSet,
+): { next: string; repairs: StructuralRepair[]; errors: string[] } {
+  if (relPath.endsWith('.json')) {
+    let parsed: Record<string, unknown>;
+    try {
+      const candidate: unknown = JSON.parse(content);
+      if (candidate === null || typeof candidate !== 'object' || Array.isArray(candidate)) {
+        return { next: content, repairs: [], errors: [`${relPath}: active-schema repair requires a JSON object`] };
+      }
+      parsed = candidate as Record<string, unknown>;
+    } catch (error) {
+      return { next: content, repairs: [], errors: [`${relPath}: active-schema repair requires valid JSON (${(error as Error).message})`] };
+    }
+    if (parsed['schema_version'] !== 2 || parsed['proof_profile'] !== 'static') {
+      return {
+        next: content,
+        repairs: [],
+        errors: [`${relPath}: structural re-attestation is restricted to schema-v2 static proof bundles`],
+      };
+    }
+    const binding = parsed['sha_binding'];
+    if (binding === null || typeof binding !== 'object' || Array.isArray(binding)) {
+      return { next: content, repairs: [], errors: [`${relPath}: sha_binding is absent or malformed`] };
+    }
+    if (Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
+      return { next: content, repairs: [], errors: [] };
+    }
+    (binding as Record<string, unknown>)['merge_sha'] = null;
+    return {
+      next: `${JSON.stringify(parsed, null, 2)}\n`,
+      repairs: [{ file: relPath, locator: 'sha_binding.merge_sha', action: 'inserted reserved null merge slot' }],
+      errors: [],
+    };
+  }
+
+  if (relPath.endsWith('.md')) {
+    const lines = content.split(/\r?\n/);
+    if (lines.some((line) => isBindingSectionHeading(line))) {
+      return { next: content, repairs: [], errors: [] };
+    }
+    if (!lines.some((line) => /^MERGE_SHA:\s*/.test(line))) {
+      return { next: content, repairs: [], errors: [`${relPath}: no MERGE_SHA: line — refusing structural repair`] };
+    }
+    const eol = content.includes('\r\n') ? '\r\n' : '\n';
+    const base = content.endsWith('\n') ? content : `${content}${eol}`;
+    const section = [
+      '',
+      MERGE_SHA_BINDING_HEADING,
+      '',
+      'Merge SHA: pending merge',
+      'PR: pending merge',
+      'Approved PR head: pending merge',
+      `Execution SHA: ${shas.execution_sha ?? 'pending merge'}`,
+      '',
+    ].join(eol);
+    return {
+      next: `${base}${section}`,
+      repairs: [{ file: relPath, locator: MERGE_SHA_BINDING_HEADING, action: 'appended canonical binding section' }],
+      errors: [],
+    };
+  }
+
+  return { next: content, repairs: [], errors: [`${relPath}: unsupported artifact type for structural repair`] };
+}
+
 export interface RebindDeps {
   readFile: (absPath: string) => string;
   writeFile: (absPath: string, content: string) => void;
@@ -1389,13 +1470,19 @@ export function validateShaSet(shas: ShaSet): string[] {
  */
 export function rebindProofBundle(
   input: RebindInput,
-  options: { write: boolean; simulateWriteFailureFor?: string; simulatePartialWrite?: boolean } = { write: false },
+  options: {
+    write: boolean;
+    simulateWriteFailureFor?: string;
+    simulatePartialWrite?: boolean;
+    allowActiveSchemaStructuralRepair?: boolean;
+  } = { write: false },
   deps: RebindDeps = defaultDeps,
 ): RebindResult {
   const root = input.root ?? ROOT;
   const errors: string[] = [...validateShaSet(input.shas)];
   const changes: BindingChange[] = [];
   const checksums: FileChecksum[] = [];
+  const structuralRepairs: StructuralRepair[] = [];
   const planned: Array<{ abs: string; rel: string; before: string; next: string }> = [];
 
   for (const rel of input.files) {
@@ -1413,11 +1500,18 @@ export function rebindProofBundle(
       errors.push(`${rel}: ${(error as Error).message}`);
       continue;
     }
+    let planningContent = before;
+    if (options.allowActiveSchemaStructuralRepair) {
+      const repair = repairActiveSchemaV2Structure(rel, before, input.shas);
+      errors.push(...repair.errors);
+      structuralRepairs.push(...repair.repairs);
+      planningContent = repair.next;
+    }
     let plan: { next: string; changes: BindingChange[]; errors: string[] };
     if (rel.endsWith('.json')) {
-      plan = planEvidenceRebind(rel, before, input.shas);
+      plan = planEvidenceRebind(rel, planningContent, input.shas);
     } else if (rel.endsWith('.md')) {
-      plan = planVerificationRebind(rel, before, input.shas, input.prUrl);
+      plan = planVerificationRebind(rel, planningContent, input.shas, input.prUrl);
     } else {
       errors.push(`${rel}: unsupported artifact type for rebinding`);
       continue;
@@ -1441,6 +1535,7 @@ export function rebindProofBundle(
     changes,
     checksums,
     errors,
+    ...(structuralRepairs.length > 0 ? { structural_repairs: structuralRepairs } : {}),
   };
 
   if (errors.length > 0) {
@@ -1518,6 +1613,7 @@ async function main(): Promise<void> {
   const mergeSha = getFlag(flags, 'merge-sha') ?? '';
   const approvedHead = getFlag(flags, 'approved-head') ?? '';
   const executionSha = getFlag(flags, 'execution-sha') ?? null;
+  const reattestActiveSchema = bools.has('reattest-active-schema') || flags.has('reattest-active-schema');
   // The PR URL is DERIVED from the validated gh record, never taken from the
   // caller. An independent --pr-url input could disagree with the PR whose
   // identity was just validated, writing a binding that points somewhere else.
@@ -1725,7 +1821,21 @@ async function main(): Promise<void> {
     return;
   }
 
-  const result = rebindProofBundle({ issueId, shas, prUrl, files }, { write: apply });
+  if (reattestActiveSchema && !identityValidated) {
+    emitJson({
+      ok: false,
+      code: 'proof_rebind_refused',
+      issue_id: issueId,
+      errors: ['--reattest-active-schema requires --pr <number> and successful merged-PR identity validation'],
+    });
+    process.exitCode = 1;
+    return;
+  }
+
+  const result = rebindProofBundle(
+    { issueId, shas, prUrl, files },
+    { write: apply, allowActiveSchemaStructuralRepair: reattestActiveSchema },
+  );
   emitJson(result);
   process.exitCode = result.ok ? 0 : 1;
 }
