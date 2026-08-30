@@ -4,7 +4,7 @@
   "pr_number": 1465,
   "source_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
   "reviewed_head_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
-  "evidence_commit_sha": null,
+  "evidence_commit_sha": "9cd4c80d75aa6a6f0dbb7410a9a5ffa4f3069db8",
   "current_head_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
   "merge_sha": null,
   "generated_at": "2026-08-30T21:48:12.427706Z",
@@ -15,7 +15,7 @@
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
-    "evidence_commit_sha": "set-by-ci",
+    "evidence_commit_sha": "9cd4c80d75aa6a6f0dbb7410a9a5ffa4f3069db8",
     "current_pr_head_sha": "set-by-ci"
   },
   "gate_results": [
