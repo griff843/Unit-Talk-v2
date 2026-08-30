@@ -20,6 +20,16 @@ allowed_path_globs:
   - docs/06_status/lanes/**
   - packages/db/src/**
   - packages/contracts/src/promotion.ts
+  # UTV2-1671: the Smart Form Track Only contract module and the barrel that
+  # re-exports it are consumed by apps/api runtime code, but appeared in no
+  # lane type's allowlist, so every lane carrying the runtime change failed
+  # Lane Authority with `outside_allowed_paths` and no lane type could legally
+  # carry it. Admitted as two exact files, in the same narrow form as
+  # `promotion.ts` above. Admission correction only -- no taxonomy change, no
+  # executor-policy change, and deliberately NOT a `packages/contracts/src/**`
+  # glob: every other contract module stays outside this lane.
+  - packages/contracts/src/smart-form.ts
+  - packages/contracts/src/index.ts
   - .lane/lanes/**
   - .github/workflows/**
   - deploy/production/**
