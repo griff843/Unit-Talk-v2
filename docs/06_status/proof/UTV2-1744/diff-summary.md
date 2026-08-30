@@ -1,6 +1,6 @@
 # UTV2-1744 — diff summary
 
-MERGE_SHA: cb4581c8241a2b302aa456f53194d108998d3f6a
+MERGE_SHA: pending merge
 
 ## Files changed
 
@@ -46,3 +46,8 @@ has no `delivered` status — the terminal status is `sent`. The filter matched
 nothing and pulled all 3,758 terminal rows into the triage read. Fixed to
 `.in('status', ['pending', 'processing', 'dead_letter'])`, with the terminal
 status exported as `TERMINAL_STATUS` and pinned by two regression tests.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1452

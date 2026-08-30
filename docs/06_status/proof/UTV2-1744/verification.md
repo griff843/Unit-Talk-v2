@@ -1,6 +1,6 @@
 # PROOF: UTV2-1744
 
-MERGE_SHA: cb4581c8241a2b302aa456f53194d108998d3f6a
+MERGE_SHA: pending merge
 
 Read-only triage of the production `distribution_outbox`. This lane ships a
 classifier, a target verifier, a stuck-claim analyser, and a replay verdict
@@ -134,21 +134,54 @@ $ pnpm exec tsx --test scripts/ops/outbox-triage.test.ts
 
 ### Static verification
 
+Re-run in full on 2026-08-30 at the synchronized head
+`4e912e88b175d3bdacb4e0b4c7b9063c7a137890`, against the machinery currently on
+`main` (which advanced 39 commits after this lane was authored, including new
+proof, truth-check, reconciler, and file-scope-guard code). These are measured
+receipts from that re-run, not the pre-synchronization numbers.
+
 ```text
 $ pnpm type-check
+> @unit-talk/v2@0.1.0 type-check
 > pnpm exec tsc -b tsconfig.json
-(no diagnostics; exit 0)
+TYPECHECK_EXIT=0
 
 $ pnpm verify:static
 ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
 ops:automation-coverage-check, env:check, lint, type-check, build,
 pnpm test, smart-form verify, verify:commands
 [executable-wiring] verdict=PASS required_roots=verify
-EXIT=0
+[executable-wiring] tests total=469 required-reachable=314 optional-reachable=36 \
+    fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+[executable-wiring] capabilities total=156 wired=138 orphan=18 (baselined=18 new=0)
+VERIFY_STATIC_EXIT=0
+```
 
+`pnpm test` ran inside `pnpm verify:static` above and aggregated to
+**5275 tests, 5275 pass, 0 fail, 0 skipped, 0 todo**. `scripts/ops/outbox-triage.test.ts`
+executed as part of `test:ops`, confirming the wiring is live and not merely declared.
+
+The lane's own suite, re-run standalone at the same head:
+
+```text
+$ pnpm exec tsx --test scripts/ops/outbox-triage.test.ts
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+FOCUSED_EXIT=0
+```
+
+R-level, re-evaluated against the synchronized diff:
+
+```text
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 17
+Changed files: 10
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
@@ -166,10 +199,57 @@ $ pnpm test:db
 That is a correct safety refusal, not lane debt. The live-DB receipt for this lane
 is produced by CI's `staging-ci` environment inside the required `verify` job.
 
-This lane's own tests are wired into `test:ops` under a PM-authorized scope
-extension covering `package.json`, so they execute under required `verify` rather
-than only when invoked by hand. No entry was added to
+This lane's own tests are wired into `test:ops` so they execute under required
+`verify` rather than only when invoked by hand. No entry was added to
 `executable-wiring-baseline.json`: the signal was fixed, not suppressed.
+
+That wiring edits `package.json`, which this lane's trusted `file_scope_lock`
+snapshot does not declare, so the advisory **File scope lock** check fails with
+`package.json is not declared by UTV2-1744`. This is the guard working as
+designed, not a guard defect: `scripts/ci/file-scope-guard.ts` resolves each
+lane's scope via `resolveTrustedManifests`, which reads the manifest as it stood
+at its *first adding commit* (`83e92730`, 7 paths). `package.json` was added to
+`file_scope_lock` later (`954333b2`, 9 paths), and a lane is deliberately barred
+from widening its own scope after that snapshot. An earlier revision of this
+document claimed the widening was covered by "a PM-authorized scope extension".
+That claim was false: **no `scope-override/v1` comment exists on PR #1452**, and
+none was ever issued. The statement has been withdrawn rather than restated.
+
+`File scope lock` is not a required status check (required contexts are `verify`,
+`Executor Result Validation`, `Merge Gate`, `P0 Protocol`), so this does not gate
+merge. Clearing it would require an externally authored `scope-override/v1`
+comment naming `package.json`, which is PM's to grant and is not self-granted
+here.
+
+## Branch synchronization (2026-08-30)
+
+The lane was authored on 2026-08-26 and had fallen 39 commits behind `main`.
+It was synchronized with `main` at `4f7ae5109325fc11999f77e8b57adc20ba7cdccd`
+using the non-rewriting PR update path (`gh pr update-branch 1452`), producing
+merge commit `4e912e88b175d3bdacb4e0b4c7b9063c7a137890`.
+
+- The merge was **clean**: `git merge-tree --write-tree HEAD origin/main`
+  reported no conflicted paths, and the worktree fast-forwarded.
+- **No history was rewritten.** All seven original lane commits remain ancestors
+  of the new head: `83e92730`, `16d40bb7`, `fd5e0598`, `df4cf115`, `cb4581c8`,
+  `9b443982`, `954333b2`.
+- The proof bundle and both lane source files survived the sync byte-for-byte.
+- No source file in this lane's scope was modified by the sync.
+
+**Production counts in this document were NOT re-measured.** Every row count and
+reason-class breakdown above remains the read taken on **2026-08-26** against
+project `zfzdnfwdarxucxtaojxm`. The read-only classifier was deliberately not
+re-run during synchronization, so this document reports one measurement at one
+timestamp rather than silently substituting fresher numbers for the evidence the
+lane's verdict was actually formed on. The verdict — no dead-letter class approved
+for replay — is a property of `replayVerdict`, which has no reachable approving
+branch, so it does not depend on the population size.
+
+The execution-identity anchor (`sha_binding.verified_source_sha`) was moved from
+`cb4581c8` to the synchronization commit `4e912e88`, which is the last commit touching any path outside
+`docs/06_status/proof/` and `docs/06_status/lanes/` (the validator's
+`PROOF_ONLY_PREFIXES`). Commits after the anchor change only the lane manifest
+heartbeat and these proof artifacts.
 
 ## Findings
 
@@ -204,3 +284,13 @@ backfill was performed or is enabled by this lane. Cleanup of the 32 orphaned
 belongs to a separate bounded successor requiring exact IDs, a before/after
 snapshot, a dry run, an immutable audit receipt, and fail-closed target
 validation. The 1,954 dead letters are never to be replayed or modified.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1452
+
+This lane is not merged. Under the schema-v2 contract, merge authority lives
+only at `sha_binding.merge_sha` and is written by the post-merge rebinder; a
+branch SHA is execution identity, never merge authority. The execution identity
+for this bundle is `4e912e88b175d3bdacb4e0b4c7b9063c7a137890` (`sha_binding.verified_source_sha`).
