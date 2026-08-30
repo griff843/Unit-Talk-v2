@@ -13,8 +13,8 @@
 | Screenshots | PASS | 12 PNGs under `screenshots/`, one desktop and one mobile capture for each primary workflow |
 | Standalone Docker attempt | BLOCKED BY HOST | Docker client 29.7.2 present; daemon socket unavailable, so no Dockerfile instruction executed |
 | Diff whitespace | PASS | `git diff --check`, exit 0 |
-| R-level compliance | PENDING EXACT COMMIT | `operator-ui` requires `qa-experience`; the repository artifact requirement is present and the exact-head checker runs after the proof commit |
-| Independent exact-head review | PENDING EXACT COMMIT | Run after the implementation commit is frozen |
+| R-level compliance | PASS | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`; `operator-ui` requires `qa-experience`, and the repository artifact requirement is present |
+| Independent exact-head review | PASS | Independent reviewer found no blocking findings at implementation SHA `a03d15cb02e562d7bf620b6f3a84c0a5054fc253` |
 
 ### Static gate evidence
 
@@ -69,6 +69,20 @@ The wired `e2e/command-center.spec.ts` previously asserted the superseded Phase 
 | System Health | `screenshots/desktop-system-health.png` | `screenshots/mobile-system-health.png` |
 
 The local capture used the existing `COMMAND_CENTER_AUTH_MODE=fail_open` override only as an ephemeral process environment so an uncredentialed workstation could render the internal UI. This is not production authorization evidence and did not change any env or auth file.
+
+### Independent exact-head review
+
+An independent reviewer examined implementation SHA `a03d15cb02e562d7bf620b6f3a84c0a5054fc253` and returned PASS with no blocking findings. The review independently confirmed:
+
+- all 56 current page routes have unique registry classifications and exactly six are primary;
+- the shell, command palette, and workspace navigation derive from the single route registry;
+- primary surfaces degrade honestly, including exact per-day, Review, and Active Picks counts;
+- deferred direct routes are visibly classified and the duplicate page headers remain removed;
+- excluded authentication/configuration files are unchanged and the production `fail_open` defect remains a Tier C residual;
+- all mutations still use canonical API POST server actions, with no direct Supabase write;
+- the diff has no Smart Form, production, API, worker, package, migration, workflow, or other prohibited overlap.
+
+The reviewer also reproduced the focused test result (132/132), Command Center type-check, route-registry checks, diff checks, and scope checks. The final proof-only commit is rechecked separately before PR creation so no implementation behavior changes after this verdict.
 
 ### Docker attempt
 
