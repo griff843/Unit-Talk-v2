@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-08-30T11:40:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "9a1038a73be1bd439dcc6cdea9f2ce318dd6766e",
     "verified_source_sha": "b36cbfa532422c56008db44c3764d60c5a7acb7a",
     "verified_source_note": "Last commit on this branch touching a non-proof path. Re-anchored for Bounce 1: the P1 cross-repository fail-open fix moved the anchor from 69b69d528b3919c072e529d4e23a5490690cb1c4. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
     "evidence_commit_sha": "set-by-ci",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-30T11:40:00Z",
+    "bound_at": "2026-08-30T11:04:49.241Z",
     "previous_verified_source_sha": "69b69d528b3919c072e529d4e23a5490690cb1c4"
   },
   "verdict": {

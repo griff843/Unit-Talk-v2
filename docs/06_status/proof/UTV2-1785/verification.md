@@ -1,6 +1,6 @@
 # PROOF: UTV2-1785
 
-MERGE_SHA: b36cbfa532422c56008db44c3764d60c5a7acb7a
+MERGE_SHA: 9a1038a73be1bd439dcc6cdea9f2ce318dd6766e
 
 Fix the pre-proof validator hook's file-selection semantics so it validates the
 files a commit actually authors, instead of every path `git diff --cached`
