@@ -53,8 +53,12 @@ between the two columns is attributable to this change alone.
       (pre-existing) -- and 16 are refused. `smart-form.ts` does not yet exist
       on disk and is covered by P1 above.
 - [x] **Governance self-check**: `lane:check --lane governance` passes on this
-      lane's own complete file set (6 files), confirming the lane carrying this
-      change is itself authorized to carry it.
+      lane's complete changed-file set at this head -- `PASS lane=governance
+      files=7`, including `docs/06_status/proof/UTV2-1671/.gitkeep`. An earlier
+      revision of this line said "6 files", which was the number of paths passed
+      to one invocation rather than the lane's actual changed set; the verdict is
+      PASS at both counts. Confirms the lane carrying this change is itself
+      authorized to carry it.
 - [x] **R-level**: `r-level-check --base origin/main --head HEAD` returns
       `PASS`, no rules matched, no R-level artifacts required.
 - [x] **Scope**: the only non-apparatus file changed is
@@ -73,7 +77,7 @@ between the two columns is attributable to this change alone.
 |---|---|
 | `pnpm lane:check --lane runtime --file <8 paths>` at `origin/main` and at HEAD | pass -- see EVIDENCE |
 | `pnpm lane:check --lane runtime` over all 18 on-disk contracts modules | pass -- 2 admitted / 16 refused |
-| `pnpm lane:check --lane governance --file <this lane's 6 files>` | pass |
+| `pnpm lane:check --lane governance --file <all 7 changed files>` | `PASS lane=governance files=7` |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS, no rules matched |
 | `pnpm type-check` (standalone) | exit 0, no diagnostics |
 | `pnpm test` (standalone) | exit 0, 97 suites, 5193 assertions, 0 fail/skip/cancel |
@@ -309,13 +313,52 @@ which is strictly worse on two counts: any `package.json` change is on the
 package's public surface rather than one module. Admitting `index.ts` is the
 smaller of the two available admissions.
 
-**Severity context.** The capability described above is not created by this
-change. `packages/contracts/src/**` -- the full glob, `index.ts` included -- is
-already granted to the `hygiene` lane (`.lane/lanes/hygiene.yml:22`) and the
-`data-canonical` lane (`.lane/lanes/data-canonical.yml:19`). This change gives
-the runtime lane strictly less than what two lane types already hold. It is an
-incremental extension of a pre-existing structural gap, admitted in the
-narrowest form available, not a new hole.
+**Severity context -- corrected after a second independent audit.** An earlier
+revision of this section claimed `packages/contracts/src/**` was already
+granted to the `hygiene` and `data-canonical` lanes, and concluded the runtime
+lane was receiving "strictly less than what two lane types already hold". That
+citation was **wrong and load-bearing**, and it is corrected here rather than
+quietly edited away. In both of those files `packages/contracts/src/**` sits
+under `forbidden_path_globs`, not `allowed_path_globs`, and `lane:check`
+refuses `index.ts` for both with `forbidden_path`. The first revision was
+written from a grep that showed the line existed without establishing which
+block it was in.
+
+The second audit then concluded the opposite -- that this PR is the first lane
+grant of `index.ts` anywhere in the taxonomy. That is also wrong. The verified
+position, established by running the matcher against every lane type rather
+than by trusting either claim, is that two lane types **do** already hold a
+strictly broader grant, but they are `modeling` and `governance`, not the two
+originally named:
+
+- `modeling` allows `packages/contracts/**` -- the entire package.
+- `governance` allows `packages/contracts/**` and `packages/domain/src/**`.
+- `hygiene` and `data-canonical` explicitly forbid `packages/contracts/src/**`.
+- `delivery-ui`, `migration` and `verification` do not admit it at all.
+
+The structural conclusion therefore survives: the capability is not created by
+this change, and the runtime lane receives a strictly narrower grant -- two
+named files -- than `modeling` and `governance` already hold over the whole
+package. But the lanes named in the first revision were the wrong ones, and a
+reader should rely on the table below rather than on either review's prose.
+
+```text
+Captured 2026-08-30T22:23:18Z at HEAD=defab63690009bb1d9ad6b35368c4a11cac7724b
+
+Per-lane verdict for packages/contracts/src/index.ts, and the glob responsible:
+LANE             VERDICT                GOVERNING ENTRY
+runtime          ADMITTED               allowed=[packages/contracts/src/promotion.ts,packages/contracts/src/smartform.ts,packages/contracts/src/index.ts] forbidden=[]
+governance       ADMITTED               allowed=[packages/contracts/CLAUDE.md,packages/contracts/**] forbidden=[]
+modeling         ADMITTED               allowed=[packages/contracts/**] forbidden=[]
+hygiene          forbidden_path         allowed=[] forbidden=[packages/contracts/src/**]
+data-canonical   forbidden_path         allowed=[] forbidden=[packages/contracts/src/**]
+delivery-ui      outside_allowed_paths  allowed=[] forbidden=[]
+migration        outside_allowed_paths  allowed=[] forbidden=[]
+verification     outside_allowed_paths  allowed=[] forbidden=[]
+
+$ pnpm lane:check --lane governance --file <all 7 changed files>
+lane:check PASS lane=governance files=7
+```
 
 **Unstaffed follow-up.** That lane authority is path-only, and so cannot see a
 barrel file re-exporting or redefining content from modules the lane may not

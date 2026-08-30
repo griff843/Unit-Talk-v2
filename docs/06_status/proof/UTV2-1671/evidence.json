@@ -44,7 +44,7 @@
     {
       "gate": "lane-check/governance/self-check",
       "verdict": "PASS",
-      "detail": "lane:check PASS lane=governance files=6 over this lane's own complete file set."
+      "detail": "lane:check PASS lane=governance files=7 over this lane's complete changed-file set at head defab636 (including docs/06_status/proof/UTV2-1671/.gitkeep). An earlier revision recorded 'files=6', which was the number of paths passed to one invocation rather than the lane's actual changed set; PASS at both counts."
     },
     {
       "gate": "r-level-check",
@@ -74,7 +74,7 @@
     {
       "gate": "independent-adversarial-review",
       "verdict": "PASS",
-      "detail": "Independent review confirmed the path-level claim byte for byte and identified a real limit: lane-check is path-only, so admitting the packages/contracts/src/index.ts barrel confers semantic capability (governance literals memberTiers/canonicalWriter/writerRoles, and 13 export * lines) that no control in this bundle can detect. Recorded in verification.md rather than absorbed. Not created by this change: packages/contracts/src/** including index.ts is already granted to the hygiene and data-canonical lanes, so runtime receives strictly less than two lane types already hold. index.ts is the minimal available admission because packages/contracts/package.json declares exports {\".\": \"./src/index.ts\"} with no subpath entries, and admitting that package.json instead is an always-escalate change governing the whole package surface. Follow-up reported for PM triage, outside this lane's authorized scope."
+      "detail": "Two independent reviews were run. Review 1 (change) confirmed the path-level claim byte for byte and identified that lane-check is path-only, so admitting the packages/contracts/src/index.ts barrel confers semantic capability (governance literals memberTiers/canonicalWriter/writerRoles and 13 export * lines) that no control here can detect. Review 2 (proof) then falsified this bundle's own severity paragraph, which had cited hygiene and data-canonical as already granting packages/contracts/src/** -- they FORBID it. Both the original claim and review 2's counter-claim ('first lane grant anywhere') were then checked by running the matcher against every lane type. Verified result: modeling allows packages/contracts/**, and governance allows packages/contracts/** plus packages/domain/src/**, so two lane types do already hold a strictly broader grant -- but not the two originally named. hygiene and data-canonical forbid it; delivery-ui, migration and verification do not admit it. The structural conclusion (capability not created here; runtime receives a strictly narrower grant than modeling and governance already hold) survives with corrected citations. All of this is recorded in verification.md rather than absorbed."
     }
   ],
   "reviewer_verdict": null,
@@ -139,8 +139,13 @@
     },
     "independent_review": {
       "performed": true,
-      "scope": "adversarial falsification of the non-broadening claim",
-      "outcome": "path-admission claim upheld; semantic-capability limit identified and recorded",
+      "rounds": 2,
+      "scope": "round 1 adversarially reviewed the change; round 2 adversarially audited this proof bundle",
+      "outcome": "path-admission claim upheld; semantic-capability limit recorded; round 2 caught a load-bearing false citation in this bundle's severity argument, which is retracted and corrected in place with per-lane mechanical evidence",
+      "corrections_made": [
+        "Severity paragraph cited hygiene and data-canonical as granting packages/contracts/src/**; they forbid it. Retracted and replaced with a verified per-lane table.",
+        "Governance self-check recorded 'files=6'; the lane's complete changed set is 7. PASS at both counts."
+      ],
       "unstaffed_followup": "lane authority is path-only and cannot see a barrel file re-exporting or redefining content from modules the lane may not touch"
     }
   }
