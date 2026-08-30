@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
+import { assertQuerySucceeded } from '../query-result';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -347,10 +348,7 @@ export async function getReviewQueue(
 
     const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
-    if (error) {
-      console.error('getReviewQueue error:', error);
-      return { picks: [], total: 0, degraded: describeQueueError(error) };
-    }
+    assertQuerySucceeded({ error }, 'getReviewQueue');
 
     const rows = (data ?? []) as JsonObject[];
     const picks = rows
@@ -360,7 +358,7 @@ export async function getReviewQueue(
     return { picks, total: count ?? picks.length, degraded: null };
   } catch (err) {
     console.error('getReviewQueue exception:', err);
-    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -531,10 +529,7 @@ export async function searchPicks(
 
     const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
-    if (error) {
-      console.error('searchPicks error:', error);
-      return { picks: [], total: 0, limit, offset };
-    }
+    assertQuerySucceeded({ error }, 'searchPicks');
 
     const rows = (data ?? []) as JsonObject[];
 
@@ -552,7 +547,7 @@ export async function searchPicks(
     return { picks, total: count ?? picks.length, limit, offset };
   } catch (err) {
     console.error('searchPicks exception:', err);
-    return { picks: [], total: 0, limit, offset };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

@@ -1,4 +1,5 @@
 import { getDataClient, OUTBOX_HISTORY_CUTOFF } from './client';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 import {
   resolveEffectiveSettlement,
   computeSettlementSummary,
@@ -484,12 +485,16 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
   const participants = eventParticipants.length > 0 ? await loadParticipantsForEvents(client, eventParticipants) : [];
   const upcomingEvents = mapUpcomingEvents(upcomingEventsRaw, eventParticipants, participants);
 
+  const validatedCount = readAuthoritativeCount(validatedCountResult, 'snapshot validated picks');
+  const queuedCount = readAuthoritativeCount(queuedCountResult, 'snapshot queued picks');
+  const postedCount = readAuthoritativeCount(postedCountResult, 'snapshot posted picks');
+  const settledCount = readAuthoritativeCount(settledCountResult, 'snapshot settled picks');
   const picksPipelineCounts = {
-    validated: validatedCountResult.count ?? 0,
-    queued: queuedCountResult.count ?? 0,
-    posted: postedCountResult.count ?? 0,
-    settled: settledCountResult.count ?? 0,
-    total: (validatedCountResult.count ?? 0) + (queuedCountResult.count ?? 0) + (postedCountResult.count ?? 0) + (settledCountResult.count ?? 0),
+    validated: validatedCount,
+    queued: queuedCount,
+    posted: postedCount,
+    settled: settledCount,
+    total: validatedCount + queuedCount + postedCount + settledCount,
   };
 
   const filteredOutbox = recentOutbox.filter((row) => row.created_at >= OUTBOX_HISTORY_CUTOFF);
@@ -658,11 +663,11 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
       recentAudit,
       workerRuntime,
       entityHealth: {
-        resolvedEventsCount: resolvedEventsCountResult.count ?? 0,
-        upcomingEventsCount: upcomingEventsCountResult.count ?? 0,
-        resolvedPlayersCount: resolvedPlayersCountResult.count ?? 0,
-        resolvedTeamsWithExternalIdCount: resolvedTeamsWithExternalIdCountResult.count ?? 0,
-        totalTeamsCount: totalTeamsCountResult.count ?? 0,
+        resolvedEventsCount: readAuthoritativeCount(resolvedEventsCountResult, 'snapshot resolved events'),
+        upcomingEventsCount: readAuthoritativeCount(upcomingEventsCountResult, 'snapshot upcoming events'),
+        resolvedPlayersCount: readAuthoritativeCount(resolvedPlayersCountResult, 'snapshot resolved players'),
+        resolvedTeamsWithExternalIdCount: readAuthoritativeCount(resolvedTeamsWithExternalIdCountResult, 'snapshot resolved teams'),
+        totalTeamsCount: readAuthoritativeCount(totalTeamsCountResult, 'snapshot total teams'),
         observedAt: new Date().toISOString(),
       },
       upcomingEvents,
@@ -708,14 +713,29 @@ export async function getPicksPipelineData(filter?: OutboxFilter): Promise<unkno
     client.from('settlement_records').select('*').order('created_at', { ascending: false }).limit(fetchLimit),
   ]);
 
+  for (const [label, result] of [
+    ['validated picks', validatedCountResult],
+    ['queued picks', queuedCountResult],
+    ['posted picks', postedCountResult],
+    ['settled picks', settledCountResult],
+    ['recent picks', picksResult],
+    ['recent settlements', settlementsResult],
+  ] as const) {
+    assertQuerySucceeded(result, `getPicksPipelineData ${label}`);
+  }
+
   const recentPicks = (picksResult.data ?? []) as PickRecord[];
   const recentSettlements = (settlementsResult.data ?? []) as SettlementRecord[];
+  const validatedCount = readAuthoritativeCount(validatedCountResult, 'pipeline validated picks');
+  const queuedCount = readAuthoritativeCount(queuedCountResult, 'pipeline queued picks');
+  const postedCount = readAuthoritativeCount(postedCountResult, 'pipeline posted picks');
+  const settledCount = readAuthoritativeCount(settledCountResult, 'pipeline settled picks');
   const picksPipelineCounts = {
-    validated: validatedCountResult.count ?? 0,
-    queued: queuedCountResult.count ?? 0,
-    posted: postedCountResult.count ?? 0,
-    settled: settledCountResult.count ?? 0,
-    total: (validatedCountResult.count ?? 0) + (queuedCountResult.count ?? 0) + (postedCountResult.count ?? 0) + (settledCountResult.count ?? 0),
+    validated: validatedCount,
+    queued: queuedCount,
+    posted: postedCount,
+    settled: settledCount,
+    total: validatedCount + queuedCount + postedCount + settledCount,
   };
   const pipeline = summarizePicksPipeline(recentPicks, recentSettlements, picksPipelineCounts);
 

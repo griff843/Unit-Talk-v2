@@ -39,12 +39,12 @@ export default async function ReviewQueuePage({
     loadError = describeOperatorFailure(error, 'The governed review queue could not be loaded.');
   }
 
-  if (!queue) {
+  if (!queue || queue.degraded) {
     return (
       <DegradedState
         severity="critical"
         title="Review queue unavailable"
-        causes={[loadError ?? 'The governed review queue could not be loaded. No queue count was inferred.']}
+        causes={[queue?.degraded ?? loadError ?? 'The governed review queue could not be loaded. No queue count was inferred.']}
         action={{ label: 'System Health', href: '/api-health' }}
       />
     );
