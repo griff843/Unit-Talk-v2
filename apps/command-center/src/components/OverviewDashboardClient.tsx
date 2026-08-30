@@ -5,6 +5,7 @@ import { LiveEventFeed, PipelineFlow, StatCard } from '@/components/ui';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal, OperationalException, PickRow } from '@/lib/types';
 import { buildAlertLog, type AlertLogEntry } from '@/lib/alert-log-model';
 import { buildPipelineStages } from '@/lib/pipeline-stages';
+import { readTodayPickCount } from '@/lib/primary-metrics';
 
 type OverviewDashboardClientProps = {
   data: DashboardData;
@@ -230,6 +231,7 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
   const todayPickDelta = dailyPickCounts && dailyPickCounts.length >= 2
     ? dailyPickCounts[dailyPickCounts.length - 1]! - dailyPickCounts[dailyPickCounts.length - 2]!
     : null;
+  const todayPickCount = readTodayPickCount(dailyPickCounts);
   const pipelineStages = useMemo(() => buildPipelineStages(data, runtime), [data, runtime]);
   const feedRows = useMemo(() => buildFeedRows(data.picks), [data.picks]);
   const alertEvents = useMemo(
@@ -269,14 +271,24 @@ export function OverviewDashboardClient({ data, runtime, dailyPickCounts }: Over
   return (
     <div className="flex flex-col gap-6">
       <div className="grid gap-4 xl:grid-cols-4">
-        <StatCard
-          label="Today's Picks"
-          value={data.picks.length}
-          delta={todayPickDelta == null ? undefined : formatDelta(todayPickDelta)}
-          liveUpdate
-          sparkline={dailyPickCounts ?? undefined}
-          sparklineLabel="Pick submissions, last 7 days"
-        />
+        {todayPickCount == null ? (
+          <article className="cc-surface p-5">
+            <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Today's Picks</p>
+            <p className="mt-4 text-2xl font-semibold text-slate-300">Unavailable</p>
+            <p className="mt-2 text-xs text-[var(--cc-text-secondary)]">
+              No authoritative daily submission count was returned.
+            </p>
+          </article>
+        ) : (
+          <StatCard
+            label="Today's Picks"
+            value={todayPickCount}
+            delta={todayPickDelta == null ? undefined : formatDelta(todayPickDelta)}
+            liveUpdate
+            sparkline={dailyPickCounts ?? undefined}
+            sparklineLabel="Pick submissions, last 7 days"
+          />
+        )}
         <article className="cc-surface p-5">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">Worker State</p>
           <p className="mt-4 text-2xl font-semibold capitalize tracking-[-0.03em] text-[var(--cc-text-primary)]">

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
-import { assertQuerySucceeded } from '../query-result';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -338,7 +338,7 @@ export async function getReviewQueue(
     // Base query: awaiting_approval lifecycle OR pending approval_status
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'estimated' })
+      .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
     // Exclude held picks (review_decision = 'hold')
@@ -359,7 +359,11 @@ export async function getReviewQueue(
       .filter((row) => !isFixtureLikePick(row))
       .map(mapReviewPick);
 
-    return { picks, total: count ?? picks.length, degraded: null };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'review queue picks'),
+      degraded: null,
+    };
   } catch (err) {
     console.error('getReviewQueue exception:', err);
     throw err instanceof Error ? err : new Error(String(err));
@@ -548,7 +552,12 @@ export async function searchPicks(
         submitter: asStringOrNull(row['capper_display_name']),
       }));
 
-    return { picks, total: count ?? picks.length, limit, offset };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'active picks'),
+      limit,
+      offset,
+    };
   } catch (err) {
     console.error('searchPicks exception:', err);
     throw err instanceof Error ? err : new Error(String(err));
