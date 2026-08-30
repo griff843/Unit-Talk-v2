@@ -34,8 +34,6 @@ export async function validateSmartFormRelationships(
     return;
   }
 
-  validateDistinctSides(resolution.away, resolution.home);
-
   const eventId = readOptionalString(resolution.eventId);
   if (!eventId) {
     assertFlatMetadataIdentity(payload, resolution);
@@ -147,10 +145,24 @@ function validateCanonicalEvent(
   const team = resolution.team ? validateEventParticipant(resolution.team, event) : null;
   const player = resolution.player ? validateEventParticipant(resolution.player, event) : null;
 
-  if (away && away.participantType !== 'team') fail('away participant must be a team');
-  if (home && home.participantType !== 'team') fail('home participant must be a team');
+  if (away && home && canonicalParticipantKey(away) === canonicalParticipantKey(home)) {
+    fail('away and home participants must be different');
+  }
+
+  const teamSport = TEAM_SPORTS.has(sportId.toUpperCase());
+  if (teamSport && away && away.participantType !== 'team') fail('away participant must be a team');
+  if (teamSport && home && home.participantType !== 'team') fail('home participant must be a team');
   if (team && team.participantType !== 'team') fail('selected team identity is not a team');
   if (player && player.participantType !== 'player') fail('selected player identity is not a player');
+
+  if (teamSport) {
+    if (away && hasCanonicalHomeAwayRole(away) && away.role !== 'away') {
+      fail(`away participant ${away.participantId} does not have canonical away role`);
+    }
+    if (home && hasCanonicalHomeAwayRole(home) && home.role !== 'home') {
+      fail(`home participant ${home.participantId} does not have canonical home role`);
+    }
+  }
 
   if (team && player) {
     const teamIds = new Set([team.participantId, team.canonicalId, team.teamId].filter((value): value is string => Boolean(value)));
@@ -158,6 +170,10 @@ function validateCanonicalEvent(
       fail(`player ${player.participantId} is not assigned to team ${team.participantId}`);
     }
   }
+}
+
+function hasCanonicalHomeAwayRole(participant: EventBrowseResult['participants'][number]) {
+  return participant.role === 'away' || participant.role === 'home';
 }
 
 function assertFlatMetadataIdentity(
@@ -197,6 +213,12 @@ function validateEventParticipant(identity: CanonicalParticipantIdentity, event:
   if (normalize(row.displayName) !== normalize(identity.displayName)) fail(`participant ID/display mismatch for ${identity.participantId}`);
   if (identity.teamId && row.teamId !== identity.teamId) fail(`participant team relationship mismatch for ${identity.participantId}`);
   return row;
+}
+
+function canonicalParticipantKey(
+  participant: EventBrowseResult['participants'][number],
+): string {
+  return participant.canonicalId ?? participant.participantId;
 }
 
 function validateDistinctSides(

@@ -23,9 +23,10 @@ const event: EventBrowseResult = {
   offers: [],
 };
 
-function referenceData(): ReferenceDataRepository {
+function referenceData(canonicalEvent: EventBrowseResult = event): ReferenceDataRepository {
   const repositories = createInMemoryRepositoryBundle();
-  repositories.referenceData.getEventBrowse = async (eventId) => eventId === event.eventId ? event : null;
+  repositories.referenceData.getEventBrowse = async (eventId) =>
+    eventId === canonicalEvent.eventId ? canonicalEvent : null;
   return repositories.referenceData;
 }
 
@@ -93,6 +94,119 @@ test('rejects the same canonical participant on both event sides', async () => {
   const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;
   resolution['home'] = { participantId: 'team-tcu', displayName: 'TCU', participantType: 'team' };
   await assert.rejects(() => validateSmartFormRelationships(invalid, referenceData()), /must be different/);
+});
+
+test('rejects duplicate event sides submitted through participantId and canonicalId aliases', async () => {
+  const aliasEvent: EventBrowseResult = {
+    ...event,
+    participants: event.participants.map((participant) =>
+      participant.canonicalId === 'team-tcu'
+        ? { ...participant, participantId: 'provider-team-tcu', canonicalId: 'team-tcu' }
+        : participant,
+    ),
+  };
+  const invalid = payload();
+  const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['away'] = {
+    participantId: 'provider-team-tcu',
+    displayName: 'TCU',
+    participantType: 'team',
+  };
+  resolution['home'] = {
+    participantId: 'team-tcu',
+    displayName: 'TCU',
+    participantType: 'team',
+  };
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(invalid, referenceData(aliasEvent)),
+    /away and home participants must be different/,
+  );
+});
+
+test('rejects a bypassed team-sport client that swaps canonical away and home roles', async () => {
+  const invalid = payload();
+  const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['away'] = {
+    participantId: 'team-unc',
+    displayName: 'UNC',
+    participantType: 'team',
+  };
+  resolution['home'] = {
+    participantId: 'team-tcu',
+    displayName: 'TCU',
+    participantType: 'team',
+  };
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(invalid, referenceData()),
+    /does not have canonical away role/,
+  );
+});
+
+test('accepts a valid team-sport side when that participant has no canonical home/away role', async () => {
+  const partialRoleEvent: EventBrowseResult = {
+    ...event,
+    participants: event.participants.map((participant) =>
+      participant.canonicalId === 'team-unc'
+        ? { ...participant, role: 'participant' }
+        : participant,
+    ),
+  };
+
+  await validateSmartFormRelationships(payload(), referenceData(partialRoleEvent));
+});
+
+test('does not impose team-sport home/away roles on a canonical MMA participant', async () => {
+  const mmaEvent: EventBrowseResult = {
+    ...event,
+    eventId: 'event-mma-1',
+    eventName: 'Fighter A vs Fighter B',
+    sportId: 'MMA',
+    leagueId: 'ufc',
+    participants: [
+      {
+        participantId: 'fighter-a',
+        canonicalId: 'fighter-a',
+        participantType: 'player',
+        displayName: 'Fighter A',
+        role: 'competitor',
+        teamId: null,
+        teamName: null,
+      },
+      {
+        participantId: 'fighter-b',
+        canonicalId: 'fighter-b',
+        participantType: 'player',
+        displayName: 'Fighter B',
+        role: 'competitor',
+        teamId: null,
+        teamName: null,
+      },
+    ],
+  };
+  const mmaPayload = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'MMA',
+      eventId: mmaEvent.eventId,
+      eventName: mmaEvent.eventName,
+      away: {
+        participantId: 'fighter-a',
+        displayName: 'Fighter A',
+        participantType: 'player',
+      },
+      home: {
+        participantId: 'fighter-b',
+        displayName: 'Fighter B',
+        participantType: 'player',
+      },
+    },
+  });
+  mmaPayload.eventName = mmaEvent.eventName;
+
+  await validateSmartFormRelationships(mmaPayload, referenceData(mmaEvent));
 });
 
 test('accepts explicit unresolved manual provenance', async () => {
