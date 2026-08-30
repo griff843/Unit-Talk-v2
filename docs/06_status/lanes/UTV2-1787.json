@@ -1,0 +1,62 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1787",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1",
+  "branch": "codex/utv2-1787-smart-form-phase-1",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/controllers/requeue-controller.ts",
+    "apps/api/src/controllers/retry-delivery-controller.ts",
+    "apps/api/src/controllers/submit-pick-controller.test.ts",
+    "apps/api/src/controllers/submit-pick-controller.ts",
+    "apps/api/src/distribution-service.test.ts",
+    "apps/api/src/distribution-service.ts",
+    "apps/api/src/handlers/reference-data.ts",
+    "apps/api/src/handlers/submit-pick.ts",
+    "apps/api/src/persistence.ts",
+    "apps/api/src/routes/reference-data.ts",
+    "apps/api/src/server.http.test.ts",
+    "apps/api/src/server.test.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/submission-service.ts",
+    "apps/smart-form/**",
+    "docs/06_status/proof/UTV2-1787/**",
+    "packages/contracts/src/**",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1787/evidence.json",
+    "docs/06_status/proof/UTV2-1787/model-routing.json"
+  ],
+  "status": "started",
+  "started_at": "2026-08-30T11:33:44.490Z",
+  "heartbeat_at": "2026-08-30T11:33:44.490Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1787-smart-form-phase-1.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

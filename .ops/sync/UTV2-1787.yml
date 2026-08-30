@@ -1,0 +1,547 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1787
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1787
+  objective: >-
+    Make Smart Form usable now as a fast, mistake-resistant capper submission
+    tool for real internal NCAAF/major-sport pick tracking while member delivery
+    remains parked.
+
+    This is a **production/launch-readiness product lane**, not autonomy work.
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      Make Smart Form usable now as a fast, mistake-resistant capper submission tool for real internal NCAAF/major-sport pick tracking while member delivery remains parked.
+
+      This is a **production/launch-readiness product lane**, not autonomy work.
+
+      ## PM PLAN APPROVAL
+
+      **APPROVED as Tier C / T1 plan.**
+
+      The lane is authorized to cross the Tier C authority boundary only where required to implement:
+
+      1. authenticated capper identity;
+      2. canonical participant/event relationship validation;
+      3. backend-enforced Track Only / Internal Tracking semantics that cannot be bypassed through enqueue/requeue paths.
+
+      PM merge approval remains required on the final exact head.
+
+      ## Product requirements
+
+      ### SF-01 — Capper authentication
+
+      * `/submit` must require authenticated capper access in the shared/manual-review environment.
+      * Google/allowlist auth remains the primary flow.
+      * Authenticated capper identity is authoritative and cannot be selected/spoofed by a normal capper.
+      * Show capper identity + sign-out in the Smart Form shell.
+      * QA auth bypass remains explicit test-only behavior, not an invisible default in the user-reviewed environment.
+
+      ### SF-02 — Participant constraint engine
+
+      Underlying abstraction is `participant`, not `pick_candidate`.
+
+      * sport constrains all downstream entities;
+      * canonical-mode sports use DB-backed selectable records, not arbitrary accepted text;
+      * team-event sports support canonical event selection first, structured Away/Home fallback second;
+      * same participant cannot occupy both sides;
+      * matchup constrains participants;
+      * team constrains players;
+      * changing upstream fields clears incompatible downstream state;
+      * market/stat options remain sport-compatible;
+      * manual participant entry is an explicit provenance-tagged exception for incomplete-coverage sports such as tennis/golf/MMA.
+
+      ### SF-10 — Track Only / Internal Tracking
+
+      Default recovery-mode submission must be backend-enforced internal tracking.
+
+      A Track Only pick may be persisted and surfaced to Command Center/internal stats testing, but it must not create member-facing delivery work.
+
+      This guarantee must hold across all relevant enqueue/requeue/retry paths, not only the initial Smart Form controller.
+
+      No member delivery, ingestion unpark, system-pick unpark, provider resubscription, or production rollout is authorized by this issue.
+
+      ### SF-11 — Server relationship validation
+
+      The API/server must independently reject invalid canonical combinations, including:
+
+      * cross-sport participant;
+      * participant not belonging to canonical event;
+      * player not belonging to selected canonical team when that relationship is known;
+      * duplicate same participant on both event sides;
+      * invalid canonical participant silently downgraded to manual.
+
+      UI filtering is not sufficient by itself.
+
+      ## Tier C authorized authority surface
+
+      Authorized where mechanically required by the final implementation plan:
+
+      * `apps/api/src/distribution-service.ts`
+      * relevant `apps/api/src/**` submission/controller/validation files
+      * `packages/contracts/src/**` for typed tracking / participant-resolution contracts
+      * `packages/db/src/repositories.ts`
+      * `packages/db/src/runtime-repositories.ts`
+      * Smart Form application files under `apps/smart-form/**`
+      * focused tests for the above
+      * this issue's normal lane/sync/proof artifacts
+
+      No schema migration is currently authorized because none has been identified as required. If implementation discovers a schema migration is genuinely necessary, **STOP and return the exact schema gap and migration plan before adding one.**
+
+      ## Dirty/uncommitted authority-file rule
+
+      The reported unrelated uncommitted changes in DB authority files are NOT part of this approval and must not be absorbed, overwritten, stashed destructively, or attributed to this lane.
+
+      Before admission/implementation:
+
+      1. record exact `git status --short` and diffs for the reported dirty authority files in the checkout where they exist;
+      2. determine whether each dirty change belongs to an active lane/worktree or is unowned local residue;
+      3. do not edit from that dirty checkout;
+      4. start Smart Form work from a clean governed worktree based on current authoritative `origin/main`;
+      5. lane-start/file-scope guard remains authoritative — if an active lane owns any requested Tier C path, STOP with the lane ID/path rather than bypassing the lock;
+      6. if dirty root-only changes are unowned residue, preserve them outside the Smart Form branch before any cleanup; do not silently delete them.
+
+      Local dirty state in another checkout is not permission to widen the Smart Form PR.
+
+      ## Merge / overlap sequencing
+
+      The Smart Form lane may proceed in parallel with [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) because the intended product/Tier C files do not overlap 1785's hook/proof-test surface.
+
+      Any real Tier C file-scope collision discovered by lane-start must serialize normally. No scope bypass is pre-approved.
+
+      Final Smart Form merge remains exact-head T1 PM-authorized.
+
+      ## Definition of done
+
+      At minimum prove:
+
+       1. unauthenticated shared/manual-review Smart Form redirects/refuses to login;
+       2. approved capper reaches the form and identity cannot be changed client-side;
+       3. sport filtering prevents cross-sport canonical participants;
+       4. canonical event/matchup selection carries canonical IDs;
+       5. structured Away/Home fallback prevents same participant twice;
+       6. team selection filters canonical players;
+       7. upstream changes clear incompatible downstream state;
+       8. canonical selectors require selecting a DB record rather than accepting arbitrary text as canonical;
+       9. explicit manual participant override is provenance-distinguishable;
+      10. server rejects invalid canonical relationships even when the UI is bypassed;
+      11. Track Only initial submission creates no member-facing outbox work;
+      12. Track Only remains non-deliverable through requeue/retry/enqueue paths;
+      13. existing live-offer path still works;
+      14. representative mobile NCAAF flow passes E2E;
+      15. representative desktop MLB flow passes E2E;
+      16. required repo verification passes;
+      17. independent review attempts capper spoofing, cross-sport injection, stale downstream state, manual-as-canonical masquerade, and Track Only delivery bypass.
+
+      ## Required product review packet
+
+      Return before merge with:
+
+      * exact PR/head;
+      * complete changed-file list;
+      * screenshots: login, NCAAF structured moneyline, NCAAF team→player prop filtering, manual participant override, mobile ticket, Track Only state;
+      * exact local/staging E2E results;
+      * server relationship-negative tests;
+      * Track Only enqueue/requeue bypass tests;
+      * independent reviewer verdict;
+      * required CI/check table;
+      * any remaining production-data gaps (especially canonical NCAAF reference population).
+
+      Do not self-approve T1 and do not enable member delivery.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      PM PLAN APPROVAL
+
+      **APPROVED as Tier C / T1 plan.**
+
+
+      The lane is authorized to cross the Tier C authority boundary only where
+      required to implement:
+
+
+      1. authenticated capper identity;
+
+      2. canonical participant/event relationship validation;
+
+      3. backend-enforced Track Only / Internal Tracking semantics that cannot
+      be bypassed through enqueue/requeue paths.
+
+
+      PM merge approval remains required on the final exact head.
+    - >-
+      Product requirements
+
+      ### SF-01 — Capper authentication
+
+
+      * `/submit` must require authenticated capper access in the
+      shared/manual-review environment.
+
+      * Google/allowlist auth remains the primary flow.
+
+      * Authenticated capper identity is authoritative and cannot be
+      selected/spoofed by a normal capper.
+
+      * Show capper identity + sign-out in the Smart Form shell.
+
+      * QA auth bypass remains explicit test-only behavior, not an invisible
+      default in the user-reviewed environment.
+
+
+      ### SF-02 — Participant constraint engine
+
+
+      Underlying abstraction is `participant`, not `pick_candidate`.
+
+
+      * sport constrains all downstream entities;
+
+      * canonical-mode sports use DB-backed selectable records, not arbitrary
+      accepted text;
+
+      * team-event sports support canonical event selection first, structured
+      Away/Home fallback second;
+
+      * same participant cannot occupy both sides;
+
+      * matchup constrains participants;
+
+      * team constrains players;
+
+      * changing upstream fields clears incompatible downstream state;
+
+      * market/stat options remain sport-compatible;
+
+      * manual participant entry is an explicit provenance-tagged exception for
+      incomplete-coverage sports such as tennis/golf/MMA.
+
+
+      ### SF-10 — Track Only / Internal Tracking
+
+
+      Default recovery-mode submission must be backend-enforced internal
+      tracking.
+
+
+      A Track Only pick may be persisted and surfaced to Command Center/internal
+      stats testing, but it must not create member-facing delivery work.
+
+
+      This guarantee must hold across all relevant enqueue/requeue/retry paths,
+      not only the initial Smart Form controller.
+
+
+      No member delivery, ingestion unpark, system-pick unpark, provider
+      resubscription, or production rollout is authorized by this issue.
+
+
+      ### SF-11 — Server relationship validation
+
+
+      The API/server must independently reject invalid canonical combinations,
+      including:
+
+
+      * cross-sport participant;
+
+      * participant not belonging to canonical event;
+
+      * player not belonging to selected canonical team when that relationship
+      is known;
+
+      * duplicate same participant on both event sides;
+
+      * invalid canonical participant silently downgraded to manual.
+
+
+      UI filtering is not sufficient by itself.
+    - >-
+      Tier C authorized authority surface
+
+      Authorized where mechanically required by the final implementation plan:
+
+
+      * `apps/api/src/distribution-service.ts`
+
+      * relevant `apps/api/src/**` submission/controller/validation files
+
+      * `packages/contracts/src/**` for typed tracking / participant-resolution
+      contracts
+
+      * `packages/db/src/repositories.ts`
+
+      * `packages/db/src/runtime-repositories.ts`
+
+      * Smart Form application files under `apps/smart-form/**`
+
+      * focused tests for the above
+
+      * this issue's normal lane/sync/proof artifacts
+
+
+      No schema migration is currently authorized because none has been
+      identified as required. If implementation discovers a schema migration is
+      genuinely necessary, **STOP and return the exact schema gap and migration
+      plan before adding one.**
+    - >-
+      Dirty/uncommitted authority-file rule
+
+      The reported unrelated uncommitted changes in DB authority files are NOT
+      part of this approval and must not be absorbed, overwritten, stashed
+      destructively, or attributed to this lane.
+
+
+      Before admission/implementation:
+
+
+      1. record exact `git status --short` and diffs for the reported dirty
+      authority files in the checkout where they exist;
+
+      2. determine whether each dirty change belongs to an active lane/worktree
+      or is unowned local residue;
+
+      3. do not edit from that dirty checkout;
+
+      4. start Smart Form work from a clean governed worktree based on current
+      authoritative `origin/main`;
+
+      5. lane-start/file-scope guard remains authoritative — if an active lane
+      owns any requested Tier C path, STOP with the lane ID/path rather than
+      bypassing the lock;
+
+      6. if dirty root-only changes are unowned residue, preserve them outside
+      the Smart Form branch before any cleanup; do not silently delete them.
+
+
+      Local dirty state in another checkout is not permission to widen the Smart
+      Form PR.
+    - |-
+      Merge / overlap sequencing
+      The Smart Form lane may proceed in parallel with [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) because the intended product/Tier C files do not overlap 1785's hook/proof-test surface.
+
+      Any real Tier C file-scope collision discovered by lane-start must serialize normally. No scope bypass is pre-approved.
+
+      Final Smart Form merge remains exact-head T1 PM-authorized.
+    - >-
+      Definition of done
+
+      At minimum prove:
+
+       1. unauthenticated shared/manual-review Smart Form redirects/refuses to login;
+       2. approved capper reaches the form and identity cannot be changed client-side;
+       3. sport filtering prevents cross-sport canonical participants;
+       4. canonical event/matchup selection carries canonical IDs;
+       5. structured Away/Home fallback prevents same participant twice;
+       6. team selection filters canonical players;
+       7. upstream changes clear incompatible downstream state;
+       8. canonical selectors require selecting a DB record rather than accepting arbitrary text as canonical;
+       9. explicit manual participant override is provenance-distinguishable;
+      10. server rejects invalid canonical relationships even when the UI is
+      bypassed;
+
+      11. Track Only initial submission creates no member-facing outbox work;
+
+      12. Track Only remains non-deliverable through requeue/retry/enqueue
+      paths;
+
+      13. existing live-offer path still works;
+
+      14. representative mobile NCAAF flow passes E2E;
+
+      15. representative desktop MLB flow passes E2E;
+
+      16. required repo verification passes;
+
+      17. independent review attempts capper spoofing, cross-sport injection,
+      stale downstream state, manual-as-canonical masquerade, and Track Only
+      delivery bypass.
+    - >-
+      Required product review packet
+
+      Return before merge with:
+
+
+      * exact PR/head;
+
+      * complete changed-file list;
+
+      * screenshots: login, NCAAF structured moneyline, NCAAF team→player prop
+      filtering, manual participant override, mobile ticket, Track Only state;
+
+      * exact local/staging E2E results;
+
+      * server relationship-negative tests;
+
+      * Track Only enqueue/requeue bypass tests;
+
+      * independent reviewer verdict;
+
+      * required CI/check table;
+
+      * any remaining production-data gaps (especially canonical NCAAF reference
+      population).
+
+
+      Do not self-approve T1 and do not enable member delivery.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and
+    title: Smart Form Phase 1 — capper auth, canonical participant constraints, and
+      Track Only launch mode
+    description: |-
+      ## Objective
+
+      Make Smart Form usable now as a fast, mistake-resistant capper submission tool for real internal NCAAF/major-sport pick tracking while member delivery remains parked.
+
+      This is a **production/launch-readiness product lane**, not autonomy work.
+
+      ## PM PLAN APPROVAL
+
+      **APPROVED as Tier C / T1 plan.**
+
+      The lane is authorized to cross the Tier C authority boundary only where required to implement:
+
+      1. authenticated capper identity;
+      2. canonical participant/event relationship validation;
+      3. backend-enforced Track Only / Internal Tracking semantics that cannot be bypassed through enqueue/requeue paths.
+
+      PM merge approval remains required on the final exact head.
+
+      ## Product requirements
+
+      ### SF-01 — Capper authentication
+
+      * `/submit` must require authenticated capper access in the shared/manual-review environment.
+      * Google/allowlist auth remains the primary flow.
+      * Authenticated capper identity is authoritative and cannot be selected/spoofed by a normal capper.
+      * Show capper identity + sign-out in the Smart Form shell.
+      * QA auth bypass remains explicit test-only behavior, not an invisible default in the user-reviewed environment.
+
+      ### SF-02 — Participant constraint engine
+
+      Underlying abstraction is `participant`, not `pick_candidate`.
+
+      * sport constrains all downstream entities;
+      * canonical-mode sports use DB-backed selectable records, not arbitrary accepted text;
+      * team-event sports support canonical event selection first, structured Away/Home fallback second;
+      * same participant cannot occupy both sides;
+      * matchup constrains participants;
+      * team constrains players;
+      * changing upstream fields clears incompatible downstream state;
+      * market/stat options remain sport-compatible;
+      * manual participant entry is an explicit provenance-tagged exception for incomplete-coverage sports such as tennis/golf/MMA.
+
+      ### SF-10 — Track Only / Internal Tracking
+
+      Default recovery-mode submission must be backend-enforced internal tracking.
+
+      A Track Only pick may be persisted and surfaced to Command Center/internal stats testing, but it must not create member-facing delivery work.
+
+      This guarantee must hold across all relevant enqueue/requeue/retry paths, not only the initial Smart Form controller.
+
+      No member delivery, ingestion unpark, system-pick unpark, provider resubscription, or production rollout is authorized by this issue.
+
+      ### SF-11 — Server relationship validation
+
+      The API/server must independently reject invalid canonical combinations, including:
+
+      * cross-sport participant;
+      * participant not belonging to canonical event;
+      * player not belonging to selected canonical team when that relationship is known;
+      * duplicate same participant on both event sides;
+      * invalid canonical participant silently downgraded to manual.
+
+      UI filtering is not sufficient by itself.
+
+      ## Tier C authorized authority surface
+
+      Authorized where mechanically required by the final implementation plan:
+
+      * `apps/api/src/distribution-service.ts`
+      * relevant `apps/api/src/**` submission/controller/validation files
+      * `packages/contracts/src/**` for typed tracking / participant-resolution contracts
+      * `packages/db/src/repositories.ts`
+      * `packages/db/src/runtime-repositories.ts`
+      * Smart Form application files under `apps/smart-form/**`
+      * focused tests for the above
+      * this issue's normal lane/sync/proof artifacts
+
+      No schema migration is currently authorized because none has been identified as required. If implementation discovers a schema migration is genuinely necessary, **STOP and return the exact schema gap and migration plan before adding one.**
+
+      ## Dirty/uncommitted authority-file rule
+
+      The reported unrelated uncommitted changes in DB authority files are NOT part of this approval and must not be absorbed, overwritten, stashed destructively, or attributed to this lane.
+
+      Before admission/implementation:
+
+      1. record exact `git status --short` and diffs for the reported dirty authority files in the checkout where they exist;
+      2. determine whether each dirty change belongs to an active lane/worktree or is unowned local residue;
+      3. do not edit from that dirty checkout;
+      4. start Smart Form work from a clean governed worktree based on current authoritative `origin/main`;
+      5. lane-start/file-scope guard remains authoritative — if an active lane owns any requested Tier C path, STOP with the lane ID/path rather than bypassing the lock;
+      6. if dirty root-only changes are unowned residue, preserve them outside the Smart Form branch before any cleanup; do not silently delete them.
+
+      Local dirty state in another checkout is not permission to widen the Smart Form PR.
+
+      ## Merge / overlap sequencing
+
+      The Smart Form lane may proceed in parallel with [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane) because the intended product/Tier C files do not overlap 1785's hook/proof-test surface.
+
+      Any real Tier C file-scope collision discovered by lane-start must serialize normally. No scope bypass is pre-approved.
+
+      Final Smart Form merge remains exact-head T1 PM-authorized.
+
+      ## Definition of done
+
+      At minimum prove:
+
+       1. unauthenticated shared/manual-review Smart Form redirects/refuses to login;
+       2. approved capper reaches the form and identity cannot be changed client-side;
+       3. sport filtering prevents cross-sport canonical participants;
+       4. canonical event/matchup selection carries canonical IDs;
+       5. structured Away/Home fallback prevents same participant twice;
+       6. team selection filters canonical players;
+       7. upstream changes clear incompatible downstream state;
+       8. canonical selectors require selecting a DB record rather than accepting arbitrary text as canonical;
+       9. explicit manual participant override is provenance-distinguishable;
+      10. server rejects invalid canonical relationships even when the UI is bypassed;
+      11. Track Only initial submission creates no member-facing outbox work;
+      12. Track Only remains non-deliverable through requeue/retry/enqueue paths;
+      13. existing live-offer path still works;
+      14. representative mobile NCAAF flow passes E2E;
+      15. representative desktop MLB flow passes E2E;
+      16. required repo verification passes;
+      17. independent review attempts capper spoofing, cross-sport injection, stale downstream state, manual-as-canonical masquerade, and Track Only delivery bypass.
+
+      ## Required product review packet
+
+      Return before merge with:
+
+      * exact PR/head;
+      * complete changed-file list;
+      * screenshots: login, NCAAF structured moneyline, NCAAF team→player prop filtering, manual participant override, mobile ticket, Track Only state;
+      * exact local/staging E2E results;
+      * server relationship-negative tests;
+      * Track Only enqueue/requeue bypass tests;
+      * independent reviewer verdict;
+      * required CI/check table;
+      * any remaining production-data gaps (especially canonical NCAAF reference population).
+
+      Do not self-approve T1 and do not enable member delivery.
+    captured_at: 2026-08-30T11:33:29.440Z
+    description_sha256: 277ff6419feafa63dfff86141df2d9940e4bba4a448227ea120432422fdf05f0
+  contract_hash: 771158aa3991fd90443a18254f029b9be0ce6059bc9a00aeeb386a0ca5bcdbcf
