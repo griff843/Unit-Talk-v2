@@ -1,6 +1,6 @@
 # UTV2-1744 — diff summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4e912e88b175d3bdacb4e0b4c7b9063c7a137890
 
 ## Files changed
 

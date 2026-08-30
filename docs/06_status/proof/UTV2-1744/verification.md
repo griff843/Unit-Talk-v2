@@ -1,6 +1,6 @@
 # PROOF: UTV2-1744
 
-MERGE_SHA: pending merge
+MERGE_SHA: 4e912e88b175d3bdacb4e0b4c7b9063c7a137890
 
 Read-only triage of the production `distribution_outbox`. This lane ships a
 classifier, a target verifier, a stuck-claim analyser, and a replay verdict
@@ -296,7 +296,35 @@ validation. The 1,954 dead letters are never to be replayed or modified.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1452
 
-This lane is not merged. Under the schema-v2 contract, merge authority lives
-only at `sha_binding.merge_sha` and is written by the post-merge rebinder; a
-branch SHA is execution identity, never merge authority. The execution identity
-for this bundle is `4e912e88b175d3bdacb4e0b4c7b9063c7a137890` (`sha_binding.verified_source_sha`).
+This lane is **not merged**. Merge authority is `sha_binding.merge_sha`, which is
+`null` and stays null until the post-merge rebinder writes the real merge SHA.
+
+The top-level `MERGE_SHA:` anchor above carries the **execution identity**
+(`4e912e88b175d3bdacb4e0b4c7b9063c7a137890`, equal to
+`sha_binding.verified_source_sha`), not merge authority. It holds a real SHA
+because the required `Executor Result Validation` check independently requires
+`MERGE_SHA` to parse as a git SHA that is an ancestor of the PR head, and
+rejects the literal `pending merge`. The post-merge rebinder overwrites this
+anchor with the merge SHA, which is why it must be a rebindable anchor rather
+than a placeholder.
+
+### Gate conflict recorded here rather than worked around
+
+`scripts/ci/proof-binding-validator.ts` requires the opposite: it fails a
+pre-merge bundle whose `MERGE_SHA` is anything other than `pending merge`, on
+the reasoning that a branch SHA is never merge authority. The two rules cannot
+both be satisfied by one file.
+
+This lane resolves the conflict rather than hiding it: the binding validator is
+invoked **only** by `.github/workflows/migration-reversibility-gate.yml`, whose
+`on.pull_request.paths` filter is limited to `supabase/migrations/**`,
+`db/migrations-rollback/**`, and that workflow's own scripts. This PR touches
+none of those paths, so the binding validator does not run against it and is not
+a gate here; `Executor Result Validation` is a required check and is. The
+`Merge SHA: pending merge` row above is retained so the bundle still satisfies
+the binding validator's section contract if that gate is ever widened.
+
+A lane that changes `supabase/migrations/**` would trip **both** rules at once
+and could not satisfy them simultaneously. That is a real defect in the gate
+set, not a property of this lane, and is reported to PM rather than patched
+from inside this scope.
