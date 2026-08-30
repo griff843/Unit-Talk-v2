@@ -1,0 +1,333 @@
+{
+  "schema": "experience-qa/v1",
+  "runId": "2026-08-30T13-18-45-cfrypw",
+  "product": "unit-talk",
+  "surface": "smart_form",
+  "persona": "operator",
+  "flow": "submit_pick",
+  "environment": "local",
+  "headSha": "b18a0b82",
+  "timestamp": "2026-08-30T13:18:45.092Z",
+  "mode": "observe",
+  "status": "PASS",
+  "verdictReason": "Browser steps passed and required expectations passed.",
+  "preflightResults": [
+    {
+      "id": "smart_form_route_reachable",
+      "status": "passed",
+      "required": true,
+      "message": "Smart Form /submit returned HTTP 200.",
+      "evidence": {
+        "url": "http://localhost:4100/submit",
+        "status": 200,
+        "location": null
+      }
+    },
+    {
+      "id": "nextauth_session_no_500",
+      "status": "passed",
+      "required": true,
+      "message": "Smart Form /api/auth/session returned HTTP 200.",
+      "evidence": {
+        "url": "http://localhost:4100/api/auth/session",
+        "status": 200,
+        "location": null
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "Navigate to Smart Form /submit",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:46.359Z",
+      "durationMs": 519
+    },
+    {
+      "step": "Wait for form content to render",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:47.361Z",
+      "durationMs": 1002
+    },
+    {
+      "step": "Check for sport selector",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:47.558Z",
+      "durationMs": 25
+    },
+    {
+      "step": "Check for market type control",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:47.570Z",
+      "durationMs": 12
+    },
+    {
+      "step": "Check for sportsbook / book selector",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:47.584Z",
+      "durationMs": 14
+    },
+    {
+      "step": "Check for submit button",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:47.604Z",
+      "durationMs": 20
+    },
+    {
+      "step": "Attempt to open sport selector (observe mode interaction)",
+      "status": "pass",
+      "timestamp": "2026-08-30T13:18:48.644Z",
+      "durationMs": 921
+    }
+  ],
+  "expectationResults": [
+    {
+      "id": "smart_form_session_no_500",
+      "status": "passed",
+      "severity": "critical",
+      "message": "/api/auth/session did not return HTTP 500.",
+      "evidence": [],
+      "hard": true
+    },
+    {
+      "id": "smart_form_no_login_redirect_before_form",
+      "status": "passed",
+      "severity": "critical",
+      "message": "No unexpected redirect to /login before form render.",
+      "evidence": {
+        "pageUrl": "http://localhost:4100/submit"
+      },
+      "hard": true
+    },
+    {
+      "id": "smart_form_controls_render",
+      "status": "passed",
+      "severity": "critical",
+      "message": "Sport, market, book, and submit controls rendered.",
+      "evidence": [
+        {
+          "key": "sportSelect",
+          "preferred": "[data-testid=\"smart-form-sport-select\"]",
+          "preferredFound": true,
+          "found": true
+        },
+        {
+          "key": "marketSelect",
+          "preferred": "[data-testid=\"smart-form-market-select\"]",
+          "preferredFound": true,
+          "found": true
+        },
+        {
+          "key": "bookSelect",
+          "preferred": "[data-testid=\"smart-form-book-select\"]",
+          "preferredFound": true,
+          "found": true
+        },
+        {
+          "key": "submitButton",
+          "preferred": "[data-testid=\"smart-form-submit-button\"]",
+          "preferredFound": true,
+          "found": true
+        }
+      ],
+      "hard": true
+    },
+    {
+      "id": "smart_form_no_5xx_network_responses",
+      "status": "passed",
+      "severity": "critical",
+      "message": "No HTTP 5xx network responses observed.",
+      "evidence": [],
+      "hard": true
+    }
+  ],
+  "observations": [],
+  "selectorResults": [
+    {
+      "key": "sportSelect",
+      "preferred": "[data-testid=\"smart-form-sport-select\"]",
+      "preferredFound": true,
+      "found": true
+    },
+    {
+      "key": "marketSelect",
+      "preferred": "[data-testid=\"smart-form-market-select\"]",
+      "preferredFound": true,
+      "found": true
+    },
+    {
+      "key": "bookSelect",
+      "preferred": "[data-testid=\"smart-form-book-select\"]",
+      "preferredFound": true,
+      "found": true
+    },
+    {
+      "key": "submitButton",
+      "preferred": "[data-testid=\"smart-form-submit-button\"]",
+      "preferredFound": true,
+      "found": true
+    },
+    {
+      "key": "authError",
+      "preferred": "[data-testid=\"smart-form-auth-error\"]",
+      "preferredFound": false,
+      "found": false,
+      "recommendation": "Add stable selector [data-testid=\"smart-form-auth-error\"] for authError; no fallback rendered."
+    },
+    {
+      "key": "successState",
+      "preferred": "[data-testid=\"smart-form-success-state\"]",
+      "preferredFound": false,
+      "found": false,
+      "recommendation": "Add stable selector [data-testid=\"smart-form-success-state\"] for successState; no fallback rendered."
+    }
+  ],
+  "screenshots": [
+    "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1/apps/qa-agent/artifacts/unit-talk-smart_form-submit_pick-operator/2026-08-30T13-18-45-cfrypw/01-form-loaded.png",
+    "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1/apps/qa-agent/artifacts/unit-talk-smart_form-submit_pick-operator/2026-08-30T13-18-45-cfrypw/02-form-controls-verified.png",
+    "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1/apps/qa-agent/artifacts/unit-talk-smart_form-submit_pick-operator/2026-08-30T13-18-45-cfrypw/03-sport-selector-interaction.png"
+  ],
+  "videoPath": "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1/apps/qa-agent/artifacts/unit-talk-smart_form-submit_pick-operator/2026-08-30T13-18-45-cfrypw/9952b29acfb02b67584924cdf09f19ff.webm",
+  "tracePath": "/home/griff843/unit-talk-utv2-1787-admission-2/.out/worktrees/codex__utv2-1787-smart-form-phase-1/apps/qa-agent/artifacts/unit-talk-smart_form-submit_pick-operator/2026-08-30T13-18-45-cfrypw/trace.zip",
+  "consoleErrors": [],
+  "networkErrors": [],
+  "networkObservations": [
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/submit",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/0e96d314a90a6138-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/css/4a3d6e22719622c9.css",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/1ba0a863e6af8aeb-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/1f54c84255ccf44e-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/3667c091265cf81b-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/5fb5c05ff73c0616-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/437e5f23c97e320c-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/60c9b95e8d9e49be-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/61d96c4884191721-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/b0bb26939bb40fdb-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/b7ea2ab4a8ad1f81-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/media/d7df244fe7b07b95-s.p.woff2",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/webpack-eff2be106d2793ec.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/9cb46fa5-29cd4ad7e98723d0.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/main-app-385adac0732d84a5.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/558-4a5bfbf7023bc992.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/682-e5bb32c140cdbea2.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/861-a95ae21de4571a32.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/app/layout-16b2e480b070e5be.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/452-69bc6d775f3e1ded.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/_next/static/chunks/app/submit/page-1b95d8a76ad85ee1.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/icon.svg?0736096a11bd44a1",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/api/auth/session",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4100/api/auth/session",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/catalog",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:4000/api/reference-data/matchups?sport=NBA&date=2026-08-30",
+      "status": 200
+    }
+  ],
+  "uxFriction": [],
+  "regressionRecommendations": [],
+  "durationMs": 4183
+}

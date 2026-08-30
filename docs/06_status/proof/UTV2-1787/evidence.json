@@ -1,0 +1,92 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1787",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b18a0b829d1804eb604cf03dacba2b0454ae6431",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "passed",
+    "source_sha": "b18a0b829d1804eb604cf03dacba2b0454ae6431",
+    "verify_static": "passed",
+    "smart_form_unit_tests": {
+      "status": "passed",
+      "passed": 116,
+      "failed": 0
+    },
+    "api_focused_tests": {
+      "status": "passed",
+      "passed": 35,
+      "failed": 0
+    },
+    "r_level_check": {
+      "status": "passed",
+      "rules_matched": [
+        "operator-ui"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "status": "passed",
+    "source_sha": "b18a0b829d1804eb604cf03dacba2b0454ae6431",
+    "queries": [
+      {
+        "method": "GET",
+        "target": "http://localhost:4100/submit",
+        "status": 200
+      },
+      {
+        "method": "GET",
+        "target": "http://localhost:4100/api/auth/session",
+        "status": 200
+      }
+    ],
+    "row_counts": [
+      {
+        "scenario": "Track Only initial submission",
+        "member_facing_outbox_rows": 0,
+        "source": "focused in-memory repository tests"
+      },
+      {
+        "scenario": "Track Only direct enqueue, retry, and requeue bypass attempts",
+        "member_facing_outbox_rows": 0,
+        "source": "focused controller and distribution tests"
+      }
+    ],
+    "playwright": {
+      "status": "passed",
+      "passed": 22,
+      "failed": 0,
+      "coverage": [
+        "authenticated recovery access",
+        "mobile NCAAF moneyline and player prop",
+        "desktop MLB submission",
+        "canonical participant IDs and relationship resets",
+        "manual unresolved override",
+        "duplicate-side prevention",
+        "Track Only submission"
+      ]
+    },
+    "experience_qa": {
+      "status": "passed",
+      "run_id": "2026-08-30T13-18-45-cfrypw",
+      "head_sha": "b18a0b82",
+      "route_status": 200,
+      "auth_session_status": 200,
+      "http_5xx_observed": 0
+    }
+  },
+  "db_proof": {
+    "status": "pending_staging_ci",
+    "local_guard": "refused_before_write",
+    "local_project_ref": "zfzdnfwdarxucxtaojxm",
+    "required_staging_project_ref": "xskgrzbteyqdufktjrjx",
+    "note": "T1 writable DB verification must run in the staging CI environment; no production write was attempted."
+  }
+}
