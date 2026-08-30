@@ -4,11 +4,13 @@ import {
   getCatalog,
   getEventBrowse,
   getMatchups,
+  getReferenceDataAvailability,
   searchBrowse,
   submitPick,
 } from '../lib/api-client.ts';
 import {
   buildParticipantSearchUrl,
+  buildParticipantSearchEmptyMessage,
   normalizeParticipantSearchResults,
 } from '../lib/participant-search.ts';
 
@@ -52,11 +54,33 @@ test('buildParticipantSearchUrl keeps event-aware search on canonical endpoints'
 
   assert.equal(
     playerUrl,
-    'http://127.0.0.1:4000/api/reference-data/search/players?q=Shai&sport=NBA',
+    'http://127.0.0.1:4000/api/reference-data/search/players?q=Shai&sport=NBA&eventId=evt-thunder',
   );
   assert.equal(
     teamUrl,
-    'http://127.0.0.1:4000/api/reference-data/search/teams?q=Thunder&sport=NBA',
+    'http://127.0.0.1:4000/api/reference-data/search/teams?q=Thunder&sport=NBA&eventId=evt-thunder',
+  );
+});
+
+test('buildParticipantSearchUrl constrains player search to the selected team', () => {
+  const url = buildParticipantSearchUrl('LeBron', 'player', {
+    sport: 'NBA',
+    teamId: 'team-lakers',
+  });
+  assert.equal(
+    url,
+    'http://127.0.0.1:4000/api/reference-data/search/players?q=LeBron&sport=NBA&teamId=team-lakers',
+  );
+});
+
+test('participant empty states distinguish an empty dataset from a query miss', () => {
+  assert.equal(
+    buildParticipantSearchEmptyMessage('team', 'NBA', 'Lakers', false),
+    'Canonical NBA team data is not available in this environment yet.',
+  );
+  assert.equal(
+    buildParticipantSearchEmptyMessage('player', 'NBA', 'LeBron', true),
+    'No canonical player found for “LeBron”.',
   );
 });
 
@@ -74,9 +98,30 @@ test('normalizeParticipantSearchResults preserves participant ids, de-dupes, and
   );
 
   assert.deepEqual(results, [
-    { participantId: 'team-1', displayName: 'Boston Celtics', participantType: 'team' },
-    { participantId: 'team-2', displayName: 'New York Knicks', participantType: 'team' },
+    { participantId: 'team-1', displayName: 'Boston Celtics', participantType: 'team', teamId: null },
+    { participantId: 'team-2', displayName: 'New York Knicks', participantType: 'team', teamId: null },
   ]);
+});
+
+test('getReferenceDataAvailability reports whether canonical sport datasets are populated', async () => {
+  let capturedUrl = '';
+  const restoreFetch = installFetchMock(async (url) => {
+    capturedUrl = url;
+    return new Response(
+      JSON.stringify({
+        data: { sportId: 'NBA', teamsAvailable: false, playersAvailable: false },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+
+  const availability = await getReferenceDataAvailability('NBA');
+  assert.equal(availability.teamsAvailable, false);
+  assert.equal(
+    capturedUrl,
+    'http://127.0.0.1:4000/api/reference-data/availability?sport=NBA',
+  );
+  restoreFetch();
 });
 
 test('normalizeParticipantSearchResults returns an empty array for invalid payloads', () => {

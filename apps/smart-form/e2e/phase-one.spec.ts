@@ -1,6 +1,17 @@
 import { expect, test, type Page } from '@playwright/test';
 
+// Fixture-backed UI behavior tests. Canonical reference rows below are test fixtures,
+// not evidence that the connected API environment is populated.
+
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/reference-data/availability?**', async (route) => {
+    const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { sportId, teamsAvailable: true, playersAvailable: true } }),
+    });
+  });
   await page.addInitScript(() => {
     const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
       .replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -152,7 +163,7 @@ test('switching sports clears the selected canonical matchup', async ({ page }) 
   await page.getByRole('button', { name: 'MLB' }).click();
   await expect(page.getByRole('button', { name: 'Change game' })).toHaveCount(0);
   await expect(page.getByText('TCU @ UNC', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('No matchups scheduled for 2026-09-01. You can switch to manual entry and still submit against canonical sport and book selections.')).toBeVisible();
+  await expect(page.getByText('No canonical matchups are available for 2026-09-01. Continue with Away Team and Home Team search below.')).toBeVisible();
 });
 
 test('desktop MLB structured canonical event entry remains available', async ({ page }) => {
@@ -256,12 +267,108 @@ test('structured manual entry rejects the same canonical participant on both sid
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByRole('button', { name: 'Manual fallback' }).click();
-  await page.getByLabel('Away participant').fill('TCU');
+  await page.getByLabel('Away Team').fill('TCU');
   await page.getByRole('button', { name: /TCU\s+team/i }).click();
-  await page.getByLabel('Home participant').fill('TCU');
+  await page.getByLabel('Home Team').fill('TCU');
   await page.getByRole('button', { name: /TCU\s+team/i }).click();
 
   await expect(page.getByText('Choose a different participant', { exact: true })).toBeVisible();
   await expect(page.getByText('The same canonical participant cannot occupy both event sides.', { exact: true })).toBeVisible();
   await expect(page.getByText('Derived matchup', { exact: true })).toHaveCount(0);
+});
+
+test('non-team sport without a slate remains reachable through explicit manual provenance', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+  const mmaCatalog = {
+    data: {
+      ...catalog.data,
+      sports: [
+        ...catalog.data.sports,
+        { id: 'MMA', name: 'MMA', marketTypes: ['moneyline'], statTypes: [], teams: [] },
+      ],
+    },
+  };
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(mmaCatalog),
+  }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [] }),
+  }));
+  await page.route('**/api/submissions', async (route) => {
+    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { submissionId: 'sub-mma', pickId: 'pick-mma', lifecycleState: 'validated' } }),
+    });
+  });
+
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'MMA', exact: true }).click();
+  await expect(page.getByText('Manual event identity', { exact: true })).toBeVisible();
+  await expect(page.getByText(/does not use canonical home\/away roles/i)).toBeVisible();
+  await expect(page.getByText(/enter explicit manual event and competitor details below/i).first()).toBeVisible();
+  await expect(page.getByLabel('Away Team')).toHaveCount(0);
+  await expect(page.getByLabel('Home Team')).toHaveCount(0);
+  await page.getByRole('button', { name: /Moneyline/i }).first().click();
+  await page.getByLabel('Matchup').fill('Fighter A vs Fighter B');
+  await page.getByLabel('Competitor').fill('Fighter A');
+  await page.locator('input[name="odds"]').fill('-115');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByTestId('smart-form-submit-button').first().click();
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+
+  const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
+  expect(metadata['participantResolution']).toMatchObject({
+    resolution: 'manual',
+    sportId: 'MMA',
+    eventId: null,
+    manualOverride: true,
+    enteredEventName: 'Fighter A vs Fighter B',
+  });
+});
+
+test('editing a selected team as free text clears the dependent canonical player', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(catalog),
+  }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [] }),
+  }));
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [
+      { participantId: 'team-tcu', displayName: 'TCU', participantType: 'team' },
+      { participantId: 'team-unc', displayName: 'UNC', participantType: 'team' },
+    ] }),
+  }));
+  await page.route('**/api/reference-data/search/players?**', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ data: [
+      { participantId: 'player-tcu-qb', displayName: 'TCU Quarterback', participantType: 'player', teamId: 'team-tcu' },
+    ] }),
+  }));
+
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NCAAF', exact: true }).click();
+  await page.getByRole('button', { name: /Player Prop/i }).first().click();
+  await page.getByLabel('Team', { exact: true }).fill('TCU');
+  await page.getByRole('button', { name: /TCU\s+team/i }).last().click();
+  await page.getByLabel('Player', { exact: true }).fill('TCU');
+  await page.getByRole('button', { name: /TCU Quarterback/i }).click();
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('TCU Quarterback');
+
+  await page.getByLabel('Team', { exact: true }).fill('UNC');
+  await expect(page.getByLabel('Player', { exact: true })).toHaveValue('');
+  await expect(page.getByLabel('Player', { exact: true })).toBeDisabled();
 });

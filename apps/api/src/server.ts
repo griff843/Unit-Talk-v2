@@ -58,6 +58,7 @@ import {
   handlePromotionPreviewRoute,
   handleRequeuePick,
   handleReferenceDataCatalog,
+  handleReferenceDataAvailability,
   handleReferenceDataLeagues,
   handleReferenceDataMatchups,
   handleReferenceDataEventBrowse,
@@ -443,6 +444,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {
     return handleReferenceDataCatalog(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/availability') {
+    return handleReferenceDataAvailability(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/leagues') {

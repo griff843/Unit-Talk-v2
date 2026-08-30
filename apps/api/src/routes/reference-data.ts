@@ -3,6 +3,7 @@ import type { ApiRuntimeDependencies } from '../server.js';
 import {
   handleGetEventBrowse,
   handleGetCatalog,
+  handleGetReferenceDataAvailability,
   handleListLeagues,
   handleListMatchups,
   handleListEvents,
@@ -21,6 +22,20 @@ export async function handleReferenceDataCatalog(
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 
+export async function handleReferenceDataAvailability(
+  request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+): Promise<void> {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const sport = url.searchParams.get('sport');
+  const apiResponse = await handleGetReferenceDataAvailability(
+    { ...(sport ? { sport } : {}) },
+    runtime.repositories.referenceData,
+  );
+  writeJson(response, apiResponse.status, apiResponse.body);
+}
+
 export async function handleReferenceDataSearchTeams(
   request: IncomingMessage,
   response: ServerResponse,
@@ -29,8 +44,9 @@ export async function handleReferenceDataSearchTeams(
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
   const sport = url.searchParams.get('sport');
   const q = url.searchParams.get('q');
+  const eventId = url.searchParams.get('eventId');
   const apiResponse = await handleSearchTeams(
-    { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
+    { ...(sport ? { sport } : {}), ...(q ? { q } : {}), ...(eventId ? { eventId } : {}) },
     runtime.repositories.referenceData,
   );
   writeJson(response, apiResponse.status, apiResponse.body);
@@ -44,8 +60,15 @@ export async function handleReferenceDataSearchPlayers(
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
   const sport = url.searchParams.get('sport');
   const q = url.searchParams.get('q');
+  const eventId = url.searchParams.get('eventId');
+  const teamId = url.searchParams.get('teamId');
   const apiResponse = await handleSearchPlayers(
-    { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
+    {
+      ...(sport ? { sport } : {}),
+      ...(q ? { q } : {}),
+      ...(eventId ? { eventId } : {}),
+      ...(teamId ? { teamId } : {}),
+    },
     runtime.repositories.referenceData,
   );
   writeJson(response, apiResponse.status, apiResponse.body);

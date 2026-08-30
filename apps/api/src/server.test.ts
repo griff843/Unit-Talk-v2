@@ -1072,6 +1072,96 @@ test('GET /api/reference-data/search/teams returns matching teams', async () => 
   }
 });
 
+test('GET /api/reference-data/availability distinguishes populated and empty sport datasets', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/availability?sport=NBA`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: { sportId: string; teamsAvailable: boolean; playersAvailable: boolean };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.data, {
+      sportId: 'NBA',
+      teamsAvailable: true,
+      playersAvailable: false,
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/search/players constrains results to selected team and event', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData = {
+    ...repositories.referenceData,
+    async searchPlayers() {
+      return [
+        { participantId: 'player-lebron', displayName: 'LeBron James', sport: 'NBA', teamId: 'team-lakers' },
+        { participantId: 'player-harden', displayName: 'James Harden', sport: 'NBA', teamId: 'team-clippers' },
+      ];
+    },
+    async getEventBrowse(eventId: string) {
+      if (eventId !== 'event-lakers-clippers') return null;
+      return {
+        eventId,
+        externalId: null,
+        eventName: 'Lakers vs Clippers',
+        eventDate: '2026-08-30',
+        startTime: null,
+        status: 'scheduled',
+        sportId: 'NBA',
+        leagueId: 'nba',
+        participants: [
+          {
+            participantId: 'player-lebron',
+            canonicalId: 'player-lebron',
+            participantType: 'player' as const,
+            displayName: 'LeBron James',
+            role: 'competitor',
+            teamId: 'team-lakers',
+            teamName: 'Lakers',
+          },
+        ],
+        offers: [],
+      };
+    },
+  };
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/search/players?sport=NBA&q=James&teamId=team-lakers&eventId=event-lakers-clippers`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: Array<{ participantId: string; teamId: string | null }>;
+    };
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.data, [
+      { participantId: 'player-lebron', displayName: 'LeBron James', sport: 'NBA', teamId: 'team-lakers' },
+    ]);
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /api/reference-data/leagues returns canonical leagues for a sport', async () => {
   const repositories = createInMemoryRepositoryBundle();
   repositories.referenceData = {

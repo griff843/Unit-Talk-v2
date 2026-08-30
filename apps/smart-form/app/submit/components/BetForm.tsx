@@ -8,18 +8,21 @@ import type {
   EventBrowseResult,
   EventOfferBrowseResult,
   MatchupBrowseResult,
+  ReferenceDataAvailability,
   SubmitPickResult,
 } from '@/lib/api-client';
 import {
   getCatalog,
   getEventBrowse,
   getMatchups,
+  getReferenceDataAvailability,
   searchBrowse,
   submitPick,
 } from '@/lib/api-client';
 import type { CapperDefinition, CatalogData, SportDefinition, SportsbookDefinition } from '@/lib/catalog';
 import {
   buildParticipantSearchUrl,
+  buildParticipantSearchEmptyMessage,
   isRecord,
   normalizeParticipantSearchResults,
   type ParticipantSearchType,
@@ -84,6 +87,7 @@ const CONVICTION_PRESETS = [6, 7, 8, 9, 10] as const;
 const UNITS_PRESETS = [0.5, 1, 2, 3] as const;
 const SPORTSBOOK_SESSION_KEY = 'ut_last_sportsbook';
 const CAPPER_SESSION_KEY = 'ut_last_capper';
+const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'Soccer']);
 
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
@@ -102,7 +106,9 @@ interface ParticipantAutocompleteFieldProps {
   placeholder: string;
   searchType: ParticipantSearchType;
   eventId?: string | null;
+  teamId?: string | null;
   sport: string;
+  datasetAvailable?: boolean | null;
   allowedParticipantIds?: ReadonlySet<string> | null;
   onSuggestionSelected: (suggestion: ParticipantSuggestion) => void | Promise<void>;
   onManualChange: () => void;
@@ -367,7 +373,9 @@ function ParticipantAutocompleteField({
   placeholder,
   searchType,
   eventId,
+  teamId,
   sport,
+  datasetAvailable = null,
   allowedParticipantIds,
   onSuggestionSelected,
   onManualChange,
@@ -397,7 +405,11 @@ function ParticipantAutocompleteField({
       setSearchError(null);
 
       try {
-        const response = await fetch(buildParticipantSearchUrl(query, searchType, { sport, eventId }), {
+        const response = await fetch(buildParticipantSearchUrl(query, searchType, {
+          sport,
+          eventId,
+          teamId,
+        }), {
           signal: controller.signal,
         });
         let json: unknown = null;
@@ -442,7 +454,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [allowedParticipantIds, eventId, name, searchType, sport, value]);
+  }, [allowedParticipantIds, eventId, name, searchType, sport, teamId, value]);
 
   const shouldShowMenu =
     isFocused &&
@@ -494,7 +506,9 @@ function ParticipantAutocompleteField({
                 <div className="px-3 py-2 text-sm text-destructive">{searchError}</div>
               ) : null}
               {!isLoading && !searchError && hasSearched && suggestions.length === 0 ? (
-                <div className="px-3 py-2 text-sm text-muted-foreground">No matching participants found.</div>
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  {buildParticipantSearchEmptyMessage(searchType, sport, value, datasetAvailable)}
+                </div>
               ) : null}
               {!isLoading && !searchError && suggestions.length > 0 ? (
                 <div className="py-1">
@@ -788,6 +802,8 @@ export function BetForm({
   const effectiveCapper = authenticatedCapper ?? capperClaims;
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [referenceAvailability, setReferenceAvailability] = useState<ReferenceDataAvailability | null>(null);
+  const [referenceAvailabilityError, setReferenceAvailabilityError] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
   const [liveEntryMode, setLiveEntryMode] = useState<LiveEntryMode>('browse');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -840,6 +856,7 @@ export function BetForm({
 
   const watchedValues = form.watch();
   const selectedSport = watchedValues.sport;
+  const isTeamSport = TEAM_SPORTS.has(selectedSport);
   const selectedMarketType = watchedValues.marketType;
   const selectedSportsbookValue = watchedValues.sportsbook?.trim().toLocaleLowerCase() ?? '';
   const emptyCatalog: CatalogData = { sports: [], sportsbooks: [], ticketTypes: [], cappers: [] };
@@ -1080,6 +1097,33 @@ export function BetForm({
       .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : 'Reference data unavailable'));
   }, []);
 
+  useEffect(() => {
+    if (!selectedSport) {
+      setReferenceAvailability(null);
+      setReferenceAvailabilityError(null);
+      return;
+    }
+
+    let active = true;
+    setReferenceAvailability(null);
+    setReferenceAvailabilityError(null);
+    getReferenceDataAvailability(selectedSport)
+      .then((availability) => {
+        if (active) setReferenceAvailability(availability);
+      })
+      .catch(() => {
+        if (active) {
+          setReferenceAvailabilityError(
+            `Canonical ${selectedSport} reference-data availability could not be checked.`,
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedSport]);
+
   // Capper identity is set from the JWT token on the server (UTV2-658).
   // No client-side capper init needed.
 
@@ -1106,7 +1150,7 @@ export function BetForm({
     setSelectedTeamId(null);
     setAwayParticipantId(null);
     setHomeParticipantId(null);
-    setManualIdentityOverride(false);
+    setManualIdentityOverride(Boolean(selectedSport) && !TEAM_SPORTS.has(selectedSport));
     setBrowseSearchQuery('');
     setBrowseSearchResults([]);
     setBrowseSearchError(null);
@@ -1526,6 +1570,15 @@ export function BetForm({
   }
 
   async function handleTeamSuggestionSelection(suggestion: ParticipantSuggestion) {
+    if (selectedTeamId !== suggestion.participantId) {
+      setSelectedPlayerId(null);
+      setSelectedOfferParticipantId(null);
+      form.setValue('playerName', '', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
     setSelectedTeamId(suggestion.participantId);
 
     const uniqueMatchupFromSlate = findUniqueMatchupForTeam(suggestion.participantId);
@@ -1978,10 +2031,12 @@ export function BetForm({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Live Slate
+              Available games
             </h2>
             <p className="text-sm text-muted-foreground">
-              Browse or search canonical matchups first. Manual entry stays available when coverage is missing.
+              {isTeamSport
+                ? 'Choose a canonical game when one is available. Otherwise continue with Away Team and Home Team below.'
+                : 'Choose a canonical event when one is available. Otherwise enter explicit manual event and competitor details below.'}
             </p>
           </div>
           <div
@@ -2047,7 +2102,7 @@ export function BetForm({
             {browseSearchError ? <p className="text-sm text-destructive">{browseSearchError}</p> : null}
             {!isSearchingBrowse && !browseSearchError && hasSearchedBrowse && browseSearchResults.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
-                No canonical results matched that search on the selected date. You can switch to browse or finish manually.
+                No canonical result matched “{browseSearchQuery.trim()}” on the selected date. This differs from an empty reference dataset.
               </div>
             ) : null}
             {browseSearchResults.length > 0 ? (
@@ -2103,7 +2158,9 @@ export function BetForm({
         {liveEntryMode === 'browse' && matchupsError ? <p className="text-sm text-destructive">{matchupsError}</p> : null}
         {liveEntryMode === 'browse' && !isLoadingMatchups && !matchupsError && matchups.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-5 text-sm text-muted-foreground">
-            No matchups scheduled for {watchedValues.gameDate}. You can switch to manual entry and still submit against canonical sport and book selections.
+            {isTeamSport
+              ? `No canonical matchups are available for ${watchedValues.gameDate}. Continue with Away Team and Home Team search below.`
+              : `No canonical events are available for ${watchedValues.gameDate}. Enter explicit manual event and competitor details below.`}
           </div>
         ) : null}
         {liveEntryMode === 'browse' && matchups.length > 0 && !selectedMatchup ? (
@@ -2756,21 +2813,35 @@ export function BetForm({
             searchType="team"
             eventId={selectedMatchupId}
             sport={selectedSport}
+            datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
             allowedParticipantIds={allowedTeamIds}
             onSuggestionSelected={handleTeamSuggestionSelection}
-            onManualChange={() => setSelectedTeamId(null)}
+            onManualChange={() => {
+              setSelectedTeamId(null);
+              setSelectedPlayerId(null);
+              setSelectedOfferParticipantId(null);
+              setSelectedOffer(null);
+              form.setValue('playerName', '', {
+                shouldDirty: true,
+                shouldTouch: true,
+                shouldValidate: true,
+              });
+            }}
           />
           <ParticipantAutocompleteField
             form={form}
             name="playerName"
-            label="Player Name"
+            label="Player"
             placeholder="Type a player name"
             searchType="player"
             eventId={selectedMatchupId}
+            teamId={selectedTeamId}
             sport={selectedSport}
+            datasetAvailable={referenceAvailability?.playersAvailable ?? null}
             allowedParticipantIds={allowedPlayerIds}
             onSuggestionSelected={handlePlayerSuggestionSelection}
             onManualChange={() => setSelectedPlayerId(null)}
+            disabledOverride={!selectedTeamId}
           />
           <div className="grid grid-cols-2 gap-3">
             <FormField
@@ -2782,7 +2853,7 @@ export function BetForm({
                   <FormControl>
                     <Input
                       placeholder="e.g. Knicks vs Heat"
-                      readOnly={browseMode === 'live-offer' && Boolean(selectedMatchup)}
+                      readOnly={Boolean(selectedMatchup)}
                       {...field}
                     />
                   </FormControl>
@@ -2921,18 +2992,35 @@ export function BetForm({
                   </FormItem>
                 )}
               />
-              <ParticipantAutocompleteField
-                form={form}
-                name="team"
-                label="Team to Win"
-                placeholder="Type a team name"
-                searchType="team"
-                eventId={selectedMatchupId}
-                sport={selectedSport}
-                allowedParticipantIds={allowedTeamIds}
-                onSuggestionSelected={handleTeamSuggestionSelection}
-                onManualChange={() => setSelectedTeamId(null)}
-              />
+              {isTeamSport ? (
+                <ParticipantAutocompleteField
+                  form={form}
+                  name="team"
+                  label="Team to Win"
+                  placeholder="Type a team name"
+                  searchType="team"
+                  eventId={selectedMatchupId}
+                  sport={selectedSport}
+                  datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
+                  allowedParticipantIds={allowedTeamIds}
+                  onSuggestionSelected={handleTeamSuggestionSelection}
+                  onManualChange={() => setSelectedTeamId(null)}
+                />
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="team"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Competitor</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Enter unresolved competitor" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </>
           )}
         </div>
@@ -3515,11 +3603,12 @@ export function BetForm({
               Smart Form V1
             </p>
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Live-offer first pick entry
+              Canonical pick entry
             </h1>
             <p className="max-w-2xl text-sm text-muted-foreground sm:text-base">
-              Browse the live slate by date and sport, lock in an available offer when coverage exists,
-              or finish the ticket manually against canonical matchup, player, team, and book data.
+              {isTeamSport
+                ? 'Choose a sport, then a game when one is available. If the slate is empty, build the matchup with canonical Away Team and Home Team search before choosing the market.'
+                : 'Choose a sport, then an event when one is available. If canonical coverage is empty, enter explicit unresolved event and competitor details before choosing the market.'}
             </p>
           </div>
 
@@ -3531,9 +3620,9 @@ export function BetForm({
               <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Browse Setup</h2>
+                    <h2 className="text-lg font-semibold text-foreground">1. Sport and date</h2>
                     <p className="text-sm text-muted-foreground">
-                      Start with the live board. Switch to manual only when the exact offer is missing.
+                      Sport keeps every game, team, player, and market choice in the correct context.
                     </p>
                   </div>
                   <div className="inline-flex rounded-full border border-border bg-background p-1">
@@ -3625,7 +3714,9 @@ export function BetForm({
                 <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-lg font-semibold text-foreground">Pick Details</h2>
+                    <h2 className="text-lg font-semibold text-foreground">
+                      {selectedMatchup ? '3. Market and selection' : isTeamSport ? '2. Build matchup' : '2. Event and market'}
+                    </h2>
                     <span className="text-xs text-muted-foreground">
                       {shouldShowManualFallback ? 'Manual completion active' : 'Offer-backed fields active'}
                     </span>
@@ -3636,44 +3727,32 @@ export function BetForm({
                   </p>
                 </div>
 
-                {!hasSelectedBrowseMatchup ? (
-                  <div data-testid="smart-form-market-select" className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Market Family
-                    </p>
-                    <MarketTypeGrid
-                      availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
-                      selected={selectedMarketType}
-                      sportId={selectedSport ?? undefined}
-                      onSelect={(type) => form.setValue('marketType', type, {
-                        shouldDirty: true,
-                        shouldTouch: true,
-                        shouldValidate: true,
-                      })}
-                    />
-                  </div>
-                ) : null}
-
                 {selectedMatchup && shouldShowManualFallback ? (
                   <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
                     The selected matchup is preserved from canonical browse data. You can finish this pick manually if the exact live offer is not present.
                   </div>
                 ) : null}
 
-                {!selectedMatchup && browseMode === 'manual' ? (
-                  <div className="space-y-4 rounded-xl border border-border bg-background/60 p-4">
+                {!selectedMatchup ? (
+                  <div data-testid="canonical-matchup-builder" className="space-y-4 rounded-xl border border-border bg-background/60 p-4">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-semibold text-foreground">
-                          {manualIdentityOverride ? 'Manual participant override' : 'Build canonical matchup'}
+                          {!isTeamSport
+                            ? 'Manual event identity'
+                            : manualIdentityOverride
+                              ? 'Manual participant override'
+                              : 'Build canonical matchup'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {manualIdentityOverride
+                          {!isTeamSport
+                            ? `${selectedSport} does not use canonical home/away roles here. Event and participant text is explicitly stored as unresolved manual provenance.`
+                            : manualIdentityOverride
                             ? 'Manual identities are explicitly tagged unresolved and never stored as canonical IDs.'
-                            : 'Select both participants from sport-filtered records. The matchup name is derived for you.'}
+                            : 'Select Away Team and Home Team from sport-filtered canonical records. The matchup name is derived for you.'}
                         </p>
                       </div>
-                      <Button
+                      {isTeamSport ? <Button
                         type="button"
                         variant="outline"
                         onClick={() => {
@@ -3697,28 +3776,41 @@ export function BetForm({
                         }}
                       >
                         {manualIdentityOverride ? 'Use canonical search' : "Can't find participants? Add manually"}
-                      </Button>
+                      </Button> : null}
                     </div>
 
-                    {!manualIdentityOverride ? (
+                    {isTeamSport && referenceAvailabilityError ? (
+                      <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                        {referenceAvailabilityError} Search requests will still be attempted.
+                      </div>
+                    ) : null}
+                    {isTeamSport && referenceAvailability?.teamsAvailable === false ? (
+                      <div data-testid="canonical-team-data-unavailable" className="rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-sm text-foreground">
+                        Canonical {selectedSport} team data is not available in this environment yet. This is a reference-data dependency, not a search miss.
+                      </div>
+                    ) : null}
+
+                    {isTeamSport && !manualIdentityOverride ? (
                       <div className="grid gap-4 sm:grid-cols-2">
                         <ParticipantAutocompleteField
                           form={form}
                           name="awayParticipantName"
-                          label="Away participant"
-                          placeholder="Search canonical participant"
+                          label="Away Team"
+                          placeholder={`Search ${selectedSport} teams`}
                           searchType="team"
                           sport={selectedSport ?? ''}
+                          datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
                           onSuggestionSelected={(suggestion) => applyStructuredSideSelection('away', suggestion)}
                           onManualChange={() => setAwayParticipantId(null)}
                         />
                         <ParticipantAutocompleteField
                           form={form}
                           name="homeParticipantName"
-                          label="Home participant"
-                          placeholder="Search canonical participant"
+                          label="Home Team"
+                          placeholder={`Search ${selectedSport} teams`}
                           searchType="team"
                           sport={selectedSport ?? ''}
+                          datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
                           onSuggestionSelected={(suggestion) => applyStructuredSideSelection('home', suggestion)}
                           onManualChange={() => setHomeParticipantId(null)}
                         />
@@ -3729,7 +3821,58 @@ export function BetForm({
                           </div>
                         ) : null}
                       </div>
-                    ) : null}
+                    ) : isTeamSport ? (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <FormField
+                          control={form.control}
+                          name="awayParticipantName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Away Team</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Enter unresolved away team" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="homeParticipantName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Home Team</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Enter unresolved home team" {...field} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
+                        Choose the market below, then enter the event and competitor in the market-specific fields. No home/away role is inferred.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {!hasSelectedBrowseMatchup ? (
+                  <div data-testid="smart-form-market-select" className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {isTeamSport && !selectedMatchup ? '3. Market Family' : 'Market Family'}
+                    </p>
+                    <MarketTypeGrid
+                      availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
+                      selected={selectedMarketType}
+                      sportId={selectedSport ?? undefined}
+                      onSelect={(type) => form.setValue('marketType', type, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })}
+                    />
                   </div>
                 ) : null}
 

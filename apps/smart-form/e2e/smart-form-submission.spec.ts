@@ -1,6 +1,17 @@
 import { expect, test } from '@playwright/test';
 
+// Fixture-backed UI behavior tests. Route interception is intentional here and
+// must not be cited as proof of connected canonical-reference data.
+
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/reference-data/availability?**', async (route) => {
+    const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { sportId, teamsAvailable: true, playersAvailable: true } }),
+    });
+  });
   await page.addInitScript(() => {
     const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
       .replace(/=/g, '')
@@ -620,8 +631,8 @@ test('manual fallback surfaces structured canonical participant selection', asyn
   await page.getByRole('button', { name: 'Manual fallback' }).click();
 
   await expect(page.getByText('Build canonical matchup', { exact: true })).toBeVisible();
-  await expect(page.getByLabel('Away participant')).toBeVisible();
-  await expect(page.getByLabel('Home participant')).toBeVisible();
+  await expect(page.getByLabel('Away Team')).toBeVisible();
+  await expect(page.getByLabel('Home Team')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
 });
 

@@ -294,6 +294,34 @@ test('structured no-event fallback rejects a selected team outside the two canon
   );
 });
 
+test('accepts a Soccer structured fallback backed by canonical team search', async () => {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+
+  await validateSmartFormRelationships(soccer, repository);
+});
+
 test('structured no-event fallback rejects a player whose team relationship cannot be verified', async () => {
   const invalid = payload();
   const resolution = invalid.metadata?.['participantResolution'] as Record<string, unknown>;

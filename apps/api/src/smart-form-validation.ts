@@ -6,7 +6,7 @@ import type {
 import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
 import { ApiError } from './errors.js';
 
-const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL']);
+const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
 
 export async function validateSmartFormRelationships(
   payload: SubmissionPayload,

@@ -10,12 +10,27 @@ export type ParticipantSearchType = 'player' | 'team';
 interface OperatorParticipantSearchOptions {
   eventId?: string | null;
   sport?: string;
+  teamId?: string | null;
 }
 
 export interface ParticipantSuggestion {
   participantId: string;
   displayName: string;
   participantType: ParticipantSearchType;
+  teamId: string | null;
+}
+
+export function buildParticipantSearchEmptyMessage(
+  participantType: ParticipantSearchType,
+  sport: string,
+  query: string,
+  datasetAvailable: boolean | null,
+): string {
+  const noun = participantType === 'team' ? 'team' : 'player';
+  if (datasetAvailable === false) {
+    return `Canonical ${sport} ${noun} data is not available in this environment yet.`;
+  }
+  return `No canonical ${noun} found for “${query.trim()}”.`;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,8 +48,16 @@ export function buildParticipantSearchUrl(
     if (sportOrOptions.trim()) {
       params.set('sport', sportOrOptions.trim());
     }
-  } else if (sportOrOptions?.sport?.trim()) {
-    params.set('sport', sportOrOptions.sport.trim());
+  } else {
+    if (sportOrOptions?.sport?.trim()) {
+      params.set('sport', sportOrOptions.sport.trim());
+    }
+    if (sportOrOptions?.eventId?.trim()) {
+      params.set('eventId', sportOrOptions.eventId.trim());
+    }
+    if (participantType === 'player' && sportOrOptions?.teamId?.trim()) {
+      params.set('teamId', sportOrOptions.teamId.trim());
+    }
   }
 
   const endpoint = participantType === 'player' ? 'players' : 'teams';
@@ -69,6 +92,7 @@ export function normalizeParticipantSearchResults(
         : typeof row.type === 'string'
           ? row.type
           : expectedType;
+      const teamId = typeof row.teamId === 'string' ? row.teamId : null;
 
       if (!participantId || !displayName) {
         return [];
@@ -83,7 +107,7 @@ export function normalizeParticipantSearchResults(
       }
 
       seen.add(dedupeKey);
-      return [{ participantId, displayName, participantType: expectedType }];
+      return [{ participantId, displayName, participantType: expectedType, teamId }];
     })
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
