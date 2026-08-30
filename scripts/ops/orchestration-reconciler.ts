@@ -33,6 +33,30 @@ export type OrchestrationVerdict =
 
 export type CheckRequirement = 'required' | 'advisory';
 
+/**
+ * Which reconciliation bucket a check belongs to. This is the dispatch
+ * authority: only `dispatch_blocking` and `infra_error` may stop dispatch.
+ */
+export type CheckClassification =
+  | 'dispatch_blocking'
+  | 'closeout_debt'
+  | 'warning'
+  | 'infra_error'
+  | 'informational';
+
+/**
+ * How a Linear lookup failed. These are four genuinely different conditions and
+ * must never be collapsed: a deleted entity is permanent and knowable, while a
+ * transient or auth failure means we simply do not know the entity's state.
+ */
+export type LinearLookupFailureKind = 'deleted' | 'transient' | 'auth' | 'unknown';
+
+export interface LinearLookupFailure {
+  issue_id: string;
+  kind: LinearLookupFailureKind;
+  message: string;
+}
+
 export interface LinearIssueSnapshot {
   issue_id: string;
   state_name: string;
@@ -54,6 +78,15 @@ export interface PullRequestSnapshot {
   merged_at?: string | null;
   merge_sha?: string | null;
   checks?: GitHubCheckSnapshot[];
+  /** Exact head commit of the PR, when GitHub reported one. */
+  head_sha?: string | null;
+  /**
+   * Lane manifest as it exists at `head_sha`. An in-flight lane's manifest
+   * lives on its own branch until merge, so this — not the working tree copy —
+   * is the authoritative manifest for an open PR. `null` means "resolved and
+   * genuinely absent"; `undefined` means "not resolved".
+   */
+  head_manifest?: LaneManifest | null;
 }
 
 export interface BranchSnapshot {
@@ -71,6 +104,7 @@ export interface OrchestrationCheck {
   id: string;
   requirement: CheckRequirement;
   verdict: OrchestrationVerdict;
+  classification: CheckClassification;
   issue_id?: string;
   branch?: string;
   pr_url?: string;
@@ -87,6 +121,7 @@ export interface OrchestrationReconcilerReport {
   filters: OrchestrationReconcileFilters;
   transition_window_minutes: number;
   summary: Record<OrchestrationVerdict, number>;
+  buckets: OrchestrationBuckets;
   checks: OrchestrationCheck[];
   state_machine: OrchestrationStateMachineReport;
   repair_plan: OrchestrationRepairPlan;
@@ -95,6 +130,16 @@ export interface OrchestrationReconcilerReport {
     status: 'proposed';
     detail: string;
   };
+}
+
+/**
+ * The four required output buckets. Dispatch reads only the first and last.
+ */
+export interface OrchestrationBuckets {
+  dispatch_blocking_failures: OrchestrationCheck[];
+  closeout_debt: OrchestrationCheck[];
+  warnings: OrchestrationCheck[];
+  infra_errors: OrchestrationCheck[];
 }
 
 export type LaneReconciliationState =
@@ -194,6 +239,8 @@ export interface OrchestrationReconcilerInput {
   transitionWindowMinutes?: number;
   infraErrors?: string[];
   historicalDecayErrors?: string[];
+  /** Structured Linear lookup failures, classified by kind. */
+  linearFailures?: LinearLookupFailure[];
 }
 
 type ManifestWithRelatedPrs = LaneManifest & {
@@ -204,7 +251,6 @@ const DEFAULT_TRANSITION_WINDOW_MINUTES = 60;
 const ACTIVE_LINEAR_STATE_NAMES = new Set(['in codex', 'in claude']);
 const DONE_LINEAR_STATE_NAMES = new Set(['done']);
 const DONE_LINEAR_STATE_TYPES = new Set(['completed']);
-const FAIL_CLASS_VERDICTS = new Set<OrchestrationVerdict>(['fail', 'stale_reclaim_required']);
 const CLOSED_MANIFEST_STATUSES = new Set(['merged', 'done']);
 
 interface FilteredInput extends OrchestrationReconcilerInput {
@@ -503,8 +549,61 @@ function mergeShaForIssue(
   return manifest?.commit_sha ?? historySha ?? mergedPrForIssue(normalizedIssueId, manifests, prs)?.merge_sha ?? null;
 }
 
-function addCheck(checks: OrchestrationCheck[], check: OrchestrationCheck): void {
-  checks.push(check);
+/**
+ * Transient/auth signatures are matched BEFORE deletion, and deletion requires
+ * Linear's specific `Entity not found` wording. A bare "not found" — which a DNS
+ * failure (ENOTFOUND) or a gateway page can also produce — falls through to
+ * `unknown`, which is treated as blocking. The failure mode this guards against
+ * is real: the same entity was classified `infra_error` on one run and
+ * `historical_decay` on the next, decided purely by network luck.
+ */
+export function classifyLinearLookupError(error: string): LinearLookupFailureKind {
+  const value = String(error ?? '').toLowerCase();
+  if (
+    /(timeout|timed out|aborted|abortederror|econnreset|etimedout|enotfound|econnrefused|socket hang up|network|fetch failed|rate limit|too many requests|ratelimited|\b(?:429|500|502|503|504)\b|service unavailable|bad gateway|gateway time)/.test(value)
+  ) {
+    return 'transient';
+  }
+  if (
+    /(unauthorized|unauthenticated|authentication|authentication required|invalid api key|invalid token|forbidden|access denied|\b(?:401|403)\b)/.test(value)
+  ) {
+    return 'auth';
+  }
+  if (/entity not found/.test(value)) {
+    return 'deleted';
+  }
+  return 'unknown';
+}
+
+/**
+ * Default bucket for a check. Explicit `classification` on the call site wins;
+ * this only supplies the mechanical default so that adding a check can never
+ * silently land it in no bucket at all.
+ */
+function defaultClassification(
+  verdict: OrchestrationVerdict,
+  requirement: CheckRequirement,
+): CheckClassification {
+  if (verdict === 'infra_error') {
+    return 'infra_error';
+  }
+  if ((verdict === 'fail' || verdict === 'stale_reclaim_required') && requirement === 'required') {
+    return 'dispatch_blocking';
+  }
+  if (verdict === 'pass') {
+    return 'informational';
+  }
+  return 'warning';
+}
+
+function addCheck(
+  checks: OrchestrationCheck[],
+  check: Omit<OrchestrationCheck, 'classification'> & { classification?: CheckClassification },
+): void {
+  checks.push({
+    ...check,
+    classification: check.classification ?? defaultClassification(check.verdict, check.requirement),
+  });
 }
 
 function buildCleanupPlan(input: FilteredInput): OrchestrationCleanupPlan {
@@ -888,7 +987,24 @@ export function buildOrchestrationReconcilerReport(
   const transitionWindowMs = transitionWindowMinutes * 60 * 1000;
   const manifestsByIssue = mapByIssueId(input.manifests);
   const activeLeasesByIssue = mapByIssueId(input.leases.filter(isLeaseActive));
+  // Authoritative in-flight manifest resolution, applied once and used by every
+  // check that asks "does this lane have an active manifest?". An in-flight
+  // lane's manifest lives on its own branch until merge, so resolving only from
+  // main/working tree reports live lanes as having no lane record at all. Head
+  // manifests are only admitted from OPEN PRs, and only when active — a merged
+  // or closed PR never contributes here.
   const activeManifestsByIssue = mapByIssueId(input.manifests.filter(isManifestActive));
+  for (const pr of input.pullRequests) {
+    if (pr.state !== 'open' || !pr.head_manifest) {
+      continue;
+    }
+    const issueId = issueIdFromBranch(pr.branch);
+    if (!issueId || !isManifestActive(pr.head_manifest)) {
+      continue;
+    }
+    // The PR head wins over a main/working-tree copy of the same manifest.
+    activeManifestsByIssue.set(issueId, pr.head_manifest);
+  }
   const linearByIssue = mapByIssueId(input.linearIssues);
   const requiredCheckNames = new Set(input.requiredCheckNames ?? []);
   const checks: OrchestrationCheck[] = [];
@@ -915,6 +1031,81 @@ export function buildOrchestrationReconcilerReport(
     });
   }
 
+  for (const failure of input.linearFailures ?? []) {
+    const issueId = normalizeIssueId(failure.issue_id);
+    const linearEvidence = evidence(
+      'linear',
+      `Linear:${issueId}`,
+      `lookup_failure_kind=${failure.kind}; error=${failure.message}`,
+    );
+
+    if (failure.kind !== 'deleted') {
+      // Transient, auth, and unclassifiable failures all mean the same thing:
+      // we do not know this entity's state. That is a blocking infra error and
+      // must never be demoted to historical debt.
+      addCheck(checks, {
+        id: 'ORCH-INFRA',
+        requirement: 'required',
+        verdict: 'infra_error',
+        issue_id: issueId,
+        detail: `Linear lookup for ${issueId} failed (${failure.kind}); entity state is unknown: ${failure.message}`,
+        evidence: [linearEvidence],
+      });
+      continue;
+    }
+
+    const activeManifest = activeManifestsByIssue.get(issueId);
+    const activeLease = activeLeasesByIssue.get(issueId);
+    if (activeManifest || activeLease) {
+      // Deleted Linear entity still holding lane state: an orphan. This is the
+      // one deletion case that is genuinely actionable, and it needs a PM.
+      addCheck(checks, {
+        id: 'ORCH-LINEAR-DELETED-ORPHAN',
+        requirement: 'required',
+        verdict: 'fail',
+        classification: 'dispatch_blocking',
+        issue_id: issueId,
+        branch: activeManifest?.branch ?? activeLease?.branch,
+        detail: `Linear entity ${issueId} is deleted but lane state is still active; PM disposition required before dispatch`,
+        evidence: [
+          linearEvidence,
+          evidence(
+            'lane_manifest',
+            `docs/06_status/lanes/${issueId}.json`,
+            activeManifest ? `status=${activeManifest.status}` : 'no active manifest',
+          ),
+          evidence(
+            'lease_registry',
+            `.ops/leases/${issueId}.json`,
+            activeLease ? `status=${activeLease.status}` : 'no active lease',
+          ),
+        ],
+      });
+      continue;
+    }
+
+    // Deleted Linear entity referenced only by terminal/historical artifacts.
+    // Reported as debt — never converted into a done or pass state.
+    const terminalManifest = manifestsByIssue.get(issueId);
+    addCheck(checks, {
+      id: 'ORCH-HISTORICAL-DECAY',
+      requirement: 'advisory',
+      verdict: 'historical_decay',
+      classification: 'warning',
+      issue_id: issueId,
+      branch: terminalManifest?.branch,
+      detail: `Linear entity ${issueId} is deleted; referenced only by ${terminalManifest ? `terminal manifest (status=${terminalManifest.status})` : 'historical artifacts'}`,
+      evidence: [
+        linearEvidence,
+        evidence(
+          'lane_manifest',
+          `docs/06_status/lanes/${issueId}.json`,
+          terminalManifest ? `status=${terminalManifest.status}` : 'no manifest',
+        ),
+      ],
+    });
+  }
+
   for (const issue of input.linearIssues.filter(isLinearActive)) {
     const issueId = normalizeIssueId(issue.issue_id);
     const lease = activeLeasesByIssue.get(issueId);
@@ -931,7 +1122,13 @@ export function buildOrchestrationReconcilerReport(
       evidence: [
         evidence('linear', `Linear:${issueId}`, `state=${issue.state_name}`),
         evidence('lease_registry', `.ops/leases/${issueId}.json`, lease ? `status=${lease.status}` : 'missing active lease'),
-        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, manifest ? `status=${manifest.status}` : 'missing active manifest'),
+        evidence(
+          'lane_manifest',
+          `docs/06_status/lanes/${issueId}.json`,
+          manifest
+            ? `status=${manifest.status}; resolved from ${input.manifests.some((entry) => normalizeIssueId(entry.issue_id) === issueId && isManifestActive(entry)) ? 'working tree / main' : 'open PR head'}`
+            : 'missing active manifest at the PR head, on main, and in the working tree',
+        ),
       ],
     });
   }
@@ -1029,10 +1226,19 @@ export function buildOrchestrationReconcilerReport(
 
   for (const pr of input.pullRequests.filter((entry) => entry.state === 'open')) {
     const issueId = issueIdFromBranch(pr.branch);
-    const manifest = issueId ? manifestsByIssue.get(issueId) : undefined;
     if (!issueId) {
       continue;
     }
+    // An in-flight lane's manifest lives on its own branch until merge. The
+    // manifest at the exact PR head is authoritative and is preferred over the
+    // working-tree copy, which can be a stale untracked file. Suppression is
+    // driven strictly by "a manifest was resolved at the PR head" — never by
+    // "the PR is open" — so a genuinely missing manifest still fails.
+    const headManifest = pr.head_manifest ?? undefined;
+    const manifest = headManifest ?? manifestsByIssue.get(issueId);
+    const manifestSource = headManifest
+      ? `PR head ${pr.head_sha ?? 'unknown'}`
+      : 'working tree / main';
     if (!manifest) {
       addCheck(checks, {
         id: 'ORCH-OPEN-PR-MANIFEST-URL',
@@ -1041,10 +1247,14 @@ export function buildOrchestrationReconcilerReport(
         issue_id: issueId,
         branch: pr.branch,
         pr_url: pr.url,
-        detail: 'Open PR exists but the matching lane manifest is missing',
+        detail: 'Open PR exists but the matching lane manifest is missing at the PR head and on main',
         evidence: [
-          evidence('github_pr', pr.url, `state=open; branch=${pr.branch}`),
-          evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, 'missing manifest'),
+          evidence('github_pr', pr.url, `state=open; branch=${pr.branch}; head_sha=${pr.head_sha ?? 'unknown'}`),
+          evidence(
+            'lane_manifest',
+            `docs/06_status/lanes/${issueId}.json`,
+            `missing manifest (head_resolved=${pr.head_manifest === undefined ? 'no' : 'yes'})`,
+          ),
         ],
       });
       continue;
@@ -1058,14 +1268,14 @@ export function buildOrchestrationReconcilerReport(
       branch: pr.branch,
       pr_url: pr.url,
       detail: prUrlRecorded
-        ? 'Open PR URL is recorded in lane manifest'
-        : 'Open PR exists but lane manifest is missing the matching PR URL',
+        ? `Open PR URL is recorded in the lane manifest resolved from ${manifestSource}`
+        : `Open PR exists but the lane manifest resolved from ${manifestSource} is missing the matching PR URL`,
       evidence: [
-        evidence('github_pr', pr.url, `state=open; branch=${pr.branch}`),
+        evidence('github_pr', pr.url, `state=open; branch=${pr.branch}; head_sha=${pr.head_sha ?? 'unknown'}`),
         evidence(
           'lane_manifest',
           `docs/06_status/lanes/${issueId}.json`,
-          `pr_url=${manifest.pr_url ?? 'null'}; related_prs=${relatedPrUrls(manifest).join(',') || 'none'}`,
+          `source=${manifestSource}; pr_url=${manifest.pr_url ?? 'null'}; related_prs=${relatedPrUrls(manifest).join(',') || 'none'}`,
         ),
       ],
     });
@@ -1083,17 +1293,40 @@ export function buildOrchestrationReconcilerReport(
     const mergedAtMs = Date.parse(pr.merged_at ?? '');
     const ageMs = Number.isNaN(mergedAtMs) ? Number.POSITIVE_INFINITY : now.getTime() - mergedAtMs;
     const ageMinutes = Math.max(0, Math.floor(ageMs / (60 * 1000)));
+    // Closeout debt only halts dispatch while the lane still holds something a
+    // new lane could collide with: an active lease, an active (locking)
+    // manifest, or an active Linear execution record. Once the lane holds none
+    // of those, the debt is real but carries no dispatch, capacity, authority,
+    // or production risk — so it is reported without blocking.
+    const holdsLease = activeLeasesByIssue.has(issueId);
+    const holdsManifestLock = activeManifestsByIssue.has(issueId);
+    const holdsLinearAuthority = isLinearActive(linearIssue);
+    const holdsAuthority = holdsLease || holdsManifestLock || holdsLinearAuthority;
     addCheck(checks, {
       id: 'ORCH-MERGED-PR-LINEAR-DONE',
       requirement: 'required',
       verdict: ageMs > transitionWindowMs ? 'fail' : 'warn',
+      classification: holdsAuthority ? 'dispatch_blocking' : 'closeout_debt',
       issue_id: issueId,
       branch: pr.branch,
       pr_url: pr.url,
-      detail: `Merged PR is ${ageMinutes}m old but Linear state is ${linearIssue.state_name}`,
+      detail: `Merged PR is ${ageMinutes}m old but Linear state is ${linearIssue.state_name}`
+        + (holdsAuthority
+          ? ` (lane still holds ${[holdsLease && 'lease', holdsManifestLock && 'manifest lock', holdsLinearAuthority && 'active Linear record'].filter(Boolean).join(' + ')})`
+          : ' (lane holds no lease, lock, or active Linear record — closeout debt only)'),
       evidence: [
         evidence('github_pr', pr.url, `state=merged; merged_at=${pr.merged_at ?? 'unknown'}`),
         evidence('linear', `Linear:${issueId}`, `state=${linearIssue.state_name}`),
+        evidence(
+          'lease_registry',
+          `.ops/leases/${issueId}.json`,
+          holdsLease ? 'active lease held' : 'no active lease',
+        ),
+        evidence(
+          'lane_manifest',
+          `docs/06_status/lanes/${issueId}.json`,
+          holdsManifestLock ? 'active manifest lock held' : 'no active manifest lock',
+        ),
       ],
     });
   }
@@ -1105,6 +1338,13 @@ export function buildOrchestrationReconcilerReport(
       id: 'ORCH-DONE-MERGE-SHA',
       requirement: 'required',
       verdict: mergeSha ? 'pass' : 'fail',
+      // The issue is already Done in Linear and holds no lane authority, so a
+      // missing merge SHA is provenance debt, not a dispatch hazard.
+      classification: mergeSha
+        ? 'informational'
+        : activeManifestsByIssue.has(issueId) || activeLeasesByIssue.has(issueId)
+          ? 'dispatch_blocking'
+          : 'closeout_debt',
       issue_id: issueId,
       branch: manifestsByIssue.get(issueId)?.branch,
       detail: mergeSha
@@ -1185,13 +1425,18 @@ export function buildOrchestrationReconcilerReport(
     summary[check.verdict] += 1;
   }
 
-  const hasFail = checks.some((check) => FAIL_CLASS_VERDICTS.has(check.verdict));
-  const hasInfra = checks.some((check) => check.verdict === 'infra_error');
-  const hasWarn = checks.some((check) =>
-    check.verdict === 'warn'
-    || check.verdict === 'cleanup_candidate'
-    || check.verdict === 'historical_decay'
-  );
+  const buckets: OrchestrationBuckets = {
+    dispatch_blocking_failures: checks.filter((check) => check.classification === 'dispatch_blocking'),
+    closeout_debt: checks.filter((check) => check.classification === 'closeout_debt'),
+    warnings: checks.filter((check) => check.classification === 'warning'),
+    infra_errors: checks.filter((check) => check.classification === 'infra_error'),
+  };
+
+  // Exit authority: only genuine dispatch hazards and unresolved infra errors
+  // stop dispatch. Closeout debt and warnings are reported, never blocking.
+  const hasFail = buckets.dispatch_blocking_failures.length > 0;
+  const hasInfra = buckets.infra_errors.length > 0;
+  const hasWarn = buckets.closeout_debt.length > 0 || buckets.warnings.length > 0;
   const verdict = hasFail ? 'FAIL' : hasInfra ? 'INFRA' : hasWarn ? 'WARN' : 'PASS';
   const stateMachine = buildStateMachineReport(input, now);
 
@@ -1210,6 +1455,7 @@ export function buildOrchestrationReconcilerReport(
     },
     transition_window_minutes: transitionWindowMinutes,
     summary,
+    buckets,
     checks,
     state_machine: stateMachine,
     repair_plan: buildRepairPlan(input, stateMachine),
@@ -1266,6 +1512,7 @@ interface GhPrRecord {
   state: string;
   mergedAt?: string | null;
   mergeCommit?: { oid?: string | null } | null;
+  headRefOid?: string | null;
 }
 
 interface GhStatusCheckRollupItem {
@@ -1282,13 +1529,57 @@ function parseGhPr(record: GhPrRecord, state: PullRequestSnapshot['state']): Pul
     state,
     merged_at: record.mergedAt ?? null,
     merge_sha: record.mergeCommit?.oid ?? null,
+    head_sha: record.headRefOid ?? null,
     checks: [],
   };
 }
 
+/**
+ * Make `sha` readable locally, fetching it from origin if the object is absent.
+ * Returns false when the head genuinely cannot be resolved — the caller then
+ * leaves `head_manifest` undefined and falls back to the working-tree copy,
+ * which keeps the check fail-closed rather than silently suppressing it.
+ */
+function ensureCommitPresent(sha: string): boolean {
+  try {
+    runCommand('git', ['cat-file', '-e', `${sha}^{commit}`]);
+    return true;
+  } catch {
+    try {
+      runCommand('git', ['fetch', '--quiet', '--no-tags', 'origin', sha]);
+      runCommand('git', ['cat-file', '-e', `${sha}^{commit}`]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+/**
+ * Read a lane manifest as it exists at an exact commit. `null` means the commit
+ * was readable and the manifest is genuinely absent there; `undefined` means the
+ * commit could not be resolved, so nothing was learned.
+ */
+export function manifestAtCommit(sha: string, issueId: string): LaneManifest | null | undefined {
+  if (!ensureCommitPresent(sha)) {
+    return undefined;
+  }
+  let raw: string;
+  try {
+    raw = runCommand('git', ['show', `${sha}:docs/06_status/lanes/${issueId}.json`]);
+  } catch {
+    return null;
+  }
+  try {
+    return JSON.parse(raw) as LaneManifest;
+  } catch {
+    return null;
+  }
+}
+
 function githubPullRequests(infraErrors: string[]): PullRequestSnapshot[] {
   try {
-    const fields = 'number,headRefName,url,state,mergedAt,mergeCommit';
+    const fields = 'number,headRefName,url,state,mergedAt,mergeCommit,headRefOid';
     const open = JSON.parse(runCommand('gh', ['pr', 'list', '--state', 'open', '--json', fields])) as GhPrRecord[];
     const merged = JSON.parse(runCommand('gh', ['pr', 'list', '--state', 'merged', '--limit', '100', '--json', fields])) as GhPrRecord[];
     const prs = [
@@ -1296,6 +1587,19 @@ function githubPullRequests(infraErrors: string[]): PullRequestSnapshot[] {
       ...merged.map((record) => parseGhPr(record, 'merged')),
     ];
     for (const pr of prs) {
+      if (pr.state === 'open' && pr.head_sha) {
+        const issueId = issueIdFromBranch(pr.branch);
+        if (issueId) {
+          const resolved = manifestAtCommit(pr.head_sha, issueId);
+          if (resolved === undefined) {
+            infraErrors.push(
+              `PR head ${pr.head_sha} for #${pr.number} could not be resolved locally; manifest authority fell back to the working tree`,
+            );
+          } else {
+            pr.head_manifest = resolved;
+          }
+        }
+      }
       try {
         const rollup = JSON.parse(
           runCommand('gh', ['pr', 'view', String(pr.number), '--json', 'statusCheckRollup']),
@@ -1352,8 +1656,7 @@ interface LinearIssueQueryData {
 async function fetchLinearIssues(
   issueIds: string[],
   infraErrors: string[],
-  historicalDecayErrors: string[],
-  currentIssueIds: Set<string>,
+  linearFailures: LinearLookupFailure[],
 ): Promise<LinearIssueSnapshot[]> {
   const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
@@ -1368,6 +1671,7 @@ async function fetchLinearIssues(
         issue(id: $id) {
           identifier
           updatedAt
+          archivedAt
           state { name type }
         }
       }`,
@@ -1375,12 +1679,16 @@ async function fetchLinearIssues(
       { token, userAgent: 'unit-talk-orchestration-reconciler' },
     );
     if (!result.ok || !result.data?.issue) {
-      const message = `Linear issue query failed for ${issueId}: ${result.error ?? 'not found'}`;
-      if (!currentIssueIds.has(issueId) && isHistoricalLinearDecay(result.error ?? 'not found')) {
-        historicalDecayErrors.push(message);
-      } else {
-        infraErrors.push(message);
-      }
+      const rawError = result.error ?? 'not found';
+      // Classification is decided by the error signature alone, never by
+      // whether the issue happens to be in the current working set — that
+      // coupling is what let one entity be classified two different ways on
+      // two consecutive runs.
+      linearFailures.push({
+        issue_id: issueId,
+        kind: classifyLinearLookupError(rawError),
+        message: rawError,
+      });
       continue;
     }
     issues.push({
@@ -1393,10 +1701,6 @@ async function fetchLinearIssues(
   return issues;
 }
 
-function isHistoricalLinearDecay(error: string): boolean {
-  return /entity not found|not found/i.test(error);
-}
-
 export function renderHuman(report: OrchestrationReconcilerReport): string {
   const lines = [
     `[ops:orchestration-reconcile] generated_at=${report.generated_at} verdict=${report.verdict} mode=${report.mode}`,
@@ -1405,21 +1709,18 @@ export function renderHuman(report: OrchestrationReconcilerReport): string {
     `  summary pass=${report.summary.pass} warn=${report.summary.warn} fail=${report.summary.fail} stale_reclaim_required=${report.summary.stale_reclaim_required} cleanup_candidate=${report.summary.cleanup_candidate} historical_decay=${report.summary.historical_decay} infra_error=${report.summary.infra_error}`,
   ];
 
-  const currentRequiredFailures = report.checks.filter((check) =>
-    check.requirement === 'required'
-    && (check.verdict === 'fail' || check.verdict === 'stale_reclaim_required' || check.verdict === 'infra_error')
+  lines.push(
+    `  buckets dispatch_blocking_failures=${report.buckets.dispatch_blocking_failures.length}`
+    + ` closeout_debt=${report.buckets.closeout_debt.length}`
+    + ` warnings=${report.buckets.warnings.length}`
+    + ` infra_errors=${report.buckets.infra_errors.length}`,
   );
-  const currentRequiredChecks = report.checks.filter((check) =>
-    check.requirement === 'required'
-    && check.verdict !== 'fail'
-    && check.verdict !== 'stale_reclaim_required'
-    && check.verdict !== 'infra_error'
-  );
-  const historicalDebt = report.checks.filter((check) => check.requirement === 'advisory');
+
   const sections: Array<[string, OrchestrationCheck[]]> = [
-    ['current required failures', currentRequiredFailures],
-    ['current required checks', currentRequiredChecks],
-    ['historical debt / cleanup candidates', historicalDebt],
+    ['dispatch_blocking_failures (these stop dispatch)', report.buckets.dispatch_blocking_failures],
+    ['infra_errors (unknown state — these stop dispatch)', report.buckets.infra_errors],
+    ['closeout_debt (reported, does not stop dispatch)', report.buckets.closeout_debt],
+    ['warnings (reported, does not stop dispatch)', report.buckets.warnings],
   ];
   for (const [label, checks] of sections) {
     lines.push(`  ${label}:`);
@@ -1503,6 +1804,7 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   const transitionWindow = Number.parseInt(parsed.flags.get('transition-window-minutes')?.at(-1) ?? '', 10);
   const infraErrors: string[] = [];
   const historicalDecayErrors: string[] = [];
+  const linearFailures: LinearLookupFailure[] = [];
 
   const manifests = readAllManifests();
   const leases = readAllLeases();
@@ -1515,23 +1817,16 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     branches,
     pullRequests,
   });
-  const currentIssueIds = collectCurrentIssueIds({
-    linearIssues: [],
-    leases,
-    manifests,
-    branches,
-    pullRequests,
-  });
+  // The "is this issue in the current working set" signal is deliberately no
+  // longer collected here: Linear failure classification must not depend on it.
   const linearIssueIds = new Set(issueIds);
   if (issueId) {
     linearIssueIds.add(issueId);
-    currentIssueIds.add(issueId);
   }
   const linearIssues = await fetchLinearIssues(
     [...linearIssueIds].sort((left, right) => left.localeCompare(right)),
     infraErrors,
-    historicalDecayErrors,
-    currentIssueIds,
+    linearFailures,
   );
 
   const report = buildOrchestrationReconcilerReport({
@@ -1549,6 +1844,7 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     transitionWindowMinutes: Number.isFinite(transitionWindow) ? transitionWindow : undefined,
     infraErrors,
     historicalDecayErrors,
+    linearFailures,
   });
   if (applyCleanup) {
     throw new Error('Cleanup apply is not automated yet; run the dry-run cleanup_plan commands explicitly under the merge mutex.');

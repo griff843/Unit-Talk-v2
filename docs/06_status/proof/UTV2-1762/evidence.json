@@ -1,0 +1,242 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1762",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Audited scope release: the sanctioned narrowing path LANE_MANIFEST_SPEC named but never shipped",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-28T03:45:00Z",
+  "sha_binding": {
+    "verified_source_sha": "f966821f40cd0b6ba72d2bd746b952ed0b6b00aa",
+    "verified_source_note": "Authoritative merge SHA of PR #1455 into main, bound post-merge by ops:proof-generate --merge-sha. The pre-merge anchor was 76c8d422b9ced176df1694e8a5e60940a07ea4c9 -- this lane's last non-proof commit, which carries every source control this bundle describes; it remains recorded as Anchor SHA in diff-summary.md. Approved PR head at merge time was de0f1dde83dcbe2de8a9c701eb899c508f5e0913.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-28T04:08:36.836Z"
+  },
+  "scope": {
+    "substantive_diff_stat": "8 files, 1848 insertions(+), 5 deletions(-)",
+    "files": [
+      "scripts/ops/scope-release.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/lane-manifest.ts",
+      "scripts/ops/lane-manifest.test.ts",
+      "scripts/ci/file-scope-guard.ts",
+      "scripts/ci/file-scope-guard.test.ts",
+      "docs/05_operations/LANE_MANIFEST_SPEC.md",
+      "docs/05_operations/schemas/lane_manifest_v1.schema.json"
+    ],
+    "diff_stat_note": "Measured with git diff --numstat origin/main...HEAD -- scripts/ docs/05_operations/ at the anchor SHA. The whole-diff total is deliberately not quoted because it would count this proof bundle."
+  },
+  "premise_check": {
+    "claim": "LANE_MANIFEST_SPEC.md named ops:lane:relock as the way to redefine scope, and it was never implemented.",
+    "method": "grep -rn 'relock' scripts/ package.json .github/workflows/ at origin/main",
+    "result": "no matches",
+    "consequence": "The spec correction states the command was named but never shipped. It does not claim an implementation was removed.",
+    "verified": true
+  },
+  "static_proof": {
+    "verify_static": "PASS (env:check, lint, type-check, build all exit 0)",
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane is T2 and touches no DB surface.",
+    "full_test_suite": {
+      "command": "pnpm test",
+      "suites": 98,
+      "fail": 0
+    },
+    "lane_suites": [
+      {
+        "command": "pnpm exec tsx --test scripts/ci/file-scope-guard.test.ts",
+        "exit_code": 0,
+        "tests": 46,
+        "pass": 46,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lane-manifest.test.ts",
+        "exit_code": 0,
+        "tests": 35,
+        "pass": 35,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+        "exit_code": 0,
+        "tests": 72,
+        "pass": 72,
+        "fail": 0,
+        "skipped": 0
+      }
+    ],
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 12,
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "applicable": false,
+    "reason": "Governance tooling only. No runtime, database, migration, deployment, ingestion or delivery path is touched. Production containment in force throughout: no SGO call, no production mutation, no production DDL, no member delivery, no unpark, no secret access. No release was executed against any lane.",
+    "test_db": {
+      "status": "NOT_REQUIRED",
+      "waived": false,
+      "claimed_na": false,
+      "why": "T2 governance lane with a static proof profile. No DB surface is touched, so no live-DB receipt is required by r1-r5-rules for this lane_type."
+    }
+  },
+  "requirements_coverage": [
+    {
+      "requirement": "1. Removal only; never add, replace, glob-expand, or widen",
+      "mechanism": "The resulting lock is derived by filtering the previous lock, so no code path can introduce a new entry. Naming a path that is not already an exact lock entry is refused.",
+      "refusals": [
+        "path_not_in_lock",
+        "empty_resulting_lock",
+        "unexpected_field_mutation"
+      ],
+      "tests": [
+        "refuses to widen scope: a path absent from file_scope_lock cannot be named",
+        "refuses a replacement: one valid removal plus one unknown path releases neither",
+        "UTV2-1762: a widening dressed up as a release is still refused"
+      ]
+    },
+    {
+      "requirement": "2. Runs against the target lane's own worktree and branch, never the main control checkout",
+      "refusals": [
+        "not_in_lane_worktree",
+        "branch_mismatch"
+      ],
+      "tests": [
+        "refuses when run outside the lane worktree",
+        "refuses when the checked-out branch is not the lane branch"
+      ]
+    },
+    {
+      "requirement": "3. Requires exact issue ID, open PR number, expected head SHA, expected pre-change lock hash, exact released paths, actor, reason",
+      "mechanism": "Every field is required by ScopeReleaseRequest and by the CLI's argument validation, which runs before any git or GitHub call.",
+      "tests": [
+        "scope-release is a routed subcommand and refuses an incomplete invocation"
+      ]
+    },
+    {
+      "requirement": "4. Refuses unless all listed conditions hold",
+      "refusals": [
+        "issue_mismatch",
+        "branch_mismatch",
+        "pr_url_mismatch",
+        "pr_number_mismatch",
+        "pr_not_open",
+        "head_sha_mismatch",
+        "lock_hash_mismatch",
+        "path_not_in_lock",
+        "path_in_pr_diff",
+        "path_in_staged_work",
+        "path_in_unstaged_work",
+        "path_in_untracked_work",
+        "path_in_unpushed_work",
+        "concurrent_lane_dependency",
+        "empty_resulting_lock",
+        "manifest_lane_inactive",
+        "no_release_paths",
+        "duplicate_release_path"
+      ],
+      "tests": [
+        "one isolating test per refusal, plus the mutation control"
+      ]
+    },
+    {
+      "requirement": "5. Append-only scope_release_history entry with full provenance",
+      "mechanism": "One entry per release carrying timestamp, actor, reason, PR number and URL, exact head SHA, previous and resulting lock hashes, exact released paths, and eight verification records.",
+      "tests": [
+        "releases an exact unused path and records a chained audit entry",
+        "releases multiple exact unused paths in a single atomic audit entry"
+      ]
+    },
+    {
+      "requirement": "6. Must not modify files_changed, issue identity, status, commit_sha, pr_url, proof verdicts, merge state",
+      "mechanism": "Enforced positively: the two manifests are compared with only file_scope_lock and scope_release_history stripped, so a field added in future is protected by default.",
+      "refusals": [
+        "unexpected_field_mutation"
+      ],
+      "tests": [
+        "files_changed, identity, and lifecycle state are byte-identical across a release"
+      ]
+    },
+    {
+      "requirement": "7. CI and lane-start recognize an audited narrowing as sanctioned while rejecting unaudited mutation",
+      "mechanism": "file-scope-guard's resolveTrustedManifests consults evaluateSanctionedNarrowing; ops:lane-start reads manifests at PR head, and validateManifest enforces the audit chain on every read/write.",
+      "tests": [
+        "UTV2-1762: an audited narrowing is trusted over the base-branch baseline",
+        "UTV2-1762: a narrowing with no audit history is ignored",
+        "UTV2-1762: an audit entry that does not chain to the head lock is ignored",
+        "UTV2-1762: an audit entry that does not chain from the baseline lock is ignored",
+        "UTV2-1762: a removed path not accounted for by any audit entry is ignored",
+        "UTV2-1762: an audit trail whose earlier entries were rewritten is ignored"
+      ]
+    },
+    {
+      "requirement": "8. After release, a future PR diff touching a released path fails the normal scope guard",
+      "tests": [
+        "UTV2-1762: after a release, a later PR touching the released path fails scope validation"
+      ]
+    }
+  ],
+  "mutation_testing": {
+    "method": "The harness reads scope-release.ts's own source, deletes one refuse('<code>', ...) call at a time by paren-balanced rewrite, writes the mutant beside the original, dynamically imports it, and asserts the scenario naming that refusal now gets through. It also asserts, against the unmutated module, that each scenario produces that refusal AND NO OTHER, so a shadowed, unreachable, or already-dead refusal fails the test rather than passing silently.",
+    "refusals_mutated": 18,
+    "refusals_flipped": 18,
+    "codes": [
+      "no_release_paths",
+      "duplicate_release_path",
+      "not_in_lane_worktree",
+      "branch_mismatch",
+      "issue_mismatch",
+      "manifest_lane_inactive",
+      "pr_url_mismatch",
+      "pr_number_mismatch",
+      "pr_not_open",
+      "head_sha_mismatch",
+      "lock_hash_mismatch",
+      "path_not_in_lock",
+      "path_in_pr_diff",
+      "path_in_staged_work",
+      "path_in_unstaged_work",
+      "path_in_untracked_work",
+      "path_in_unpushed_work",
+      "concurrent_lane_dependency"
+    ],
+    "documented_exception": "With no_release_paths deleted, an independent later validator (validateScopeReleaseHistory) still rejects the resulting empty-released_paths entry as manifest_invalid_after_release. The assertion accounts for this explicitly rather than pretending the mutant sailed through.",
+    "cleanup": "Mutants are written and removed in a try/finally; the worktree is clean afterwards."
+  },
+  "safety_posture": {
+    "production_behaviour_changed": false,
+    "database_behaviour_changed": false,
+    "deployment_ingestion_delivery_changed": false,
+    "guard_weakened": false,
+    "guard_weakened_note": "The one place a manifest-sourced scope change is newly trusted is an audited narrowing, which only ever REMOVES the lane's own permissions. A PR cannot launder a violation by narrowing: dropping a path makes the guard stricter about that path, not looser. Widening from a manifest edit remains refused and still requires an externally authored scope-override/v1 comment.",
+    "tier_c_path_touched": "none",
+    "release_executed_against_any_lane": false
+  },
+  "known_gaps": [
+    "No lock_not_narrowed refusal exists: the filter-based derivation makes it structurally unreachable, and an unreachable refusal cannot be validated by making it fail on the condition it names. Requirement 1 is carried by three reachable, mutation-proven refusals instead.",
+    "evaluateScopeRelease calls validateManifest, which checks preflight-token existence on disk, so the evaluator is not strictly pure. The test fixture materializes its own token rather than depending on ambient state.",
+    "The 24 scope-release tests live inside scripts/ops/lane-manifest.test.ts (35 tests total) rather than in a scripts/ops/scope-release.test.ts. The executable-wiring gate fails any new *.test.ts unreachable from a package script or workflow command; an import chain from an already-wired test file does not satisfy it (confirmed empirically -- a first attempt shipped the separate file chained by import and CI returned WIRING_TEST_UNWIRED_NEW). Both remedies require package.json or docs/05_operations/executable-wiring-baseline.json, which are outside this lane's frozen file_scope_lock, and baselining a brand-new suite as unwired would be false. Splitting the suite back out is follow-up work -- and is itself an instance of the frozen-scope problem this lane addresses. Recorded as UTV2-1764 (backlog, unstaffed).",
+    "concurrent_lane_dependency scans other lane manifests' file_scope_lock. Undeclared work is invisible to this check, exactly as it is to ops:lane-start's own overlap check."
+  ],
+  "sign_off": {
+    "static_proof_status": "COMPLETE",
+    "runtime_proof_status": "NOT_APPLICABLE (T2 governance, static profile)",
+    "ready_for_pm_review": true,
+    "pending": [
+      "exact-head CI green",
+      "EXECUTOR_RESULT at the exact head",
+      "T2 merge authority: GitHub PR review approval or pm-verdict/v1 APPROVED"
+    ]
+  }
+}

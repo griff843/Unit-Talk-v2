@@ -77,14 +77,33 @@
     "docs/06_status/proof/UTV2-1512/diff-summary.md",
     "docs/06_status/proof/UTV2-1512/verification.md"
   ],
-  "status": "blocked",
+  "status": "superseded",
   "started_at": "2026-07-08T17:00:01Z",
   "heartbeat_at": "2026-07-09T05:15:00.000Z",
   "closed_at": "2026-07-14T01:32:24.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1512-command-center-workbench.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-29T20:03:20.074Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1238.8h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    },
+    {
+      "checked_at": "2026-08-30T01:55:05.479Z",
+      "verdict": "fail",
+      "merge_sha": null,
+      "failures": [
+        "heartbeat_at 1244.7h old — exceeded 24h stranded threshold"
+      ],
+      "runner": "ops:reconcile"
+    }
+  ],
   "reopen_history": [],
   "notes": "Manifest backfilled 2026-07-09 for a pre-existing open PR (#1173) that had no lane manifest, blocking ops:orchestration-reconcile. This is a housekeeping/tracking-correction lane per the Linear issue description (PR content already implemented; issue exists solely to bind correct manifest/tracking), not new work. preflight_token points to a documented backfill record, not a passing token: preflight was run twice against the verified true GitHub branch tip and returned NOT_APPLICABLE both times, with non-waivable-at-T2 failures PG5 (branch is 32 commits behind main), PL3 (Linear state 'In Claude' is not in preflight's hardcoded startable-state allowlist), PX1 (pre-existing root .ops/sync.yml references an unrelated older issue, UTV2-1072), and PX2 (commit history references the branch's original pre-rename issue ID UTV2-1482, expected per the issue text). None of these are fixable without rebasing or rewriting the PR branch, which was explicitly out of scope for this reconciliation.",
   "override": {
@@ -99,9 +118,40 @@
     "mechanism": "Manifest relocated from docs/06_status/lanes/ to docs/06_status/lanes/parked/ (no schema-supported 'abandoned'/'parked' status value exists as of this writing) so it drops out of readAllManifestPaths()'s non-recursive scan and no longer counts toward the Claude executor slot cap. Lifecycle status field left as-is (in_review) since it is not actually done or merged. The associated open PR and branch remain untouched for later product reuse. No lease existed to release. Landed via a governed PR after an initial direct-main push of this same change was reverted for policy compliance."
   },
   "superseded": {
-    "reason": "OS v1 Lock ratified (UTV2-1530). This foundation branch's scope is fully superseded by the merged UTV2-1522 Command Center v2 redesign (PR #1190, b0a9002b, 2026-07-13). PR #1173 closed (not merged) and branch claude/utv2-1512-command-center-workbench deleted. No further action expected on this issue.",
+    "reason": "OS v1 Lock ratified (UTV2-1530). This foundation branch's scope is fully superseded by the merged UTV2-1522 Command Center v2 redesign (PR #1190, b0a9002b, 2026-07-13). PR #1173 is CLOSED and was never merged. The historical branch claude/utv2-1512-command-center-workbench still EXISTS on origin at d57d1023bffcf1f815c77c6b9e488e9ad43a762c and is deliberately preserved as an inert reference. A previous version of this text asserted the branch had been deleted; that assertion was false. It is corrected here rather than made true by deleting the branch. This record is a historical tombstone: the lane is terminal and superseded, NOT done, and no merge, completion, or truth-check pass is claimed for it.",
     "superseded_by": "UTV2-1522",
     "by": "pm",
-    "at": "2026-07-14T01:32:24.000Z"
+    "at": "2026-07-14T01:32:24.000Z",
+    "tombstone": {
+      "recorded_by": "UTV2-1757",
+      "recorded_at": "2026-08-30T02:25:08.144Z",
+      "linear_identity": {
+        "issue_id": "UTV2-1512",
+        "state": "deleted",
+        "recreated": false,
+        "note": "The Linear issue UTV2-1512 is DELETED, not archived. It is not recreated and must not be. References to the identifier UTV2-1512 resolve to successor record UTV2-1757, which is a recovery/tombstone issue and is NOT the original implementation issue.",
+        "successor_issue_id": "UTV2-1757"
+      },
+      "historical_lane_facts": {
+        "branch": "claude/utv2-1512-command-center-workbench",
+        "branch_state": "exists on origin, inert, preserved",
+        "commit_sha": "d57d1023bffcf1f815c77c6b9e488e9ad43a762c",
+        "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1173",
+        "pr_state": "closed, never merged",
+        "superseded_by": "UTV2-1522"
+      },
+      "governance_evidence": {
+        "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1448",
+        "merge_commit": "3399b271fc13cd39dc03e12f38a73fb1a46e0679",
+        "merged_at": "2026-08-26T20:01:19Z",
+        "role": "Ratification of the superseded disposition ONLY. PR #1448 is governance evidence, not the implementation merge identity for UTV2-1512. It is deliberately NOT bound as commit_sha or pr_url on this manifest, and record-merge must never be run against it."
+      },
+      "not_claimed": [
+        "done",
+        "merge receipt",
+        "truth-check pass",
+        "recreated Linear issue"
+      ]
+    }
   }
 }

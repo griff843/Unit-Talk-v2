@@ -100,6 +100,9 @@ export interface EvidenceContractFailure extends ValidationFailure {
     | 'legacy_v1_not_allowed_pre_merge'
     | 'sha_binding_missing'
     | 'sha_binding_invalid'
+    | 'sha_binding_merge_slot_missing'
+    | 'sha_binding_premature_merge_sha'
+    | 'legacy_merge_sha_forbidden'
     | 'proof_profile_missing'
     | 'proof_profile_unknown'
     | 'proof_profile_mismatch'
@@ -160,6 +163,31 @@ export interface EvidenceContractResult {
   profileSource: 'legacy-schema' | 'manifest-lane-type' | 'evidence' | null;
   failures: EvidenceContractFailure[];
   bundle: Record<string, unknown> | null;
+}
+
+/** Line indexes that are part of CommonMark fenced code blocks, including fences. */
+export function markdownFencedLineIndexes(content: string): Set<number> {
+  const fenced = new Set<number>();
+  const lines = content.split(/\r?\n/u);
+  let active: { char: '`' | '~'; length: number } | null = null;
+
+  for (const [index, line] of lines.entries()) {
+    if (active) {
+      fenced.add(index);
+      const closing = line.match(/^[ \t]{0,3}(`+|~+)[ \t]*$/u);
+      if (closing && closing[1]?.[0] === active.char && closing[1].length >= active.length) {
+        active = null;
+      }
+      continue;
+    }
+
+    const opening = line.match(/^[ \t]{0,3}(`{3,}|~{3,}).*$/u);
+    if (!opening) continue;
+    const run = opening[1]!;
+    active = { char: run[0] as '`' | '~', length: run.length };
+    fenced.add(index);
+  }
+  return fenced;
 }
 
 // Ratified T1 precedent treats modeling/analytics and canonical-data lanes as
@@ -370,9 +398,20 @@ function verifyProofOnlyMigrationAncestry(
     : { status: 'pass' };
 }
 
+/**
+ * Resolves the GitHub merged-PR attestation and verifies that `mergeAuthoritySha`
+ * — the SHA the caller claims carries merge authority — is the merge SHA GitHub
+ * actually recorded.
+ *
+ * `authorityField` names the evidence field the caller drew that SHA from, so a
+ * mismatch says which field lied. Callers that predate the explicit
+ * `sha_binding.merge_sha` slot pass `verified_source_sha` and keep the historical
+ * meaning; the schema-v2 consumer passes the explicit slot instead.
+ */
 function resolveMergedPrAttestation(
-  verifiedSourceSha: string,
+  mergeAuthoritySha: string,
   context: EvidenceContractContext,
+  authorityField = 'sha_binding.verified_source_sha',
 ): MergedPrAttestationResolution {
   if (!context.repoRoot) {
     return { status: 'unverified', detail: 'post-merge migration receipt ancestry requires repoRoot' };
@@ -393,10 +432,10 @@ function resolveMergedPrAttestation(
     };
   }
 
-  if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+  if (mergeAuthoritySha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
     return {
       status: 'attestation-mismatch',
-      detail: 'sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA',
+      detail: `${authorityField} does not equal the GitHub-recorded merge SHA`,
     };
   }
 
@@ -548,27 +587,207 @@ function verifyPostMergeMigrationReceiptBinding(
 export type ExternalVerifierBindingCode =
   | 'verifier_provenance_bound_exact_source'
   | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_provenance_bound_merge_slot'
   | 'verifier_receipt_sha_invalid'
   | 'verifier_source_sha_invalid'
   | 'verifier_receipt_head_mismatch'
+  | 'verifier_merge_slot_invalid'
+  | 'verifier_merge_slot_premature'
+  | 'verifier_source_not_in_merged_pr'
   | 'verifier_merge_attestation_mismatch'
   | 'verifier_merge_attestation_unverified';
 
+type ExternalVerifierBindingSuccessCode =
+  | 'verifier_provenance_bound_exact_source'
+  | 'verifier_provenance_bound_merged_pr_head'
+  | 'verifier_provenance_bound_merge_slot';
+
 export type ExternalVerifierBindingResult =
-  | { valid: true; code: 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'; detail: string }
-  | { valid: false; code: Exclude<ExternalVerifierBindingCode, 'verifier_provenance_bound_exact_source' | 'verifier_provenance_bound_merged_pr_head'>; detail: string };
+  | { valid: true; code: ExternalVerifierBindingSuccessCode; detail: string }
+  | { valid: false; code: Exclude<ExternalVerifierBindingCode, ExternalVerifierBindingSuccessCode>; detail: string };
 
 /**
- * Binds an external required-check receipt to schema-v2 evidence. Before merge,
- * and whenever checks ran on the merge SHA itself, exact-source equality is the
- * only accepted path. After a squash/rebase/two-parent merge, the receipt may
- * instead name the original PR head only when the caller supplies the same
- * authoritative GitHub merged-PR attestation used by migration receipts.
+ * The caller's view of the schema-v2 authoritative merge slot.
+ *
+ * `declared` must be derived with `hasOwnProperty` on `sha_binding`, never from
+ * truthiness: an explicitly-`null` slot is a *declared* slot, and conflating it
+ * with an absent one would route a modern bundle into the historical
+ * pre-slot compatibility path. Omitting `mergeSlot` entirely preserves the
+ * pre-UTV2-1776 behaviour, which is the stricter of the two.
+ */
+export interface EvidenceMergeSlot {
+  declared: boolean;
+  value?: unknown;
+}
+
+/**
+ * Reads the authoritative merge slot off a `sha_binding` block without
+ * collapsing "absent" and "null" into the same state.
+ */
+export function readEvidenceMergeSlot(binding: unknown): EvidenceMergeSlot {
+  if (!binding || typeof binding !== 'object' || Array.isArray(binding)) return { declared: false };
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) return { declared: false };
+  return { declared: true, value: (binding as Record<string, unknown>)['merge_sha'] };
+}
+
+/**
+ * Post-merge verification for a bundle that declares the authoritative merge
+ * slot. Total: every path returns a decision, so a declared slot can never fall
+ * through to source-derived merge authority.
+ */
+function verifyDeclaredMergeSlotBinding(
+  receiptSha: string,
+  verifiedSourceSha: string,
+  slotValue: unknown,
+  context: EvidenceContractContext,
+): ExternalVerifierBindingResult {
+  if (typeof slotValue !== 'string' || !SHA_RE.test(slotValue)) {
+    return {
+      valid: false,
+      code: 'verifier_merge_slot_invalid',
+      detail: 'post-merge evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
+    };
+  }
+
+  const resolution = resolveMergedPrAttestation(slotValue, context, 'sha_binding.merge_sha');
+  if (resolution.status === 'attestation-mismatch') {
+    return { valid: false, code: 'verifier_merge_attestation_mismatch', detail: resolution.detail };
+  }
+  if (resolution.status !== 'pass') {
+    return { valid: false, code: 'verifier_merge_attestation_unverified', detail: resolution.detail };
+  }
+
+  const attestation = resolution.attestation;
+
+  // Execution/source identity keeps its own obligation. Two shapes are honest,
+  // and nothing else is:
+  //   1. the attested merge SHA itself — verification ran on the merge commit.
+  //      This is the pre-UTV2-1776 shape, retained rather than broadened: it is
+  //      no longer what *grants* merge authority, only what a verified source is
+  //      allowed to be.
+  //   2. a commit the PR itself contributed — reachable from the attested PR
+  //      head and NOT reachable from the base-side reference GitHub merged into.
+  //      This is the split identity UTV2-1729 has.
+  //
+  // The base-side exclusion is not decorative. "Ancestor of the PR head" alone
+  // admits the whole of `main` behind the branch point, including the merge SHA
+  // of every previously merged PR — so a bundle could name a commit containing
+  // none of the lane's work and still be reported as "within that PR".
+  if (verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()) {
+    const sourceInPr = verifiedSourceIsContributedByAttestedPr(
+      verifiedSourceSha,
+      attestation.head_sha,
+      resolution.mainRef,
+      context,
+    );
+    if (sourceInPr !== true) {
+      return {
+        valid: false,
+        code: typeof sourceInPr === 'string' ? 'verifier_merge_attestation_unverified' : 'verifier_source_not_in_merged_pr',
+        detail: typeof sourceInPr === 'string'
+          ? sourceInPr
+          : `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA nor a commit contributed by the attested PR (head ${attestation.head_sha}, base ${resolution.mainRef})`,
+      };
+    }
+  }
+
+  const matchesSource = receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase();
+  const matchesHead = receiptSha.toLowerCase() === attestation.head_sha.toLowerCase();
+  if (!matchesSource && !matchesHead) {
+    return {
+      valid: false,
+      code: 'verifier_receipt_head_mismatch',
+      detail: 'external verifier receipt must match sha_binding.verified_source_sha or the GitHub-attested original PR head',
+    };
+  }
+
+  return {
+    valid: true,
+    code: 'verifier_provenance_bound_merge_slot',
+    detail: `sha_binding.merge_sha ${slotValue} matches the GitHub-recorded merge of PR #${attestation.pr_number}; verified source ${verifiedSourceSha} is within that PR`,
+  };
+}
+
+/**
+ * `true` when the verified source is a commit the attested PR actually
+ * contributed — reachable from its head and not already present on the base-side
+ * reference GitHub merged into. `false` when it provably is not, and a
+ * diagnostic string when the check could not be completed, which the caller
+ * treats as unverified rather than as a pass.
+ */
+function verifiedSourceIsContributedByAttestedPr(
+  verifiedSourceSha: string,
+  headSha: string,
+  mainRef: string,
+  context: EvidenceContractContext,
+): true | false | string {
+  if (verifiedSourceSha.toLowerCase() === headSha.toLowerCase()) return true;
+  if (!context.repoRoot) return 'verified-source ancestry requires repoRoot';
+
+  const available = verifyCommitAvailable(verifiedSourceSha, 'verified source', context);
+  if (available) return available.detail;
+
+  const inHead = isAncestorOrDiagnostic(verifiedSourceSha, headSha, context);
+  if (typeof inHead === 'string') return inHead;
+  if (!inHead) return false;
+
+  // Present on the base branch before the PR existed => contributed by some
+  // earlier merge, not by this PR.
+  const inBase = isAncestorOrDiagnostic(verifiedSourceSha, mainRef, context);
+  if (typeof inBase === 'string') return inBase;
+  return !inBase;
+}
+
+function isAncestorOrDiagnostic(
+  candidate: string,
+  descendant: string,
+  context: EvidenceContractContext,
+): boolean | string {
+  const ancestry = runEvidenceGit(
+    ['merge-base', '--is-ancestor', candidate, descendant],
+    context.repoRoot!,
+    context.gitRunner,
+  );
+  if (ancestry.error || ancestry.status === null || ancestry.status > 1) {
+    return ancestry.error?.message ||
+      String(ancestry.stderr ?? '').trim() ||
+      'verified-source ancestry check did not complete';
+  }
+  return ancestry.status === 0;
+}
+
+/**
+ * Binds an external required-check receipt to schema-v2 evidence.
+ *
+ * Two identities are involved and they are deliberately not the same thing:
+ *
+ *  - **Merge authority** — which commit GitHub actually recorded as the merge.
+ *    In a schema-v2 bundle this lives in the explicit `sha_binding.merge_sha`
+ *    slot and nowhere else. It is checked against the GitHub merged-PR
+ *    attestation, so neither a branch SHA nor the original PR head can satisfy
+ *    it, and a missing/incomplete/foreign attestation fails closed.
+ *  - **Execution/source identity** — which commit the verification actually ran
+ *    on. That is `sha_binding.verified_source_sha`, and it keeps its own
+ *    provenance obligation: it must be the attested PR head or an ancestor of
+ *    it, i.e. genuinely part of the merged PR.
+ *
+ * Before UTV2-1776 there was no explicit slot, so merge authority was read off
+ * `verified_source_sha`, which forced the two identities to be equal. Under a
+ * squash merge they never can be, which is exactly how Post-Merge Lane Close run
+ * 33268421913 rejected a valid UTV2-1729 bundle at P10 and R3.
+ *
+ * When `mergeSlot` is absent the historical behaviour is used unchanged; when it
+ * is declared, merge authority is taken from the slot. The slot branch is
+ * evaluated *before* the exact-source shortcut on purpose: otherwise a bundle
+ * naming the wrong merge SHA would pass unchecked whenever its receipt happened
+ * to be the exact source head.
  */
 export function verifyExternalVerifierProvenanceBinding(input: {
   receiptSha: string | null | undefined;
   verifiedSourceSha: string | null | undefined;
   context: EvidenceContractContext;
+  /** Omit to keep pre-UTV2-1776 semantics. See {@link readEvidenceMergeSlot}. */
+  mergeSlot?: EvidenceMergeSlot;
 }): ExternalVerifierBindingResult {
   const receiptSha = input.receiptSha?.trim() ?? '';
   const verifiedSourceSha = input.verifiedSourceSha?.trim() ?? '';
@@ -586,6 +805,25 @@ export function verifyExternalVerifierProvenanceBinding(input: {
       detail: 'sha_binding.verified_source_sha must be a full 40-character Git SHA',
     };
   }
+
+  // Authoritative merge-slot semantics. Evaluated ahead of the exact-source
+  // shortcut so a wrong slot can never ride in on a matching receipt.
+  const mergeSlot = input.mergeSlot;
+  if (mergeSlot?.declared) {
+    if (input.context.gate === 'post-merge-read') {
+      return verifyDeclaredMergeSlotBinding(receiptSha, verifiedSourceSha, mergeSlot.value, input.context);
+    }
+    if (mergeSlot.value !== null) {
+      return {
+        valid: false,
+        code: 'verifier_merge_slot_premature',
+        detail: 'pre-merge evidence requires sha_binding.merge_sha to be null; a branch SHA is never merge authority',
+      };
+    }
+    // merge_sha: null at a pre-merge gate is the correct authored shape; fall
+    // through to the unchanged exact-source rule below.
+  }
+
   if (receiptSha.toLowerCase() === verifiedSourceSha.toLowerCase()) {
     return {
       valid: true,
@@ -633,10 +871,65 @@ export function verifyExternalVerifierProvenanceBinding(input: {
   };
 }
 
+/**
+ * Historical compatibility for bundles that genuinely predate the reserved
+ * `sha_binding.merge_sha` slot.
+ *
+ * The slot is mandatory. This is the single, deliberately narrow way a bundle
+ * may lack it, and it is keyed on proven identity rather than on the bundle's
+ * profile. An earlier form of this exemption keyed on `profile !== 'migration'`,
+ * which matched the migration receipts it was written for but silently excluded
+ * the static/governance receipts of the same vintage and equal authenticity.
+ *
+ * Three properties this must never give up, each asserted by its own test:
+ *  - It never applies at the `pre-merge` gate. A bundle being authored or gated
+ *    for merge must carry the slot, explicitly `null`.
+ *  - It never lets a branch SHA satisfy merge authority. Eligibility is decided
+ *    by `resolveMergedPrAttestation`, which requires `verified_source_sha` to
+ *    equal the GitHub-recorded merge SHA of a real merged PR and verifies that
+ *    merge's ancestry locally.
+ *  - It is fail-closed. A missing repoRoot, a missing or incomplete attestation,
+ *    or an attestation belonging to a different PR all resolve to something
+ *    other than `pass`, and the slot is then required.
+ */
+function historicalMergeSlotIsExempt(
+  binding: Record<string, unknown>,
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
+): boolean {
+  // Migration receipts are bound by their own older merged-PR attestation
+  // contract, verified separately further down this module. Their exemption is
+  // left exactly as it was authored, at both gates. Tightening it to require
+  // `merge_sha: null` pre-merge is correct and intended, but the only fixture
+  // that asserts the current behaviour lives in scripts/ops/truth-check-lib.test.ts,
+  // which was released from this lane's file_scope_lock on 2026-08-28. Returned
+  // to PM as an out-of-scope defect rather than widened here.
+  if (profileHint === 'migration') return true;
+
+  // Authoring/merge-gating never reads history: the slot is always required.
+  if (context.gate === 'pre-merge') return false;
+
+  const verifiedSourceSha = binding['verified_source_sha'];
+  if (typeof verifiedSourceSha !== 'string' || !SHA_RE.test(verifiedSourceSha)) return false;
+
+  return resolveMergedPrAttestation(verifiedSourceSha, context).status === 'pass';
+}
+
 function validateV2Binding(
   bundle: Record<string, unknown>,
   failures: EvidenceContractFailure[],
+  context: EvidenceContractContext,
+  profileHint: EvidenceProofProfile | null,
 ): void {
+  if (Object.prototype.hasOwnProperty.call(bundle, 'merge_sha')) {
+    failures.push({
+      code: 'legacy_merge_sha_forbidden',
+      field: 'merge_sha',
+      message:
+        'schema-v2 evidence forbids legacy top-level merge_sha; merge authority lives only at sha_binding.merge_sha',
+    });
+  }
+
   const rawBinding = bundle['sha_binding'];
   if (!isPopulatedRecord(rawBinding)) {
     failures.push({
@@ -648,6 +941,32 @@ function validateV2Binding(
   }
 
   const binding = rawBinding;
+  if (!Object.prototype.hasOwnProperty.call(binding, 'merge_sha')) {
+    if (!historicalMergeSlotIsExempt(binding, context, profileHint)) {
+      failures.push({
+        code: 'sha_binding_merge_slot_missing',
+        field: 'sha_binding.merge_sha',
+        message:
+          'schema-v2 evidence must declare sha_binding.merge_sha (null before merge, authoritative SHA after merge)',
+      });
+    }
+  } else if (context.gate === 'pre-merge') {
+    if (binding['merge_sha'] !== null) {
+      failures.push({
+        code: 'sha_binding_premature_merge_sha',
+        field: 'sha_binding.merge_sha',
+        message:
+          'pre-merge evidence requires sha_binding.merge_sha to be null; a branch SHA must never be represented as a merge SHA',
+      });
+    }
+  } else if (typeof binding['merge_sha'] !== 'string' || !SHA_RE.test(binding['merge_sha'])) {
+    failures.push({
+      code: 'sha_binding_invalid',
+      field: 'sha_binding.merge_sha',
+      message: 'post-merge evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
+    });
+  }
+
   if (typeof binding['verified_source_sha'] !== 'string' || !SHA_RE.test(binding['verified_source_sha'])) {
     failures.push({
       code: 'sha_binding_invalid',
@@ -886,11 +1205,15 @@ export function validateEvidenceBundleContract(
     };
   }
 
-  const failures: EvidenceContractFailure[] = [];
-  validateV2Binding(bundle, failures);
-
   const declaredProfile = declaredProfileForLaneType(context.laneType);
   const authoredProfile = bundle['proof_profile'];
+  const profileHint = declaredProfile ??
+    (typeof authoredProfile === 'string' && AUTHORABLE_PROFILES.has(authoredProfile as EvidenceProofProfile)
+      ? authoredProfile as EvidenceProofProfile
+      : null);
+  const failures: EvidenceContractFailure[] = [];
+  validateV2Binding(bundle, failures, context, profileHint);
+
   let profile: EvidenceProofProfile | null = null;
   let profileSource: EvidenceContractResult['profileSource'] = null;
 

@@ -24,6 +24,12 @@ import {
   type ShaRebindOutcome,
 } from './proof-generate.js';
 import {
+  buildMergedPrAttestation,
+  rebindProofBundle,
+  validatePrIdentity,
+  type ShaSet,
+} from './proof-rebind.js';
+import {
   acquireMergeLock,
   defaultMergeLockOwner,
   MERGE_LOCK_PATH,
@@ -98,6 +104,7 @@ export interface RepairMergedPrInfo {
   state: string | null;
   merged: boolean;
   mergeSha: string | null;
+  headSha?: string | null;
   headRefName?: string | null;
   baseRefName?: string | null;
   title?: string | null;
@@ -950,7 +957,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
         '--limit',
         '20',
         '--json',
-        'url,number,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
+        'url,number,state,mergedAt,mergeCommit,headRefOid,headRefName,baseRefName,title',
       ],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
@@ -964,6 +971,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
     state?: string | null;
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
+    headRefOid?: string | null;
     headRefName?: string | null;
     baseRefName?: string | null;
     title?: string | null;
@@ -983,6 +991,7 @@ function inferMergedPrForBranch(branch: string, issueId: string): RepairMergedPr
       state,
       merged: state === 'merged' || Boolean(entry.mergedAt),
       mergeSha: entry.mergeCommit?.oid ?? null,
+      headSha: entry.headRefOid ?? null,
       headRefName: entry.headRefName ?? null,
       baseRefName: entry.baseRefName ?? null,
       title: entry.title ?? null,
@@ -1012,6 +1021,96 @@ function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
   );
 }
 
+type LaneCloseGitRunner = (args: readonly string[], cwd: string) => void;
+
+const runLaneCloseGit: LaneCloseGitRunner = (args, cwd) => {
+  execFileSync('git', [...args], { cwd, stdio: 'ignore' });
+};
+
+/**
+ * Ensure the immutable GitHub PR-head object exists before local ancestry
+ * checks. Merged source branches may be deleted, while refs/pull/<n>/head is
+ * retained by GitHub. A second cat-file check prevents a successful-looking
+ * fetch from granting ancestry authority when it did not materialize the exact
+ * attested object.
+ */
+export function ensureAttestedPrHeadAvailable(
+  prNumber: number,
+  headSha: string,
+  repoRoot: string,
+  runGit: LaneCloseGitRunner = runLaneCloseGit,
+): void {
+  try {
+    runGit(['cat-file', '-e', `${headSha}^{commit}`], repoRoot);
+    return;
+  } catch {
+    // Fetch the immutable PR ref below.
+  }
+
+  try {
+    runGit(['fetch', '--no-tags', 'origin', `refs/pull/${prNumber}/head`], repoRoot);
+    runGit(['cat-file', '-e', `${headSha}^{commit}`], repoRoot);
+  } catch (error) {
+    throw new Error(
+      `GitHub-recorded PR #${prNumber} head ${headSha} is unavailable after immutable PR-head fetch: ${(error as Error).message}`,
+    );
+  }
+}
+
+interface ActiveStaticReattestationCandidate {
+  evidencePath: string;
+  verificationPath: string;
+  executionSha: string | null;
+  needsStructuralRepair: boolean;
+}
+
+/**
+ * Recognise only the exact two-omission shape emitted by the broken active
+ * schema-v2/static generator, or the canonical successor produced by repairing
+ * that shape so replay stays idempotent. Historical/profileless/optional
+ * bundles stay on the tolerant rebindMergeSha path and are never upgraded
+ * merely because a PR attestation is available.
+ */
+function activeStaticReattestationCandidate(
+  repoRoot: string,
+  issueId: string,
+): ActiveStaticReattestationCandidate | null {
+  const proofRoot = path.posix.join('docs', '06_status', 'proof', issueId);
+  const evidencePath = safeRepoPath(repoRoot, path.posix.join(proofRoot, 'evidence.json'));
+  const verificationPath = safeRepoPath(repoRoot, path.posix.join(proofRoot, 'verification.md'));
+  if (!fs.existsSync(evidencePath) || !fs.existsSync(verificationPath)) return null;
+
+  let evidence: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+    evidence = parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  if (evidence['schema_version'] !== 2 || evidence['proof_profile'] !== 'static') return null;
+
+  const binding = evidence['sha_binding'];
+  if (binding === null || typeof binding !== 'object' || Array.isArray(binding)) return null;
+  const verification = fs.readFileSync(verificationPath, 'utf8');
+  const hasMergeSlot = Object.prototype.hasOwnProperty.call(binding, 'merge_sha');
+  const hasBindingSection = /^## Merge SHA Binding\s*$/mu.test(verification);
+  const malformedGeneratorShape = !hasMergeSlot && !hasBindingSection && /^MERGE_SHA:\s*/mu.test(verification);
+  const repairedGeneratorShape = hasMergeSlot && hasBindingSection &&
+    /^Approved PR head:\s*/mu.test(verification) && /^Execution SHA:\s*/mu.test(verification);
+  if (!malformedGeneratorShape && !repairedGeneratorShape) return null;
+
+  const executionSha = typeof (binding as Record<string, unknown>)['verified_source_sha'] === 'string'
+    ? (binding as Record<string, unknown>)['verified_source_sha'] as string
+    : null;
+  return {
+    evidencePath,
+    verificationPath,
+    executionSha,
+    needsStructuralRepair: malformedGeneratorShape,
+  };
+}
+
 /**
  * Post-merge automation initially sees the repair PR's merge SHA, but
  * --repair-merged resolves the implementation PR recorded in manifest.pr_url.
@@ -1033,12 +1132,71 @@ function modelRoutingSidecarPaths(manifest: LaneManifest): string[] {
  */
 export function rebindRepairedLaneProof(
   manifest: LaneManifest,
-  options: { repoRoot?: string; now?: Date } = {},
+  options: {
+    repoRoot?: string;
+    gitRoot?: string;
+    now?: Date;
+    pr?: RepairMergedPrInfo | null;
+    isCommitReachable?: (ancestor: string, descendant: string) => boolean;
+    ensurePrHeadAvailable?: (prNumber: number, headSha: string) => void;
+  } = {},
 ): ShaRebindOutcome[] {
   const repoRoot = options.repoRoot ?? process.cwd();
   const generatedAt = (options.now ?? new Date()).toISOString();
   const mergeSha = manifest.commit_sha;
   const modelRoutingPaths = modelRoutingSidecarPaths(manifest);
+
+  let attestedShas: ShaSet | null = null;
+  const structuralCandidate = mergeSha && options.pr
+    ? activeStaticReattestationCandidate(repoRoot, manifest.issue_id)
+    : null;
+  if (mergeSha && options.pr && structuralCandidate) {
+    const executionSha = structuralCandidate.executionSha;
+    const built = buildMergedPrAttestation({
+      number: options.pr.number,
+      headRefOid: options.pr.headSha,
+      mergeCommitOid: options.pr.mergeSha,
+    });
+    if (!built.attestation) {
+      throw new Error(`Merged-PR re-attestation refused: ${built.errors.join('; ')}`);
+    }
+    attestedShas = {
+      merge_sha: mergeSha,
+      approved_head_sha: built.attestation.head_sha,
+      execution_sha: executionSha,
+    };
+    const ensurePrHeadAvailable = options.ensurePrHeadAvailable ?? ((prNumber: number, headSha: string): void => {
+      ensureAttestedPrHeadAvailable(prNumber, headSha, options.gitRoot ?? repoRoot);
+    });
+    ensurePrHeadAvailable(built.attestation.pr_number, built.attestation.head_sha);
+    const reachable = options.isCommitReachable ?? ((ancestor: string, descendant: string): boolean => {
+      try {
+        execFileSync('git', ['merge-base', '--is-ancestor', ancestor, descendant], {
+          cwd: options.gitRoot ?? repoRoot,
+          stdio: 'ignore',
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    const identityErrors = validatePrIdentity(
+      attestedShas,
+      {
+        attestation: built.attestation,
+        state: options.pr.merged ? 'MERGED' : options.pr.state ?? 'UNKNOWN',
+        base_ref: options.pr.baseRefName ?? 'main',
+        merge_sha_on_base: reachable(mergeSha, `origin/${options.pr.baseRefName ?? 'main'}`),
+      },
+      {
+        executionShaOnBranch:
+          executionSha === null ? true : reachable(executionSha, built.attestation.head_sha),
+      },
+    );
+    if (identityErrors.length > 0) {
+      throw new Error(`Merged-PR re-attestation refused: ${identityErrors.join('; ')}`);
+    }
+  }
 
   if (mergeSha) {
     // Validate-only pass first: throws ModelRoutingRebindError before any
@@ -1056,12 +1214,31 @@ export function rebindRepairedLaneProof(
           relPath: modelRoutingPath,
           expectedIssueId: manifest.issue_id,
           manifestModelRouting: manifest.model_routing,
+          allowLegacyExecutionReattestation: attestedShas !== null,
+          executionSha: attestedShas?.execution_sha,
         },
       );
     }
   }
 
-  const outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+  let outcomes: ShaRebindOutcome[];
+  if (mergeSha && attestedShas) {
+    const files = [structuralCandidate!.evidencePath, structuralCandidate!.verificationPath]
+      .map((absolutePath) => path.relative(repoRoot, absolutePath).split(path.sep).join(path.posix.sep));
+    const result = rebindProofBundle(
+      { issueId: manifest.issue_id, shas: attestedShas, prUrl: manifest.pr_url, files, root: repoRoot },
+      { write: true, allowActiveSchemaStructuralRepair: structuralCandidate!.needsStructuralRepair },
+    );
+    if (!result.ok) {
+      throw new Error(`Merged-PR proof re-attestation refused: ${result.errors.join('; ')}`);
+    }
+    outcomes = result.checksums.map((checksum) => ({
+      path: checksum.file,
+      status: checksum.changed ? 'updated' : 'unchanged',
+    }));
+  } else {
+    outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+  }
 
   if (mergeSha) {
     for (const modelRoutingPath of modelRoutingPaths) {
@@ -1077,6 +1254,8 @@ export function rebindRepairedLaneProof(
             relPath: modelRoutingPath,
             expectedIssueId: manifest.issue_id,
             manifestModelRouting: manifest.model_routing,
+            allowLegacyExecutionReattestation: attestedShas !== null,
+            executionSha: attestedShas?.execution_sha,
           },
         ),
       );
@@ -2151,7 +2330,7 @@ async function main(): Promise<void> {
       repairedManifest = repair.manifest;
       repairChangedFields = repair.changed_fields;
       mergeBinding = repair.merge_binding ?? null;
-      rebindRepairedLaneProof(manifest);
+      rebindRepairedLaneProof(manifest, { pr: repair.pr ?? validatedPr });
     }
 
     requireCloseCommitSha(manifest);
@@ -2433,7 +2612,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
       '--repo',
       TRUSTED_POST_MERGE_REPOSITORY,
       '--json',
-      'url,state,mergedAt,mergeCommit,headRefName,baseRefName,title',
+      'url,state,mergedAt,mergeCommit,headRefOid,headRefName,baseRefName,title',
     ],
     {
       encoding: 'utf8',
@@ -2461,6 +2640,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     state?: string | null;
     mergedAt?: string | null;
     mergeCommit?: { oid?: string | null } | null;
+    headRefOid?: string | null;
     headRefName?: string | null;
     baseRefName?: string | null;
     title?: string | null;
@@ -2473,6 +2653,7 @@ function fetchPrInfo(prUrl: string, includeFiles: boolean): RepairMergedPrInfo {
     state,
     merged: state === 'merged' || Boolean(parsed.mergedAt),
     mergeSha: parsed.mergeCommit?.oid ?? null,
+    headSha: parsed.headRefOid ?? null,
     headRefName: parsed.headRefName ?? null,
     baseRefName: parsed.baseRefName ?? null,
     title: parsed.title ?? null,

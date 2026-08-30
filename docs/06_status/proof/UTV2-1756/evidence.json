@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1756",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "title": "Scheduled reconciler overwrites root lane manifests with parked-copy content, reverting merged governance decisions every 6 hours",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-28T15:40:00Z",
+  "sha_binding": {
+    "verified_source_sha": "05308d6d39d4ba45a0aea2b3414b1982d2e26b29",
+    "verified_source_note": "This lane's implementation commit and the last non-proof commit on the branch. It carries every source control this bundle describes. It is the anchor only because a file cannot contain its own SHA; post-merge rebinding sets the merge SHA.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-29T16:37:45.351Z"
+  },
+  "scope": {
+    "substantive_diff_stat": "4 files, 696 insertions(+), 34 deletions(-)",
+    "files": [
+      "scripts/ops/shared.ts",
+      "scripts/ops/shared.test.ts",
+      "scripts/ops/reconcile.ts",
+      "scripts/ops/reconcile.test.ts"
+    ],
+    "not_touched": [
+      ".github/workflows/reconcile-stale-lanes.yml",
+      "docs/06_status/lanes/UTV2-1512.json",
+      "docs/06_status/lanes/parked/UTV2-1512.json",
+      "docs/06_status/lanes/UTV2-1157.json",
+      "docs/06_status/lanes/UTV2-1157-codex.json",
+      "scripts/ops/lane-close.ts"
+    ]
+  },
+  "premise_check": {
+    "claim": "The reconciler's read-side selection was correct; the bypass was that the writers on the reconcile path resolved their destination from the issue ID alone, with no knowledge of the file the record was read from. This is a statement about the reconcile path specifically, not about every writer in the repository: lane-link-pr's writeBoundManifest and migrate-lane-types resolve their own paths and do not share the defect.",
+    "method": "Read readAllManifestPaths, issueToManifestPath and writeManifest in scripts/ops/shared.ts, and selectReconcilableManifests, manifestPath and writeManifestJson in scripts/ops/reconcile.ts, at origin/main 44f5fbd7. Enumerated every duplicate issue_id on main by parsing all lane manifests.",
+    "result": "Confirmed. selectReconcilableManifests correctly excluded the terminal root and selected the active parked copy; UTV2-1619's fail-closed allowlist is intact and is not the bypass. reconcile.ts carried a private manifestPath(issueId) duplicating issueToManifestPath, and wrote with raw fs.writeFileSync, so neither validateManifest nor assertStatusTransition ever ran on that path.",
+    "duplicate_population_measured_on_main": [
+      "UTV2-1512: docs/06_status/lanes/UTV2-1512.json + docs/06_status/lanes/parked/UTV2-1512.json (same filename, different directory)",
+      "UTV2-1157: docs/06_status/lanes/UTV2-1157.json + docs/06_status/lanes/UTV2-1157-codex.json (same directory, aliased filename)"
+    ],
+    "consequence": "The second arrangement means the fix has to be path fidelity in general, not a subdirectory special case, and that the guard's identity arm cannot separate same-issue_id aliases.",
+    "verified": true
+  },
+  "requirements_coverage": {
+    "dod_1_subdirectory_writes_back_to_subdirectory": "readAllManifestEntries pairs each manifest with its source file; selectReconcilableManifestEntries preserves it through selection; reconcileManifest writes to options.manifestPath; main() threads entry.path. Asserted end-to-end by ARM A: the parked copy is written and the root file is byte-identical.",
+    "dod_2_terminal_root_immutable_under_duplicates": "assertManifestWriteIsSafe refuses any move out of a settled on-disk status that TRANSITIONS does not permit. Asserted by execution in ARM B against a fixture holding both copies, and per-status by the settled-status regression covering merged, done, failed, superseded and cancelled.",
+    "dod_3_mutation_tested": "Three source-level mutations applied to the committed implementation and the suites re-run, plus ARM C as an in-suite inversion control that reproduces the historical clobber. See mutation_testing.",
+    "dod_4_classify_lane_capacity_location_independent": "classifyLaneCapacity is unchanged. A new regression asserts the same status classifies identically for a root-path manifest and a subdirectory manifest; the pre-existing coverage at shared.test.ts is unmodified."
+  },
+  "mutation_testing": {
+    "method": "Each mutation was applied to the committed implementation source, the affected suites re-run, and the source restored from a pre-mutation copy. ARM A/B/C in reconcile.test.ts encode the same triple as executable tests so the suite re-proves it on every run rather than relying on this transcript.",
+    "mutation_1_guard_disabled": {
+      "mutation": "assertManifestWriteIsSafe returns immediately (no-op)",
+      "result": "4 failures out of 111",
+      "tests_that_flipped": [
+        "ARM B: with path fidelity removed, the guard still refuses to rewrite the terminal root",
+        "GUARD: a superseded manifest refuses a write back to blocked (the a67a6a59 condition)",
+        "GUARD: refuses a write whose issue_id differs from the record already at that path",
+        "GUARD: every settled status vetoes a rollback to an active status"
+      ]
+    },
+    "mutation_2_path_fidelity_removed": {
+      "mutation": "reconcileManifest ignores options.manifestPath and re-derives from issueToManifestPath",
+      "result": "3 failures out of 26",
+      "tests_that_flipped": [
+        "ARM A",
+        "ARM B",
+        "ARM C"
+      ]
+    },
+    "mutation_3_selection_drops_source_path": {
+      "mutation": "selectReconcilableManifestEntries rewrites each entry's path from the issue ID",
+      "result": "4 failures out of 26",
+      "tests_that_flipped": [
+        "ARM A",
+        "ARM B",
+        "ARM C",
+        "selectReconcilableManifestEntries applies the same policy as selectReconcilableManifests"
+      ]
+    },
+    "in_suite_inversion_control": {
+      "arm": "ARM C",
+      "mutation": "both defences removed — a raw fs.writeFileSync writer injected, aimed at the root path",
+      "observed": "root manifest clobbered: status superseded -> blocked and heartbeat_at rolled backwards, reproducing a67a6a59",
+      "why_this_control_matters": "Without it, ARM A and ARM B could both pass against a fixture that was never writable in the first place, and would prove nothing."
+    },
+    "collateral_observed_during_mutation": "Mutations 2 and 3 reproduced the defect against the live repository: issueToManifestPath resolved to the real docs/06_status/lanes/UTV2-1512.json inside the lane worktree and the fixture's content was written over it (1 file changed, 17 insertions(+), 125 deletions(-) — lane_type, commit_sha, pr_url and the entire file_scope_lock replaced). The file was restored from HEAD and the working tree verified clean before this bundle was written. Reported because it measures the blast radius rather than asserting it: the corruption is whole-object, not only the status field.",
+    "source_restored": true,
+    "baseline_after_restore": "111 tests, 111 pass, 0 fail",
+    "rounds": [
+      {
+        "control": "done -> started restart exception and the narrowed reconcile catch",
+        "mutations": [
+          {
+            "mutation": "remove the done -> started exception in assertManifestWriteIsSafe",
+            "expected": "restart test fails",
+            "observed": "not ok 87 - UTV2-1756 RESTART: a done manifest accepts the sanctioned replacement by a fresh started lane"
+          },
+          {
+            "mutation": "widen the exception to any settled status -> started",
+            "expected": "bounds test fails",
+            "observed": "not ok 88 - UTV2-1756 RESTART: the exception is exactly done->started and nothing wider"
+          },
+          {
+            "mutation": "restore the catch-all in applyManifestWrite",
+            "expected": "both write-failure tests fail",
+            "observed": "not ok 27 and not ok 28"
+          }
+        ],
+        "control_run": "shared.test.ts 88 pass 0 fail; reconcile.test.ts 28 pass 0 fail"
+      }
+    ]
+  },
+  "static_proof": {
+    "verify_full": "PARTIAL - every static stage PASSES; test:live-db refuses locally because ci:assert-staging reports host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx. This lane's proof profile is static: it touches no DB surface, issues no query, and changes no runtime behaviour. No live-DB claim is made.",
+    "stages": {
+      "env:check": "exit 0",
+      "lint": "exit 0",
+      "type-check": "exit 0",
+      "build": "exit 0"
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "fail": 0,
+      "exit_code": 0
+    },
+    "lane_suites": [
+      {
+        "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+        "exit_code": 0,
+        "tests": 85,
+        "pass": 85,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/reconcile.test.ts",
+        "exit_code": 0,
+        "tests": 26,
+        "pass": 26,
+        "fail": 0,
+        "skipped": 0
+      },
+      {
+        "command": "pnpm exec tsx --test scripts/ops/lane-link-pr.test.ts",
+        "exit_code": 0,
+        "note": "run because the un-narrowed guard broke it; passes with the narrowing in place"
+      }
+    ],
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "changed_files": 7,
+      "rules_matched": "none"
+    }
+  },
+  "safety_posture": {
+    "db_writes": "none",
+    "migrations": "none",
+    "runtime_behaviour_change": "none — governance tooling only",
+    "production_surface": "untouched",
+    "other_lane_manifests_edited": "none; the UTV2-1512 file transiently modified during mutation testing was restored from HEAD and the tree verified clean",
+    "workflow_files_edited": "none",
+    "note": "This lane changes where a lane manifest write lands and which writes a settled manifest accepts. It does not change lane execution, delivery, ingestion, grading, scoring, or any production path."
+  },
+  "known_gaps": [
+    "started -> in_review is missing from the TRANSITIONS table, yet ops:lane-link-pr performs exactly that transition on every lane at PR binding. Discovered by this lane when the un-narrowed guard broke four pre-existing tests. Not fixed here: it is a lifecycle-policy change, not a clobber fix, and closing it under this lane would smuggle a governance change in under a bug fix. Recorded as a separate unstaffed issue.",
+    "The guard's identity arm cannot separate same-issue_id aliases. docs/06_status/lanes/UTV2-1157.json and docs/06_status/lanes/UTV2-1157-codex.json are distinct lanes that both declare UTV2-1157, so the identity arm has nothing to compare and only path fidelity and the transition arm apply to that pair. Path fidelity is the primary defence; the guard is the backstop.",
+    "ops:reconcile passes validate:false to writeManifestAtPath, so it still does not schema-validate its writes — as it never did. The opt-out is explicit and documented rather than incidental, and the clobber guard runs regardless, but a reconciler-authored write can still land a record that would fail validateManifest. Measured on main: two UTV2-1512 manifests fail on a reaped preflight_token file and UTV2-1157-codex.json throws on a null worktree_path. Making legacy manifests schema-clean is separate, larger work.",
+    "The duplicate manifests themselves are untouched. Both UTV2-1512 records still read status blocked on main; restoring them to a truthful terminal state is a separate lane, deliberately outside this lane's frozen scope. This lane stops the recurrence; it does not repair the damage already done.",
+    "The transition arm protects settled statuses only. An in-flight manifest can still be written to any status by a caller that resolves its path correctly; this lane deliberately does not make writeManifestAtPath a lifecycle authority.",
+    "writeManifestAtPath is not a universal write chokepoint, and this bundle claims no universal un-rewritability. Two writers still reach a manifest file without passing through it: writeBoundManifest in scripts/ops/lane-link-pr.ts:81-88 when allowMissingPreflightToken is set (raw writeJsonFile after a filtered validateManifest), and scripts/ops/migrate-lane-types.ts:106 (raw fs.writeFileSync). Both predate this lane and are outside its frozen file_scope_lock. Neither carries the path fidelity defect, since each writes back to the file it resolved for its own issue, so neither can reproduce a67a6a59; but neither is guarded. The proven result is therefore the narrower one: the UTV2-1756 reconciler incident path is closed by path fidelity plus the guard on the chokepoint the reconciler now routes through, not that a terminal manifest is un-rewritable by any writer."
+  ],
+  "sign_off": {
+    "executor": "claude",
+    "self_certified_done": false,
+    "note": "This bundle is evidence, not certification. The done-gate is ops:truth-check."
+  }
+}

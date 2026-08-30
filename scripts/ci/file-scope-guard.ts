@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
 
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -51,6 +52,8 @@ import path from 'node:path';
 const SELF_SCOPE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened', 'merged']);
 const LOCK_CONFLICT_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
 const ISSUE_BRANCH_PATTERN = /(?:^|[/_-])(UTV2-\d+)(?:$|[/_-])/i;
+/** A whole issue ID and nothing else -- used to key exact-lane lifecycle paths. */
+const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
 
 type GuardVerdict = 'PASS' | 'FAIL';
 
@@ -66,6 +69,11 @@ interface LaneManifest {
   // files_changed, only file_scope_lock. See the SELF_SCOPE_STATUSES /
   // LOCK_CONFLICT_STATUSES doc comment (UTV2-1571).
   files_changed?: string[];
+  // Append-only audit trail of narrowing-only file_scope_lock releases
+  // (UTV2-1762). Modeled here so this guard can distinguish an AUDITED
+  // narrowing (accepted) from an unaudited edit to the lock (ignored, the
+  // base-branch baseline stands). See evaluateSanctionedNarrowing below.
+  scope_release_history?: ScopeReleaseHistoryEntry[];
   // A manifest-embedded `scope_override` field existed here before UTV2-1521.
   // It was removed: the manifest is part of the PR's own diff, so a
   // well-formed-looking override object proved nothing about actual
@@ -382,6 +390,154 @@ export interface GitManifestSource {
   firstAddingCommit(base: string, head: string, filePath: string): string | null;
 }
 
+export interface ScopeReleaseHistoryEntry {
+  released_at?: string;
+  actor?: string;
+  reason?: string;
+  pr_number?: number;
+  pr_url?: string;
+  head_sha?: string;
+  previous_lock_hash?: string;
+  resulting_lock_hash?: string;
+  released_paths?: string[];
+  verifications?: unknown[];
+}
+
+// Deliberately duplicated from scripts/ops/shared.ts's hashFileScopeLock, for
+// the same reason SELF_SCOPE_STATUSES is duplicated above: CI extracts and runs
+// THIS file standalone from the base branch, with no sibling scripts/ops/ tree
+// to import from. The two implementations must stay byte-equivalent in
+// behaviour; scripts/ci/file-scope-guard.test.ts asserts that against a shared
+// fixture.
+function hashLock(fileScopeLock: readonly string[]): string {
+  const canonical = [...new Set(fileScopeLock.map((entry) => normalizePath(entry)))].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+export interface SanctionedNarrowingVerdict {
+  sanctioned: boolean;
+  reason: string;
+  lock: string[];
+}
+
+/**
+ * Decides whether the head-side version of a lane manifest narrowed its own
+ * `file_scope_lock` through the audited release path (UTV2-1762), and may
+ * therefore be trusted over the base-branch baseline for scope evaluation.
+ *
+ * Why narrowing is safe to accept from a PR's own diff when widening is not:
+ * widening GRANTS the PR permissions it did not have, so it must come from a
+ * source the PR cannot write (an externally authored scope-override/v1
+ * comment, UTV2-1521). Narrowing only REMOVES the PR's own permissions and
+ * releases its hold on other lanes' paths. A PR cannot use narrowing to make
+ * one of its own violations pass -- dropping a path from the lock makes the
+ * guard STRICTER about that path, not looser (requirement 8).
+ *
+ * "Audited" is not merely "the field is present". The appended entries must
+ * account for exactly the paths that left the lock, and their hash chain must
+ * run from the baseline lock to the head lock, so an unaudited edit -- or an
+ * audit entry describing a lock state that never existed -- is refused and the
+ * baseline stands.
+ */
+export function evaluateSanctionedNarrowing(
+  baseline: LaneManifest,
+  head: LaneManifest | null,
+): SanctionedNarrowingVerdict {
+  const baselineLock = baseline.file_scope_lock ?? [];
+  if (!head) {
+    return { sanctioned: false, reason: 'no head-side manifest', lock: baselineLock };
+  }
+  const headLock = head.file_scope_lock ?? [];
+  const baselineHash = hashLock(baselineLock);
+  const headHash = hashLock(headLock);
+  if (baselineHash === headHash) {
+    return { sanctioned: false, reason: 'file_scope_lock unchanged', lock: baselineLock };
+  }
+
+  const baselineSet = new Set(baselineLock.map(normalizePath));
+  const headSet = new Set(headLock.map(normalizePath));
+  if (headLock.length === 0) {
+    return { sanctioned: false, reason: 'head file_scope_lock is empty', lock: baselineLock };
+  }
+  for (const entry of headSet) {
+    if (!baselineSet.has(entry)) {
+      return {
+        sanctioned: false,
+        reason: `head file_scope_lock adds "${entry}"; scope widening requires an authorized scope-override/v1 comment, not a manifest edit`,
+        lock: baselineLock,
+      };
+    }
+  }
+
+  const removed = [...baselineSet].filter((entry) => !headSet.has(entry));
+  if (removed.length === 0) {
+    return { sanctioned: false, reason: 'no paths were removed', lock: baselineLock };
+  }
+
+  const baselineHistory = baseline.scope_release_history ?? [];
+  const headHistory = head.scope_release_history ?? [];
+  if (headHistory.length <= baselineHistory.length) {
+    return {
+      sanctioned: false,
+      reason: 'file_scope_lock was narrowed with no new scope_release_history entry',
+      lock: baselineLock,
+    };
+  }
+  for (let index = 0; index < baselineHistory.length; index += 1) {
+    if (JSON.stringify(headHistory[index]) !== JSON.stringify(baselineHistory[index])) {
+      return {
+        sanctioned: false,
+        reason: `scope_release_history[${index}] was rewritten; the audit trail is append-only`,
+        lock: baselineLock,
+      };
+    }
+  }
+
+  const appended = headHistory.slice(baselineHistory.length);
+  let cursor = baselineHash;
+  const accountedFor = new Set<string>();
+  for (const entry of appended) {
+    if (entry?.previous_lock_hash !== cursor) {
+      return {
+        sanctioned: false,
+        reason: 'scope_release_history does not chain from the baseline file_scope_lock hash',
+        lock: baselineLock,
+      };
+    }
+    if (typeof entry.resulting_lock_hash !== 'string' || entry.resulting_lock_hash.length === 0) {
+      return { sanctioned: false, reason: 'scope_release_history entry has no resulting_lock_hash', lock: baselineLock };
+    }
+    const released = entry.released_paths ?? [];
+    if (released.length === 0) {
+      return { sanctioned: false, reason: 'scope_release_history entry releases no paths', lock: baselineLock };
+    }
+    for (const releasedPath of released) {
+      accountedFor.add(normalizePath(releasedPath));
+    }
+    cursor = entry.resulting_lock_hash;
+  }
+  if (cursor !== headHash) {
+    return {
+      sanctioned: false,
+      reason: 'scope_release_history does not terminate at the head file_scope_lock hash',
+      lock: baselineLock,
+    };
+  }
+  for (const removedPath of removed) {
+    if (!accountedFor.has(removedPath)) {
+      return {
+        sanctioned: false,
+        reason: `"${removedPath}" left file_scope_lock but no scope_release_history entry accounts for it`,
+        lock: baselineLock,
+      };
+    }
+  }
+
+  return { sanctioned: true, reason: `audited release of ${removed.length} path(s)`, lock: headLock };
+}
+
 export function resolveTrustedManifests(
   source: GitManifestSource,
   base: string,
@@ -413,6 +569,33 @@ export function resolveTrustedManifests(
     } catch {
       // Malformed manifests are ignored here; schema validation owns that failure mode.
       continue;
+    }
+
+    // UTV2-1762: an AUDITED narrowing of file_scope_lock is honoured from the
+    // head side. Narrowing only ever removes the lane's own permissions and
+    // releases its hold on other lanes, so unlike widening it cannot be used to
+    // launder a violation -- and it is exactly what the sanctioned
+    // `ops:lane-manifest scope-release` command produces. Anything that is not
+    // a fully audited, correctly chained narrowing leaves the baseline in
+    // place, so unaudited manifest edits remain inert.
+    if (headPaths.has(filePath)) {
+      const headRaw = source.readFileAtRef(head, filePath);
+      let headManifest: LaneManifest | null = null;
+      if (headRaw) {
+        try {
+          headManifest = JSON.parse(headRaw) as LaneManifest;
+        } catch {
+          headManifest = null;
+        }
+      }
+      const narrowing = evaluateSanctionedNarrowing(trusted, headManifest);
+      if (narrowing.sanctioned && headManifest) {
+        trusted = {
+          ...trusted,
+          file_scope_lock: narrowing.lock,
+          scope_release_history: headManifest.scope_release_history,
+        };
+      }
     }
 
     // No head-tip override path here (removed in UTV2-1521): the base/
@@ -516,6 +699,45 @@ function branchLooksLikeLane(branch: string): boolean {
   return ISSUE_BRANCH_PATTERN.test(branch);
 }
 
+/**
+ * The single definition of "this lane's own lifecycle bookkeeping paths".
+ *
+ * UTV2-1759: the pre-merge guard granted these unconditionally (below) while the
+ * post-merge S1 scope-diff check knew nothing about them. Every lane commits its
+ * own manifest and sync file -- `ops:lane-start` creates them and the dispatch
+ * procedure requires committing them -- but neither path is normally declared in
+ * `file_scope_lock`, which is frozen at lane-start. So the merged diff always
+ * contained files S1 rejected, and a truthful closeout was structurally
+ * impossible: the lane could not pass a gate by doing exactly what the lane
+ * procedure told it to do.
+ *
+ * The fix is one shared policy, not a second copy. Both guards now derive these
+ * patterns from this function, so they cannot drift into disagreeing about what
+ * a lane's own lifecycle metadata is -- the duplicated-authority failure class
+ * that UTV2-1640 already fixed once for glob semantics in this same pair of
+ * gates.
+ *
+ * EXACT-LANE ONLY. Every pattern is keyed to a specific issue ID. There is no
+ * `docs/06_status/lanes/**` and no `.ops/sync/**` here, deliberately: a directory
+ * exemption would let any lane's merged diff carry any OTHER lane's manifest or
+ * sync file, which is precisely the cross-lane scope bleed both guards exist to
+ * catch. Another issue's manifest still fails, and an arbitrary file under either
+ * directory still fails.
+ *
+ * Returns [] for a missing or malformed issue ID, so an unidentifiable lane
+ * receives no grant at all rather than a grant it can shape.
+ */
+export function laneLifecycleScopePatterns(issueId: string | undefined | null): string[] {
+  const normalized = String(issueId ?? '').trim().toUpperCase();
+  if (!ISSUE_ID_PATTERN.test(normalized)) return [];
+
+  return [
+    `.ops/sync/${normalized}.yml`,
+    `docs/06_status/lanes/${normalized}.json`,
+    `docs/06_status/proof/${normalized}/**`,
+  ];
+}
+
 function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   if (!manifest.issue_id) return [];
 
@@ -534,11 +756,7 @@ function ownLaneControlPlanePatterns(manifest: LaneManifest): string[] {
   // resolution -- arbitrary scope widening beyond these three canonical
   // paths still requires an externally authorized scope-override/v1
   // comment, same as before.
-  return [
-    `.ops/sync/${manifest.issue_id}.yml`,
-    `docs/06_status/lanes/${manifest.issue_id}.json`,
-    `docs/06_status/proof/${manifest.issue_id}/**`,
-  ];
+  return laneLifecycleScopePatterns(manifest.issue_id);
 }
 
 function fileIsAllowedByOwnManifest(

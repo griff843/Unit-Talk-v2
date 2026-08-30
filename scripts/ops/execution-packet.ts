@@ -42,6 +42,12 @@ export interface ExecutionPacket {
   required_verification: string[];
   verification_plan?: VerificationPlan;
   expected_proof_paths: string[];
+  /**
+   * Deterministic operational-skill routing (UTV2-1750). Computed once, here,
+   * from the task contract's full text -- never from executor judgment -- so
+   * two runs against the same contract always select the same skills.
+   */
+  skill_routing: SkillRoutingResult;
   closeout_instructions: string[];
   repo_brief: string;
   source_of_truth: {
@@ -88,7 +94,10 @@ export type ExecutionPacketResult =
   | { ok: true; packet: ExecutionPacket }
   | {
       ok: false;
-      code: 'EXECUTION_PACKET_INVALID' | 'LANE_CONTRACT_CONFLICT';
+      code:
+        | 'EXECUTION_PACKET_INVALID'
+        | 'LANE_CONTRACT_CONFLICT'
+        | 'INSUFFICIENT_TASK_CONTRACT';
       issue_id: string;
       branch: string;
       message: string;
@@ -97,7 +106,32 @@ export type ExecutionPacketResult =
        * operator can reconcile without re-deriving which root held what.
        */
       contracts?: Array<{ root: string; contract_hash: string }>;
+      /**
+       * Present only on INSUFFICIENT_TASK_CONTRACT. Names exactly which
+       * mandatory packet content is absent, so the caller can go add the
+       * missing section rather than re-read a generic message.
+       */
+      missing?: string[];
     };
+
+/**
+ * A skill slug plus the condition, in the operator's own words, that selects
+ * it. Kept next to `SKILL_ROUTING_SPECS` -- not restated -- for the same
+ * reason `CONTRACT_FIELD_SPECS` is a single table above: a second copy is
+ * exactly how one of them drifts silently from the other.
+ */
+export interface SkillRoutingResult {
+  /** Skill slugs selected for this task contract, e.g. "/lane-recovery". */
+  selected_skills: string[];
+  /** skill slug -> the trigger condition that matched, one entry per selection. */
+  reasons: Record<string, string>;
+  /**
+   * Always present, even when `selected_skills` is empty -- an empty
+   * selection must say so explicitly rather than leave the executor to infer
+   * routing never ran (UTV2-1750 DoD 7).
+   */
+  note: string;
+}
 
 type LinearFetchRunner = typeof spawnSync;
 
@@ -105,6 +139,8 @@ export interface DispatchPacketOptions {
   root?: string;
   linearToken?: string;
   runner?: LinearFetchRunner;
+  /** See `ExecutionPacketOptions.enforceSufficiency`. Defaults to false. */
+  enforceSufficiency?: boolean;
 }
 
 export interface VerificationPlan {
@@ -131,11 +167,193 @@ const TIER_VERIFICATION_MAP: Record<string, string[]> = {
   T3: ['type-check', 'test'],
 };
 
+/**
+ * One entry per operational skill /dispatch can route to (UTV2-1750, DoD 7).
+ * `pattern` is matched against the task contract's full text -- objective,
+ * every structured field, and unmapped residue -- case-insensitively.
+ *
+ * This table is the ONLY place these trigger conditions are stated. Restating
+ * the routing prose from `.claude/commands/dispatch.md` here, or vice versa,
+ * is exactly the "mirror beside the thing it must match" pattern this module
+ * has already paid for once (see `CONTRACT_FIELD_SPECS`'s own comment); a test
+ * asserts the wording stays anchored to this table instead.
+ */
+interface SkillRoutingSpec {
+  readonly skill: string;
+  readonly pattern: RegExp;
+  /** The trigger condition, in the operator's own words -- becomes the reason. */
+  readonly trigger: string;
+}
+
+const SKILL_ROUTING_SPECS: readonly SkillRoutingSpec[] = [
+  {
+    skill: '/lane-recovery',
+    pattern:
+      /\b(ghost lane|parked lane|merged[- ]but[- ]unclosed|lane is (?:stuck|broken)|stuck lane|broken lane|leaked? lease|lease leak|manifest (?:drift|drifted|disagrees|diverged))\b/iu,
+    trigger: 'a lane is broken, ghosted, parked, or merged-but-unclosed',
+  },
+  {
+    skill: '/pr-unblock',
+    pattern:
+      /\b(required[- ]context|head[- ]binding|headrefoid|merge gate (?:mismatch|refus\w*)|stale head|pr is blocked|pull request is blocked|executor result validation)\b/iu,
+    trigger: 'a required-context, head-binding, or merge-gate mismatch',
+  },
+  {
+    skill: '/proof-authoring',
+    // Deliberately NOT a bare "proof bundle" or "evidence bundle" match --
+    // nearly every lane's required-evidence content mentions a proof bundle
+    // as ordinary boilerplate ("attached to the proof bundle"), which made
+    // this fire on almost any contract with a Required evidence section. The
+    // trigger is creating or CORRECTING a bundle, not merely referencing one.
+    pattern:
+      /\b(correct(?:ing)? the proof( bundle)?|proof bundle (?:is|was) (?:missing|invalid|wrong|rejected)|verification\.md (?:is|was) (?:missing|invalid|wrong)|proof-authoring|proof (?:auditor|gate) (?:fail|failed|reject|rejected))\b/iu,
+    trigger: 'proof bundle creation or correction',
+  },
+  {
+    skill: '/mutation-test',
+    pattern:
+      /\b(mutation test|vacuous test|prove the control|inversion test|kill the mutation|control (?:claimed|guarded) by (?:a )?tests?)\b/iu,
+    trigger: 'a control claimed by tests',
+  },
+];
+
+/** Exposed so a test can assert the routing table stays the single source. */
+export function skillRoutingSpecsForTest(): readonly SkillRoutingSpec[] {
+  return SKILL_ROUTING_SPECS;
+}
+
+/**
+ * Every word of the task contract that could carry a routing trigger or a
+ * sufficiency signal -- objective, every structured field, and residue the
+ * whitelist did not classify. Unmapped content is deliberately included:
+ * excluding it would mean a genuine trigger phrase (or a "where to look"
+ * section) sitting in unclassified prose could never be found.
+ */
+export function taskContractFullText(contract: TaskContract): string {
+  return [
+    contract.objective,
+    ...contract.acceptance_criteria,
+    ...contract.guardrails,
+    ...contract.non_goals,
+    ...contract.required_evidence,
+    ...contract.exit_criteria,
+    ...contract.unmapped_sections,
+  ].join('\n');
+}
+
+/**
+ * Deterministic skill discovery (UTV2-1750). Pure function of the task
+ * contract's text -- no executor judgment, no randomness -- so /dispatch and
+ * this module always agree, and re-running against the same contract always
+ * selects the same skills. Multiple skills may be selected when triggers
+ * genuinely overlap; an empty selection still returns an explicit `note`
+ * rather than silence.
+ */
+export function deriveSkillRouting(contract: TaskContract): SkillRoutingResult {
+  const text = taskContractFullText(contract);
+  const selected: string[] = [];
+  const reasons: Record<string, string> = {};
+  for (const spec of SKILL_ROUTING_SPECS) {
+    if (spec.pattern.test(text)) {
+      selected.push(spec.skill);
+      reasons[spec.skill] = spec.trigger;
+    }
+  }
+  return {
+    selected_skills: selected,
+    reasons,
+    note:
+      selected.length > 0
+        ? `Matched ${selected.length} operational skill trigger(s) deterministically from the task contract.`
+        : 'No operational skill trigger matched this task contract; continuing dispatch without a routed skill.',
+  };
+}
+
+/**
+ * Structured refusal for a task contract that is internally VALID (passes
+ * `assertTaskContract`) but does not carry enough content for an executor to
+ * work from unattended: where to find the relevant files, what "done" means,
+ * and how the work will be checked. A contract can satisfy every existing
+ * structural rule and still be three sentences with no pointer to a single
+ * file -- this refusal exists to catch exactly that (UTV2-1750 DoD 3).
+ */
+export class InsufficientTaskContractError extends Error {
+  readonly code = 'INSUFFICIENT_TASK_CONTRACT';
+  constructor(
+    readonly issueId: string,
+    readonly missing: string[],
+  ) {
+    super(
+      `task contract for ${issueId} is missing required packet content: ${missing.join(', ')}`,
+    );
+    this.name = 'InsufficientTaskContractError';
+  }
+}
+
+const WHERE_TO_LOOK_RE =
+  /where[- ]to[- ]look|files? to (?:read|check|modify)|read these files/iu;
+const DEFINITION_OF_DONE_RE =
+  /definition of done|\bdod\b|done when|success criteria/iu;
+const VERIFICATION_SELF_CHECK_RE =
+  /self[- ]check|verification|\bverify\b|test plan/iu;
+
+/**
+ * Refuses with `INSUFFICIENT_TASK_CONTRACT` when the contract lacks
+ * where-to-look, definition-of-done, or verification/self-check content.
+ * Definition-of-done and verification each also accept their existing
+ * structured-field equivalent (`exit_criteria`, `required_evidence`) so a
+ * contract that already states them structurally is not forced to repeat
+ * itself in prose -- but `acceptance_criteria` alone (already mandatory via
+ * `assertTaskContract`) does not satisfy this on its own, or this check could
+ * never fire for a contract that lacks the other two.
+ */
+export function assertSufficientTaskContract(
+  contract: TaskContract,
+  issueId: string = contract.issue_id,
+): void {
+  const text = taskContractFullText(contract);
+  const missing: string[] = [];
+  if (!WHERE_TO_LOOK_RE.test(text)) missing.push('where_to_look');
+  if (
+    contract.exit_criteria.length === 0 &&
+    !DEFINITION_OF_DONE_RE.test(text)
+  ) {
+    missing.push('definition_of_done');
+  }
+  if (
+    contract.required_evidence.length === 0 &&
+    !VERIFICATION_SELF_CHECK_RE.test(text)
+  ) {
+    missing.push('verification_self_check');
+  }
+  if (missing.length > 0) {
+    throw new InsufficientTaskContractError(issueId, missing);
+  }
+}
+
+/**
+ * Options for `generateExecutionPacket`/`generateExecutionPacketResult`.
+ *
+ * `enforceSufficiency` defaults to false. `claude-exec.ts`, `codex-exec.ts`,
+ * and `lane-start.ts` call these functions directly against contracts
+ * predating UTV2-1750's where-to-look/definition-of-done/verification
+ * requirement, and are out of this lane's file scope -- enforcing by default
+ * would refuse packets those callers have relied on for a long time. The
+ * standalone CLI (`main()`, below) is the one caller that turns enforcement
+ * ON: `/dispatch`'s Phase 1.5 skill-discovery step runs that CLI as a
+ * preflight gate BEFORE any executor is launched, which is where
+ * `INSUFFICIENT_TASK_CONTRACT` is meant to stop a lane (UTV2-1750 DoD 3).
+ */
+export interface ExecutionPacketOptions {
+  enforceSufficiency?: boolean;
+}
+
 export function generateExecutionPacket(
   manifest: LaneManifest,
   env: NodeJS.ProcessEnv = process.env,
   suppliedTaskContract?: TaskContract,
   root: string = ROOT,
+  options: ExecutionPacketOptions = {},
 ): ExecutionPacket {
   const issueId = manifest.issue_id;
   const tier = manifest.tier ?? 'unknown';
@@ -143,6 +361,10 @@ export function generateExecutionPacket(
   const verificationPlan = buildVerificationPlan(manifest, env);
   const taskContract = suppliedTaskContract ?? readTaskContract(issueId, root);
   assertTaskContract(taskContract, issueId);
+  if (options.enforceSufficiency) {
+    assertSufficientTaskContract(taskContract, issueId);
+  }
+  const skillRouting = deriveSkillRouting(taskContract);
 
   return {
     issue_id: issueId,
@@ -171,6 +393,7 @@ export function generateExecutionPacket(
     required_verification: buildRequiredVerification(tier, expectedProofPaths),
     verification_plan: verificationPlan,
     expected_proof_paths: [...expectedProofPaths],
+    skill_routing: skillRouting,
     closeout_instructions: buildCloseoutInstructions(
       issueId,
       tier,
@@ -191,6 +414,7 @@ export function generateExecutionPacketResult(
   env: NodeJS.ProcessEnv = process.env,
   suppliedTaskContract?: TaskContract,
   root: string = ROOT,
+  options: ExecutionPacketOptions = {},
 ): ExecutionPacketResult {
   try {
     return {
@@ -200,16 +424,18 @@ export function generateExecutionPacketResult(
         env,
         suppliedTaskContract,
         root,
+        options,
       ),
     };
   } catch (error) {
-    return {
-      ok: false,
-      code: 'EXECUTION_PACKET_INVALID',
-      issue_id: manifest.issue_id,
-      branch: manifest.branch,
-      message: `Execution packet refused: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    // Route through the ONE failure classifier both entry points share.
+    // This function used to hand-roll its own catch that always reported
+    // EXECUTION_PACKET_INVALID, so a LANE_CONTRACT_CONFLICT or an
+    // INSUFFICIENT_TASK_CONTRACT thrown on this path would have been
+    // misreported as the generic code -- restating classification logic
+    // beside `executionPacketFailure` is exactly the "second copy drifts"
+    // pattern this module has already paid for once.
+    return executionPacketFailure(manifest, error);
   }
 }
 
@@ -229,6 +455,18 @@ function executionPacketFailure(
       branch: manifest.branch,
       message,
       contracts: error.hashes,
+    };
+  }
+  // Same reasoning: an insufficient contract is actionable in a way the
+  // generic code is not -- it names exactly which sections to go add.
+  if (error instanceof InsufficientTaskContractError) {
+    return {
+      ok: false,
+      code: 'INSUFFICIENT_TASK_CONTRACT',
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      message,
+      missing: error.missing,
     };
   }
   return {
@@ -1352,7 +1590,9 @@ export function generateDispatchExecutionPacketResult(
       laneRootExists ? [root, laneRoot] : [root],
     );
 
-    return generateExecutionPacketResult(manifest, env, contract, root);
+    return generateExecutionPacketResult(manifest, env, contract, root, {
+      enforceSufficiency: options.enforceSufficiency,
+    });
   } catch (error) {
     return executionPacketFailure(manifest, error);
   }
@@ -1727,7 +1967,15 @@ function main(): void {
   // authoritative capture-and-persist the dispatch path uses, then apply the
   // identical strict validator. This is the one place a capture may happen from
   // this entry point; it is not a second, looser packet definition.
-  const result = generateDispatchExecutionPacketResult(readManifest(issueId));
+  //
+  // This CLI is the ONE caller that enforces task-contract sufficiency
+  // (UTV2-1750 DoD 3) -- it is what `/dispatch`'s Phase 1.5 skill-discovery
+  // step runs as a preflight gate before any executor is launched. See
+  // `ExecutionPacketOptions.enforceSufficiency` for why other callers
+  // (claude-exec.ts, codex-exec.ts, lane-start.ts) do not.
+  const result = generateDispatchExecutionPacketResult(readManifest(issueId), process.env, {
+    enforceSufficiency: true,
+  });
   if (!result.ok) {
     emitJson(result);
     process.exitCode = 1;

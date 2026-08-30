@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
@@ -68,6 +69,41 @@ export interface ReopenHistoryEntry {
   detected_by: string;
 }
 
+/**
+ * One audited narrowing of a lane's `file_scope_lock` (UTV2-1762).
+ *
+ * `LANE_MANIFEST_SPEC.md` used to name an `ops:lane:relock` command as the way to
+ * "redefine scope" when two lanes contend for a path. That command was never
+ * implemented -- it matched nothing in `scripts/`, `package.json`, or
+ * `.github/workflows/` -- so in practice a lane that declared a path it never
+ * touched held that path hostage until it closed, and the only escape was to
+ * falsify the historical `files_changed` record (correctly rejected, PR #1288).
+ *
+ * This entry is the honest alternative. It is append-only and removal-only: it
+ * records that specific paths were dropped from `file_scope_lock`, who dropped
+ * them, against which PR and exact head SHA, and what the lock hashed to before
+ * and after. `previous_lock_hash` -> `resulting_lock_hash` forms a chain that
+ * `validateScopeReleaseHistory` verifies terminates at the manifest's CURRENT
+ * lock, so a lock cannot be edited without a matching audited entry, and an
+ * entry cannot be forged for a lock state that never existed.
+ *
+ * Nothing here can widen scope: `released_paths` are, by construction, paths
+ * that left the lock. Re-acquiring a released path requires a new lane-start,
+ * not an edit to this array.
+ */
+export interface ScopeReleaseHistoryEntry {
+  released_at: string;
+  actor: string;
+  reason: string;
+  pr_number: number;
+  pr_url: string;
+  head_sha: string;
+  previous_lock_hash: string;
+  resulting_lock_hash: string;
+  released_paths: string[];
+  verifications: Array<{ check: string; status: 'pass'; detail: string }>;
+}
+
 export interface P0ProtocolBlock {
   required: boolean;
   codex_implementation?: { recorded: boolean; pr_url?: string };
@@ -130,6 +166,12 @@ export interface LaneManifest {
   created_by: CreatedBy;
   truth_check_history: TruthCheckHistoryEntry[];
   reopen_history: ReopenHistoryEntry[];
+  /**
+   * Append-only audit trail of narrowing-only `file_scope_lock` releases
+   * (UTV2-1762). Absent on lanes that never released a path. See
+   * ScopeReleaseHistoryEntry and validateScopeReleaseHistory.
+   */
+  scope_release_history?: ScopeReleaseHistoryEntry[];
   stale?: boolean;
   orphaned?: boolean;
   override?: {
@@ -446,6 +488,21 @@ const CODEX_EXECUTORS = new Set<LaneExecutor>(['codex-cli', 'codex-cloud']);
  * the normal gate, leaving both facts in the history.
  */
 const NON_SUCCESS_TERMINALS: LaneManifestStatus[] = ['failed', 'superseded', 'cancelled'];
+
+/**
+ * UTV2-1756: the statuses whose on-disk record gets a veto over an incoming
+ * write. These are the settled ones -- the records that represent a decision
+ * already taken, and that a repair job has no business reopening by side
+ * effect. `merged` is included: it is not lock-holding, but rolling a merged
+ * lane back to `blocked` would be the same class of regression as rolling a
+ * `superseded` one back, and `TRANSITIONS` already permits every legitimate
+ * move out of it.
+ */
+const TERMINAL_WRITE_PROTECTED_STATUSES = new Set<LaneManifestStatus>([
+  'merged',
+  'done',
+  ...NON_SUCCESS_TERMINALS,
+]);
 const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
   started: ['in_progress', 'blocked', 'parked', 'reopened', 'started', ...NON_SUCCESS_TERMINALS],
   in_progress: ['in_review', 'blocked', 'parked', 'reopened', 'in_progress', ...NON_SUCCESS_TERMINALS],
@@ -869,6 +926,28 @@ export function manifestExists(issueId: string): boolean {
   return fs.existsSync(issueToManifestPath(issueId));
 }
 
+/**
+ * UTV2-1756: a manifest paired with the exact file it was read from.
+ *
+ * `readAllManifestPaths` recurses, so the manifest tree can hold two records
+ * with the same `issue_id` -- `docs/06_status/lanes/UTV2-1512.json` alongside
+ * `docs/06_status/lanes/parked/UTV2-1512.json`, and (in the same directory)
+ * `UTV2-1157.json` alongside `UTV2-1157-codex.json`. Every writer that
+ * resolves its destination from the issue ID alone therefore writes one
+ * record's content over a different record's file.
+ *
+ * That is not hypothetical: commit `a67a6a59` reverted PR #1448's ratified
+ * `superseded` root manifest back to `blocked` and deleted 58 lines of
+ * `truth_check_history`, by reading the parked copy and writing the root path.
+ *
+ * Carrying the source path alongside the manifest is what makes writing back
+ * to the file a record actually came from expressible at all.
+ */
+export interface LaneManifestEntry {
+  path: string;
+  manifest: LaneManifest;
+}
+
 export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   if (!fs.existsSync(manifestDir)) {
     throw new Error(`Lane manifest directory does not exist: ${manifestDir}`);
@@ -890,8 +969,15 @@ export function readAllManifestPaths(manifestDir = MANIFEST_DIR): string[] {
   return paths.sort((left, right) => left.localeCompare(right));
 }
 
+export function readAllManifestEntries(manifestDir = MANIFEST_DIR): LaneManifestEntry[] {
+  return readAllManifestPaths(manifestDir).map((filePath) => ({
+    path: filePath,
+    manifest: parseJsonFile<LaneManifest>(filePath),
+  }));
+}
+
 export function readAllManifests(manifestDir = MANIFEST_DIR): LaneManifest[] {
-  return readAllManifestPaths(manifestDir).map((filePath) => parseJsonFile<LaneManifest>(filePath));
+  return readAllManifestEntries(manifestDir).map((entry) => entry.manifest);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1668,6 +1754,8 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     }
   }
 
+  errors.push(...validateScopeReleaseHistory(manifest, sourcePath));
+
   return errors;
 }
 
@@ -1687,15 +1775,289 @@ function normalizePortableAbsolutePath(value: string): string {
   return path.resolve(value).replaceAll('\\', '/');
 }
 
-export function writeManifest(manifest: LaneManifest): void {
-  validateManifestSchemaDependencies();
-  const manifestPath = issueToManifestPath(manifest.issue_id);
-  const errors = validateManifest(manifest, manifestPath);
-  if (errors.length > 0) {
-    throw new Error(errors.join('\n'));
+/**
+ * Canonical, order-independent hash of a `file_scope_lock`.
+ *
+ * Normalized + sorted + deduplicated before hashing so that reordering or
+ * re-serializing a lock never reads as a change, and so a release computed on
+ * one machine verifies on another. This is the identity used by
+ * `scope_release_history` chaining; it is NOT a security boundary (the manifest
+ * lives in the PR's own diff), it is a tamper-EVIDENCE boundary: an unaudited
+ * edit to the lock breaks the chain and is detectable.
+ */
+export function hashFileScopeLock(fileScopeLock: readonly string[]): string {
+  const canonical = [...new Set(fileScopeLock.map((entry) => entry.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/\/+$/, '')))]
+    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+  return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+/**
+ * Validates the shape and the hash chain of `scope_release_history` (UTV2-1762).
+ *
+ * The chain is what makes the audit trail load-bearing rather than decorative:
+ *   - entry[i].previous_lock_hash must equal entry[i-1].resulting_lock_hash
+ *   - the LAST entry's resulting_lock_hash must equal the hash of the manifest's
+ *     current file_scope_lock
+ * so a lock edited without a matching entry, or an entry claiming a lock state
+ * the manifest does not actually hold, both fail closed here.
+ *
+ * A released path must also be absent from the current lock -- otherwise the
+ * entry would be claiming a removal that did not happen.
+ */
+export function validateScopeReleaseHistory(
+  manifest: Pick<LaneManifest, 'file_scope_lock' | 'scope_release_history'>,
+  sourcePath: string,
+): string[] {
+  const errors: string[] = [];
+  const history = manifest.scope_release_history;
+  if (history === undefined) {
+    return errors;
+  }
+  if (!Array.isArray(history)) {
+    errors.push(`${sourcePath}: scope_release_history must be an array`);
+    return errors;
+  }
+
+  const currentLock = Array.isArray(manifest.file_scope_lock) ? manifest.file_scope_lock : [];
+  const currentLockSet = new Set(currentLock);
+
+  history.forEach((entry, index) => {
+    const at = `${sourcePath}: scope_release_history[${index}]`;
+    if (!entry || typeof entry !== 'object') {
+      errors.push(`${at} must be an object`);
+      return;
+    }
+    if (!isNonEmptyString(entry.released_at)) errors.push(`${at}.released_at is required`);
+    if (!isNonEmptyString(entry.actor)) errors.push(`${at}.actor is required`);
+    if (!isNonEmptyString(entry.reason)) errors.push(`${at}.reason is required`);
+    if (!Number.isInteger(entry.pr_number) || entry.pr_number <= 0) {
+      errors.push(`${at}.pr_number must be a positive integer`);
+    }
+    if (!isNonEmptyString(entry.pr_url)) errors.push(`${at}.pr_url is required`);
+    if (!isNonEmptyString(entry.head_sha)) errors.push(`${at}.head_sha is required`);
+    if (!isNonEmptyString(entry.previous_lock_hash)) errors.push(`${at}.previous_lock_hash is required`);
+    if (!isNonEmptyString(entry.resulting_lock_hash)) errors.push(`${at}.resulting_lock_hash is required`);
+    if (!Array.isArray(entry.released_paths) || entry.released_paths.length === 0) {
+      errors.push(`${at}.released_paths must be a non-empty array`);
+    } else {
+      for (const released of entry.released_paths) {
+        if (!isNonEmptyString(released)) {
+          errors.push(`${at}.released_paths contains an empty entry`);
+        } else if (currentLockSet.has(released)) {
+          errors.push(
+            `${at}.released_paths claims "${released}" was released, but it is still present in file_scope_lock`,
+          );
+        }
+      }
+    }
+    if (!Array.isArray(entry.verifications) || entry.verifications.length === 0) {
+      errors.push(`${at}.verifications must be a non-empty array`);
+    }
+    if (index > 0) {
+      const previous = history[index - 1];
+      if (previous && entry.previous_lock_hash !== previous.resulting_lock_hash) {
+        errors.push(
+          `${at}.previous_lock_hash does not chain from scope_release_history[${index - 1}].resulting_lock_hash`,
+        );
+      }
+    }
+  });
+
+  if (errors.length === 0 && history.length > 0) {
+    const last = history[history.length - 1];
+    const expected = hashFileScopeLock(currentLock);
+    if (last.resulting_lock_hash !== expected) {
+      errors.push(
+        `${sourcePath}: scope_release_history tail resulting_lock_hash ${last.resulting_lock_hash} does not match the current file_scope_lock hash ${expected} -- the lock was modified outside the audited release path`,
+      );
+    }
+  }
+
+  return errors;
+}
+
+/**
+ * UTV2-1756: raised by `assertManifestWriteIsSafe`, and by nothing else.
+ *
+ * A manifest write can fail for two unrelated reasons, and a caller that
+ * conflates them is dangerous. One is policy: this write would rewrite settled
+ * truth, and the refusal is a decision the guard made deliberately. The other
+ * is operational: the disk is full, the path is read-only, the process lost a
+ * permission. The first is a normal, reportable outcome for a sweeping caller
+ * like `ops:reconcile`, which should record it and carry on. The second means
+ * the run did not do what it claims and must not be reported as success.
+ *
+ * A bare `catch` cannot tell them apart, so the policy refusal gets its own
+ * type. Catch `ManifestWritePolicyError` to handle a refusal; let everything
+ * else propagate.
+ */
+export class ManifestWritePolicyError extends Error {
+  override readonly name = 'ManifestWritePolicyError';
+
+  constructor(message: string) {
+    super(message);
+  }
+}
+
+/**
+ * UTV2-1756: the single fail-closed guard every manifest write passes through.
+ *
+ * `writeManifestAtPath` is the chokepoint. Before a write can land on a file
+ * that already exists, the record already on disk gets a vote:
+ *
+ *   1. Identity. If the on-disk record carries a different `issue_id`, the
+ *      write is a cross-record clobber and is refused outright.
+ *   2. Terminal protection. When the record on disk is in a settled status,
+ *      the move to the incoming status must be legal under `TRANSITIONS`.
+ *      `superseded -> blocked` is not, so the exact clobber performed by
+ *      `a67a6a59` is refused here regardless of which caller resolved the path
+ *      or how it resolved it -- so the protection is not specific to the one
+ *      writer whose path resolution was fixed.
+ *
+ *      It is NOT yet universal, and must not be described as such. Two writers
+ *      still reach a manifest file without passing through here:
+ *      `writeBoundManifest` in `scripts/ops/lane-link-pr.ts` when
+ *      `allowMissingPreflightToken` is set (it calls `writeJsonFile` directly
+ *      after a filtered `validateManifest`), and the one-off lane-type
+ *      migration CLI (raw `fs.writeFileSync`); both are named with exact paths
+ *      and line numbers in this lane's verification.md, which is deliberately
+ *      where those strings live -- `executable-wiring` reads a path written in
+ *      non-test source as an executable reference and would mark that CLI
+ *      spuriously wired. Both predate this change and are out of this
+ *      lane's frozen scope; both are recorded as follow-up work. Closing them
+ *      is what would make the claim "un-rewritable by any writer" true.
+ *
+ *      The arm is deliberately scoped to settled statuses rather than to every
+ *      status. Applying `TRANSITIONS` to in-flight records would make this
+ *      guard a lifecycle authority, which is not what this lane ratified --
+ *      and the table is not currently fit for that role: `ops:lane-link-pr`
+ *      moves every lane `started -> in_review` on PR binding, a transition the
+ *      table does not list. That gap is real and worth its own issue, but
+ *      closing it by having a write guard start refusing PR binding would be
+ *      smuggling a lifecycle change in under a clobber fix.
+ *
+ * The guard deliberately abstains when the on-disk file cannot be parsed or
+ * carries no recognisable status: a corrupt manifest must stay repairable, and
+ * refusing to overwrite garbage would brick the only path that fixes it.
+ *
+ * The guard is not a substitute for writing to the right file. Two records can
+ * share an `issue_id` and still be distinct lanes -- `UTV2-1157.json` and
+ * `UTV2-1157-codex.json` sit in the same directory and both say `UTV2-1157`,
+ * so the identity arm has nothing to compare and only the transition arm
+ * applies. Path fidelity at the call site is the primary fix; this guard is
+ * the backstop that holds even when a caller resolves the wrong path.
+ *
+ * Note the layering. `selectReconcilableManifests` (UTV2-1619) already fails
+ * closed on the *read* side by allowlisting active statuses; that fix is
+ * correct and untouched. It could not stop this defect because the candidate
+ * it selected was never the terminal manifest -- the terminal manifest was
+ * only ever the write *destination*. Guarding both sides is what closes it.
+ */
+function assertManifestWriteIsSafe(manifest: LaneManifest, manifestPath: string): void {
+  if (!fs.existsSync(manifestPath)) {
+    return;
+  }
+
+  let onDisk: LaneManifest;
+  try {
+    onDisk = parseJsonFile<LaneManifest>(manifestPath);
+  } catch {
+    // Unparseable target: abstain so a corrupt manifest stays repairable.
+    return;
+  }
+
+  const onDiskIssueId = String(onDisk?.issue_id ?? '').trim().toUpperCase();
+  const incomingIssueId = String(manifest.issue_id ?? '').trim().toUpperCase();
+  if (onDiskIssueId && incomingIssueId && onDiskIssueId !== incomingIssueId) {
+    throw new ManifestWritePolicyError(
+      `Refusing to write manifest for ${incomingIssueId} over ${relativeToRoot(manifestPath)}, ` +
+        `which holds ${onDiskIssueId}: a manifest must be written back to its own file`,
+    );
+  }
+
+  if (!TERMINAL_WRITE_PROTECTED_STATUSES.has(onDisk?.status)) {
+    // Not settled (or an unrecognised legacy value): no transition vote. An
+    // in-flight lane is expected to move, and a corrupt one must stay
+    // repairable.
+    return;
+  }
+
+  // The one sanctioned reanimation: ops:lane-start replaces a `done` manifest
+  // with a fresh `started` one when an issue is worked a second time. It is not
+  // in TRANSITIONS, and adding it there would let anything move a done lane
+  // back to started. Permitting it here instead keeps the exception exactly as
+  // wide as the kernel's own rule: lane-start hard-errors on an existing
+  // manifest in ANY other status, so `done` is the only settled record it will
+  // ever replace, and `started` is the only status it replaces one with.
+  //
+  // This is load-bearing, not cosmetic. Branch, worktree, and lease are all
+  // created before lane-start reaches its manifest write, and that path has no
+  // rollback -- so refusing this write would strand a worktree and a lease on
+  // every restart of a completed issue.
+  //
+  // Nothing else can reach it: ops:reconcile only ever writes `blocked`,
+  // `merged`, or `done`, and only for manifests in ACTIVE_LOCK_STATUSES, which
+  // excludes `done`.
+  const isSanctionedRestart = onDisk.status === 'done' && manifest.status === 'started';
+  if (isSanctionedRestart) {
+    return;
+  }
+
+  try {
+    assertStatusTransition(onDisk.status, manifest.status);
+  } catch {
+    throw new ManifestWritePolicyError(
+      `Refusing to overwrite ${relativeToRoot(manifestPath)}: on-disk status "${onDisk.status}" ` +
+        `cannot transition to "${manifest.status}". A terminal manifest may only be moved through ` +
+        'a legal transition (see TRANSITIONS); reconciling one backwards would rewrite settled truth.',
+    );
+  }
+}
+
+export interface WriteManifestOptions {
+  /**
+   * Whether to run full schema validation on the outgoing manifest.
+   *
+   * Defaults to true, and every lane-authoring writer leaves it that way.
+   * `ops:reconcile` sets it to false, deliberately: it repairs pre-existing
+   * records it did not author, and many of them no longer satisfy the current
+   * schema through no fault of the repair -- a reaped `preflight_token` file
+   * is enough, and `docs/06_status/lanes/UTV2-1512.json` fails on exactly that
+   * today. Validating there would make the reconciler refuse to release locks
+   * on precisely the legacy lanes reconciliation exists to unstick, turning a
+   * clobber bug into a stuck-board bug.
+   *
+   * The clobber guard below is NOT optional and runs either way. Skipping
+   * schema validation is a statement about the outgoing record's shape; it is
+   * never permission to write over a different record.
+   */
+  validate?: boolean;
+}
+
+export function writeManifestAtPath(
+  manifest: LaneManifest,
+  manifestPath: string,
+  options: WriteManifestOptions = {},
+): void {
+  assertManifestWriteIsSafe(manifest, manifestPath);
+
+  if (options.validate !== false) {
+    validateManifestSchemaDependencies();
+    const errors = validateManifest(manifest, manifestPath);
+    if (errors.length > 0) {
+      throw new Error(errors.join('\n'));
+    }
   }
 
   writeJsonFile(manifestPath, manifest);
+}
+
+export function writeManifest(manifest: LaneManifest): void {
+  writeManifestAtPath(manifest, issueToManifestPath(manifest.issue_id));
 }
 
 export function updateManifest(

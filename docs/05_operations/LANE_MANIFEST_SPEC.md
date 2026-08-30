@@ -169,19 +169,67 @@ Reconciliation rules:
 
 ## 6. File-Scope Lock Behavior
 
-`file_scope_lock` declares the set of files the lane claims exclusive write access to. It is declared at `ops:lane-start` and immutable for the life of the lane.
+`file_scope_lock` declares the set of files the lane claims exclusive write access to. It is declared at `ops:lane-start`. It can never be widened for the life of the lane, and can be narrowed only through the audited release path in §6.1.
 
 Rules:
 
 - `ops:lane-start` scans all active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`) and refuses if any `file_scope_lock` entries overlap with the incoming lane's declared locks.
 - Overlap is computed on glob-expanded absolute paths. `apps/api/src/**` overlaps with `apps/api/src/foo.ts`.
-- Overlap refusal is hard; the only resolution is to wait for the conflicting lane to close, or to redefine scope.
-- A lane may widen its declared scope only by explicit `ops:lane:relock` which re-runs the overlap check.
+- Overlap refusal is hard. The resolutions are: wait for the conflicting lane to close, or have the conflicting lane **release** the contended path if it is not actually using it (§6.1).
+- **A lane can never widen its declared scope.** Widening requires an externally authored, GitHub-attested `scope-override/v1` PR comment (UTV2-1521), evaluated per-PR by `scripts/ci/file-scope-guard.ts`; it never comes from an edit to the manifest itself. There is no command that widens a lock.
 - Locks are released on `status ∈ {done}`. Blocked and reopened lanes retain their locks.
 
 Locks are **advisory at the filesystem level** but **enforced at lane-start**. A rogue agent that ignores the manifest can still edit a locked file; the mechanism protects sanctioned `ops:*` flows, not misuse.
 
 A pre-commit hook (future) may promote locks to hard enforcement.
+
+### 6.1 Audited scope release (UTV2-1762)
+
+**Correction to an earlier version of this document.** Until UTV2-1762 this section said a lane "may widen its declared scope only by explicit `ops:lane:relock` which re-runs the overlap check". No such command was ever implemented — `relock` matched nothing in `scripts/`, `package.json`, or `.github/workflows/`. The sentence described a mechanism that did not exist, and it described the wrong operation besides: conflict resolution needs *narrowing*, not widening. Do not read the old text as history; nothing was removed, because nothing was ever there.
+
+The consequence was real. A lane that declared a path at lane-start and then never touched it held that path against every other lane until it reached `done` — and §17 already records what that costs when the holder cannot mechanically close. The only escape anyone had found was to falsify the historical `files_changed` record, which was correctly rejected (PR #1288).
+
+`ops:lane-manifest scope-release` is the honest mechanism. It is **removal-only**:
+
+```bash
+pnpm ops:lane-manifest -- scope-release UTV2-1729 \
+  --pr 1436 \
+  --expected-head-sha <exact PR head SHA> \
+  --expected-lock-hash <sha256 of the pre-change file_scope_lock> \
+  --release-path scripts/ops/truth-check-lib.ts \
+  --release-path scripts/ops/truth-check-lib.test.ts \
+  --actor griff843 \
+  --reason "never touched by PR #1436; blocks UTV2-1759" \
+  --json
+```
+
+It must run **in the target lane's own worktree, on the target lane's own branch**. Running it from the main control checkout is refused.
+
+Every argument is mandatory because the operation's whole value is that the operator restates what they believe to be true and the tool refuses if live state disagrees. It refuses unless **all** of the following hold, and it collects every refusal before returning, so a partial failure writes nothing:
+
+| Refusal | Condition |
+|---|---|
+| `not_in_lane_worktree` / `branch_mismatch` | not running in the lane's own worktree and branch |
+| `issue_mismatch` / `pr_url_mismatch` | the manifest's identity does not match the request |
+| `manifest_lane_inactive` | the lane holds no active scope lock, so there is nothing to release |
+| `pr_number_mismatch` / `pr_not_open` / `head_sha_mismatch` | GitHub does not report the expected open PR at the exact expected head |
+| `lock_hash_mismatch` | `file_scope_lock` changed since the operator inspected it |
+| `path_not_in_lock` | a named path is not already an exact lock entry — this is what makes widening and replacement unrepresentable |
+| `path_in_pr_diff` | the lane actually changed the path in this PR |
+| `path_in_staged_work` / `path_in_unstaged_work` / `path_in_untracked_work` / `path_in_unpushed_work` | the lane is still working on the path locally |
+| `concurrent_lane_dependency` | another active lane already declares the path in its own `file_scope_lock` |
+| `empty_resulting_lock` | the release would leave the lock empty |
+| `no_release_paths` / `duplicate_release_path` | the request itself is malformed |
+| `unexpected_field_mutation` | the release would have altered any field other than `file_scope_lock` and `scope_release_history` |
+| `manifest_invalid_after_release` | the resulting manifest would not validate |
+
+On success it appends one `scope_release_history` entry — timestamp, actor, reason, PR number and URL, exact head SHA, previous and resulting lock hashes, the exact released paths, and the verification results — and narrows `file_scope_lock`. It changes nothing else: `files_changed`, issue identity, `status`, `commit_sha`, `pr_url`, proof verdicts, and merge state are all byte-identical across a release, enforced as a post-condition on the value about to be written rather than by an enumeration of forbidden fields.
+
+`scope_release_history` is append-only and hash-chained: each entry's `previous_lock_hash` must equal the prior entry's `resulting_lock_hash`, and the last entry's `resulting_lock_hash` must equal the hash of the manifest's current `file_scope_lock`. `validateManifest` enforces the chain, so a lock edited outside this command — or an entry describing a lock state the manifest does not hold — fails closed.
+
+`scripts/ci/file-scope-guard.ts` honours an audited narrowing from the PR's own head, which is the one manifest-sourced scope change it trusts. Narrowing is safe from that source in a way widening is not: widening grants the PR permissions it did not have, while narrowing only removes the lane's own permissions and releases its hold on other lanes. A PR cannot launder a violation by narrowing — dropping a path makes the guard **stricter** about that path. Anything short of a fully audited, correctly chained narrowing leaves the base-branch baseline in force, so unaudited manifest edits stay inert.
+
+**A released path is not re-acquirable by editing the manifest.** After a release the lane fails its own scope guard if it touches that path again; re-acquiring it requires a new lane.
 
 ---
 
@@ -340,7 +388,7 @@ Optional field `verification_target` (schema: `docs/05_operations/schemas/lane_m
 1. **Self-scope resolution** — "is this PR's own diff allowed to touch these files?" A manifest reset to `merged` between a PR merging and `ops:lane-close` finishing full closure must still resolve as the trusted scope for its own branch (UTV2-1563).
 2. **Conflict-blocking** — "does another lane's declared scope block a *different* lane's diff?" A `merged` manifest's code is already shipped; it should not indefinitely hold active edit-lock capacity over anyone else once merged, unless something is genuinely still resuming it (which manifests as a status transition back to an active state, most commonly `reopened` — see the `TRANSITIONS` map in `scripts/ops/shared.ts`).
 
-`scripts/ci/file-scope-guard.ts` (the CI PR gate) previously used one `ACTIVE_STATUSES` set (including `merged`) for both roles. This let a **merged-but-not-yet-`done`** manifest whose truth-check can never mechanically pass (see UTV2-1550 below) permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288).
+`scripts/ci/file-scope-guard.ts` (the CI PR gate) previously used one `ACTIVE_STATUSES` set (including `merged`) for both roles. This let a **merged-but-not-yet-`done`** manifest whose truth-check can never mechanically pass (see UTV2-1550 below) permanently block every other lane from touching any path in its `file_scope_lock`, with no way to release that lock short of falsifying the historical `files_changed` record (rejected — PR #1288). The sanctioned narrowing path added in UTV2-1762 (§6.1) is the answer to that "no way to release"; the status-set split described here remains the fix for the blocking behaviour itself.
 
 The fix splits the guard's status sets:
 - `SELF_SCOPE_STATUSES` (role 1, includes `merged`) — unchanged from UTV2-1563.

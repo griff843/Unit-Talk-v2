@@ -264,9 +264,13 @@ jobs:
           echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
 
       - name: Bind proof artifacts to merge SHA
-        # UTV2-1684: trigger-independent. The validated merge SHA resolved
-        # from the lane's authoritative PR controls binding on both push and
-        # workflow_dispatch closeouts.
+        # UTV2-1729: recovery dispatches must reach the GitHub-attested
+        # `ops:lane-close --repair-merged` path before any proof mutation.
+        # The ordinary generator intentionally refuses the malformed active
+        # schema-v2 bundles this workflow must recover, and it does not own PR
+        # identity validation. Fresh push closeouts still use the normal
+        # generator path; workflow_dispatch delegates binding entirely to the
+        # trusted repair step below.
         # the script below. ops:proof-generate never binds model-routing.json
         # by default (bindModelRouting defaults to false -- see
         # ProofGenerateOptions in scripts/ops/proof-generate.ts), so this
@@ -323,7 +327,12 @@ jobs:
           MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::notice title=post-merge-lane-close::Deferring proof mutation to GitHub-attested lane-close repair."
+            exit 0
+          fi
           existing_commit_sha=$(jq -r '.commit_sha // empty' "$MANIFEST_PATH")
           if [ -n "$existing_commit_sha" ] && [ "$existing_commit_sha" != "$MERGE_SHA" ]; then
             echo "::error title=post-merge-lane-close::Manifest commit_sha ($existing_commit_sha) does not match authoritative PR merge SHA ($MERGE_SHA). Refusing mismatched proof binding."
