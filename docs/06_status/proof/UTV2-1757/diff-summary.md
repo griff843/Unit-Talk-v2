@@ -1,5 +1,7 @@
 # PROOF: UTV2-1757 — Diff Summary
 
+MERGE_SHA: cbe7069295f435652c3fa68c0243fd4dd7d1ae5a
+
 ## Functional diff
 
 | File | Change |
@@ -43,3 +45,10 @@ paths), `override`, `parked`, `branch`, `commit_sha`, `pr_url`, `started_at`,
 `superseded.superseded_by`, and every other key.
 
 `heartbeat_at` is deliberately unchanged at the historical `2026-07-09T05:15:00.000Z`.
+
+## Merge SHA Binding
+
+`MERGE_SHA:` above carries `cbe7069295f435652c3fa68c0243fd4dd7d1ae5a`, the last
+non-proof commit on this branch and the commit that carries the entire
+functional change. It is a real commit, not a placeholder token. Post-merge
+rebinding replaces it with the recorded merge SHA.

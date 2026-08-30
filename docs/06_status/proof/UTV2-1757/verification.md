@@ -7,9 +7,9 @@
 **Executor:** codex (lane registration) — see Known gaps
 **Branch:** `codex/utv2-1757-supersede-tombstone`
 **Base:** `c92e922f88083122dfd6c073954a6f84d7d0ff55`
-**Merge SHA:** `cbe7069295f435652c3fa68c0243fd4dd7d1ae5a`
+MERGE_SHA: cbe7069295f435652c3fa68c0243fd4dd7d1ae5a
 
-> The Merge SHA field above carries the branch anchor commit — the last non-proof
+> The MERGE_SHA line above carries the branch anchor commit — the last non-proof
 > commit on this branch. A file cannot contain its own SHA; post-merge rebinding
 > replaces it with the real merge SHA. It is a real commit, not a placeholder.
 
@@ -292,7 +292,29 @@ The single `automation-coverage` warning is the pre-existing
 `main` and unrelated to this lane.
 
 
-### 2. R-level
+### 2. Type-check and full test suite, run standalone
+
+Run separately from `verify:static` so each carries its own measured receipt
+rather than being asserted from the composite run.
+
+```
+$ pnpm type-check
+exit code 0
+
+$ pnpm test
+exit code 0
+
+# tests 5149
+# pass 5149
+# fail 0
+# skipped 0
+```
+
+The count differs from the `pnpm verify:static` total above because
+`verify:static` additionally runs the `@unit-talk/smart-form` package suite,
+which `pnpm test` does not.
+
+### 3. R-level
 
 ```
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -301,7 +323,7 @@ Changed files: 6
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-### 3. Synchronization integrity
+### 4. Synchronization integrity
 
 ```
 $ pnpm ops:sync-check
@@ -311,7 +333,7 @@ $ pnpm ops:system-alignment-check
 [system-alignment] verdict=PASS fail=0 warn=0
 ```
 
-### 4. Live-DB
+### 5. Live-DB
 
 Not applicable. This lane's proof profile is `static`: it touches no DB surface,
 issues no query, and changes no runtime behaviour. No live-DB claim is made.

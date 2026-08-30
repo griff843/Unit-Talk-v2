@@ -308,6 +308,25 @@
       "warnings": [
         "Writable DB execution is not audited from proof text: pnpm test:db. Enforcement is the CI-produced ci-db-proof-receipt/v2, verified in the required `verify` context."
       ]
+    },
+    "standalone_type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "standalone_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "tests": 5149,
+      "pass": 5149,
+      "fail": 0,
+      "skipped": 0,
+      "counting_method": "sum over every TAP block the run emitted",
+      "note": "Run standalone, separately from verify:static, so it carries its own measured receipt. The count is lower than the verify:static total because verify:static additionally runs the @unit-talk/smart-form package suite."
+    },
+    "proof_format_gates": {
+      "note": "The proof format gates disagree on their contracts, and passing one does not imply passing the others. proof-auditor-gate requires '## Summary'/'## Evidence'/'## Verification'; the close-eligibility preflight (CEP-E3) requires the literal tokens '# PROOF:', 'MERGE_SHA:', 'ASSERTIONS:', 'EVIDENCE:'; CEP-E5 requires a line matching ^\\s*MERGE_SHA: or ^\\s*Merge SHA: in EVERY markdown artifact; proof-rebind additionally requires exactly one such line plus a '## Merge SHA Binding' heading per file it rebinds.",
+      "first_submission_defect": "The first pushed revision wrote the anchor as '**Merge SHA:** `<sha>`'. The leading '**' defeats the ^\\s*Merge SHA: anchor regex, so CEP-E5 reported both markdown artifacts as unbindable: post-merge rebinding would have been impossible and the lane would have been strandable. proof-auditor-gate passed on that same revision, locally and in CI. Corrected to a bare 'MERGE_SHA: <sha>' line in both artifacts, each paired with a '## Merge SHA Binding' section.",
+      "verification_method": "The close-eligibility evaluator (evaluateCloseEligibilityPreflight) was executed locally against this bundle with the same inputs the workflow supplies, rather than inferred from the CI log."
     }
   },
   "safety_posture": {
