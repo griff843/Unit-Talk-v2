@@ -1,6 +1,6 @@
 # PROOF: UTV2-1745
 
-MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
+MERGE_SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
 
 Retrospective, read-only audit of whether the production pick population can
 support a trustworthy-pick claim.
@@ -261,9 +261,21 @@ ASSERTIONS:
       incompleteness rather than by an unusable stub.
 - [ ] **Residual, unrepaired:** the shipped CLI has never been executed
       end-to-end against production in this lane — the read key is unavailable
-      under containment — so `createClosingOfferLookup`'s real query construction
-      is exercised only by fixtures. Stated as a limitation, not closed.
-- [x] `pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts` — 52 pass,
+      under containment. Round 11 narrows this: the shipped factories
+      `createClosingOfferLookup` and `createMarketUniverseClosingLookup` were
+      driven against a recording client and their emitted PostgREST criteria
+      compared predicate-for-predicate with the SQL actually executed against
+      production (`.out/replay/parity_receipt.json`), so the query *construction* is now
+      proven rather than fixture-asserted. What is still unexecuted is the CLI
+      entrypoint end to end under a real read key. Stated as a limitation, not
+      closed.
+- [x] Round 11 (eighth adversarial review): the round-10 battery mutated helper
+      *bodies* but never the *call sites* that invoke them, so deleting the
+      `asProductionClosingLine` wrapper at either tier, or reintroducing a trim
+      at `buildGradingClvContext`'s `eventStartTime`, left every test green.
+      Three call-site regression tests added; the three matching mutations now
+      die.
+- [x] `pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts` — 55 pass,
       0 fail.
 
 ## Runtime Verification
@@ -390,30 +402,45 @@ ok 49 - a truncated reverse provider_market_aliases page is refused
 ok 50 - loadAuditDataset builds one candidate pool per sport, and queries each one scoped
 ok 51 - a closing row production would discard skips the TIER, not just the row
 ok 52 - a whitespace-padded starts_at is passed through untrimmed, as production passes it
-1..52
-# tests 52
+ok 53 - call site: the pinnacle-tier closing line passes through asProductionClosingLine
+ok 54 - call site: the consensus-tier closing line passes through asProductionClosingLine
+ok 55 - call site: buildGradingClvContext passes starts_at to the cutoff untrimmed
+1..55
+# tests 55
 # suites 0
-# pass 52
+# pass 55
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 467.575298
+# duration_ms 584.746056
 ```
 
 ### Mutation controls — each correction is load-bearing
 
 > **Harness note.** The mutation harness was rebuilt on 2026-08-30 after the
 > system reaped `/tmp`, destroying the battery scripts and their result files
-> mid-sequence. All 39 mutations were reconstructed from source and the harness
-> now lives at `.out/mutation/battery.py` (gitignored, inside the repo) so a
-> `/tmp` reap cannot break the evidence chain again. The reconstruction is
-> recorded because it is weaker evidence than a continuously-maintained battery:
-> its first run left ONE survivor, `read_only reverted to asserted literals`,
-> and the fault was the reconstruction's — it patched the untested CLI wiring
-> site instead of the `read_only` block in the report builder that the test
-> actually covers. Repointed at the covered site, it dies. The table below is
-> the corrected run.
+> mid-sequence. The mutations were reconstructed from source and the harness now
+> lives at `.out/mutation/battery.py` (gitignored, inside the repo) so a `/tmp`
+> reap cannot break the evidence chain again. The reconstruction is recorded
+> because it is weaker evidence than a continuously-maintained battery: its
+> first run left ONE survivor, `read_only reverted to asserted literals`, and
+> the fault was the reconstruction's — it patched the untested CLI wiring site
+> instead of the `read_only` block in the report builder that the test actually
+> covers. Repointed at the covered site, it dies.
+>
+> **Round 11 raised the battery from 39 to 42.** The eighth adversarial review
+> found that the round-10 mutations targeted helper *bodies*
+> (`asProductionClosingLine`, the untrimmed `starts_at` passthrough) but never
+> the *call sites* that invoke them, so deleting a wrapper at its call site left
+> the whole suite green. Three call-site mutations were added and three tests
+> written to kill them. The table below is a single end-to-end re-execution of
+> all 42 on the merged head `c4715923` against the 55-test baseline
+> (receipt: `.out/mutation/mutations.json`). Every row is a direct measurement,
+> not a restatement of the earlier 52-test run — three rows moved by more than
+> the test-count delta (`snapshot_at closing cutoff dropped` went from 4 fail to
+> 5, because the new pinnacle call-site test also depends on the cutoff). No
+> mutation changed from dead to alive or the reverse.
 
 
 Every mutation below was applied to `scripts/ops/pick-truth-audit.ts` in
@@ -422,48 +449,51 @@ cannot fail proves nothing, so each is shown failing.
 
 ```text
 mutation                                                                       result
----------------------------------------------------------------------------------------------
-(none — corrected implementation)                                              52 pass, 0 fail
-identity check removed from the grade ladder                                   44 pass, 8 fail
-game_result event match dropped                                                49 pass, 3 fail
-game_result participant match dropped                                          50 pass, 2 fail
-game_result market match dropped                                               51 pass, 1 fail
-event-scoped drift guard removed                                               51 pass, 1 fail
-market identity conflict detection removed                                     49 pass, 3 fail
-provenance re-admitted as an identity seed (self-validating market claim)      50 pass, 2 fail
-reverse alias ownership check removed (foreign provider key may seed)          51 pass, 1 fail
-grading CLV context ignored (event identity reconstructed instead)             49 pass, 3 fail
-name-based participant fallback dropped                                        50 pass, 2 fail
-closing table reverted to provider_offers                                      50 pass, 2 fail
-snapshot_at closing cutoff dropped                                             48 pass, 4 fail
-retained pick-side cutoff ignored (event-derived cutoff used instead)          51 pass, 1 fail
-pinnacle bookmaker preference pass dropped                                     51 pass, 1 fail
-market_universe participant semantics reverted to truthiness                   51 pass, 1 fail
-odds gate over-tightened with `|| pick.odds === 0`                             51 pass, 1 fail
-zero closing odds priced (caller falsy-check semantics ignored)                51 pass, 1 fail
-null participant bail re-introduced (query production issues is refused)       50 pass, 2 fail
-truncated page accepted instead of refused (exact-count guard removed)         51 pass, 1 fail
-missing exact count treated as complete                                        51 pass, 1 fail
-grading context null participant re-admits the metadata resolver (`??`)        51 pass, 1 fail
-unresolvable grading context falls back to a weaker resolver                   51 pass, 1 fail
-offer-lookup event id taken from market_universe first                         50 pass, 2 fail
-participant precedence reverted to market_universe first                       51 pass, 1 fail
-ambiguous external_id resolves to one of the events                            51 pass, 1 fail
-selection side branch order collapsed into two families                        51 pass, 1 fail
-moneyline structural classification reverted to eventScoped                    51 pass, 1 fail
-superseded-correction check removed                                            51 pass, 1 fail
-alias priority ordering removed (last-wins Map)                                51 pass, 1 fail
-read_only reverted to asserted literals                                        51 pass, 1 fail
-participants name-fallback pager reverted to a rows.length terminator          51 pass, 1 fail
-participants name-fallback exact-count requirement removed                     51 pass, 1 fail
-forward alias completeness assertion removed                                   51 pass, 1 fail
-reverse alias completeness assertion removed                                   51 pass, 1 fail
-name-fallback pool key reverted to a bare normalized name (all sports pooled)  51 pass, 1 fail
-name-fallback LOOKUP ignores the pick sport                                    50 pass, 2 fail
-sport pools collapsed to a single all-players pool when any pick lacks sport   51 pass, 1 fail
-production closing-line validity gate removed (asClosingLineLike unmirrored)   51 pass, 1 fail
-starts_at trimmed, diverging from production's untrimmed passthrough           51 pass, 1 fail
-(restored byte-exact)                                                          52 pass, 0 fail
+-----------------------------------------------------------------------------------------------
+(none — corrected implementation)                                              55 pass, 0 fail
+identity check removed from the grade ladder                                   47 pass, 8 fail
+game_result event match dropped                                                52 pass, 3 fail
+game_result participant match dropped                                          53 pass, 2 fail
+game_result market match dropped                                               54 pass, 1 fail
+event-scoped drift guard removed                                               54 pass, 1 fail
+market identity conflict detection removed                                     52 pass, 3 fail
+provenance re-admitted as an identity seed (self-validating market claim)      54 pass, 1 fail
+reverse alias ownership check removed (foreign provider key may seed)          54 pass, 1 fail
+grading CLV context ignored (event identity reconstructed instead)             54 pass, 1 fail
+name-based participant fallback dropped                                        53 pass, 2 fail
+closing table reverted to provider_offers                                      53 pass, 2 fail
+snapshot_at closing cutoff dropped                                             50 pass, 5 fail
+retained pick-side cutoff ignored (event-derived cutoff used instead)          54 pass, 1 fail
+pinnacle bookmaker preference pass dropped                                     53 pass, 2 fail
+market_universe participant semantics reverted to truthiness                   54 pass, 1 fail
+odds gate over-tightened with `|| pick.odds === 0`                             54 pass, 1 fail
+zero closing odds priced (caller falsy-check semantics ignored)                54 pass, 1 fail
+null participant bail re-introduced (query production issues is refused)       53 pass, 2 fail
+truncated page accepted instead of refused (exact-count guard removed)         54 pass, 1 fail
+missing exact count treated as complete                                        54 pass, 1 fail
+grading context null participant re-admits the metadata resolver (`??`)        54 pass, 1 fail
+unresolvable grading context falls back to a weaker resolver                   54 pass, 1 fail
+offer-lookup event id taken from market_universe first                         54 pass, 1 fail
+participant precedence reverted to market_universe first                       54 pass, 1 fail
+ambiguous external_id resolves to one of the events                            54 pass, 1 fail
+selection side branch order collapsed into two families                        54 pass, 1 fail
+moneyline structural classification reverted to eventScoped                    54 pass, 1 fail
+superseded-correction check removed                                            54 pass, 1 fail
+alias priority ordering removed (last-wins Map)                                54 pass, 1 fail
+read_only reverted to asserted literals                                        54 pass, 1 fail
+participants name-fallback pager reverted to a rows.length terminator          54 pass, 1 fail
+participants name-fallback exact-count requirement removed                     54 pass, 1 fail
+forward alias completeness assertion removed                                   54 pass, 1 fail
+reverse alias completeness assertion removed                                   54 pass, 1 fail
+name-fallback pool key reverted to a bare normalized name (all sports pooled)  54 pass, 1 fail
+name-fallback LOOKUP ignores the pick sport                                    53 pass, 2 fail
+sport pools collapsed to a single all-players pool when any pick lacks sport   54 pass, 1 fail
+production closing-line validity gate removed (asClosingLineLike unmirrored)   52 pass, 3 fail
+starts_at trimmed, diverging from production's untrimmed passthrough           53 pass, 2 fail
+call site: tier-1 pinnacle asProductionClosingLine wrapper removed             54 pass, 1 fail
+call site: tier-2 consensus asProductionClosingLine wrapper removed            54 pass, 1 fail
+call site: trim reintroduced at buildGradingClvContext eventStartTime          54 pass, 1 fail
+(restored byte-exact)                                                          55 pass, 0 fail
 ```
 
 ### Static verification
@@ -532,10 +562,15 @@ precedence *is* exercised — but it returns every matching row instead of the
 shipped query's `order snapshot_at desc limit 1`. `selectLatestClosingOffer` then
 picks the same row the shipped query would have returned (except on a
 `snapshot_at` tie, where it applies an `id` tie-break PostgREST does not), so no
-CLV outcome below is affected. What this replay therefore does **not** prove is
-the shipped query's own construction — its limit, order clause and emitted filter
-strings. Those are covered by unit tests asserting the captured PostgREST
-parameters, not by this production run. The two counts in the closing-line block
+CLV outcome below is affected. What *that* round-10 replay did not prove was the
+shipped query's own construction — its limit, order clause and emitted filter
+strings. **Round 11 closes that gap**: `.out/replay/parity.ts` drives the
+shipped `createClosingOfferLookup` and `createMarketUniverseClosingLookup`
+against a recording client, and the emitted criteria
+(`.out/replay/parity_receipt.json`) match the SQL actually executed against
+production filter for filter — predicate-for-predicate, not byte-for-byte, since
+one side speaks PostgREST and the other SQL. The construction is now captured
+from the shipped code, not only unit-asserted. The two counts in the closing-line block
 are candidate rows the substitute surfaced across all calls; the shipped lookup
 returns at most one row per call, so they are **not** a count of rows the shipped
 query would fetch, and an earlier revision of this bundle mislabelled them as
@@ -561,13 +596,17 @@ such.
 >    bail: production passes a possibly-null `providerParticipantId` straight
 >    into `findClosingLine`, which filters `is(provider_participant_id, null)`,
 >    so production **issues the query**. Removing the bail moves all three to
->    `missing_closing_line` (**100**), which is what production would report, and
->    eliminates a class that is not a member of production's
->    `CLVComputationStatus` at all.
+>    `missing_closing_line` (**100**) — a figure that is **itself now
+>    superseded** by the round-11 replay, which shows the dominant cause was an
+>    under-scoped `market_universe` fallback in the round-10 replay harness, not
+>    production behaviour. See "CLV — superseded measurements" below.
 
-Each of the three revisions replaced a mis-causation with the behaviour
-production actually has. The direction of travel is one-way: every correction so
-far has removed a reason the audit had invented, and none has been reversed.
+Each of these revisions replaced a mis-causation with the behaviour production
+actually has, and revision 4 (round 11) does the same to revision 3. The
+direction of travel is one-way in the sense that no correction has been
+reversed; it is **not** a claim that the CLV figures converged early. Every CLV
+number above this line is withdrawn. The authoritative CLV measurement is the
+round-11 replay, below.
 
 Cohort: `settlement_records` where `status='settled'`, `source='grading'`,
 `corrects_id IS NULL`, `result IN ('win','loss','push')` and
@@ -623,100 +662,243 @@ deliberately **not** admitted here. `apps/api/src/grading-service.ts` sets it to
 circularity P1-A exists to remove. A test asserts a wrong-event row stays
 unverifiable even when the grading context names that same wrong event.
 
-### CLV — legacy `provider_offers` vs production's actual resolver
+### CLV — superseded measurements, and the round-11 replay
+
+> **SUPERSEDED — do not cite.** Every CLV number in revisions 1–4 of this
+> bundle is withdrawn, including the figures this section previously carried:
+> `resolvable = 98`, `unresolvable = 102`, `missing_closing_line = 100`,
+> `resolvability rate = 49.00%`, the `persisted clvStatus='computed' but
+> currently unresolvable = 82` figure, the old→corrected transition table, and
+> the "clean split" claim that **all 100 April settlements are
+> CLV-unresolvable**. That last claim is false. It is removed rather than
+> restated, and nothing in this bundle depends on it.
+>
+> Cause of the error, mechanically established. The round-10 replay was driven
+> by a hand-assembled `dataset.json` that (a) resolved production's
+> `market_universe` fallback against only the 100 rows reachable from
+> `picks.metadata.marketUniverseId`, instead of the whole table, and (b) pruned
+> load-bearing JSON columns — `events.metadata` reduced to `starts_at`,
+> `settlements.payload` stripped of its `clv` block, one `picks.metadata`
+> emptied entirely. Both defects were in that ad-hoc harness, **not** in
+> `scripts/ops/pick-truth-audit.ts`. The shipped entrypoint
+> (`runPickTruthAudit`, :2088) already passes
+> `createMarketUniverseClosingLookup(client)` (:2102), which queries the full
+> `market_universe` table, and `loadAuditDataset` already selects `payload`
+> and `metadata` unpruned (:1671, :1697, :1760). No audit-logic change was
+> required to obtain the corrected numbers, and none was made.
+> `dataset.json` is retained only as superseded historical evidence and is not
+> quantitative authority for anything.
+
+**Definition — "CLV resolvable".** A settlement is counted resolvable when the
+audit reaches a non-null closing line by the same ladder production uses and a
+priced side exists for the pick's selection. It asserts nothing further. It does
+**not** mean the pick was correctly graded, that the line is temporally valid,
+that its provenance is trustworthy, or that the pick is traceable. Those are
+measured separately below, and two of them fail.
+
+**The resolution ladder has four rungs**, in the order production applies them:
 
 ```text
-                              old      corrected
-resolvable                      4             98
-unresolvable                  196            102
-resolvability rate          2.00%         49.00%
-
-failure classes
-  missing_closing_line        193            100
-  missing_priced_side           2              2
-  missing_event_context         0              0
-  missing_participant_context   1              0
-
-persisted clvStatus='computed' but currently unresolvable
-                              176             82
+1  market_universe by id     picks.metadata.marketUniverseId -> closing_line
+                             (production returns `computed` immediately;
+                              NO cutoff is applied on this rung)
+2  provider_offer_history    bookmaker_key = pinnacle, snapshot_at <= cutoff
+3  provider_offer_history    no bookmaker filter,      snapshot_at <= cutoff
+4  market_universe by key    eq provider_event_id + provider_market_key,
+                             closing_line not null, limit 1
+                             (production applies NO time filter on this rung)
 ```
 
-Closing-line evidence for the corrected lookup:
+Mechanism parity for rungs 2–4 is not asserted; it is captured. Driving the
+**shipped** factories `createClosingOfferLookup` and
+`createMarketUniverseClosingLookup` against a recording client emits the
+criteria in `.out/replay/parity_receipt.json`: `eq.` on event and market,
+`eq.`/`is.null` on participant, `lte.<cutoff>` plus
+`order=snapshot_at.desc&limit=1` for rungs 2–3, and
+`closing_line=not.is.null&limit=1` with **no** time predicate for rung 4.
+
+The comparison is **predicate-for-predicate, not byte-for-byte**, and the
+distinction is stated rather than glossed: the shipped path speaks PostgREST
+while the replay spoke SQL through the MCP read channel, so the two are not
+literally the same string. What is established is that every filter, its
+operator, its null semantics, its ordering and its limit correspond one to one,
+and that no predicate present on one side is absent on the other.
+
+#### Cohort identity — reproducible digests and the exact 200 rows
+
+The cohort is fixed and stated in full, so a reviewer can confirm that round 11
+measured the same 200 rows as rounds 1–10 and that the movement in the CLV
+numbers is attributable to the fallback scoping alone, not to a different
+sample.
+
+**Digest definition.** `sha256` over the ids joined by a single `,` with no
+trailing separator, in the cohort's canonical order: the 100 earliest by
+`settled_at` ascending, then the 100 latest by `settled_at` descending.
 
 ```text
-table queried                                provider_offer_history
-distinct (event, market, participant) triples requested      167
-  with at least one eligible pre-cutoff snapshot              77
-  with none                                                   90
-candidate rows surfaced by the replay lookup                  191
-  of which on the pinnacle pass                               17
-
-legacy provider_offers, total rows                     8,191,206
-legacy provider_offers, rows for any sampled event             0
+settlement-id digest  41edbf1b3ab8a1c2074e22e3613c357d36009468971dda8928b823336f96244e
+pick-id digest        f2f7f039e61137adbd8614046c438a115bdc97afa05b2e0cfde394b8ef868c53
+count                 200 settlements, 200 distinct pick ids
 ```
 
-All 90 uncovered triples fall in just **8 provider events**, and a direct
-unbounded re-query confirms `provider_offer_history` holds **zero** rows for
-those 8 events at any time — they are the April 2026 half of the cohort, which
-predates the closing-line history. The absence is real, not an export gap.
+Reproduce:
 
-Old-to-corrected transitions:
+```bash
+python3 -c "import json,hashlib;c=json.load(open('.out/replay/cohort11.json'));\
+print(hashlib.sha256(','.join(c['settlement_ids']).encode()).hexdigest());\
+print(hashlib.sha256(','.join(c['pick_ids']).encode()).hexdigest())"
+```
+
+The superseded round-10 `dataset.json` reproduces the settlement digest in
+exact order. That is what establishes cohort continuity across the correction.
+
+The full ordered lists are carried in
+`evidence.json` → `post_fix_validation.cohort_identity.settlement_ids` and
+`.pick_ids`, and the per-row resolution outcome for each is in
+`.out/replay/per_row11_final.json`. The first and last five of each, as a
+spot-check anchor:
 
 ```text
-old                          corrected                        n
-missing_closing_line     ->  missing_closing_line            99
-missing_closing_line     ->  resolvable                      94
-resolvable               ->  resolvable                       4
-missing_priced_side      ->  missing_priced_side              2
-missing_participant_ctx  ->  missing_closing_line             1
+settlement_ids[0..4]    980e9f90-e526-4c22-b307-97b1daa7f773
+                        4a4b918a-ede2-4ea8-9ac7-9f6bb0f87a81
+                        3237cc49-57d5-4178-9bf3-47953a682adf
+                        cafeaf39-eafa-47fe-93c9-d9eaf48bab06
+                        be81aba5-3541-4d69-9781-e4cab7aa989c
+settlement_ids[195..199]931ed7ce-510a-44c5-8242-76082e221d85
+                        c667d2b7-f93c-418d-bf98-4979dedfa2d8
+                        8d86a1e1-b366-4117-8274-e383324e29e6
+                        c7bf579f-2fa6-481f-b865-10d72093401a
+                        78d0dd8d-6757-4f56-b35d-7103a7121d33
+pick_ids[0..4]          b6764d3c-bafe-439f-9770-4932ec5253d8
+                        1b762490-5e8c-4edf-9a39-7212692576a9
+                        ede52e01-f7ee-4df5-bd02-f5a77cf58977
+                        46fdac6b-8ec6-4311-af71-b7f422858975
+                        ce407160-9022-4ff6-afe8-d7bc4d98cf61
+pick_ids[195..199]      e981c7c9-b91e-43bf-bbec-ad7f75c6479b
+                        66d46240-e919-4b3b-b8a0-424a7512095f
+                        bd8a0d73-131d-401a-b699-08608f1a1555
+                        f187a0a5-a0d4-4f2c-acdc-49cd8a9c303a
+                        5dc821fb-a8b0-4830-891d-9ef0d43d474a
 ```
 
-**94** picks the old audit reported as `missing_closing_line` do have a closing
-line: the old lookup read the legacy `provider_offers` surface, production reads
-`provider_offer_history`. The old audit was under-reporting CLV availability
-relative to production.
+#### Executed query receipts
 
-### The clean split, and why it is the finding
+Every statement below is a `SELECT`, issued through the Supabase MCP read path
+against production `zfzdnfwdarxucxtaojxm` on 2026-08-30. **Writes performed: 0.**
+The full statements and their results are carried in `evidence.json` →
+`runtime_proof.queries` (Q1–Q8).
 
 ```text
-                             identity        CLV               n
-earliest 100 (April 2026)    unverifiable    missing_closing_line    100
-latest 100 (Jun-Jul 2026)    proven          resolvable               98
-                             proven          missing_priced_side       2
+id  purpose                                                        rows
+--  -------------------------------------------------------------  ------------
+Q1  exact table cardinalities                                      6 counts
+      picks 107858 · events 789 · provider_offer_history 14456685
+      settlement_records 37496 · game_results 135249 · participants 1647
+Q2  the 200-settlement cohort in canonical order                       200
+Q3  every row the shipped loader reads, JSON columns UNPRUNED
+      settlement_records 200 · picks 200 · game_results 192
+      events 42 · participants 132 · market_universe 100
+Q4  provider_market_aliases, both directions               fwd 30 · rev 19
+Q5  participant name-fallback pool, exact-count paged                 1523
+Q6  per (event, market) snapshot_at min/max, to bound the
+    14.4M-row offer table                                             480
+      -> 186 triples needed, 92 provably empty, 94 alive
+Q7  rung 2/3: latest pre-cutoff offer per alive triple
+    (4 batches of 24 LATERAL probes; a single 188-probe
+     query timed out — the only index is
+     (provider_event_id, snapshot_at))                                 111
+Q8  rung 4: market_universe fallback over the WHOLE table               90
+      market_universe holds 102,155 rows; the round-10 replay
+      resolved this rung against 100 of them. That single
+      scoping defect accounts for the entire 98 -> 194 movement.
 ```
 
-Every one of the 100 earliest settlements is **both** independently unverifiable
-**and** CLV-unresolvable; every one of the 100 latest has provable pick-side
-identity, and 98 of them resolve CLV. The defect is a historical cohort with
-neither retained identity nor closing-line data — not a fault spread evenly
-across the population, and not a resolver bug.
+The six id-sets Q3 returns were independently re-derived and matched the
+round-10 sets exactly. That is what allows the round-10 `dataset.json` to be
+identified as *pruned* rather than *differently scoped*, and it is why the CLV
+movement is attributable to Q8 alone.
+
+#### Every one of the 200 accounted for
+
+```text
+resolution source                            outcome                       n
+market_universe: by-id short-circuit (r1)    resolvable                    4
+market_universe: by-id short-circuit (r1)    unresolvable missing_priced_side  2
+provider_offer_history: pinnacle (r2)        resolvable                   17
+provider_offer_history: consensus (r3)       resolvable                   77
+market_universe: provider-key lookup (r4)    resolvable                   96
+market_universe: provider-key lookup (r4)    unresolvable missing_priced_side  1
+no line on any rung                          unresolvable missing_closing_line 3
+                                                                       -----
+                                             TOTAL                       200
+```
+
+CLV resolvable **194**, unresolvable **6** (3 `missing_closing_line`,
+3 `missing_priced_side`). The partition sums to 200 by construction: it is
+derived by replaying each settlement individually
+(`.out/replay/attribute.ts`, 200 runs), and its totals reconcile exactly with
+the independent whole-cohort run: 194 resolvable both ways, 100 grading-
+unresolvable both ways, 100 structurally blocked both ways.
+
+#### Why the April half resolves, and why that is not reassuring
+
+`provider_offer_history` retains no snapshot earlier than **2026-06-25** for
+these events, so every offer criterion issued for the April half — 200 of them,
+100 picks across rungs 2 and 3 — correctly returns zero rows. The April picks
+resolve on rung 4, because `market_universe`
+retains a `closing_line` after the underlying history has aged out. The prior
+bundle mistook the retention gap for an absence of closing lines outright.
+
+But rung 4 applies **no cutoff**, and rung 1 applies none either. Testing every
+resolved row against its own permitted cutoff:
+
+```text
+resolvable                                              194
+  cutoff-enforced (line snapshot <= cutoff)             150
+  NOT cutoff-validated                                   44
+    rung 4, snapshot strictly AFTER the cutoff           40
+    rung 1, no cutoff applied at all                      4
+```
+
+All **40** post-cutoff rows carry the identical snapshot
+`2026-04-24T00:00:00+00:00` — one uniform midnight watermark across 40 distinct
+markets, which is a batch backfill, not 40 per-market closing captures. A line
+stamped after the event's own cutoff cannot be the closing line as of that
+cutoff. This is production-parity behaviour, so it is a defect in production's
+CLV provenance, not an audit artifact — and it is why "resolvable" is defined
+above to carry no claim of temporal validity.
 
 ### Effect on the lane verdict
 
 The verdict is **unchanged**: `can_currently_produce_trustworthy_pick: false`.
-The materiality rules still fire — the CLV unresolvable rate is 51.00%, at or
-above the 10% rule — and the 2026-08-26 population decomposition (1 of 107,858
-picks simultaneously non-fixture, identity- and provenance-complete, and
-settled) is untouched.
+CLV unavailability is **not** the basis for it, and the previous
+"CLV unresolvable rate 51.00%" materiality framing is withdrawn — its numerator
+no longer exists. The verdict rests on the defects that survive the corrected
+measurement, each with an explicit numerator and denominator over the 200-row
+cohort:
 
-What changes is the **stated cause**, and it changed three times, each time
-toward the truth and each change disclosed rather than silently substituted.
-The pre-correction bundle attributed the dominant CLV failure to
-`missing_closing_line` (193 of 200) — an artifact of querying a frozen legacy
-table. The first correction moved the dominant class to `missing_event_context`
-(99 of 200), which was in turn an artifact of the audit reconstructing an event
-production never consulted; mirroring production's grading-context resolver
-removed that class entirely. The second correction removed
-`missing_participant_context` (3 of 200), which was an artifact of the audit
-*refusing to issue* a query production does issue: `computeCLVOutcome` passes a
-possibly-null `providerParticipantId` straight into `findClosingLine`, which
-filters `is(provider_participant_id, null)`. That class is not even a member of
-production's `CLVComputationStatus`, so the persisted-status comparison had been
-running against a state production can never have persisted.
+```text
+metric                                     numerator / denominator        rate
+grading identity independently unverifiable      100 / 200             50.00%
+structurally blocked picks                       100 / 200             50.00%
+CLV resolved without cutoff-valid provenance      44 / 194             22.68%
+CLV technically resolvable                       194 / 200             97.00%
+CLV resolvable AND cutoff-valid                  150 / 200             75.00%
+```
 
-What remains is a single clean historical split with one failure reason per
-half: the April 100 have neither provable identity nor any retained closing
-line, and the June–July 100 have both. Finding 6 below records this.
+The first two are the load-bearing ones. Half the cohort cannot have its grade
+independently verified at all: the only event identity available for those 100
+rows is `gameResult.event_id`, the very row under validation, so any agreement
+there is circular. The same 100 rows are structurally blocked (99 orphaned
+event, 4 missing participant, 4 unresolvable market; the classes overlap). A
+pipeline that cannot independently verify half its settled grades does not
+support a trustworthy-pick claim, whatever the CLV column says — and the CLV
+column, read honestly, adds a third defect rather than an exoneration: 44 of the
+194 resolutions rest on a line that was never shown to precede its cutoff.
+
+The 2026-08-26 population decomposition (1 of 107,858 picks simultaneously
+non-fixture, identity- and provenance-complete, and settled) is untouched by
+this correction and is not restated here.
 
 ## Findings
 
@@ -747,23 +929,28 @@ line, and the June–July 100 have both. Finding 6 below records this.
    key on the pick side. This corrects an earlier reading of `events.metadata`
    alone.
 
-6. **The blocker is a historical cohort, not a live resolver defect.** The
-   2026-08-30 post-fix validation shows the closing-line data largely exists —
-   94 of 200 sampled picks the pre-correction audit called
-   `missing_closing_line` resolve against the canonical
-   `provider_offer_history`. Once CLV reads the source production actually reads
-   *and* resolves event context the way production's grading path does, and once
-   grading proves the referenced `game_results` row belongs to the pick, the
-   sample splits exactly in half by age: all 100 April 2026 settlements are both
-   independently unverifiable and CLV-unresolvable (their events have no
-   retained closing-line history at all), while all 100 June–July settlements
-   have provable pick-side identity and 98 resolve CLV. After the round-5
-   correction each half fails for exactly one reason — the April 100 are
-   uniformly `missing_closing_line`, and the two June–July failures are
-   `missing_priced_side` — so no part of the residual is attributable to a
-   resolver or participant defect. The remedy is therefore about the historical
-   population and about making event identity a first-class field at admission
-   (Finding 1), not about the resolver.
+6. **The blocker is unverifiable grading identity, not closing-line
+   availability.** An earlier revision of this finding claimed the sample
+   "splits exactly in half by age", with all 100 April 2026 settlements both
+   independently unverifiable *and* CLV-unresolvable. **That claim is
+   withdrawn.** The round-11 replay resolves CLV for 96 of those 100 April
+   rows. `provider_offer_history` retains nothing before 2026-06-25 for these
+   events, but `market_universe` retains the closing line after the history
+   ages out, and production's fallback reads it — so the retention gap was
+   mistaken for an absence of data.
+
+   What survives is a cleaner and narrower statement. CLV availability is
+   **not** the lane's blocker: 194 of 200 resolve. The blocker is that 100 of
+   200 settlements have no pick-side event identity, so the only identity
+   available is `gameResult.event_id` — the row being validated — and any
+   agreement on those rows is circular. The same 100 are structurally blocked.
+   Independently, 44 of the 194 CLV resolutions rest on a line never shown to
+   precede its own cutoff (40 carrying a single backfilled
+   `2026-04-24T00:00:00+00:00` watermark, 4 taking a rung that applies no
+   cutoff), so closing-line *availability* overstates closing-line
+   *validity*. The remedy is making event identity a first-class field at
+   admission (Finding 1) and giving the CLV fallback a cutoff predicate — not
+   backfilling offer history.
 
 ## Scope and refusals
 
@@ -857,21 +1044,23 @@ declared file scope.
 
 ### Re-verification on the synchronized head
 
+Re-run on the merged head `c4715923`, not carried forward from an earlier tree.
+
 ```text
 $ pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts
-# tests 52
-# pass 52
+# tests 55
+# pass 55
 # fail 0
 
 $ pnpm test:ops
-# tests 2705
+# tests 2708
 # suites 20
-# pass 2705
+# pass 2708
 # fail 0
 # skipped 0
 
-$ python3 .out/mutation/battery.py   # 39 semantic mutations
-baseline 52 pass, 0 fail surviving 0 restored 52 pass, 0 fail count 39
+$ python3 .out/mutation/battery.py   # 42 semantic mutations
+baseline 55 pass, 0 fail surviving 0 restored 55 pass, 0 fail count 42
 
 $ pnpm verify:static
 ci:db-client-boundary, ops:sync-check, ops:system-alignment-check,
@@ -892,38 +1081,114 @@ Rules matched: (none) — no R-level artifacts required for this diff
 locally under production containment, exactly as recorded above, and its receipt
 is produced by CI's `staging-ci` environment inside the required `verify` job.
 
+### Synchronization with main — a recorded process deviation
+
+The 2026-08-30 second synchronization did **not** route through
+`pnpm ops:merge-wrapper git-merge-main`. That command cannot succeed on this
+branch, and the failure is a defect in the wrapper, not in the branch.
+
+```text
+$ pnpm ops:merge-wrapper git-merge-main
+fatal: Not possible to fast-forward, aborting.
+```
+
+`buildExtendedCommand` in `scripts/ops/ops-merge-wrapper.ts:88-108` emits
+`git merge --ff-only origin/main` for the `git-merge-main` verb. A branch with
+its own commits is by definition diverged from `origin/main`, so `--ff-only`
+can never succeed, and the safe non-rebasing exit UTV2-1678 advertises is
+unreachable for every lane that has committed anything. This is reported to the
+**UTV2-1790** owner as cross-lane coordination; nothing in that worktree was
+touched from this lane, and no second wrapper lane was opened.
+
+The synchronization was therefore performed directly as
+`git merge --no-ff --no-edit origin/main`, and the wrapper's own dropped-path
+check was replicated by hand. **This is recorded as a process deviation, not a
+precedent.** The branch was not rewritten and the synchronization was not
+repeated to force it through the broken verb. The machine evidence admitting
+`c4715923`:
+
+```text
+$ git rev-list --parents -n1 c4715923
+c4715923…  3a99f504…  249da64b…          # p1 = lane head, p2 = origin/main
+
+$ git merge-base --is-ancestor 3a99f504 HEAD && echo ANCESTOR_YES
+ANCESTOR_YES
+
+$ git rev-parse origin/main
+249da64b1108815f1bde07e82414535e64fe4382   # == parent 2, exactly
+
+$ git rev-list --left-right --count origin/main...HEAD
+0	14                                      # zero behind, 14 ahead
+
+$ git diff --name-status 3a99f504 HEAD      # what main contributed
+M	docs/06_status/readiness/readiness-score.json
+
+$ git diff --name-status 249da64b HEAD      # what the lane contributes
+A	.ops/sync/UTV2-1745.yml
+A	docs/06_status/lanes/UTV2-1745.json
+A	docs/06_status/proof/UTV2-1745/.gitkeep
+A	docs/06_status/proof/UTV2-1745/diff-summary.md
+A	docs/06_status/proof/UTV2-1745/evidence.json
+A	docs/06_status/proof/UTV2-1745/model-routing.json
+A	docs/06_status/proof/UTV2-1745/verification.md
+M	package.json
+A	scripts/ops/pick-truth-audit.test.ts
+A	scripts/ops/pick-truth-audit.ts
+
+$ comm -23 <(git ls-tree -r --name-only 3a99f504 | sort) \
+           <(git ls-tree -r --name-only HEAD      | sort) | wc -l
+0                                           # nothing dropped from the lane side
+
+$ comm -23 <(git ls-tree -r --name-only 249da64b | sort) \
+           <(git ls-tree -r --name-only HEAD      | sort) | wc -l
+0                                           # nothing dropped from main's side
+
+$ git status --porcelain                    # before the proof-only re-anchor
+(clean)
+```
+
+Read together: `3a99f504` is a first-parent ancestor of the merge; parent 2 is
+`origin/main` at its exact tip; the merged tree is main's tree plus exactly the
+ten paths this lane authors and nothing else; not one path from either side was
+dropped; the branch is zero behind main immediately before final proof binding;
+and the worktree is clean. The one path main contributed,
+`readiness-score.json`, is an upstream `[skip ci]` bot ledger refresh this lane
+did not author.
+
 ### Proof re-anchor
 
-**Final binding: `verified_source_sha` = `f616d5cb`.** `sha_binding.merge_sha`
+**Final binding: `verified_source_sha` = `3a99f504`.** `sha_binding.merge_sha`
 is `null`, as the shared schema-v2 evidence contract requires before a merge
 exists (CEP-E7).
 
+`3a99f504` is the last commit on this branch authoring a change to any non-proof
+file: the three round-11 call-site regression tests in
+`scripts/ops/pick-truth-audit.test.ts`. The one commit after it, the
+synchronization merge `c4715923`, contributes exactly one path from main
+(`docs/06_status/readiness/readiness-score.json`, an upstream `[skip ci]` bot
+ledger refresh this lane did not author) and nothing of its own —
+`git diff --name-status 3a99f504 HEAD` lists that single file. `scripts/ops/`
+and all proof artifacts are byte-identical across the two commits, so every
+receipt in this bundle describes the tree at the bound SHA.
+
 The binding history is preserved in `sha_binding.verified_source_sha_history`:
 `daad7b00` (original bundle) → `149b60ee` (first main sync) → `f616d5cb`
-(final substantive head).
+(round-10 substantive head) → `3a99f504` (round-11 substantive head).
 
-**The `149b60ee` anchor became stale and its note was false.** It read "every
-later commit touches proof artifacts only." The seventh adversarial review
-measured that claim and it failed by a wide margin: at `149b60ee` the audit is
-**1,105 lines with 4 tests**, while the tree the bundle describes has **2,120
-lines and 52 tests**. The entire P1-A/P1-B hardening — rounds 8, 9 and 10 —
-landed *after* that anchor. A PM approving the bundle in that state would have
-been approving code no SHA on the branch contained. The claim is retracted here
-rather than quietly overwritten.
+**Two earlier anchors are retracted rather than quietly overwritten.**
 
-`f616d5cb` is the last commit on this branch authoring a change to any non-proof
-file. The single commit after it, `87f93bf6`, is the sanctioned synchronization
-with `origin/main` `d847fbae`:
+`149b60ee` became stale and its note was false. It read "every later commit
+touches proof artifacts only." The seventh adversarial review measured that
+claim and it failed by a wide margin: at `149b60ee` the audit is **1,105 lines
+with 4 tests**, while the tree the bundle described at that time had **2,120
+lines and 52 tests** (55 as of round 11). The entire P1-A/P1-B hardening — rounds 8, 9 and 10 — landed *after*
+that anchor. A PM approving the bundle in that state would have been approving
+code no SHA on the branch contained.
 
-```text
-$ git diff --name-status f616d5cb 87f93bf6
-M	docs/06_status/readiness/readiness-score.json
-```
-
-That is an upstream `[skip ci]` bot ledger refresh this lane did not author. The
-audit script, its test file, and all three proof artifacts are byte-identical
-across the two commits, so every receipt in this bundle describes the tree at the
-bound SHA. No production count, finding, or verdict was altered.
+`f616d5cb` was correct for round 10 and became stale for the same structural
+reason when round 11 landed `3a99f504`: three new tests and the three call-site
+mutations they kill are outside `f616d5cb`. It is superseded here on the round
+that made it stale, not a round later.
 
 ### Product truth is unchanged
 

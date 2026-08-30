@@ -1,13 +1,13 @@
 # UTV2-1745 — diff summary
 
-MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
+MERGE_SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
 
 ## Files changed
 
 | File | Lines | Purpose |
 |---|---|---|
 | `scripts/ops/pick-truth-audit.ts` | +2120 | Read-only retrospective audit of the production pick population. Uses its own `ReadOnlyPostgrestClient`, which exposes HTTP `GET` only and has no write method. Recomputes grades independently from `game_results.actual_value` against each pick's own line and selection side rather than trusting the stored `status`, only after proving the referenced `game_results` row belongs to the pick (P1-A), and resolves CLV against the canonical `provider_offer_history` with production's resolver semantics (P1-B). CLV failures are classified by named cause. |
-| `scripts/ops/pick-truth-audit.test.ts` | +2045 | 52 tests. Original 4: selection parsing and independent grade recomputation across over/under/push; itemized grading disagreements, named CLV failures and structural blockers; `missing_closing_line` is not collapsed into `missing_event_context`; the production transport exposes only `GET` and no write method. P1-A (7): wrong-event / wrong-participant / incompatible-market referenced rows are each unresolvable under their own named reason, a proven triple recomputes, an event-level total with a legitimately null participant stays valid, plus a negative control proving the wrong-event row *would* have agreed without the check and a structural control proving pick-side identity never reads the referenced row. P1-B (7): canonical table identity, closing cutoff exclusion, latest-eligible selection, event-level null participant, participant-scoped matching, pinnacle-then-consensus preference, plus a negative control reverting the lookup to `provider_offers`. Cohort and report integrity (3): a settlement superseded by a later `corrects_id` is never an agreement, alias resolution is deterministic under `providerMarketKeyPriority`, and `read_only` is measured from the transport rather than asserted. P1-A hardening, isolated (2): the drift guard and market-identity conflict detection each get their own scenario, because the combined attack is blocked by either one alone. Round 3 (6): a `metadata.providerMarketKey` naming a different market cannot validate itself into the candidate set, pick-side provenance still seeds identity when the alias table has no mapping, the closing cutoff is the pick's retained start time rather than the event date, a moneyline pick with a null participant is not a structural blocker, `createMarketUniverseClosingLookup` mirrors `findClosingLineByProviderKey`, and the odds gate does not refuse zero odds. Round 4 (10): a provider key owned by another market cannot seed identity (with a negative control showing it WOULD be admitted without the reverse index), a genuinely unowned key may still seed, CLV uses the event production graded against, the grading event is used for CLV only and never rescues a wrong-event row, the name-based participant fallback and its uniqueness rule, zero closing odds are priced (reverted in round 5), the offer lookup takes its event id from `events.external_id`, the participant external id comes from the participants table first, an `external_id` shared by two events is unverifiable rather than a mismatch, and selection-side branches run in production order. Round 5 (3, from the fourth adversarial review): a null participant issues the offer query production issues rather than bailing (asserting the captured `is.null` filter as the receipt), a grading context naming an unresolvable event fails closed under its own reason with a resolvable-event negative control, and a truncated page is refused rather than silently accepted. Round 6 (1, from the fifth adversarial review): a resolved grading context whose participantExternalId is null is not overridden by the market_universe/metadata resolver. The saturation test was rewritten in round 6 to exercise the case a length check misses -- 3 rows against a limit of 4 with 900 matching -- plus a missing-count refusal and a complete-page negative control. Test 35 was inverted in round 5: zero closing odds are `missing_priced_side`, because both callers of `readClosingSideOdds` test its return for truthiness and zero is falsy. Round 8 (4): `loadAuditDataset` is exported and driven end to end by a routing fetch stub, so its completeness guards finally carry controls -- a short participants name-fallback pool is refused, a pool page with no exact count is refused, a truncated forward `provider_market_aliases` page is refused, and a complete-pages negative control loads the dataset. Round 9 (1): a truncated REVERSE alias page is refused, added because the round-8 battery left that guard alive -- the earlier test truncated both alias pages so the forward read threw first, and the fixture carried no `providerMarketKey` so the reverse read had no ids and never ran. |
+| `scripts/ops/pick-truth-audit.test.ts` | +2196 | 55 tests. Original 4: selection parsing and independent grade recomputation across over/under/push; itemized grading disagreements, named CLV failures and structural blockers; `missing_closing_line` is not collapsed into `missing_event_context`; the production transport exposes only `GET` and no write method. P1-A (7): wrong-event / wrong-participant / incompatible-market referenced rows are each unresolvable under their own named reason, a proven triple recomputes, an event-level total with a legitimately null participant stays valid, plus a negative control proving the wrong-event row *would* have agreed without the check and a structural control proving pick-side identity never reads the referenced row. P1-B (7): canonical table identity, closing cutoff exclusion, latest-eligible selection, event-level null participant, participant-scoped matching, pinnacle-then-consensus preference, plus a negative control reverting the lookup to `provider_offers`. Cohort and report integrity (3): a settlement superseded by a later `corrects_id` is never an agreement, alias resolution is deterministic under `providerMarketKeyPriority`, and `read_only` is measured from the transport rather than asserted. P1-A hardening, isolated (2): the drift guard and market-identity conflict detection each get their own scenario, because the combined attack is blocked by either one alone. Round 3 (6): a `metadata.providerMarketKey` naming a different market cannot validate itself into the candidate set, pick-side provenance still seeds identity when the alias table has no mapping, the closing cutoff is the pick's retained start time rather than the event date, a moneyline pick with a null participant is not a structural blocker, `createMarketUniverseClosingLookup` mirrors `findClosingLineByProviderKey`, and the odds gate does not refuse zero odds. Round 4 (10): a provider key owned by another market cannot seed identity (with a negative control showing it WOULD be admitted without the reverse index), a genuinely unowned key may still seed, CLV uses the event production graded against, the grading event is used for CLV only and never rescues a wrong-event row, the name-based participant fallback and its uniqueness rule, zero closing odds are priced (reverted in round 5), the offer lookup takes its event id from `events.external_id`, the participant external id comes from the participants table first, an `external_id` shared by two events is unverifiable rather than a mismatch, and selection-side branches run in production order. Round 5 (3, from the fourth adversarial review): a null participant issues the offer query production issues rather than bailing (asserting the captured `is.null` filter as the receipt), a grading context naming an unresolvable event fails closed under its own reason with a resolvable-event negative control, and a truncated page is refused rather than silently accepted. Round 6 (1, from the fifth adversarial review): a resolved grading context whose participantExternalId is null is not overridden by the market_universe/metadata resolver. The saturation test was rewritten in round 6 to exercise the case a length check misses -- 3 rows against a limit of 4 with 900 matching -- plus a missing-count refusal and a complete-page negative control. Test 35 was inverted in round 5: zero closing odds are `missing_priced_side`, because both callers of `readClosingSideOdds` test its return for truthiness and zero is falsy. Round 8 (4): `loadAuditDataset` is exported and driven end to end by a routing fetch stub, so its completeness guards finally carry controls -- a short participants name-fallback pool is refused, a pool page with no exact count is refused, a truncated forward `provider_market_aliases` page is refused, and a complete-pages negative control loads the dataset. Round 9 (1): a truncated REVERSE alias page is refused, added because the round-8 battery left that guard alive -- the earlier test truncated both alias pages so the forward read threw first, and the fixture carried no `providerMarketKey` so the reverse read had no ids and never ran. Round 10 (4, from the seventh adversarial review): the name-fallback pool is scoped to the pick's sport exactly as production scopes it, `loadAuditDataset` builds one pool PER SPORT and issues the sport filter production issues, a closing row production would discard skips the TIER rather than falling back within it, and a whitespace-padded `starts_at` is passed through untrimmed. Round 11 (3, from the eighth adversarial review): the round-10 tests exercised helper BODIES but never the CALL SITES, so deleting the `asProductionClosingLine` wrapper at the pinnacle tier, deleting it at the consensus tier, or reintroducing a trim at `buildGradingClvContext`'s `eventStartTime` left every test green — one call-site regression test each, and all three matching mutations now die. |
 | `package.json` | +1 | Wires `scripts/ops/pick-truth-audit.test.ts` into `test:ops` so the suite actually executes under required `verify`. PM-authorized scope extension, recorded in the lane manifest's `scope_override` block. |
 | `docs/06_status/lanes/UTV2-1745.json` | modified | Adds `package.json` to `file_scope_lock` plus the `scope_override` record. |
 | `docs/06_status/proof/UTV2-1745/verification.md` | new | Proof bundle: verdict, assertions, live population evidence, findings. |
@@ -87,9 +87,14 @@ MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
   unique-normalized-`display_name` fallback. Reconstructing the event context
   instead was denying CLV that production actually has and reporting the gap as
   a production defect. The correction moved the measurement materially and
-  truthfully: `missing_event_context` 99 -> 0, `missing_closing_line` 1 -> 97,
-  CLV resolvable unchanged at 98/200. Both superseded revisions are recorded in
-  the evidence bundle rather than silently replaced.
+  truthfully. (Those intermediate CLV counts — `missing_event_context` 99 -> 0,
+  `missing_closing_line` 1 -> 97, "CLV resolvable unchanged at 98/200" — are
+  themselves **SUPERSEDED** by the round-11 replay, which measures 194 resolvable
+  and 6 unresolvable. See `evidence.json` ->
+  `post_fix_validation.round11_clv_replay` and the superseded-claims index. The
+  *mechanism* correction described in this bullet stands; only its numbers are
+  withdrawn.) Both superseded revisions are recorded in the evidence bundle
+  rather than silently replaced.
 - **The grading event id is admitted for CLV only, never for identity.**
   `apps/api/src/grading-service.ts` sets `gradingContext.eventId` to
   `gameResult.event_id`, so using it in the P1-A proof would reinstate exactly
@@ -198,12 +203,12 @@ MERGE_SHA: f616d5cb88e414303ae3d43063421c85df450b4a
   an earlier fix touched only the former, so a reader of the proof document alone
   still saw the defect. Three further inconsistencies the sixth review found are
   also fixed: a pasted `test:ops` receipt reading 2695 when the round-6 tree
-  produced 2696 (the round-10 tree produces 2705, and every receipt in this bundle
-  is re-captured at the head it describes), an `evidence.json` mutation block
+  produced 2696 (the round-11 merged head produces 2708, and every receipt in this
+  bundle is re-captured at the head it describes), an `evidence.json` mutation block
   still carrying the round-4 battery (25 rows, baseline 39) beside a note
   claiming 30 and 43, and two assertions still describing mechanisms later rounds
   had replaced.
-- **Every control was proven by making it fail.** Thirty-nine semantic
+- **Every control was proven by making it fail.** Forty-two semantic
   mutations, each applied in isolation and reverted byte-exact, each turn at
   least one test red. Three rounds left a survivor, and each was killed by adding
   an isolating test rather than by weakening the mutation: round 2 left the drift
@@ -277,34 +282,53 @@ The merge's combined diff contains that one file and nothing else: no content
 inherited from `main` was re-authored, and no other lane's proof bundle was
 touched. Proof artifacts were re-anchored to that merge commit at the time
 (`verified_source_sha` `daad7b00` -> `149b60ee`). **That anchor is no longer the
-binding**: rounds 8-10 landed substantive code after it, so the final binding is
-`f616d5cb` — see "Final proof binding" below. `sha_binding.merge_sha` remains
+binding**: rounds 8-11 landed substantive code after it, so the final binding is
+`3a99f504` — see "Final proof binding" below. `sha_binding.merge_sha` remains
 `null` pre-merge. Production counts from the 2026-08-26 read-only
 measurement are unchanged.
 
 ## Final proof binding
 
-`sha_binding.verified_source_sha` = **`f616d5cb88e414303ae3d43063421c85df450b4a`**,
-the last commit on this branch authoring a change to any non-proof file. Binding
-history is preserved in `verified_source_sha_history`: `daad7b00` -> `149b60ee`
--> `f616d5cb`.
+`sha_binding.verified_source_sha` = **`3a99f5043e950b6f5610b26aab4d761bc8fc46fb`**,
+the last commit on this branch authoring a change to any non-proof file (the
+three round-11 call-site regression tests). Binding history is preserved in
+`verified_source_sha_history`: `daad7b00` -> `149b60ee` -> `f616d5cb` ->
+`3a99f504`.
 
 The earlier `149b60ee` anchor carried the note "every later commit touches proof
 artifacts only." That was false once rounds 8-10 landed: at `149b60ee` the audit
-is 1,105 lines with 4 tests, against the 2,120 lines and 52 tests this bundle
-describes. The seventh adversarial review caught it. It is retracted in
-`verified_source_sha_history` rather than silently replaced.
+is 1,105 lines with 4 tests, against the 2,120 lines and (at that time) 52 tests
+this bundle describes. The seventh adversarial review caught it. `f616d5cb` was
+correct for round 10 and became stale the moment round 11 landed `3a99f504`.
+Both are retracted in `verified_source_sha_history` rather than silently
+replaced.
 
-The one commit after the binding, `87f93bf6`, is the final main synchronization
-(`origin/main` `d847fbae`). Its entire delta against the bound SHA is one
+The one commit after the binding, `c4715923`, is the third main synchronization
+(`origin/main` `249da64b`). Its entire delta against the bound SHA is one
 upstream bot ledger file:
 
 ```text
-$ git diff --name-status f616d5cb 87f93bf6
+$ git diff --name-status 3a99f504 c4715923
 M	docs/06_status/readiness/readiness-score.json
 ```
 
 `scripts/ops/pick-truth-audit.ts`, `scripts/ops/pick-truth-audit.test.ts` and all
-three proof artifacts are byte-identical across `f616d5cb` and `87f93bf6`.
+proof artifacts are byte-identical across `3a99f504` and `c4715923`.
 `sha_binding.merge_sha` stays `null` pre-merge; `post-merge-lane-close.yml` binds
 it to the real merge commit.
+
+That third synchronization did **not** route through
+`pnpm ops:merge-wrapper git-merge-main`, and is recorded as a **process
+deviation, not a precedent**. The wrapper's `git-merge-main` verb emits
+`git merge --ff-only origin/main` (`scripts/ops/ops-merge-wrapper.ts:88-108`),
+which can never succeed on a branch carrying its own commits, so the safe
+non-rebasing exit UTV2-1678 advertises is unreachable for every lane that has
+committed anything. The defect is routed to the **UTV2-1790** owner; that
+worktree was not touched and no second wrapper lane was opened. The merge was
+performed directly as `git merge --no-ff --no-edit origin/main` with the
+wrapper's dropped-path check replicated by hand. Full admissibility evidence —
+first-parent ancestry, parent-2 identity with `origin/main`'s exact tip, the
+complete two-sided path diff, zero dropped paths on either side, zero commits
+behind main, and a clean worktree — is in `evidence.json` ->
+`main_synchronization.history[2].admissibility_evidence` and in
+`verification.md` -> "Synchronization with main — a recorded process deviation".
