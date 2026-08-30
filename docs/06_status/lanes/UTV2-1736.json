@@ -26,9 +26,9 @@
     "docs/06_status/proof/UTV2-1736/evidence.json",
     "docs/06_status/proof/UTV2-1736/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-08-24T12:56:35.350Z",
-  "heartbeat_at": "2026-08-27T02:00:47.219Z",
+  "heartbeat_at": "2026-08-30T11:14:04.639Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1736-offer-history-partitions.json",
