@@ -1,5 +1,4 @@
 import { getDashboardData, getDashboardRuntimeData, getIntelligenceData, getInterventionAudit, getPerformanceData, getProviderHealth } from '@/lib/data';
-import type { PerformanceData } from '@/lib/data/analytics';
 import { getEventStream } from '@/lib/data/events';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
@@ -12,7 +11,6 @@ export interface PipelineStageSummary {
   metric: string;
   detail: string;
 }
-import type { AgentStatus } from '@/components/ui/AgentCard';
 import type { EventStreamRecord } from '@/lib/events-feed';
 
 export interface CommandMetric {
@@ -72,7 +70,7 @@ export interface ApiHealthContent {
 
 export interface AgentsContent {
   metrics: CommandMetric[];
-  roster: AgentStatus[];
+  roster: [];
   notes: Array<{ title: string; detail: string }>;
 }
 
@@ -127,81 +125,6 @@ function pipelineStatusTone(status: string): PipelineStageSummary['status'] {
   return 'unknown';
 }
 
-function fallbackEvents(): EventStreamItem[] {
-  return [
-    {
-      id: 'seed-1',
-      title: 'Submission surge contained',
-      detail: 'Board queue absorbed the late slate burst without sending promotion lag above the warning line.',
-      source: 'runtime',
-      timestamp: 'seeded',
-      status: 'healthy',
-    },
-    {
-      id: 'seed-2',
-      title: 'Provider freshness inside budget',
-      detail: 'All primary feeds remain inside the freshness envelope with no quota exhaustion warnings.',
-      source: 'ingestor',
-      timestamp: 'seeded',
-      status: 'healthy',
-    },
-    {
-      id: 'seed-3',
-      title: 'Manual review pocket detected',
-      detail: 'A small hold cluster is still waiting for operator attribution before release.',
-      source: 'ops',
-      timestamp: 'seeded',
-      status: 'warning',
-    },
-  ];
-}
-
-function fallbackAgents(): AgentStatus[] {
-  const now = new Date();
-  return [
-    {
-      id: 'codexfrontend',
-      name: 'CodexFrontend',
-      role: 'Frontend / runtime implementation',
-      status: 'busy',
-      lastHeartbeat: new Date(now.getTime() - 45_000).toISOString(),
-      currentTask: 'UNI-174 Command Center re-implementation',
-      cpu: 62,
-      memory: 54,
-    },
-    {
-      id: 'verificationlead',
-      name: 'VerificationLead',
-      role: 'Playwright and acceptance verification',
-      status: 'healthy',
-      lastHeartbeat: new Date(now.getTime() - 90_000).toISOString(),
-      currentTask: 'Standing by for live UI verification',
-      cpu: 28,
-      memory: 37,
-    },
-    {
-      id: 'cto',
-      name: 'CTO',
-      role: 'Lane routing and execution governance',
-      status: 'healthy',
-      lastHeartbeat: new Date(now.getTime() - 120_000).toISOString(),
-      currentTask: 'Supervising bounded frontend delivery',
-      cpu: 18,
-      memory: 33,
-    },
-    {
-      id: 'pm',
-      name: 'PM',
-      role: 'Flow coordination and acceptance tracking',
-      status: 'warning',
-      lastHeartbeat: new Date(now.getTime() - 180_000).toISOString(),
-      currentTask: 'Waiting on fresh visual proof bundle',
-      cpu: 14,
-      memory: 29,
-    },
-  ];
-}
-
 function mapEventItems(events: EventStreamRecord[]): EventStreamItem[] {
   return events.slice(0, 8).map((event) => ({
     id: event.id,
@@ -213,27 +136,7 @@ function mapEventItems(events: EventStreamRecord[]): EventStreamItem[] {
   }));
 }
 
-function buildUsageRows(performance: PerformanceData): LlmUsageRow[] {
-  const sources = Object.entries(performance.byIndividualSource).slice(0, 4);
-  if (sources.length === 0) {
-    return [
-      { model: 'gpt-5.5', requests: 82, tokens: 284000, cost: 18.2, latency: 1480, errorRate: 0.6 },
-      { model: 'gpt-5.4', requests: 61, tokens: 191000, cost: 10.7, latency: 1120, errorRate: 0.4 },
-      { model: 'o4-mini', requests: 44, tokens: 126000, cost: 4.9, latency: 860, errorRate: 0.2 },
-    ];
-  }
-
-  return sources.map(([model, stats], index) => ({
-    model,
-    requests: stats.total,
-    tokens: Math.max(1, Math.round((stats.avgStakeUnits ?? 1) * stats.total * 1200)),
-    cost: Math.max(0.5, Number((stats.total * 0.12 + index * 0.65).toFixed(2))),
-    latency: 820 + index * 140,
-    errorRate: Math.max(0, Number((2.2 - stats.hitRatePct / 45).toFixed(1))),
-  }));
-}
-
-export async function getOverviewContent(): Promise<OverviewContent> {
+export async function getOverviewContent(): Promise<OverviewContent | null> {
   try {
     const [dashboard, runtime, pipelineSnapshot, eventStream] = await Promise.all([
       getDashboardData(),
@@ -264,30 +167,11 @@ export async function getOverviewContent(): Promise<OverviewContent> {
       ],
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Qualified picks', value: 12, delta: '+6%' },
-        { label: 'Review pressure', value: 5, delta: 'stable' },
-        { label: 'Open exceptions', value: 2, delta: '-2 from peak' },
-        { label: 'Live providers', value: 4, delta: '37 events/24h' },
-      ],
-      pipeline: [
-        { key: 'ingest', label: 'Ingest', status: 'healthy', metric: '82', detail: 'Fresh provider offers flowing into staging.' },
-        { key: 'grade', label: 'Grade', status: 'healthy', metric: '49', detail: 'Scoring throughput inside the current budget.' },
-        { key: 'promote', label: 'Promote', status: 'warning', metric: '7', detail: 'Small review pocket is waiting on operator attention.' },
-        { key: 'publish', label: 'Publish', status: 'healthy', metric: '31', detail: 'Discord delivery is keeping pace with queue depth.' },
-      ],
-      events: fallbackEvents(),
-      focus: [
-        { label: 'Worker state', value: 'nominal' },
-        { label: 'Latest receipt', value: '3m ago' },
-        { label: 'Cycle status', value: 'healthy' },
-      ],
-    };
+    return null;
   }
 }
 
-export async function getPicksContent(): Promise<PicksContent> {
+export async function getPicksContent(): Promise<PicksContent | null> {
   try {
     const dashboard = await getDashboardData();
     const reviewRows = dashboard.picks.slice(0, 8).map((pick) => ({
@@ -325,46 +209,7 @@ export async function getPicksContent(): Promise<PicksContent> {
       heldRows: heldRows.slice(0, 6),
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Review queue', value: 9, delta: '3 held' },
-        { label: 'Avg promotion', value: 74.2, delta: '+1.8' },
-        { label: 'Held picks', value: 3, delta: 'QA board' },
-        { label: 'Ready to post', value: 4, delta: 'next 30m' },
-      ],
-      reviewRows: [
-        {
-          id: 'seed-pick-1',
-          selection: 'Celtics -4.5',
-          market: 'Spread',
-          source: 'board-model',
-          capperDisplayName: 'CodexFrontend',
-          promotion_score: 81,
-          approval_status: 'approved-ready',
-          eventName: 'NBA',
-        },
-        {
-          id: 'seed-pick-2',
-          selection: 'Over 219.5',
-          market: 'Total',
-          source: 'capper-slate',
-          capperDisplayName: 'Operator',
-          promotion_score: 74,
-          approval_status: 'pending-review',
-          eventName: 'NBA',
-        },
-      ],
-      heldRows: [
-        {
-          id: 'seed-held-1',
-          selection: 'Yankees ML',
-          market: 'Moneyline',
-          heldBy: 'VerificationLead',
-          holdReason: 'Needs attribution review before release.',
-          ageHours: 2.4,
-        },
-      ],
-    };
+    return null;
   }
 }
 
@@ -394,7 +239,7 @@ export async function getPipelineContent(): Promise<PipelineContent | null> {
   }
 }
 
-export async function getEventsContent(): Promise<{ metrics: CommandMetric[]; events: EventStreamItem[] }> {
+export async function getEventsContent(): Promise<{ metrics: CommandMetric[]; events: EventStreamItem[] } | null> {
   try {
     const stream = await getEventStream(18);
     const items = mapEventItems(stream.events);
@@ -408,19 +253,11 @@ export async function getEventsContent(): Promise<{ metrics: CommandMetric[]; ev
       events: items,
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Events loaded', value: 8, delta: 'replay ready' },
-        { label: 'Submission events', value: 5, delta: 'live' },
-        { label: 'Warnings', value: 2, delta: 'watchlist' },
-        { label: 'Errors', value: 0, delta: 'clear' },
-      ],
-      events: fallbackEvents(),
-    };
+    return null;
   }
 }
 
-export async function getApiHealthContent(): Promise<ApiHealthContent> {
+export async function getApiHealthContent(): Promise<ApiHealthContent | null> {
   try {
     const health = await getProviderHealth();
     const payload = asRecord(health.data);
@@ -453,43 +290,15 @@ export async function getApiHealthContent(): Promise<ApiHealthContent> {
       })),
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Healthy feeds', value: 4, delta: '37 events/24h' },
-        { label: 'Stale feeds', value: 1, delta: 'watch' },
-        { label: 'Absent feeds', value: 0, delta: 'clear' },
-        { label: 'Cycle blockers', value: 1, delta: 'warning' },
-      ],
-      providers: [
-        { providerKey: 'sgo', status: 'healthy', latestSnapshotAt: new Date().toISOString(), last24hRows: 1204, minutesSinceLastSnapshot: 7 },
-        { providerKey: 'odds-api', status: 'warning', latestSnapshotAt: new Date().toISOString(), last24hRows: 864, minutesSinceLastSnapshot: 31 },
-      ],
-      cycle: [
-        { key: 'sgo-nba', label: 'sgo nba', status: 'healthy', metric: '18/18', detail: 'Cycle fully merged and verified.' },
-        { key: 'odds-api-mlb', label: 'odds-api mlb', status: 'warning', metric: '11/15', detail: 'Staging fresh, merge waiting on proof.' },
-      ],
-    };
+    return null;
   }
 }
 
-export async function getAgentsContent(): Promise<AgentsContent> {
-  const roster = fallbackAgents();
-  return {
-    metrics: [
-      { label: 'Agents online', value: roster.length, delta: 'network live' },
-      { label: 'Busy agents', value: roster.filter((agent) => agent.status === 'busy').length, delta: 'delivery lane' },
-      { label: 'Waiting review', value: roster.filter((agent) => agent.status === 'warning').length, delta: 'handoff needed' },
-      { label: 'Recent heartbeats', value: roster.filter((agent) => formatRelativeTime(agent.lastHeartbeat).includes('m')).length, delta: 'fresh' },
-    ],
-    roster,
-    notes: roster.map((agent) => ({
-      title: `${agent.name} · ${agent.role}`,
-      detail: `${agent.currentTask} · heartbeat ${formatRelativeTime(agent.lastHeartbeat)}`,
-    })),
-  };
+export async function getAgentsContent(): Promise<AgentsContent | null> {
+  return null;
 }
 
-export async function getIntelligenceContent(): Promise<IntelligenceContent> {
+export async function getIntelligenceContent(): Promise<IntelligenceContent | null> {
   try {
     const [performance, intelligence] = await Promise.all([getPerformanceData(), getIntelligenceData()]);
     if (!performance || !intelligence) {
@@ -502,7 +311,7 @@ export async function getIntelligenceContent(): Promise<IntelligenceContent> {
         { label: 'Approved delta', value: Number(performance.insights.approvedVsDeniedDelta.toFixed(1)), unit: '%', delta: 'approved vs denied' },
         { label: 'Feedback rows', value: intelligence.feedbackLoop.length, delta: intelligence.scoreQuality.scoreVsOutcome.correlation },
       ],
-      usage: buildUsageRows(performance),
+      usage: [],
       scoreBands: intelligence.scoreQuality.bands.map((band) => ({
         range: band.range,
         hitRatePct: band.hitRatePct,
@@ -512,31 +321,11 @@ export async function getIntelligenceContent(): Promise<IntelligenceContent> {
       warnings: intelligence.insights.warnings,
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Settled picks', value: 42, delta: '57.1% hit' },
-        { label: '7d ROI', value: 9.8, unit: '%', delta: '+signal' },
-        { label: 'Approved delta', value: 13.2, unit: '%', delta: 'approved vs denied' },
-        { label: 'Feedback rows', value: 18, delta: 'positive' },
-      ],
-      usage: [
-        { model: 'gpt-5.5', requests: 82, tokens: 284000, cost: 18.2, latency: 1480, errorRate: 0.6 },
-        { model: 'gpt-5.4', requests: 61, tokens: 191000, cost: 10.7, latency: 1120, errorRate: 0.4 },
-        { model: 'o4-mini', requests: 44, tokens: 126000, cost: 4.9, latency: 860, errorRate: 0.2 },
-      ],
-      scoreBands: [
-        { range: '80-89', hitRatePct: 63.4, roiPct: 12.2, total: 18 },
-        { range: '70-79', hitRatePct: 55.7, roiPct: 7.1, total: 21 },
-        { range: '60-69', hitRatePct: 49.2, roiPct: -2.4, total: 14 },
-      ],
-      warnings: [
-        { segment: 'Low-score releases', message: 'Sub-70 scores are producing negative ROI and should stay review-gated.' },
-      ],
-    };
+    return null;
   }
 }
 
-export async function getOpsContent(): Promise<OpsContent> {
+export async function getOpsContent(): Promise<OpsContent | null> {
   try {
     const auditRows = await getInterventionAudit();
     return {
@@ -561,36 +350,6 @@ export async function getOpsContent(): Promise<OpsContent> {
       })),
     };
   } catch {
-    return {
-      metrics: [
-        { label: 'Interventions', value: 12, delta: '7d window' },
-        { label: 'Manual overrides', value: 2, delta: 'review' },
-        { label: 'Retry actions', value: 5, delta: 'delivery' },
-        { label: 'Hold actions', value: 3, delta: 'policy' },
-      ],
-      controls: [
-        { label: 'Safe mode', state: 'armed', owner: 'CTO' },
-        { label: 'Promotion overrides', state: 'gated', owner: 'Operator' },
-        { label: 'Discord delivery retry', state: 'ready', owner: 'Worker' },
-      ],
-      audit: [
-        {
-          id: 'ops-1',
-          title: 'delivery retry',
-          detail: 'distribution_outbox · retried after transient Discord failure',
-          source: 'audit_log',
-          timestamp: '18m ago',
-          status: 'healthy',
-        },
-        {
-          id: 'ops-2',
-          title: 'promotion override suppress',
-          detail: 'pick review lane suppressed after duplicate market collision',
-          source: 'audit_log',
-          timestamp: '43m ago',
-          status: 'warning',
-        },
-      ],
-    };
+    return null;
   }
 }

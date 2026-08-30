@@ -6,6 +6,7 @@ type TopBarProps = {
   title: string;
   breadcrumb: string[];
   lastUpdatedAt?: number;
+  onOpenNavigation?: () => void;
   onOpenPalette?: () => void;
 };
 
@@ -47,7 +48,7 @@ function ThemeIcon({ dark }: { dark: boolean }) {
   );
 }
 
-export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenPalette }: TopBarProps) {
+export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenNavigation, onOpenPalette }: TopBarProps) {
   const [now, setNow] = useState(Date.now());
   const [dark, setDark] = useState(true);
 
@@ -72,6 +73,18 @@ export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenPa
   return (
     <header className="mb-6 flex flex-col gap-4 rounded-[28px] border border-[var(--cc-border-subtle)] bg-[color-mix(in_srgb,var(--cc-bg-surface)_92%,transparent)] px-5 py-4 backdrop-blur md:flex-row md:items-center md:justify-between">
       <div className="min-w-0">
+        {onOpenNavigation && (
+          <button
+            type="button"
+            onClick={onOpenNavigation}
+            className="cc-icon-button mb-3 md:hidden"
+            aria-label="Open navigation"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        )}
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
           {breadcrumb.map((crumb, index) => (
             <span key={`${crumb}-${index}`} className="inline-flex items-center gap-2">
@@ -102,9 +115,8 @@ export function TopBar({ title, breadcrumb, lastUpdatedAt = Date.now(), onOpenPa
         <div className="rounded-full border border-[var(--cc-border-subtle)] bg-[var(--cc-bg-surface-elevated)] px-3 py-2 text-xs text-[var(--cc-text-secondary)]">
           Updated {updatedLabel}
         </div>
-        <button type="button" className="cc-icon-button relative" aria-label="Alerts">
+        <button type="button" className="cc-icon-button" aria-label="Open alerts">
           <BellIcon />
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-[var(--cc-danger)]" />
         </button>
         <button type="button" onClick={toggleTheme} className="cc-icon-button" aria-label="Toggle color theme">
           <ThemeIcon dark={dark} />
