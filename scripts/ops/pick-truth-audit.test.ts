@@ -2043,3 +2043,154 @@ test('a whitespace-padded starts_at is passed through untrimmed, as production p
     '2026-06-27T23:59:59Z',
   );
 });
+
+/*
+ * Round 11 — call-site coverage for the two production gates.
+ *
+ * The three tests above this block exercise `asProductionClosingLine` and
+ * `resolveEventStartTime` as units. A unit test proves the helper is correct;
+ * it cannot prove the report actually CALLS it. Deleting either wrapper at its
+ * real call site in `buildPickTruthAuditReport`, or reintroducing a trim inside
+ * `buildGradingClvContext`, leaves every one of those unit assertions green.
+ *
+ * These three drive `buildPickTruthAuditReport` end to end and assert on the
+ * emitted PostgREST filter and the reported failure class, so each one dies
+ * when its own call site is mutated. Each carries a negative control: the same
+ * fixture with a VALID row, proving the failure is caused by the gate under
+ * test and not by the fixture being unresolvable for some unrelated reason.
+ */
+
+test('call site: the pinnacle-tier closing line passes through asProductionClosingLine', async () => {
+  // Tier 1 (pinnacle) offers a NEWER-looking row that production rejects for a
+  // blank provider_key; tier 2 offers an older but valid one. Correct behaviour
+  // is to reject the pinnacle row, fall through to the consensus tier, and
+  // resolve. Removing the wrapper at the tier-1 call site accepts the bad row,
+  // which prices neither side of the pick, and reports missing_priced_side.
+  const captured: CapturedRead[] = [];
+  const client = historyClient(
+    [
+      historyRow({
+        id: 'pinnacle-bad',
+        bookmaker_key: 'pinnacle',
+        provider_key: '',
+        snapshot_at: '2026-06-30T22:00:00Z',
+        over_odds: 0,
+      }),
+      historyRow({
+        id: 'consensus-good',
+        bookmaker_key: null,
+        snapshot_at: '2026-06-30T22:50:00Z',
+        over_odds: -105,
+      }),
+    ],
+    captured,
+  );
+  const report = await clvReport(clvDataset(), createClosingOfferLookup(client));
+
+  // Both tiers were queried: the pinnacle row was rejected, not merely unmatched.
+  assert.equal(captured.some((call) => call.params.get('bookmaker_key') === 'eq.pinnacle'), true);
+  assert.equal(captured.some((call) => call.params.get('bookmaker_key') === null), true);
+  assert.equal(report.clv.resolvable, 1);
+  assert.deepEqual(report.clv.failure_class_counts, {});
+});
+
+test('call site: the consensus-tier closing line passes through asProductionClosingLine', async () => {
+  // No pinnacle row at all, so tier 1 returns nothing and tier 2 is the only
+  // tier that can supply a closing line. Its single row has a blank
+  // provider_key. Correct behaviour rejects it and falls to the
+  // market_universe path, whose closing_line is null -> missing_closing_line.
+  // Removing the wrapper at the tier-2 call site accepts the bad row instead
+  // and reports missing_priced_side.
+  const captured: CapturedRead[] = [];
+  const client = historyClient(
+    [
+      historyRow({
+        id: 'consensus-bad',
+        bookmaker_key: null,
+        provider_key: '',
+        snapshot_at: '2026-06-30T22:00:00Z',
+        over_odds: 0,
+      }),
+    ],
+    captured,
+  );
+  const report = await clvReport(clvDataset(), createClosingOfferLookup(client));
+
+  assert.equal(report.clv.resolvable, 0);
+  assert.deepEqual(report.clv.failure_class_counts, { missing_closing_line: 1 });
+
+  // Negative control: the identical fixture with a valid provider_key resolves,
+  // so the failure above is the gate rejecting the row, not the row being
+  // unreachable.
+  const controlCaptured: CapturedRead[] = [];
+  const controlClient = historyClient(
+    [
+      historyRow({
+        id: 'consensus-ok',
+        bookmaker_key: null,
+        snapshot_at: '2026-06-30T22:00:00Z',
+        over_odds: -105,
+      }),
+    ],
+    controlCaptured,
+  );
+  const control = await clvReport(clvDataset(), createClosingOfferLookup(controlClient));
+  assert.equal(control.clv.resolvable, 1);
+  assert.deepEqual(control.clv.failure_class_counts, {});
+});
+
+test('call site: buildGradingClvContext passes starts_at to the cutoff untrimmed', async () => {
+  // The grading path takes its cutoff from buildGradingClvContext's
+  // eventStartTime (pick-truth-audit.ts: `gradingClv?.eventStartTime ?? ...`),
+  // and that string becomes the `lte.` filter verbatim. Production
+  // (settlement-service.ts:999) tests the trimmed value but sends the raw one,
+  // so a trim reintroduced inside buildGradingClvContext would issue a filter
+  // production never issues -- and would silently RESOLVE CLV that production
+  // reports as missing, because a leading space sorts below every digit and
+  // therefore excludes every snapshot.
+  const paddedStartsAt = ' 2026-06-30T23:00:00Z ';
+  const paddedEvent: EventRow = { ...event, metadata: { starts_at: paddedStartsAt } };
+
+  const dataset = clvDataset();
+  // A settlement that names its grading event, so buildGradingClvContext is the
+  // component that supplies the cutoff rather than resolveClosingCutoff.
+  dataset.settlements = [
+    {
+      ...dataset.settlements[0]!,
+      payload: {
+        gradingContext: { gameResultId: 'result-1', eventId: 'event-1' },
+        clvStatus: 'computed',
+      },
+    },
+  ];
+  dataset.eventsById = new Map([[paddedEvent.id, paddedEvent]]);
+  dataset.eventsByExternalId = new Map([[paddedEvent.external_id!, paddedEvent]]);
+
+  const captured: CapturedRead[] = [];
+  const client = historyClient(
+    [historyRow({ id: 'pre-cutoff', snapshot_at: '2026-06-30T22:00:00Z', over_odds: -105 })],
+    captured,
+  );
+  const report = await clvReport(dataset, createClosingOfferLookup(client));
+
+  // The mechanism: the emitted filter is byte-identical to the raw metadata value.
+  assert.equal(captured[0]!.params.get('snapshot_at'), `lte.${paddedStartsAt}`);
+  // And the consequence production actually has: nothing matches the padded
+  // cutoff, so CLV does not resolve.
+  assert.equal(report.clv.resolvable, 0);
+  assert.deepEqual(report.clv.failure_class_counts, { missing_closing_line: 1 });
+
+  // Negative control: the same dataset with an UNPADDED starts_at resolves
+  // against the same snapshot row. This is what makes the assertions above a
+  // statement about the padding rather than about the fixture.
+  const controlDataset = clvDataset();
+  controlDataset.settlements = dataset.settlements;
+  const controlCaptured: CapturedRead[] = [];
+  const controlClient = historyClient(
+    [historyRow({ id: 'pre-cutoff', snapshot_at: '2026-06-30T22:00:00Z', over_odds: -105 })],
+    controlCaptured,
+  );
+  const control = await clvReport(controlDataset, createClosingOfferLookup(controlClient));
+  assert.equal(controlCaptured[0]!.params.get('snapshot_at'), 'lte.2026-06-30T23:00:00Z');
+  assert.equal(control.clv.resolvable, 1);
+});
