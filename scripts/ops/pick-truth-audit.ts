@@ -66,6 +66,7 @@ export interface ParticipantRow {
   external_id: string | null;
   display_name: string;
   participant_type: string;
+  sport?: string | null;
 }
 
 export interface MarketUniverseRow {
@@ -166,9 +167,13 @@ export class ReadOnlyPostgrestClient {
     };
     if (request.exactCount) headers['Prefer'] = 'count=exact';
 
-    this.#methodsUsed.set('GET', (this.#methodsUsed.get('GET') ?? 0) + 1);
+    // One constant feeds both the tally and the request, so the tally cannot
+    // drift from the method actually sent and the "measured, not asserted"
+    // claim is structurally true rather than true by coincidence.
+    const method = 'GET';
+    this.#methodsUsed.set(method, (this.#methodsUsed.get(method) ?? 0) + 1);
     const response = await this.#fetch(url, {
-      method: 'GET',
+      method,
       headers,
       redirect: 'error',
     });
@@ -231,13 +236,15 @@ function readString(record: JsonRecord, key: string): string | null {
 }
 
 export function inferSelectionSide(selection: string): SelectionSide | null {
+  // Production evaluates four branches SEQUENTIALLY (apps/api/src/clv-service.ts):
+  // \bover\b, then \bunder\b, then the O<digit> token, then the U<digit> token.
+  // Collapsing them into two over/under families changes the answer for a
+  // selection carrying both an `under` word and an `O 8` token.
   const normalized = selection.toLowerCase();
-  if (/\bover\b/.test(normalized) || /\bO\s+\d/.test(selection) || /^O\s+\d/.test(selection)) {
-    return 'over';
-  }
-  if (/\bunder\b/.test(normalized) || /\bU\s+\d/.test(selection) || /^U\s+\d/.test(selection)) {
-    return 'under';
-  }
+  if (/\bover\b/.test(normalized)) return 'over';
+  if (/\bunder\b/.test(normalized)) return 'under';
+  if (/\bO\s+\d/.test(selection) || /^O\s+\d/.test(selection)) return 'over';
+  if (/\bU\s+\d/.test(selection) || /^U\s+\d/.test(selection)) return 'under';
   return null;
 }
 
@@ -270,6 +277,128 @@ function gameResultReference(settlement: SettlementRow): {
     id: evidenceId || payloadId,
     conflict: Boolean(evidenceId && payloadId && evidenceId !== payloadId),
   };
+}
+
+/**
+ * The CLV context production used for a `source='grading'` settlement.
+ *
+ * This cohort is written by recordGradedSettlement / recordCorrectedSettlement
+ * (apps/api/src/settlement-service.ts), which resolve CLV context from the
+ * GRADING EVENT and pass it as `preResolvedContext`. That short-circuits
+ * `resolvePickEventContext` entirely (apps/api/src/clv-service.ts), so for
+ * every settlement in this audit's cohort production's event identity, cutoff
+ * and participant come from here -- not from market_universe, not from
+ * pick metadata, and not from readRetainedEventStartTime.
+ *
+ * `gradingContext.eventId` is persisted on the settlement row, so using it is
+ * NOT circular: it is the value production recorded at grading time, read from
+ * the settlement, not derived from the game_results row being validated. It is
+ * therefore used for CLV only. The P1-A identity proof never consults it,
+ * because the grading service chose that event from the same game result whose
+ * membership is in question.
+ */
+export interface GradingClvContext {
+  providerEventId: string;
+  eventStartTime: string;
+  participantExternalId: string | null;
+}
+
+/** The event id production recorded when it graded this settlement. */
+export function gradingContextEventId(settlement: SettlementRow): string | null {
+  return readString(asRecord(asRecord(settlement.payload)['gradingContext']), 'eventId');
+}
+
+/** Production's normalization for the display-name participant fallback. */
+export function normalizeDisplayName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+/**
+ * Key for the name-fallback candidate index.
+ *
+ * Production does NOT search one flat pool: it calls
+ * participants.listByType('player', sport) with the PICK's own metadata.sport,
+ * and DatabaseParticipantRepository.listByType applies `.eq('sport', sport)`
+ * only when sport is truthy. So the pool a pick is matched against is scoped to
+ * that pick's sport, and an absent sport means every player.
+ *
+ * Pooling all sports together diverges in BOTH directions. Two players sharing a
+ * normalized display_name in different sports make the audit see 2 matches where
+ * production, scoped to one sport, sees 1 -- denying CLV production has. And for
+ * a participant-scoped market the resulting null participant emits
+ * `provider_participant_id=is.null`, which can match an event-scoped history row
+ * production's `eq.<player>` query never sees -- claiming CLV production does
+ * not have. That is the same over-claim class the `??` fix removed.
+ */
+export function participantNameKey(
+  sport: string | null | undefined,
+  displayName: string,
+): string {
+  return `${nonEmpty(sport) ?? ''}|${normalizeDisplayName(displayName)}`;
+}
+
+/**
+ * Exact port of buildCLVContextFromGradingEvent
+ * (apps/api/src/settlement-service.ts). Returns null exactly where production
+ * returns null -- no event row, or no external_id -- in which case production
+ * falls back to resolvePickEventContext.
+ */
+export function buildGradingClvContext(
+  settlement: SettlementRow,
+  pick: PickRow,
+  eventsById: ReadonlyMap<string, EventRow>,
+  participantsById: ReadonlyMap<string, ParticipantRow>,
+  participantsByNormalizedName: ReadonlyMap<string, readonly ParticipantRow[]> = new Map(),
+): GradingClvContext | null {
+  const eventId = gradingContextEventId(settlement);
+  if (!eventId) return null;
+  const event = eventsById.get(eventId);
+  const externalId = nonEmpty(event?.external_id);
+  if (!event || !externalId) return null;
+
+  // Production reads metadata.starts_at, else event_date + 'T23:59:59Z'.
+  // readRetainedEventStartTime is NOT on this path.
+  //
+  // This is the one null return production does NOT have: with neither
+  // metadata.starts_at nor event_date, production builds the literal string
+  // "nullT23:59:59Z" and returns a context carrying it, which then matches no
+  // snapshot and yields missing_closing_line. The audit refuses instead of
+  // reproducing a malformed timestamp, so such a pick is named
+  // grading_context_unresolvable rather than missing_closing_line. Measured on
+  // the cohort: 0 events lack both fields, so the divergence does not occur --
+  // but it IS a divergence and is recorded rather than glossed as parity.
+  const eventStartTime = resolveEventStartTime(event);
+  if (!eventStartTime) return null;
+
+  const metadata = asRecord(pick.metadata);
+  const playerName = readString(metadata, 'player');
+  if (!pick.participant_id && !playerName) {
+    return { providerEventId: externalId, eventStartTime, participantExternalId: null };
+  }
+
+  let participantExternalId: string | null = null;
+  if (pick.participant_id) {
+    // `nonEmpty` where production uses a bare `?? null`: an empty-string
+    // external_id would become an `eq.` filter in production and `is.null` here.
+    // Measured: 0 participants have a null or blank external_id, so the two
+    // agree on every row that exists. Noted because the bundle asserts elsewhere
+    // that an empty-string participant id is an `eq` filter, not `is.null`.
+    participantExternalId =
+      nonEmpty(participantsById.get(pick.participant_id)?.external_id) ?? null;
+  } else if (playerName) {
+    // Production: participants.listByType('player', sport), then a unique match
+    // on the normalized display_name. A non-unique match resolves to null.
+    // Production scopes the pool with the PICK's metadata.sport. An absent
+    // sport means listByType('player', undefined) -- every player -- so the
+    // empty-sport key is the all-players pool, not an empty one.
+    const matches =
+      participantsByNormalizedName.get(
+        participantNameKey(readString(metadata, 'sport'), playerName),
+      ) ?? [];
+    participantExternalId =
+      matches.length === 1 ? nonEmpty(matches[0]?.external_id) ?? null : null;
+  }
+  return { providerEventId: externalId, eventStartTime, participantExternalId };
 }
 
 /**
@@ -330,8 +459,40 @@ export function isEventScopedTotalPick(pick: PickRow): boolean {
  * end of the event date. Production passes exactly this value as
  * ClosingLineLookupCriteria.before.
  */
+/**
+ * Mirrors clv-service.ts's readRetainedEventStartTime. For event-scoped total
+ * picks production prefers the start time RETAINED ON THE PICK over anything
+ * derived from the event row, and only that path passes it. Ignoring it makes
+ * the audit send a later cutoff than production and select an in-play snapshot
+ * production would never see.
+ */
+export function readRetainedEventStartTime(pick: PickRow): string | null {
+  const metadata = asRecord(pick.metadata);
+  const retained =
+    readString(metadata, 'eventStartTime') ?? readString(metadata, 'eventTime');
+  return retained && Number.isFinite(Date.parse(retained)) ? retained : null;
+}
+
+/**
+ * The closing cutoff production would use for this pick: the retained pick-side
+ * start time on the event-scoped total path, else the event-derived value.
+ */
+export function resolveClosingCutoff(pick: PickRow, event: EventRow | null): string | null {
+  if (isEventScopedTotalPick(pick)) {
+    const retained = readRetainedEventStartTime(pick);
+    if (retained) return retained;
+  }
+  return event ? resolveEventStartTime(event) : null;
+}
+
 export function resolveEventStartTime(event: EventRow): string | null {
-  const startsAt = readString(asRecord(event.metadata), 'starts_at');
+  // Production (settlement-service.ts:999) tests `startsAt.trim().length > 0`
+  // but returns `startsAt` UNTRIMMED, and that raw string becomes the `lte.`
+  // cutoff filter. readString would trim it, so a whitespace-padded starts_at
+  // would send a different filter than production sends. Read raw, test trimmed.
+  const rawStartsAt = asRecord(event.metadata)?.['starts_at'];
+  const startsAt =
+    typeof rawStartsAt === 'string' && rawStartsAt.trim().length > 0 ? rawStartsAt : null;
   if (startsAt) return startsAt;
   const eventDate = nonEmpty(event.event_date);
   return eventDate ? `${eventDate}T23:59:59Z` : null;
@@ -399,7 +560,19 @@ export function resolveEvent(
   eventsById: ReadonlyMap<string, EventRow>,
   eventsByExternalId: ReadonlyMap<string, EventRow>,
   universe: MarketUniverseRow | null,
+  /**
+   * external_id values shared by more than one events row. The by-external-id
+   * index is last-wins, so an ambiguous value would silently select one of
+   * several events and then report `game_result_event_mismatch` -- a claim of
+   * CONTRADICTED identity, which is stronger and more misleading than the truth
+   * (identity could not be established). Ambiguity resolves to no event.
+   */
+  ambiguousExternalEventIds: ReadonlySet<string> = new Set(),
 ): EventRow | null {
+  const byExternal = (value: string | null): EventRow | null =>
+    value && !ambiguousExternalEventIds.has(value)
+      ? eventsByExternalId.get(value) ?? null
+      : null;
   if (universe?.event_id) {
     const event = eventsById.get(universe.event_id);
     if (event) return event;
@@ -409,8 +582,8 @@ export function resolveEvent(
   const providerEventId =
     universe?.provider_event_id ?? readString(metadata, 'providerEventId');
   return (
-    (eventId ? eventsById.get(eventId) ?? eventsByExternalId.get(eventId) : null) ??
-    (providerEventId ? eventsByExternalId.get(providerEventId) : null) ??
+    (eventId ? eventsById.get(eventId) ?? byExternal(eventId) : null) ??
+    byExternal(providerEventId) ??
     null
   );
 }
@@ -420,18 +593,26 @@ function resolveParticipantExternalId(
   participantsById: ReadonlyMap<string, ParticipantRow>,
   universe: MarketUniverseRow | null,
 ): string | null {
-  if (universe?.provider_participant_id) return universe.provider_participant_id;
+  // Production resolves this from the PARTICIPANTS TABLE first, keyed by
+  // pick.participant_id (buildCLVContextFromGradingEvent in
+  // apps/api/src/settlement-service.ts, and resolvePickEventContext in
+  // apps/api/src/clv-service.ts). Preferring market_universe or pick metadata
+  // would query a different player than production wherever the provenance row
+  // is stale.
   const metadata = asRecord(pick.metadata);
-  const explicit = readString(metadata, 'providerParticipantId');
-  if (explicit) return explicit;
   const participantId =
     pick.participant_id ??
     universe?.participant_id ??
     readString(metadata, 'participantId') ??
     readString(metadata, 'playerId');
-  return participantId
-    ? participantsById.get(participantId)?.external_id ?? null
+  const fromTable = participantId
+    ? nonEmpty(participantsById.get(participantId)?.external_id)
     : null;
+  if (fromTable) return fromTable;
+  return (
+    nonEmpty(universe?.provider_participant_id) ??
+    readString(metadata, 'providerParticipantId')
+  );
 }
 
 /**
@@ -496,26 +677,78 @@ export function buildPickIdentityContext(
   eventsById: ReadonlyMap<string, EventRow>,
   eventsByExternalId: ReadonlyMap<string, EventRow>,
   providerMarketKeysByType: ReadonlyMap<string, string>,
+  /**
+   * Reverse alias index: provider_market_key -> the market_type_id(s) that own
+   * it. Without it the `!aliasKey` branch below is a hole: for any pick whose
+   * canonical key has no alias row, the pick's own provider-key claim becomes
+   * the candidate set and validates itself.
+   */
+  marketTypeIdsByProviderKey: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+  ambiguousExternalEventIds: ReadonlySet<string> = new Set(),
 ): PickIdentityContext {
   const metadata = asRecord(pick.metadata);
   const providerMarketKey = resolveProviderMarketKey(pick, universe, providerMarketKeysByType);
   const canonical = canonicalMarketKey(pick);
 
-  // The pick's ONE market identity, in its two legitimate spellings. Widening
-  // this to every market string the pick carries would let a pick that asserts
-  // two different markets accept a game result matching either -- which is how
-  // a drifted `market_type_id` could admit the game's own total row for a
-  // player prop.
+  // The pick's ONE market identity. This must be anchored in something the pick
+  // cannot simply assert about itself: the canonical market column and its
+  // provider spelling from the alias table. Seeding the candidate set from
+  // `metadata.providerMarketKey` or `universe.provider_market_key` -- as an
+  // earlier revision did via resolveProviderMarketKey -- lets those claims
+  // validate themselves, because the conflict loop below then re-checks them
+  // against a set they populated. A pick that named a DIFFERENT market in
+  // metadata could therefore admit a real game_results row for that other
+  // market and book a fabricated agreement (a rebounds row graded against a
+  // points line).
+  const aliasKey =
+    nonEmpty(providerMarketKeysByType.get(canonical)) ??
+    (canonical !== pick.market ? nonEmpty(providerMarketKeysByType.get(pick.market)) : null);
+  const provenanceKeys = [
+    nonEmpty(universe?.provider_market_key),
+    nonEmpty(readString(metadata, 'providerMarketKey')),
+  ].filter((key): key is string => key !== null);
+
   const candidates = new Set<string>();
-  for (const candidate of [providerMarketKey, canonical]) {
+  for (const candidate of [canonical, aliasKey]) {
     const normalized = normalizeMarketKey(candidate);
     if (normalized) candidates.add(normalized);
   }
-
-  // Every other market claim the pick makes must agree with that identity,
-  // directly or through the alias table. One that does not is a contradiction.
   let marketIdentityConflict = false;
-  for (const claim of [
+  if (!aliasKey) {
+    // No authoritative mapping exists for this pick's canonical market, so
+    // pick-side provenance is the only provider spelling available and may seed
+    // the set -- but only under two conditions, or the claim validates itself.
+    //
+    //   1. every provenance claim agrees with every other one; and
+    //   2. the claimed provider key is not OWNED by some other market_type_id.
+    //
+    // (2) is the load-bearing half. `rebounds-all-game-ou` belongs to
+    // `player_rebounds_ou`; a points pick that names it in metadata is asserting
+    // another market's identity, and admitting it would let a real rebounds
+    // game_results row grade a points line. Only a provider key that no
+    // market_type_id claims -- genuinely unmapped on both sides -- may seed.
+    const owners = (key: string): ReadonlySet<string> =>
+      marketTypeIdsByProviderKey.get(key) ?? new Set<string>();
+    const foreign = provenanceKeys.filter((key) => {
+      const owned = owners(key);
+      if (owned.size === 0) return false;
+      return !owned.has(canonical) && !owned.has(pick.market);
+    });
+    const distinct = new Set(
+      provenanceKeys
+        .map((key) => normalizeMarketKey(key))
+        .filter((key): key is string => key !== null),
+    );
+    if (foreign.length > 0 || distinct.size > 1) {
+      marketIdentityConflict = true;
+    } else {
+      for (const normalized of distinct) candidates.add(normalized);
+    }
+  }
+
+  // Every market claim the pick makes must agree with that identity, directly
+  // or through the alias table. One that does not is a contradiction.
+  for (const claim of marketIdentityConflict ? [] : [
     pick.market,
     pick.market_type_id,
     readString(metadata, 'providerMarketKey'),
@@ -533,7 +766,13 @@ export function buildPickIdentityContext(
   }
 
   return {
-    event: resolveEvent(pick, eventsById, eventsByExternalId, universe),
+    event: resolveEvent(
+      pick,
+      eventsById,
+      eventsByExternalId,
+      universe,
+      ambiguousExternalEventIds,
+    ),
     providerMarketKey,
     participantInternalId: resolveParticipantInternalId(pick, universe),
     eventScoped: isEventScopedTotalPick(pick),
@@ -615,6 +854,19 @@ export interface TruthAuditDataset {
    * if it were the pick's current truth.
    */
   supersededSettlementIds: ReadonlySet<string>;
+  /**
+   * provider_market_key -> the market_type_id(s) that own it, from
+   * provider_market_aliases. Used to refuse a pick-side provider-key claim that
+   * belongs to a DIFFERENT market.
+   */
+  marketTypeIdsByProviderKey?: ReadonlyMap<string, ReadonlySet<string>>;
+  /** external_id values shared by more than one events row. */
+  ambiguousExternalEventIds?: ReadonlySet<string>;
+  /**
+   * Participants indexed by production's normalized display_name, for the
+   * name-based participant fallback in buildCLVContextFromGradingEvent.
+   */
+  participantsByNormalizedName?: ReadonlyMap<string, readonly ParticipantRow[]>;
 }
 
 export interface ClosingLookupCriteria {
@@ -768,12 +1020,45 @@ export function selectLatestClosingOffer(
   })[0] ?? null;
 }
 
+/**
+ * Mirrors `asClosingLineLike` (apps/api/src/clv-service.ts:867). Production
+ * wraps EVERY findClosingLine result in it, and it returns null -- the row is
+ * treated as no line at all -- when `snapshot_at` or `provider_key` is not a
+ * non-empty string. A rejected pinnacle row therefore falls through to the
+ * consensus tier and then to the market_universe fallback.
+ *
+ * The rejection is applied AFTER the latest row is selected, never as a filter
+ * on the candidate list: production's query already returned a single row, so a
+ * bad row makes production skip that TIER, not fall back to the second-latest
+ * row in it. Filtering first would resolve a line production never sees.
+ *
+ * Both columns are NOT NULL in database.types.ts, so only the empty-string case
+ * is reachable on real data. Mirrored anyway: the bundle claims filter-for-filter
+ * parity, and an unmirrored gate is a divergence whether or not it is currently
+ * reachable.
+ */
+export function asProductionClosingLine(
+  offer: ClosingOfferRow | null,
+): ClosingOfferRow | null {
+  if (!offer) return null;
+  if (typeof offer.snapshot_at !== 'string' || offer.snapshot_at.length === 0) return null;
+  if (typeof offer.provider_key !== 'string' || offer.provider_key.length === 0) return null;
+  return offer;
+}
+
 function pricedSideAvailable(
   side: SelectionSide,
   overOdds: number | null,
   underOdds: number | null,
 ): boolean {
   const value = side === 'over' ? overOdds : underOdds;
+  // `readClosingSideOdds` (apps/api/src/clv-service.ts) does gate on
+  // Number.isFinite alone -- but it RETURNS the raw number, and both of its
+  // callers test it for truthiness: `const pricedSide = readClosingSideOdds(...)
+  // ; if (!pricedSide) return 'missing_priced_side'` at clv-service.ts:415 and
+  // the same falsy check at :542. Zero is falsy, so production reports
+  // missing_priced_side on zero odds. Reading readClosingSideOdds in isolation
+  // says the opposite; the callers are the semantics.
   return typeof value === 'number' && Number.isFinite(value) && value !== 0;
 }
 
@@ -836,6 +1121,17 @@ export async function buildPickTruthAuditReport(
       dataset.eventsById,
       dataset.eventsByExternalId,
       dataset.providerMarketKeysByType,
+      dataset.marketTypeIdsByProviderKey ?? new Map(),
+      dataset.ambiguousExternalEventIds ?? new Set(),
+    );
+    // Production's CLV context for this cohort. Read from the settlement row,
+    // never from the referenced game_results row, and used for CLV only.
+    const gradingClv = buildGradingClvContext(
+      settlement,
+      pick,
+      dataset.eventsById,
+      dataset.participantsById,
+      dataset.participantsByNormalizedName ?? new Map(),
     );
     const event = identity.event;
     const providerMarketKey = identity.providerMarketKey;
@@ -848,7 +1144,10 @@ export async function buildPickTruthAuditReport(
 
     const structuralClasses: string[] = [];
     if (!event) structuralClasses.push('orphaned_event');
-    if (!identity.eventScoped && !participantExternalId) {
+    // Production sends a null participant for moneyline as well as for
+    // event-level totals, so a team moneyline pick with no participant is not a
+    // structural blocker. Using `eventScoped` here counted every one of them.
+    if (!usesNullParticipantForClosingLookup(pick) && !participantExternalId) {
       structuralClasses.push('missing_participant');
     }
     if (!providerMarketKey || !side || !Number.isFinite(pick.line ?? null)) {
@@ -924,18 +1223,55 @@ export async function buildPickTruthAuditReport(
       pick,
       dataset.providerMarketKeysByType,
     );
+    // For this cohort production's participant comes from the grading context.
+    // A resolved grading context whose participantExternalId is null is
+    // production's own answer -- it passes that null into findClosingLine and
+    // filters is(provider_participant_id, null). `??` would fall through to the
+    // market_universe/metadata resolver and send eq.<id>, finding a closing line
+    // production never sees: the same over-claim class as the deleted
+    // missing_participant_context bail. Only an ABSENT context falls back.
+    const clvParticipantExternalId = gradingClv
+      ? gradingClv.participantExternalId
+      : participantExternalId;
     const closingParticipantId = usesNullParticipantForClosingLookup(pick)
       ? null
-      : participantExternalId;
+      : clvParticipantExternalId;
+    const clvProviderEventId =
+      gradingClv?.providerEventId ??
+      // Production's non-grading path resolves the offer-lookup event id from
+      // events.external_id, then (event-scoped totals only) metadata
+      // providerEventId. market_universe.provider_event_id owns the provenance
+      // short-circuit above, not this lookup.
+      nonEmpty(event?.external_id) ??
+      nonEmpty(readString(asRecord(pick.metadata), 'providerEventId'));
+    const clvCutoff = gradingClv?.eventStartTime ?? resolveClosingCutoff(pick, event);
 
-    if (!Number.isFinite(pick.odds ?? null) || pick.odds === 0) {
+    // Mirrors clv-service.ts exactly: `!Number.isFinite(pick.odds ?? null)`.
+    // An extra `|| pick.odds === 0` would refuse a pick production still prices.
+    if (!Number.isFinite(pick.odds ?? null)) {
       clvReason = 'missing_pick_odds';
     } else if (isMoneyline(pick)) {
-      // Production has a dedicated moneyline path that takes the side from the
-      // participant's home/away role in event_participants. The audit does not
-      // read that table, so it declines rather than guessing -- named, so it is
-      // never mistaken for a production failure.
-      clvReason = 'moneyline_side_not_independently_resolvable';
+      // `resolvePickEventContext` has a moneyline path that takes the side from
+      // the participant's home/away role in event_participants -- but this
+      // cohort never reaches it. buildCLVContextFromGradingEvent
+      // (apps/api/src/settlement-service.ts) returns three fields and never sets
+      // participantSide, so no moneyline pick on this path can ever reach
+      // `computed`. It does NOT always terminate at missing_selection_side:
+      // clv-service.ts returns missing_closing_line first when no closing line
+      // exists, and only reaches the participantSide check after one is found.
+      // What is unconditional is the unreachability of a CLV result, which is
+      // what this reason names -- rather than blaming an event_participants
+      // lookup the audit merely did not perform.
+      //
+      // This branch precedes the grading_context_unresolvable check below, so a
+      // moneyline settlement with NO grading context would be named here even
+      // though production would take resolvePickEventContext, set participantSide
+      // from event_participants, and could reach `computed`. Measured on the
+      // cohort: 0 moneyline picks, 0 settlements missing gradingContext.eventId,
+      // and 0 whose named event fails to resolve -- so the combination does not
+      // occur. Recorded rather than reordered, because reordering would change
+      // the reason reported for a case that has never arisen.
+      clvReason = 'moneyline_clv_unreachable_on_grading_path';
     } else if (!side) {
       clvReason = 'missing_selection_side';
     } else if (universe?.closing_line !== null && universe?.closing_line !== undefined) {
@@ -944,29 +1280,47 @@ export async function buildPickTruthAuditReport(
       if (!pricedSideAvailable(side, universe.closing_over_odds, universe.closing_under_odds)) {
         clvReason = 'missing_priced_side';
       }
-    } else if (!nonEmpty(event?.external_id) && !nonEmpty(universe?.provider_event_id)) {
+    } else if (gradingContextEventId(settlement) !== null && !gradingClv) {
+      // The settlement names a grading event that could not be resolved to a
+      // usable context. Production would fall back to resolvePickEventContext,
+      // which for a player prop additionally requires a resolved participant,
+      // event_participants links and chooseEventForPick proximity selection --
+      // none of which this read-only audit models. Substituting
+      // events.external_id here would resolve where production returns
+      // missing_event_context, an over-claim. Name it and fail closed.
+      //
+      // Unreachable for the audited cohort: all 1571 source='grading'
+      // settlements persist gradingContext.eventId and every one resolves. A
+      // settlement carrying NO grading context is a different case -- there
+      // production genuinely takes the fallback path, and the generic resolver
+      // below is the audit's model of it.
+      clvReason = 'grading_context_unresolvable';
+    } else if (!clvProviderEventId) {
       clvReason = 'missing_event_context';
     } else if (!nonEmpty(productionMarketKey)) {
       clvReason = 'missing_market_context';
-    } else if (closingParticipantId === null && !usesNullParticipantForClosingLookup(pick)) {
-      clvReason = 'missing_participant_context';
-    } else if (!event || !resolveEventStartTime(event)) {
-      // Production passes eventContext.eventStartTime as the closing cutoff.
-      // Without a start time there is no cutoff, and an audit that dropped the
-      // cutoff would claim CLV availability production does not have.
+    } else if (!clvCutoff) {
+      // Production passes eventContext.eventStartTime as the closing cutoff --
+      // the pick's retained start time on the event-scoped total path, else the
+      // event-derived value. Without a cutoff there is no closing line, and an
+      // audit that dropped the cutoff would claim CLV production does not have.
       clvReason = 'missing_closing_cutoff';
     } else {
       const baseCriteria = {
-        providerEventId: nonEmpty(universe?.provider_event_id) ?? nonEmpty(event.external_id)!,
+        providerEventId: clvProviderEventId,
         providerMarketKey: productionMarketKey,
         providerParticipantId: closingParticipantId,
-        before: resolveEventStartTime(event)!,
+        before: clvCutoff,
       };
-      let closing = selectLatestClosingOffer(
-        observeClosingRows(await closingOfferLookup({ ...baseCriteria, bookmakerKey: 'pinnacle' })),
+      let closing = asProductionClosingLine(
+        selectLatestClosingOffer(
+          observeClosingRows(await closingOfferLookup({ ...baseCriteria, bookmakerKey: 'pinnacle' })),
+        ),
       );
       if (!closing) {
-        closing = selectLatestClosingOffer(observeClosingRows(await closingOfferLookup(baseCriteria)));
+        closing = asProductionClosingLine(
+          selectLatestClosingOffer(observeClosingRows(await closingOfferLookup(baseCriteria))),
+        );
       }
       if (closing) {
         if (!pricedSideAvailable(side, closing.over_odds, closing.under_odds)) {
@@ -1203,7 +1557,28 @@ async function readExactCount(
  * and a tight limit truncates the result, surfacing as a false
  * `orphaned_event` / `game_result_identity_unverifiable`.
  */
-async function readByIds<T>(
+/**
+ * A page is only usable when every matching row is in it. `Prefer: count=exact`
+ * reports the true total in the content-range header, which is exact even when
+ * PostgREST's `max_rows` cap silently shortens the response -- the case a
+ * `rows.length === limit` check cannot see.
+ */
+function assertCompletePage(
+  page: { rows: readonly unknown[]; count: number | null },
+  what: string,
+): void {
+  if (page.count === null) {
+    throw new Error(`${what}: no exact count; completeness cannot be established`);
+  }
+  if (page.rows.length < page.count) {
+    throw new Error(
+      `${what}: read ${page.rows.length} of ${page.count} matching rows; `
+      + 'a truncated read cannot be audited',
+    );
+  }
+}
+
+export async function readByIds<T>(
   client: ReadOnlyPostgrestClient,
   table: string,
   select: string,
@@ -1214,18 +1589,42 @@ async function readByIds<T>(
   const rows: T[] = [];
   for (const idsChunk of chunk(unique(ids))) {
     if (idsChunk.length === 0) continue;
+    // `idsChunk.length * rowsPerId` is a budget for the WHOLE chunk, not per
+    // id, so a few ids with many rows can push the others' rows off the end.
+    // A truncated read makes an ambiguous events.external_id look UNIQUE --
+    // failing OPEN in precisely the place the ambiguity guard exists to close.
+    //
+    // Comparing rows.length against the limit cannot detect this reliably:
+    // PostgREST caps every response at the project's `max_rows` setting, so
+    // above that cap a truncated page comes back SHORTER than the limit and
+    // reads as complete. Prefer: count=exact reports the total number of
+    // matching rows in the content-range header regardless of any cap, so the
+    // comparison below is exact rather than a heuristic.
     const page = await client.read<T>({
       table,
       select,
       filters: { [column]: inFilter(idsChunk) },
       limit: idsChunk.length * rowsPerId,
+      exactCount: true,
     });
+    if (page.count === null) {
+      throw new Error(
+        `readByIds(${table}.${column}) got no exact count; a read whose `
+        + 'completeness cannot be established must not be audited',
+      );
+    }
+    if (page.rows.length < page.count) {
+      throw new Error(
+        `readByIds(${table}.${column}) read ${page.rows.length} of ${page.count} `
+        + 'matching rows; a truncated read cannot be audited',
+      );
+    }
     rows.push(...page.rows);
   }
   return rows;
 }
 
-async function loadAuditDataset(
+export async function loadAuditDataset(
   client: ReadOnlyPostgrestClient,
   sampleSize: number,
 ): Promise<{
@@ -1345,6 +1744,10 @@ async function loadAuditDataset(
     ...gameResults.map((row) => row.event_id),
     ...universes.map((row) => row.event_id),
     ...picks.map((pick) => readString(asRecord(pick.metadata), 'eventId')),
+    // The event production itself used for CLV on this cohort. Loading it is
+    // what lets the audit mirror buildCLVContextFromGradingEvent instead of
+    // reconstructing an event production never consulted.
+    ...settlements.map((settlement) => gradingContextEventId(settlement)),
   ]);
   const providerEventIds = unique([
     ...universes.map((row) => row.provider_event_id),
@@ -1382,9 +1785,96 @@ async function loadAuditDataset(
   const participants = await readByIds<ParticipantRow>(
     client,
     'participants',
-    'id,external_id,display_name,participant_type',
+    'id,external_id,display_name,participant_type,sport',
     participantIds,
   );
+
+  // Production's name-based participant fallback (buildCLVContextFromGradingEvent)
+  // reads participants.listByType('player', sport) and requires a UNIQUE match on
+  // the normalized display_name. Mirroring it needs the same candidate pool, so
+  // the pool is fetched per sport -- narrowing it server-side by name could make
+  // a genuinely ambiguous name look unique and manufacture CLV production does
+  // not have. Only picks that actually take this branch cause a read.
+  const nameFallbackPicks = picks.filter(
+    (pick) => !pick.participant_id && readString(asRecord(pick.metadata), 'player'),
+  );
+  // One pool PER SPORT, because production scopes the pool per pick:
+  // listByType('player', metadata.sport) applies `.eq('sport', sport)` only when
+  // sport is truthy. A single flat pool diverges in both directions -- see
+  // participantNameKey. `sport` absent means listByType('player', undefined),
+  // which is EVERY player, not none, so an unsported pick gets the all-players
+  // pool; modelling that as an empty pool would deny the participant production
+  // resolves. The all-players pool is fetched ONLY when some pick actually
+  // lacks a sport, so a fully-sported cohort does not read the whole table.
+  const nameFallbackSports: (string | null)[] = [
+    ...unique(nameFallbackPicks.map((pick) => readString(asRecord(pick.metadata), 'sport'))),
+    ...(nameFallbackPicks.some((pick) => !readString(asRecord(pick.metadata), 'sport'))
+      ? [null]
+      : []),
+  ];
+  const participantsByNormalizedName = new Map<string, ParticipantRow[]>();
+  for (const sport of nameFallbackSports) {
+    const nameCandidates: ParticipantRow[] = [];
+    const PAGE = 1000;
+    // DIVERGENCE, deliberate and recorded: production's own listByType
+    // (packages/db/src/runtime-repositories.ts:5906) terminates on
+    // `page.length < PAGE_SIZE` -- the very rows.length terminator this comment
+    // calls dangerous. So production can itself see a short pool and read a
+    // non-unique name as unique. The audit is STRICTER: it refuses rather than
+    // silently deciding uniqueness on an incomplete pool. That means the audit
+    // can report a participant unresolved where production resolved one. It is
+    // the fail-closed direction, and refusing to audit is preferable to
+    // reproducing a bug in order to agree with it -- but it IS a divergence and
+    // is named here rather than glossed as parity.
+    //
+    // The loop is driven by the exact match total, never by `rows.length < PAGE`.
+    // PostgREST caps every response at the project's `max_rows` setting, so a
+    // length-based terminator stops early whenever that cap is below PAGE, and
+    // a SHORT candidate pool is the dangerous direction: it makes a display name
+    // that is genuinely non-unique look unique, and production's fallback only
+    // resolves a participant on a UNIQUE normalized-name match. That would
+    // manufacture a participant production resolves to null.
+    let total: number | null = null;
+    const before = nameCandidates.length;
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await client.read<ParticipantRow>({
+        table: 'participants',
+        select: 'id,external_id,display_name,participant_type,sport',
+        filters: {
+          participant_type: 'eq.player',
+          ...(sport ? { sport: `eq.${sport}` } : {}),
+        },
+        order: 'display_name.asc',
+        limit: PAGE,
+        exactCount: true,
+        offset,
+      });
+      if (page.count === null) {
+        throw new Error(
+          'participants name-fallback page: no exact count; a pool whose '
+          + 'completeness cannot be established must not decide uniqueness',
+        );
+      }
+      total = page.count;
+      nameCandidates.push(...page.rows);
+      if (nameCandidates.length - before >= total) break;
+      if (page.rows.length === 0) {
+        throw new Error(
+          `participants name-fallback pool: read ${nameCandidates.length - before} `
+          + `of ${total} rows before the server stopped returning any; an `
+          + 'incomplete pool cannot decide name uniqueness',
+        );
+      }
+    }
+    // Bucketed under THIS pool's sport key, so a pick only ever sees the pool
+    // production would have queried for it.
+    for (const row of nameCandidates) {
+      const key = participantNameKey(sport, row.display_name);
+      const bucket = participantsByNormalizedName.get(key);
+      if (bucket) bucket.push(row);
+      else participantsByNormalizedName.set(key, [row]);
+    }
+  }
 
   const aliasTypeIds = unique([
     ...picks.map((pick) => pick.market_type_id),
@@ -1404,9 +1894,51 @@ async function loadAuditDataset(
       // that priority ordering decides the winner a truncated page would change
       // the resolved provider key rather than merely shorten the list.
       limit: typeIds.length * 8,
+      exactCount: true,
     });
+    assertCompletePage(page, 'provider_market_aliases (forward, by market_type_id)');
     providerMarketAliases.push(...page.rows);
   }
+
+  // Reverse alias index. A provider market key claimed by a pick but OWNED by a
+  // different market_type_id is another market's identity, so the owners have to
+  // be known before any pick-side claim may seed identity. Fetched by
+  // provider_market_key, because the forward page is keyed by the pick's own
+  // market_type_id and would never contain the foreign key.
+  const claimedProviderKeys = unique([
+    ...universes.map((row) => row.provider_market_key),
+    ...picks.map((pick) => readString(asRecord(pick.metadata), 'providerMarketKey')),
+  ]);
+  const reverseAliases: ProviderMarketAliasRow[] = [];
+  for (const keys of chunk(claimedProviderKeys)) {
+    const page = await client.read<ProviderMarketAliasRow>({
+      table: 'provider_market_aliases',
+      select: 'market_type_id,provider,provider_market_key',
+      filters: { provider: 'eq.sgo', provider_market_key: inFilter(keys) },
+      limit: keys.length * 8,
+      exactCount: true,
+    });
+    assertCompletePage(page, 'provider_market_aliases (reverse, by provider_market_key)');
+    reverseAliases.push(...page.rows);
+  }
+  const marketTypeIdsByProviderKey = new Map<string, Set<string>>();
+  for (const row of [...providerMarketAliases, ...reverseAliases]) {
+    const bucket = marketTypeIdsByProviderKey.get(row.provider_market_key);
+    if (bucket) bucket.add(row.market_type_id);
+    else marketTypeIdsByProviderKey.set(row.provider_market_key, new Set([row.market_type_id]));
+  }
+
+  // external_id values shared by more than one events row: ambiguous identity,
+  // which must read as unverifiable rather than as a contradiction.
+  const externalIdCounts = new Map<string, number>();
+  for (const row of events) {
+    if (row.external_id) {
+      externalIdCounts.set(row.external_id, (externalIdCounts.get(row.external_id) ?? 0) + 1);
+    }
+  }
+  const ambiguousExternalEventIds = new Set(
+    [...externalIdCounts].filter(([, count]) => count > 1).map(([id]) => id),
+  );
 
   return {
     dataset: {
@@ -1421,8 +1953,11 @@ async function loadAuditDataset(
           .map((row) => [row.external_id, row]),
       ),
       participantsById: new Map(participants.map((row) => [row.id, row])),
+      participantsByNormalizedName,
       marketUniverseById,
       providerMarketKeysByType: buildProviderMarketKeyIndex(providerMarketAliases),
+      marketTypeIdsByProviderKey,
+      ambiguousExternalEventIds,
     },
     gradingPopulation,
     auditablePopulation,
@@ -1456,9 +1991,13 @@ export function createClosingOfferLookup(
     const filters: Record<string, string> = {
       provider_event_id: `eq.${criteria.providerEventId}`,
       provider_market_key: `eq.${criteria.providerMarketKey}`,
-      provider_participant_id: criteria.providerParticipantId
-        ? `eq.${criteria.providerParticipantId}`
-        : 'is.null',
+      // Production narrows `undefined` to `null` and then branches on `null`,
+      // so an empty-string participant id is an `eq.` filter, not `is.null`.
+      provider_participant_id:
+        criteria.providerParticipantId === undefined ||
+        criteria.providerParticipantId === null
+          ? 'is.null'
+          : `eq.${criteria.providerParticipantId}`,
       snapshot_at: `lte.${criteria.before}`,
     };
     if (criteria.bookmakerKey !== undefined) {
@@ -1495,9 +2034,11 @@ export function createMarketUniverseClosingLookup(
         provider_event_id: `eq.${criteria.providerEventId}`,
         provider_market_key: `eq.${criteria.providerMarketKey}`,
         closing_line: 'not.is.null',
-        provider_participant_id: criteria.providerParticipantId
-          ? `eq.${criteria.providerParticipantId}`
-          : 'is.null',
+        // findClosingLineByProviderKey branches on `=== null`, not truthiness.
+        provider_participant_id:
+          criteria.providerParticipantId === null
+            ? 'is.null'
+            : `eq.${criteria.providerParticipantId}`,
       },
       limit: 1,
     });

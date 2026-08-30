@@ -55,7 +55,12 @@ ASSERTIONS:
       desc limit 1`, and `apps/api/src/clv-service.ts`'s pinnacle-then-consensus
       bookmaker preference with the `market_universe` fallback last. The closing
       cutoff mirrors production's `readEventStartTime`
-      (`metadata.starts_at`, else `event_date + 'T23:59:59Z'`).
+      (`metadata.starts_at`, else `event_date + 'T23:59:59Z'`) **and** its
+      `readRetainedEventStartTime`: on the event-scoped-total path production
+      prefers the start time retained on the pick
+      (`metadata.eventStartTime`/`eventTime`), so the audit does too. Using the
+      event-derived value there would send a *later* cutoff than production and
+      could select an in-play snapshot production never sees.
 - [x] **P1-B remains read-only and inside the audit.** No file under
       `packages/db/**`, `apps/api/**`, `supabase/migrations/**` or any runtime
       production path is modified; the transport is still GET-only.
@@ -79,17 +84,186 @@ ASSERTIONS:
       by production's `providerMarketKeyPriority` (`-all-game-` < `-game-` <
       `-all-` < other) then `localeCompare`, instead of last-wins `Map`
       insertion order.
+- [x] **A pick-side market claim cannot validate itself.** The candidate set is
+      seeded only from the canonical market column and its provider spelling in
+      `provider_market_aliases`. An earlier revision seeded it from
+      `market_universe.provider_market_key` and `metadata.providerMarketKey` and
+      then re-checked those same claims against the set they had populated, so a
+      pick naming a different market in metadata could admit a real
+      `game_results` row for that other market and book a fabricated agreement.
+      Pick-side provenance may seed identity only when the alias table has no
+      mapping at all, and only when every provenance claim agrees.
+- [x] **Structural classification does not invent a moneyline defect.**
+      Production sends a null participant for moneyline as well as for
+      event-level totals, so `usesNullParticipantForClosingLookup` — not
+      `eventScoped` — decides whether a missing participant is structural.
+- [x] **The odds gate is exactly production's.** `!Number.isFinite(pick.odds ??
+      null)`; an extra `|| pick.odds === 0` had been refusing a pick production
+      still prices.
+- [x] **Participant null-semantics match each production call site.**
+      `createClosingOfferLookup` branches on `=== undefined || === null`
+      (`findClosingLine` narrows `undefined` to `null` first) and
+      `createMarketUniverseClosingLookup` on `=== null`
+      (`findClosingLineByProviderKey`), so an empty-string participant id is an
+      `eq` filter, not `is.null`.
+- [x] **A pick with no event row is still eligible when production would resolve
+      it.** `resolveEventScopedTotalContext` resolves from
+      `metadata.providerEventId` plus a retained start time with no event row at
+      all, so requiring an event row would have denied CLV production does have.
+- [x] **A null participant issues the query production issues.** `computeCLVOutcome`
+      passes `providerParticipantId` — possibly `null` — straight into
+      `findClosingLine`, which filters `is(provider_participant_id, null)`.
+      Production never bails. The audit's earlier `missing_participant_context`
+      refusal attributed a data gap to a participant-resolution defect, and named
+      a class that is not a member of production's `CLVComputationStatus` at all,
+      so the persisted-status comparison ran against a state production could
+      never have persisted. The class is gone; the test asserts the captured
+      `is.null` filter, so the receipt is that the query was actually issued.
+- [x] **Zero closing odds are `missing_priced_side`, as production reports them.**
+      `readClosingSideOdds` gates on `Number.isFinite` alone — but it returns the
+      raw number, and both callers test it for truthiness
+      (`if (!pricedSide) return 'missing_priced_side'`, `clv-service.ts:415` and
+      `:542`). Zero is falsy. Round 4 read the helper in isolation, priced zero
+      odds, and thereby claimed CLV production does not have while suppressing a
+      real persisted-status mismatch; the fourth review caught it. Production
+      holds no zero-priced closing rows today, so no measured figure moved — the
+      correction is to the semantics, not the count.
+- [x] **The moneyline decline names the path that actually applies.**
+      `buildCLVContextFromGradingEvent` never sets `participantSide`, so no
+      moneyline pick on this cohort's path can reach `computed` — which is what
+      `moneyline_clv_unreachable_on_grading_path` asserts. It does **not** always
+      terminate at `missing_selection_side`: `clv-service.ts` returns
+      `missing_closing_line` first when no closing line exists, and reaches the
+      `participantSide` check only after finding one. An earlier wording of this
+      assertion named that wrong terminal status. The previous *reason name*
+      blamed an `event_participants` lookup the audit had simply not performed.
+- [x] **An unresolvable grading context fails closed rather than downgrading.**
+      Substituting `events.external_id` would resolve where production's fallback
+      (`resolvePickEventContext`, which additionally needs a resolved participant,
+      `event_participants` links and `chooseEventForPick` proximity selection)
+      returns `missing_event_context`. Named `grading_context_unresolvable`.
+- [x] **A truncated page is refused, and completeness is established by exact
+      count rather than by page length.** `readByIds` budgets
+      `idsChunk.length * rowsPerId` for the whole chunk, so a few ids with many
+      rows could push the rest off the end — and a truncated read makes an
+      ambiguous `events.external_id` look *unique*, failing open in exactly the
+      place the ambiguity guard exists to close. Comparing `rows.length` against
+      the limit does **not** detect this: PostgREST caps every response at the
+      project's `max_rows` setting, so above that cap a truncated page arrives
+      *shorter* than the limit and reads as complete. That was round 5's guard and
+      it was itself fail-open. The shipped guard sends `Prefer: count=exact` and
+      compares the rows read against the true matching total from
+      `content-range`, which is exact regardless of any server cap; a missing
+      count is refused rather than assumed complete. The same check covers the
+      forward and reverse `provider_market_aliases` pages. The participants
+      name-fallback pager takes the same principle in the form a paged read
+      needs — its loop is driven by the exact total instead of by
+      `rows.length < PAGE`.
+- [x] **A provider market key owned by another market cannot seed identity.**
+      A reverse alias index (`provider_market_key` -> owning `market_type_id`)
+      is loaded, and a claimed key owned by a different `market_type_id` sets
+      `marketIdentityConflict`. Without it, any pick whose canonical market has
+      no alias row could seed the candidate set from its own claim — the
+      self-validation defect, relocated behind the unmapped branch. A key that
+      no `market_type_id` claims may still seed, so genuinely unmapped picks are
+      not over-refused.
+- [x] **CLV resolves the event the way production's grading path does.** This
+      cohort is `source='grading'`, written by `recordGradedSettlement`
+      (`apps/api/src/settlement-service.ts`), which passes `preResolvedContext`
+      and so bypasses `resolvePickEventContext` entirely. The audit mirrors
+      `buildCLVContextFromGradingEvent`: provider event id from
+      `events.external_id` keyed by the persisted `gradingContext.eventId`,
+      cutoff from that event's `starts_at` (else `event_date + 'T23:59:59Z'`),
+      participant from `participants.findById(pick.participant_id)` with
+      production's unique-normalized-`display_name` fallback. Reconstructing the
+      event instead was denying CLV production has and reporting it as a
+      production defect.
+- [x] **The grading event is used for CLV only, never for identity.**
+      `apps/api/src/grading-service.ts` sets `gradingContext.eventId` to
+      `gameResult.event_id`, so admitting it into the P1-A proof would reinstate
+      the circularity. A test asserts a wrong-event row stays unverifiable even
+      when the grading context names that same wrong event.
+- [x] **Round 4 priced zero closing odds; round 5 reverted that.** The round-4
+      reasoning ("`readClosingSideOdds` gates on `Number.isFinite` alone") was
+      true of the helper and wrong about production, because both callers test
+      its raw return for truthiness. The corrected assertion is recorded above.
+      It is kept here rather than deleted so the bundle shows what was believed
+      and what overturned it.
+- [x] **Offer-lookup precedence matches production.** Event id from
+      `events.external_id`, then `metadata.providerEventId` — never
+      `market_universe.provider_event_id`, which owns the provenance
+      short-circuit and not this query. Participant external id from the
+      participants table first.
+- [x] **An ambiguous `events.external_id` is unverifiable, not a mismatch.** The
+      by-external-id index is last-wins; silently selecting one of two events and
+      then reporting `game_result_event_mismatch` would assert *contradicted*
+      identity where the truth is unproven identity.
+- [x] **Selection-side branches run in production's order.** `\bover\b`, then
+      `\bunder\b`, then `O<digit>`, then `U<digit>` — not two collapsed
+      over/under families, which differ for a selection carrying both.
 - [x] **A superseded settlement is never counted as an agreement.**
       `corrects_id IS NULL` excludes the corrections themselves, not the
       settlements they supersede; rows named by a later `corrects_id` fail
       closed as `settlement_superseded_by_correction`.
-- [x] **Every correction carries a mutation control, and none survives.** Twelve
-      independent mutations each turn at least one test red. An earlier round of
-      this battery left two mutations **surviving** — removing the drift guard,
-      and removing conflict detection — because the single combined scenario was
-      blocked by either mechanism alone; two isolating tests were added
-      specifically to kill them. Recorded below.
-- [x] `pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts` — 23 pass,
+- [x] **Every correction carries a mutation control, and none survives.**
+      Thirty-nine independent, **semantic** mutations each turn at least one
+      test red; none relies on a compile error. Three rounds of this battery left
+      survivors, and every one was fixed by adding the isolating test rather than
+      by weakening the mutation — round 2 left the drift guard and conflict
+      detection alive because one combined scenario was blocked by either alone;
+      round 4 left `gradingClv = null` alive because the fixture's
+      `market_universe` row still pointed at the right event; and round 8 left
+      `assertCompletePage` on the **reverse** alias read alive for two
+      independent reasons, both in the test. The truncation test truncated *both*
+      alias pages, so the forward read threw first and the reverse guard never
+      executed; and the loader fixture carried no `market_universe` row and no
+      `metadata.providerMarketKey`, so `claimedProviderKeys` was empty and the
+      reverse read's loop body never ran at all. A test serving a complete
+      forward page beside a truncated reverse one now isolates it. Rounds 5 and 6
+      added six mutations, including two that invert round-4 decisions the fourth
+      review overturned; round 8 added four covering `loadAuditDataset`. Recorded
+      below.
+- [x] **The name-fallback candidate pool is scoped by sport, as production
+      scopes it.** Production calls `participants.listByType('player',
+      metadata.sport)` and `listByType` applies `.eq('sport', sport)` whenever
+      sport is truthy, so the pool belongs to the *pick*, not to the cohort. The
+      audit had built one flat pool keyed by normalized name alone, collapsing to
+      an all-players pool the moment any single pick lacked `metadata.sport` —
+      diverging in **both** directions: a name shared across two sports read as
+      ambiguous and denied CLV production has (booking a false
+      `persisted_computed_but_currently_missing_closing_line` mismatch as it
+      went), while the resulting null participant emitted `is.null`, which can
+      match an event-scoped history row production's `eq.<player>` query never
+      sees. 94.4% of the audited picks carry a null `participant_id`, so this is
+      the dominant path, not an edge case. Now keyed `${sport}|${name}`, one pool
+      per sport, with the all-players pool fetched only when a pick genuinely has
+      no sport.
+- [x] **A closing row production would discard skips the tier, not the row.**
+      `asClosingLineLike` is mirrored, applied *after* latest-row selection —
+      production's query already returned one row, so a bad row makes production
+      skip that tier rather than fall back to a second-latest row it never
+      fetched.
+- [x] **`starts_at` is passed through untrimmed**, because production tests it
+      trimmed but returns it raw, and that raw string becomes the `lte.` cutoff.
+- [ ] **Recorded divergence, deliberately unfixed:** production's own
+      `listByType` paginates on `page.length < PAGE_SIZE`, so production can
+      decide name uniqueness on a short pool. The audit refuses instead, and can
+      therefore report a participant unresolved where production resolved one.
+      This is the fail-closed direction; reproducing a bug in order to agree with
+      it would be worse. Named rather than glossed as parity.
+- [x] **`loadAuditDataset`'s completeness guards are covered, not merely
+      present.** Through round 7 the function was module-private and wholly
+      untested: removing `assertCompletePage` from either alias call site, or
+      reverting the participants name-fallback pager to a `rows.length`
+      terminator, turned no test red. It is now exported and driven end to end by
+      a routing fetch stub, with a mutation control on each of its four guards
+      and a complete-pages negative control proving the refusals are caused by
+      incompleteness rather than by an unusable stub.
+- [ ] **Residual, unrepaired:** the shipped CLI has never been executed
+      end-to-end against production in this lane — the read key is unavailable
+      under containment — so `createClosingOfferLookup`'s real query construction
+      is exercised only by fixtures. Stated as a limitation, not closed.
+- [x] `pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts` — 52 pass,
       0 fail.
 
 ## Runtime Verification
@@ -187,11 +361,44 @@ ok 20 - provider market alias resolution is deterministic, mirroring providerMar
 ok 21 - read_only evidence is measured from the transport, not asserted
 ok 22 - P1-A drift guard: a game-total market_type_id on a player pick is not event-scoped
 ok 23 - P1-A conflict detection: an unaliasable extra market claim is unverifiable
-1..23
-# tests 23
-# pass 23
+ok 24 - P1-A: a metadata market key cannot validate itself into the candidate set
+ok 25 - P1-A: pick-side provenance still seeds identity when the alias table has no mapping
+ok 26 - P1-B: the closing cutoff is the pick's retained event start time, not the event date
+ok 27 - a moneyline pick with no participant is not a structural blocker
+ok 28 - the market_universe closing lookup mirrors findClosingLineByProviderKey
+ok 29 - the odds gate mirrors production exactly and does not refuse zero odds
+ok 30 - P1-A: a provider market key OWNED by another market cannot seed identity
+ok 31 - P1-A: a provider key that no market_type_id owns may still seed identity
+ok 32 - P1-B: CLV uses the event production graded against, not a reconstruction
+ok 33 - the grading event is used for CLV only, never to prove pick identity
+ok 34 - the name-based participant fallback mirrors production uniqueness
+ok 35 - the name-fallback pool is scoped to the pick sport, as production scopes it
+ok 36 - zero closing odds are missing_priced_side, exactly as production reports them
+ok 37 - the offer lookup takes its event id from events.external_id, not market_universe
+ok 38 - the participant external id comes from the participants table first
+ok 39 - an external_id shared by two events is unverifiable, not a mismatch
+ok 40 - selection side branches in production order
+ok 41 - a null participant issues the offer query, exactly as production does
+ok 42 - a grading context naming an unresolvable event fails closed
+ok 43 - a truncated page is refused, even when it is shorter than the limit
+ok 44 - a grading context that resolved a null participant is not overridden
+ok 45 - the participants name-fallback pool is refused when the server stops short
+ok 46 - the participants name-fallback pool is refused when it carries no exact count
+ok 47 - a truncated provider_market_aliases page is refused
+ok 48 - a complete set of pages loads the dataset, so the refusals above are caused by incompleteness
+ok 49 - a truncated reverse provider_market_aliases page is refused
+ok 50 - loadAuditDataset builds one candidate pool per sport, and queries each one scoped
+ok 51 - a closing row production would discard skips the TIER, not just the row
+ok 52 - a whitespace-padded starts_at is passed through untrimmed, as production passes it
+1..52
+# tests 52
+# suites 0
+# pass 52
 # fail 0
+# cancelled 0
 # skipped 0
+# todo 0
+# duration_ms 467.575298
 ```
 
 ### Mutation controls — each correction is load-bearing
@@ -201,22 +408,49 @@ isolation, the suite re-run, and the file restored byte-exact. A control that
 cannot fail proves nothing, so each is shown failing.
 
 ```text
-mutation                                        result
-------------------------------------------------------------------------
-(none — corrected implementation)               23 pass, 0 fail
-identity check removed from the grade ladder    17 pass, 6 fail
-game_result event match dropped                 20 pass, 3 fail
-game_result participant match dropped           21 pass, 2 fail
-game_result market match dropped                22 pass, 1 fail
-event-scoped drift guard removed                22 pass, 1 fail
-market identity conflict detection removed      22 pass, 1 fail
-closing table reverted to provider_offers       21 pass, 2 fail
-snapshot_at closing cutoff dropped              21 pass, 2 fail
-pinnacle bookmaker preference pass dropped      22 pass, 1 fail
-superseded-correction check removed             22 pass, 1 fail
-alias priority ordering removed (last-wins Map) 22 pass, 1 fail
-read_only reverted to asserted literals         22 pass, 1 fail
-(restored)                                      23 pass, 0 fail
+mutation                                                                       result
+---------------------------------------------------------------------------------------------
+(none — corrected implementation)                                              52 pass, 0 fail
+identity check removed from the grade ladder                                   44 pass, 8 fail
+game_result event match dropped                                                49 pass, 3 fail
+game_result participant match dropped                                          50 pass, 2 fail
+game_result market match dropped                                               51 pass, 1 fail
+event-scoped drift guard removed                                               51 pass, 1 fail
+market identity conflict detection removed                                     49 pass, 3 fail
+provenance re-admitted as an identity seed (self-validating market claim)      50 pass, 2 fail
+reverse alias ownership check removed (foreign provider key may seed)          51 pass, 1 fail
+grading CLV context ignored (event identity reconstructed instead)             49 pass, 3 fail
+name-based participant fallback dropped                                        50 pass, 2 fail
+closing table reverted to provider_offers                                      50 pass, 2 fail
+snapshot_at closing cutoff dropped                                             48 pass, 4 fail
+retained pick-side cutoff ignored (event-derived cutoff used instead)          51 pass, 1 fail
+pinnacle bookmaker preference pass dropped                                     51 pass, 1 fail
+market_universe participant semantics reverted to truthiness                   51 pass, 1 fail
+odds gate over-tightened with `|| pick.odds === 0`                             51 pass, 1 fail
+zero closing odds priced (caller falsy-check semantics ignored)                51 pass, 1 fail
+null participant bail re-introduced (query production issues is refused)       50 pass, 2 fail
+truncated page accepted instead of refused (exact-count guard removed)         51 pass, 1 fail
+missing exact count treated as complete                                        51 pass, 1 fail
+grading context null participant re-admits the metadata resolver (`??`)        51 pass, 1 fail
+unresolvable grading context falls back to a weaker resolver                   51 pass, 1 fail
+offer-lookup event id taken from market_universe first                         50 pass, 2 fail
+participant precedence reverted to market_universe first                       51 pass, 1 fail
+ambiguous external_id resolves to one of the events                            51 pass, 1 fail
+selection side branch order collapsed into two families                        51 pass, 1 fail
+moneyline structural classification reverted to eventScoped                    51 pass, 1 fail
+superseded-correction check removed                                            51 pass, 1 fail
+alias priority ordering removed (last-wins Map)                                51 pass, 1 fail
+read_only reverted to asserted literals                                        51 pass, 1 fail
+participants name-fallback pager reverted to a rows.length terminator          51 pass, 1 fail
+participants name-fallback exact-count requirement removed                     51 pass, 1 fail
+forward alias completeness assertion removed                                   51 pass, 1 fail
+reverse alias completeness assertion removed                                   51 pass, 1 fail
+name-fallback pool key reverted to a bare normalized name (all sports pooled)  51 pass, 1 fail
+name-fallback LOOKUP ignores the pick sport                                    50 pass, 2 fail
+sport pools collapsed to a single all-players pool when any pick lacks sport   51 pass, 1 fail
+production closing-line validity gate removed (asClosingLineLike unmirrored)   51 pass, 1 fail
+starts_at trimmed, diverging from production's untrimmed passthrough           51 pass, 1 fail
+(restored byte-exact)                                                          52 pass, 0 fail
 ```
 
 ### Static verification
@@ -266,20 +500,61 @@ bounded, read-only** measurement executed with the corrected P1-A/P1-B
 semantics, recorded here so the two are never conflated.
 
 **Method — direct replay.** The 200-settlement cohort and every row the loader
-reads (picks, game_results, events, participants, market_universe,
-provider_market_aliases, and the pre-cutoff `provider_offer_history` snapshots)
-were exported read-only from production `zfzdnfwdarxucxtaojxm` through the
-Supabase MCP read path. Both the pre-fix and the corrected
-`buildPickTruthAuditReport` were then executed over that identical dataset. Both
-columns below therefore come from **running the shipped code**, not from a SQL
-re-derivation of its semantics. **No write of any kind was issued.**
+reads (settlement payloads including the persisted `gradingContext`, picks,
+game_results, events, participants, market_universe, provider_market_aliases in
+both directions, and the pre-cutoff `provider_offer_history` snapshots) were
+exported read-only from production `zfzdnfwdarxucxtaojxm` through the Supabase
+MCP read path. Both the pre-fix and the corrected `buildPickTruthAuditReport`
+were then executed over that identical dataset. Both columns below come from
+**running the shipped `buildPickTruthAuditReport`**, not from a SQL re-derivation
+of its semantics. **No write of any kind was issued.**
 
-> An earlier revision of this section reported the pre-fix CLV column as 44
-> resolvable (22%), obtained by re-deriving the audit's semantics in SQL. That
-> figure is superseded: executing the pre-fix code itself over the same rows
-> yields 4 resolvable. The direct replay is authoritative because it exercises
-> the real resolution order rather than a restatement of it. The grading column
-> is unaffected — both methods agree at 200/200.
+One substitution, stated rather than left implicit: the `ClosingOfferLookup`
+handed to the report was an **in-memory function over the exported
+`provider_offer_history` rows, not the shipped `createClosingOfferLookup`**. The
+substitute applies the same four predicates (`provider_event_id`,
+`provider_market_key`, participant with `null`-vs-`eq` semantics,
+`snapshot_at <= cutoff`) and honours `bookmakerKey`, so pinnacle-then-consensus
+precedence *is* exercised — but it returns every matching row instead of the
+shipped query's `order snapshot_at desc limit 1`. `selectLatestClosingOffer` then
+picks the same row the shipped query would have returned (except on a
+`snapshot_at` tie, where it applies an `id` tie-break PostgREST does not), so no
+CLV outcome below is affected. What this replay therefore does **not** prove is
+the shipped query's own construction — its limit, order clause and emitted filter
+strings. Those are covered by unit tests asserting the captured PostgREST
+parameters, not by this production run. The two counts in the closing-line block
+are candidate rows the substitute surfaced across all calls; the shipped lookup
+returns at most one row per call, so they are **not** a count of rows the shipped
+query would fetch, and an earlier revision of this bundle mislabelled them as
+such.
+
+> Three earlier revisions of this section are superseded, plus the relabelling
+> of the closing-line counts described above. All are recorded rather than
+> silently replaced.
+>
+> 1. The pre-fix CLV column was once reported as 44 resolvable (22%), obtained by
+>    re-deriving the audit's semantics in SQL. Executing the pre-fix code itself
+>    over the same rows yields **4**. The direct replay is authoritative because
+>    it exercises the real resolution order rather than a restatement of it.
+> 2. The corrected CLV column once showed `missing_event_context` = 99. That was
+>    an artifact of the audit reconstructing an event **production never
+>    consulted**. Mirroring `buildCLVContextFromGradingEvent` removes the class
+>    entirely (**0**) and re-attributes those picks to `missing_closing_line`.
+>    Re-measuring required re-exporting the settlement payloads with the full
+>    `gradingContext` and fetching `provider_offer_history` for 89 additional
+>    (event, market, participant) triples.
+> 3. The corrected CLV column once showed `missing_closing_line` = 97 plus
+>    `missing_participant_context` = 3. That third class was an audit-invented
+>    bail: production passes a possibly-null `providerParticipantId` straight
+>    into `findClosingLine`, which filters `is(provider_participant_id, null)`,
+>    so production **issues the query**. Removing the bail moves all three to
+>    `missing_closing_line` (**100**), which is what production would report, and
+>    eliminates a class that is not a member of production's
+>    `CLVComputationStatus` at all.
+
+Each of the three revisions replaced a mis-causation with the behaviour
+production actually has. The direction of travel is one-way: every correction so
+far has removed a reason the audit had invented, and none has been reversed.
 
 Cohort: `settlement_records` where `status='settled'`, `source='grading'`,
 `corrects_id IS NULL`, `result IN ('win','loss','push')` and
@@ -301,7 +576,6 @@ agreements                    200            100
 disagreements                   0              0
 unresolvable                    0            100
 agreement rate            100.00%        100.00%
-disagreement rate           0.00%          0.00%
 
 corrected unresolvable, by named reason
   game_result_identity_unverifiable          100
@@ -310,22 +584,33 @@ corrected unresolvable, by named reason
   game_result_event_mismatch                   0
   game_result_participant_mismatch             0
   game_result_market_mismatch                  0
-
-transitions
-  resolvable -> game_result_identity_unverifiable   100
-  resolvable -> resolvable                          100
 ```
+
+One caveat belongs with the 100.00% figure before anything is read into it: the
+audit's `inferSelectionSide` and `recomputeGrade` reproduce
+`apps/api/src/grading-service.ts`'s own formula — deliberately, so that a
+disagreement means the data moved rather than that two implementations differ.
+Applied to the same `game_results` row, agreement is therefore close to
+structurally guaranteed for any settlement current grading code wrote. The
+control detects **post-hoc drift in the referenced row** and, since P1-A,
+**identity that cannot be proven** — it is not evidence that the grading formula
+is correct, and must not be cited as such.
 
 **100 of the 200 apparent agreements were manufactured by the circular event
 resolution.** For those picks the only event identity available came from
 `gameResult.event_id` — the very row being validated — so the old
-implementation proved nothing about them. Under the corrected implementation
-they are `game_result_identity_unverifiable`, not agreements. Where pick-side
-identity does exist (100 rows), it agrees with the referenced row in every
-case: zero event, participant or market mismatches. The corrected result is a
-smaller, honest agreement basis, not a worse one.
+implementation proved nothing about them. Where pick-side identity does exist
+(100 rows) it agrees with the referenced row in every case: zero event,
+participant or market mismatches. The corrected result is a smaller, honest
+agreement basis, not a worse one.
 
-### CLV — legacy `provider_offers` vs canonical `provider_offer_history`
+Note that `gradingContext.eventId`, which the corrected CLV path *does* use, is
+deliberately **not** admitted here. `apps/api/src/grading-service.ts` sets it to
+`gameResult.event_id`, so using it for identity would reinstate exactly the
+circularity P1-A exists to remove. A test asserts a wrong-event row stays
+unverifiable even when the grading context names that same wrong event.
+
+### CLV — legacy `provider_offers` vs production's actual resolver
 
 ```text
                               old      corrected
@@ -334,9 +619,9 @@ unresolvable                  196            102
 resolvability rate          2.00%         49.00%
 
 failure classes
-  missing_closing_line        193              1
-  missing_event_context         0             99
+  missing_closing_line        193            100
   missing_priced_side           2              2
+  missing_event_context         0              0
   missing_participant_context   1              0
 
 persisted clvStatus='computed' but currently unresolvable
@@ -347,48 +632,51 @@ Closing-line evidence for the corrected lookup:
 
 ```text
 table queried                                provider_offer_history
-distinct (event, market, participant) triples requested       95
-triples with at least one eligible pre-cutoff snapshot        94
-rows returned to the lookup                                  126
-  of which bookmaker_key='pinnacle'                           17
+distinct (event, market, participant) triples requested      167
+  with at least one eligible pre-cutoff snapshot              77
+  with none                                                   90
+candidate rows surfaced by the replay lookup                  191
+  of which on the pinnacle pass                               17
 
 legacy provider_offers, total rows                     8,191,206
 legacy provider_offers, rows for any sampled event             0
 ```
 
-The single triple with no eligible snapshot was re-queried with **no lower time
-bound** and genuinely has no pre-cutoff row, so the bounded export did not
-manufacture that failure.
-
-The `provider_offers` row counts are the direct measurement behind P1-B: the
-legacy surface is not empty in general — it holds 8.19M rows — but it holds
-**nothing at all** for any event in this cohort. That is why the pre-fix audit
-reported `missing_closing_line` for 193 of 200 picks.
+All 90 uncovered triples fall in just **8 provider events**, and a direct
+unbounded re-query confirms `provider_offer_history` holds **zero** rows for
+those 8 events at any time — they are the April 2026 half of the cohort, which
+predates the closing-line history. The absence is real, not an export gap.
 
 Old-to-corrected transitions:
 
 ```text
-old                          corrected                 n
-missing_closing_line     ->  missing_event_context    98
-missing_closing_line     ->  resolvable               94
-resolvable               ->  resolvable                4
-missing_priced_side      ->  missing_priced_side       2
-missing_closing_line     ->  missing_closing_line      1
-missing_participant_ctx  ->  missing_event_context     1
+old                          corrected                        n
+missing_closing_line     ->  missing_closing_line            99
+missing_closing_line     ->  resolvable                      94
+resolvable               ->  resolvable                       4
+missing_priced_side      ->  missing_priced_side              2
+missing_participant_ctx  ->  missing_closing_line             1
 ```
 
-Both corrections move the measurement, in opposite directions, and both moves
-are truthful:
+**94** picks the old audit reported as `missing_closing_line` do have a closing
+line: the old lookup read the legacy `provider_offers` surface, production reads
+`provider_offer_history`. The old audit was under-reporting CLV availability
+relative to production.
 
-- **94** picks the old audit reported as `missing_closing_line` do have a
-  closing line. The old lookup was reading the legacy `provider_offers` surface;
-  production reads `provider_offer_history`. The old audit was under-reporting
-  CLV availability relative to production.
-- **98** picks the old audit also reported as `missing_closing_line` are
-  unresolvable for a different and more fundamental reason: their event context
-  existed only because the referenced game result supplied it, so under
-  independent identity they are `missing_event_context`. The old class label was
-  wrong about the cause even where it was right about the outcome.
+### The clean split, and why it is the finding
+
+```text
+                             identity        CLV               n
+earliest 100 (April 2026)    unverifiable    missing_closing_line    100
+latest 100 (Jun-Jul 2026)    proven          resolvable               98
+                             proven          missing_priced_side       2
+```
+
+Every one of the 100 earliest settlements is **both** independently unverifiable
+**and** CLV-unresolvable; every one of the 100 latest has provable pick-side
+identity, and 98 of them resolve CLV. The defect is a historical cohort with
+neither retained identity nor closing-line data — not a fault spread evenly
+across the population, and not a resolver bug.
 
 ### Effect on the lane verdict
 
@@ -398,14 +686,24 @@ above the 10% rule — and the 2026-08-26 population decomposition (1 of 107,858
 picks simultaneously non-fixture, identity- and provenance-complete, and
 settled) is untouched.
 
-What changes is the **stated cause**, and it changes toward the truth. The
-pre-correction bundle attributed the dominant CLV failure to
+What changes is the **stated cause**, and it changed three times, each time
+toward the truth and each change disclosed rather than silently substituted.
+The pre-correction bundle attributed the dominant CLV failure to
 `missing_closing_line` (193 of 200) — an artifact of querying a frozen legacy
-table. Corrected, that class holds a single pick and the dominant failure is
-`missing_event_context` (99 of 200), the *same* root cause that makes 100 of
-the 200 sampled grades unverifiable. The blocking defect is a single one:
-**pick-side event identity is absent**, not closing-line data. Finding 6 below
-records this.
+table. The first correction moved the dominant class to `missing_event_context`
+(99 of 200), which was in turn an artifact of the audit reconstructing an event
+production never consulted; mirroring production's grading-context resolver
+removed that class entirely. The second correction removed
+`missing_participant_context` (3 of 200), which was an artifact of the audit
+*refusing to issue* a query production does issue: `computeCLVOutcome` passes a
+possibly-null `providerParticipantId` straight into `findClosingLine`, which
+filters `is(provider_participant_id, null)`. That class is not even a member of
+production's `CLVComputationStatus`, so the persisted-status comparison had been
+running against a state production can never have persisted.
+
+What remains is a single clean historical split with one failure reason per
+half: the April 100 have neither provable identity nor any retained closing
+line, and the June–July 100 have both. Finding 6 below records this.
 
 ## Findings
 
@@ -436,15 +734,23 @@ records this.
    key on the pick side. This corrects an earlier reading of `events.metadata`
    alone.
 
-6. **The blocker is one defect, not two.** The 2026-08-30 post-fix validation
-   shows the closing-line data largely exists — 94 of 200 sampled picks the
-   pre-correction audit called `missing_closing_line` resolve against the
-   canonical `provider_offer_history`. Once CLV reads the source production
-   actually reads, and once grading proves the referenced `game_results` row
-   belongs to the pick, both failure surfaces collapse onto the same cause:
-   the absence of pick-side event identity (99 of 200 for CLV, 99 of the 100
-   unverifiable grades). Fixing event identity at admission time addresses both;
-   nothing else in this lane's evidence needs a separate remedy.
+6. **The blocker is a historical cohort, not a live resolver defect.** The
+   2026-08-30 post-fix validation shows the closing-line data largely exists —
+   94 of 200 sampled picks the pre-correction audit called
+   `missing_closing_line` resolve against the canonical
+   `provider_offer_history`. Once CLV reads the source production actually reads
+   *and* resolves event context the way production's grading path does, and once
+   grading proves the referenced `game_results` row belongs to the pick, the
+   sample splits exactly in half by age: all 100 April 2026 settlements are both
+   independently unverifiable and CLV-unresolvable (their events have no
+   retained closing-line history at all), while all 100 June–July settlements
+   have provable pick-side identity and 98 resolve CLV. After the round-5
+   correction each half fails for exactly one reason — the April 100 are
+   uniformly `missing_closing_line`, and the two June–July failures are
+   `missing_priced_side` — so no part of the residual is attributable to a
+   resolver or participant defect. The remedy is therefore about the historical
+   population and about making event identity a first-class field at admission
+   (Finding 1), not about the resolver.
 
 ## Scope and refusals
 
@@ -475,7 +781,8 @@ package.json
 Both sides append to the same hardcoded list: `main` had gained
 `scripts/ops/outbox-triage.test.ts` from UTV2-1744, this lane had added
 `scripts/ops/pick-truth-audit.test.ts`. The resolution takes current main's file
-verbatim and appends this lane's one entry — 131 entries, nothing removed, no
+verbatim and appends this lane's one entry — 131 whitespace-separated tokens, of
+which 128 are test-file arguments (main: 130 tokens / 127 files) — nothing removed, no
 formatting churn, no dependency change, no other script changed.
 
 ```text
@@ -512,23 +819,41 @@ PROOF VALIDATOR: commit blocked — staged proof bundle has issues (fix and re-c
   - [docs/06_status/proof/UTV2-1745/evidence.json] sha_binding.ci_sentinels missing or empty
 ```
 
-The file was then restored byte-exact (sha256
-`c7bd926da3f028bc0c342df8837c3858b2b7ae60672da30dc1391eeb6c4e8ae7`), as were the
-other three artifacts in this bundle. Lane-authored proof remains fail-closed;
-inherited proof is correctly ignored.
+The file was then restored byte-exact, as were the other three artifacts in this
+bundle. Lane-authored proof remains fail-closed; inherited proof is correctly
+ignored.
+
+The control was last exercised on the round-3 bundle, and the
+`sha256` of `evidence.json` measured immediately after the byte-exact restore
+was `d439ac760c8913924521335336bea4f8c6599f4de91e8ab0d5b6cb78b3b470bc`. That
+digest is a receipt for *that* restore and is deliberately not updated as the
+bundle legitimately changes; the round-4 corrections and the final main
+synchronization each move it again. The control is re-run, and a fresh digest
+recorded below, on the final stationary head — which is the only digest that
+binds to what merges.
+
+One incidental observation, recorded because it bears on how much this control
+proves: the validator is a `PreToolUse` hook keyed on the tool call's command
+string. When `git commit` was issued as one line of a multi-line shell
+invocation with its output redirected, the hook did not fire and the corrupted
+bundle committed cleanly; issued as its own command it blocked as shown above.
+The commit was immediately reset and the bundle restored byte-exact (digest
+above). This is a property of the local hook, not of anything this lane changes,
+and it is reported rather than repaired here because repairing it is outside the
+declared file scope.
 
 ### Re-verification on the synchronized head
 
 ```text
 $ pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts
-# tests 23
-# pass 23
+# tests 52
+# pass 52
 # fail 0
 
 $ pnpm test:ops
-# tests 2676
+# tests 2705
 # suites 20
-# pass 2676
+# pass 2705
 # fail 0
 # skipped 0
 
