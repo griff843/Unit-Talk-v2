@@ -21,9 +21,9 @@ Execution SHA: `6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99`
 $ pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts
 tests 2; pass 2; fail 0; skipped 0; exit 0
 
-$ pnpm verify:static
-exit 0; env, lint, type-check, build, root test, Smart Form verify, and command checks passed
-root ops segment: tests 2745; pass 2745; fail 0; skipped 0
+$ pnpm verify:static (final committed head)
+exit 1 at automation-coverage before type-check/test
+WIRING_TEST_UNWIRED_NEW: scripts/ci/ingestor-alert-wiring.test.ts is not reachable from a package script or workflow command
 
 $ pnpm test:db
 blocked/deferred locally by the staging target identity guard; not executed against production
@@ -31,11 +31,11 @@ blocked/deferred locally by the staging target identity guard; not executed agai
 
 ## Verification
 
-- [x] `pnpm type-check`: passed as a stage of `pnpm verify:static`.
-- [x] `pnpm test`: passed as a stage of `pnpm verify:static`.
-- [x] `pnpm verify:static`: exit 0.
+- [ ] `pnpm type-check`: an earlier pre-tracking static run passed, but the final committed head stopped at executable wiring before this stage; rerun required after scope resolution.
+- [ ] `pnpm test`: an earlier pre-tracking static run passed, but the final committed head stopped at executable wiring before this stage; rerun required after scope resolution.
+- [ ] `pnpm verify:static`: blocked by `WIRING_TEST_UNWIRED_NEW` for the newly tracked focused test.
 - [x] `pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts`: 2/2 passed.
-- [x] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; 5 changed files, no R-level rules matched, no artifacts required.
+- [ ] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: earlier pass covered 5 pre-proof files; rerun required at the eventual final head.
 - [ ] `pnpm test:db`: writable live-DB proof is blocked/deferred locally because target identity is `host=unparseable`; run against `xskgrzbteyqdufktjrjx` through `staging-ci` with `CI_SUPABASE_*` credentials.
 
 ## Mutation / inversion proof
@@ -55,6 +55,10 @@ After every mutation the line was restored with `apply_patch`, and the workflow 
 Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
 
 No scheduled-run success is claimed from YAML. After merge, observe the scheduled workflow and record its run URL, run attempt, `alerting-pass` and `monitor` conclusions, and evidence that the alerting pass reaches the canary-only operations path.
+
+## Current blocker
+
+The repository requires every committed test to be reachable from a required command. The focused test is intentionally located at the packet-authorized path, but root `test:ops` is an explicit file list in `package.json`. Wiring this test requires a one-entry `package.json` change, and that file is outside the authoritative lane scope. No baseline/quarantine entry can solve this in scope: the executable-wiring ledger may shrink but never grow.
 
 ## Merge SHA Binding
 

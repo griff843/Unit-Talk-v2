@@ -4,7 +4,7 @@
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "ready_for_review",
+  "status": "changes_in_progress",
   "generated_at": "2026-08-31T20:21:40.394Z",
   "sha_binding": {
     "merge_sha": null,
@@ -43,8 +43,11 @@
   "static_proof": {
     "verify_static": {
       "command": "pnpm verify:static",
-      "exit_code": 0,
-      "status": "PASS",
+      "exit_code": 1,
+      "status": "BLOCKED_BY_SCOPE_WIRING_GAP",
+      "final_head_failure": "WIRING_TEST_UNWIRED_NEW: scripts/ci/ingestor-alert-wiring.test.ts is not reachable from a package script or workflow command",
+      "required_fix": "Add scripts/ci/ingestor-alert-wiring.test.ts to the root test:ops command in package.json, which requires authoritative scope expansion because package.json is outside this lane's file_scope_lock.",
+      "earlier_run_note": "An earlier run exited 0 while the focused test was still untracked; executable-wiring scans tracked repository tests, so that run is not sufficient for the committed head.",
       "included_stages": [
         "env:check",
         "lint",
@@ -71,7 +74,7 @@
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "status": "PASS",
+      "status": "PASS_BEFORE_PROOF_COMMIT_PENDING_FINAL_RERUN",
       "changed_files": 5,
       "rules_matched": "none",
       "artifacts_required": []
@@ -135,6 +138,8 @@
     "pm_approval_self_applied": false,
     "ready_for_pm_review": false,
     "pending": [
+      "authoritative scope decision permitting package.json test:ops wiring, or an orchestrator-provided in-scope wiring mechanism",
+      "pnpm verify:static and R-level rerun after the wiring gap is resolved",
       "independent exact-head review",
       "T1 approval at the stationary reviewed head",
       "staging-ci writable DB proof",
