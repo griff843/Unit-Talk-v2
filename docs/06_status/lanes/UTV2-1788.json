@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1788-command-center-stabilization",
   "branch": "codex/utv2-1788-command-center-stabilization",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "14ca65db6a2ca45e4fdbdd3c2c27d57bb08554d5",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1463",
   "files_changed": [],
   "file_scope_lock": [
@@ -18,14 +18,22 @@
     "docs/06_status/proof/UTV2-1788/verification.md",
     "docs/06_status/proof/UTV2-1788/model-routing.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-30T10:49:12.325Z",
-  "heartbeat_at": "2026-08-30T15:40:07.100Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-31T20:24:51.995Z",
+  "closed_at": "2026-08-31T20:24:51.995Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1788-command-center-stabilization.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-31T20:24:49.729Z",
+      "verdict": "pass",
+      "merge_sha": "14ca65db6a2ca45e4fdbdd3c2c27d57bb08554d5",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",
