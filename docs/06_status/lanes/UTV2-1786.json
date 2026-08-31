@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1786-smart-form-lane-2",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1469",
   "files_changed": [],
   "file_scope_lock": [
     "apps/smart-form/.env.example",
@@ -42,9 +42,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1786/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-08-31T20:07:06.004Z",
-  "heartbeat_at": "2026-08-31T20:07:06.004Z",
+  "heartbeat_at": "2026-08-31T21:05:46.938Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1786-smart-form-lane-2.json",
