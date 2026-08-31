@@ -1,0 +1,152 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1671",
+  "pr_number": 1465,
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "generated_at": "2026-08-30T21:50:06.160915Z",
+  "sha_binding": {
+    "merge_sha": "41341ba8dd8b09e0b78223268acfcef980410250",
+    "verified_source_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
+    "verified_source_note": "Last commit on this branch touching a non-proof path -- it carries the entire substantive change, the two added entries in .lane/lanes/runtime.yml. Every commit after it changes only docs/06_status/proof/ and docs/06_status/lanes/. It is the anchor rather than the PR head only because a file cannot contain its own SHA. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "66d7fa65dfff6bb6ec727165a1c206060238157c",
+    "current_pr_head_sha": "e7a2cde013bb511a8fb899ced50c9fc19eb2cd8d",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T21:50:06.160915Z"
+  },
+  "gate_results": [
+    {
+      "gate": "lane-check/runtime/positive-controls",
+      "verdict": "PASS",
+      "detail": "packages/contracts/src/smart-form.ts and packages/contracts/src/index.ts refused at origin/main with outside_allowed_paths (exit 1) and admitted at HEAD (exit 0). Baseline produced by restoring .lane/lanes/runtime.yml to its origin/main content in place and re-running the identical commands."
+    },
+    {
+      "gate": "lane-check/runtime/negative-controls-load-bearing",
+      "verdict": "PASS",
+      "detail": "packages/contracts/src/submission.ts, distribution.ts and picks.ts still refused at HEAD with outside_allowed_paths. These share the directory and refusal code of the admitted paths, so a packages/contracts/src/** glob would have flipped all three to pass."
+    },
+    {
+      "gate": "lane-check/runtime/negative-controls-structural",
+      "verdict": "PASS",
+      "detail": "packages/domain/src/**, supabase/migrations/** and packages/db/src/database.types.ts still refused at HEAD by forbidden_path_globs, with migration_lane_required intact where applicable."
+    },
+    {
+      "gate": "lane-check/runtime/exhaustive-non-broadening",
+      "verdict": "PASS",
+      "detail": "Every on-disk module in packages/contracts/src/ checked against lane runtime at HEAD: 2 admitted (index.ts from this change, promotion.ts pre-existing), 16 refused."
+    },
+    {
+      "gate": "lane-check/governance/self-check",
+      "verdict": "PASS",
+      "detail": "lane:check PASS lane=governance files=7 over this lane's complete changed-file set at head defab636 (including docs/06_status/proof/UTV2-1671/.gitkeep). An earlier revision recorded 'files=6', which was the number of paths passed to one invocation rather than the lane's actual changed set; PASS at both counts."
+    },
+    {
+      "gate": "r-level-check",
+      "verdict": "PASS",
+      "detail": "Verdict PASS, 4 changed files, no rules matched, no R-level artifacts required."
+    },
+    {
+      "gate": "pnpm type-check",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0. tsc -b tsconfig.json emitted no diagnostics."
+    },
+    {
+      "gate": "pnpm test",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0. 97 node:test suites, 5193 passing assertions, 0 fail, 0 skipped, 0 cancelled, no 'not ok' lines."
+    },
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "exit 0. 98 node:test suites, 0 fail, 0 cancelled, 0 skipped, 0 ELIFECYCLE. Exit code captured from the pnpm process directly, not from a pipeline tail."
+    },
+    {
+      "gate": "pnpm test:live-db",
+      "verdict": "SKIP",
+      "detail": "Structurally unrunnable locally: ci:assert-staging refuses any target that is not staging ref xskgrzbteyqdufktjrjx (local resolves to host=127.0.0.1). The required verify CI job in the staging-ci environment is the authoritative producer of this evidence on PR #1465."
+    },
+    {
+      "gate": "independent-adversarial-review",
+      "verdict": "PASS",
+      "detail": "Two independent reviews were run. Review 1 (change) confirmed the path-level claim byte for byte and identified that lane-check is path-only, so admitting the packages/contracts/src/index.ts barrel confers semantic capability (governance literals memberTiers/canonicalWriter/writerRoles and 13 export * lines) that no control here can detect. Review 2 (proof) then falsified this bundle's own severity paragraph, which had cited hygiene and data-canonical as already granting packages/contracts/src/** -- they FORBID it. Both the original claim and review 2's counter-claim ('first lane grant anywhere') were then checked by running the matcher against every lane type. Verified result: modeling allows packages/contracts/**, and governance allows packages/contracts/** plus packages/domain/src/**, so two lane types do already hold a strictly broader grant -- but not the two originally named. hygiene and data-canonical forbid it; delivery-ui, migration and verification do not admit it. The structural conclusion (capability not created here; runtime receives a strictly narrower grant than modeling and governance already hold) survives with corrected citations. All of this is recorded in verification.md rather than absorbed."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "static_proof": {
+    "status": "pass",
+    "profile_rationale": "governance lane; STATIC_LANE_TYPES in proof-schema.ts. The change is a YAML path allowlist consumed by the Lane authority CI check -- it executes no application code, reaches no database, and mutates no production state.",
+    "commands": [
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "98 node:test suites, 0 fail, 0 cancelled, 0 skipped, 0 ELIFECYCLE. Exit code captured from the pnpm process directly, not from a pipeline tail."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "Verdict PASS, 4 changed files, no rules matched, no R-level artifacts required."
+      },
+      {
+        "command": "pnpm lane:check --lane governance --file <this lane's 6 files>",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "lane:check PASS lane=governance files=6."
+      }
+    ],
+    "controls": {
+      "method": "Before/after against the real .lane/lanes/runtime.yml on disk. Baseline produced by restoring the file to its origin/main content in place and re-running the identical commands.",
+      "positive": {
+        "count": 2,
+        "result": "pass",
+        "detail": "packages/contracts/src/smart-form.ts and packages/contracts/src/index.ts: refused at origin/main with outside_allowed_paths (exit 1), admitted at HEAD (exit 0)."
+      },
+      "negative": {
+        "count": 6,
+        "result": "pass",
+        "load_bearing": "packages/contracts/src/submission.ts, distribution.ts, picks.ts -- same directory and same refusal code as the admitted paths, so a packages/contracts/src/** glob would flip all three to pass. All three still refused at HEAD.",
+        "structural": "packages/domain/src/**, supabase/migrations/**, packages/db/src/database.types.ts -- refused by forbidden_path_globs, which an allowed_path_globs addition cannot override. Reported for completeness, not as the proof of non-broadening."
+      },
+      "exhaustive": {
+        "scope": "every on-disk module in packages/contracts/src/",
+        "admitted": 2,
+        "refused": 16,
+        "admitted_files": [
+          "packages/contracts/src/index.ts",
+          "packages/contracts/src/promotion.ts"
+        ],
+        "note": "index.ts is this change; promotion.ts is pre-existing. smart-form.ts is not yet on disk and is covered by the positive control."
+      }
+    },
+    "live_db": {
+      "status": "not_applicable_locally",
+      "detail": "pnpm verify is verify:static && test:live-db. test:live-db begins with ci:assert-staging, which refuses any target that is not staging ref xskgrzbteyqdufktjrjx; it is structurally unrunnable outside the staging-ci GitHub environment. The required verify CI job on this PR head is the authoritative producer of that evidence."
+    },
+    "containment": {
+      "production_mutation": "none",
+      "member_delivery": "none",
+      "ingestion_unpark": "none",
+      "direct_main_work": "none",
+      "detail": "Lane executed entirely in an isolated worktree on branch claude/utv2-1671-admit-contract-paths."
+    },
+    "independent_review": {
+      "performed": true,
+      "rounds": 2,
+      "scope": "round 1 adversarially reviewed the change; round 2 adversarially audited this proof bundle",
+      "outcome": "path-admission claim upheld; semantic-capability limit recorded; round 2 caught a load-bearing false citation in this bundle's severity argument, which is retracted and corrected in place with per-lane mechanical evidence",
+      "corrections_made": [
+        "Severity paragraph cited hygiene and data-canonical as granting packages/contracts/src/**; they forbid it. Retracted and replaced with a verified per-lane table.",
+        "Governance self-check recorded 'files=6'; the lane's complete changed set is 7. PASS at both counts."
+      ],
+      "unstaffed_followup": "lane authority is path-only and cannot see a barrel file re-exporting or redefining content from modules the lane may not touch"
+    }
+  }
+}
