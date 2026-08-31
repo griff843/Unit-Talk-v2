@@ -29,7 +29,9 @@ import {
   type ParticipantSuggestion,
 } from '@/lib/participant-search';
 import {
+  buildManualEnteredParticipants,
   buildSubmissionPayload,
+  evaluateSubmissionGuards,
   getMarketTypesForSport,
   getStatTypesForSport,
   inferStatTypeFromMarketTypeId,
@@ -1826,16 +1828,10 @@ export function BetForm({
         manualOverride: true,
         reason: 'canonical-coverage-gap',
         enteredEventName: values.eventName,
-        enteredParticipants: [
-          values.awayParticipantName
-            ? { role: 'away' as const, displayName: values.awayParticipantName, canonicalParticipantId: null }
-            : null,
-          values.homeParticipantName
-            ? { role: 'home' as const, displayName: values.homeParticipantName, canonicalParticipantId: null }
-            : null,
-          values.team ? { role: 'team' as const, displayName: values.team, canonicalParticipantId: null } : null,
-          values.playerName ? { role: 'player' as const, displayName: values.playerName, canonicalParticipantId: null } : null,
-        ].filter((value): value is NonNullable<typeof value> => value !== null),
+        // Distinct names only: `values.team` normally repeats the away or home
+        // side, and the API rejects manual provenance that lists one display
+        // name under two roles.
+        enteredParticipants: buildManualEnteredParticipants(values),
       };
     }
 
@@ -1909,6 +1905,28 @@ export function BetForm({
     }
     if (!manualIdentityOverride && selectedMarketType === 'player-prop' && !selectedPlayerId) {
       toast({ title: 'Select a canonical player', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
+      return;
+    }
+
+    // UTV2-1786: refuse the payload shapes the API's Smart Form contract
+    // rejects, before submitting rather than after a 400. Each rule is stated
+    // once, in `evaluateSubmissionGuards`, next to the server rule it mirrors.
+    const guardFailure = evaluateSubmissionGuards({
+      sportId: values.sport,
+      manualOverride: manualIdentityOverride,
+      awayParticipantName: values.awayParticipantName,
+      homeParticipantName: values.homeParticipantName,
+      team: values.team,
+      playerName: values.playerName,
+      canonicalEventId: selectedMatchup?.eventId ?? null,
+      selectedPlayerId,
+    });
+    if (guardFailure) {
+      toast({
+        title: guardFailure.title,
+        description: guardFailure.description,
+        variant: 'destructive',
+      });
       return;
     }
 

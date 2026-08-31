@@ -12,7 +12,7 @@
     "lint": "next lint",
     "test": "tsx --test test/form-schema.test.ts test/form-utils.test.ts test/api-client.test.ts test/allowlist.test.ts test/auth-config.test.ts test/control-plane-boundary.test.ts",
     "test:e2e": "playwright test -c playwright.config.ts",
-    "test:e2e:fixture": "playwright test -c playwright.config.ts e2e/phase-one.spec.ts e2e/smart-form-submission.spec.ts",
+    "test:e2e:fixture": "NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=1 playwright test -c playwright.config.ts e2e/phase-one.spec.ts e2e/smart-form-submission.spec.ts",
     "test:e2e:real-reference": "playwright test -c playwright.config.ts e2e/real-reference.spec.ts"
   },
   "dependencies": {

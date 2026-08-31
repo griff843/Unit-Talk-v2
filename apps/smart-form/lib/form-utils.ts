@@ -467,3 +467,195 @@ const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
   tackles: 'player.tackles',
   interceptions: 'player.interceptions',
 };
+
+// UTV2-1786 SUBMISSION_GUARD_START
+//
+// The API's Smart Form contract (`apps/api/src/smart-form-validation.ts`)
+// refuses several payload shapes this form was happy to build. Each refusal
+// below mirrors a specific server rule, so an operator is stopped in the UI
+// with an actionable message instead of getting a 400 after the fact.
+//
+// These live here, as pure functions over form state, so they can be executed
+// in the unit suite. `BetForm` calls them; it does not restate the rules.
+
+/**
+ * Mirror of `TEAM_SPORTS` in `apps/api/src/smart-form-validation.ts:9`.
+ *
+ * It cannot be imported: `apps` never import from `apps`, and the list is not
+ * in a shared package. `submissionGuardsMatchServerTeamSports` in the unit
+ * suite pins this copy so a server-side change to the list fails here rather
+ * than silently splitting client and server behaviour.
+ */
+export const CLIENT_TEAM_SPORT_IDS: ReadonlySet<string> = new Set([
+  'NFL',
+  'NCAAF',
+  'NBA',
+  'NCAAB',
+  'MLB',
+  'NHL',
+  'SOCCER',
+]);
+
+export function isTeamSportId(sportId: string | null | undefined): boolean {
+  return CLIENT_TEAM_SPORT_IDS.has((sportId ?? '').trim().toUpperCase());
+}
+
+/**
+ * Client-side approximation of the server's `aliasKey`: NFKD-fold, drop
+ * diacritics, lower-case, then keep only `[a-z0-9]`.
+ *
+ * The server additionally maps Cyrillic and Greek look-alikes back to ASCII.
+ * That difference is safe in this direction: a homoglyph spelling the client
+ * fails to collapse is refused by the server's non-ASCII check before the
+ * duplicate rule is ever reached, so the client can only be more permissive
+ * about names the server rejects for a different, louder reason.
+ */
+export function participantAliasKey(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/gu, '');
+}
+
+export type ManualParticipantRole = 'away' | 'home' | 'team' | 'player';
+
+export interface ManualEnteredParticipant {
+  role: ManualParticipantRole;
+  displayName: string;
+  canonicalParticipantId: null;
+}
+
+export interface ManualParticipantNames {
+  awayParticipantName?: string | null;
+  homeParticipantName?: string | null;
+  team?: string | null;
+  playerName?: string | null;
+}
+
+/**
+ * Build manual provenance from *distinct* entered names.
+ *
+ * `values.team` normally repeats whichever side the operator bet, so appending
+ * it unconditionally emitted the same display name under two roles — which
+ * `validateManualResolution` rejects outright ("manual participants must be
+ * distinct"). The market side is already carried by the payload's own
+ * `selection`/`team` fields, so dropping the duplicate provenance entry loses
+ * no information the server needs.
+ *
+ * Order is away, home, team, player: the first occurrence of a name keeps its
+ * role, matching the server's first-wins `seen` map.
+ */
+export function buildManualEnteredParticipants(
+  values: ManualParticipantNames,
+): ManualEnteredParticipant[] {
+  const candidates: Array<{ role: ManualParticipantRole; displayName: string | null | undefined }> = [
+    { role: 'away', displayName: values.awayParticipantName },
+    { role: 'home', displayName: values.homeParticipantName },
+    { role: 'team', displayName: values.team },
+    { role: 'player', displayName: values.playerName },
+  ];
+
+  const seen = new Set<string>();
+  const participants: ManualEnteredParticipant[] = [];
+  for (const candidate of candidates) {
+    const displayName = candidate.displayName?.trim();
+    if (!displayName) continue;
+    const key = participantAliasKey(displayName);
+    if (key.length === 0 || seen.has(key)) continue;
+    seen.add(key);
+    participants.push({ role: candidate.role, displayName, canonicalParticipantId: null });
+  }
+  return participants;
+}
+
+export interface SubmissionGuardFailure {
+  code:
+    | 'manual-team-sport-requires-both-sides'
+    | 'manual-requires-a-participant'
+    | 'canonical-player-requires-event'
+    | 'canonical-without-event-requires-team-sport';
+  title: string;
+  description: string;
+}
+
+export interface SubmissionGuardInput {
+  sportId: string;
+  manualOverride: boolean;
+  awayParticipantName?: string | null;
+  homeParticipantName?: string | null;
+  team?: string | null;
+  playerName?: string | null;
+  /** The canonical event backing this submission, or null when none is selected. */
+  canonicalEventId?: string | null;
+  /** A canonical player participant id, set only when one was chosen from search. */
+  selectedPlayerId?: string | null;
+}
+
+/**
+ * Returns the first server rule this submission would violate, or null when the
+ * payload shape is acceptable. Each branch cites the rule it mirrors.
+ */
+export function evaluateSubmissionGuards(
+  input: SubmissionGuardInput,
+): SubmissionGuardFailure | null {
+  const teamSport = isTeamSportId(input.sportId);
+
+  if (input.manualOverride) {
+    const participants = buildManualEnteredParticipants(input);
+
+    // smart-form-validation.ts:126 — at least one entered participant.
+    if (participants.length === 0) {
+      return {
+        code: 'manual-requires-a-participant',
+        title: 'Enter the matchup participants',
+        description:
+          'A manual override must name the participants it is standing in for.',
+      };
+    }
+
+    // smart-form-validation.ts:129 — team sports need both sides, counted
+    // after the duplicate rule, because two entries with the same name collapse
+    // to one and would be refused as a duplicate rather than accepted as two.
+    if (teamSport && participants.length < 2) {
+      return {
+        code: 'manual-team-sport-requires-both-sides',
+        title: 'Enter both sides of the matchup',
+        description:
+          'A manual team-sport override must name two distinct participants: enter both the away and the home side.',
+      };
+    }
+
+    return null;
+  }
+
+  if (input.canonicalEventId) {
+    return null;
+  }
+
+  // smart-form-validation.ts:203 — `validateStructuredTeamFallback` refuses any
+  // canonical player selection without a canonical event, because team
+  // membership cannot be verified.
+  if (input.selectedPlayerId) {
+    return {
+      code: 'canonical-player-requires-event',
+      title: 'Select a canonical matchup',
+      description:
+        'A canonical player prop needs the matchup it belongs to. Select a matchup, or use manual participant override.',
+    };
+  }
+
+  // smart-form-validation.ts:70 — outside team sports there is no structured
+  // fallback at all, so a canonical resolution without an event is refused.
+  if (!teamSport) {
+    return {
+      code: 'canonical-without-event-requires-team-sport',
+      title: 'Select a canonical matchup',
+      description:
+        'This sport has no structured fallback. Select a matchup, or use manual participant override.',
+    };
+  }
+
+  return null;
+}
+// UTV2-1786 SUBMISSION_GUARD_END

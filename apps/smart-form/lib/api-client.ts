@@ -229,20 +229,50 @@ export async function searchBrowse(sportId: string, date: string, query: string)
   return readJsonResponse<BrowseSearchResult[]>(res, 'Search unavailable');
 }
 
+/**
+ * Choose the bearer a submission is sent with.
+ *
+ * The Auth.js session wins whenever one exists. It is server-signed and was
+ * just used to admit the operator to `/submit`; the recovery token is an
+ * operator-pasted string this client cannot verify. Preferring the stored token
+ * meant that a single stale, expired, or forged recovery token turned every
+ * submission from an otherwise authenticated capper into a 401 — the session
+ * opened the page and the bad bearer then failed the request.
+ *
+ * The recovery token remains the fallback for the operator-recovery path, where
+ * there is no session at all.
+ */
+export function resolveSubmitAuthorization(input: {
+  sessionToken?: string | null;
+  storedRecoveryToken?: string | null;
+}): string | null {
+  const sessionToken = input.sessionToken?.trim();
+  if (sessionToken) return `Bearer ${sessionToken}`;
+  const recoveryToken = input.storedRecoveryToken?.trim();
+  if (recoveryToken) return `Bearer ${recoveryToken}`;
+  return null;
+}
+
 export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPickResult> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  // Attach the legacy capper JWT if present, otherwise use the Auth.js session bearer.
   // The API validates the bearer and derives capperId from the claim.
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('ut_capper_token') : null;
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    } else if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       const session = await getSession();
-      if (session?.authToken) headers['Authorization'] = `Bearer ${session.authToken}`;
+      let storedRecoveryToken: string | null = null;
+      try {
+        storedRecoveryToken = localStorage.getItem('ut_capper_token');
+      } catch {
+        // Storage can throw in private windows; the session bearer still applies.
+      }
+      const authorization = resolveSubmitAuthorization({
+        sessionToken: session?.authToken ?? null,
+        storedRecoveryToken,
+      });
+      if (authorization) headers['Authorization'] = authorization;
     }
   } catch {
-    // Ignore storage errors — request proceeds without auth header (API may 401)
+    // Ignore session errors — request proceeds without auth header (API may 401)
   }
   const res = await fetch(`${API}/api/submissions`, {
     method: 'POST',
