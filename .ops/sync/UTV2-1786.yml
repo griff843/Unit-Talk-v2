@@ -1,0 +1,325 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1786
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1786
+  objective: |-
+    Land the combined Tier C Smart Form application surface:
+    authoritative authentication and session gate;
+    environment/server-controlled approved-capper resolution;
+    sport → event → participant → team → player constraint chain;
+    downstream clearing when upstream selections change;
+    duplicate-side prevention;
+    manual-versus-canonical provenance;
+    Track Only presentation;
+    reference-unavailable states;
+    application regression tests;
+    Playwright/E2E acceptance;
+    fresh QA-agent evidence.
+  acceptance_criteria:
+    - |-
+      ## Controlled issue reshape
+
+      This identifier was an exact duplicate of completed [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane), with no implementation, comments, attachments, children, PR, live branch, or repository lane artifacts. Its complete original record and duplicate relationship were preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Land the combined Tier C Smart Form application surface:
+
+      * authoritative authentication and session gate;
+      * environment/server-controlled approved-capper resolution;
+      * sport → event → participant → team → player constraint chain;
+      * downstream clearing when upstream selections change;
+      * duplicate-side prevention;
+      * manual-versus-canonical provenance;
+      * Track Only presentation;
+      * reference-unavailable states;
+      * application regression tests;
+      * Playwright/E2E acceptance;
+      * fresh QA-agent evidence.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: delivery-ui
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 2 of 3
+      * Blocked by: [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation)
+
+      ## Admission condition
+
+      Do not start until [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) merges and server-side Track Only enforcement is present on current main.
+
+      ## Exact path contract requirement
+
+      Claude already mechanically validated the combined Lane 2 set: `delivery-ui PASS files=24`.
+
+      Before `ops:lane-start`, paste the complete enumerated 24-path set into this issue and re-run `lane:check --lane delivery-ui` against current main.
+
+      No “etc.”, directory shorthand, historical QA artifact, or undeclared path is permitted.
+
+      `apps/smart-form/package.json` may remain only if its scripts are necessary governed application test/QA entrypoints.
+
+      ## Security requirements
+
+      * remove the permanent hard-coded personal-email allowlist;
+      * use environment/server-controlled approved-capper configuration;
+      * do not place the real personal email in `.env.example`;
+      * `/submit` must wait for authoritative authentication/session resolution;
+      * client-stored claims alone must never grant access;
+      * server-side JWT identity remains authoritative;
+      * no new provider, OAuth scope, secret destination, or production delivery authority.
+
+      ## Explicit exclusions
+
+      * all `apps/api/**`;
+      * all `packages/**`;
+      * root `package.json`;
+      * migrations;
+      * worker, Discord, delivery-target, or governance-brake changes;
+      * production writes or runtime unpark;
+      * direct-main work.
+
+      ## Definition of done
+
+      * unauthenticated access is refused;
+      * client-stored-claim bypass is refused;
+      * capper/source spoofing is refused;
+      * canonical relationship constraints and stale downstream clearing pass;
+      * crafted `delivery-eligible` payload is refused by the already-merged server;
+      * real-reference testing records available and unavailable sports honestly;
+      * fresh desktop/mobile QA is generated at this lane's exact head;
+      * stale PR #1462 QA artifacts are not reused;
+      * full required verification, writable staging, proof binding, independent exact-head review, ERV, and review-thread closure pass;
+      * zero member delivery and production containment remain unchanged.
+
+      ## Stop conditions
+
+      Stop on any need for:
+
+      * an API, package, migration, worker, Discord, delivery, or governance-brake path;
+      * a new auth provider or secret destination;
+      * production mutation;
+      * broader lane authority;
+      * a fourth lane not already PM-approved.
+
+      No production write, member delivery, ingestion unpark, or direct-main action is authorized.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Controlled issue reshape
+      This identifier was an exact duplicate of completed [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane), with no implementation, comments, attachments, children, PR, live branch, or repository lane artifacts. Its complete original record and duplicate relationship were preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+    - |-
+      Classification
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: delivery-ui
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 2 of 3
+      * Blocked by: [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation)
+    - |-
+      Admission condition
+      Do not start until [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) merges and server-side Track Only enforcement is present on current main.
+    - >-
+      Exact path contract requirement
+
+      Claude already mechanically validated the combined Lane 2 set:
+      `delivery-ui PASS files=24`.
+
+
+      Before `ops:lane-start`, paste the complete enumerated 24-path set into
+      this issue and re-run `lane:check --lane delivery-ui` against current
+      main.
+
+
+      No “etc.”, directory shorthand, historical QA artifact, or undeclared path
+      is permitted.
+
+
+      `apps/smart-form/package.json` may remain only if its scripts are
+      necessary governed application test/QA entrypoints.
+    - >-
+      Security requirements
+
+      * remove the permanent hard-coded personal-email allowlist;
+
+      * use environment/server-controlled approved-capper configuration;
+
+      * do not place the real personal email in `.env.example`;
+
+      * `/submit` must wait for authoritative authentication/session resolution;
+
+      * client-stored claims alone must never grant access;
+
+      * server-side JWT identity remains authoritative;
+
+      * no new provider, OAuth scope, secret destination, or production delivery
+      authority.
+    - |-
+      Explicit exclusions
+      * all `apps/api/**`;
+      * all `packages/**`;
+      * root `package.json`;
+      * migrations;
+      * worker, Discord, delivery-target, or governance-brake changes;
+      * production writes or runtime unpark;
+      * direct-main work.
+    - >-
+      Definition of done
+
+      * unauthenticated access is refused;
+
+      * client-stored-claim bypass is refused;
+
+      * capper/source spoofing is refused;
+
+      * canonical relationship constraints and stale downstream clearing pass;
+
+      * crafted `delivery-eligible` payload is refused by the already-merged
+      server;
+
+      * real-reference testing records available and unavailable sports
+      honestly;
+
+      * fresh desktop/mobile QA is generated at this lane's exact head;
+
+      * stale PR #1462 QA artifacts are not reused;
+
+      * full required verification, writable staging, proof binding, independent
+      exact-head review, ERV, and review-thread closure pass;
+
+      * zero member delivery and production containment remain unchanged.
+    - >-
+      Stop conditions
+
+      Stop on any need for:
+
+
+      * an API, package, migration, worker, Discord, delivery, or
+      governance-brake path;
+
+      * a new auth provider or secret destination;
+
+      * production mutation;
+
+      * broader lane authority;
+
+      * a fourth lane not already PM-approved.
+
+
+      No production write, member delivery, ingestion unpark, or direct-main
+      action is authorized.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1786/smart-form-recovery-lane-2-authenticated-canonical-intake-and-e2e
+    title: Smart Form recovery Lane 2 — authenticated canonical intake and E2E
+      acceptance
+    description: |-
+      ## Controlled issue reshape
+
+      This identifier was an exact duplicate of completed [UTV2-1785](https://linear.app/unit-talk-v2/issue/UTV2-1785/pre-proof-commit-hook-validates-inherited-merge-content-as-if-the-lane), with no implementation, comments, attachments, children, PR, live branch, or repository lane artifacts. Its complete original record and duplicate relationship were preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Land the combined Tier C Smart Form application surface:
+
+      * authoritative authentication and session gate;
+      * environment/server-controlled approved-capper resolution;
+      * sport → event → participant → team → player constraint chain;
+      * downstream clearing when upstream selections change;
+      * duplicate-side prevention;
+      * manual-versus-canonical provenance;
+      * Track Only presentation;
+      * reference-unavailable states;
+      * application regression tests;
+      * Playwright/E2E acceptance;
+      * fresh QA-agent evidence.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: delivery-ui
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 2 of 3
+      * Blocked by: [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation)
+
+      ## Admission condition
+
+      Do not start until [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) merges and server-side Track Only enforcement is present on current main.
+
+      ## Exact path contract requirement
+
+      Claude already mechanically validated the combined Lane 2 set: `delivery-ui PASS files=24`.
+
+      Before `ops:lane-start`, paste the complete enumerated 24-path set into this issue and re-run `lane:check --lane delivery-ui` against current main.
+
+      No “etc.”, directory shorthand, historical QA artifact, or undeclared path is permitted.
+
+      `apps/smart-form/package.json` may remain only if its scripts are necessary governed application test/QA entrypoints.
+
+      ## Security requirements
+
+      * remove the permanent hard-coded personal-email allowlist;
+      * use environment/server-controlled approved-capper configuration;
+      * do not place the real personal email in `.env.example`;
+      * `/submit` must wait for authoritative authentication/session resolution;
+      * client-stored claims alone must never grant access;
+      * server-side JWT identity remains authoritative;
+      * no new provider, OAuth scope, secret destination, or production delivery authority.
+
+      ## Explicit exclusions
+
+      * all `apps/api/**`;
+      * all `packages/**`;
+      * root `package.json`;
+      * migrations;
+      * worker, Discord, delivery-target, or governance-brake changes;
+      * production writes or runtime unpark;
+      * direct-main work.
+
+      ## Definition of done
+
+      * unauthenticated access is refused;
+      * client-stored-claim bypass is refused;
+      * capper/source spoofing is refused;
+      * canonical relationship constraints and stale downstream clearing pass;
+      * crafted `delivery-eligible` payload is refused by the already-merged server;
+      * real-reference testing records available and unavailable sports honestly;
+      * fresh desktop/mobile QA is generated at this lane's exact head;
+      * stale PR #1462 QA artifacts are not reused;
+      * full required verification, writable staging, proof binding, independent exact-head review, ERV, and review-thread closure pass;
+      * zero member delivery and production containment remain unchanged.
+
+      ## Stop conditions
+
+      Stop on any need for:
+
+      * an API, package, migration, worker, Discord, delivery, or governance-brake path;
+      * a new auth provider or secret destination;
+      * production mutation;
+      * broader lane authority;
+      * a fourth lane not already PM-approved.
+
+      No production write, member delivery, ingestion unpark, or direct-main action is authorized.
+    captured_at: 2026-08-31T20:06:57.793Z
+    description_sha256: e80aeccd399602f0116120a85cc99dc8bc80f079c611be9f31ef7949bd84d4fe
+  contract_hash: 70b79831194334c20dcc1650c9169c4d6754f0e692ef1eaa1d71a6157bfa85af
