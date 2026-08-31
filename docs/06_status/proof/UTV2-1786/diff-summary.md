@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: claude/utv2-1786-smart-form-lane-2
 PR URL: N/A
 Head SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
-Merge SHA: N/A
+Merge SHA: 63d76eb6744943e7782e3b3645e7018da84bbb56
 Diff base: 2bbd20ae7a0b3759bb68bce4ab57797724218965
 Diff target: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
 
@@ -88,4 +88,4 @@ head `6c640ca0`.
 
 ## SHA Binding
 Head SHA: 9c8d2d431303c80066feef79df4c3326171b2267
-Merge SHA: N/A
+Merge SHA: 63d76eb6744943e7782e3b3645e7018da84bbb56

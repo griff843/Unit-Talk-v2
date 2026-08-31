@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1786-smart-form-lane-2",
   "branch": "claude/utv2-1786-smart-form-lane-2",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "63d76eb6744943e7782e3b3645e7018da84bbb56",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1469",
   "files_changed": [],
   "file_scope_lock": [
@@ -42,14 +42,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1786/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-31T20:07:06.004Z",
-  "heartbeat_at": "2026-08-31T21:05:46.938Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-31T23:14:52.521Z",
+  "closed_at": "2026-08-31T23:14:52.521Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1786-smart-form-lane-2.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-31T23:14:50.675Z",
+      "verdict": "pass",
+      "merge_sha": "63d76eb6744943e7782e3b3645e7018da84bbb56",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
