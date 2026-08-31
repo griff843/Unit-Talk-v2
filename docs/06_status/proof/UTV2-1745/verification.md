@@ -2,6 +2,15 @@
 
 MERGE_SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
 
+SYNC_PROVENANCE: e4e434e19b5db509dfb4f0cebe2857d6f0f1d080 — the 2026-08-31 synchronization
+merge with origin/main `d8c77b8e`, performed through the sanctioned
+`ops:merge-wrapper git-merge-main` path that UTV2-1790 (merged `c6d2b81f`) repaired from
+`--ff-only` to `git merge --no-ff --no-edit origin/main`. It is a true two-parent merge of
+`3ef5f69e` and `d8c77b8e`; no history was rewritten and no lane artifact was dropped or
+altered (7/7 byte-identical). It is sync provenance only, NOT the substantive source anchor:
+it authored no change to any file this lane owns, and `scripts/ops/pick-truth-audit.ts`, its
+test file and `package.json` are byte-identical to `3a99f504`. The anchor above is unchanged.
+
 Retrospective, read-only audit of whether the production pick population can
 support a trustworthy-pick claim.
 
