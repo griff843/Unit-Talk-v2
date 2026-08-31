@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1672",
+  "pr_number": 1466,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "static",
+  "status": "pre_merge",
+  "generated_at": "2026-08-31T03:20:00.000000Z",
+  "sha_binding": {
+    "merge_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "verified_source_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "verified_source_note": "Last commit on this branch touching a non-proof path. It carries the complete substantive change plus the final mutation control for CANONICAL_SPORT_ID_GUARD. Every commit after it changes only docs/06_status/proof/UTV2-1672/. It is the anchor rather than the PR head only because a file cannot contain its own SHA. merge_sha is rebound to the real merge commit by post-merge-lane-close.yml per CEP-E7. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "current_pr_head_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-31T03:20:00.000000Z"
+  },
+  "gate_results": [
+    {
+      "gate": "track-only/outbox-chokepoint",
+      "verdict": "PASS",
+      "detail": "OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD refuses outbox.enqueue for a Track Only pick in BOTH InMemoryOutboxRepository and DatabaseOutboxRepository. Every delivery path funnels through this call, so a route that omits its own check still cannot create delivery work. Mutation control removes both marked blocks (the regex carries the g flag; an earlier revision removed only the first and proved half the feature)."
+    },
+    {
+      "gate": "track-only/atomic-chokepoint",
+      "verdict": "PASS",
+      "detail": "ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD refuses enqueueDistributionAtomic before the RPC is issued. Proven by the recorded RPC call list being empty at baseline and ['enqueue_distribution_atomic'] in the mutant -- the absence of the database call, not an exception message."
+    },
+    {
+      "gate": "track-only/unreadable-row-fail-closed",
+      "verdict": "PASS",
+      "detail": "DatabaseOutboxRepository.loadPickMetadata refuses to proceed when the pick row is absent or the query errors. An unreadable row means Track Only status cannot be established, which is not the same as 'not Track Only'."
+    },
+    {
+      "gate": "track-only/per-path-guards",
+      "verdict": "PASS",
+      "detail": "Submit, requeue, retry and the pre-atomic run-audit path each carry an independently mutation-proven guard: TRACK_ONLY_DIRECT_ENQUEUE_GUARD, TRACK_ONLY_REQUEUE_GUARD, TRACK_ONLY_RETRY_GUARD, TRACK_ONLY_ATOMIC_GUARD. Defence in depth above the chokepoint."
+    },
+    {
+      "gate": "track-only/request-integrity",
+      "verdict": "PASS",
+      "detail": "TRACK_ONLY_REQUEST_INTEGRITY_GUARD refuses to answer a Track Only request with a delivery-eligible pick -- the persisted pre-atomic enforcement the contract names."
+    },
+    {
+      "gate": "track-only/recap-exclusion",
+      "verdict": "PASS",
+      "detail": "RECAP_TRACK_ONLY_EXCLUSION_GUARD excludes Track Only picks from recap top-play selection. Added after round-3 review found the outbox chokepoint would otherwise throw inside postRecapSummary (whose enqueue sits outside its own try block, with topPlayRow chosen purely by profit and no Track Only filter), silently killing daily and weekly recaps."
+    },
+    {
+      "gate": "identity/capper-track-only-pin",
+      "verdict": "PASS",
+      "detail": "CAPPER_TRACK_ONLY_PIN_GUARD pins distributionMode='track-only' server-side for an authenticated capper; the mutant shows the client can otherwise opt into member delivery."
+    },
+    {
+      "gate": "identity/capper-source-pin",
+      "verdict": "PASS",
+      "detail": "CAPPER_SOURCE_PIN_GUARD pins the pick source server-side; the mutant shows an authenticated capper can otherwise spoof it."
+    },
+    {
+      "gate": "identity/http-contract",
+      "verdict": "PASS",
+      "detail": "SMART_FORM_HTTP_CONTRACT_GUARD refuses any HTTP source:'smart-form' submission that does not declare both metadata.distributionMode and metadata.participantResolution. Closes the SMART_FORM_TRIGGER_SCOPE exemption at the boundary for operator/submitter roles and for the fail-open BYPASS_CONTEXT, whose role is operator."
+    },
+    {
+      "gate": "canonical/relationship-validation",
+      "verdict": "PASS",
+      "detail": "SMART_FORM_RELATIONSHIP_GUARD refuses cross-sport event injection, participants outside the canonical event, ID/display-name mismatch, a player assigned to an incompatible team, duplicate sides, and alias-based duplicate sides submitted through participantId vs canonicalId for one entity."
+    },
+    {
+      "gate": "canonical/sport-id",
+      "verdict": "PASS",
+      "detail": "CANONICAL_SPORT_ID_GUARD refuses a sportId the catalog does not carry. Every reference-data lookup is case-sensitive, so without it a sportId of 'nba' searches an empty universe and the coverage proof reports success while proving nothing. Live sports ids (NBA, NFL, MLB, NHL, NCAAB, NCAAF, Soccer, MMA, Tennis) match V1_REFERENCE_DATA exactly and the form sources its values from GET /api/reference-data/catalog, so the case-sensitive comparison matches by construction."
+    },
+    {
+      "gate": "canonical/manual-coverage-gap",
+      "verdict": "PASS",
+      "detail": "MANUAL_COVERAGE_GAP_PROOF_GUARD verifies the claimed gap rather than accepting it: refuses zero participants; refuses a one-sided matchup for TEAM_SPORTS only (individual sports have legitimate one-participant markets); refuses a name still holding a non-ASCII code point after folding; refuses duplicates by alias key; refuses any participant that resolves canonically. Round-4 fix: the check now consults the catalog (participants, 124 teams, populated) before searchTeams/searchPlayers (teams and player_team_assignments, both 0 rows in production) -- a search-only proof returned null for every name in every sport and accepted every override."
+    },
+    {
+      "gate": "canonical/alias-normalisation",
+      "verdict": "PASS",
+      "detail": "Proven against Cyrillic and Greek homoglyphs, fullwidth forms, zero-width characters in every word, punctuation on single-word names, and city-prefix asymmetry in both directions. LATIN_EXPANSION covers the Latin letters NFKD does not decompose so real Soccer clubs (Brondby IF, Preussen Munster, Kasimpasa, LKS Lodz) are admitted rather than refused as non-Latin."
+    },
+    {
+      "gate": "canonical/trigger-scope",
+      "verdict": "PASS",
+      "detail": "SMART_FORM_TRIGGER_SCOPE keys the strict contract on the presence of Smart Form fields so pre-existing in-process smart-form callers keep working. Its mutation control asserts a regression the guard prevents (legacy callers refused 422) rather than a bypass it blocks."
+    },
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "exit 0 at the anchor head. 99 node:test suites, 5360 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines. Exit code captured from the pnpm process directly, not from a pipeline tail. executable-wiring PASS, unwired baselined=119 new=0."
+    },
+    {
+      "gate": "pnpm lint",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0, no findings."
+    },
+    {
+      "gate": "pnpm type-check",
+      "verdict": "PASS",
+      "detail": "Run standalone, exit 0. tsc -b tsconfig.json emitted no diagnostics."
+    },
+    {
+      "gate": "lane-check/runtime",
+      "verdict": "PASS",
+      "detail": "lane:check PASS lane=runtime over this lane's complete changed set, including apps/api/src/recap-service.ts (inside runtime lane authority, outside the declared file scope -- covered by the requested scope-override, not by a lane amendment)."
+    },
+    {
+      "gate": "r-level-check",
+      "verdict": "PASS",
+      "detail": "Verdict PASS, 29 changed files, no rules matched, no R-level artifacts required."
+    },
+    {
+      "gate": "pnpm test:live-db",
+      "verdict": "SKIP",
+      "detail": "Structurally unrunnable locally: ci:assert-staging refuses any target that is not staging ref xskgrzbteyqdufktjrjx. The required verify CI job in the staging-ci environment is the authoritative producer of this evidence on PR #1466."
+    },
+    {
+      "gate": "require-live-db-proof-for-runtime-changes",
+      "verdict": "FAIL",
+      "detail": "DISCLOSED, NOT SUPPRESSED. This is a non-required check. A dedicated t1-proof live-DB test was written and then withdrawn: registering it requires editing docs/05_operations/db-writer-classification.json, which required-db-smoke fails closed without, and which is outside_allowed_paths for lane runtime. The lane authorization explicitly forbids widening lane authority or using a scope override to repair executor authority, so the test was withdrawn rather than the authority widened. Consequence: the DatabaseOutboxRepository chokepoint is proven against a faithful stub Supabase client rather than real Postgres."
+    },
+    {
+      "gate": "independent-adversarial-review",
+      "verdict": "PASS",
+      "detail": "Four rounds. Round 2 found 9 defects: 6 fixed in scope, 3 deferred as requiring apps/worker/** or a migration. Round 3 found that round 2's fixes introduced new defects -- the recap outage, over-refusals (substring containment refused 'Alex Pereira Junior'; a >=2 participant rule refused golf/tennis single-competitor markets) and under-refusals (fullwidth and Cherokee confusables, zero-width in every word, unvalidated case-sensitive sportId); all fixed. Round 4 found the production vacuity of the coverage search (fixed), a non-ASCII over-refusal rejecting real Soccer clubs (fixed), and a retrieval failure on punctuated single-word names (fixed). Round 4's remaining findings on isSameEntityName were deliberately not fixed and are recorded in verification.md with the reason."
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": null,
+  "static_proof": {
+    "status": "pass",
+    "profile_rationale": "Runtime lane verified by executing the changed code: 273 tests across the eight touched suites, including 15 mutation controls that import and execute mutated copies of the real modules. The live-DB half of pnpm verify is produced by the required verify CI job in the staging-ci environment.",
+    "commands": [
+      {
+        "command": "pnpm verify:static",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "99 node:test suites, 5360 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines."
+      },
+      {
+        "command": "pnpm lint",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "eslint . --cache, no findings."
+      },
+      {
+        "command": "pnpm type-check",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "tsc -b tsconfig.json, no diagnostics."
+      },
+      {
+        "command": "pnpm exec tsx --test <8 touched suites>",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "273 tests, 0 failures."
+      },
+      {
+        "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "Verdict PASS, 29 changed files, no rules matched."
+      }
+    ],
+    "controls": {
+      "method": "Each control reads the guard's own source, deletes the block between its UTV2-1672 <NAME>_START / _END markers by regex (g flag, so a guard marking multiple blocks is fully removed), asserts mutantSource !== source so a rename cannot make the control vacuous, writes a sibling module, imports it with a ?mutation= cache-buster, asserts the prevented behaviour now occurs, and unlinks in finally.",
+      "guards": 15,
+      "mutation_controls": 15,
+      "result": "pass",
+      "coverage": "every UTV2-1672 guard has a mutation control; removal fails and restoration passes for all 15"
+    },
+    "live_db": {
+      "status": "not_applicable_locally",
+      "detail": "pnpm verify is verify:static && test:live-db. test:live-db begins with ci:assert-staging, which refuses any target that is not staging ref xskgrzbteyqdufktjrjx. The required verify CI job on this PR head is the authoritative producer."
+    },
+    "containment": {
+      "production_mutation": "none",
+      "member_delivery": "none",
+      "ingestion_unpark": "none",
+      "direct_main_work": "none",
+      "detail": "Lane executed entirely in an isolated worktree on branch claude/utv2-1672-smart-form-backend-track-only. No distribution_outbox row is produced for a Track Only pick by any test in this lane."
+    },
+    "independent_review": {
+      "performed": true,
+      "rounds": 4,
+      "scope": "rounds 2-4 adversarially reviewed the implementation; each round also audited the previous round's fixes",
+      "outcome": "all outage-class and vacuity-class findings fixed; two classes deliberately carried as disclosed residual risk",
+      "not_fixed": [
+        "isSameEntityName both under-refuses (a trailing extra or reordered token evades it: 'Knicks Basketball', 'Knicks NY') and over-refuses (a shared trailing token matches distinct entities: 'North Texas' refused as 'Texas'). Not independently fixable: round 3 required 'Alex Pereira Junior' NOT be treated as covered while round 4 requires 'Knicks Basketball' BE treated as covered -- the same structural case with opposite required verdicts. This is bypass-detection for a manual-override claim, not a safety boundary: it does not gate Track Only, member distribution, capper identity, or source spoofing, and a wrong verdict creates no member delivery.",
+        "getCatalog() is an uncached 7-query round trip on every Smart Form submission. Performance debt."
+      ],
+      "disclosed_dependencies": [
+        "apps/smart-form on this branch sends neither metadata.distributionMode nor metadata.participantResolution, so SMART_FORM_HTTP_CONTRACT_GUARD 400s the current frontend until Lane 2 (UTV2-1786) lands. Intended phased outcome -- production activation is disabled, and the alternative is leaving the HTTP boundary open.",
+        "teams and player_team_assignments are empty in production AND staging. The catalog-backed branch (participants, 124 teams) is what makes the coverage guard non-vacuous today; the search-backed branch becomes load-bearing only once those tables are populated. Backfilling is production data mutation -- a hard stop for this lane."
+      ]
+    }
+  }
+}
