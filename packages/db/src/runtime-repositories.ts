@@ -3534,8 +3534,16 @@ export class DatabasePickRepository implements PickRepository {
 export class DatabaseOutboxRepository implements OutboxRepository {
   private readonly client: UnitTalkSupabaseClient;
 
-  constructor(connection: DatabaseConnectionConfig) {
-    this.client = createDatabaseClientFromConnection(connection);
+  /**
+   * `client` exists so the Track Only chokepoint below is reachable from a
+   * test without a live connection. Production continues to pass a connection
+   * config and let the repository build its own client.
+   */
+  constructor(
+    connection: DatabaseConnectionConfig,
+    client?: UnitTalkSupabaseClient,
+  ) {
+    this.client = client ?? createDatabaseClientFromConnection(connection);
   }
 
   /** Reads the persisted metadata of a pick for the Track Only chokepoint. */
@@ -3556,7 +3564,17 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       );
     }
 
-    const metadata = (data as { metadata?: unknown } | null)?.metadata;
+    if (!data) {
+      // An absent row is not evidence of safety. `maybeSingle()` reports both
+      // "no such pick" and "the pick exists but this role cannot see it" as
+      // data:null/error:null, and treating that as "not Track Only" would make
+      // the chokepoint fail open on exactly the case it cannot evaluate.
+      throw new Error(
+        `Refusing delivery work for pick ${pickId}: its row is not readable, so Track Only status cannot be established`,
+      );
+    }
+
+    const metadata = (data as { metadata?: unknown }).metadata;
     return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
       ? (metadata as Record<string, unknown>)
       : null;

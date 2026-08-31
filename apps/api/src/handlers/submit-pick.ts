@@ -105,6 +105,35 @@ function coerceSubmissionPayload(
   }
   // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_END
 
+  // UTV2-1672 SMART_FORM_HTTP_CONTRACT_GUARD_START
+  // `smart-form` is also a legacy plain source label used by in-process
+  // service callers, so smart-form-validation.ts keys its canonical contract on
+  // the presence of the Smart Form fields. That exemption must not be reachable
+  // over HTTP: without this guard a `submitter`/`operator` key -- or any
+  // fail-open deployment, whose bypass context is `operator` -- could POST
+  // `source: 'smart-form'` with no distributionMode and no participantResolution
+  // and skip every canonical event, team and participant check, while still
+  // landing in LIVE_SOURCES. Requests arriving at the HTTP boundary must carry
+  // the full contract; the exemption then covers only in-process callers.
+  if (source === 'smart-form') {
+    if (metadata['distributionMode'] === undefined) {
+      throw new ApiError(
+        400,
+        'SMART_FORM_CONTRACT_REQUIRED',
+        'Smart Form submissions must declare metadata.distributionMode.',
+      );
+    }
+    if (metadata['participantResolution'] === undefined) {
+      throw new ApiError(
+        400,
+        'SMART_FORM_CONTRACT_REQUIRED',
+        'Smart Form submissions must declare metadata.participantResolution.',
+      );
+    }
+  }
+  // UTV2-1672 SMART_FORM_HTTP_CONTRACT_GUARD_END
+
+
   if (stakeUnits.defaulted) {
     // Keep the default explicit for machine-generated request paths.
     metadata.stakeUnitsSource = 'system_default_flat_1u';

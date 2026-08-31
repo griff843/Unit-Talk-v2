@@ -101,8 +101,20 @@ async function validateManualResolution(
   // vacuously, and a fabricated event reaches distribution. A manual override
   // is only legitimate when the canonical gap it names is real, so the claim is
   // verified against reference data rather than taken on trust.
+  //
+  // The proof has to be at least as strong as the canonical path it replaces,
+  // which means it must survive the four ways a caller can dodge a naive
+  // equality check: entering one side instead of two, spelling a canonical name
+  // with a homoglyph, spelling it with a city prefix the catalog omits (or
+  // omitting one the catalog carries), and picking a sport whose participants
+  // are players rather than teams.
   if (resolution.enteredParticipants.length === 0) {
     fail('manual participant resolution requires at least one entered participant');
+  }
+  if (resolution.enteredParticipants.length < 2) {
+    fail(
+      'manual participant resolution requires both sides of the entered matchup; the canonical path it replaces requires two participants',
+    );
   }
 
   const seen = new Map<string, string>();
@@ -117,22 +129,17 @@ async function validateManualResolution(
     seen.set(key, participant.role);
   }
 
-  if (TEAM_SPORTS.has(sportId.toUpperCase())) {
-    const matches = await Promise.all(
-      resolution.enteredParticipants.map(async (participant) => {
-        const rows = await referenceData.searchTeams(sportId, participant.displayName, 25);
-        const canonical = rows.find(
-          (row) => aliasKey(row.displayName) === aliasKey(participant.displayName),
-        );
-        return canonical ? { entered: participant.displayName, canonical } : null;
-      }),
+  const matches = await Promise.all(
+    resolution.enteredParticipants.map(async (participant) => {
+      const canonical = await findCanonicalCoverage(participant.displayName, sportId, referenceData);
+      return canonical ? { entered: participant.displayName, canonical } : null;
+    }),
+  );
+  const covered = matches.find((match) => match !== null);
+  if (covered) {
+    fail(
+      `manual override claims a canonical coverage gap, but "${covered.entered}" resolves to canonical participant ${covered.canonical.participantId}; use the canonical selection`,
     );
-    const covered = matches.find((match) => match !== null);
-    if (covered) {
-      fail(
-        `manual override claims a canonical coverage gap, but "${covered.entered}" resolves to canonical participant ${covered.canonical.participantId}; use the canonical selection`,
-      );
-    }
   }
   // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_END
 }
@@ -305,6 +312,25 @@ function normalize(value: string) {
 }
 
 /**
+ * Latin look-alikes drawn from the Cyrillic and Greek blocks. `aliasKey` strips
+ * everything outside `[a-z0-9]`, so without this table a single Cyrillic "\u0441"
+ * inside "Knicks" is *deleted* rather than compared, and the alias key no longer
+ * equals the canonical one -- which is exactly what a caller wants when the goal
+ * is to claim a canonical entity does not exist.
+ */
+const CONFUSABLE_LATIN: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    '\u0430': 'a', '\u0432': 'b', '\u0435': 'e', '\u0437': '3', '\u0438': 'u', '\u043a': 'k',
+    '\u043c': 'm', '\u043d': 'h', '\u043e': 'o', '\u0440': 'p', '\u0441': 'c', '\u0442': 't',
+    '\u0443': 'y', '\u0445': 'x', '\u0455': 's', '\u0456': 'i', '\u0458': 'j', '\u04bb': 'h',
+    '\u0501': 'd', '\u051b': 'q', '\u051d': 'w', '\u0261': 'g',
+    '\u03b1': 'a', '\u03b2': 'b', '\u03b3': 'y', '\u03b5': 'e', '\u03b7': 'n', '\u03b9': 'i',
+    '\u03ba': 'k', '\u03bd': 'v', '\u03bf': 'o', '\u03c1': 'p', '\u03c3': 'o', '\u03c4': 't',
+    '\u03c5': 'u', '\u03c7': 'x', '\u03c9': 'w',
+  }),
+);
+
+/**
  * A deliberately aggressive key used only to decide whether two names refer to
  * the same entity. `normalize` stays strict because it backs mismatch
  * refusals, where collapsing more strings would let a mismatch through; this
@@ -312,11 +338,73 @@ function normalize(value: string) {
  * entity does not exist.
  */
 function aliasKey(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/gu, '')
-    .toLocaleLowerCase()
-    .replace(/[^a-z0-9]+/gu, '');
+  return foldConfusables(value).replace(/[^a-z0-9]+/gu, '');
+}
+
+/**
+ * Lower-case, strip diacritics and map Latin look-alikes back to ASCII, but
+ * keep word boundaries. `searchTeams`/`searchPlayers` match on the raw query
+ * string, so a homoglyph spelling finds nothing at all and never reaches the
+ * alias comparison -- the folded spelling has to be searched too.
+ */
+function foldConfusables(value: string) {
+  return Array.from(
+    value.normalize('NFD').replace(/[\u0300-\u036f]/gu, '').toLocaleLowerCase(),
+  )
+    .map((character) => CONFUSABLE_LATIN.get(character) ?? character)
+    .join('');
+}
+
+/**
+ * Resolve whether an entered name is already covered by reference data.
+ *
+ * Two asymmetries make exact alias equality insufficient. The catalog may store
+ * "Knicks" while the form sends "New York Knicks", or the reverse, so the match
+ * is containment in either direction rather than equality. And `searchTeams` /
+ * `searchPlayers` match on substrings, so a city-prefixed query finds nothing at
+ * all -- each significant word is therefore queried on its own as well.
+ *
+ * The catalog to search follows the sport: team sports resolve to teams, and
+ * everything else (MMA, tennis, golf, ...) resolves to players. Skipping the
+ * non-team case, as an earlier revision did, left the manual override entirely
+ * unverified for precisely the sports whose only supported route is manual.
+ */
+async function findCanonicalCoverage(
+  displayName: string,
+  sportId: string,
+  referenceData: ReferenceDataRepository,
+): Promise<{ participantId: string; displayName: string } | null> {
+  const enteredKey = aliasKey(displayName);
+  if (!enteredKey) return null;
+
+  const trimmed = displayName.trim();
+  const queries = new Set<string>([trimmed, foldConfusables(trimmed)]);
+  for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
+    if (aliasKey(word).length >= 3) queries.add(word);
+  }
+
+  const search = TEAM_SPORTS.has(sportId.toUpperCase())
+    ? (query: string) => referenceData.searchTeams(sportId, query, 25)
+    : (query: string) => referenceData.searchPlayers(sportId, query, 25);
+
+  for (const query of queries) {
+    const rows = await search(query);
+    for (const row of rows) {
+      const rowKey = aliasKey(row.displayName);
+      if (!rowKey) continue;
+      const equal = rowKey === enteredKey;
+      // Containment is restricted to keys long enough that a shared substring is
+      // evidence of the same entity rather than a coincidence ("Jets"/"Jetsons").
+      const contained =
+        rowKey.length >= 5 &&
+        enteredKey.length >= 5 &&
+        (rowKey.includes(enteredKey) || enteredKey.includes(rowKey));
+      if (equal || contained) {
+        return { participantId: row.participantId, displayName: row.displayName };
+      }
+    }
+  }
+  return null;
 }
 
 /** True when the payload carries anything the Smart Form itself would send. */

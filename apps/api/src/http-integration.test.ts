@@ -1161,3 +1161,89 @@ test('mutation control: removing CAPPER_TRACK_ONLY_PIN_GUARD lets an authenticat
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the HTTP boundary closes the SMART_FORM_TRIGGER_SCOPE exemption.
+//
+// smart-form-validation.ts keys its canonical contract on the presence of the
+// Smart Form fields, because `smart-form` is also a legacy plain source label
+// used by in-process service callers. Over HTTP that exemption would be a
+// bypass: `submitter` and `operator` are allowed on POST /api/submissions, the
+// fail-open bypass context is `operator`, and only `capper` gets the pins -- so
+// a non-capper key could post `source: 'smart-form'` with a fabricated event and
+// skip every canonical check while still landing in LIVE_SOURCES.
+// ---------------------------------------------------------------------------
+
+const OPERATOR_AUTH = { role: 'operator', identity: 'operator:test' };
+
+function bareSmartFormBody(overrides: Record<string, unknown> = {}) {
+  return {
+    source: 'smart-form',
+    market: 'NBA moneyline',
+    selection: 'Fabricated ML',
+    stakeUnits: 1,
+    eventName: 'Totally Fake Matchup',
+    metadata: { sport: 'NBA', eventId: 'nope', teamId: 'nope' },
+    ...overrides,
+  };
+}
+
+test('an operator cannot post a Smart Form submission that omits the Smart Form contract', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await handleSubmitPick(
+    { body: bareSmartFormBody(), auth: OPERATOR_AUTH as never },
+    repositories,
+  );
+  assert.equal(result.status, 400);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'SMART_FORM_CONTRACT_REQUIRED');
+});
+
+test('a Smart Form submission that declares distributionMode but no participantResolution is refused', async () => {
+  const result = await handleSubmitPick(
+    {
+      body: bareSmartFormBody({
+        metadata: { sport: 'NBA', distributionMode: 'delivery-eligible' },
+      }),
+      auth: OPERATOR_AUTH as never,
+    },
+    createInMemoryRepositoryBundle(),
+  );
+  assert.equal(result.status, 400);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'SMART_FORM_CONTRACT_REQUIRED');
+});
+
+test('mutation control: removing SMART_FORM_HTTP_CONTRACT_GUARD lets a non-capper post an unvalidated Smart Form pick', async () => {
+  // Baseline asserted above. The mutant must admit the same body AND persist it
+  // with the fabricated identity intact -- proving the guard, not the canonical
+  // validator, is what refuses it.
+  await withCapperGuardRemoved('SMART_FORM_HTTP_CONTRACT_GUARD', async (mutant) => {
+    const mutantHandle = mutant.handleSubmitPick as typeof handleSubmitPick;
+    const repositories = createInMemoryRepositoryBundle();
+    const result = await mutantHandle(
+      { body: bareSmartFormBody(), auth: OPERATOR_AUTH as never },
+      repositories,
+    );
+    assert.ok(result.body.ok, 'mutant must admit the contract-free Smart Form submission');
+    if (!result.body.ok) return;
+    const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+    assert.equal(persisted?.source, 'smart-form');
+    assert.equal(
+      (persisted?.metadata as Record<string, unknown>)['eventId'],
+      'nope',
+      'mutant must persist the fabricated canonical identity unchecked',
+    );
+  });
+});
+
+test('an authenticated capper is unaffected: the track-only pin supplies distributionMode', async () => {
+  // The pin runs before the contract guard, so a capper never has to send
+  // distributionMode. participantResolution is still required of them.
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await handleSubmitPick(
+    { body: capperBody(), auth: CAPPER_AUTH as never },
+    repositories,
+  );
+  assert.ok(result.body.ok, JSON.stringify(result.body));
+});

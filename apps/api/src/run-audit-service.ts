@@ -59,7 +59,7 @@ export async function enqueueDistributionWithRunTracking(
   // other helper path that reaches this function must also be safe.
   const currentPick = await pickRepository.findPickById(pick.id);
 
-  // UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_START
+  // UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_START
   // This guard must remain before promotion evaluation and, critically, before
   // enqueueDistributionAtomic(). The persisted row is authoritative: callers
   // can hold stale or spoofed CanonicalPick objects, while the database record
@@ -71,7 +71,7 @@ export async function enqueueDistributionWithRunTracking(
   ) {
     throw new TrackOnlyDistributionError(pick.id, resolvedTarget);
   }
-  // UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_END
+  // UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_END
 
   const currentLifecycleState =
     currentPick?.status ?? pick.lifecycleState;

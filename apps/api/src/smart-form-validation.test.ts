@@ -475,6 +475,125 @@ test('a legacy smart-form submission carrying no Smart Form fields is not retrof
   await validateSmartFormRelationships(legacy, referenceData());
 });
 
+// ---------------------------------------------------------------------------
+// UTV2-1672: the four ways an exact-equality coverage proof can be dodged.
+//
+// Adversarial review at the previous head demonstrated each of these against
+// the shipped guard. They are regression tests, not hypotheticals.
+// ---------------------------------------------------------------------------
+
+/** Reference data seeded with the real in-memory catalog: NBA "Knicks" exists. */
+function seededReferenceData(): ReferenceDataRepository {
+  return createInMemoryRepositoryBundle().referenceData;
+}
+
+test('manual override is refused when a canonical name is spelled with a Cyrillic homoglyph', async () => {
+  // U+0441 (Cyrillic "es") is visually identical to "c". Stripping it instead
+  // of folding it produced "kniks", which matched nothing.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'Kni\u0441ks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        seededReferenceData(),
+      ),
+    /resolves to canonical participant team:NBA:Knicks/u,
+  );
+});
+
+test('manual override is refused when a canonical name is entered with a city prefix the catalog omits', async () => {
+  // The catalog stores the bare nickname, so searching the full string returns
+  // nothing and exact alias equality never fires.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'New York Knicks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        seededReferenceData(),
+      ),
+    /resolves to canonical participant team:NBA:Knicks/u,
+  );
+});
+
+test('manual override is refused when the catalog carries a city prefix the entry omits', async () => {
+  // The opposite convention: the catalog is verbose, the caller is terse.
+  const repository = seededReferenceData();
+  repository.searchTeams = async (_sportId, query) =>
+    /knicks/iu.test(query)
+      ? ([{ participantId: 'team-nyk', displayName: 'New York Knicks', sport: 'NBA' }] as never)
+      : [];
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'Knicks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        repository,
+      ),
+    /resolves to canonical participant team-nyk/u,
+  );
+});
+
+test('manual override is verified for non-team sports, whose only supported route is manual', async () => {
+  // TEAM_SPORTS gates the team catalog only. Skipping the proof for every other
+  // sport left the manual override unverified for exactly the sports the
+  // canonical path refuses without an event.
+  const repository = seededReferenceData();
+  repository.searchPlayers = async (sportId, query) =>
+    sportId === 'MMA' && /jones/iu.test(query)
+      ? ([{ participantId: 'player-jones', displayName: 'Jon Jones', sport: 'MMA' }] as never)
+      : [];
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload(
+          [
+            { role: 'away', displayName: 'Jon Jones', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Nobody Atall', canonicalParticipantId: null },
+          ],
+          'MMA',
+        ),
+        repository,
+      ),
+    /resolves to canonical participant player-jones/u,
+  );
+});
+
+test('manual override is refused when only one side of the matchup is entered', async () => {
+  // The canonical structured fallback requires both away and home; the manual
+  // route must not be weaker than the path it substitutes for.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload(
+          [{ role: 'away', displayName: 'Nobody Atall', canonicalParticipantId: null }],
+          'MMA',
+        ),
+        referenceData(),
+      ),
+    /requires both sides of the entered matchup/u,
+  );
+});
+
+test('a genuinely uncovered manual matchup is still admitted', async () => {
+  // The guard must refuse fabricated gaps without refusing real ones.
+  await validateSmartFormRelationships(
+    manualPayload(
+      [
+        { role: 'competitor', displayName: 'Nobody Atall', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Someone Else Entirely', canonicalParticipantId: null },
+      ],
+      'MMA',
+    ),
+    seededReferenceData(),
+  );
+});
+
 async function withGuardRemoved<T>(
   guardName: string,
   run: (mutant: Record<string, unknown>) => Promise<T>,

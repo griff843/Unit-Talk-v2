@@ -265,7 +265,7 @@ test('enqueueDistributionWithRunTracking: persisted Track Only metadata blocks t
   assert.equal((await repositories.outbox.listByPickId(callerPick.id)).length, 0);
 });
 
-test('mutation control: removing the pre-atomic Track Only guard reopens lifecycle and Discord outbox writes', async () => {
+test('mutation control: removing the pre-atomic Track Only guard lets the atomic distribution path run for a Track Only pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const callerPick = makeValidatedPick({
     id: 'pick-track-only-atomic-mutant',
@@ -282,7 +282,7 @@ test('mutation control: removing the pre-atomic Track Only guard reopens lifecyc
     new URL(`./run-audit-service.__track_only_mutant_${process.pid}.ts`, import.meta.url),
   );
   const source = await readFile(sourcePath, 'utf8');
-  const guardPattern = /[ ]{2}\/\/ UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_START[\s\S]*?[ ]{2}\/\/ UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_END\n/u;
+  const guardPattern = /[ ]{2}\/\/ UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_START[\s\S]*?[ ]{2}\/\/ UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_END\n/u;
   const mutantSource = source.replace(guardPattern, '');
   assert.notEqual(mutantSource, source, 'mutation control could not remove the Track Only guard');
 
