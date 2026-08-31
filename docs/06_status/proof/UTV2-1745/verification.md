@@ -1,6 +1,6 @@
 # PROOF: UTV2-1745
 
-MERGE_SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
+MERGE_SHA: 85c572edf5d6061cf4e2ece9ddebc730cae3e0d3
 
 SYNC_PROVENANCE: e4e434e19b5db509dfb4f0cebe2857d6f0f1d080 — the 2026-08-31 synchronization
 merge with origin/main `d8c77b8e`, performed through the sanctioned
@@ -1705,3 +1705,77 @@ The lane verdict stands as originally measured: **the historical production pick
 population cannot support a trustworthy-pick claim.** Of 107,858 picks, exactly
 1 is simultaneously non-fixture, fully identity- and provenance-complete, and
 settled. Nothing in this synchronization softens that.
+
+## Closeout repair (2026-08-31)
+
+PR #1453 merged at `85c572edf5d6061cf4e2ece9ddebc730cae3e0d3` and the lane then
+failed to close. Two independent defects stacked behind one error message.
+
+**1. A false merge identity in the model-routing sidecar.**
+`model-routing.json` carried a top-level `merge_sha` of
+`daad7b0080bfaa87bf10989c2dc93996ba0591a5` — a branch-only proof commit that a
+squash merge can never produce. The rebinder refused:
+
+```
+code: model_routing_rebind_failed
+model_routing_error_code: legacy_binding_conflict
+Sidecar legacy top-level merge_sha "daad7b00..." conflicts with the
+authoritative merge SHA "85c572ed..."
+```
+
+That refusal was correct and is preserved. The false field is removed rather
+than overwritten, because a pre-merge sidecar has no merge authority to assert.
+
+The rule that would have prevented this already existed.
+`validatePreMergeModelRoutingEvidence` in `scripts/ops/model-routing.ts`
+rejects exactly this shape, executed against both states of the real file:
+
+```
+pre-repair : valid=false — "top-level merge_sha is forbidden before merge;
+                            a branch SHA is execution identity, never merge authority"
+post-repair: valid=true
+```
+
+It never ran on this lane. Its only caller, `scripts/ci/proof-binding-validator.ts`,
+is invoked from one workflow — `migration-reversibility-gate.yml` — so the
+contract is unenforced for every non-migration lane. Extending that reach needs
+`.github/workflows/**`, carried by exactly one lane type (`runtime`), currently
+held by UTV2-1672. Reported as a lane-type collision and deferred; recorded on
+UTV2-1792.
+
+**2. A closeout detector that did not recognise this bundle's shape.**
+`activeStaticReattestationCandidate()` recognised only "both omissions" and
+"both repaired". This bundle is schema-VALID — CEP-E7 requires
+`sha_binding.merge_sha` to be present and null before merge, and it was — while
+`verification.md` predated the canonical `## Merge SHA Binding` section. That
+third shape matched neither test, so structural repair was never enabled.
+
+Executed inversion, with the widened shape removed from the detector:
+
+```
+not ok - a schema-valid bundle missing the binding section is repaired
+    outcomes === ['updated','updated','updated']   <-- reported SUCCESS
+    The input did not match /^## Merge SHA Binding$/mu
+```
+
+The fallback path does not refuse here. It rebinds the top-level `MERGE_SHA:`
+line, reports three successful updates, and never writes the canonical section,
+the approved PR head, the PR identity or the execution SHA — a silent partial
+binding presented as a clean closeout. **Repairing the sidecar data alone would
+have produced that, not a correct closeout.** Both fixes were required.
+
+The structural repairer already handled this shape correctly; only the detector
+was too narrow. Fail-closed conflict handling is unchanged: a sidecar naming a
+different non-null merge identity still refuses, and the refusal is still atomic
+across all three artifacts.
+
+`MERGE_SHA:` above is updated from the audit branch anchor `3a99f504` to the
+authoritative merge SHA. `3a99f504` was squashed away by the merge and is not an
+ancestor of this repair branch; `85c572ed` is the merge commit GitHub recorded
+for PR #1453 and is the only merge authority this bundle may assert. The
+canonical `## Merge SHA Binding` section is written by the closeout rebinder
+from the resolved merge SHA, which is the behaviour this repair restores.
+
+Executed controls live in `scripts/ops/lane-close.test.ts` and run the real
+exported `rebindRepairedLaneProof` path. Defect recorded as UTV2-1792, a
+required child beneath this lane.

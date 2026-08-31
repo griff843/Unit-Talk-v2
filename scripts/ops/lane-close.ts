@@ -1095,10 +1095,23 @@ function activeStaticReattestationCandidate(
   const verification = fs.readFileSync(verificationPath, 'utf8');
   const hasMergeSlot = Object.prototype.hasOwnProperty.call(binding, 'merge_sha');
   const hasBindingSection = /^## Merge SHA Binding\s*$/mu.test(verification);
-  const malformedGeneratorShape = !hasMergeSlot && !hasBindingSection && /^MERGE_SHA:\s*/mu.test(verification);
+  const hasTopMergeShaLine = /^MERGE_SHA:\s*/mu.test(verification);
+  // Shape A -- the original broken generator: BOTH omissions together.
+  const malformedGeneratorShape = !hasMergeSlot && !hasBindingSection && hasTopMergeShaLine;
+  // Shape B (UTV2-1745): the evidence bundle is schema-valid -- CEP-E7 requires
+  // sha_binding.merge_sha to exist and be null before merge -- while
+  // verification.md still predates the canonical binding section. Recognising
+  // only "neither omission" and "both repaired" left this third, entirely
+  // legitimate shape unclassified: it fell through to the tolerant
+  // rebindMergeSha path, where planVerificationRebind refuses on the absent
+  // section, and the lane stayed merged-but-unclosed with no sanctioned exit.
+  // The structural repairer already handles it correctly -- its JSON branch
+  // no-ops when the merge slot is present and its Markdown branch appends the
+  // canonical section -- so only this detector was too narrow.
+  const legacySectionOnlyShape = hasMergeSlot && !hasBindingSection && hasTopMergeShaLine;
   const repairedGeneratorShape = hasMergeSlot && hasBindingSection &&
     /^Approved PR head:\s*/mu.test(verification) && /^Execution SHA:\s*/mu.test(verification);
-  if (!malformedGeneratorShape && !repairedGeneratorShape) return null;
+  if (!malformedGeneratorShape && !legacySectionOnlyShape && !repairedGeneratorShape) return null;
 
   const executionSha = typeof (binding as Record<string, unknown>)['verified_source_sha'] === 'string'
     ? (binding as Record<string, unknown>)['verified_source_sha'] as string
@@ -1107,7 +1120,7 @@ function activeStaticReattestationCandidate(
     evidencePath,
     verificationPath,
     executionSha,
-    needsStructuralRepair: malformedGeneratorShape,
+    needsStructuralRepair: malformedGeneratorShape || legacySectionOnlyShape,
   };
 }
 
