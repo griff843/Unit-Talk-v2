@@ -40,6 +40,37 @@ ok 6 - the allowlist module exports no compiled-in capper constant
 # fail 0
 ```
 
+### Repository gate receipts
+
+Executed standalone at this head, not inferred from the composite run:
+
+```text
+$ pnpm type-check                                                     -> exit 0
+  pnpm exec tsc -b tsconfig.json, no diagnostics.
+
+$ pnpm test                                                           -> exit 0
+# tests 5360
+# pass 5360
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+  Zero 'not ok' lines across the whole run.
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD -> exit 0
+  Verdict: PASS
+  Changed files: 28
+  Rules matched: operator-ui
+```
+
+`scripts/ci/r-level-check.ts` reports PASS for the `operator-ui` rule. That
+verdict reflects the presence of a locally produced `apps/qa-agent/artifacts/**`
+run directory on this workstation, which `apps/qa-agent/.gitignore` excludes
+from the commit. It is recorded here as the measured local result and is NOT
+offered as evidence that the qa-experience requirement is satisfied in a
+committed tree — see "QA experience disposition" above, where that run's FAIL
+verdict and the unreachable artifact path are both stated.
+
 ### E2E evidence at this head
 
 ```text
