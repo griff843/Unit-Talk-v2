@@ -2,6 +2,8 @@
 
 ## Merge SHA Binding
 
+MERGE_SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
+
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1468
 Execution SHA: `b8795cb58665b66b2e04840159c589f4f9e31b5e`
@@ -17,6 +19,10 @@ was executed at this exact SHA. The proof commit that adds this file follows it.
       `env:check`, `lint`, `type-check`, `build`, `test`, smart-form verify and
       `verify:commands`. Aggregate `tests 5471 / pass 5471 / fail 0 / skipped 0`,
       zero `not ok` lines.
+- [x] `pnpm type-check` — exit 0 (executed as a stage of `pnpm verify:static` at this head).
+- [x] `pnpm test` — exit 0, `tests 5471 / pass 5471 / fail 0 / skipped 0`, zero `not ok` lines
+      (executed as a stage of `pnpm verify:static` at this head).
+- [x] `pnpm lint` — exit 0 (same stage list).
 - [x] `pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts` — 2/2 pass.
 - [x] Executable-wiring reachability — `[automation-coverage] verdict=PASS fail=0 warn=1 classified=15`.
 - [x] Mutation proof — five independent mutations, each re-executed at this head; see below.
@@ -82,7 +88,10 @@ ok 2 - scheduled alert workflow remains parked and canary-only
 Repository gate at `b8795cb58665b66b2e04840159c589f4f9e31b5e`:
 
 ```text
-$ pnpm verify:static
+$ pnpm verify:static                                      -> exit 0
+$ pnpm lint                       (stage of verify:static)  -> exit 0
+$ pnpm type-check                 (stage of verify:static)  -> exit 0
+$ pnpm test                       (stage of verify:static)  -> exit 0
 [automation-coverage] verdict=PASS fail=0 warn=1 classified=15
 ...
 # tests 5471
