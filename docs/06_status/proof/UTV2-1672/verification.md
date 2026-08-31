@@ -1,6 +1,6 @@
 # PROOF: UTV2-1672
 
-MERGE_SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
+MERGE_SHA: 6a8eface93068687b6876d7e4e6f9c5bf9d9ddf5
 
 > Pre-merge the merge anchor carries the verified implementation identity; the
 > Execution SHA row below repeats it. `post-merge-lane-close.yml` rebinds merge
@@ -539,6 +539,6 @@ been wrong in the other direction.
 
 ## Merge SHA Binding
 
-Merge SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
+Merge SHA: 6a8eface93068687b6876d7e4e6f9c5bf9d9ddf5
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 Execution SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9

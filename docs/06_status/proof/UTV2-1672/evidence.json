@@ -5,10 +5,10 @@
   "tier": "T1",
   "lane_type": "runtime",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "generated_at": "2026-08-31T03:20:00.000000Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "6a8eface93068687b6876d7e4e6f9c5bf9d9ddf5",
     "verified_source_sha": "15eee48254c0141cf739a23ecc4add0f519a6fe9",
     "verified_source_note": "Last commit on this branch touching a non-proof path; it carries the complete substantive change, including the two requirements returned by the PM verdict at da323a11. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7) -- a branch SHA must never be represented as a merge SHA. post-merge-lane-close.yml binds it to the real merge commit via proof-generate rebindEvidenceJsonSha, and the same workflow harvests runtime_proof from the Writable DB proof (staging only) receipt. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
     "evidence_commit_sha": "15eee48254c0141cf739a23ecc4add0f519a6fe9",
@@ -17,8 +17,8 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-08-31T16:05:00.000000Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-31T15:45:45.690Z"
   },
   "gate_results": [
     {
