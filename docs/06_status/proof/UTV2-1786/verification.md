@@ -2,26 +2,30 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
-Head SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
-Merge SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
-Execution SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
+MERGE_SHA: 9c8d2d431303c80066feef79df4c3326171b2267
+Head SHA: 9c8d2d431303c80066feef79df4c3326171b2267
+Merge SHA: 9c8d2d431303c80066feef79df4c3326171b2267
+Execution SHA: 9c8d2d431303c80066feef79df4c3326171b2267
 Diff base: origin/main at the time of this binding
 
-`05d7d9bf` is this branch's last non-proof commit — it carries every
-implementation change under review, including the `main` sync that brought
-UTV2-1788 into this branch. It is execution identity, not merge authority: the
+`9c8d2d43` is this branch's last non-proof commit — it carries every
+implementation change under review, including the review-round correction
+described below. It is execution identity, not merge authority: the
 authoritative merge SHA does not exist until the PR merges, at which point
 `post-merge-lane-close.yml` rebinds these anchors to it. The proof-only commit
-that adds this file sits on top of `05d7d9bf` and changes no implementation byte.
+that adds this file sits on top of `9c8d2d43` and changes no implementation byte.
+
+The branch was 0 commits behind `origin/main` when this binding was taken, so no
+sync was performed and no head-pinned artifact was invalidated to obtain it.
 
 ## Verification
 
 | Check | Result | Evidence |
 | --- | --- | --- |
 | Repository gate | PASS | `pnpm verify`; all static stages exit 0 |
-| Smart Form unit tests (required path) | PASS | `pnpm --filter @unit-talk/smart-form verify`, invoked by `verify:static`; 123 passed, 0 failed |
+| Smart Form unit tests (required path) | PASS | `pnpm --filter @unit-talk/smart-form verify`, invoked by `verify:static`; 132 passed, 0 failed |
 | Auth-gate E2E at this head | PASS | `pnpm exec playwright test e2e/auth-gate.spec.ts`; 3 passed against the running app |
+| Review-round corrections (5 findings) | PASS | 9 new tests, each proven by reverting its fix; see "Review round" below |
 | Auth-gate mutation test | PASS (control proven to fail) | gate reverted to the pre-lane ordering; 2 of 3 specs failed on the refusal assertion |
 | Allowlist regression tests reach required CI | PASS | both tests appear in the TAP output of the suite `verify:static` runs |
 | Screenshots | PASS | 3 PNGs captured by the E2E run at this head |
@@ -108,6 +112,87 @@ correctly shows that spec 1 is not the load-bearing control. The file was
 restored before any commit — `git diff` on `app/submit/page.tsx` is empty at
 this head.
 
+### Review round — five findings, one bounded correction
+
+GitHub review left five unresolved, non-outdated threads on head `6c640ca0`.
+Each was checked against `apps/api/src/smart-form-validation.ts` — the server
+that would receive these payloads — before being treated as real. All five were
+real, and all five are corrected in `1be0d992`.
+
+| # | Finding | Server rule it violated | Correction |
+| - | --- | --- | --- |
+| P1-a | Manual team-sport submission did not require both sides | `smart-form-validation.ts:129` — team sports need two entered participants | `evaluateSubmissionGuards` refuses before submit |
+| P1-b | Manual provenance repeated the selected side under a second role | `:154-163` — manual participants must be distinct | `buildManualEnteredParticipants` emits distinct names only |
+| P1-c | Canonical player props could carry `eventId: null` | `:203` — a canonical player needs a canonical event | `evaluateSubmissionGuards` requires a matchup |
+| P2-a | `submitPick` preferred `ut_capper_token` over a valid session | API rejects the stale bearer; the session was valid | `resolveSubmitAuthorization` prefers the session |
+| P2-b | `.env.example` documented a variable the browser never sees | Next.js inlines only `NEXT_PUBLIC_*` into client bundles | Both names documented; fixture E2E sets the working one |
+
+Each correction was reverted in turn and the suite re-run. A guard whose test
+still passes when the guard is gone proves nothing, so this is the load-bearing
+evidence, not the green run:
+
+```text
+mutation: dedupe removed from manual provenance
+  not ok 17 - manual team-sport submission is refused until both sides are entered
+  not ok 18 - manual team-sport submission is refused when both sides name the same participant
+  not ok 19 - manual provenance never repeats the selected side under a second role
+  not ok 20 - manual provenance treats punctuation and case differences as the same participant
+  # pass 21  # fail 4
+
+mutation: team-sport two-side requirement removed
+  not ok 17, not ok 18                                            # pass 23  # fail 2
+
+mutation: player-prop event requirement removed
+  not ok 21 - a canonical player prop is refused without a canonical event
+                                                                  # pass 24  # fail 1
+
+mutation: recovery token preferred over session again
+  not ok 24 - submitPick prefers the authoritative session bearer over a stored recovery token
+                                                                  # pass 24  # fail 1
+
+mutation: env template + fixture command reverted to the unprefixed name
+  not ok 25 - the QA auth bypass is documented under the name the browser bundle can see
+                                                                  # pass 24  # fail 1
+
+baseline restored                                                 # pass 25  # fail 0
+```
+
+Every block also asserts the case that must **still be allowed**, so a guard
+that simply refused everything would fail here too: individual sports with
+one-participant markets (`GOLF`), a genuinely distinct third team name, a
+team-sport market with no player, a player prop with its matchup selected, and
+the operator-recovery path with no session.
+
+The client's `CLIENT_TEAM_SPORT_IDS` duplicates a server list that cannot be
+imported — `apps` never import from `apps`, and the list is in neither a shared
+package nor a contract. It is pinned by a test that reads the API source and
+compares; adding `'WNBA'` to the server set during independent review made that
+test, and only that test, fail.
+
+### Independent verification of the correction
+
+One focused independent review was obtained, scoped to these five corrections
+only. It read the server file rather than trusting the commit message, and
+re-ran each mutation itself. Verdict: all five **CORRECTED**, each new client
+rule matching its cited server rule, all five inversion tests real (each kills
+its target mutation and only that mutation), and no new defect blocking a
+legitimate submission path.
+
+It returned one finding against this lane, which was checked and confirmed
+against the server before being accepted: the justification comment on
+`participantAliasKey` named the wrong backstop. It claimed a look-alike the
+client fails to collapse is refused by the server's non-ASCII check; that check
+is `hasNonAscii(foldConfusables(name))`, so a character in the confusable table
+folds to ASCII and passes it. The duplicate is actually caught by `aliasKey`,
+which folds as well. The conclusion the comment defended still holds — the
+client is only ever more permissive than the server, never less — but it rested
+on a mechanism that does not exist. Corrected in `9c8d2d43`, comment only.
+
+It also noted, as informational and pre-existing, that `BetForm.tsx:92` carries
+its own local `TEAM_SPORTS` set spelling `'Soccer'` in mixed case. It predates
+this lane, does not affect the new guards (`isTeamSportId` normalizes case), and
+is recorded as a follow-up rather than changed here.
+
 ### QA experience disposition
 
 `pnpm qa:experience --regression --mode fast` was executed twice at this head
@@ -181,6 +266,18 @@ for this head.
       `test` script lists both. Root `package.json` is untouched.
 - [x] `apps/smart-form/.env.example` documents the allowlist with a placeholder
       address. It contains no real operator email.
+- [x] A manual team-sport submission cannot be sent with one side, and cannot be
+      sent with two entries naming the same participant. Both are what the API
+      counts as fewer than two participants.
+- [x] Manual provenance never lists one display name under two roles, so the
+      selected market side no longer duplicates an entered event side.
+- [x] A canonical player prop cannot be submitted without the canonical event
+      that makes its team membership verifiable.
+- [x] A submission from an authenticated operator carries the server-signed
+      session bearer, not a stored recovery token, so a stale or forged recovery
+      token can no longer 401 an otherwise valid submission.
+- [x] The QA bypass is documented under the name the browser bundle can actually
+      see, and the fixture E2E command sets that name.
 
 ## EVIDENCE: executed command receipts
 
@@ -197,6 +294,34 @@ $ pnpm exec playwright test -c playwright.config.ts e2e/auth-gate.spec.ts -> 3 p
 $ (gate reverted in place) pnpm exec playwright test ... e2e/auth-gate.spec.ts -> 2 failed, 1 passed
 $ pnpm qa:experience --regression --mode fast     -> exit 2, FAIL (stale expectation; see disposition)
 ```
+
+Re-executed at the corrected head `9c8d2d43`:
+
+```text
+$ pnpm type-check                                 -> exit 0
+$ pnpm lint                                       -> exit 0
+$ pnpm test                                       -> exit 0
+# tests 5369
+# pass 5369
+# fail 0
+  Zero 'not ok' lines across the whole run.
+
+$ pnpm --filter @unit-talk/smart-form verify      -> exit 0
+# tests 132
+# pass 132
+# fail 0
+
+$ pnpm exec playwright test -c playwright.config.ts e2e/auth-gate.spec.ts -> 3 passed
+  ✓ 1 unauthenticated submit redirects to the Unit Talk Capper Portal (2.8s)
+  ✓ 2 a forged capper token stored in localStorage does not open /submit (2.1s)
+  ✓ 3 storing a recovery token does not sign the operator in (2.0s)
+```
+
+The auth gate itself is byte-identical to head `6c640ca0`: `git diff
+6c640ca0..9c8d2d43 -- app/submit/page.tsx app/login/page.tsx lib/auth-config.ts
+lib/auth-allowlist.ts auth.ts` is empty. The three specs and their mutation
+control were nonetheless re-executed at the corrected head rather than carried
+forward on that argument alone.
 
 ## Residual risks and deferred work
 
@@ -242,7 +367,7 @@ manifest.
 
 `ops:proof-check UTV2-1786` reports `STALE: yes` before merge. `isProofStale`
 compares `source_sha` to the PR head by strict equality, and this bundle's
-`source_sha` is `05d7d9bf` — the last non-proof commit, which is what the merge
+`source_sha` is `9c8d2d43` — the last non-proof commit, which is what the merge
 binding and the executor result are pinned to. The PR head is the proof-only
 commit that carries this file. Setting `source_sha` to the PR head cannot be
 done without changing the PR head again, so the condition is unsatisfiable for

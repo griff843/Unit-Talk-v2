@@ -67,6 +67,25 @@ A	docs/06_status/proof/UTV2-1786/.gitkeep
 ## Manifest Files Changed
 - No files_changed entries recorded.
 
+## Review-Round Correction (1be0d992, 9c8d2d43)
+
+Five GitHub review findings, one bounded correction. Files touched, all inside
+the frozen lane scope:
+
+```text
+M	apps/smart-form/.env.example
+M	apps/smart-form/app/submit/components/BetForm.tsx
+M	apps/smart-form/lib/api-client.ts
+M	apps/smart-form/lib/form-utils.ts
+M	apps/smart-form/package.json
+M	apps/smart-form/test/api-client.test.ts
+```
+
+No file outside `apps/smart-form/**` was touched by the correction, and the
+authentication gate (`app/submit/page.tsx`, `app/login/page.tsx`,
+`lib/auth-config.ts`, `lib/auth-allowlist.ts`, `auth.ts`) is byte-identical to
+head `6c640ca0`.
+
 ## SHA Binding
-Head SHA: 05d7d9bf4ef67af09c272b98126f2c8a79b486ed
+Head SHA: 9c8d2d431303c80066feef79df4c3326171b2267
 Merge SHA: N/A

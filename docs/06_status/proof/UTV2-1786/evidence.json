@@ -7,9 +7,11 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "05d7d9bf4ef67af09c272b98126f2c8a79b486ed",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "verified_source_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
   },
   "static_proof": {
     "status": "pass",
@@ -131,9 +133,9 @@
     ]
   },
   "pr_number": 1469,
-  "source_sha": "05d7d9bf4ef67af09c272b98126f2c8a79b486ed",
-  "reviewed_head_sha": "7b5e99142a8299dbddb7a14da72ca892c0f10ae8",
-  "generated_at": "2026-08-31T21:05:33Z",
+  "source_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+  "reviewed_head_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+  "generated_at": "2026-08-31T22:09:16Z",
   "gate_results": [
     {
       "gate": "verify",
@@ -142,12 +144,12 @@
     },
     {
       "gate": "smart-form app suite",
-      "detail": "123 tests, 0 failures, via pnpm --filter @unit-talk/smart-form verify",
+      "detail": "132 tests, 0 failures, via pnpm --filter @unit-talk/smart-form verify at 9c8d2d43",
       "verdict": "PASS"
     },
     {
       "gate": "auth-gate e2e",
-      "detail": "3 specs passed against the running app at this head",
+      "detail": "3 specs passed against the running app, re-executed at 9c8d2d43",
       "verdict": "PASS"
     },
     {
@@ -159,6 +161,21 @@
       "gate": "qa-experience",
       "detail": "stale pre-lane expectation in the qa-agent smart_form skill; disclosed, not claimed as satisfied",
       "verdict": "FAIL"
+    },
+    {
+      "gate": "repository unit suite",
+      "detail": "pnpm test at 9c8d2d43: 5369 tests, 5369 pass, 0 fail, zero 'not ok' lines",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "review-round corrections",
+      "detail": "5 GitHub review findings corrected in 1be0d992; 9 new tests, each proven by reverting its own fix (5 mutations, each failing only its target tests; baseline 25/25)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "independent verification",
+      "detail": "one focused independent review of only these 5 corrections: all 5 CORRECTED, inversion tests confirmed non-vacuous by re-run mutation, no new blocking defect; one comment-accuracy finding accepted and fixed in 9c8d2d43",
+      "verdict": "PASS"
     }
   ]
 }
