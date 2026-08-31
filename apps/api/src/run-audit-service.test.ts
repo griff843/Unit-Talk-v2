@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { CanonicalPick } from '@unit-talk/contracts';
 
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
-import { AwaitingApprovalBrakeError, DistributionTargetMismatchError } from './distribution-service.js';
+import {
+  AwaitingApprovalBrakeError,
+  DistributionTargetMismatchError,
+  TrackOnlyDistributionError,
+} from './distribution-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,114 @@ function makeValidatedPick(overrides: Partial<CanonicalPick> = {}): CanonicalPic
     ...overrides,
   };
 }
+
+function installProductionAtomicMutationHarness(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  const enqueue = repositories.outbox.enqueue.bind(repositories.outbox);
+  let atomicCallCount = 0;
+
+  repositories.outbox.enqueueDistributionAtomic = async (input) => {
+    atomicCallCount += 1;
+    assert.equal(input.fromState, 'validated');
+    assert.equal(input.toState, 'queued');
+    assert.equal(input.writerRole, 'promoter');
+
+    const persistedPick = await repositories.picks.updatePickLifecycleState(input.pickId, 'queued');
+    const lifecycleEvent = await repositories.picks.saveLifecycleEvent({
+      pickId: input.pickId,
+      fromState: 'validated',
+      toState: 'queued',
+      writerRole: 'promoter',
+      reason: input.reason,
+      createdAt: input.lifecycleCreatedAt,
+    });
+    const outbox = await enqueue({
+      pickId: input.pickId,
+      target: input.outboxTarget,
+      payload: input.outboxPayload,
+      idempotencyKey: input.outboxIdempotencyKey,
+    });
+
+    return { pick: persistedPick, lifecycleEvent, outbox };
+  };
+
+  return () => atomicCallCount;
+}
+
+test('enqueueDistributionWithRunTracking: persisted Track Only metadata blocks the production atomic path', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const callerPick = makeValidatedPick({
+    id: 'pick-track-only-atomic-guard',
+    metadata: { sport: 'NBA' },
+  });
+  await repositories.picks.savePick({
+    ...callerPick,
+    metadata: { sport: 'NBA', distributionMode: 'track-only' },
+  });
+  const atomicCallCount = installProductionAtomicMutationHarness(repositories);
+
+  await assert.rejects(
+    () => enqueueDistributionWithRunTracking(
+      callerPick,
+      'discord:canary',
+      'test-actor',
+      repositories.picks,
+      repositories.outbox,
+      repositories.runs,
+      repositories.audit,
+    ),
+    TrackOnlyDistributionError,
+  );
+
+  assert.equal(atomicCallCount(), 0, 'Track Only guard must run before production atomic enqueue');
+  assert.equal((await repositories.picks.findPickById(callerPick.id))?.status, 'validated');
+  assert.equal((await repositories.outbox.listByPickId(callerPick.id)).length, 0);
+});
+
+test('mutation control: removing the pre-atomic Track Only guard reopens lifecycle and Discord outbox writes', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const callerPick = makeValidatedPick({
+    id: 'pick-track-only-atomic-mutant',
+    metadata: { sport: 'NBA' },
+  });
+  await repositories.picks.savePick({
+    ...callerPick,
+    metadata: { sport: 'NBA', distributionMode: 'track-only' },
+  });
+  const atomicCallCount = installProductionAtomicMutationHarness(repositories);
+
+  const sourcePath = fileURLToPath(new URL('./run-audit-service.ts', import.meta.url));
+  const mutantPath = fileURLToPath(
+    new URL(`./run-audit-service.__track_only_mutant_${process.pid}.ts`, import.meta.url),
+  );
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = /[ ]{2}\/\/ UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_START[\s\S]*?[ ]{2}\/\/ UTV2-1787 TRACK_ONLY_ATOMIC_GUARD_END\n/u;
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, 'mutation control could not remove the Track Only guard');
+
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = await import(`${pathToFileURL(mutantPath).href}?mutation=track-only`) as typeof import('./run-audit-service.js');
+    await mutant.enqueueDistributionWithRunTracking(
+      callerPick,
+      'discord:canary',
+      'test-actor',
+      repositories.picks,
+      repositories.outbox,
+      repositories.runs,
+      repositories.audit,
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+
+  assert.equal(atomicCallCount(), 1, 'mutant must reach production atomic enqueue');
+  assert.equal((await repositories.picks.findPickById(callerPick.id))?.status, 'queued');
+  const outboxRows = await repositories.outbox.listByPickId(callerPick.id);
+  assert.equal(outboxRows.length, 1, 'mutant must create Discord/member delivery work');
+  assert.equal(outboxRows[0]?.target, 'discord:canary');
+});
 
 test('enqueueDistributionWithRunTracking: real DB errors (constraint violation) rethrow — no silent sequential fallback', async () => {
   const repositories = createInMemoryRepositoryBundle();

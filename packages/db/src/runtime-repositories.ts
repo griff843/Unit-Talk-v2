@@ -2340,6 +2340,7 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         participantId: row.id,
         displayName: row.display_name,
         sport: row.sport ?? sportId,
+        teamId: null,
       }));
   }
 
@@ -6587,6 +6588,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         participantId: row.id as string,
         displayName: row.display_name as string,
         sport: sportId,
+        teamId: currentAssignments.get(row.id as string)?.teamId ?? null,
       }));
   }
 

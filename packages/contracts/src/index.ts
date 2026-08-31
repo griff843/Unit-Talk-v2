@@ -23,6 +23,7 @@ export type WriterRole = (typeof writerRoles)[number];
 
 export * from './distribution.js';
 export * from './submission.js';
+export * from './smart-form.js';
 export * from './picks.js';
 export * from './promotion.js';
 export * from './settlement.js';

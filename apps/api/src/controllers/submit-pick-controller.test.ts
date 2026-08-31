@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import type { SubmissionPayload, PickSource } from '@unit-talk/contracts';
 
@@ -136,7 +138,22 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const repositories = createInMemoryRepositoryBundle();
 
   const result = await submitPickController(
-    makePayload('smart-form'),
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'delivery-eligible',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [],
+        },
+      },
+    }),
     repositories,
   );
 
@@ -150,6 +167,36 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const pick = await repositories.picks.findPickById(result.body.data.pickId);
   assert.ok(pick);
   assert.notEqual(pick.status, 'awaiting_approval');
+});
+
+test('submit-pick-controller: track-only smart-form pick persists without outbox work', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await submitPickController(
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'track-only',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [],
+        },
+      },
+    }),
+    repositories,
+  );
+  assert.equal(result.status, 201);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.outboxEnqueued, false);
+  assert.equal((await repositories.outbox.listByPickId(result.body.data.pickId)).length, 0);
+  const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.equal((persisted?.metadata as Record<string, unknown>)['distributionMode'], 'track-only');
 });
 
 test('submit-pick-controller: api source is NOT braked (human path preserved)', async () => {
@@ -234,4 +281,88 @@ test('submit-pick-controller: enqueue failure writes operator-visible zombie pic
   assert.ok(alertDetails && typeof alertDetails === 'object' && !Array.isArray(alertDetails));
   assert.equal(alertDetails.pickId, result.body.data.pickId);
   assert.equal(alertDetails.recoveryAction, 'POST /api/picks/:id/requeue');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: mutation controls for the controller-level Smart Form guards.
+// Each control deletes one named guard from its own source file and asserts the
+// mutant admits input the guarded build refuses.
+// ---------------------------------------------------------------------------
+
+async function withGuardRemoved<T>(
+  relativeModulePath: string,
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL(relativeModulePath, import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = new RegExp(
+    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    'u',
+  );
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=${guardName}`
+    )) as Record<string, unknown>;
+    return await run(mutant);
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+/**
+ * A Smart Form payload whose typed participantResolution is structurally
+ * invalid: it claims canonical resolution for a sport with no canonical event
+ * and no participants at all, which cannot be verified against reference data.
+ * The relationship validator refuses it; without the validator it is admitted.
+ */
+function makeUnverifiablePayload(): SubmissionPayload {
+  return makePayload('smart-form', {
+    eventName: 'Unverifiable event',
+    metadata: {
+      sport: 'MMA',
+      distributionMode: 'track-only',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: 'MMA',
+        eventId: null,
+      },
+    },
+  });
+}
+
+test('mutation control: removing SMART_FORM_RELATIONSHIP_GUARD admits an unverifiable canonical resolution', async () => {
+  // Baseline: the guard refuses with its own error code.
+  const guardedRepositories = createInMemoryRepositoryBundle();
+  await assert.rejects(
+    () => submitPickController(makeUnverifiablePayload(), guardedRepositories),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(
+        (err as { code?: string }).code,
+        'SMART_FORM_RELATIONSHIP_INVALID',
+        'guarded build must refuse via the relationship validator',
+      );
+      return true;
+    },
+  );
+
+  // Mutant: the same payload is accepted and persisted with no canonical
+  // verification whatsoever.
+  await withGuardRemoved(
+    './submit-pick-controller.ts',
+    'SMART_FORM_RELATIONSHIP_GUARD',
+    async (mutant) => {
+      const mutantSubmit = mutant.submitPickController as typeof submitPickController;
+      const repositories = createInMemoryRepositoryBundle();
+      const result = await mutantSubmit(makeUnverifiablePayload(), repositories);
+      assert.equal(result.status, 201, 'mutant must admit the unverifiable payload');
+      assert.ok(result.body.ok);
+    },
+  );
 });

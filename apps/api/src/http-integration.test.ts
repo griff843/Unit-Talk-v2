@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import type { AppEnv } from '@unit-talk/config';
@@ -17,7 +19,8 @@ import {
   createApiServer,
   type ApiRuntimeDependencies,
 } from './server.js';
-import { loadAuthConfig } from './auth.js';
+import { loadAuthConfig, signCapperToken } from './auth.js';
+import { handleSubmitPick } from './handlers/submit-pick.js';
 import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 
 test('createApiRuntimeDependencies fails closed when database config is unavailable', () => {
@@ -332,6 +335,92 @@ test('POST /api/submissions resists body identity spoofing when keyed by authent
 
     assert.equal(second.status, 429);
     assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
+  } finally {
+    server.close();
+  }
+});
+
+test('capper JWT submissions cannot spoof source or opt into member delivery', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const jwtSecret = 'utv2-1787-test-secret-that-is-long-enough';
+  const token = await signCapperToken(
+    { sub: 'capper-user', capperId: 'capper-canonical', displayName: 'Canonical Capper' },
+    jwtSecret,
+    '5m',
+  );
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      repositories,
+      authConfig: {
+        enabled: true,
+        keys: new Map([['operator-key', { role: 'operator', identity: 'operator:test' }]]),
+        jwtSecret,
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+  const request = (body: Record<string, unknown>) => fetch(
+    `http://127.0.0.1:${address.port}/api/submissions`,
+    {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const basePayload = {
+    source: 'smart-form',
+    submittedBy: 'spoofed-capper',
+    market: 'NBA moneyline',
+    selection: 'Celtics ML',
+    stakeUnits: 1,
+    eventName: 'Celtics vs Knicks',
+    metadata: {
+      sport: 'NBA',
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NBA',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Celtics vs Knicks',
+        enteredParticipants: [],
+      },
+    },
+  };
+
+  try {
+    const spoofedSource = await request({ ...basePayload, source: 'api' });
+    assert.equal(spoofedSource.status, 403);
+    assert.equal(
+      ((await spoofedSource.json()) as { error?: { code?: string } }).error?.code,
+      'CAPPER_SOURCE_FORBIDDEN',
+    );
+
+    const deliveryEligible = await request({
+      ...basePayload,
+      metadata: { ...basePayload.metadata, distributionMode: 'delivery-eligible' },
+    });
+    assert.equal(deliveryEligible.status, 403);
+    assert.equal(
+      ((await deliveryEligible.json()) as { error?: { code?: string } }).error?.code,
+      'CAPPER_TRACK_ONLY_REQUIRED',
+    );
+
+    const accepted = await request(basePayload);
+    assert.equal(accepted.status, 201);
+    const acceptedBody = (await accepted.json()) as { data?: { pickId?: string; outboxEnqueued?: boolean } };
+    const pickId = acceptedBody.data?.pickId;
+    assert.ok(pickId);
+    assert.equal(acceptedBody.data?.outboxEnqueued, false);
+    const pick = await repositories.picks.findPickById(pickId);
+    assert.equal((pick?.metadata as Record<string, unknown>)['capper'], 'capper-canonical');
+    assert.equal((pick?.metadata as Record<string, unknown>)['distributionMode'], 'track-only');
+    assert.deepEqual(await repositories.outbox.listByPickId(pickId), []);
   } finally {
     server.close();
   }
@@ -939,4 +1028,130 @@ test('POST /api/member-tiers returns 400 when discord_id is missing', async () =
   } finally {
     server.close();
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: mutation controls for the server-authoritative capper pins.
+//
+// The integration test above proves the guarded build refuses spoofing. These
+// controls prove the refusal comes from the named guards and not from some
+// incidental property of the fixture: each deletes one guard from
+// handlers/submit-pick.ts and asserts the mutant admits exactly the request the
+// guard exists to refuse.
+// ---------------------------------------------------------------------------
+
+async function withCapperGuardRemoved<T>(
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL('./handlers/submit-pick.ts', import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = new RegExp(
+    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    'u',
+  );
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=${guardName}`
+    )) as Record<string, unknown>;
+    return await run(mutant);
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+const CAPPER_AUTH = { role: 'capper', capperId: 'capper-canonical', identity: 'capper:test' };
+
+function capperBody(overrides: Record<string, unknown> = {}) {
+  return {
+    source: 'smart-form',
+    submittedBy: 'spoofed-capper',
+    market: 'NBA moneyline',
+    selection: 'Celtics ML',
+    stakeUnits: 1,
+    eventName: 'Celtics vs Knicks',
+    metadata: {
+      sport: 'NBA',
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NBA',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Celtics vs Knicks',
+        enteredParticipants: [],
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('mutation control: removing CAPPER_SOURCE_PIN_GUARD lets an authenticated capper spoof the pick source', async () => {
+  // Baseline: the guard refuses.
+  const guarded = await handleSubmitPick(
+    { body: capperBody({ source: 'api' }), auth: CAPPER_AUTH as never },
+    createInMemoryRepositoryBundle(),
+  );
+  assert.equal(guarded.status, 403);
+  assert.ok(!guarded.body.ok);
+  if (!guarded.body.ok) assert.equal(guarded.body.error.code, 'CAPPER_SOURCE_FORBIDDEN');
+
+  // Mutant: the spoofed source is admitted and persisted.
+  await withCapperGuardRemoved('CAPPER_SOURCE_PIN_GUARD', async (mutant) => {
+    const mutantHandle = mutant.handleSubmitPick as typeof handleSubmitPick;
+    const repositories = createInMemoryRepositoryBundle();
+    const result = await mutantHandle(
+      { body: capperBody({ source: 'api' }), auth: CAPPER_AUTH as never },
+      repositories,
+    );
+    assert.notEqual(result.status, 403, 'mutant must no longer refuse the spoofed source');
+    assert.ok(result.body.ok, 'mutant must admit the submission');
+    if (!result.body.ok) return;
+    const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+    assert.equal(persisted?.source, 'api', 'mutant must persist the spoofed source');
+  });
+});
+
+test('mutation control: removing CAPPER_TRACK_ONLY_PIN_GUARD lets an authenticated capper opt into member delivery', async () => {
+  const deliveryEligibleBody = () =>
+    capperBody({
+      metadata: {
+        ...(capperBody().metadata as Record<string, unknown>),
+        distributionMode: 'delivery-eligible',
+      },
+    });
+
+  // Baseline: the guard refuses.
+  const guarded = await handleSubmitPick(
+    { body: deliveryEligibleBody(), auth: CAPPER_AUTH as never },
+    createInMemoryRepositoryBundle(),
+  );
+  assert.equal(guarded.status, 403);
+  assert.ok(!guarded.body.ok);
+  if (!guarded.body.ok) assert.equal(guarded.body.error.code, 'CAPPER_TRACK_ONLY_REQUIRED');
+
+  // Mutant: the capper's own client-supplied distributionMode survives, the
+  // pick is persisted as delivery-eligible, and the Track Only short-circuit in
+  // submit-pick-controller no longer applies to it.
+  await withCapperGuardRemoved('CAPPER_TRACK_ONLY_PIN_GUARD', async (mutant) => {
+    const mutantHandle = mutant.handleSubmitPick as typeof handleSubmitPick;
+    const repositories = createInMemoryRepositoryBundle();
+    const result = await mutantHandle(
+      { body: deliveryEligibleBody(), auth: CAPPER_AUTH as never },
+      repositories,
+    );
+    assert.ok(result.body.ok, 'mutant must admit the delivery-eligible submission');
+    if (!result.body.ok) return;
+    const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+    assert.equal(
+      (persisted?.metadata as Record<string, unknown>)['distributionMode'],
+      'delivery-eligible',
+      'mutant must persist client-chosen delivery eligibility',
+    );
+  });
 });

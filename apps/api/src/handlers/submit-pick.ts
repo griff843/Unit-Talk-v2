@@ -51,8 +51,9 @@ export async function handleSubmitPick(
  * Coerce raw request body into a typed SubmissionPayload.
  *
  * When the authenticated role is 'capper', the capperId from the JWT claim
- * takes precedence over whatever submittedBy the form sent — the form field
- * is ignored entirely. This is the trust boundary enforcement for UTV2-658.
+ * takes precedence over whatever submittedBy the form sent. Capper requests
+ * are also pinned to source=smart-form and distributionMode=track-only so a
+ * modified client cannot opt into member delivery.
  */
 function coerceSubmissionPayload(
   body: unknown,
@@ -63,12 +64,46 @@ function coerceSubmissionPayload(
   },
 ): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
-  const source = readString(payload.source) as SubmissionPayload['source'];
+  const requestedSource = readString(payload.source) as SubmissionPayload['source'];
+  const isAuthenticatedCapper = auth?.role === 'capper' && Boolean(auth.capperId);
+  // UTV2-1672: `source` starts as whatever the client asked for. The guard
+  // below is the ONLY thing that makes an authenticated capper's source
+  // server-authoritative, so deleting the guard genuinely removes the property
+  // rather than leaving a silent coercion behind. The mutation control in
+  // http-integration.test.ts depends on that being true.
+  let source = requestedSource;
+  // UTV2-1672 CAPPER_SOURCE_PIN_GUARD_START
+  if (isAuthenticatedCapper && requestedSource !== 'smart-form') {
+    throw new ApiError(
+      403,
+      'CAPPER_SOURCE_FORBIDDEN',
+      'Authenticated capper submissions must use the Smart Form source.',
+    );
+  }
+  if (isAuthenticatedCapper) {
+    source = 'smart-form';
+  }
+  // UTV2-1672 CAPPER_SOURCE_PIN_GUARD_END
   const stakeUnits = resolveStakeUnits(payload, source);
   if (stakeUnits.value === undefined || stakeUnits.value <= 0) {
     throw new ApiError(400, 'INVALID_SUBMISSION', 'stakeUnits must be a positive number.');
   }
   const metadata = isRecord(payload.metadata) ? { ...payload.metadata } : {};
+
+  // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_START
+  if (isAuthenticatedCapper) {
+    if (metadata['distributionMode'] !== undefined && metadata['distributionMode'] !== 'track-only') {
+      throw new ApiError(
+        403,
+        'CAPPER_TRACK_ONLY_REQUIRED',
+        'Authenticated capper submissions are restricted to Track Only internal tracking.',
+      );
+    }
+    // Server authority, not client intent, decides whether a capper pick can
+    // produce delivery work during the recovery phase.
+    metadata['distributionMode'] = 'track-only';
+  }
+  // UTV2-1672 CAPPER_TRACK_ONLY_PIN_GUARD_END
 
   if (stakeUnits.defaulted) {
     // Keep the default explicit for machine-generated request paths.

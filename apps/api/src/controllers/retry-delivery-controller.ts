@@ -1,3 +1,4 @@
+import { isTrackOnlyPickMetadata } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse, errorResponse } from '../http.js';
@@ -36,6 +37,12 @@ export async function retryDeliveryController(
   if (!pick) {
     return errorResponse(404, 'PICK_NOT_FOUND', `Pick not found: ${pickId}`);
   }
+
+  // UTV2-1672 TRACK_ONLY_RETRY_GUARD_START
+  if (isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null)) {
+    return errorResponse(409, 'TRACK_ONLY_DELIVERY_BLOCKED', `Pick ${pickId} is track-only and cannot be retried`);
+  }
+  // UTV2-1672 TRACK_ONLY_RETRY_GUARD_END
 
   // Find the failed/dead_letter outbox row for this pick
   const outboxRows = await repositories.outbox.listByPickId(pickId);
@@ -90,4 +97,8 @@ export async function retryDeliveryController(
     attemptCount: 0,
     auditId: audit.id,
   });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -1,4 +1,4 @@
-import type { CanonicalPick, PickSource } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type CanonicalPick, type PickSource } from '@unit-talk/contracts';
 import type { OutboxRecord, OutboxRepository } from '@unit-talk/db';
 import { buildDistributionWorkItem } from '@unit-talk/domain';
 import {
@@ -122,6 +122,18 @@ export class AwaitingApprovalBrakeError extends Error {
   }
 }
 
+export class TrackOnlyDistributionError extends Error {
+  public readonly pickId: string;
+  public readonly target: string;
+
+  constructor(pickId: string, target: string) {
+    super(`Distribution blocked: pick ${pickId} is marked track-only and cannot be delivered to ${target}.`);
+    this.name = 'TrackOnlyDistributionError';
+    this.pickId = pickId;
+    this.target = target;
+  }
+}
+
 
 /**
  * Thrown when a caller attempts to enqueue a pick to a delivery target that is
@@ -227,6 +239,11 @@ export async function enqueueDistributionWork(
   target: string,
   targetRegistry?: TargetRegistryEntry[],
 ): Promise<DistributionEnqueueResult | DistributionSkippedResult> {
+  // UTV2-1672 TRACK_ONLY_DIRECT_ENQUEUE_GUARD_START
+  if (isTrackOnlyPickMetadata(pick.metadata)) {
+    throw new TrackOnlyDistributionError(pick.id, target);
+  }
+  // UTV2-1672 TRACK_ONLY_DIRECT_ENQUEUE_GUARD_END
   const registry = targetRegistry ?? resolveTargetRegistry();
   const targetGate = evaluateDistributionTargetGate(target, registry);
   const requestedPromotionTarget = targetGate.requestedPromotionTarget;
