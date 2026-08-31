@@ -2,6 +2,10 @@ import type { CatalogData } from './catalog';
 import type { EventOfferBrowseResult } from './api-client';
 import type { BetFormValues } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
+import type {
+  SmartFormDistributionMode,
+  SmartFormParticipantResolution,
+} from '@unit-talk/contracts';
 import {
   getMarketTypeFamily,
   getSupportedMarketTypesForSport,
@@ -19,6 +23,8 @@ export interface SubmissionContext {
   sportsbookId?: string | null;
   manualOverrideFields?: string[];
   selectedOffer?: Pick<EventOfferBrowseResult, 'providerKey' | 'providerMarketKey' | 'providerParticipantId' | 'snapshotAt'> | null;
+  distributionMode?: SmartFormDistributionMode;
+  participantResolution?: SmartFormParticipantResolution;
 }
 
 export function getMarketTypesForSport(
@@ -341,6 +347,19 @@ export function buildSubmissionPayload(
       leagueId: context.leagueId ?? null,
       marketTypeId: context.canonicalMarketTypeId ?? null,
       submissionMode: context.submissionMode ?? 'manual',
+      distributionMode: context.distributionMode ?? (values.trackOnly ? 'track-only' : 'delivery-eligible'),
+      participantResolution: context.participantResolution ?? {
+        resolution: 'manual',
+        sportId: values.sport,
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: values.eventName,
+        enteredParticipants: [
+          values.team ? { role: 'team' as const, displayName: values.team, canonicalParticipantId: null } : null,
+          values.playerName ? { role: 'player' as const, displayName: values.playerName, canonicalParticipantId: null } : null,
+        ].filter((value): value is NonNullable<typeof value> => value !== null),
+      },
       manualEntry: manualOverrideFields.length > 0,
       manualOverrideFields,
       selectedOffer: context.selectedOffer

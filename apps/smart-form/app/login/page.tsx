@@ -1,53 +1,45 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { signIn } from 'next-auth/react';
-import { decodeCapperToken, setStoredToken } from '@/lib/auth-token';
+import { setStoredToken } from '@/lib/auth-token';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<{ capperId: string; displayName: string } | null>(null);
+  const [stored, setStored] = useState(false);
 
   function handleTokenChange(value: string) {
     setToken(value);
     setError(null);
-    const trimmed = value.trim();
-    if (!trimmed) {
-      setPreview(null);
-      return;
-    }
-    const claims = decodeCapperToken(trimmed);
-    if (claims) {
-      setPreview({ capperId: claims.capperId, displayName: claims.displayName });
-    } else {
-      setPreview(null);
-    }
   }
 
+  // UTV2-1786: a recovery token is stored so the API can authenticate the
+  // bearer, but it does NOT grant access to /submit. Its signature cannot be
+  // verified in the browser, so a decoded payload is an unauthenticated claim,
+  // not an identity. Access is granted only by an Auth.js session, which the
+  // server signs and /submit waits for.
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const trimmed = token.trim();
-    const claims = decodeCapperToken(trimmed);
-    if (!claims) {
-      setError('Invalid capper token. Paste the full token you received from your operator.');
+    if (!trimmed) {
+      setError('Paste the full token you received from your operator.');
       return;
     }
     setStoredToken(trimmed);
-    router.push('/submit');
+    setStored(true);
   }
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-background">
-      <div className="w-full max-w-md space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Capper Login</h1>
+      <div className="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+        <div className="text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground">Unit Talk</p>
+          <h1 className="mt-2 text-3xl font-bold text-foreground">Capper Portal</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Sign in with your approved Google account or paste your capper token.
+            Sign in with an approved capper account to open the Smart Form.
           </p>
         </div>
 
@@ -56,19 +48,19 @@ export default function LoginPage() {
           className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
           onClick={() => void signIn('google', { callbackUrl: '/submit' })}
         >
-          Sign in with Google
+          Continue with Google
         </Button>
 
-        <div className="flex items-center gap-3">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-xs font-semibold uppercase text-muted-foreground">Fallback token</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
+        <p className="text-center text-xs text-muted-foreground">Only allowlisted Google accounts can continue.</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <details className="rounded-lg border border-border bg-background px-4 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-muted-foreground">
+            Operator recovery access
+          </summary>
+          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div className="space-y-2">
             <label htmlFor="token" className="text-sm font-medium text-foreground">
-              Capper Token
+              Operator-issued recovery token
             </label>
             <Input
               id="token"
@@ -85,13 +77,23 @@ export default function LoginPage() {
             )}
           </div>
 
-          {preview && (
-            <div className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+          <p className="text-xs text-muted-foreground">
+            Storing a recovery token lets the API authenticate your requests. It does not
+            sign you in: the token&apos;s signature cannot be checked in the browser, so it is
+            never treated as proof of identity here. Continue with Google to open the form.
+          </p>
+
+          {stored && (
+            <div
+              data-testid="recovery-token-stored"
+              className="rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
+            >
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">
-                Token recognized
+                Token stored
               </p>
-              <p className="text-sm font-semibold text-foreground">{preview.displayName}</p>
-              <p className="text-xs text-muted-foreground">{preview.capperId}</p>
+              <p className="text-sm text-foreground">
+                Saved for API requests. Sign in with Google to open the Smart Form.
+              </p>
             </div>
           )}
 
@@ -100,13 +102,10 @@ export default function LoginPage() {
             className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
             disabled={!token.trim()}
           >
-            Enter
+            Store recovery token
           </Button>
-        </form>
-
-        <p className="text-xs text-muted-foreground text-center">
-          Don&apos;t have a token? Contact your operator to get one issued.
-        </p>
+          </form>
+        </details>
       </div>
     </main>
   );

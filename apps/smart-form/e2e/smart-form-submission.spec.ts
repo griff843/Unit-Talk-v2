@@ -1,5 +1,33 @@
 import { expect, test } from '@playwright/test';
 
+// Fixture-backed UI behavior tests. Route interception is intentional here and
+// must not be cited as proof of connected canonical-reference data.
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/reference-data/availability?**', async (route) => {
+    const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: { sportId, teamsAvailable: true, playersAvailable: true } }),
+    });
+  });
+  await page.addInitScript(() => {
+    const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
+      .replace(/=/g, '')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    const token = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({
+      sub: 'griff843',
+      capperId: 'griff843',
+      displayName: 'Griff Test',
+      role: 'capper',
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    })}.test-signature`;
+    localStorage.setItem('ut_capper_token', token);
+  });
+});
+
 const catalogResponse = {
   data: {
     sports: [
@@ -508,7 +536,8 @@ test('live-offer search flow supports canonical entity selection and successful 
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await expect(page.getByPlaceholder('Search capper')).toHaveValue('griff843');
+  await expect(page.getByText('Griff Test', { exact: true })).toBeVisible();
+  await expect(page.getByText('griff843', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page.getByText('Search canonical players, teams, and matchups for NBA on 2026-04-02.')).toBeVisible();
@@ -519,26 +548,15 @@ test('live-offer search flow supports canonical entity selection and successful 
   await page.getByRole('button', { name: /Jamal Murray/i }).click();
 
   await expect(page.getByRole('button', { name: /PROP Player Prop/i }).first()).toBeVisible();
-  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Nuggets vs Jazz' })).toBeVisible();
+  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Jazz @ Nuggets' })).toBeVisible();
   await page.getByRole('button', { name: 'Over -140' }).click();
 
-  await expect(page.getByText('Conviction (1-10)', { exact: true })).toBeVisible();
-  await expect(page.locator('input[name="capperConviction"]')).toBeVisible();
-  await expect(page.getByText('How confident are you in this pick? (1 = low, 10 = highest conviction)')).toBeVisible();
-  await expect(page.getByText('Teasers').first()).toBeVisible();
-
-  await page.getByPlaceholder('Search sportsbook').click();
-  await expect(page.getByRole('button', { name: /Fanatics/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Fanatics', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /William Hill/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /SGO/i })).toHaveCount(0);
-  await page.getByText('Book not listed? Type it').click();
-  await page.getByPlaceholder('Type sportsbook name').fill('PrizePicks');
 
-  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
-  await expect(page.getByText('Conviction must be a number')).toBeVisible();
-
-  await page.locator('input[name="capperConviction"]').fill('8');
-  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('button', { name: '1u', exact: true }).click();
 
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
@@ -553,6 +571,7 @@ test('live-offer search flow supports canonical entity selection and successful 
   expect(submittedPayload?.metadata).toMatchObject({
     eventId: 'evt-1',
     submissionMode: 'live-offer',
+    distributionMode: 'track-only',
     playerId: 'player-jamal',
     capperConviction: 8,
     promotionScores: {
@@ -563,16 +582,16 @@ test('live-offer search flow supports canonical entity selection and successful 
       providerMarketKey: 'nba-player-assists',
       providerParticipantId: 'provider-jamal',
     },
-    manualEntry: true,
-    manualOverrideFields: ['sportsbook'],
+    manualEntry: false,
+    manualOverrideFields: [],
   });
   expect(submittedPayload?.metadata).toMatchObject({
-    sportsbook: 'PrizePicks',
-    sportsbookId: null,
+    sportsbook: 'fanatics',
+    sportsbookId: 'fanatics',
   });
 });
 
-test('manual fallback surfaces the current free-text matchup warning', async ({ page }) => {
+test('manual fallback surfaces structured canonical participant selection', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -611,7 +630,9 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: 'Manual fallback' }).click();
 
-  await expect(page.getByText('Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.')).toBeVisible();
+  await expect(page.getByText('Build canonical matchup', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Away Team')).toBeVisible();
+  await expect(page.getByLabel('Home Team')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
 });
 
@@ -757,7 +778,7 @@ test('player-prop flow binds matchup and narrows players once a matchup team is 
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await expect(page.getByRole('button', { name: 'Fanatics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Browse slate' }).click();
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await expect(page.getByRole('button', { name: /ML\s*Moneyline/i }).first()).toBeVisible();
@@ -773,7 +794,7 @@ test('player-prop flow binds matchup and narrows players once a matchup team is 
   await expect(page.getByText('Pick Details')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Celtics/i })).toHaveCount(1);
   await expect(page.getByPlaceholder('Type a player name')).toHaveValue('Jayson Tatum');
-  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Celtics vs Knicks' })).toBeVisible();
+  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Knicks @ Celtics' })).toBeVisible();
   await expect(page.getByText('Apr 2', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Stat Type' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Jayson Tatum' })).toBeVisible();
@@ -877,7 +898,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   await expect(page.locator('input[name="line"]')).toBeVisible();
 });
 
-test('units and conviction clamp to operator-safe bounds while typing', async ({ page }) => {
+test('units and conviction expose operator-safe bounded controls', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -888,20 +909,10 @@ test('units and conviction clamp to operator-safe bounds while typing', async ({
 
   await page.goto('/submit');
 
-  const unitsInput = page.locator('input[name="units"]');
-  const convictionInput = page.locator('input[name="capperConviction"]');
-
-  await unitsInput.fill('20');
-  await expect(unitsInput).toHaveValue('5');
-
-  await unitsInput.fill('0.1');
-  await expect(unitsInput).toHaveValue('0.5');
-
-  await convictionInput.fill('0');
-  await expect(convictionInput).toHaveValue('1');
-
-  await convictionInput.fill('14');
-  await expect(convictionInput).toHaveValue('10');
+  await expect(page.getByRole('button', { name: '0.5u', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '3u', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '6', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '10', exact: true })).toBeVisible();
 });
 
 test('moneyline flow uses sportsbook-first filtering and matchup teams instead of free-text winner entry', async ({ page }) => {
@@ -950,7 +961,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await expect(page.getByRole('button', { name: 'Fanatics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change game' })).toBeVisible();
@@ -965,8 +976,8 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
 
   await page.getByRole('button', { name: /Celtics Fanatics -135/i }).click();
   await expect(page.locator('input[name="odds"]')).toHaveValue('-135');
-  await page.locator('input[name="capperConviction"]').fill('8');
-  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
   await expect(page.getByText('Pick Submitted')).toBeVisible();
@@ -1021,7 +1032,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await expect(page.getByRole('button', { name: 'Fanatics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
 
   await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
@@ -1033,8 +1044,8 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
 
   await page.getByRole('button', { name: /Celtics.*-4.5.*-110/i }).click();
   await expect(page.locator('input[name="odds"]')).toHaveValue('-110');
-  await page.locator('input[name="capperConviction"]').fill('8');
-  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
   await expect(page.getByText('Pick Submitted')).toBeVisible();
@@ -1259,15 +1270,15 @@ test('alternate live books surface when selected sportsbook has no coverage for 
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await page.getByRole('option', { name: 'Points', exact: true }).click();
 
-  // Fanatics has no coverage — "Live books available now" should surface the alternate books
-  await expect(page.getByText('Live books available now')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'DraftKings' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'BetMGM' })).toBeVisible();
+  // Fanatics has no coverage — alternate live books remain immediately selectable.
+  await expect(page.getByText('Available on:', { exact: true })).toBeVisible();
+  const draftKingsButtons = page.getByRole('button', { name: 'DraftKings' });
+  await expect(draftKingsButtons).toHaveCount(2);
+  await expect(page.getByRole('button', { name: 'BetMGM' }).last()).toBeVisible();
 
   // Clicking DraftKings should switch context and show live offers
-  await page.getByRole('button', { name: 'DraftKings' }).click();
-  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('DraftKings');
-  await expect(page.getByText('Live books available now')).toHaveCount(0);
+  await draftKingsButtons.last().click();
+  await expect(page.getByText('No live fanatics offers for this market right now.')).toHaveCount(0);
 });
 
 test('nhl moneyline uses the same guided game-market flow as nba', async ({ page }) => {
@@ -1316,7 +1327,7 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
 
   await page.getByRole('button', { name: 'NHL' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await expect(page.getByRole('button', { name: 'Fanatics', exact: true })).toBeVisible();
   await page.getByRole('button', { name: /Blackhawks @ Kraken/i }).click();
   await page.getByRole('button', { name: /ML\\s*Moneyline|Moneyline/i }).first().click();
 
@@ -1325,8 +1336,8 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
   await expect(page.getByText('Pick Details')).toHaveCount(0);
   await page.getByRole('button', { name: /Kraken.*-125/i }).click();
   await expect(page.locator('input[name="odds"]')).toHaveValue('-125');
-  await page.locator('input[name="capperConviction"]').fill('8');
-  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await page.getByRole('button', { name: '1u', exact: true }).click();
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
   await expect(page.getByText('Pick Submitted')).toBeVisible();

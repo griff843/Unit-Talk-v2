@@ -11,6 +11,12 @@ export interface LeagueBrowseResult {
   displayName: string;
 }
 
+export interface ReferenceDataAvailability {
+  sportId: string;
+  teamsAvailable: boolean;
+  playersAvailable: boolean;
+}
+
 export interface MatchupBrowseTeam {
   participantId: string;
   teamId: string | null;
@@ -179,6 +185,15 @@ export async function getCatalog(): Promise<CatalogData> {
 export async function getLeagues(sportId: string): Promise<LeagueBrowseResult[]> {
   const res = await fetch(`${API}/api/reference-data/leagues?sport=${encodeURIComponent(sportId)}`);
   return readJsonResponse<LeagueBrowseResult[]>(res, 'Leagues unavailable');
+}
+
+export async function getReferenceDataAvailability(
+  sportId: string,
+): Promise<ReferenceDataAvailability> {
+  const res = await fetch(
+    `${API}/api/reference-data/availability?sport=${encodeURIComponent(sportId)}`,
+  );
+  return readJsonResponse<ReferenceDataAvailability>(res, 'Reference data availability unavailable');
 }
 
 export async function getMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
