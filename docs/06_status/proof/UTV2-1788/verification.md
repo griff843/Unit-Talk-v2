@@ -111,16 +111,16 @@ Result: blocked before build-context processing because `/var/run/docker.sock` i
 
 ## ASSERTIONS: product and safety claims proven by this lane
 
-- The primary navigation contains exactly six workflows and is derived from the route registry.
-- All 55 baseline page routes are classified; the added `/settlement` route is also classified.
-- `/settlement` uses the existing `SettlementForm` and `actions/settle.ts` path to `POST /api/picks/{id}/settle`; no API authority is added.
-- Every Command Center mutation remains a server action that posts to the canonical API. No new direct write path exists.
-- Primary workflow fetch failures render degraded/unavailable states; fabricated catch payloads and inferred zero health are removed.
-- Overview's Today's Picks KPI uses an exact current-day count from complete UTC day bounds rather than a capped row window; any unavailable daily count degrades the entire series. Review and Active Picks likewise require authoritative exact query counts.
-- Deferred routes are absent from primary navigation and receive an explicit classification banner when directly visited.
-- Request-time privileged reads are forced dynamic, preventing image build from presenting build-time data as runtime truth.
-- The Tier C auth/config files named in the authorization correction are byte-unchanged.
-- No file overlaps Smart Form Phase 1 or the production deployment/recovery lanes.
+- [x] The primary navigation contains exactly six workflows and is derived from the route registry.
+- [x] All 55 baseline page routes are classified; the added `/settlement` route is also classified.
+- [x] `/settlement` uses the existing `SettlementForm` and `actions/settle.ts` path to `POST /api/picks/{id}/settle`; no API authority is added.
+- [x] Every Command Center mutation remains a server action that posts to the canonical API. No new direct write path exists.
+- [x] Primary workflow fetch failures render degraded/unavailable states; fabricated catch payloads and inferred zero health are removed.
+- [x] Overview's Today's Picks KPI uses an exact current-day count from complete UTC day bounds rather than a capped row window; any unavailable daily count degrades the entire series. Review and Active Picks likewise require authoritative exact query counts.
+- [x] Deferred routes are absent from primary navigation and receive an explicit classification banner when directly visited.
+- [x] Request-time privileged reads are forced dynamic, preventing image build from presenting build-time data as runtime truth.
+- [x] The Tier C auth/config files named in the authorization correction are byte-unchanged.
+- [x] No file overlaps Smart Form Phase 1 or the production deployment/recovery lanes.
 
 ## EVIDENCE: executed command receipts
 
