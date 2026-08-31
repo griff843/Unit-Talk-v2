@@ -1,6 +1,6 @@
 # PROOF: UTV2-1790
 
-MERGE_SHA: 370097343393241ffa7d3db4db33530b4949e2fe
+MERGE_SHA: 905c14d403306d7c179922a0bf6a47a39cff6b0f
 
 `pnpm ops:merge-wrapper main-sync` is the only sanctioned way to bring `origin/main`
 into a lane branch. When it detects divergence it refuses and names two explicit
@@ -311,10 +311,23 @@ Every control this lane adds was inverted individually **in this session**, the
 focused suite re-run against the mutant, and the source restored and re-hashed to
 prove the revert was byte-exact (an md5 comparison is asserted after each restore, and
 the run aborts if it differs). Baseline and restored state both report `# fail 0`
-(67/67). All twenty-five live rows below were measured in ONE round-8 pass against the
-current source; none is carried forward from an earlier round. One further row (M12)
-is retained only as a superseded record and was NOT re-measured, because the code it
-targeted no longer exists — that is stated in the row itself rather than left implicit.
+(68/68). All twenty-five live rows below were measured in ONE round-9 pass against the
+current source; none is carried forward from an earlier round.
+
+**`evidence.json`'s machine-readable copy of this table was WRONG in round 8, and
+that was round 9's P1.** The header fields were updated for round 8 but the
+`mutants[]` array was not: it held 22 round-7 rows, recorded the known survivor M16
+as `KILLED`, and omitted M23–M26 entirely, while the same object's `count` said 25 and
+`surviving` said 1. An auditor reading only the machine-readable artifact — proof
+bundle, rank 2 in the truth hierarchy — would have concluded zero survivors and never
+seen the round-8 controls, and the Proof Auditor Gate passed it. The array is
+regenerated from the round-9 measurement and diffed against this table. The lesson is
+the same one as finding 11, one artifact over: **a table and its machine-readable twin
+are two measurements, and updating only the one a human reads is not updating it.** Two further rows (M12 and M17)
+are retained only as non-live records and were NOT re-measured, because the code each
+targeted no longer exists — stated in the rows themselves rather than left implicit.
+The table below therefore holds twenty-seven rows: twenty-five live, one superseded,
+one retired. `evidence.json`'s `mutants[]` array holds the same twenty-seven ids.
 
 | # | Mutation | Result | Tests killed |
 |---|---|---|---|
@@ -334,28 +347,32 @@ targeted no longer exists — that is stated in the row itself rather than left 
 | M14 | the mutex released on a conflicting autostash pop (`const release = true` in that branch) | KILLED, `# fail 1` | 55 |
 | M15 | the mutex NEVER released on a failed pop, i.e. the round-5 behaviour restored (`const release = false`) | KILLED, `# fail 2` | 57, 60 |
 | M16 | the mutex released unconditionally on a stash-PUSH failure (pre-fix behaviour) | **SURVIVED**, `# fail 0` | none |
+| M17 | the bridge's own `residueProbe` override removed | **RETIRED** — round 7, provably equivalent to its surroundings | none |
 | M18 | `if (!preSyncHead)` → `if (!result.ok \|\| !preSyncHead)`, i.e. the pre-fix early return | KILLED, `# fail 1` | 57 |
 | M20 | the `optionsWithProbe` wiring removed, so no delegation receives a probe | KILLED, `# fail 14` | 47, 48, 49, 50, 53, 54, 55, 56, 57, 58, 60, 63, 64, 65 |
 | M21 | `measureResidue`'s catch reports a thrown probe as `clean: true` | KILLED, `# fail 1` | 61 |
 | M22 | `rebaseHead` drops the `rebase-merge`/`rebase-apply` directory checks | KILLED, `# fail 5` | 23, 24, 62, 63, 67 |
-| M19 | `measureResidue`'s no-probe default reports `clean: true` | KILLED, `# fail 1` | 59 |
+| M19 | `measureResidue`'s no-probe default reports `clean: true` | KILLED, `# fail 2` | 59, 68 |
 | M23 | `worktreeResidue` drops its `CHERRY_PICK_HEAD` and `REVERT_HEAD` terms | KILLED, `# fail 1` | 64 |
 | M24 | the nothing-to-abort early return drops its `cherryPickHead`/`revertHead` terms (M12's successor) | KILLED, `# fail 1` | 66 |
 | M25 | `sequencerDir` reports a non-zero `git rev-parse --git-path` as ABSENT rather than undetermined | KILLED, `# fail 1` | 67 |
-| M26 | the `main-sync` pre-flight measurement removed, i.e. the round-8 pre-fix behaviour | KILLED, `# fail 6` | 58, 59, 61, 63, 64, 65 |
+| M26 | the `main-sync` pre-flight measurement removed, i.e. the round-8 pre-fix behaviour | KILLED, `# fail 7` | 58, 59, 61, 63, 64, 65, 68 |
+| M27 | the pre-flight refusal RETAINS the merge mutex, i.e. the round-8 pre-fix behaviour | KILLED, `# fail 7` | 58, 59, 61, 63, 64, 65, 68 |
 
 **M1, M2 and M3's counts were WRONG in the round-3 and round-4 bundles** — 7/3/5,
 carried forward unchanged while the suite grew, so they described a source tree that
 no longer existed. A round-5 reviewer caught it. Every row above is re-measured at the
-current source in one pass, again in rounds 6, 7 and 8. Movement across rounds is
+current source in one pass, again in rounds 6, 7, 8 and 9. Movement across rounds is
 real and is why re-measuring is not optional: M1 moved 10 → 11 when test 57 was added;
 M14 moved 1 → 3 as tests 59 and 61 were added and then back to 3 → 1 in round 8 when
 those two tests moved to the pre-flight; M20 moved 3 → 14 once round 8 made the probe
-reachable from every real-git regression; M22 moved 3 → 5. The lesson is recorded in
+reachable from every real-git regression; M22 moved 3 → 5; M19 moved 1 → 2 and M26
+6 → 7 when round 9 added test 68. The lesson is recorded in
 finding 11: a mutation row is a measurement, and a measurement not retaken is not
 evidence.
 
-**Survivors: 1 (M16), reported rather than hidden — and one row superseded (M12).**
+**Survivors: 1 (M16), reported rather than hidden — 24 killed, and two non-live rows
+carried as records: M12 (superseded) and M17 (retired).**
 
 **M16 survived, and this is the honest reading of why.** M16 inverts the
 stash-PUSH-failure branch's release decision to `release = true`. In round 6 that
@@ -368,7 +385,7 @@ has already measured the tree clean — and its guard is defence-in-depth for a 
 entry point rather than a live control. It was NOT deleted, because unlike round 7's
 dead `residueProbe` override it is not provably equivalent to its surroundings: the
 tree could in principle change between the two measurements. It is left in place and
-reported as a survivor. M26 is the row that now carries this scenario, killed by six
+reported as a survivor. M26 is the row that now carries this scenario, killed by seven
 tests including 58.
 
 **M12 was superseded, not dropped.** Round 8 extended the nothing-to-abort early
@@ -377,8 +394,15 @@ source. The battery reports this as `ANCHOR COUNT 0 -- SKIPPED` rather than sile
 passing, and M24 is its successor over the current five-term condition. The row is
 kept so the transition is visible instead of looking like a quietly removed control.
 
+**M17 was retired, not silently deleted.** In round 7 `optionsWithProbe` began
+supplying the same default the bridge's own `residueProbe` override supplied, which
+made that override byte-for-byte equivalent to its surroundings; its mutant SURVIVED,
+and that was the correct signal that it had stopped being a control. The override was
+deleted rather than re-pinned with a test that would have asserted nothing. The row is
+kept so the retirement is visible in both artifacts.
+
 **M9–M12 are round 4**, **M13–M14 round 5**, **M15–M19 round 6**, **M20–M22
-round 7** and **M23–M26 round 8**, each added
+round 7**, **M23–M26 round 8** and **M27 round 9**, each added
 because an independent reviewer demonstrated the control was unpinned. M9's, M14's and
 M18's were not merely unpinned but asserted and false. See findings 10, 11 and 12.
 M14/M15 are deliberately a matched pair in opposite directions: the round-5 fix and
@@ -429,6 +453,12 @@ cherry-pick report as "nothing to abort". **M25** proves `sequencerDir` distingu
 one probe deeper. **M26 reproduces the round-8 P1 exactly**: without the pre-flight,
 `main-sync` over a worktree stopped mid-rebase runs `git pull --ff-only`, advances the
 detached HEAD out from under the rebase, reports success and releases the mutex.
+**M27 reproduces the round-9 P2 exactly**: retaining the mutex on a refusal that
+changed nothing leaks the repo-wide lock for its full TTL. M26 and M27 kill the SAME
+seven tests, and that overlap is reported rather than hidden — every pre-flight
+regression asserts both the refusal and the release, so removing either breaks the
+same set. They remain distinct controls: M26 removes the refusal, M27 removes the
+release.
 
 **A survivor was found and removed rather than hidden.** Round 6's `residueProbe`
 override inside the bridge became byte-for-byte equivalent to `optionsWithProbe`'s
@@ -462,7 +492,7 @@ depending on an editor being available at all.
 seven-mutation battery transcript produced by a `battery.py` script that is not part
 of this repository and was not run by this session. **None of its results are
 carried forward.** The twenty-five live rows above were each re-executed against the
-CURRENT source in a single round-8 pass, with the restored baseline re-confirmed green
+CURRENT source in a single round-9 pass, with the restored baseline re-confirmed green
 after each; they are the only mutation claims made.
 
 ## Runtime Verification
@@ -471,16 +501,27 @@ This is a `hygiene` lane on the `static` proof profile. It changes orchestrator
 tooling scripts and their tests. It issues no database query, performs no network
 I/O, and touches no runtime, delivery, ingestion or application code. Runtime proof
 is therefore the executed behaviour of the wrapper against real git repositories.
-Twenty-one of the sixty-seven regressions build a real git repository on disk with
+**These counts were WRONG in round 8 and a round-9 reviewer corrected them; the
+corrected figures are below.** Round 8 claimed 21 of 67 and "nothing about git is
+mocked" in 17 of them. Both were overstated.
+
+**Twenty** of the sixty-eight regressions build a real git repository on disk with
 real commits: they create real conflicts on both the merge and the cherry-pick verbs
-and drive a real interactive rebase to a `break` step. In seventeen of those
-(47, 48, 49, 50, 53, 54, 55, 56, 57, 58, 60, 62, 63, 64, 65, 66, 67) NO runner is
-injected at all, so the wrapper drives the real `git` binary end to end and nothing
-about git is mocked. The remaining four (32, 46, 51, 52) inject a runner over a real
-repository to reach one specific branch — an unanswerable probe, a throwing cleanup
-hook — and each says so in its own comment. Seventeen of the twenty-one
-(46, 47, 48, 49, 50, 51, 53, 54, 55, 57, 58, 60, 62, 63, 64, 65, 66) inspect the
-on-disk repository directly — `MERGE_HEAD`, `CHERRY_PICK_HEAD`,
+and drive a real interactive rebase to a `break` step. (Round 8 said 21 by counting
+test 32, which builds no repository at all — it is a lock-guard unit test.)
+
+Of those twenty, **thirteen** inject no runner and no probe stub whatsoever, so the
+wrapper drives the real `git` binary end to end. **Four more** (49, 54, 56, 65) run
+against a real repository but substitute a synthetic result for one specific git
+invocation through `realGitRunner`'s hook — 49 fakes a `merge --abort` failure, 54 and
+65 fake exit-128 probes, 56 fakes an abort success — and each says which one in its own
+comment. Round 8 counted all seventeen as "nothing about git is mocked", which was
+false for those four. Test 48's hook is a pure observer and is correctly counted as
+unmocked. The remaining three of the twenty (46, 51, 52) inject a runner over a real
+repository to reach one specific branch.
+
+Seventeen of the twenty (46, 47, 48, 49, 50, 51, 53, 54, 55, 57, 58, 60, 62, 63, 64,
+65, 66) inspect the on-disk repository directly — `MERGE_HEAD`, `CHERRY_PICK_HEAD`,
 `git diff --diff-filter=U`, `git stash list`, `git status --porcelain`,
 `git rev-parse HEAD` — rather than trusting the wrapper's own report.
 
@@ -510,9 +551,9 @@ ok 59 - UTV2-1790: without a residue probe the release decision fails closed rat
 ok 60 - UTV2-1790: main-sync gets the residue probe too, so a clean refused pop releases the mutex
 ok 61 - UTV2-1790: a residue probe that throws fails closed rather than escaping
 ok 62 - UTV2-1790: a rebase stopped at a break step is NOT reported clean
-# tests 67
+# tests 68
 # suites 0
-# pass 67
+# pass 68
 # fail 0
 # cancelled 0
 # skipped 0
@@ -883,19 +924,31 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     residue probe was supplied". Three things are true about it and all three are
     stated here rather than left for a reviewer to find:
 
-    1. **It is fail-CLOSED, not fail-open.** It refuses to sync; it does not sync
-       unsafely. No safety property regresses.
+    1. ~~**It is fail-CLOSED, not fail-open.** It refuses to sync; it does not sync
+       unsafely. No safety property regresses.~~ **THIS WAS FALSE AND ROUND 9 PROVED
+       IT BY EXECUTION.** See finding 16. The pre-flight sits AFTER
+       `acquireMergeLock`, and its first draft retained the lock on refusal — so a
+       probe-less run acquired the repo-wide serializing mutex, did nothing at all,
+       and never gave it back for the full TTL, halting every other lane until a
+       human reclaimed it. A safety property *did* regress: the reviewer blocked its
+       own next command with it. Fixed in round 9 — the pre-flight now releases —
+       and pinned by test 68 and mutant M27.
     2. **The sanctioned entry point is unaffected.** `package.json` maps
        `ops:merge-wrapper` to `scripts/ops/ops-merge-wrapper.ts`, which supplies the
        probe at every delegation (mutant M20, 14 tests). Nothing in `package.json`,
        any workflow, or any script invokes `merge-wrapper.ts` directly; the direct
-       CLI is reachable only by typing that path by hand, which the operating model
-       does not sanction.
+       CLI is reachable only by typing that path by hand. **Independently confirmed
+       by the round-9 reviewer**, which also checked for other un-probed callers and
+       found none: only tests import these modules, and `ops-merge-wrapper.ts:71`
+       re-exports `runMergeWrapper` with no consumer.
     3. **The message is an internal-wiring message in the slot reserved for a state
-       measurement** — precisely the defect class round 7's reviewer named. That is
-       the real complaint, and it is not cosmetic.
+       measurement** — precisely the defect class round 7's reviewer named. Still
+       true, and still the residual complaint.
 
-    **Not fixed in this lane, and why.** The correct fix is to move
+    **The residual is now cosmetic rather than unsafe, and is still not fixed here.**
+    With the round-9 release in place, a probe-less run refuses, releases, and blocks
+    nothing. What remains is that its message explains a wiring gap where a state
+    measurement belongs. The clean fix is to move
     `probeSyncResidue`/`worktreeResidue` down into `merge-wrapper.ts` so
     `runMergeWrapper`'s default is a real measurement instead of an injection seam,
     which would delete `optionsWithProbe`, mutant M19 and mutant M20 along with it.
@@ -903,8 +956,8 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     explicit: *"Do not broaden the issue beyond making git-merge-main transactional
     and noninteractive."* PM has ruled individually on every scope change here,
     including a single-file addition. So it is raised as a PM decision — fix here
-    under a widened scope, or take it as a successor issue — and NOT self-authorized
-    at the last step of round 8. The behaviour itself is already pinned by test 59.
+    under a widened scope, or take it as a successor issue — and NOT self-authorized.
+    The behaviour itself is pinned by tests 59 and 68.
 
     **What round 8 cost, stated plainly.** Making the round-7 terms reachable changed
     which control enforces the stranded-merge case, and M16 — killed in round 6 —
@@ -912,6 +965,65 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     dropped from the table. This is the seventh consecutive round in which a fresh
     reviewer found something the previous round's fix installed, and the fourth in
     which the PROOF asserted a property the CODE did not have.
+
+16. **Round-8 independent review: FAIL — one P1, three P2s, three P3s. All fixed.**
+   A seventh reviewer, authoring none of this, returned FAIL for the **ninth
+   consecutive round**. It falsified the round-8 *code* by execution and could not
+   break it; every finding was in the *evidence*, plus one undisclosed regression.
+
+    **P1 — the machine-readable artifact contradicted the human-readable one.**
+    `evidence.json`'s `mutants[]` array was left at round-7 data while
+    `verification.md`'s table was updated for round 8. It held 22 rows, recorded the
+    known survivor M16 as `KILLED`, omitted M23–M26 entirely, and narrated a
+    "single round-7 pass" — while the same object's `count` said 25 and `surviving`
+    said 1. The reviewer re-measured eight rows against the table and found the table
+    byte-exact, then found the JSON wrong. An auditor reading only the JSON would
+    conclude zero survivors, and the Proof Auditor Gate passed it. Regenerated in
+    round 9 from the current measurement and diffed against the table.
+
+    **P2 — a repo-wide merge-mutex leak, disclosed as harmless.** Round 8 disclosed
+    the probe-less `runCli` refusal and asserted "no safety property regresses". The
+    pre-flight sits AFTER `acquireMergeLock` and retained the lock, so a probe-less
+    run acquired the serializing mutex, did nothing, and never released it for the
+    full TTL. The reviewer reproduced it on a **pristine** worktree and blocked its
+    own next sanctioned command with `merge_lock_stale_reclaim_required`. Fixed: the
+    pre-flight releases, because this run created no state to protect. Test 68,
+    mutant M27. **This is the fourth time in this lane that the proof asserted a
+    property the code did not have, and the first time the false claim was about a
+    correction rather than an implementation.**
+
+    **P2 — `File scope lock` is red and the bundle never said so.** Recorded below
+    under **Scope**.
+
+    **P2 — the PR body was eight rounds stale**, claiming 49/0 tests, a six-mutant
+    battery, and a Scope section omitting `scripts/ops/merge-wrapper.ts` entirely.
+    Rewritten in round 9.
+
+    **P3 — a commit BODY still cited the pre-rewrite SHA `9162d2c9`.** The round-8
+    rewrite fixed the subject line and missed the body, so `evidence.json`'s claim
+    that "no message on this branch names a commit that is not on it" was false.
+    Fixed. Fixing it renamed the next commit in turn, which invalidated *its*
+    SHA-bearing subject — so the SHA was removed from that subject rather than
+    repointed. **A SHA in a commit subject is self-invalidating under any message
+    rewrite**, and that is the durable lesson.
+
+    **P3 — the `trees_unchanged` record cited the wrong tree.** It named
+    `fd554012`, which is the tree of a commit created *after* both rewrites and could
+    not have existed before them. The invariant tree is `d1227506`. The substantive
+    claim was true — the reviewer verified all six mappings byte-identical — but the
+    evidence cited for it was not.
+
+    **P3 — the real-git counts were overstated.** 21 claimed, 20 actual (test 32
+    builds no repository), and four of the seventeen claimed to have "nothing about
+    git mocked" do substitute a synthetic result for one invocation. Corrected above.
+
+    **What the reviewer could not break**, recorded because negative results are
+    evidence too: the headline `--no-ff` merge against a real diverged branch; the
+    round-8 P1 fix (with the pre-flight deleted it reproduced the destructive
+    success, with it present the refusal held); no false positive on clean or merely
+    dirty trees; reachability of both round-8 additions; non-vacuity of tests 63–67
+    by targeted inversion; the `CLEAN_WORKTREE_PROBE` stub hiding nothing; and all
+    five wrapper safety invariants on the sanctioned path.
 
 ## Independent review
 
@@ -1000,8 +1112,15 @@ was demonstrated by execution against a real mid-rebase repository, not by inspe
 the wrapper reported `merge_wrapper_completed`, the detached HEAD had advanced, and
 the mutex was released.
 
-**Review of the current head is PENDING.** The round-8 corrections moved the head, so
-none of the six reviews above covers the code now proposed for merge. No claim of
+**Round 9 review, of head `76e09e7a`.** A seventh reviewer, authoring none of this
+implementation or proof, returned **FAIL** on the one P1, three P2s and three P3s
+recorded in finding 16 — all fixed above. It is the first round whose findings were
+almost entirely in the evidence rather than the code: it attacked the implementation
+by execution and could not break it. Its P2 lock leak was reproduced on a pristine
+worktree and is pinned by test 68 and mutant M27.
+
+**Review of the current head is PENDING.** The round-9 corrections moved the head, so
+none of the seven reviews above covers the code now proposed for merge. No claim of
 completed independent review at this head is made.
 
 ## Scope
@@ -1024,6 +1143,17 @@ Authorized code scope, four files touched, nothing else:
 
 Plus lane-owned metadata: `.ops/sync/UTV2-1790.yml`,
 `docs/06_status/lanes/UTV2-1790.json`, `docs/06_status/proof/UTV2-1790/**`.
+
+**`File scope lock` is RED on this head, and here is exactly why.** The guard
+resolves a manifest that is absent from `origin/main` via the first PR commit that
+added it — `ac6e3307`, which declared four paths — and by design ignores any later
+self-widening. This lane widened twice: `scripts/ops/merge-wrapper.ts` under explicit
+PM approval, and `scripts/ops/merge-wrapper.test.ts` as a consequence of the round-8
+pre-flight. Both are declared in the head manifest; neither is in the base one, so the
+guard reports both as undeclared. It is not a required context and will not block
+merge, but it IS red and this bundle previously did not say so — a round-9 P2. The
+only mechanism that can clear it is a `scope-override/v1` comment bound to the exact
+head, which is a PM artifact and is not something this lane may issue for itself.
 
 No workflow file, no production/runtime/DB code, no `package.json`, lockfile or
 tsconfig change, no proof-schema change, no branch-protection change, and no bypass

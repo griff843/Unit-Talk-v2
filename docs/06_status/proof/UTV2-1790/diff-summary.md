@@ -1,6 +1,6 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 370097343393241ffa7d3db4db33530b4949e2fe
+MERGE_SHA: 905c14d403306d7c179922a0bf6a47a39cff6b0f
 
 Four code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
@@ -8,8 +8,8 @@ runtime/DB/application code.
 | File | Change |
 |---|---|
 | `scripts/ops/ops-merge-wrapper.ts` | +342 / −6 |
-| `scripts/ops/merge-wrapper.ts` | +273 / −16 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +1708 / −15 |
+| `scripts/ops/merge-wrapper.ts` | +292 / −14 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +1792 / −15 |
 | `scripts/ops/merge-wrapper.test.ts` | +37 / −4 |
 
 (`git diff --numstat origin/main -- scripts/ops/`, the full lane diff, re-measured at

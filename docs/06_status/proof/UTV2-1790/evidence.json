@@ -9,8 +9,8 @@
   "generated_at": "2026-08-31T00:00:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "370097343393241ffa7d3db4db33530b4949e2fe",
-    "verified_source_note": "Last commit on this branch touching a non-proof path (round-8 remediation). merge_sha is null pre-merge as the shared evidence schema requires.",
+    "verified_source_sha": "905c14d403306d7c179922a0bf6a47a39cff6b0f",
+    "verified_source_note": "Last commit on this branch touching a non-proof path (round-9 remediation). merge_sha is null pre-merge as the shared evidence schema requires.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -19,7 +19,7 @@
     },
     "sha_type": "merge_sha",
     "bound_at": "2026-08-31T00:00:00Z",
-    "previous_verified_source_sha": "0f93008bef9766aed1809cd9340e540461244314",
+    "previous_verified_source_sha": "370097343393241ffa7d3db4db33530b4949e2fe",
     "verified_source_sha_history": [
       {
         "sha": "54e03d861d5c53d0990bffd933d5a75f2148f6a5",
@@ -50,11 +50,15 @@
       {
         "sha": "0f93008bef9766aed1809cd9340e540461244314",
         "superseded_reason": "Round-7 head. Superseded by the round-8 remediation commit: an independent reviewer demonstrated by execution that round 7's sequencer-state terms (rebase-merge/rebase-apply directory, CHERRY_PICK_HEAD, REVERT_HEAD) were wired only into branches reachable from an unmerged index, while every sequencer state leaves the index clean -- so the terms were unreachable from every production decision path and main-sync over a mid-rebase worktree still ran `git pull --ff-only`, fast-forwarded the detached HEAD out from under the rebase, reported merge_wrapper_completed and released the repo-wide merge mutex. NOTE: this SHA no longer exists on the branch; see sha_rewrite_record below."
+      },
+      {
+        "sha": "370097343393241ffa7d3db4db33530b4949e2fe",
+        "superseded_reason": "Round-8 head. Superseded by the round-9 remediation commit: an independent reviewer proved by execution that the round-8 pre-flight, which sits after acquireMergeLock, retained the repo-wide merge mutex on a refusal that had changed nothing -- so any probe-less caller acquired the serializing lock, did nothing, and never released it for the full TTL, and the reviewer blocked its own next sanctioned command with it. The round-8 bundle had disclosed that code path and asserted 'no safety property regresses', which was false. The same review found evidence.json's mutants[] array left at round-7 data, recording the known survivor M16 as KILLED and omitting M23-M26. NOTE: this SHA no longer exists on the branch; see sha_rewrite_record."
       }
     ],
     "sha_rewrite_record": {
-      "why": "Governed remediation of a cross-issue reference: commit 9162d2c9's body contained the token `(UTV2-1678)`, which the branch-discipline guard scans for and rejects on a UTV2-1790 branch. Removing it requires rewording that commit, which necessarily rewrites it and every commit after it. A second, smaller rewrite then repointed one descendant commit subject that cited 9162d2c9 by SHA, so no message on this branch names a commit that is not on it.",
-      "trees_unchanged": "Verified: the branch tip's tree object was byte-identical before and after both rewrites (fd554012b6719c8833bbbaa3eec537f0c73fd31f). Only commit messages changed. No content, no author, and no authored timestamp was altered.",
+      "why": "Governed remediation, in four passes. (1) commit 9162d2c9's BODY contained the token `(UTV2-1678)`, which the branch-discipline guard scans for and rejects on a UTV2-1790 branch; removing it rewrote that commit and every commit after it. (2) a descendant SUBJECT cited 9162d2c9 by SHA and was repointed. (3) round 9 found the round-8 rewrite had fixed that subject but MISSED a commit BODY that still cited 9162d2c9, so the claim 'no message names a commit that is not on it' was false when first written; it was repointed too. (4) fixing (3) renamed the next commit in turn and invalidated ITS SHA-bearing subject, so the SHA was removed from that subject rather than repointed. The durable lesson: a SHA in a commit subject is self-invalidating under any message rewrite. Verified after the final pass: every hex token in every commit message on this branch that resolves to a commit is an ancestor of HEAD.",
+      "trees_unchanged": "Verified, with the round-9 correction to the evidence cited. The invariant tip tree across the rewrites is d1227506 (the tree of cb059ebb and of its rewritten twin 4a766873). Round 8 cited fd554012 here, which is the tree of a commit created AFTER both rewrites and therefore could not have existed before them -- the claim was true but the evidence for it was wrong, and a round-9 reviewer caught it. The reviewer independently verified all six old->new mappings byte-identical. Only commit messages changed; no content, no author and no authored timestamp was altered.",
       "map": {
         "9162d2c926856ccef5a1b26372140ac4106fab5b": "7d80ec6e4a29248a2b457d1fff051363908ed83e",
         "7372df54f4f7ab8fbd7bb6f9f2544a30521c03c7": "d79820c623ba6d8a533dbcd3800758da6ff15594",
@@ -64,16 +68,17 @@
         "cb059ebbfa7520707ed9c8b8e51ff78830820608": "4a7668738d417e2b96fc572b339917e63a7f926f"
       },
       "unchanged_prefix": "ac6e3307, 54e03d86, 9b45a62e, 11920f2d, 77028bb5, 26b5740e, 3ed0be33, da425fad, 1486d510 and 009cfe46 are byte-identical before and after; the rewrite begins at the reworded commit.",
-      "consequence": "Every head-pinned governance artifact bound to cb059ebb or earlier is invalidated by this rewrite and must be re-posted against the new head. The earlier history entries in verified_source_sha_history name pre-rewrite SHAs on purpose: they are the SHAs those rounds were actually reviewed at, and rewriting them would falsify the review record. Use the map above to resolve any of them."
+      "consequence": "Every head-pinned governance artifact bound to cb059ebb or earlier is invalidated by this rewrite and must be re-posted against the new head. The earlier history entries in verified_source_sha_history name pre-rewrite SHAs on purpose: they are the SHAs those rounds were actually reviewed at, and rewriting them would falsify the review record. Use the map above to resolve any of them.",
+      "note_on_map": "The map records the first two passes. Passes 3 and 4 moved every commit from d79820c6 and 740c0267 onward again; the pre-rewrite SHAs in verified_source_sha_history are deliberately left as the SHAs those rounds were actually reviewed at, since rewriting them would falsify the review record."
     }
   },
   "verdict": {
     "recommended_divergence_exit_is_operable": true,
     "commit_shas_preserved_on_both_sides": true,
     "no_history_rewriting": true,
-    "mutex_acquire_release_preserved": "QUALIFIED — the safety invariant is preserved; the release SITE is deliberately moved by this lane. Round 5 recorded this as a flat true while round 5 was itself relocating the release, and round 6 recorded it as flat true while a stash-push failure still released over a conflicted index. It is now: released after a successful merge, after a cleanly-aborted failing one, and after a non-conflicting pop failure over a MEASURED-clean tree; retained on cleanup failure, on a conflicting pop, on a stash-push failure over an in-progress merge, and whenever the tree could not be measured.  Round 7 extended this to `main-sync`, which had never received the probe at all and therefore leaked the mutex on every failed pop. Tests 27, 48, 49, 51, 52, 55, 56, 57, 58, 59, 60, 61.",
+    "mutex_acquire_release_preserved": "QUALIFIED \u2014 the safety invariant is preserved; the release SITE is deliberately moved by this lane. Round 5 recorded this as a flat true while round 5 was itself relocating the release, and round 6 recorded it as flat true while a stash-push failure still released over a conflicted index. It is now: released after a successful merge, after a cleanly-aborted failing one, and after a non-conflicting pop failure over a MEASURED-clean tree; retained on cleanup failure, on a conflicting pop, on a stash-push failure over an in-progress merge, and whenever the tree could not be measured.  Round 7 extended this to `main-sync`, which had never received the probe at all and therefore leaked the mutex on every failed pop. Tests 27, 48, 49, 51, 52, 55, 56, 57, 58, 59, 60, 61.",
     "protected_path_refusal_preserved": true,
-    "head_move_invalidation_reporting_preserved": "QUALIFIED — the reporting primitives are untouched, but this lane created a path that reached the post-sync analysis with ok:false after a COMMITTED merge (merge_wrapper_stash_pop_conflict), and the `!result.ok` early return skipped both classifyDroppedPaths and renderHeadMoveNotice on it. Reachability repaired in round 6: a failed result keeps its code and the notice is appended to its stderr. Test 57, mutant M18.",
+    "head_move_invalidation_reporting_preserved": "QUALIFIED \u2014 the reporting primitives are untouched, but this lane created a path that reached the post-sync analysis with ok:false after a COMMITTED merge (merge_wrapper_stash_pop_conflict), and the `!result.ok` early return skipped both classifyDroppedPaths and renderHeadMoveNotice on it. Reachability repaired in round 6: a failed result keeps its code and the notice is appended to its stderr. Test 57, mutant M18.",
     "actionable_failure_behaviour_preserved": true,
     "statement": "git-merge-main built `git merge --ff-only origin/main`, which cannot merge a diverged branch by definition, so main-sync's recommended exit for divergence failed on exactly the condition it exists for -- leaving git-rebase-main, which rewrites history and invalidates every head-pinned governance artifact, as the only operable path. The command is now `git merge --no-ff --no-edit origin/main`: it merges a genuinely diverged branch while preserving both sides' commit SHAs byte-for-byte, is deliberately not a bare `git merge` (which would fast-forward a merely-behind branch and make the verb's effect depend on divergence state), and is noninteractive. Permitting a non-fast-forward merge also permits a conflicting one, which exposed a second defect on the same path and was raised as a review P1: the wrapper popped its lane-state autostash and released the merge mutex while MERGE_HEAD and unmerged index entries were still present, stranding lane state in the stash and letting the next lane acquire a mutex over a half-merged worktree. The failure path is now transactional: abortInProgressSync aborts the in-progress merge/rebase and verifies the result before the stash is restored and before the lock is released, and a cleanup that cannot restore the pre-attempt state fails closed with the distinct merge_wrapper_cleanup_failed code, the mutex retained and the stash left intact. All five wrapper safety invariants are preserved; the mutex ordering is hardened, not weakened. Round 3 closed two fail-open residuals found by independent review: an undeterminable probe result (git exit 128) was being read as 'the ref is absent', which sent an unreadable repository down the 'nothing to abort' early return; and the caller-supplied onCommandFailure hook was called unguarded, so a throwing hook escaped runMergeWrapper with the lock held and no structured result. Both now force the fail-closed branch. The fail-closed recovery message also named `pnpm ops:merge-wrapper guard`, which only asserts the lock is held; it now names `pnpm ops:merge-lock release`. Round 4 corrected a FALSE claim that round 3's proof made and three controls that nothing pinned, all found by a second independent reviewer. The false claim: the fail-closed message was asserted to name the git command that actually ran, but commandVector was built from the bridged input, so it rendered `git pull --ff-only origin main` -- an invocation that cannot leave MERGE_HEAD behind -- and pointed the operator away from the residue. runMergeWrapper now takes a reportedCommand option: what is run is still `command`, what is reported is the caller's real vector. The three unpinned controls were the abort verb (hardcoding `merge` survived the whole suite; `git merge --abort` during a rebase exits 128 and the residue survives), the not-attempted autostash pop (test 49's assertions were satisfied by git's own refusal to pop into an unmerged index, not by the control), and the unmerged-paths term of the nothing-to-abort early return. Each is now pinned by a test and a mutant (M9-M12). Round 5 closed a fail-open that round 4's proof certified as impossible. Every prior regression entered through the command FAILURE path; this one enters through the SUCCESS path -- the merge completes, `git stash pop` then conflicts because the commit just merged from main touches an autostashed path, and the wrapper released the serializing mutex over a worktree carrying unmerged entries and conflict markers. The release now happens after that branch and the branch returns without releasing. Round 5 also pinned the third term of `residue` (an undeterminable POST-abort state was read as clean, killed by nothing until M13) and re-measured every mutation row: M1/M2/M3 had been carried forward from round 3 at 7/3/5 while the suite grew, and are 10/4/8 against the current source.",
     "merge_is_noninteractive": true,
@@ -106,8 +111,8 @@
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts",
-      "tests": 67,
-      "pass": 67,
+      "tests": 68,
+      "pass": 68,
       "fail": 0,
       "skipped": 0
     },
@@ -155,8 +160,8 @@
   "mutation_controls": {
     "executed_by": "the certifying session, in this worktree",
     "method": "each control inverted individually from a pre-mutation backup, focused suite re-run against the mutant, source restored and the restored baseline re-confirmed green. Round 5 re-measured EVERY row in one pass against the current source rather than carrying earlier numbers forward. Rounds 6, 7 and 8 each re-measured every row again; counts moved in every round, which is why re-measurement is not optional.",
-    "baseline": "67 pass, 0 fail",
-    "restored": "67 pass, 0 fail",
+    "baseline": "68 pass, 0 fail",
+    "restored": "68 pass, 0 fail",
     "count": 25,
     "surviving": 1,
     "mutants": [
@@ -186,10 +191,10 @@
         "result": "KILLED",
         "mutant_fail_count": 4,
         "failing_tests": [
-          "2",
-          "23",
-          "27",
-          "49"
+          2,
+          23,
+          27,
+          49
         ],
         "note": "Killed by command-shape assertions ONLY. git merge --no-ff opens $GIT_EDITOR only when run from a terminal and the wrapper spawns git with piped stdio, so --no-edit cannot be made behaviourally load-bearing in this harness. It is the guarantee for tty callers; the shape assertion pins it."
       },
@@ -199,14 +204,14 @@
         "result": "KILLED",
         "mutant_fail_count": 8,
         "failing_tests": [
-          "23",
-          "24",
-          "48",
-          "49",
-          "51",
-          "53",
-          "54",
-          "56"
+          23,
+          24,
+          48,
+          49,
+          51,
+          53,
+          54,
+          56
         ],
         "note": "Reproduces the reviewed P1 exactly: a conflicted merge again releases the mutex and attempts the autostash pop with MERGE_HEAD and unmerged entries still present."
       },
@@ -214,10 +219,11 @@
         "id": "M4",
         "name": "abortInProgressSync failure return reports cleaned: true",
         "result": "KILLED",
-        "mutant_fail_count": 2,
+        "mutant_fail_count": 3,
         "failing_tests": [
-          "49",
-          "56"
+          49,
+          56,
+          66
         ],
         "note": "Proves the fail-closed `cleaned` computation is load-bearing: a tree that could not be cleaned must never be reported clean."
       },
@@ -227,10 +233,10 @@
         "result": "KILLED",
         "mutant_fail_count": 4,
         "failing_tests": [
-          "49",
-          "51",
-          "52",
-          "56"
+          49,
+          51,
+          52,
+          56
         ],
         "note": "Proves the fail-closed branch must exist at all."
       },
@@ -240,7 +246,7 @@
         "result": "KILLED",
         "mutant_fail_count": 1,
         "failing_tests": [
-          "51"
+          51
         ],
         "note": "Reproduces the reviewed round-2 P2 exactly: collapsing 'the probe could not answer' into 'the ref is absent' sends an undeterminable tree down the 'nothing to abort' early return, pops the autostash into a possibly-unmerged index and releases the mutex."
       },
@@ -250,7 +256,7 @@
         "result": "KILLED",
         "mutant_fail_count": 1,
         "failing_tests": [
-          "52"
+          52
         ],
         "note": "Proves the hook boundary is guarded: without it a throwing caller-supplied hook exits runMergeWrapper with the lock held, the stash unpopped and no structured result."
       },
@@ -260,10 +266,10 @@
         "result": "KILLED",
         "mutant_fail_count": 4,
         "failing_tests": [
-          "49",
-          "51",
-          "52",
-          "56"
+          49,
+          51,
+          52,
+          56
         ],
         "note": "Proves the fail-closed branch must not release the mutex on its way out."
       },
@@ -273,8 +279,8 @@
         "result": "KILLED",
         "mutant_fail_count": 2,
         "failing_tests": [
-          "49",
-          "53"
+          49,
+          53
         ],
         "note": "Round 4. Reproduces the reviewed P2 exactly: the fail-closed result names `git pull --ff-only origin main`, a command that cannot leave MERGE_HEAD behind, pointing the operator away from the residue."
       },
@@ -284,7 +290,7 @@
         "result": "KILLED",
         "mutant_fail_count": 1,
         "failing_tests": [
-          "53"
+          53
         ],
         "note": "Round 4. `git merge --abort` during a rebase exits 128 and the residue survives. It fails closed rather than open, but it converts automatic recovery into a manual-recovery incident for git-rebase-main. Survived the entire 52-test suite before test 53 existed."
       },
@@ -294,19 +300,9 @@
         "result": "KILLED",
         "mutant_fail_count": 1,
         "failing_tests": [
-          "49"
+          49
         ],
         "note": "Round 4. Test 49's `popped === false` and 'stash entry still listed' were satisfied by git's own refusal to pop into an unmerged index, so they passed under this mutant; the test now asserts the call was never issued."
-      },
-      {
-        "id": "M12",
-        "name": "`&& before.unmerged.length === 0` dropped from the nothing-to-abort early return",
-        "result": "KILLED",
-        "mutant_fail_count": 1,
-        "failing_tests": [
-          "54"
-        ],
-        "note": "Round 4. Every real conflict leaves MERGE_HEAD too, so no test isolated the third term until test 54 masked both refs to ABSENT over a genuinely conflicted index."
       },
       {
         "id": "M13",
@@ -314,7 +310,7 @@
         "result": "KILLED",
         "mutant_fail_count": 1,
         "failing_tests": [
-          "56"
+          56
         ],
         "note": "Round 5. Pinned by nothing before test 56: test 51 masks ALL probes, so the before-probe fail-closed fires first and the after-probe is never exercised. Without this term the wrapper pops the autostash into a still-conflicted index and releases the mutex."
       },
@@ -322,11 +318,9 @@
         "id": "M14",
         "name": "the mutex released on a conflicting autostash pop",
         "result": "KILLED",
-        "mutant_fail_count": 3,
+        "mutant_fail_count": 1,
         "failing_tests": [
-          55,
-          59,
-          61
+          55
         ],
         "note": "Round 5, the reviewed P1. Reproduces the fail-open exactly: after a SUCCESSFUL merge a conflicting `git stash pop` leaves unmerged entries and conflict markers, and the serializing mutex is handed to the next lane over that worktree."
       },
@@ -344,12 +338,10 @@
       {
         "id": "M16",
         "name": "the mutex released unconditionally on a stash-PUSH failure (pre-fix behaviour)",
-        "result": "KILLED",
-        "mutant_fail_count": 1,
-        "failing_tests": [
-          58
-        ],
-        "note": "Round-6 P2. That branch returns before any cleanup hook can run, so it bypasses every other guard; `git stash push` refuses over an already-conflicted index, which is precisely the state an earlier failed sync leaves behind."
+        "result": "SURVIVED",
+        "mutant_fail_count": 0,
+        "failing_tests": [],
+        "note": "SURVIVOR. Round 8 moved the enforcing control earlier: main-sync now measures the worktree BEFORE the autostash, so the stranded-merge scenario is caught by the pre-flight and this later branch is no longer the control that carries it. NOT deleted -- unlike round 7's dead residueProbe override it is not provably equivalent to its surroundings, since the tree could in principle change between the two measurements -- so it remains as defence-in-depth and is declared a survivor. M26 is the row that now carries the scenario."
       },
       {
         "id": "M18",
@@ -365,23 +357,35 @@
         "id": "M19",
         "name": "`measureResidue`'s no-probe default reports `clean: true`",
         "result": "KILLED",
-        "mutant_fail_count": 1,
+        "mutant_fail_count": 2,
         "failing_tests": [
-          59
+          59,
+          68
         ],
-        "note": "Proves the fail-closed default. runMergeWrapper is callable directly, without the probe runExtendedMergeWrapper injects; an unmeasured tree must never buy a release. Test 59 is the only test that reaches this default."
+        "note": "Round 9 added test 68, the probe-less CLI shape, so this moved from 1 kill to 2."
       },
       {
         "id": "M20",
         "name": "the `optionsWithProbe` wiring removed, so no delegation receives a residue probe",
         "result": "KILLED",
-        "mutant_fail_count": 3,
+        "mutant_fail_count": 14,
         "failing_tests": [
+          47,
+          48,
+          49,
+          50,
+          53,
+          54,
+          55,
+          56,
           57,
           58,
-          60
+          60,
+          63,
+          64,
+          65
         ],
-        "note": "Round-7 P1. After round 7 this is the SINGLE probe-wiring site, which is why it kills all three release-decision regressions together. Round 6 wired the probe only inside the git-merge-main/git-rebase-main bridge, leaving main-sync -- the verb the CLI routes straight through -- with the no-probe default and a permanently retained mutex."
+        "note": "Round 8 made the probe reachable from every real-git regression, so this moved from 3 kills to 14."
       },
       {
         "id": "M21",
@@ -397,26 +401,101 @@
         "id": "M22",
         "name": "`rebaseHead` drops the `rebase-merge`/`rebase-apply` directory checks",
         "result": "KILLED",
-        "mutant_fail_count": 3,
+        "mutant_fail_count": 5,
         "failing_tests": [
           23,
           24,
-          62
+          62,
+          63,
+          67
         ],
         "note": "Round-7 P3. A rebase stopped at a `break`/`edit` step has no REBASE_HEAD, no MERGE_HEAD and no unmerged paths -- it is a detached HEAD with a .git/rebase-merge directory -- so it read as clean and the mutex would have been handed over mid-sequencer."
       },
       {
-        "id": "M17",
-        "name": "REMOVED IN ROUND 7 -- the bridge's own residueProbe override",
-        "result": "SURVIVED, then deleted",
-        "mutant_fail_count": 0,
+        "id": "M23",
+        "name": "worktreeResidue drops its CHERRY_PICK_HEAD and REVERT_HEAD terms",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          64
+        ]
+      },
+      {
+        "id": "M24",
+        "name": "the nothing-to-abort early return drops its cherryPickHead/revertHead terms (M12's successor)",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          66
+        ]
+      },
+      {
+        "id": "M25",
+        "name": "sequencerDir reports a non-zero `git rev-parse --git-path` as ABSENT rather than undetermined",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          67
+        ]
+      },
+      {
+        "id": "M26",
+        "name": "the main-sync pre-flight measurement removed, i.e. the round-8 pre-fix behaviour",
+        "result": "KILLED",
+        "mutant_fail_count": 7,
+        "failing_tests": [
+          58,
+          59,
+          61,
+          63,
+          64,
+          65,
+          68
+        ],
+        "note": "Reproduces the round-8 P1 exactly: without the pre-flight, main-sync over a worktree stopped mid-rebase runs git pull --ff-only, advances the detached HEAD out from under the rebase, reports merge_wrapper_completed and releases the mutex."
+      },
+      {
+        "id": "M27",
+        "name": "the pre-flight refusal RETAINS the merge mutex, i.e. the round-8 pre-fix behaviour",
+        "result": "KILLED",
+        "mutant_fail_count": 7,
+        "failing_tests": [
+          58,
+          59,
+          61,
+          63,
+          64,
+          65,
+          68
+        ],
+        "note": "Reproduces the round-9 P2 exactly: the pre-flight sits after acquireMergeLock, so retaining the lock on a refusal that changed nothing leaks the repo-wide merge mutex for the full TTL. Kills the SAME seven tests as M26, and that overlap is reported rather than hidden: every pre-flight regression asserts both the refusal and the release, so removing either one breaks the same set. The two are still distinct controls -- M26 removes the refusal, M27 removes the release."
+      },
+      {
+        "id": "M12",
+        "name": "`&& before.unmerged.length === 0` dropped from the nothing-to-abort early return",
+        "result": "SUPERSEDED",
+        "mutant_fail_count": null,
         "failing_tests": [],
-        "note": "Recorded rather than hidden. Once round 7 added optionsWithProbe, the override became byte-for-byte equivalent to the default (realRunner and options.runner ?? spawnSync are the same value at that site), so removing it changed nothing and its mutant survived. An override that cannot fail is not a control; the dead code was deleted and M20 covers the wiring that remains."
+        "note": "NOT re-measured, and that is stated rather than implied. Round 8 replaced the three-term nothing-to-abort early return with a five-term one, so this row's anchor string no longer occurs in the source and the battery reports it as `ANCHOR COUNT 0 -- SKIPPED` instead of silently passing. M24 is its successor over the current condition. Retained so the transition is visible rather than looking like a quietly removed control."
+      },
+      {
+        "id": "M17",
+        "name": "the bridge's own residueProbe override removed",
+        "result": "RETIRED",
+        "mutant_fail_count": null,
+        "failing_tests": [],
+        "note": "Retired in round 7. Once optionsWithProbe supplied the same default, this override became byte-for-byte equivalent to its surroundings and its mutant SURVIVED -- the correct signal that it was no longer a control. The override was deleted rather than re-pinned. Kept here as a record of the retirement."
       }
     ],
-    "corroboration": "All TWENTY-ONE mutants were re-executed against the CURRENT source in a single round-7 pass by an automated battery that asserts a byte-exact md5 restore after each mutant and aborts if it differs. Baseline and restored both 0 fail. No count is carried forward from an earlier round. Round 7 also found a genuine SURVIVOR -- round 6's residueProbe override inside the bridge, which had become byte-for-byte equivalent to the new optionsWithProbe default -- and removed the dead override rather than re-pinning it.",
-    "count_note": "25 live rows measured in one round-8 pass. A 26th entry, M12, is retained in verification.md only as a SUPERSEDED record: round 8 replaced the three-term nothing-to-abort early return with a five-term one, so M12's anchor string no longer occurs in the source and the battery reports it as ANCHOR COUNT 0 -- SKIPPED rather than silently passing. M24 is its successor. A 27th, M17, was retired in round 7 when the control it inverted was deleted for being provably equivalent to its surroundings.",
-    "surviving_note": "M16 (release on a stash-PUSH failure) SURVIVED in round 8 and is reported rather than hidden. Round 8 moved the refusal earlier: main-sync now measures the worktree BEFORE the autostash, so the stranded-merge scenario is caught by the pre-flight and the later branch is no longer the enforcing control. It was NOT deleted -- unlike round 7's dead residueProbe override it is not provably equivalent to its surroundings, since the tree could in principle change between the two measurements -- so it remains as defence-in-depth and is declared a survivor. M26 is the row that now carries the scenario, killed by six tests."
+    "corroboration": "Every row above was re-executed against the CURRENT source in a single round-9 pass: each control inverted individually, the focused suite re-run against the mutant, the source restored and the restored baseline re-confirmed green, with an md5 comparison asserted after each restore so the run aborts if a revert is not byte-exact. Counts have moved in every round (M1 10->11, M14 1->3->1, M20 3->14, M22 3->5, M19 1->2), which is why re-measurement is not optional and why round 9's P1 was possible at all.",
+    "count_note": "25 live rows, re-measured in ONE round-9 pass against the current source; 24 killed, 1 survivor (M16). The array also carries two non-live records, M12 (SUPERSEDED) and M17 (RETIRED), each flagged as such with mutant_fail_count null, so it holds 27 ids in total and matches verification.md's table row for row. Round 9's P1 was that THIS ARRAY had been left at round-7 data while verification.md's table was updated -- it held 22 rows, recorded the known survivor M16 as KILLED, and omitted M23-M26 entirely, so an auditor reading only the machine-readable artifact would have concluded zero survivors. It is regenerated here from the round-9 measurement and diffed against verification.md. The 26/25 figures this note itself carried before that diff was run are corrected here: the same defect class, one field over.",
+    "surviving_note": "M16 (release on a stash-PUSH failure) SURVIVED in round 8 and is reported rather than hidden. Round 8 moved the refusal earlier: main-sync now measures the worktree BEFORE the autostash, so the stranded-merge scenario is caught by the pre-flight and the later branch is no longer the enforcing control. It was NOT deleted -- unlike round 7's dead residueProbe override it is not provably equivalent to its surroundings, since the tree could in principle change between the two measurements -- so it remains as defence-in-depth and is declared a survivor. M26 is the row that now carries the scenario, killed by seven tests.",
+    "measured_at_round": 9,
+    "killed": 24,
+    "non_live": [
+      "M12",
+      "M17"
+    ]
   },
   "regression_fixtures": {
     "type": "real git subprocesses, nothing mocked",
@@ -605,7 +684,9 @@
     "This lane's history was rewritten twice under governed remediation to remove a cross-issue reference and one now-dangling SHA citation. Trees were verified byte-identical across both rewrites, but every head-pinned governance artifact bound to cb059ebb or earlier is invalidated and must be re-posted. See sha_binding.sha_rewrite_record for the full old-to-new map.",
     "Seven consecutive rounds of independent review have each found a defect the previous round's fix installed, and four of those rounds found a property the PROOF asserted that the CODE did not have. That rate is itself the lane's durable finding: it is why every claim in this bundle names the test and the mutant that make it fail, and why an eighth review at the current head is recorded as PENDING rather than assumed unnecessary.",
     "OPEN, RAISED AS A PM DECISION, found by the certifying session and not by a reviewer: scripts/ops/merge-wrapper.ts has its own runCli() entry that calls runMergeWrapper directly with no residueProbe, so with the round-8 pre-flight a hand-run `tsx scripts/ops/merge-wrapper.ts main-sync ...` now always refuses with merge_wrapper_worktree_not_clean and the internal message 'no worktree residue probe was supplied'. It is fail-CLOSED (it refuses to sync, it does not sync unsafely); the sanctioned entry point ops:merge-wrapper -> ops-merge-wrapper.ts is unaffected and supplies the probe at every delegation (M20, 14 tests); nothing in package.json, any workflow or any script invokes merge-wrapper.ts directly. The real complaint is that an internal-wiring message occupies the slot reserved for a state measurement. The correct fix -- moving probeSyncResidue/worktreeResidue into merge-wrapper.ts so runMergeWrapper's default is a real measurement, deleting optionsWithProbe and mutants M19/M20 with it -- is a file-boundary refactor that exceeds the governing order's 'do not broaden the issue beyond making git-merge-main transactional and noninteractive', so it is NOT self-authorized here. Behaviour pinned by test 59.",
-    "Two proof validators disagree about the pre-merge MERGE_SHA anchor and this bundle deliberately follows the one that actually gates this PR. scripts/ci/proof-binding-validator.ts requires verification.md's MERGE_SHA to read literally 'pending merge' pre-merge and requires a 'PR:' row in the Merge SHA Binding section; it reports FAIL on this bundle for both. It is wired ONLY to migration-reversibility-gate.yml, whose pull_request paths filter is supabase/migrations/** and three migration scripts, so it does not run on this PR -- confirmed by reading the workflow trigger, and consistent with it being absent from this PR's check list. The shape used here (a real branch/implementation SHA in MERGE_SHA) is the shape under which the previous head cb059ebb had Proof Auditor Gate, Runtime Verifier Gate, verify, Merge Gate and P0 Protocol all SUCCESS, and both gates that do run were re-executed locally at this head and returned PASS. Changing the anchor to satisfy a non-running validator would be changing a measured-green shape on speculation, so it was not done; the disagreement is recorded instead and is a genuine successor-issue candidate."
+    "Two proof validators disagree about the pre-merge MERGE_SHA anchor and this bundle deliberately follows the one that actually gates this PR. scripts/ci/proof-binding-validator.ts requires verification.md's MERGE_SHA to read literally 'pending merge' pre-merge and requires a 'PR:' row in the Merge SHA Binding section; it reports FAIL on this bundle for both. It is wired ONLY to migration-reversibility-gate.yml, whose pull_request paths filter is supabase/migrations/** and three migration scripts, so it does not run on this PR -- confirmed by reading the workflow trigger, and consistent with it being absent from this PR's check list. The shape used here (a real branch/implementation SHA in MERGE_SHA) is the shape under which the previous head cb059ebb had Proof Auditor Gate, Runtime Verifier Gate, verify, Merge Gate and P0 Protocol all SUCCESS, and both gates that do run were re-executed locally at this head and returned PASS. Changing the anchor to satisfy a non-running validator would be changing a measured-green shape on speculation, so it was not done; the disagreement is recorded instead and is a genuine successor-issue candidate.",
+    "Round 9, P2, now recorded in the bundle rather than absent from it: `File scope lock` is RED on this head. The guard resolves a manifest absent from origin/main via the first PR commit that added it (ac6e3307, four paths) and by design ignores any later self-widening, so both scripts/ops/merge-wrapper.ts (PM-approved) and scripts/ops/merge-wrapper.test.ts (a round-8 consequence) read as undeclared even though the head manifest declares them. Not a required context, so it will not block merge. Only a scope-override/v1 comment bound to the exact head can clear it, and that is a PM artifact this lane may not issue for itself.",
+    "Round 9 measured that M26 and M27 kill an identical set of seven tests. They are distinct controls -- M26 removes the pre-flight refusal, M27 removes its lock release -- but every pre-flight regression asserts both properties, so no single test distinguishes them. Reported rather than presented as two independent kills."
   ],
   "provenance": {
     "summary": "Part of the implementation proven here was authored by a different session and adopted as untrusted input after review and re-execution, not as authored work.",
