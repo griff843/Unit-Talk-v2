@@ -1,6 +1,6 @@
 # PROOF: UTV2-1672
 
-MERGE_SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
+MERGE_SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
 
 > Pre-merge the merge anchor carries the verified implementation identity; the
 > Execution SHA row below repeats it. `post-merge-lane-close.yml` rebinds merge
@@ -11,8 +11,8 @@ Tier: T1
 Lane type: runtime
 Proof profile: app-runtime
 Branch: claude/utv2-1672-smart-form-backend-track-only
-Head SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
-Diff base: cb5dc80350b06374efaea450a2fbfe6724d3c201
+Head SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
+Diff base: ea7b26334f67ced32bb19ded92c5f303a61aef56
 result: pass
 
 ## Summary
@@ -132,7 +132,7 @@ This is weaker than a mutation control and is labelled as such.
 
 ### Verification
 
-- [x] `pnpm verify:static` exits 0 at this head: 99 suites, 5363 passing, 0
+- [x] `pnpm verify:static` exits 0 at this head: 99 suites, 5458 passing, 0
       fail, 0 cancelled, 0 skipped, 0 `not ok` lines. The `test:live-db` half is
       produced by the required `verify` CI job in the `staging-ci` environment;
       it cannot run locally by design.
@@ -147,13 +147,14 @@ This is weaker than a mutation control and is labelled as such.
 
 | Command | Result |
 |---|---|
-| `pnpm verify:static` | exit 0 -- 99 suites, 5363 pass, 0 fail/skip/cancel |
+| `pnpm verify:static` | exit 0 -- 99 suites, 5458 pass, 0 fail/skip/cancel (re-run at `15eee482`) |
 | `pnpm lint` (standalone) | exit 0, no findings |
 | `pnpm type-check` (standalone) | exit 0, no diagnostics |
-| `pnpm exec tsx --test` over the 8 touched suites | 276 tests, 0 failures |
+| `pnpm exec tsx --test` over the 8 locally-runnable touched suites | 293 tests, 0 failures (re-run at `15eee482`) |
 | `pnpm lane:check --lane runtime` over the changed set | `PASS lane=runtime` |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS, 29 files, no rules matched |
 | `pnpm test:live-db` | refused locally by `ci:assert-staging` -- produced by required CI |
+| `pnpm test:t1-proof:live` (incl. the new UTV2-1672 live-Postgres section) | refused locally by `ci:assert-staging` -- executed by the required `verify` job in `staging-ci` |
 
 ### Why the mutation controls are the proof
 
@@ -246,25 +247,33 @@ remains free to add CI's own staging receipt on top post-merge.
 ## Runtime Verification
 
 This lane changes application code, and its runtime behaviour is verified by
-executing that code -- 276 tests across the eight touched suites, including 15
-mutation controls that execute mutated copies of the real modules.
+executing that code -- 293 tests across the eight locally-runnable touched
+suites, including 15 mutation controls that execute mutated copies of the real
+modules. A ninth touched suite,
+`apps/api/src/t1-proof-awaiting-approval.test.ts`, runs only against staging
+Postgres and is executed by the required `verify` job rather than locally.
 
 The live-DB half of `pnpm verify` is produced by the required `verify` CI job in
 the `staging-ci` environment. It is structurally unrunnable locally:
 `test:live-db` begins with `ci:assert-staging`, which refuses any target that is
 not the staging ref `xskgrzbteyqdufktjrjx`.
 
-**Disclosed limit.** The `DatabaseOutboxRepository` chokepoint (T1, T3) is
-proven against a faithful stub Supabase client modelling
-`.from('picks').select().eq().maybeSingle()` and `.from().insert().select().single()`,
-not against real Postgres. A dedicated live-DB proof test was written and then
-**withdrawn**: registering it would have required editing
+**A limit that was disclosed here, and has since been closed.** An earlier
+revision of this section recorded that the `DatabaseOutboxRepository` chokepoint
+(T1, T3) was proven only against a faithful stub Supabase client, never against
+real Postgres, and that a dedicated live-DB proof test had been **withdrawn**
+because registering it would have required editing
 `docs/05_operations/db-writer-classification.json`, which is
-`outside_allowed_paths` for lane `runtime`, and the lane's authorization
-explicitly forbids widening lane authority or using a scope override to repair
-executor authority. The withdrawal is the correct outcome under that
-instruction, and the consequence is stated rather than hidden: `Require
-live-DB proof for runtime changes` (a non-required check) stays red.
+`outside_allowed_paths` for lane `runtime`.
+
+The withdrawal was correct; the conclusion drawn from it was not. It was blocked
+only for a *new* proof file. `apps/api/src/t1-proof-awaiting-approval.test.ts`
+was **already** registered in that classification file and already runs under
+`pnpm test:t1-proof:live`, so extending it needed no registry edit, no new lane
+and no widened lane authority -- and that option was available the whole time.
+It is now taken, and the chokepoint is proven against real Postgres. See
+"Live Postgres proof of the chokepoint" below. The remaining stub-based cases
+are retained as fast unit coverage, not as the load-bearing proof.
 
 No production mutation, member delivery, ingestion unpark, or direct-main work
 was performed by this lane.
@@ -272,7 +281,7 @@ was performed by this lane.
 ## EVIDENCE:
 
 ```text
-Captured 2026-08-31   HEAD=2b0e2225b863fd9b5e16719c11202ba16fbb2cd3   base=cb5dc80350b06374efaea450a2fbfe6724d3c201
+Captured 2026-08-31   HEAD=15eee48254c0141cf739a23ecc4add0f519a6fe9   base=ea7b26334f67ced32bb19ded92c5f303a61aef56
 
 ==============================================================
 GUARD / MUTATION-CONTROL INVENTORY -- 17 guards, 16 mutation controls
@@ -338,10 +347,10 @@ $ pnpm verify:static; echo "VERIFY_STATIC_EXIT=$?"
   [system-alignment]   verdict=PASS fail=0 warn=0
   [automation-coverage] verdict=PASS fail=0 warn=1 classified=15
   [executable-wiring]  verdict=PASS required_roots=verify
-  [executable-wiring]  tests total=470 required-reachable=315 unwired=119 (baselined=119 new=0)
+  [executable-wiring]  tests total=471 required-reachable=316 optional-reachable=36 unwired=119 (baselined=119 new=0)
 
   aggregate over 99 node:test suites
-  # pass       5363
+  # pass       5458
   # fail       0
   # cancelled  0
   # skipped    0
@@ -455,8 +464,81 @@ what makes the guard non-vacuous today; the search-backed branch will only
 become load-bearing once those tables are populated. Backfilling them would be
 production data mutation, which is a hard stop for this lane.
 
+## PM verdict at `da323a11` -- both blockers closed
+
+The PM verdict on this PR returned CHANGES_REQUIRED with two substantive
+requirements. Both are implemented at `15eee482`, the last commit on this branch
+touching a non-proof path.
+
+### 1. Live Postgres proof of the chokepoint
+
+The requirement was that the Track Only chokepoint be proven against real
+Postgres rather than an in-memory repository and a stub client -- the exact gap
+the proof-coverage guard names, and a class of change that has shipped broken
+twice in this repository because unit tests passed under InMemory while
+production diverged.
+
+`apps/api/src/t1-proof-awaiting-approval.test.ts` gains a UTV2-1672 section with
+three cases, all running through the real submit-pick controller against real
+repositories:
+
+| Case | Asserts |
+|---|---|
+| Track Only submission persists | `distributionMode=track-only` is stored and **no** `distribution_outbox` row is created |
+| `DatabaseOutboxRepository.enqueue` on that persisted pick | refused with `TrackOnlyDeliveryForbiddenError` |
+| End of run | zero outbox rows for any fixture created by the run |
+
+The second case asserts the specific error type rather than merely that it
+threw. This matters: the chokepoint raises a *different* error when it cannot
+read the pick row at all, so `TrackOnlyDeliveryForbiddenError` is what
+distinguishes "read the real row out of Postgres and refused on its metadata"
+from "failed closed because the row was invisible". Asserting only that it
+rejected would have passed for the wrong reason.
+
+Three properties of the fixture keep the proof honest rather than convenient.
+It satisfies the Smart Form relationship contract instead of routing around it,
+so the path is end-to-end. The sport is read from the live catalog rather than
+hardcoded, because a hardcoded id that staging happened not to carry would fail
+`CANONICAL_SPORT_ID_GUARD` and produce a red that says nothing about Track Only.
+Participant names carry the run id, so the manual coverage gap they claim is
+genuine and cannot collide with real reference data.
+
+Fixtures are voided through the lifecycle FSM in an `after` hook, never a direct
+status PATCH -- cleaning up by bypassing the control being proven is not
+evidence. The hook also asserts zero outbox rows per fixture, so the run cannot
+leave anything actionable behind.
+
+### 2. Sport-scoped player availability (round 5, P2, confirmed)
+
+`searchPlayers` fetched an unordered global `limit * 5` batch of name matches and
+only then filtered by sport. A sport whose players fell outside that arbitrary
+slice reported no availability even though canonical players existed, and the
+result was not stable between calls. Availability is a refusal input for Smart
+Form coverage, so this was a wrong answer, not a slow one.
+
+The name match is now paged in a deterministic order with the sport filter
+applied per page, using the pagination idiom already in the file. It is bounded
+by how many players actually match the query rather than by a fixed cross-sport
+cap, and paging stops as soon as the limit is met, so the common case remains a
+single round trip. `DatabaseReferenceDataRepository` gains an optional injected
+client, mirroring `DatabaseOutboxRepository` in this same lane, so the path is
+reachable from a test without a live connection; production still passes a
+connection config.
+
+Three regressions, in `apps/api/src/smart-form-validation.test.ts`:
+
+| Control | What it proves |
+|---|---|
+| 250 MLB players sorting ahead of one NBA player | the NBA player is found at match 251, past the old cap of 100. **Verified by inversion: it fails against the pre-fix implementation and passes against the fix**, so it is not vacuous |
+| a sport with no players | the sport filter still *refuses*, so the fix did not turn scoping into a permissive pass |
+| the common case | resolved in one round trip, so the fix did not become a multi-round-trip search |
+
+The first is the load-bearing one and the only one whose inversion was executed;
+the other two are controls against the two ways this particular fix could have
+been wrong in the other direction.
+
 ## Merge SHA Binding
 
-Merge SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
+Merge SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
-Execution SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
+Execution SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9

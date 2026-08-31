@@ -1,14 +1,15 @@
 # DIFF SUMMARY: UTV2-1672
 
-MERGE_SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
+MERGE_SHA: 15eee48254c0141cf739a23ecc4add0f519a6fe9
 
-Head: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
-Base: cb5dc80350b06374efaea450a2fbfe6724d3c201
+Head: 15eee48254c0141cf739a23ecc4add0f519a6fe9
+Base: ea7b26334f67ced32bb19ded92c5f303a61aef56
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 
-33 files changed. Excluding this proof bundle's own three documents, whose
-line counts move with every proof-only edit: 29 files, 4001 insertions,
-73 deletions.
+33 files changed. The table below lists the 29 of them outside this proof
+bundle: 4368 insertions, 48 deletions. The bundle's own four paths are
+excluded from the table rather than carried at a stale count, because their
+line counts move with every proof-only edit including this one.
 
 ## Changed files
 
@@ -33,20 +34,16 @@ line counts move with every proof-only edit: 29 files, 4001 insertions,
 | `apps/api/src/run-audit-service.ts` | +21 / -1 |
 | `apps/api/src/server.test.ts` | +225 / -0 |
 | `apps/api/src/server.ts` | +5 / -0 |
-| `apps/api/src/smart-form-validation.test.ts` | +857 / -0 |
+| `apps/api/src/smart-form-validation.test.ts` | +1022 / -0 |
 | `apps/api/src/smart-form-validation.ts` | +570 / -0 |
 | `apps/api/src/submission-service.test.ts` | +40 / -4 |
+| `apps/api/src/t1-proof-awaiting-approval.test.ts` | +188 / -0 |
 | `docs/06_status/lanes/UTV2-1672.json` | +61 / -0 |
-| `docs/06_status/proof/UTV2-1672/.gitkeep` | +0 / -0 |
-| `docs/06_status/proof/UTV2-1672/diff-summary.md` | this bundle |
-| `docs/06_status/proof/UTV2-1672/evidence.json` | this bundle |
-| `docs/06_status/proof/UTV2-1672/verification.md` | this bundle |
-| `docs/06_status/readiness/readiness-score.json` | +45 / -45 |
 | `package.json` | +1 / -1 |
 | `packages/contracts/src/index.ts` | +1 / -0 |
 | `packages/contracts/src/smart-form.ts` | +57 / -0 |
 | `packages/db/src/repositories.ts` | +1 / -0 |
-| `packages/db/src/runtime-repositories.ts` | +131 / -6 |
+| `packages/db/src/runtime-repositories.ts` | +190 / -26 |
 
 ## What each file does
 
@@ -123,7 +120,7 @@ line counts move with every proof-only edit: 29 files, 4001 insertions,
 
 ### Tests
 
-857 lines of new Smart Form validation tests plus additions to seven existing
+1022 lines of new Smart Form validation tests plus additions to eight existing
 suites. 16 of these are mutation controls, against 17 guards.
 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD has no mutation control: it lives in
 `packages/db`, which an `apps/api` test cannot import as source without
@@ -131,6 +128,41 @@ violating the db-client-boundary check. It is proven by premise assertion
 instead, and labelled as the weaker proof in verification.md.
 `apps/api/src/recap-service.test.ts` is **outside the declared file scope —
 covered by the requested scope-override.**
+
+### Closing the two PM blockers
+
+- **`apps/api/src/t1-proof-awaiting-approval.test.ts`** — a UTV2-1672 section
+  proving the Track Only chokepoint against real Postgres rather than an
+  in-memory repository and a stub client. Three cases run through the real
+  submit-pick controller against real repositories: a Track Only submission
+  persists `distributionMode=track-only` and creates no `distribution_outbox`
+  row; `DatabaseOutboxRepository` — the repository production actually runs —
+  refuses to enqueue that persisted pick; and no outbox row exists for any
+  fixture from the run. The second case asserts `TrackOnlyDeliveryForbiddenError`
+  specifically, not merely that it threw, because the chokepoint raises a
+  different error when it cannot read the pick row: asserting only rejection
+  would have passed for the wrong reason. Fixtures are voided through the
+  lifecycle FSM in an `after` hook, never a direct status PATCH, and the hook
+  asserts zero outbox rows per fixture. The file was already registered in
+  `db-writer-classification.json` and already runs under `pnpm test:t1-proof:live`,
+  so no registry change, no new lane and no widened lane authority are involved.
+  **Outside the declared file scope — covered by the requested scope-override.**
+  I had previously reported this work as blocked. That was wrong: it was blocked
+  only for a *new* proof file, and extending an existing registered one was
+  available the whole time.
+- **`packages/db/src/runtime-repositories.ts`** — `searchPlayers` fetched an
+  unordered global `limit * 5` batch of name matches and only then filtered by
+  sport, so a sport whose players fell outside that arbitrary slice reported no
+  availability even though canonical players existed, and the result was not
+  stable between calls. Availability is a refusal input for Smart Form coverage,
+  so this returned a wrong answer, not merely a slow one. The name match is now
+  paged in a deterministic order with the sport filter applied per page, bounded
+  by how many players actually match the query rather than by a fixed
+  cross-sport cap; paging stops as soon as the limit is met, so the common case
+  remains one round trip. `DatabaseReferenceDataRepository` gains an optional
+  injected client, mirroring `DatabaseOutboxRepository` in this same lane, so
+  the path is reachable from a test without a live connection; production still
+  passes a connection config.
 
 ## Files deliberately NOT changed
 

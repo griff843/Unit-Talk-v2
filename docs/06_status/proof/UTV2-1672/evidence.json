@@ -9,16 +9,16 @@
   "generated_at": "2026-08-31T03:20:00.000000Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
-    "verified_source_note": "Last commit on this branch touching a non-proof path; it carries the complete substantive change. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7) -- a branch SHA must never be represented as a merge SHA. post-merge-lane-close.yml binds it to the real merge commit via proof-generate rebindEvidenceJsonSha, and the same workflow harvests runtime_proof from the Writable DB proof (staging only) receipt. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
-    "evidence_commit_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
-    "current_pr_head_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
+    "verified_source_sha": "15eee48254c0141cf739a23ecc4add0f519a6fe9",
+    "verified_source_note": "Last commit on this branch touching a non-proof path; it carries the complete substantive change, including the two requirements returned by the PM verdict at da323a11. merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7) -- a branch SHA must never be represented as a merge SHA. post-merge-lane-close.yml binds it to the real merge commit via proof-generate rebindEvidenceJsonSha, and the same workflow harvests runtime_proof from the Writable DB proof (staging only) receipt. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
+    "evidence_commit_sha": "15eee48254c0141cf739a23ecc4add0f519a6fe9",
+    "current_pr_head_sha": "15eee48254c0141cf739a23ecc4add0f519a6fe9",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-08-31T03:20:00.000000Z"
+    "bound_at": "2026-08-31T16:05:00.000000Z"
   },
   "gate_results": [
     {
@@ -104,7 +104,7 @@
     {
       "gate": "pnpm verify:static",
       "verdict": "PASS",
-      "detail": "exit 0 at the anchor head. 99 node:test suites, 5363 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines. Exit code captured from the pnpm process directly, not from a pipeline tail. executable-wiring PASS, unwired baselined=119 new=0."
+      "detail": "exit 0 at the anchor head. 99 node:test suites, 5458 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines. Exit code captured from the pnpm process directly, not from a pipeline tail. executable-wiring PASS, unwired baselined=119 new=0."
     },
     {
       "gate": "pnpm lint",
@@ -146,13 +146,13 @@
   "pm_verdict": null,
   "static_proof": {
     "status": "pass",
-    "profile_rationale": "app-runtime profile, matching the manifest lane_type of runtime. Runtime behaviour is verified by executing the changed code: 276 tests across the eight touched suites, including 16 mutation controls that import and execute mutated copies of the real modules. runtime_proof.queries and runtime_proof.row_counts are harvested from CI's own Writable DB proof (staging only) receipt by post-merge-lane-close.yml, which is the sanctioned staging path; they are deliberately not hand-authored here, because that harvest keys on the merge SHA and this bundle is pre-merge.",
+    "profile_rationale": "app-runtime profile, matching the manifest lane_type of runtime. Runtime behaviour is verified by executing the changed code: 293 tests across the eight locally-runnable touched suites, including 16 mutation controls that import and execute mutated copies of the real modules. runtime_proof.queries and runtime_proof.row_counts ARE authored here, from measurements this bundle's own tests produce. An earlier revision claimed the opposite -- that they were deliberately left empty for post-merge harvest -- and that claim is retracted in verification.md under 'Close eligibility'. The harvest by post-merge-lane-close.yml remains free to add CI's own Writable DB proof (staging only) receipt on top after merge; it is an addition, not the sole source.",
     "commands": [
       {
         "command": "pnpm verify:static",
         "exit_code": 0,
         "result": "pass",
-        "detail": "99 node:test suites, 5363 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines."
+        "detail": "99 node:test suites, 5458 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines."
       },
       {
         "command": "pnpm lint",
@@ -170,7 +170,7 @@
         "command": "pnpm exec tsx --test <8 touched suites>",
         "exit_code": 0,
         "result": "pass",
-        "detail": "276 tests, 0 failures."
+        "detail": "293 tests, 0 failures."
       },
       {
         "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -216,7 +216,7 @@
   "runtime_proof": {
     "status": "PASS",
     "defect_fixed": "Smart Form had no server-side Track Only enforcement: the client declared distribution intent, capper identity and pick source were accepted from the payload, and participant resolution was unverified. Every backend path that can create member delivery work is now pinned closed for a Track Only pick, identity is derived server-side, and a manual coverage-gap claim is verified against reference data rather than trusted.",
-    "measurement_basis": "In-process measurement against the real modules, plus mutation controls that delete a guard's marked block from a copy of its own source and execute the mutant. Live Postgres is exercised separately by the required verify job's test:live-db half in the staging-ci environment; these probes measure this lane's own behaviour, which is what the guards claim.",
+    "measurement_basis": "In-process measurement against the real modules, plus mutation controls that delete a guard's marked block from a copy of its own source and execute the mutant. The outbox chokepoint is additionally proven against real Postgres in apps/api/src/t1-proof-awaiting-approval.test.ts, run by the required verify job in the staging-ci environment; these probes measure this lane's own behaviour, which is what the guards claim.",
     "queries": [
       {
         "name": "outbox chokepoint refuses delivery work for a Track Only pick",
@@ -265,6 +265,18 @@
         "method": "CAPPER_TRACK_ONLY_PIN_GUARD, CAPPER_SOURCE_PIN_GUARD and SMART_FORM_HTTP_CONTRACT_GUARD exercised over the real HTTP surface, each with a mutation control",
         "result": "baseline refuses the spoofed source, refuses opting into member delivery, and refuses a Smart Form submission missing its contract fields; each mutant permits the corresponding bypass",
         "significance": "Establishes that the pins are load-bearing rather than incidental to some other check."
+      },
+      {
+        "name": "Track Only chokepoint refuses delivery work against real Postgres",
+        "method": "apps/api/src/t1-proof-awaiting-approval.test.ts, UTV2-1672 section, executed against the staging Postgres project through the real submit-pick controller and real repositories -- not InMemory and not a stub client. Sport is read from the live catalog rather than hardcoded; fixtures are voided through the lifecycle FSM in an after hook rather than a direct status PATCH.",
+        "result": "A Track Only submission persisted with distributionMode=track-only and created zero distribution_outbox rows. DatabaseOutboxRepository.enqueue on that persisted row was refused with TrackOnlyDeliveryForbiddenError specifically -- not the different error the chokepoint raises when it cannot read the pick row -- so the refusal is on the row's real metadata, read out of Postgres. Zero outbox rows remained for any fixture at end of run.",
+        "significance": "Closes the disclosed limit in the previous revision of this bundle. The chokepoint had been proven only against a faithful stub; this class of change has shipped broken twice here because unit tests passed under InMemory while production diverged."
+      },
+      {
+        "name": "player availability is sport-scoped rather than sliced from an unordered cross-sport batch",
+        "method": "Regression in apps/api/src/smart-form-validation.test.ts: 250 MLB players sorted ahead of a single NBA player, so the NBA player is match 251 against the former global cap of 100. Inversion executed against the pre-fix implementation.",
+        "result": "Passes against the fix and FAILS against the pre-fix implementation, so the control is not vacuous. A positive control confirms the sport filter still refuses a sport with no players; a third confirms the common case still resolves in one round trip.",
+        "significance": "Availability is a refusal input for Smart Form coverage, so the pre-fix behaviour returned a wrong answer -- unstable between calls -- rather than a slow one."
       }
     ],
     "row_counts": [
@@ -293,16 +305,24 @@
         "value": 16
       },
       {
-        "probe": "tests passing across the eight touched suites",
-        "value": 276
+        "probe": "tests passing across the eight locally-runnable touched suites",
+        "value": 293
       },
       {
         "probe": "tests passing under pnpm verify:static",
-        "value": 5363
+        "value": 5458
       },
       {
         "probe": "test failures, skips and cancellations",
         "value": 0
+      },
+      {
+        "probe": "distribution_outbox rows created for a Track Only pick against real Postgres",
+        "value": 0
+      },
+      {
+        "probe": "live-Postgres chokepoint cases executed",
+        "value": 3
       }
     ],
     "mutation_testing": "16 controls, all killed. Each deletes a guard's marked block from a copy of its own source, asserts the mutated text actually differs (so a rename cannot make the control vacuous), imports the mutant with a cache-buster and asserts the prevented behaviour occurs. The removal regex carries the g flag because OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD marks two blocks, one per repository implementation; an earlier revision removed only the first and so proved half the feature while reporting success. The one guard without a control, BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD, lives in packages/db and cannot be imported as source by an app test without violating the db-client-boundary check; it is proven by premise assertion plus a positive control instead, which is weaker and labelled as such.",
