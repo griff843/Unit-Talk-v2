@@ -2,16 +2,22 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
+MERGE_SHA: 497a36f805220e7d71a6c01d252d6e237628824a
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1468
-Execution SHA: `b8795cb58665b66b2e04840159c589f4f9e31b5e`
+Execution SHA: `497a36f805220e7d71a6c01d252d6e237628824a`
 Approved PR head: pending PM verdict at the final unchanged head
 
-`b8795cb58665b66b2e04840159c589f4f9e31b5e` is the last non-proof commit on this branch. It is the `origin/main` sync
-merge; the implementation it carries is unchanged from `10fa8dd8`. Every receipt below
-was executed at this exact SHA. The proof commit that adds this file follows it.
+`497a36f805220e7d71a6c01d252d6e237628824a` is the last non-proof commit on this branch: the second `origin/main` sync merge,
+taken after PR #1469 merged as `63d76eb6`. The implementation it carries is unchanged from
+`10fa8dd8`.
+
+The receipts below were executed at `b8795cb58665b66b2e04840159c589f4f9e31b5e`, the first sync merge. They are not re-executed
+here because the second sync changed no file this lane owns: the workflow blob, the test blob
+and the whole proof tree are byte-identical across both merges
+(`2599bfd3…`, `b3df7e48…`, `86f8665e…` before and after). CI re-runs every required gate at
+this head regardless.
 
 ## Verification
 
@@ -70,7 +76,7 @@ the pass start, fail to construct a Supabase client, and degrade silently.
 
 ## EVIDENCE: executed command receipts
 
-Focused regression test at `b8795cb58665b66b2e04840159c589f4f9e31b5e`:
+Focused regression test at `497a36f805220e7d71a6c01d252d6e237628824a`:
 
 ```text
 $ pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts
@@ -85,7 +91,7 @@ ok 2 - scheduled alert workflow remains parked and canary-only
 # todo 0
 ```
 
-Repository gate at `b8795cb58665b66b2e04840159c589f4f9e31b5e`:
+Repository gate at `497a36f805220e7d71a6c01d252d6e237628824a`:
 
 ```text
 $ pnpm verify:static                                      -> exit 0

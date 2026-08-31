@@ -8,8 +8,8 @@
   "generated_at": "2026-08-31T22:46:35.000Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b8795cb58665b66b2e04840159c589f4f9e31b5e",
-    "verified_source_note": "The last non-proof commit on this branch: the origin/main sync merge, carrying the implementation unchanged from 10fa8dd8. Every receipt in verification.md was executed at this SHA. Authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
+    "verified_source_sha": "497a36f805220e7d71a6c01d252d6e237628824a",
+    "verified_source_note": "The last non-proof commit on this branch: the second origin/main sync merge, taken after PR #1469 merged as 63d76eb6. Receipts were executed at b8795cb58665b66b2e04840159c589f4f9e31b5e, the first sync merge; the second sync changed no file this lane owns (workflow, test and proof tree blobs are byte-identical across both), so they remain valid at this SHA. Authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {

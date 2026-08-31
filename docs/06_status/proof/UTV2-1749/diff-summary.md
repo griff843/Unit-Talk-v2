@@ -6,10 +6,10 @@ Tier: T1
 Lane type: governance
 Branch: codex/utv2-1749-alert-workflow-wiring
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1468
-Head SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
-Merge SHA: pending merge (anchor b8795cb58665b66b2e04840159c589f4f9e31b5e)
+Head SHA: 497a36f805220e7d71a6c01d252d6e237628824a
+Merge SHA: pending merge (anchor 497a36f805220e7d71a6c01d252d6e237628824a)
 Diff base: 1522ac4613651131544e1c8812c50e9d25534677
-Diff target: b8795cb58665b66b2e04840159c589f4f9e31b5e
+Diff target: 497a36f805220e7d71a6c01d252d6e237628824a
 
 ## Git Diff Stat
 ```
@@ -47,5 +47,5 @@ This is pre-merge static evidence only. A successful scheduled execution is not 
 - `scripts/ci/ingestor-alert-wiring.test.ts`
 
 ## SHA Binding
-Head SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
-Merge SHA: pending merge (anchor b8795cb58665b66b2e04840159c589f4f9e31b5e)
+Head SHA: 497a36f805220e7d71a6c01d252d6e237628824a
+Merge SHA: pending merge (anchor 497a36f805220e7d71a6c01d252d6e237628824a)
