@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "title": "Retrospective pick trustworthiness audit: the current population cannot support a trustworthy-pick claim",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-30T23:35:00Z",
+  "generated_at": "2026-08-31T01:05:00Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "3a99f5043e950b6f5610b26aab4d761bc8fc46fb",
@@ -226,9 +226,26 @@
         "measured_at": "2026-08-30",
         "rows_returned": 90,
         "note": "market_universe holds 102,155 rows; the round-10 replay resolved this rung against 100 of them. That single scoping defect accounts for the entire 98 -> 194 movement in CLV resolvable."
+      },
+      {
+        "id": "Q9",
+        "purpose": "Executed receipt for the 102,155 market_universe denominator. The ninth adversarial review (P2-c) found that this number -- which carries the entire round-10 vs round-11 CLV explanation, since the round-10 harness resolved rung 4 against only 100 of these rows -- was asserted with no executed query behind it.",
+        "statement": "select count(*) as total_rows, count(*) filter (where closing_line is not null) as rows_with_closing_line, count(*) filter (where closing_line is null) as rows_without_closing_line, now() as executed_at from public.market_universe;",
+        "channel": "Supabase MCP execute_sql (read-only SELECT)",
+        "project_ref": "zfzdnfwdarxucxtaojxm",
+        "environment": "production read path; no credential is stored in or recoverable from this bundle",
+        "executed_at": "2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)",
+        "rows_returned": 1,
+        "result": {
+          "total_rows": 102155,
+          "rows_with_closing_line": 88213,
+          "rows_without_closing_line": 13942
+        },
+        "reconciles": "102155 = 88213 + 13942",
+        "writes": 0
       }
     ],
-    "queries_note": "Executed read-only query receipts for the round-11 replay (2026-08-30). These are separate from row_counts, which is the preserved 2026-08-26 population decomposition. Every statement is a SELECT; writes_performed remains 0.",
+    "queries_note": "Executed read-only query receipts for the round-11 replay (2026-08-30). These are separate from row_counts, which is the preserved 2026-08-26 population decomposition. Every statement is a SELECT; writes_performed remains 0. Q9 added in round 12 to substantiate the 102,155 denominator that Q8's explanation depends on.",
     "mechanism_parity": {
       "claim": "The audit mechanism, not a one-off manual query, is what was measured.",
       "method": "The SHIPPED factories createClosingOfferLookup (:1987) and createMarketUniverseClosingLookup (:2025) were driven against a recording PostgREST client (.out/replay/parity.ts); the emitted criteria were compared to the SQL actually executed in Q7/Q8.",
@@ -1333,6 +1350,202 @@
         "post_fix_validation.method_change_note",
         "verification.md '### CLV — superseded measurements, and the round-11 replay'"
       ]
+    },
+    "systemic_defect_detector": {
+      "disclosure": "PROMINENT AND REQUIRED. The shipped audit's own systemic_defect detector moved from detected=true (round 10) to detected=false (round 11) as a DIRECT consequence of the round-11 CLV correction. This is disclosed rather than left for a reviewer to find in a gitignored receipt.",
+      "round10": {
+        "detected": true,
+        "reasons": [
+          "CLV unresolvable rate 51% is at least the 10% materiality rule"
+        ],
+        "receipt": ".out/replay/report.json"
+      },
+      "round11": {
+        "detected": false,
+        "reasons": [],
+        "receipt": ".out/replay/report11.json"
+      },
+      "implemented_rules": [
+        "grading disagreement rate >= 5% of independently resolvable grades",
+        "CLV unresolvable rate >= 10% of sampled grading settlements"
+      ],
+      "why_it_stopped_firing": "The detector implements exactly two threshold rules. The grading-disagreement rule has measured 0 in every round (no sampled pick produced an event, participant or market MISMATCH; the failure is ABSENT pick-side identity, not contradicted identity). The CLV-unresolvable rule fired in round 10 at 51%. The corrected round-11 measurement is 6/200 = 3%, below the 10% threshold. Both rules are therefore now below threshold and the detector reports no systemic defect.",
+      "what_this_does_NOT_mean": "systemic_defect=false means only that neither of the detector's two CURRENTLY IMPLEMENTED threshold rules fired. It does NOT mean the cohort is trustworthy, nor that it is free of systemic deficiencies. The detector has no rule for grading UNVERIFIABILITY and no rule for structural blockers, which are the two conditions that actually carry this lane's verdict.",
+      "verdict_is_independent": "can_currently_produce_trustworthy_pick=false is produced by the shipped verdict logic, not by the detector, and is unchanged across both rounds. Its recorded reasons in .out/replay/report11.json are verbatim: '100 sampled grades cannot be independently resolved', '6 sampled picks cannot currently resolve CLV', '100 sampled picks have structural blockers'. The verdict therefore does not depend on the detector and did not move when the detector did.",
+      "framing_status_of_the_materiality_table": "post_fix_validation.materiality is PROOF-NARRATIVE FRAMING for a human reader. It is explicitly NOT a materiality rule the tool applies, and it does not replace, extend or redefine the detector. No hand-authored rule was added to the shipped code.",
+      "proposed_successor": "Expanding systemic_defect to cover grading unverifiability and/or structural blockers is recorded here as a PROPOSED SUCCESSOR ISSUE and was deliberately NOT implemented in UTV2-1745. Doing so would be substantive audit logic, outside a proof-only remediation round. Note for the successor's author: the governing issue's stop condition is worded 'a systemic grading or CLV defect affecting a material share of picks'. On the corrected measurement the CLV arm no longer trips, but 100/200 = 50% of the cohort cannot have its grade independently verified, which is arguably a systemic grading defect affecting a material share and which no implemented rule detects. That gap is the successor's subject.",
+      "contract_check": "The governing UTV2-1745 issue (acceptance tests 1-5 and its Required-proof section) does not mention systemic_defect and does not require it to classify grading unverifiability, structural blockers, or every condition that makes the verdict false. Acceptance test 4 requires 'a single honest verdict ... yes or no, with the evidence', which is verdict.can_currently_produce_trustworthy_pick and remains false and correctly reasoned. Verified against the issue text on 2026-08-30 before this remediation began."
+    },
+    "persisted_clv_status_mismatches": {
+      "supersedes": "The withdrawn 'persisted computed but unresolvable = 82'. That figure is retired; this is its measured successor, reported rather than dropped.",
+      "total": 16,
+      "denominator": 200,
+      "rate": "8.00%",
+      "by_reason": {
+        "currently_resolvable_but_persisted_missing_closing_line": 13,
+        "currently_resolvable_but_persisted_missing_priced_side": 2,
+        "persisted_computed_but_currently_missing_priced_side": 1
+      },
+      "meaning": "Settlements where the corrected audit's CLV outcome disagrees with the clvStatus production actually persisted. 15 of the 16 are cases where the audit can now resolve CLV but production recorded a failure; 1 is the reverse. This is the resolver-disagreement signal the report exists to surface, and it is a defect class independent of the cutoff-provenance finding.",
+      "materiality_placement": "Deliberately NOT added to the materiality table, and the reason is stated rather than left implicit: the materiality table is proof narrative, and adding a metric to it does not make it a rule the tool applies. This class is also not one the shipped detector scores. It is reported here as a standalone measured finding and is named in Finding 7.",
+      "evidence": {
+        "file": ".out/replay/report11.json",
+        "json_path": "clv.persisted_status_mismatches",
+        "sha256": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
+        "note": "Each entry carries settlement_id, pick_id and reason, so all 16 are individually traceable to a cohort row."
+      }
+    },
+    "retained_derivation": {
+      "why": "The ninth adversarial review (P2-d) found that no retained script produced the authoritative per-row artifact: attribute.ts wrote per_row11.json, which reports resolution_source='none' for all six rung-1 rows and carries neither source_exact nor cutoff_enforced -- the two fields the entire 194/150/44/40/4 cutoff analysis rests on. Those fields had been derived by undocumented manual steps. That gap is closed here.",
+      "script": ".out/replay/derive_final.ts",
+      "what_it_does": "Imports the SHIPPED buildPickTruthAuditReport, selectLatestClosingOffer and asProductionClosingLine, replays each of the 200 settlements individually, and decides the rung by applying the shipped ladder: a rung wins only if the row it returns SURVIVES asProductionClosingLine, because a discarded row makes production skip the TIER. That is the latent misattribution the review identified in attribute.ts. Rung 1 is identified as the case where NO lookup fired at all, which is what the by-id short-circuit at pick-truth-audit.ts:1276 does -- it returns before any cutoff is derived.",
+      "reads_only": "It reads the shipped module; it does not and cannot modify it. No shipped audit logic changed in round 12.",
+      "reproduces": {
+        "partition_total": 200,
+        "clv_resolvable": 194,
+        "cutoff_enforced": 150,
+        "not_cutoff_validated": 44,
+        "r4_post_cutoff": 40,
+        "r1_no_cutoff": 4,
+        "grade_unresolvable": 100,
+        "structural_blocked": 100,
+        "post_cutoff_watermarks": [
+          "2026-04-24T00:00:00+00:00"
+        ],
+        "cohort_settlement_digest": "41edbf1b3ab8a1c2074e22e3613c357d36009468971dda8928b823336f96244e"
+      },
+      "manual_steps_removed": "replay11.ts previously read the cohort order from a /tmp scratch file, which is exactly the undocumented manual input the review objected to. It now reads .out/replay/cohort11.json. Re-running it reproduces report11.json BYTE-IDENTICALLY (generated_at is a pinned literal, not a clock read); all 16 retained digests were re-verified after a clean re-execution of both scripts and all matched.",
+      "delta_from_the_pre_review_artifact": "Re-deriving per_row11_final.json changed exactly 6 of 200 rows, and only in the coarse resolution_source label: the six rung-1 rows previously read 'none' and now read 'market_universe:closing_line'. source_exact, cutoff_enforced, clv_resolvable, clv_failure_class, grade_resolvable and structural_blocked are identical on all 200 rows. No published number changed.",
+      "artifact_digests": {
+        "cohort11.json": "6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c",
+        "fresh_tables.json": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4",
+        "player_pool_all.json": "33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6",
+        "fwd_aliases11.json": "df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc",
+        "rev_aliases11.json": "dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3",
+        "offer_rows11.json": "227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34",
+        "universe_rows11.json": "735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372",
+        "row_counts11.json": "1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376",
+        "em_ranges.json": "84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5",
+        "parity_receipt.json": "ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289",
+        "per_row11_final.json": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a",
+        "report11.json": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
+        "derive_final.ts": "50e4586c8d825a274bbe72f398429767f9d12094b931a6655acd32f3a6de5f69",
+        "replay11.ts": "6b4b2497fa42c1ac3a743f32ab8684c5a2e3aa3888f15de611de5c5c2ba3a940",
+        "parity.ts": "473ac5eeafa26161c0cf3babc2c13c38975836dba60783da82e345d9c6507724",
+        "attribute.ts": "53803e9ae9fdb073e532a18426c93b5ad27a0cbcb47e2d65ed88e2b043f1eff0"
+      },
+      "mutation_digests": {
+        "mutations.json": "3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae",
+        "battery.py": "24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152"
+      },
+      "reproduce": "pnpm exec tsx .out/replay/derive_final.ts   # prints the full reconciliation and both digests"
+    }
+  },
+  "round12_remediation": {
+    "authorization": "PM DISPOSITION -- UTV2-1745 ROUND 12 AUTHORIZED: one bounded proof-only remediation round and one tenth independent review.",
+    "scope": "PROOF-ONLY. scripts/ops/pick-truth-audit.ts, scripts/ops/pick-truth-audit.test.ts and package.json are byte-identical to their state at 3a99f504 (verified: git diff --stat 3a99f504 -- <path> is empty for all three). No shipped audit logic, package behaviour or production execution semantic was touched.",
+    "findings_dispositioned": 9,
+    "note": "All nine ninth-review findings are dispositioned, including the three P3s that were not in the summary returned to PM.",
+    "matrix": [
+      {
+        "n": 1,
+        "severity": "P1",
+        "finding": "Shipped systemic_defect flipped true->false between rounds 10 and 11, undisclosed",
+        "disposition": "FIXED -- disclosed",
+        "where": "verification.md 'The shipped systemic_defect detector flipped true -> false'; evidence.json post_fix_validation.systemic_defect_detector"
+      },
+      {
+        "n": 2,
+        "severity": "P1",
+        "finding": "Withdrawn 'persisted computed but unresolvable = 82' had a measured successor never reported",
+        "disposition": "FIXED -- 16/200 = 8.00% reported, split 13/2/1, bound to report11.json clv.persisted_status_mismatches",
+        "where": "verification.md Finding 7; evidence.json post_fix_validation.persisted_clv_status_mismatches"
+      },
+      {
+        "n": 3,
+        "severity": "P2",
+        "finding": "git diff --name-status 3a99f504 HEAD asserted a fixed result that committing the assertion falsified",
+        "disposition": "FIXED -- every comparison pinned to two immutable SHAs and re-executed; the one unpinnable leg stated as a reviewer-verifiable property, not asserted output. Four further moving-ref receipts found and pinned in the same sweep (git rev-parse origin/main, origin/main...c4715923, r-level-check --base origin/main --head HEAD in two places, git show HEAD, git diff HEAD origin/main).",
+        "where": "verification.md git receipt block, Proof re-anchor, Main synchronization"
+      },
+      {
+        "n": 4,
+        "severity": "P2",
+        "finding": "Round-10 harness described as emptying 'one' picks.metadata; the real count is three",
+        "disposition": "FIXED -- corrected to three, ids listed, independently re-measured against fresh_tables.json",
+        "ids": [
+          "01a77b3f-462d-4daa-b0ef-0b96ca120c15",
+          "9c8833ff-6738-4bf7-8874-257c5ef6cdfd",
+          "aec0db94-7ff9-42f4-8951-e39343f3f58c"
+        ],
+        "where": "verification.md CLV superseded-measurements block"
+      },
+      {
+        "n": 5,
+        "severity": "P2",
+        "finding": "The 102,155 market_universe denominator had no executed query receipt",
+        "disposition": "FIXED -- Q9 added with statement, channel, project ref, environment, server-clock timestamp, all three counts and an internal reconciliation; no credentials",
+        "where": "verification.md Q9 receipt; evidence.json runtime_proof.queries Q9"
+      },
+      {
+        "n": 6,
+        "severity": "P2",
+        "finding": "No retained script produced per_row11_final.json; source_exact and cutoff_enforced came from undocumented manual steps",
+        "disposition": "FIXED -- .out/replay/derive_final.ts retained; imports the shipped exports, reproduces 194/150/44/40/4 from retained inputs, separates rung 1 from rung 4, applies asProductionClosingLine at tier granularity. replay11.ts de-/tmp/-ed and reproduces report11.json byte-identically. Outputs and 18 digests recorded.",
+        "where": "verification.md 'How the per-row artifact is produced'; evidence.json post_fix_validation.retained_derivation"
+      },
+      {
+        "n": 7,
+        "severity": "P3",
+        "finding": "The rung-4 cutoff comparison used an unnamed proxy column",
+        "disposition": "FIXED -- named as market_universe.last_offer_snapshot_at, stated as a proxy, with the direction of inference it does and does not support made explicit",
+        "where": "verification.md 'Why the April half resolves'"
+      },
+      {
+        "n": 8,
+        "severity": "P3",
+        "finding": "Q7 probe accounting (4 x 24, 188, 94) was mutually inconsistent",
+        "disposition": "FIXED -- recounted from offer_rows11.json: 94 alive triples x 2 tiers = 188 probes; one 188-way query timed out; re-issued as 4 batches of <=24 TRIPLES covering both tiers; 111 non-empty results (17 pinnacle, 94 ANY); 1,221 offer rows. The batching unit is the triple, not the probe.",
+        "where": "verification.md Q7 receipt"
+      },
+      {
+        "n": 9,
+        "severity": "P3",
+        "finding": "diff-summary.md mixed the round-8/9 mutation count (34) with the current one (42)",
+        "disposition": "FIXED -- counts attributed by round: 34 (round 9) + 5 (round 10) + 3 (round 11) = 42",
+        "where": "diff-summary.md mutation bullet"
+      }
+    ],
+    "verification_before_review": {
+      "derived_outputs_regenerated": "derive_final.ts and replay11.ts re-executed from clean invocations; all 18 retained digests re-verified and matched",
+      "partitions_reconcile_to_200": true,
+      "commands_re_executed": "every command displayed in verification.md that can be re-run was re-run; five moving-ref receipts were found to have drifted and were pinned",
+      "lane_tests": "55 pass / 0 fail",
+      "test_ops": "2708 pass / 0 fail",
+      "type_check": "exit 0",
+      "anchor_still_mechanically_true": "git diff --stat 3a99f504 -- scripts/ops/pick-truth-audit.ts | pick-truth-audit.test.ts | package.json all empty",
+      "worktree_contains_only": [
+        "docs/06_status/proof/UTV2-1745/verification.md",
+        "docs/06_status/proof/UTV2-1745/evidence.json",
+        "docs/06_status/proof/UTV2-1745/diff-summary.md"
+      ]
+    },
+    "disclosed_gate_disagreement": {
+      "tool": "scripts/ci/proof-binding-validator.ts",
+      "result": "FAIL (4 violations)",
+      "violations": [
+        "verification.md MERGE_SHA must be \"pending merge\" before merge",
+        "verification.md must contain exactly one \"## Merge SHA Binding\" section (found 0)",
+        "model-routing.json: top-level merge_sha is forbidden before merge",
+        "Non-proof files changed between verified_source_sha and HEAD: docs/06_status/readiness/readiness-score.json"
+      ],
+      "gates_this_pr": false,
+      "why_not": "Invoked from exactly one workflow, migration-reversibility-gate.yml, path-filtered to supabase/migrations/**, db/migrations-rollback/** and three migration CI scripts plus its own workflow file. This lane touches none of them, so the workflow does not trigger and the check will not appear on the PR.",
+      "disposition_of_each": {
+        "violations_1_to_3": "A live disagreement between two validators, not a defect introduced here. This validator wants MERGE_SHA 'pending merge'; required Executor Result Validation rejects a non-SHA in that field. The '## Merge SHA Binding' section and the model-routing.json merge_sha key belong to the same older contract that schema-v2's sha_binding block replaced (CEP-E7). The bundle satisfies the gate that actually runs.",
+        "violation_4": "Inherited from main, not lane-authored. readiness-score.json entered the branch through the synchronization merge as main's own content; last author github-actions[bot], 'ops(readiness): refresh ledger [skip ci]', commit 249da64b. The rule compares every path rather than lane-authored paths, so any lane that synchronizes with main trips it. Same class as the defect already routed to UTV2-1790; not remediated here."
+      },
+      "disclosed_because": "A reviewer should not have to discover a failing validator by running it themselves, even one that does not gate."
     }
   }
 }

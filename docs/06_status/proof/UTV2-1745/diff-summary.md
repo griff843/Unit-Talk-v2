@@ -216,12 +216,17 @@ MERGE_SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
   either mechanism alone; round 4 left `gradingClv = null` alive because the
   fixture's `market_universe` row still pointed at the right event; round 8 left
   the reverse alias assertion alive because the test truncated both alias pages
-  and the fixture gave the reverse read no ids. Six of the thirty-four were added
-  in rounds 5 and 6, three of which invert decisions an adversarial review
-  overturned; five more in rounds 8 and 9 cover `loadAuditDataset`; and five in
-  round 10 cover the sport-scoped participant pool, the mirrored closing-line
-  validity gate, and the untrimmed `starts_at`. Presence and a green run prove
-  nothing on their own.
+  and the fixture gave the reverse read no ids. The battery grew by round, and each
+  count below is attributed to the round that produced it rather than left to be
+  read against the current total: six of the **round-9 battery's thirty-four**
+  were added in rounds 5 and 6, three of which invert decisions an adversarial
+  review overturned; five more in rounds 8 and 9 cover `loadAuditDataset`; five
+  in round 10 cover the sport-scoped participant pool, the mirrored closing-line
+  validity gate, and the untrimmed `starts_at`, taking the battery to
+  thirty-nine; and three in round 11 cover the two `asProductionClosingLine`
+  call sites and the `buildGradingClvContext` event-start trim, taking it to the
+  **forty-two** run against the current head — 34 + 5 + 3 = 42. Presence and a
+  green run prove nothing on their own.
 - **The seventh review found the largest P1-B defect of the lane, on the
   dominant code path.** The name-based participant fallback was not scoped by
   sport. Production calls `participants.listByType('player', metadata.sport)`
@@ -332,3 +337,61 @@ complete two-sided path diff, zero dropped paths on either side, zero commits
 behind main, and a clean worktree — is in `evidence.json` ->
 `main_synchronization.history[2].admissibility_evidence` and in
 `verification.md` -> "Synchronization with main — a recorded process deviation".
+
+## Round-12 proof-only remediation
+
+The ninth independent adversarial review returned CHANGES_REQUIRED with nine
+findings — 2 P1, 4 P2, 3 P3. All nine are repaired, and **every repair is
+proof-only**: `scripts/ops/pick-truth-audit.ts`,
+`scripts/ops/pick-truth-audit.test.ts` and `package.json` are byte-identical to
+their state at `3a99f504` (`git diff --stat 3a99f504 -- <path>` is empty for all
+three), so the anchor remains mechanically correct and no shipped audit logic,
+package behaviour or production execution semantic changed.
+
+The full disposition matrix is in `verification.md` → "Round-12 remediation —
+disposition of every ninth-review finding" and, machine-readably, in
+`evidence.json` → `round12_remediation.matrix`. In brief:
+
+- **The shipped `systemic_defect` detector flipped `true` → `false`** between
+  rounds 10 and 11 and that had gone undisclosed. It is now disclosed
+  prominently, with both rounds' verbatim output and the cause of each: the
+  detector implements only two threshold rules, and the corrected CLV
+  unresolvable rate (3%) fell below the 10% rule that fired in round 10. It is
+  stated explicitly that this does **not** mean the cohort is trustworthy — the
+  detector has no rule for grading unverifiability or structural blockers, which
+  are the two conditions carrying the verdict at 50% each. The verdict is
+  produced by separate logic, is `false` in both rounds, and did not move. No
+  hand-authored materiality rule was added to compensate; expanding the detector
+  is recorded as a proposed successor issue and deliberately not done here.
+- **The withdrawn "persisted `computed` but unresolvable = 82" has a measured
+  successor**, now reported as Finding 7: 16 of 200 (8.00%) persisted-`clvStatus`
+  mismatches, split 13 / 2 / 1, each traceable to a cohort row in
+  `report11.json`.
+- **Five self-invalidating Git and CI receipts were pinned.** The bundle printed
+  `git diff --name-status 3a99f504 HEAD` asserting a fixed result — and
+  committing that assertion moved `HEAD` and falsified it. A sweep for the same
+  defect class found four more (`git rev-parse origin/main`,
+  `origin/main...c4715923`, `r-level-check --base origin/main --head HEAD` in two
+  places, `git show HEAD`, `git diff HEAD origin/main`), two of which had already
+  drifted. All are now pinned to immutable SHAs and were re-executed against
+  them; the one leg that cannot be pinned is stated as a property for the
+  reviewer to verify rather than as asserted output.
+- **Three further corrections:** the round-10 harness emptied **three**
+  `picks.metadata` objects, not one (ids listed, independently re-measured); the
+  102,155 `market_universe` denominator now carries an executed receipt (Q9,
+  with server-clock timestamp and an internal reconciliation, no credentials);
+  and `.out/replay/derive_final.ts` is retained so the authoritative per-row
+  artifact — including `source_exact` and `cutoff_enforced`, previously derived
+  by undocumented manual steps — reproduces from retained inputs alone.
+- **The three P3s are resolved:** the rung-4 cutoff proxy is named
+  (`market_universe.last_offer_snapshot_at`) and its weaker inference stated;
+  Q7's probe accounting is recounted from the retained receipts (94 alive
+  triples × 2 tiers = 188 probes, 4 batches of ≤24 **triples**, 111 non-empty
+  results, 1,221 rows); and the mutation counts are attributed by round
+  (34 + 5 + 3 = 42).
+
+Re-verified before review: 55 lane tests pass / 0 fail, `pnpm test:ops` 2708 / 0,
+`pnpm type-check` exit 0, every partition reconciles to 200, all 18 retained
+artifact digests re-validate after a clean re-execution of both replay scripts,
+and the worktree contains changes to exactly three files, all of them in this
+proof bundle.

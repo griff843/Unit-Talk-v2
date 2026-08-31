@@ -206,7 +206,7 @@ ASSERTIONS:
       settlements they supersede; rows named by a later `corrects_id` fail
       closed as `settlement_superseded_by_correction`.
 - [x] **Every correction carries a mutation control, and none survives.**
-      Thirty-nine independent, **semantic** mutations each turn at least one
+      Forty-two independent, **semantic** mutations each turn at least one
       test red; none relies on a compile error. Three rounds of this battery left
       survivors, and every one was fixed by adding the isolating test rather than
       by weakening the mutation — round 2 left the drift guard and conflict
@@ -510,11 +510,18 @@ pnpm test, smart-form verify, verify:commands
 [executable-wiring] verdict=PASS required_roots=verify
 EXIT=0
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base 249da64b --head c4715923
 Verdict: PASS
-Changed files: 11
+Changed files: 10
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
+
+> Endpoints are pinned to literal SHAs rather than `origin/main --head HEAD`,
+> for the reason given under the git receipts below: a moving ref makes the
+> printed `Changed files` count drift as main advances, which would falsify a
+> receipt this bundle asserts. The verdict — the part that gates — is `PASS`
+> either way; only the file count moves. Re-executed against the pinned
+> endpoints while assembling round 12.
 
 `pnpm verify` is `verify:static && test:live-db`. `verify:static` is green, shown
 above. `test:live-db` cannot run in this worktree: production containment sets
@@ -678,8 +685,14 @@ unverifiable even when the grading context names that same wrong event.
 > `market_universe` fallback against only the 100 rows reachable from
 > `picks.metadata.marketUniverseId`, instead of the whole table, and (b) pruned
 > load-bearing JSON columns — `events.metadata` reduced to `starts_at`,
-> `settlements.payload` stripped of its `clv` block, one `picks.metadata`
-> emptied entirely. Both defects were in that ad-hoc harness, **not** in
+> `settlements.payload` stripped of its `clv` block, and **three**
+> `picks.metadata` objects emptied entirely —
+> `01a77b3f-462d-4daa-b0ef-0b96ca120c15`,
+> `9c8833ff-6738-4bf7-8874-257c5ef6cdfd` and
+> `aec0db94-7ff9-42f4-8951-e39343f3f58c`. An earlier draft of this paragraph
+> said "one"; the ninth review (P2-b) counted the retained `dataset.json`
+> against the unpruned `fresh_tables.json` and measured three. The corrected
+> count is used here and the understated one is withdrawn. Both defects were in that ad-hoc harness, **not** in
 > `scripts/ops/pick-truth-audit.ts`. The shipped entrypoint
 > (`runPickTruthAudit`, :2088) already passes
 > `createMarketUniverseClosingLookup(client)` (:2102), which queries the full
@@ -803,20 +816,146 @@ Q5  participant name-fallback pool, exact-count paged                 1523
 Q6  per (event, market) snapshot_at min/max, to bound the
     14.4M-row offer table                                             480
       -> 186 triples needed, 92 provably empty, 94 alive
-Q7  rung 2/3: latest pre-cutoff offer per alive triple
-    (4 batches of 24 LATERAL probes; a single 188-probe
-     query timed out — the only index is
-     (provider_event_id, snapshot_at))                                 111
+Q7  rung 2/3: latest pre-cutoff offer per alive triple                 111
+      94 alive triples x 2 provider tiers (pinnacle, then ANY)
+      = 188 probes. Issued as ONE 188-way query it timed out --
+      the only usable index is (provider_event_id, snapshot_at)
+      -- so it was re-issued as 4 batches of at most 24 triples,
+      each batch covering both tiers. 111 of the 188 probes
+      returned at least one row (17 pinnacle, 94 ANY); the
+      other 77 returned none. Those 111 results are retained
+      verbatim in .out/replay/offer_rows11.json and hold
+      1,221 offer rows in total.
 Q8  rung 4: market_universe fallback over the WHOLE table               90
       market_universe holds 102,155 rows; the round-10 replay
       resolved this rung against 100 of them. That single
       scoping defect accounts for the entire 98 -> 194 movement.
+Q9  market_universe cardinality, executed to substantiate
+    the 102,155 denominator Q8 depends on                            1 row
+      total_rows 102155 · with closing_line 88213
+      · without closing_line 13942
+```
+
+> **The three numeric claims in Q7 that the ninth review found mutually
+> inconsistent are corrected above from the retained receipts.** The earlier
+> text compressed "4 batches of at most 24 triples, both tiers" into "4 batches
+> of 24 probes", which cannot reconcile with either 188 or 94. The batching
+> unit is the *triple*; the probe count is twice that. Counted from
+> `offer_rows11.json`: 94 distinct triples, 111 non-empty probe results,
+> 17 of them at the pinnacle tier and 94 at ANY.
+
+**Q9 receipt, in full.** The ninth review (P2-c) found that 102,155 — the
+denominator carrying the entire round-10-vs-round-11 CLV explanation — was
+asserted with no executed receipt behind it. It now has one.
+
+```text
+query        SELECT count(*) AS total_rows,
+                    count(*) FILTER (WHERE closing_line IS NOT NULL)
+                      AS rows_with_closing_line,
+                    count(*) FILTER (WHERE closing_line IS NULL)
+                      AS rows_without_closing_line,
+                    now() AS executed_at
+             FROM public.market_universe;
+channel      Supabase MCP execute_sql (read-only SELECT)
+project_ref  zfzdnfwdarxucxtaojxm  (production)
+environment  production read path; no credential is stored in, or
+             recoverable from, this bundle
+executed_at  2026-08-30 23:49:36.002252+00   (server clock, returned by the
+                                              statement itself)
+result       total_rows                 102155
+             rows_with_closing_line      88213
+             rows_without_closing_line   13942
+             102155 = 88213 + 13942                       (reconciles)
+writes       0
 ```
 
 The six id-sets Q3 returns were independently re-derived and matched the
 round-10 sets exactly. That is what allows the round-10 `dataset.json` to be
 identified as *pruned* rather than *differently scoped*, and it is why the CLV
 movement is attributable to Q8 alone.
+
+#### How the per-row artifact is produced — a retained, re-runnable script
+
+The ninth adversarial review (P2-d) found that **no retained script produced the
+artifact every published count is read from.** `attribute.ts` wrote
+`per_row11.json`, which reports `resolution_source: 'none'` for all six rung-1
+rows and carries neither `source_exact` nor `cutoff_enforced` — the two fields
+the entire 194 / 150 / 44 / 40 / 4 analysis rests on. Those fields had been
+derived by manual steps that were never written down. A reviewer could not
+reproduce the numbers. That gap is closed.
+
+`.out/replay/derive_final.ts` now produces `per_row11_final.json`
+deterministically from retained inputs alone:
+
+```text
+$ pnpm exec tsx .out/replay/derive_final.ts
+rows: 200
+partition  r1 by-id 4 · r1 priced-side-only 2 · r2 pinnacle 17 · r3 consensus 77
+           · r4 universe 96 + 1 · none 3                       = 200
+resolvable 194   cutoff_enforced 150   NOT cutoff-validated 44
+             = r4 post-cutoff 40 + r1 no cutoff 4
+grade unresolvable 100   structural 100
+post-cutoff watermarks: ["2026-04-24T00:00:00+00:00"]
+cohort settlement digest: 41edbf1b3ab8a1c2074e22e3613c357d36009468971dda8928b823336f96244e
+per_row11_final.json sha256: d306a84e...
+```
+
+Three properties make it evidence rather than restatement:
+
+- **It imports the shipped code.** `buildPickTruthAuditReport`,
+  `selectLatestClosingOffer` and `asProductionClosingLine` are imported from
+  `scripts/ops/pick-truth-audit.ts` and executed, not re-implemented. It reads
+  that module; it cannot modify it, and no shipped audit logic changed in
+  round 12.
+- **It distinguishes rung 1 from rung 4, which `attribute.ts` did not.** Rung 1
+  is identified as the case where *no lookup fired at all* — precisely what the
+  by-id short-circuit at `pick-truth-audit.ts:1276` does, returning before any
+  cutoff is derived. Rung 4 is the late `market_universe` lookup keyed on
+  provider identity. Conflating them would have understated the
+  no-cutoff-applied population.
+- **A rung wins only if its row survives `asProductionClosingLine`.** A row that
+  fails that gate makes production skip the whole *tier*, not fall through to
+  the second-latest row inside it. `attribute.ts` did not mirror this, which is
+  a latent misattribution the review's finding exposed.
+
+Re-deriving changed exactly **6 of 200 rows**, and only in the coarse
+`resolution_source` label: the six rung-1 rows read `'none'` before and
+`'market_universe:closing_line'` now. `source_exact`, `cutoff_enforced`,
+`clv_resolvable`, `clv_failure_class`, `grade_resolvable` and
+`structural_blocked` are identical on all 200 rows. **No published number
+changed.**
+
+`replay11.ts` previously read the cohort order from a `/tmp` scratch file — the
+same class of undocumented manual input. It now reads
+`.out/replay/cohort11.json`. Re-running it reproduces `report11.json`
+**byte-identically** — `generated_at` is a pinned literal, not a clock read — so
+the digest below is a reproducible check, not a one-time snapshot. Every digest
+in the table below was re-verified after re-executing both scripts from a clean
+invocation; all sixteen matched.
+
+**Retained inputs and outputs, with digests** (`.out/` is gitignored; these
+digests are what binds the published numbers to specific bytes):
+
+```text
+cohort11.json            6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c
+fresh_tables.json        389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4
+player_pool_all.json     33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6
+fwd_aliases11.json       df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc
+rev_aliases11.json       dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3
+offer_rows11.json        227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34
+universe_rows11.json     735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372
+row_counts11.json        1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376
+em_ranges.json           84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5
+parity_receipt.json      ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289
+per_row11_final.json     d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a
+report11.json            8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b
+derive_final.ts          50e4586c8d825a274bbe72f398429767f9d12094b931a6655acd32f3a6de5f69
+replay11.ts              6b4b2497fa42c1ac3a743f32ab8684c5a2e3aa3888f15de611de5c5c2ba3a940
+parity.ts                473ac5eeafa26161c0cf3babc2c13c38975836dba60783da82e345d9c6507724
+attribute.ts             53803e9ae9fdb073e532a18426c93b5ad27a0cbcb47e2d65ed88e2b043f1eff0
+mutation/mutations.json  3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae
+mutation/battery.py      24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152
+```
 
 #### Every one of the 200 accounted for
 
@@ -860,13 +999,83 @@ resolvable                                              194
     rung 1, no cutoff applied at all                      4
 ```
 
-All **40** post-cutoff rows carry the identical snapshot
+**What "snapshot" means on rung 4, stated rather than assumed.** Rungs 2 and 3
+read `provider_offer_history.snapshot_at`, which is the real capture time of the
+priced row. Rung 4 reads `market_universe`, which has no `snapshot_at`; the only
+temporal field on the row is **`market_universe.last_offer_snapshot_at`**, and
+that is the column used as the cutoff proxy for all 40 rows below. It is a
+*proxy*, not the same measurement: it records when the universe row last saw an
+offer, not when the line it stores was priced. The ninth review (P3) was right
+that leaving it unnamed hid a load-bearing assumption. Naming it makes the
+weaker inference explicit — and the inference still holds in the only direction
+this bundle uses it, because a `last_offer_snapshot_at` *after* the cutoff
+proves the row was still being written after the cutoff, which is sufficient to
+deny that it is a cutoff-valid closing line. The converse (proxy at or before
+cutoff ⇒ genuinely cutoff-valid) is **not** claimed anywhere.
+
+All **40** post-cutoff rows carry the identical `last_offer_snapshot_at`
 `2026-04-24T00:00:00+00:00` — one uniform midnight watermark across 40 distinct
 markets, which is a batch backfill, not 40 per-market closing captures. A line
 stamped after the event's own cutoff cannot be the closing line as of that
 cutoff. This is production-parity behaviour, so it is a defect in production's
 CLV provenance, not an audit artifact — and it is why "resolvable" is defined
 above to carry no claim of temporal validity.
+
+### The shipped `systemic_defect` detector flipped true → false
+
+**This is disclosed prominently because it moved, in this lane, as a direct
+consequence of the round-11 CLV correction — and because a reviewer would
+otherwise have to find it in a gitignored replay receipt.**
+
+```text
+round 10   systemic_defect { detected: true,
+                             reasons: ["CLV unresolvable rate 51% is at
+                                        least the 10% materiality rule"] }
+round 11   systemic_defect { detected: false, reasons: [] }
+```
+
+The detector implements exactly two threshold rules: grading disagreement at or
+above 5% of independently resolvable grades, and CLV unresolvable at or above
+10% of sampled grading settlements. The grading rule has measured zero in every
+round — no sampled pick produced an event, participant or market *mismatch*,
+because the failure mode here is **absent** pick-side identity, not contradicted
+identity. The CLV rule fired in round 10 at 51%. The corrected measurement is
+**6 / 200 = 3%**, below its threshold. Both rules are therefore below threshold
+and the detector reports nothing.
+
+**What that does not mean.** `systemic_defect: false` means only that neither
+*currently implemented* rule fired. It does not mean this cohort is trustworthy,
+and it is not evidence that it is. The detector has no rule for grading
+**unverifiability** and no rule for **structural blockers** — which are exactly
+the two conditions carrying this lane's verdict, at 50% of the cohort each.
+
+**The verdict does not depend on the detector and did not move with it.**
+`can_currently_produce_trustworthy_pick` is produced by the shipped verdict
+logic, is `false` in both rounds, and records its own reasons, verbatim from
+`.out/replay/report11.json`:
+
+```text
+"100 sampled grades cannot be independently resolved"
+"6 sampled picks cannot currently resolve CLV"
+"100 sampled picks have structural blockers"
+```
+
+**No rule was hand-authored to compensate.** The materiality table in the next
+section is proof narrative for a human reader. It is explicitly *not* a rule the tool
+applies, it does not extend or redefine the detector, and no "load-bearing
+materiality rule" was added to `pick-truth-audit.ts` in round 11 or round 12.
+The audit script is byte-identical to its state at `3a99f504`.
+
+**Recorded as a proposed successor issue, deliberately not done here.**
+Expanding `systemic_defect` to score grading unverifiability and/or structural
+blockers would be substantive audit logic, out of scope for a proof-only
+remediation round and out of scope for UTV2-1745, whose acceptance criteria
+never mention the field. It is written down so it is not lost: on the corrected
+measurement the CLV arm of the governing issue's stop condition ("a systemic
+grading or CLV defect affecting a material share of picks") no longer trips,
+while 100 of 200 sampled picks cannot have their grade independently verified —
+plausibly a systemic grading defect affecting a material share, which no
+implemented rule detects. That gap is the successor's subject.
 
 ### Effect on the lane verdict
 
@@ -899,6 +1108,31 @@ column, read honestly, adds a third defect rather than an exoneration: 44 of the
 The 2026-08-26 population decomposition (1 of 107,858 picks simultaneously
 non-fixture, identity- and provenance-complete, and settled) is untouched by
 this correction and is not restated here.
+
+## Round-12 remediation — disposition of every ninth-review finding
+
+The ninth independent adversarial review returned CHANGES_REQUIRED with nine
+findings. **All nine are dispositioned below, including the three that were not
+in the summary returned to PM.** Every repair is proof-only: no shipped audit
+logic, package behaviour or production execution semantic was touched, and
+`scripts/ops/pick-truth-audit.ts` remains byte-identical to its state at
+`3a99f504`.
+
+| # | Sev | Finding | Disposition |
+|---|-----|---------|-------------|
+| 1 | P1 | Shipped `systemic_defect` flipped `true` → `false` between rounds 10 and 11, undisclosed | **Fixed — disclosed.** New section "The shipped `systemic_defect` detector flipped true → false" gives both rounds' verbatim output, the cause of each, why the verdict is independent and unchanged, what the flag does *not* mean, and the detector-expansion successor. No rule was hand-authored to compensate. |
+| 2 | P1 | Withdrawn "persisted `computed` but unresolvable = 82" had a measured successor (16 mismatches) that was never reported | **Fixed — reported.** New Finding 7: 16 / 200 = 8.00%, split 13 / 2 / 1, bound to `report11.json` → `clv.persisted_status_mismatches`, where each entry carries `settlement_id`, `pick_id` and reason. |
+| 3 | P2 | `git diff --name-status 3a99f504 HEAD` asserted a fixed one-path result, which committing that assertion falsified | **Fixed — endpoints pinned.** Every comparison now uses two immutable SHAs (`3a99f504`/`c4715923`/`b10d8aa8`/`249da64b`) and was re-executed against them. The one leg that cannot be pinned is stated as a property for the reviewer to verify, not as asserted output. |
+| 4 | P2 | Round-10 harness described as emptying "one" `picks.metadata`; the real count is three | **Fixed — corrected to three,** with all three ids listed. Independently re-measured against `fresh_tables.json`: exactly three, and all three had real metadata upstream. |
+| 5 | P2 | The 102,155 `market_universe` denominator had no executed query receipt | **Fixed — receipt added** as Q9: statement, channel, project ref, environment, server-clock timestamp, all three counts, and the internal reconciliation `102155 = 88213 + 13942`. No credential appears in, or is recoverable from, this bundle. |
+| 6 | P2 | No retained script produced `per_row11_final.json`; `source_exact` and `cutoff_enforced` came from undocumented manual steps | **Fixed — `derive_final.ts` retained.** Imports the shipped exports, reproduces the 194 / 150 / 44 / 40 / 4 analysis from retained inputs, separates rung 1 from rung 4, applies `asProductionClosingLine` at tier granularity. `replay11.ts` de-`/tmp`-ed. Outputs and digests recorded. |
+| 7 | P3 | The rung-4 cutoff comparison used an unnamed proxy column | **Fixed — named.** `market_universe.last_offer_snapshot_at`, stated as a proxy, with the direction of inference it does and does not support made explicit. |
+| 8 | P3 | Q7's probe accounting (4 × 24, 188, 94) was mutually inconsistent | **Fixed — recounted from `offer_rows11.json`.** The batching unit is the *triple*, not the probe: 94 alive triples × 2 tiers = 188 probes, one 188-way query timed out, re-issued as 4 batches of ≤24 triples covering both tiers, 111 non-empty results (17 pinnacle, 94 ANY), 1,221 offer rows. |
+| 9 | P3 | `diff-summary.md` mixed the round-8/9 mutation count (34) with the current one (42) | **Fixed —** the two counts are now explicitly attributed to their rounds wherever both appear. |
+
+Findings 1, 2, 3, 4, 5 and 6 were each independently verified against the
+retained receipts before being accepted, rather than accepted on the reviewer's
+assertion.
 
 ## Findings
 
@@ -952,6 +1186,31 @@ this correction and is not restated here.
    admission (Finding 1) and giving the CLV fallback a cutoff predicate — not
    backfilling offer history.
 
+7. **Production's persisted `clvStatus` disagrees with the corrected audit on
+   16 of 200 sampled settlements (8.00%).** This is the measured successor to
+   the withdrawn "persisted `computed` but currently unresolvable = 82", which
+   was an artifact of the pruned round-10 dataset and is retired. The
+   replacement is measured, not estimated, and is reported here rather than
+   dropped with the figure it replaces:
+
+   ```text
+   currently resolvable, persisted missing_closing_line     13
+   currently resolvable, persisted missing_priced_side       2
+   persisted computed,  currently missing_priced_side        1
+                                                        ------
+                                                            16 / 200 = 8.00%
+   ```
+
+   Fifteen are cases where the audit resolves CLV but production recorded a
+   failure; one is the reverse. Every entry carries its `settlement_id`,
+   `pick_id` and reason in `.out/replay/report11.json` →
+   `clv.persisted_status_mismatches`, so all sixteen are individually traceable
+   to a cohort row. This is the resolver-disagreement signal the audit exists to
+   surface, and it is independent of the cutoff-provenance defect in Finding 6.
+   It is deliberately **not** added to the materiality table: that table is
+   narrative framing, and adding a metric to it would not make it a rule the
+   tool applies. Neither implemented `systemic_defect` rule scores this class.
+
 ## Scope and refusals
 
 Read-only. No regrade, backfill, CLV persistence, replay, production write, or
@@ -986,17 +1245,21 @@ which 128 are test-file arguments (main: 130 tokens / 127 files) — nothing rem
 formatting churn, no dependency change, no other script changed.
 
 ```text
-$ git show --format="" HEAD --stat -- package.json
+$ git show --format="" 149b60ee --stat -- package.json
  package.json | 2 +-
-$ git show --format="" HEAD          # combined diff: what the merge AUTHORED
+$ git show --format="" 149b60ee      # combined diff: what the merge AUTHORED
 diff --cc package.json
 ++    "test:ops": "... scripts/ops/outbox-triage.test.ts scripts/ops/pick-truth-audit.test.ts",
 ```
 
 The combined diff of merge commit `149b60ee` contains exactly one file. Nothing
 inherited from `main` was re-authored, and
-`git diff HEAD origin/main -- docs/06_status/proof/UTV2-1729/` is empty — the
-closed historical bundle that originally blocked this merge is untouched.
+`git diff 149b60ee 249da64b -- docs/06_status/proof/UTV2-1729/` is empty — the
+closed historical bundle that originally blocked this merge is untouched. (Both
+commands were originally written against `HEAD` and `origin/main`, which were
+`149b60ee` and `249da64b` when they ran; they are pinned here so the receipt
+survives the commits that came after it. Both were re-executed against the
+pinned endpoints in round 12.)
 
 ### Repaired-hook behaviour (both directions)
 
@@ -1071,11 +1334,18 @@ pnpm test, smart-form verify, verify:commands
 [lint-migrations] 6 migration file(s) checked — no findings.
 EXIT=0
 
-$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base 249da64b --head c4715923
 Verdict: PASS
-Changed files: 11
+Changed files: 10
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
+
+> Endpoints are pinned to literal SHAs rather than `origin/main --head HEAD`,
+> for the reason given under the git receipts below: a moving ref makes the
+> printed `Changed files` count drift as main advances, which would falsify a
+> receipt this bundle asserts. The verdict — the part that gates — is `PASS`
+> either way; only the file count moves. Re-executed against the pinned
+> endpoints while assembling round 12.
 
 `pnpm verify` is `verify:static && test:live-db`; the live-DB half still refuses
 locally under production containment, exactly as recorded above, and its receipt
@@ -1112,18 +1382,33 @@ $ git rev-list --parents -n1 c4715923
 c4715923…  3a99f504…  249da64b…          # p1 = lane head, p2 = origin/main
 
 $ git merge-base --is-ancestor 3a99f504 HEAD && echo ANCESTOR_YES
-ANCESTOR_YES
+ANCESTOR_YES                               # deliberately left on HEAD: this
+                                           # claim STRENGTHENS as commits are
+                                           # appended, it cannot be falsified
+                                           # by publishing it, and if it ever
+                                           # fails the 3a99f504 binding is void
 
-$ git rev-parse origin/main
-249da64b1108815f1bde07e82414535e64fe4382   # == parent 2, exactly
+$ git rev-parse c4715923^2
+249da64b1108815f1bde07e82414535e64fe4382   # parent 2, pinned to the merge
+                                           # itself rather than to the moving
+                                           # origin/main ref
 
-$ git rev-list --left-right --count origin/main...HEAD
-0	14                                      # zero behind, 14 ahead
+$ git merge-base --is-ancestor 249da64b c4715923 && echo CONTAINS_MAIN_AT_SYNC
+CONTAINS_MAIN_AT_SYNC                      # permanently true; the moving-ref
+                                           # form (origin/main...c4715923,
+                                           # which read 0 behind / 14 ahead at
+                                           # 2026-08-30T23:0Xz) is a timestamped
+                                           # measurement, not a standing fact
 
-$ git diff --name-status 3a99f504 HEAD      # what main contributed
+$ git diff --name-status 3a99f504 c4715923  # what main contributed
 M	docs/06_status/readiness/readiness-score.json
 
-$ git diff --name-status 249da64b HEAD      # what the lane contributes
+$ git diff --name-status c4715923 b10d8aa8  # round 11: proof-only
+M	docs/06_status/proof/UTV2-1745/diff-summary.md
+M	docs/06_status/proof/UTV2-1745/evidence.json
+M	docs/06_status/proof/UTV2-1745/verification.md
+
+$ git diff --name-status 249da64b c4715923  # what the lane contributes
 A	.ops/sync/UTV2-1745.yml
 A	docs/06_status/lanes/UTV2-1745.json
 A	docs/06_status/proof/UTV2-1745/.gitkeep
@@ -1136,22 +1421,55 @@ A	scripts/ops/pick-truth-audit.test.ts
 A	scripts/ops/pick-truth-audit.ts
 
 $ comm -23 <(git ls-tree -r --name-only 3a99f504 | sort) \
-           <(git ls-tree -r --name-only HEAD      | sort) | wc -l
+           <(git ls-tree -r --name-only c4715923 | sort) | wc -l
 0                                           # nothing dropped from the lane side
 
 $ comm -23 <(git ls-tree -r --name-only 249da64b | sort) \
-           <(git ls-tree -r --name-only HEAD      | sort) | wc -l
+           <(git ls-tree -r --name-only c4715923 | sort) | wc -l
 0                                           # nothing dropped from main's side
-
-$ git status --porcelain                    # before the proof-only re-anchor
-(clean)
 ```
 
+> **Why every endpoint above is a literal SHA and not `HEAD`.** The ninth
+> adversarial review (P2-a) found that this block previously printed
+> `git diff --name-status 3a99f504 HEAD`, asserting a one-path result — and
+> that committing that very assertion moved `HEAD` and made the printed output
+> wrong. A receipt whose act of publication falsifies it is not evidence. Every
+> comparison is therefore pinned to two immutable commits, and each command
+> above was **re-executed** against those pinned endpoints while assembling
+> this round; the output shown is the output returned, not output assembled
+> from expectation.
+>
+> The remaining leg — from `b10d8aa8` to whatever the final head turns out to
+> be — cannot be printed here for the same reason, so it is stated as a
+> property a reviewer verifies rather than as output this document asserts:
+>
+> ```text
+> $ git log --format='%H %s' --name-only c4715923..HEAD
+> ```
+>
+> Every commit that listing returns must touch only paths under
+> `docs/06_status/proof/UTV2-1745/`. `b10d8aa8` (round 11) is shown above and
+> satisfies it. The round-12 remediation commit is likewise proof-only by
+> construction: it is the commit that carries this paragraph, and the same
+> listing exhibits its contents. If any commit in that range touches
+> `scripts/ops/`, `package.json`, or any path outside the proof directory, the
+> `verified_source_sha = 3a99f504` binding is void and this bundle must be
+> rejected.
+>
+> **The branch is behind main again, and that is disclosed rather than
+> hidden.** `origin/main...c4715923` measured `0 behind / 14 ahead` at the
+> moment of synchronization. Main has since advanced with further `[skip ci]`
+> bot ledger refreshes, so a later invocation will report a non-zero
+> left-hand count. That is expected drift on a long-lived T1 lane, it is not a
+> defect in this bundle, and it is deliberately not "fixed" here: another
+> synchronization merge would move the last non-proof commit and invalidate
+> both the `3a99f504` anchor and every head-pinned governance artifact.
+
 Read together: `3a99f504` is a first-parent ancestor of the merge; parent 2 is
-`origin/main` at its exact tip; the merged tree is main's tree plus exactly the
-ten paths this lane authors and nothing else; not one path from either side was
-dropped; the branch is zero behind main immediately before final proof binding;
-and the worktree is clean. The one path main contributed,
+`249da64b`, which was `origin/main`'s tip at the moment of synchronization; the
+merged tree is main's tree at that point plus exactly the ten paths this lane
+authors and nothing else; not one path from either side was dropped; the branch
+was zero behind main at the sync commit; and the worktree was clean. The one path main contributed,
 `readiness-score.json`, is an upstream `[skip ci]` bot ledger refresh this lane
 did not author.
 
@@ -1167,9 +1485,54 @@ file: the three round-11 call-site regression tests in
 synchronization merge `c4715923`, contributes exactly one path from main
 (`docs/06_status/readiness/readiness-score.json`, an upstream `[skip ci]` bot
 ledger refresh this lane did not author) and nothing of its own —
-`git diff --name-status 3a99f504 HEAD` lists that single file. `scripts/ops/`
+`git diff --name-status 3a99f504 c4715923` lists that single file, and every
+commit after `c4715923` is proof-only (see the receipt block above).
+`scripts/ops/`
 and all proof artifacts are byte-identical across the two commits, so every
 receipt in this bundle describes the tree at the bound SHA.
+
+**A gate that would flag this anchor, disclosed even though it does not run
+here.** `scripts/ci/proof-binding-validator.ts` was executed against this bundle
+during round 12 and returns FAIL with four violations. It is reported rather
+than omitted, with the reason each is inapplicable stated plainly — a reviewer
+should not have to discover this by running the tool themselves:
+
+```text
+$ pnpm exec tsx scripts/ci/proof-binding-validator.ts \
+    --issue UTV2-1745 --proof-dir docs/06_status/proof/UTV2-1745
+VIOLATIONS (4):
+  MERGE_SHA must be "pending merge" before merge
+  verification.md must contain exactly one "## Merge SHA Binding" section (found 0)
+  model-routing.json: top-level merge_sha is forbidden before merge
+  Non-proof files changed between verified_source_sha and HEAD:
+    docs/06_status/readiness/readiness-score.json
+proof-binding-validator: FAIL
+```
+
+- **It does not gate this PR.** The validator is invoked from exactly one
+  workflow, `migration-reversibility-gate.yml`, which is path-filtered to
+  `supabase/migrations/**`, `db/migrations-rollback/**`, three migration CI
+  scripts and its own workflow file. This lane touches none of them —
+  `git diff --name-only 249da64b c4715923` intersected with that filter is
+  empty — so the workflow does not trigger and this check will not appear on the
+  PR. That is a statement about *which* gates govern, not a claim that the tool
+  is wrong.
+- **The first three violations are a live disagreement between two validators,
+  not a defect introduced here.** This validator wants `MERGE_SHA: pending
+  merge`; required `Executor Result Validation` rejects a non-SHA in that field.
+  The bundle satisfies the gate that actually runs. The `## Merge SHA Binding`
+  section and the `model-routing.json` `merge_sha` key belong to that same
+  older contract, which schema-v2's `sha_binding` block replaced (CEP-E7).
+- **The fourth is inherited from `main`, not authored by this lane.**
+  `readiness-score.json` entered the branch through the synchronization merge as
+  main's own content; its last author is `github-actions[bot]`
+  (`ops(readiness): refresh ledger [skip ci]`, commit `249da64b`). The lane's
+  own tree is unchanged after `3a99f504` — `git diff --stat 3a99f504 -- ` on
+  `scripts/ops/pick-truth-audit.ts`, `scripts/ops/pick-truth-audit.test.ts` and
+  `package.json` is empty for all three. The validator's rule compares against
+  every path rather than lane-authored paths, so any lane that synchronizes with
+  main trips it. That is the same class of defect already routed to
+  **UTV2-1790**, and it is not remediated here.
 
 The binding history is preserved in `sha_binding.verified_source_sha_history`:
 `daad7b00` (original bundle) → `149b60ee` (first main sync) → `f616d5cb`
