@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1786",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "static_proof": {
+    "status": "pass",
+    "profile_rationale": "app-runtime profile, matching the manifest lane_type of delivery-ui. This lane changes no schema, no migration, and no database access path, so runtime_proof records measured browser-level observations of the real running app rather than SQL. That is the same form the sibling Smart Form lane UTV2-1672 used and is measurement, not substitution: every entry below was produced by an executed run at this head.",
+    "commands": [
+      {
+        "command": "pnpm verify",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "Every verify:static stage passed (db-client boundary, sync-check, system-alignment, automation-coverage, env:check, lint, type-check, build, test, smart-form verify, verify:commands). The run then reached test:live-db, where ci:assert-staging refused the loopback target before constructing a client."
+      },
+      {
+        "command": "pnpm --filter @unit-talk/smart-form verify",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "type-check clean; 123 tests, 123 pass, 0 fail. This is the script verify:static invokes directly, and it lists every smart-form test file including allowlist.test.ts and auth-config.test.ts."
+      },
+      {
+        "command": "pnpm exec playwright test -c playwright.config.ts e2e/auth-gate.spec.ts",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "3 passed against the running app at this head; 3 screenshots captured by the run."
+      },
+      {
+        "command": "pnpm qa:experience --regression --mode fast",
+        "exit_code": 2,
+        "result": "fail",
+        "detail": "Executed twice against the running Smart Form; preflight passed (/submit 200, /api/auth/session 200) and both runs returned FAIL on smart_form_no_login_redirect_before_form and smart_form_controls_render. Not claimed as a satisfied qa-experience artifact. The QA skill encodes the pre-lane contract that /submit renders without a session. See verification.md, 'QA experience disposition'."
+      },
+      {
+        "command": "pnpm ops:merge-wrapper git-merge-main --issue UTV2-1786 --branch claude/utv2-1786-smart-form-lane-2",
+        "exit_code": 0,
+        "result": "pass",
+        "detail": "Merged origin/main into the branch with the 'ort' strategy, preserving SHAs; 683516d3 -> 5381f328."
+      }
+    ],
+    "scope_discipline": {
+      "status": "pass",
+      "detail": "git diff origin/main...HEAD -- package.json is empty at this head. An earlier commit on this branch edited the root test:smart-form script; it was reverted once the app-local path was confirmed sufficient, honouring the issue's explicit exclusion of root package.json."
+    }
+  },
+  "runtime_proof": {
+    "status": "pass",
+    "measurement_basis": "Playwright driving the real Next.js app at this head, plus one in-place mutation of the gate under test. No stub, no fixture UI.",
+    "queries": [
+      {
+        "name": "unauthenticated /submit is refused",
+        "method": "page.goto('/submit') with no session and no stored token",
+        "result": "Redirected to /login; the Capper Portal heading and the Continue with Google control rendered; the operator recovery token field stayed hidden behind its disclosure.",
+        "significance": "The gate refuses by default rather than rendering intake to an unauthenticated visitor."
+      },
+      {
+        "name": "a forged capper token in localStorage does not open /submit",
+        "method": "A structurally valid JWT (real base64url header and payload, signature literal 'not-a-real-signature') written to localStorage.ut_capper_token, then page.goto('/submit')",
+        "result": "Redirected to /login. getByText('Forged Capper') and getByText('forged-capper') each resolved to count 0, so neither the forged display name nor the forged capper id rendered anywhere.",
+        "significance": "Client-held claims are not authority. The assertion is on absence of the forged identity, not merely on the URL."
+      },
+      {
+        "name": "storing a recovery token does not sign the operator in",
+        "method": "Token pasted into the operator recovery field and submitted, then /submit requested",
+        "result": "The stored-token panel appeared and the operator stayed on /login; localStorage held the token; a subsequent /submit request still redirected to /login.",
+        "significance": "The token is retained for API bearer use while conferring no client-side session."
+      },
+      {
+        "name": "mutation control: the gate fails when reverted",
+        "method": "app/submit/page.tsx reverted in place to the pre-lane ordering (grant on stored claim, before session resolution); the same three specs re-run; file restored before any commit",
+        "result": "Specs 2 and 3 failed on 'await expect(page).toHaveURL(/\\/login$/)'. Spec 1 still passed.",
+        "significance": "The controls are proven to fail on the condition they name. Spec 1 passing under mutation correctly identifies it as not load-bearing."
+      },
+      {
+        "name": "mutation control: the compiled-in allowlist constant is detected",
+        "method": "The allowlist export test run against the removed APPROVED_CAPPERS constant",
+        "result": "The test failed while the constant was present and passes with it removed.",
+        "significance": "The test detects the specific defect rather than passing vacuously."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "auth-gate E2E specs passing at this head",
+        "value": 3
+      },
+      {
+        "probe": "auth-gate specs that fail when the gate is reverted",
+        "value": 2
+      },
+      {
+        "probe": "forged capper identity strings rendered on /submit",
+        "value": 0
+      },
+      {
+        "probe": "smart-form tests passing in the script required verify invokes",
+        "value": 123
+      },
+      {
+        "probe": "smart-form test failures",
+        "value": 0
+      },
+      {
+        "probe": "email-bearing constants exported by lib/auth-allowlist",
+        "value": 0
+      },
+      {
+        "probe": "real operator emails in apps/smart-form/.env.example",
+        "value": 0
+      },
+      {
+        "probe": "root package.json lines changed versus main at this head",
+        "value": 0
+      },
+      {
+        "probe": "qa-experience runs claimed as passing",
+        "value": 0
+      }
+    ],
+    "known_limitations": [
+      "The writable-DB leg did not execute on this workstation; ci:assert-staging refused the loopback target. CI's run-scoped staging receipt, verified inside required verify, carries the authoritative T1 receipt for this head.",
+      "pnpm qa:experience returns FAIL at this head. The cause is a stale hard expectation in the qa-agent smart_form skill, which asserts the pre-lane behaviour that /submit renders without a session. The skill is outside this lane's declared file scope and the fix is recorded as follow-up.",
+      "The qa-experience-report artifact path in r1-r5-rules.json resolves into apps/qa-agent/artifacts/, which apps/qa-agent/.gitignore ignores, so no committed tree can satisfy the operator-ui artifact requirement. Recorded, not repaired; the R-level matrix is governance."
+    ]
+  },
+  "pr_number": 1469,
+  "source_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+  "reviewed_head_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+  "generated_at": "2026-08-31T22:09:16Z",
+  "gate_results": [
+    {
+      "gate": "verify",
+      "detail": "all verify:static stages exit 0; test:live-db refused the loopback target",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "smart-form app suite",
+      "detail": "132 tests, 0 failures, via pnpm --filter @unit-talk/smart-form verify at 9c8d2d43",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "auth-gate e2e",
+      "detail": "3 specs passed against the running app, re-executed at 9c8d2d43",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "mutation control",
+      "detail": "2 of 3 specs fail when the gate is reverted",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "qa-experience",
+      "detail": "stale pre-lane expectation in the qa-agent smart_form skill; disclosed, not claimed as satisfied",
+      "verdict": "FAIL"
+    },
+    {
+      "gate": "repository unit suite",
+      "detail": "pnpm test at 9c8d2d43: 5369 tests, 5369 pass, 0 fail, zero 'not ok' lines",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "review-round corrections",
+      "detail": "5 GitHub review findings corrected in 1be0d992; 9 new tests, each proven by reverting its own fix (5 mutations, each failing only its target tests; baseline 25/25)",
+      "verdict": "PASS"
+    },
+    {
+      "gate": "independent verification",
+      "detail": "one focused independent review of only these 5 corrections: all 5 CORRECTED, inversion tests confirmed non-vacuous by re-run mutation, no new blocking defect; one comment-accuracy finding accepted and fixed in 9c8d2d43",
+      "verdict": "PASS"
+    }
+  ]
+}

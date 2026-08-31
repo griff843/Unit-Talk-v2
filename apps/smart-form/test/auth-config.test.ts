@@ -36,8 +36,9 @@ test('resolveAuthSecret fails closed in production', () => {
   );
 });
 
-test('isQaAuthBypassEnabled defaults on locally and never enables in production', () => {
-  assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'development' })), true);
+test('isQaAuthBypassEnabled defaults off and requires an explicit non-production flag', () => {
+  assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'development' })), false);
+  assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'test', SMART_FORM_QA_AUTH_BYPASS: 'true' })), true);
   assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'test', SMART_FORM_QA_AUTH_BYPASS: 'false' })), false);
   assert.equal(isQaAuthBypassEnabled(env({ NODE_ENV: 'production', SMART_FORM_QA_AUTH_BYPASS: 'true' })), false);
 });

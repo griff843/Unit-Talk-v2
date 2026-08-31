@@ -35,9 +35,6 @@ export function isQaAuthBypassEnabled(env: NodeJS.ProcessEnv = process.env) {
     env['NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS'] ??
     env['SMART_FORM_QA_AUTH_BYPASS'];
 
-  if (configured === undefined) {
-    return true;
-  }
-
-  return !['0', 'false', 'off', 'no'].includes(configured.trim().toLowerCase());
+  if (configured === undefined) return false;
+  return ['1', 'true', 'on', 'yes'].includes(configured.trim().toLowerCase());
 }
