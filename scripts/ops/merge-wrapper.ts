@@ -642,10 +642,26 @@ export function runMergeWrapper(
           `merged.\n` +
           `Measured: ${preflight.detail}.\n` +
           `A fast-forward pull over a worktree that is mid-merge, mid-rebase, ` +
-          `mid-cherry-pick or mid-revert can advance a detached HEAD out from under ` +
-          `the operation in progress and report success, which is why this refuses ` +
-          `instead. The merge mutex WAS released: this run changed nothing, so it ` +
-          `has no half-finished state to protect and must not halt other lanes. ` +
+          `mid-cherry-pick, mid-revert or mid-bisect can advance a detached HEAD out ` +
+          `from under the operation in progress and report success, which is why this ` +
+          `refuses instead. ` +
+          // UTV2-1790 (review round 10, P3): this sentence is the MEASURED release
+          // outcome, not an assertion about it. It read "The merge mutex WAS
+          // released" unconditionally while never consulting `release.ok`, so a
+          // release that failed -- a concurrent takeover in the window between
+          // acquire and release leaves `merge_lock_owner_mismatch` -- printed a
+          // reassurance that was false, and the operator would not go looking for
+          // a lock this very message told them was gone. Every other release site
+          // in this file already conditions its prose on the measurement; this one
+          // was the exception. The structured `release` field was always truthful;
+          // only the human-readable half lied, which is exactly the half an
+          // operator reads.
+          (release.ok
+            ? `The merge mutex WAS released: this run changed nothing, so it has no ` +
+              `half-finished state to protect and must not halt other lanes. `
+            : `The merge mutex could NOT be released (${release.code}), so it may still ` +
+              `be held and may block other lanes until it is reclaimed; this run ` +
+              `changed nothing in the worktree either way. `) +
           `Finish or abort the operation in progress, then re-run this command.`,
         main_sync_stash: { attempted: false, stashed: false, popped: false },
       };

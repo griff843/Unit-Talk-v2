@@ -147,9 +147,12 @@ const CHERRY_PICK_HEAD_PROBE_CALL = [
 const REVERT_HEAD_PROBE_CALL = ['git', 'rev-parse', '--verify', '--quiet', 'REVERT_HEAD'];
 const REBASE_MERGE_DIR_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'rebase-merge'];
 const REBASE_APPLY_DIR_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'rebase-apply'];
+// UTV2-1790 (review round 10, P1): bisect state lives in plain files, not refs.
+const BISECT_LOG_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'BISECT_LOG'];
+const BISECT_START_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'BISECT_START'];
 // Order matches probeSyncResidue: MERGE_HEAD, REBASE_HEAD, the two sequencer
 // directories (reached only when REBASE_HEAD is absent), CHERRY_PICK_HEAD,
-// REVERT_HEAD, then unmerged paths.
+// REVERT_HEAD, the two bisect files, then unmerged paths.
 // UTV2-1790 (review round 8): `main-sync` now measures the worktree BEFORE it
 // stashes or pulls, and refuses over a tree that is mid-merge/rebase/cherry-pick/
 // revert. Mock-runner fixtures below are about command SEQUENCES, not about
@@ -171,6 +174,8 @@ const CLEANUP_PROBE_CALLS = [
   REBASE_APPLY_DIR_PROBE_CALL,
   CHERRY_PICK_HEAD_PROBE_CALL,
   REVERT_HEAD_PROBE_CALL,
+  BISECT_LOG_PROBE_CALL,
+  BISECT_START_PROBE_CALL,
   UNMERGED_PROBE_CALL,
 ];
 const DIFF_BEFORE_CALL = ['git', 'diff', '--name-only', 'origin/main...ok'];
@@ -2413,7 +2418,7 @@ test('UTV2-1790: a NON-conflicting autostash pop failure releases the mutex over
       assert.match(result.message, /measured after the failed pop and is clean/u);
       assert.match(
         result.message,
-        /no MERGE_HEAD, no rebase\/cherry-pick\/revert in progress and no unmerged paths/u,
+        /no MERGE_HEAD, no rebase\/cherry-pick\/revert\/bisect in progress and no unmerged paths/u,
       );
       assert.doesNotMatch(
         result.message,
@@ -3211,5 +3216,237 @@ test('UTV2-1790: a probe-less caller does not strand the repo-wide merge mutex',
       'the next run must not be blocked by the previous run leaking the mutex',
     );
     assert.strictEqual(second.code, 'merge_wrapper_worktree_not_clean');
+  });
+});
+
+test('UTV2-1790: main-sync refuses over a bisecting worktree instead of advancing a detached HEAD', () => {
+  // Review round 10, P1. THE ROUND-8 DESTRUCTIVE SUCCESS, REACHED THROUGH A STATE
+  // THE PROBE DID NOT ENUMERATE.
+  //
+  // Round 8 closed `git pull --ff-only` advancing a detached HEAD out from under an
+  // in-progress operation, and the round-9 bundle presented that as fixed. A
+  // round-10 reviewer reproduced it verbatim against `git bisect`: during a bisect
+  // HEAD is detached at the commit under test, and there is no MERGE_HEAD, no
+  // REBASE_HEAD, no rebase-merge/rebase-apply directory, no CHERRY_PICK_HEAD, no
+  // REVERT_HEAD and no unmerged path. The tree read byte-clean, the pre-flight
+  // passed it, the pull fast-forwarded HEAD off the commit being tested, and the
+  // wrapper returned `merge_wrapper_completed` with BISECT_LOG still intact -- so
+  // every later `git bisect good|bad` records a verdict against the wrong commit
+  // and the search converges on an answer that was never tested.
+  //
+  // The word "bisect" appeared nowhere in the source, the suite or the proof.
+  //
+  // This fixture carries its own NEGATIVE CONTROL: it first proves, in a second
+  // repository built identically, that a raw `git pull --ff-only` really does
+  // destroy the bisect. Without that, a passing refusal could mean the hazard was
+  // never reachable in the fixture at all.
+  const build = (dir: string): { bisectHead: string; mainSha: string } => {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'two\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'two');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'three\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'three');
+    const mainSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', mainSha);
+    git(dir, 'remote', 'add', 'origin', dir);
+    // The lane branch is strictly BEHIND origin/main, so a --ff-only pull has
+    // something real to do and will succeed unless something refuses it.
+    git(dir, 'checkout', '-q', '-B', 'lane', baseSha);
+    // Start a real bisect. HEAD detaches onto the commit under test.
+    git(dir, 'bisect', 'start');
+    git(dir, 'bisect', 'bad', mainSha);
+    git(dir, 'bisect', 'good', baseSha);
+    return { bisectHead: git(dir, 'rev-parse', 'HEAD'), mainSha };
+  };
+  const bisecting = (dir: string): boolean =>
+    fs.existsSync(path.join(dir, '.git', 'BISECT_LOG')) ||
+    fs.existsSync(path.join(dir, '.git', 'BISECT_START'));
+
+  // --- NEGATIVE CONTROL: the hazard is real in this exact fixture. ---
+  const control = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-bisect-control-'));
+  try {
+    const { bisectHead, mainSha } = build(control);
+    assert.ok(bisecting(control), 'premise: a bisect really is in progress');
+    assert.strictEqual(mergeHeadPresent(control), false, 'premise: no MERGE_HEAD');
+    assert.deepStrictEqual(unmergedPaths(control), [], 'premise: the index is clean');
+    assert.strictEqual(
+      fs.existsSync(path.join(control, '.git', 'rebase-merge')),
+      false,
+      'premise: no rebase directory -- this state is invisible to every round-9 term',
+    );
+    const pull = spawnSync('git', ['pull', '--ff-only', 'origin', 'main'], {
+      cwd: control,
+      stdio: 'pipe',
+    });
+    assert.strictEqual(pull.status, 0, 'the raw pull succeeds -- that is the hazard');
+    assert.notStrictEqual(
+      git(control, 'rev-parse', 'HEAD'),
+      bisectHead,
+      'the raw pull moves the detached HEAD off the commit under test',
+    );
+    assert.ok(bisecting(control), 'and the bisect state survives, now pointing at a lie');
+    assert.notStrictEqual(bisectHead, mainSha, 'the fixture had something to lose');
+  } finally {
+    fs.rmSync(control, { recursive: true, force: true });
+  }
+
+  // --- THE REGRESSION: the wrapper refuses the same setup. ---
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-bisect-'));
+  try {
+    const { bisectHead } = build(dir);
+    const bisectTree = git(dir, 'status', '--porcelain');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      // 1. It refuses rather than reporting merge_wrapper_completed.
+      assert.strictEqual(result.ok, false, 'a bisecting worktree must never sync successfully');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+
+      // 2. THE CONTROL: HEAD stays on the commit under test.
+      assert.strictEqual(
+        git(dir, 'rev-parse', 'HEAD'),
+        bisectHead,
+        'the detached HEAD must NOT be fast-forwarded while a bisect is in progress',
+      );
+
+      // 3. The bisect survives for the operator to finish or reset.
+      assert.ok(bisecting(dir), 'the bisect in progress must be left intact');
+
+      // 4. Nothing was stashed, so the worktree is byte-identical.
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash was attempted');
+      assert.strictEqual(git(dir, 'status', '--porcelain'), bisectTree, 'worktree untouched');
+
+      // 5. The mutex is released -- this run changed nothing (round 9's rule).
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+
+      // 6. The refusal names the measured state, so the operator can act on it.
+      assert.match(result.message, /bisect is in progress/u, 'names the measured state');
+      assert.match(result.message, /was NOT run/u, 'says the command did not run');
+    });
+
+    spawnSync('git', ['bisect', 'reset'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: the post-failure cleanup does not call a bisecting worktree "nothing to abort"', () => {
+  // Review round 10, P1, second consumer. `git-merge-main` and `git-rebase-main` do
+  // NOT run the main-sync pre-flight, so `abortInProgressSync` is the only thing
+  // standing between a failed sync over a bisecting tree and a released mutex.
+  // Round 8 made this early return use the same definition of clean as
+  // `worktreeResidue`; the bisect term has to reach it too, or the two definitions
+  // diverge again in exactly the way round 8 found.
+  //
+  // This drives the exported function directly rather than through the wrapper,
+  // because the early return is what is being pinned and a wrapper-level test would
+  // reach it only incidentally.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-bisect-abort-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'two\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'two');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'three\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'three');
+    const tipSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'bisect', 'start');
+    git(dir, 'bisect', 'bad', tipSha);
+    git(dir, 'bisect', 'good', baseSha);
+
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is clean');
+
+    const realRunner: CommandRunner = (command, args, options) =>
+      spawnSync(command, args, { cwd: options?.cwd, stdio: 'pipe' });
+
+    // The measurement the cleanup depends on sees it.
+    const residue = worktreeResidue(realRunner, dir);
+    assert.strictEqual(residue.clean, false, 'a bisecting worktree is not clean');
+    assert.match(residue.detail, /bisect is in progress/u);
+
+    // THE CONTROL: the cleanup must not take the nothing-to-abort exit, which is
+    // what would pop the autostash and hand the mutex on over a detached HEAD.
+    const outcome = abortInProgressSync('git-merge-main', realRunner, dir);
+    assert.strictEqual(outcome.cleaned, false, 'a bisecting worktree is never "cleaned"');
+    assert.ok(outcome.message, 'and the operator is told why');
+    assert.match(outcome.message ?? '', /bisect is still in progress/u);
+
+    spawnSync('git', ['bisect', 'reset'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a pre-flight refusal whose release FAILS does not tell the operator it released', () => {
+  // Review round 10, P3. The pre-flight called `releaseMergeLock` and then printed
+  // "The merge mutex WAS released" without ever reading `release.ok`. Every other
+  // release site in this lane conditions its prose on the measurement; this one
+  // asserted the outcome it had just declined to check. The structured `release`
+  // field stayed truthful, so only the human-readable half lied -- which is the
+  // half an operator reads, and it would send them away from a lock that is still
+  // held.
+  //
+  // The trigger is a concurrent takeover in the window between acquire and release.
+  // This reproduces it deterministically by rewriting the lockfile from inside the
+  // residue probe, which runs in exactly that window.
+  withTempOps(({ lockPath }) => {
+    const runner: CommandRunner = () => ({
+      status: 0,
+      stdout: Buffer.from('ok'),
+      stderr: Buffer.from(''),
+      error: undefined,
+    });
+
+    const result = runMergeWrapper(
+      { ...BASE, operation: 'main-sync' },
+      {
+        lockPath,
+        runner,
+        residueProbe: () => {
+          // Another holder takes the lock between acquire and release.
+          const held = JSON.parse(fs.readFileSync(lockPath, 'utf8')) as Record<string, unknown>;
+          held.issue_id = 'UTV2-0000';
+          fs.writeFileSync(lockPath, JSON.stringify(held, null, 2));
+          return { clean: false, detail: 'MERGE_HEAD is present' };
+        },
+      },
+    );
+
+    assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+    assert.strictEqual(result.release?.ok, false, 'premise: the release really did fail');
+
+    // THE CONTROL: the message reports the measured outcome, not the intended one.
+    assert.doesNotMatch(
+      result.message,
+      /mutex WAS released/u,
+      'a failed release must never be reported as a successful one',
+    );
+    assert.match(result.message, /could NOT be released/u, 'it says what actually happened');
+    assert.match(result.message, /may still\s+be held/u, 'and what that means for other lanes');
   });
 });

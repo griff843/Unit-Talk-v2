@@ -258,6 +258,7 @@ interface SyncResidue {
   rebaseHead: boolean;
   cherryPickHead: boolean;
   revertHead: boolean;
+  bisect: boolean;
   unmerged: string[];
   undetermined: string[];
 }
@@ -303,6 +304,23 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
     }
     return fs.existsSync(path.isAbsolute(rel) ? rel : path.join(cwd, rel));
   };
+  // UTV2-1790 (review round 10, P1): bisect state is neither a ref nor a
+  // directory -- `git bisect start` writes the plain files `.git/BISECT_START`
+  // and `.git/BISECT_LOG`. `git rev-parse --verify BISECT_HEAD` answers only
+  // under `--no-checkout`, so a ref probe misses the common case entirely.
+  const sequencerFile = (name: string): boolean => {
+    const r = runner('git', ['rev-parse', '--git-path', name], { cwd });
+    if (r.error || r.status !== 0) {
+      undetermined.push(`${name} (git rev-parse --git-path exited ${r.status ?? 'with an error'})`);
+      return false;
+    }
+    const rel = bufferToText(r.stdout).trim();
+    if (!rel) {
+      undetermined.push(`${name} (git rev-parse --git-path returned no path)`);
+      return false;
+    }
+    return fs.existsSync(path.isAbsolute(rel) ? rel : path.join(cwd, rel));
+  };
   const mergeHead = ref('MERGE_HEAD');
   // UTV2-1790 (review round 7, P3): a rebase stopped at a `break`/`edit` step has
   // NO REBASE_HEAD, no MERGE_HEAD and no unmerged paths -- it is a detached HEAD
@@ -318,6 +336,25 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
     ref('REBASE_HEAD') || sequencerDir('rebase-merge') || sequencerDir('rebase-apply');
   const cherryPickHead = ref('CHERRY_PICK_HEAD');
   const revertHead = ref('REVERT_HEAD');
+  // UTV2-1790 (review round 10, P1): a round-10 reviewer reproduced the round-8
+  // destructive success again, on a state this probe did not enumerate. During a
+  // `git bisect`, HEAD is detached at the commit under test and there is no
+  // MERGE_HEAD, no REBASE_HEAD, no sequencer directory and no unmerged path --
+  // the tree reads byte-clean. `git pull --ff-only` then fast-forwards that
+  // detached HEAD off the commit being tested, returns `merge_wrapper_completed`,
+  // and leaves BISECT_LOG intact, so every subsequent `git bisect good|bad`
+  // records a verdict against the WRONG commit and the search converges on a
+  // fabricated answer. The hazard is the round-8 one exactly; only the state
+  // reaching it is new, which is why the fix belongs here in the enumeration
+  // rather than in another consumer.
+  //
+  // Both files are checked because they answer slightly different questions:
+  // BISECT_START exists from `git bisect start` onward (even before any
+  // good/bad is recorded) and BISECT_LOG is what `git bisect` itself reads back.
+  // `git bisect reset` removes both. Measured against a real repository in three
+  // variants -- plain, `--no-checkout`, and started-but-no-verdict-yet -- all
+  // three wrote both files and all three read clean under the round-9 probe.
+  const bisect = sequencerFile('BISECT_LOG') || sequencerFile('BISECT_START');
   const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
   let unmerged: string[] = [];
   if (unmergedRun.error || unmergedRun.status !== 0) {
@@ -328,7 +365,7 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
       .map((line) => line.trim())
       .filter(Boolean);
   }
-  return { mergeHead, rebaseHead, cherryPickHead, revertHead, unmerged, undetermined };
+  return { mergeHead, rebaseHead, cherryPickHead, revertHead, bisect, unmerged, undetermined };
 }
 
 /**
@@ -353,6 +390,7 @@ export function worktreeResidue(
   if (r.rebaseHead) parts.push('a rebase is in progress (REBASE_HEAD or a rebase-merge/rebase-apply directory)');
   if (r.cherryPickHead) parts.push('CHERRY_PICK_HEAD is present');
   if (r.revertHead) parts.push('REVERT_HEAD is present');
+  if (r.bisect) parts.push('a bisect is in progress (BISECT_LOG or BISECT_START is present)');
   if (r.unmerged.length > 0) parts.push(`unmerged paths: ${r.unmerged.join(', ')}`);
   if (r.undetermined.length > 0) {
     parts.push(`state could not be determined: ${r.undetermined.join('; ')}`);
@@ -361,7 +399,7 @@ export function worktreeResidue(
     clean: parts.length === 0,
     detail:
       parts.length === 0
-        ? 'no MERGE_HEAD, no rebase/cherry-pick/revert in progress and no unmerged paths'
+        ? 'no MERGE_HEAD, no rebase/cherry-pick/revert/bisect in progress and no unmerged paths'
         : parts.join('; '),
   };
 }
@@ -409,6 +447,7 @@ export function abortInProgressSync(
     !before.rebaseHead &&
     !before.cherryPickHead &&
     !before.revertHead &&
+    !before.bisect &&
     before.unmerged.length === 0
   ) {
     // The command failed without starting anything -- e.g. `git merge` refused
@@ -425,6 +464,7 @@ export function abortInProgressSync(
     after.rebaseHead ||
     after.cherryPickHead ||
     after.revertHead ||
+    after.bisect ||
     after.unmerged.length > 0 ||
     after.undetermined.length > 0;
 
@@ -443,6 +483,7 @@ export function abortInProgressSync(
   if (after.rebaseHead) detail.push('a rebase is still in progress');
   if (after.cherryPickHead) detail.push('CHERRY_PICK_HEAD is still present');
   if (after.revertHead) detail.push('REVERT_HEAD is still present');
+  if (after.bisect) detail.push('a bisect is still in progress');
   if (after.unmerged.length > 0) {
     detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
   }
