@@ -243,11 +243,13 @@ function popMainSyncStash(runner: CommandRunner, cwd: string): StashPopOutcome {
       message:
         `git stash pop failed after main-sync pull, so the autostashed lane-state ` +
         `files (${MAIN_SYNC_STASH_PATHS.join(', ')}) were NOT cleanly restored and the ` +
-        `stash entry was kept. UTV2-1790: if the pop CONFLICTED rather than refusing ` +
-        `outright, the worktree now also contains conflict markers and unmerged index ` +
-        `entries for those paths -- 'git stash pop' will fail again until they are ` +
-        `resolved; check 'git diff --name-only --diff-filter=U' first. ` +
-        `This usually means the pulled commit now tracks a path that was stashed. ` +
+        `stash entry was kept. UTV2-1790: this exit code alone does not say WHICH ` +
+        `failure it was. A pop that CONFLICTED leaves conflict markers and unmerged ` +
+        `index entries for those paths, and will fail again until they are resolved; ` +
+        `a pop that REFUSED outright ("already exists, no checkout" -- the pulled ` +
+        `commit now tracks a path that was stashed while untracked) leaves the tree ` +
+        `untouched. The caller measures the difference with ` +
+        `'git diff --name-only --diff-filter=U' and reports it below. ` +
         `Resolve manually: run 'git stash list' to find the ` +
         `"${MAIN_SYNC_STASH_MESSAGE}" entry, inspect the conflict, and run 'git stash pop' ` +
         `(or 'git checkout --theirs'/'git stash drop' as appropriate) by hand. ` +
@@ -467,6 +469,25 @@ export function runMergeWrapper(
      * merge in progress. Naming it actively misdirects the debugging.
      */
     reportedCommand?: string[];
+    /**
+     * UTV2-1790 (review round 6): measure the worktree before deciding whether the
+     * merge mutex is safe to hand to the next lane.
+     *
+     * Round 5 closed a fail-open on the stash-pop path by retaining the lock
+     * whenever `git stash pop` exited non-zero, and justified it with prose
+     * asserting the pop "left the worktree with unmerged entries" -- something
+     * nothing on that path had ever probed. `git stash pop` also fails 1 with
+     * "already exists, no checkout" when the pulled commit starts TRACKING a
+     * lane-state path that was autostashed while untracked; that leaves a
+     * byte-clean tree, and retaining the repo-wide mutex there halts every lane
+     * until a human releases it by hand. So: probe, then decide, and say what was
+     * measured. Absent this probe both paths fall back to fail-closed retention,
+     * which is safe but unmeasured.
+     */
+    residueProbe?: (ctx: { runner: CommandRunner; cwd: string }) => {
+      clean: boolean;
+      detail: string;
+    };
   } = {},
 ): MergeWrapperResult {
   let issueId: string;
@@ -533,6 +554,28 @@ export function runMergeWrapper(
 
   const runner = options.runner ?? defaultRunner;
 
+  // UTV2-1790 (review round 6). Fail closed when no probe is injected: an
+  // unmeasured tree is not a clean tree.
+  const measureResidue = (): { clean: boolean; detail: string } => {
+    if (!options.residueProbe) {
+      return {
+        clean: false,
+        detail:
+          'no worktree residue probe was supplied, so the state could not be measured',
+      };
+    }
+    try {
+      return options.residueProbe({ runner, cwd });
+    } catch (error) {
+      return {
+        clean: false,
+        detail:
+          `the worktree residue probe itself threw, so the state could not be ` +
+          `measured: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  };
+
   // main-sync runs its pull directly in the main checkout, which is the same
   // checkout lane-start/shared writers drop untracked lane-state files into.
   // Autostash exactly those two path prefixes around the pull so a pull that
@@ -542,10 +585,18 @@ export function runMergeWrapper(
   if (input.operation === 'main-sync') {
     const stashPush = stashMainSyncPaths(runner, cwd);
     if (!stashPush.ok) {
-      const release = releaseMergeLock(
-        { issue_id: issueId, branch: input.branch },
-        { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
-      );
+      // UTV2-1790 (review round 6, P2): `git stash push` can fail because the
+      // worktree is ALREADY mid-merge -- git refuses to stash over unmerged index
+      // entries. Releasing the serializing mutex over that tree is the same
+      // fail-open the cleanup path exists to close, reached from the one branch
+      // that returns before any cleanup hook can run. Measure first.
+      const residue = measureResidue();
+      const release = residue.clean
+        ? releaseMergeLock(
+            { issue_id: issueId, branch: input.branch },
+            { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+          )
+        : undefined;
       return {
         ok: false,
         code: 'merge_wrapper_stash_failed',
@@ -557,8 +608,16 @@ export function runMergeWrapper(
         stdout: stashPush.stdout,
         stderr: stashPush.stderr,
         message:
-          stashPush.message ??
-          'Failed to stash lane-state paths (.ops/sync, docs/06_status/lanes) before main-sync pull.',
+          `${
+            stashPush.message ??
+            'Failed to stash lane-state paths (.ops/sync, docs/06_status/lanes) before main-sync pull.'
+          }\n` +
+          (residue.clean
+            ? `The worktree was measured clean (${residue.detail}), so the merge mutex was released.`
+            : `The merge mutex was deliberately NOT released: ${residue.detail}. ` +
+              `Handing the serializing lock to the next lane over that tree is the ` +
+              `failure this lane exists to prevent. After resolving, release it with ` +
+              `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`),
         main_sync_stash: { attempted: true, stashed: false, popped: false },
       };
     }
@@ -685,17 +744,30 @@ export function runMergeWrapper(
   // instead of letting the pull's own success/failure mask it, and never
   // drop the stash entry ourselves.
   //
-  // UTV2-1790 (review round 5): the mutex is NOT released here, and the release
-  // now happens after this branch rather than before it. A conflicting
-  // `git stash pop` leaves unmerged index entries and conflict markers in the
-  // worktree -- releasing the serializing mutex over that tree is the same
-  // fail-open this lane exists to close, just reached from the SUCCESS side of
-  // the sync rather than the failure side. It was unreachable while
-  // `git-merge-main` was `--ff-only` and could never complete a diverged merge;
-  // making that verb work is what made it reachable, so it is this lane's to
-  // close. Demonstrated by execution, not by inspection: see the regression in
-  // ops-merge-wrapper.test.ts.
+  // UTV2-1790 (review round 5): a CONFLICTING `git stash pop` leaves unmerged
+  // index entries and conflict markers in the worktree -- releasing the
+  // serializing mutex over that tree is the same fail-open this lane exists to
+  // close, just reached from the SUCCESS side of the sync rather than the failure
+  // side. It was unreachable while `git-merge-main` was `--ff-only` and could
+  // never complete a diverged merge; making that verb work is what made it
+  // reachable, so it is this lane's to close.
+  //
+  // UTV2-1790 (review round 6, P1): round 5 retained the lock on EVERY non-zero
+  // pop exit, not only the conflicting ones, trading the fail-open for a lock
+  // leak. The likely production case -- the pulled commit now tracks a path that
+  // was autostashed while untracked, so the pop refuses outright with "already
+  // exists, no checkout" -- leaves a byte-clean tree and still deserves a hard
+  // failure (lane-state data is stranded in the stash) but NOT a permanently
+  // retained repo-wide mutex. The tree is now measured and the message reports
+  // that measurement instead of asserting a conflict.
   if (stashPopFailure) {
+    const residue = measureResidue();
+    const release = residue.clean
+      ? releaseMergeLock(
+          { issue_id: issueId, branch: input.branch },
+          { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+        )
+      : undefined;
     return {
       ok: false,
       code: 'merge_wrapper_stash_pop_conflict',
@@ -703,15 +775,21 @@ export function runMergeWrapper(
       operation: input.operation,
       command: commandVector,
       lock,
+      release,
       stdout,
       stderr,
       message:
         `${stashPopFailure}\n` +
-        `The merge mutex was deliberately NOT released: the pop left the worktree ` +
-        `with unmerged entries, and handing the serializing lock to the next lane ` +
-        `over a conflicted index is the failure this lane exists to prevent. ` +
-        `After resolving, release it with ` +
-        `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`,
+        (residue.clean
+          ? `The worktree was measured after the failed pop and is clean ` +
+            `(${residue.detail}), so the merge mutex WAS released -- the pop refused ` +
+            `outright rather than conflicting, and holding the repo-wide lock over a ` +
+            `clean tree would halt every other lane for no safety benefit. The ` +
+            `lane-state stash entry is still stranded and must be restored by hand.`
+          : `The merge mutex was deliberately NOT released: ${residue.detail}. ` +
+            `Handing the serializing lock to the next lane over that tree is the ` +
+            `failure this lane exists to prevent. After resolving, release it with ` +
+            `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`),
       main_sync_stash: mainSyncStash,
     };
   }

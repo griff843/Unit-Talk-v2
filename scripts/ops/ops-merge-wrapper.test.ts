@@ -2277,3 +2277,220 @@ test('UTV2-1790: an undeterminable state AFTER the abort also fails closed', () 
     });
   });
 });
+
+test('UTV2-1790: a NON-conflicting autostash pop failure releases the mutex over a clean tree', () => {
+  // Review round 6, P1. Round 5 closed the fail-open in test 55 by retaining the
+  // mutex on EVERY non-zero `git stash pop` exit -- and traded it for a lock
+  // leak. `popMainSyncStash` sets `conflict: true` on any non-zero status, and
+  // the round-5 message asserted "the pop left the worktree with unmerged
+  // entries" without anything on that path ever probing for them.
+  //
+  // This is the negative case test 55 never had, and it is the LIKELIER
+  // production shape: origin/main starts TRACKING a lane-state path that was
+  // autostashed while untracked, so the pop refuses outright with "already
+  // exists, no checkout" and leaves a byte-clean tree. Retaining the repo-wide
+  // merge mutex there halts every other lane until a human releases it by hand.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-popclean-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // main STARTS TRACKING the lane-state path. This is the whole fixture.
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main starts tracking lane state');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+
+    // The lane diverges elsewhere, so the merge itself succeeds and moves HEAD.
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'base\nfrom-lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane advances');
+
+    // UNTRACKED locally at the lane head -> autostashed with --include-untracked.
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'local-untracked\n');
+
+    assert.strictEqual(
+      git(dir, 'rev-list', '--left-right', '--count', 'origin/main...HEAD').replace(/\s+/u, ' '),
+      '1 1',
+      'fixture must be genuinely diverged',
+    );
+    const preSyncHead = git(dir, 'rev-parse', 'HEAD');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      // Still a hard failure: lane-state data is stranded in the stash.
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_stash_pop_conflict');
+      assert.strictEqual(result.main_sync_stash?.popped, false);
+      assert.notStrictEqual(git(dir, 'stash', 'list'), '', 'the stash entry must be kept');
+
+      // The premise: the tree really is clean. If this ever stops holding, the
+      // test below is asserting the wrong thing and must be re-derived.
+      assert.deepStrictEqual(unmergedPaths(dir), [], 'the pop refused, it did not conflict');
+      assert.strictEqual(mergeHeadPresent(dir), false, 'no merge is in progress');
+
+      // THE CONTROL: a clean tree releases the repo-wide mutex.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'released',
+        'the mutex must be released when the failed pop left a clean tree',
+      );
+      assert.ok(result.release?.ok, 'a release receipt must be reported');
+
+      // The message reports what was MEASURED, not an assumed conflict.
+      assert.match(result.message, /measured after the failed pop and is clean/u);
+      assert.match(result.message, /no MERGE_HEAD, no REBASE_HEAD and no unmerged paths/u);
+      assert.doesNotMatch(
+        result.message,
+        /left the worktree with unmerged entries/u,
+        'must not assert a conflict it did not observe',
+      );
+
+      // Review round 6, P2: the merge really did move HEAD, so the
+      // re-authorization notice must still be emitted on this failure path.
+      assert.notStrictEqual(git(dir, 'rev-parse', 'HEAD'), preSyncHead, 'the merge moved HEAD');
+      assert.match(
+        result.stderr ?? '',
+        /the sync moved the head SHA .+ which invalidates every head-pinned governance artifact/u,
+        'the head-move invalidation notice must survive a failed-but-committed sync',
+      );
+      assert.match(result.stderr ?? '', new RegExp(preSyncHead.slice(0, 7), 'u'));
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a stash-push failure over an in-progress merge fails closed and retains the mutex', () => {
+  // Review round 6, P2. The stash-PUSH failure branch returns before any cleanup
+  // hook can run, and released the mutex unconditionally. `git stash push`
+  // refuses ("error: could not write index ... needs merge") when the worktree is
+  // already mid-conflicted-merge -- exactly the state a previous failed sync
+  // leaves behind. Releasing the serializing lock there hands the next lane a
+  // conflicted index: the same fail-open, reached from the one branch that
+  // bypasses every other guard.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-pushfail-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'from-lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+    const laneHead = git(dir, 'rev-parse', 'HEAD');
+
+    // Leave the worktree mid-conflicted-merge, as an earlier failed sync would.
+    const stranded = spawnSync('git', ['merge', '--no-ff', '--no-edit', 'origin/main'], { cwd: dir });
+    assert.notStrictEqual(stranded.status, 0, 'fixture must leave a real conflict behind');
+    assert.strictEqual(mergeHeadPresent(dir), true, 'fixture must leave MERGE_HEAD behind');
+    assert.ok(unmergedPaths(dir).length > 0, 'fixture must leave unmerged entries behind');
+
+    // Something for the autostash to try to take, so the push is actually attempted.
+    fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'lane-state\n');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'git-merge-main', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_stash_failed');
+
+      // THE CONTROL: the mutex is not handed over a conflicted index.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'held',
+        'the mutex must NOT be released while MERGE_HEAD and unmerged entries survive',
+      );
+      assert.strictEqual(result.release, undefined, 'no release may be reported');
+
+      // Measured, not assumed, and actionable.
+      assert.match(result.message, /MERGE_HEAD is present/u);
+      assert.match(result.message, /unmerged paths: other\.txt/u);
+      assert.match(result.message, /ops:merge-lock release/u);
+
+      // Nothing was disturbed: no merge was attempted on top of the stranded one.
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), laneHead, 'lane HEAD unchanged');
+      assert.strictEqual(mergeHeadPresent(dir), true, 'the stranded merge is left for the operator');
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: without a residue probe the release decision fails closed rather than guessing', () => {
+  // Review round 6. `measureResidue` decides whether the merge mutex is safe to
+  // hand over. `runMergeWrapper` is also called directly (not only through
+  // `runExtendedMergeWrapper`, which injects the probe), so its DEFAULT when no
+  // probe is supplied is load-bearing: an unmeasured tree must never be treated
+  // as a clean one. Nothing else in the battery reaches that default.
+  const calls: string[][] = [];
+  const runner: CommandRunner = (command, args) => {
+    calls.push([command, ...args]);
+    // The pull succeeds; the autostash pop is what fails.
+    if (args[0] === 'stash' && args[1] === 'pop') {
+      return {
+        status: 1,
+        stdout: Buffer.from(''),
+        stderr: Buffer.from('already exists, no checkout'),
+        error: undefined,
+      };
+    }
+    return { status: 0, stdout: Buffer.from('ok'), stderr: Buffer.from(''), error: undefined };
+  };
+
+  withTempOps(({ lockPath }) => {
+    const result = runMergeWrapper(
+      { ...BASE, operation: 'main-sync' },
+      { lockPath, runner },
+    );
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_wrapper_stash_pop_conflict');
+
+    // THE CONTROL: no probe means no measurement, and no measurement means the
+    // lock is retained.
+    const lock = readMergeLock(lockPath);
+    assert.strictEqual(
+      lock.ok ? lock.lock.status : '',
+      'held',
+      'an unmeasured worktree must not release the mutex',
+    );
+    assert.strictEqual(result.release, undefined, 'no release may be reported');
+    assert.match(result.message, /could not be measured/u, 'says why it fell back');
+    assert.match(result.message, /NOT released/u);
+  });
+});

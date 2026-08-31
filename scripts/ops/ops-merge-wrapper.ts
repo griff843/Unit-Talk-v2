@@ -253,6 +253,86 @@ export function isNotFastForwardFailure(result: MergeWrapperResult): boolean {
   );
 }
 
+interface SyncResidue {
+  mergeHead: boolean;
+  rebaseHead: boolean;
+  unmerged: string[];
+  undetermined: string[];
+}
+
+/**
+ * UTV2-1790 (review round 2): a probe that cannot DETERMINE the state must never
+ * be read as "clean".
+ *
+ * `git rev-parse --verify --quiet MERGE_HEAD` exits non-zero both when the ref is
+ * absent and when the command could not run at all (a broken repository, a
+ * permissions failure, git missing). Collapsing those two into `false`
+ * reintroduces the very fail-open the cleanup path exists to close: an
+ * undeterminable tree takes the "nothing to abort" early return, the autostash is
+ * popped into a possibly-unmerged index and the mutex is released.
+ * `undetermined` is therefore tracked separately and always forces fail-closed.
+ *
+ * Round 5 hoisted this out of `abortInProgressSync` so the release decisions on
+ * the stash-push and stash-pop failure paths can ask the same question, rather
+ * than asserting an answer they never measured (review round 6, P1).
+ */
+function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
+  const undetermined: string[] = [];
+  const ref = (name: string): boolean => {
+    const r = runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd });
+    // Absent ref: status 1 and no output. Anything else non-zero -- notably
+    // git's fatal exit 128 -- means the question was not answered.
+    if (r.error || (r.status !== 0 && r.status !== 1)) {
+      undetermined.push(`${name} (git rev-parse exited ${r.status ?? 'with an error'})`);
+      return false;
+    }
+    return r.status === 0;
+  };
+  const mergeHead = ref('MERGE_HEAD');
+  const rebaseHead = ref('REBASE_HEAD');
+  const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
+  let unmerged: string[] = [];
+  if (unmergedRun.error || unmergedRun.status !== 0) {
+    undetermined.push(`unmerged paths (git diff exited ${unmergedRun.status ?? 'with an error'})`);
+  } else {
+    unmerged = bufferToText(unmergedRun.stdout)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return { mergeHead, rebaseHead, unmerged, undetermined };
+}
+
+/**
+ * UTV2-1790 (review round 6): report whether the worktree is safe to hand to the
+ * next lane, as a MEASUREMENT rather than an assumption.
+ *
+ * Round 5 retained the merge mutex on any `git stash pop` failure and justified it
+ * with the words "the pop left the worktree with unmerged entries" -- text that
+ * nothing on that path had probed for. The most likely production failure is the
+ * opposite: `git stash pop` exits 1 with "already exists, no checkout" when
+ * origin/main starts TRACKING a lane-state path that was autostashed while
+ * untracked, and that leaves a byte-clean tree. Retaining the repo-wide merge
+ * mutex there halts every lane until a human releases it by hand.
+ */
+export function worktreeResidue(
+  runner: CommandRunner,
+  cwd: string,
+): { clean: boolean; detail: string } {
+  const r = probeSyncResidue(runner, cwd);
+  const parts: string[] = [];
+  if (r.mergeHead) parts.push('MERGE_HEAD is present');
+  if (r.rebaseHead) parts.push('REBASE_HEAD is present');
+  if (r.unmerged.length > 0) parts.push(`unmerged paths: ${r.unmerged.join(', ')}`);
+  if (r.undetermined.length > 0) {
+    parts.push(`state could not be determined: ${r.undetermined.join('; ')}`);
+  }
+  return {
+    clean: parts.length === 0,
+    detail: parts.length === 0 ? 'no MERGE_HEAD, no REBASE_HEAD and no unmerged paths' : parts.join('; '),
+  };
+}
+
 /**
  * UTV2-1790: return the worktree to its pre-attempt state after a failed
  * `git-merge-main` / `git-rebase-main`.
@@ -273,50 +353,7 @@ export function abortInProgressSync(
   runner: CommandRunner,
   cwd: string,
 ): { cleaned: boolean; aborted: boolean; message?: string } {
-  // UTV2-1790 (review round 2): a probe that cannot DETERMINE the state must
-  // never be read as "clean". `git rev-parse --verify --quiet MERGE_HEAD` exits
-  // non-zero both when the ref is absent and when the command could not run at
-  // all (a broken repository, a permissions failure, git missing). Collapsing
-  // those two into `false` reintroduced the very fail-open this function exists
-  // to close: an undeterminable tree would take the "nothing to abort" early
-  // return, the autostash would be popped into a possibly-unmerged index and the
-  // mutex released. `undetermined` is therefore tracked separately and always
-  // forces the fail-closed branch.
-  const probe = (): {
-    mergeHead: boolean;
-    rebaseHead: boolean;
-    unmerged: string[];
-    undetermined: string[];
-  } => {
-    const undetermined: string[] = [];
-    const ref = (name: string): boolean => {
-      const r = runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd });
-      // Absent ref: status 1 and no output. Anything else non-zero -- notably
-      // git's fatal exit 128 -- means the question was not answered.
-      if (r.error || (r.status !== 0 && r.status !== 1)) {
-        undetermined.push(`${name} (git rev-parse exited ${r.status ?? 'with an error'})`);
-        return false;
-      }
-      return r.status === 0;
-    };
-    const mergeHead = ref('MERGE_HEAD');
-    const rebaseHead = ref('REBASE_HEAD');
-    const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
-    let unmerged: string[] = [];
-    if (unmergedRun.error || unmergedRun.status !== 0) {
-      undetermined.push(
-        `unmerged paths (git diff exited ${unmergedRun.status ?? 'with an error'})`,
-      );
-    } else {
-      unmerged = bufferToText(unmergedRun.stdout)
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
-    }
-    return { mergeHead, rebaseHead, unmerged, undetermined };
-  };
-
-  const before = probe();
+  const before = probeSyncResidue(runner, cwd);
   if (before.undetermined.length > 0) {
     // Fail closed: we do not know whether anything is in progress, so we may not
     // claim the tree is clean, and we must not guess by firing a blind --abort.
@@ -337,7 +374,7 @@ export function abortInProgressSync(
   const verb = operation === 'git-rebase-main' ? 'rebase' : 'merge';
   const abort = runner('git', [verb, '--abort'], { cwd });
   const abortOk = !abort.error && abort.status === 0;
-  const after = probe();
+  const after = probeSyncResidue(runner, cwd);
   const residue =
     after.mergeHead ||
     after.rebaseHead ||
@@ -496,9 +533,20 @@ export function runExtendedMergeWrapper(
     // command that left MERGE_HEAD behind -- an invocation that cannot leave a
     // merge in progress at all.
     reportedCommand: [cmd.command, ...cmd.args],
+    // UTV2-1790 (review round 6): the stash-push and stash-pop failure paths must
+    // DECIDE whether to release the mutex from a measurement of the worktree, not
+    // from an assumption about why a git command exited non-zero.
+    residueProbe: ({ cwd: probeCwd }) => worktreeResidue(realRunner, probeCwd),
   });
-  // Only a sync that actually ran and succeeded can have dropped anything.
-  if (!result.ok || !preSyncHead) return result;
+  // Only a sync that actually ran can have dropped anything or moved the head.
+  //
+  // UTV2-1790 (review round 6, P2): this used to bail on `!result.ok`, which
+  // silently skipped BOTH the dropped-path refusal and the head-move
+  // re-authorization notice on the one failure path where the merge had already
+  // been committed -- `merge_wrapper_stash_pop_conflict`. The head really had
+  // moved, and nothing said so. `ok` is the wrong question; whether HEAD moved is
+  // the right one, and it is asked below.
+  if (!preSyncHead) return result;
 
   const cwd = input.cwd ?? process.cwd();
   const gitLines = (args: string[]): string[] => {
@@ -522,6 +570,24 @@ export function runExtendedMergeWrapper(
   const headMoveNotice = renderHeadMoveNotice(
     buildHeadMoveInvalidation(preSyncHead, postSyncHead),
   );
+
+  // An already-failed result keeps its code: the operator must act on the failure
+  // itself, and reclassifying it would hide that. But the head DID move, so the
+  // re-authorization notice and any dropped-path warning are appended to stderr
+  // rather than dropped on the floor.
+  if (!result.ok) {
+    const warning =
+      classification.dropped.length > 0
+        ? `\n\nWARNING: this sync also dropped paths relative to the pre-sync head: ` +
+          `${classification.dropped.join(', ')}` +
+          (classification.protectedPaths.length > 0
+            ? `\nPROTECTED artifacts are among them: ${classification.protectedPaths.join(', ')}. ` +
+              `Recover with: git reset --keep ${preSyncHead}`
+            : '')
+        : '';
+    const extra = `${headMoveNotice}${warning}`;
+    return extra ? { ...result, stderr: `${result.stderr ?? ''}${extra}` } : result;
+  }
 
   if (classification.dropped.length === 0) {
     return headMoveNotice
