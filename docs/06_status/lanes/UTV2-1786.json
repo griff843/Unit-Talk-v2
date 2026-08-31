@@ -30,7 +30,8 @@
     "apps/smart-form/package.json",
     "apps/smart-form/test/allowlist.test.ts",
     "apps/smart-form/test/api-client.test.ts",
-    "apps/smart-form/test/auth-config.test.ts"
+    "apps/smart-form/test/auth-config.test.ts",
+    "apps/smart-form/tsconfig.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1786/evidence.json"

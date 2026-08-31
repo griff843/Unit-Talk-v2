@@ -1,5 +1,12 @@
 {
   "compilerOptions": {
+    // UTV2-1786: this is the only app tsconfig that neither sets a target nor
+    // extends tsconfig.base.json, so tsc defaulted to ES5. That was invisible
+    // until this app imported a workspace package: @unit-talk/contracts exports
+    // "./src/index.ts", so its TypeScript source compiles under these options and
+    // a for...of over a Set failed with TS2802. ES2020 matches apps/command-center,
+    // the other Next.js app.
+    "target": "ES2020",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
