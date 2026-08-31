@@ -1,6 +1,6 @@
 # PROOF: UTV2-1790
 
-MERGE_SHA: 4e234a49e6273f45825fec49453e2bd7c21c9940
+MERGE_SHA: c6d2b81f6173032b72de10c1e9a519530ed80f18
 
 `pnpm ops:merge-wrapper main-sync` is the only sanctioned way to bring `origin/main`
 into a lane branch. When it detects divergence it refuses and names two explicit

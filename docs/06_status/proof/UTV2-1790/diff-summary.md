@@ -1,6 +1,6 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 3f3955cd05a4a52e0e7e9e800c332d2fc94d08d9
+MERGE_SHA: c6d2b81f6173032b72de10c1e9a519530ed80f18
 
 Four code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1790-merge-wrapper-ff-only",
   "branch": "claude/utv2-1790-merge-wrapper-ff-only",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c6d2b81f6173032b72de10c1e9a519530ed80f18",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1464",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
     "docs/06_status/proof/UTV2-1790/diff-summary.md",
     "docs/06_status/proof/UTV2-1790/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-08-30T20:14:47.410Z",
-  "heartbeat_at": "2026-08-30T20:38:33.120Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-08-31T12:29:05.654Z",
+  "closed_at": "2026-08-31T12:29:05.654Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1790-merge-wrapper-ff-only.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-31T12:29:03.853Z",
+      "verdict": "pass",
+      "merge_sha": "c6d2b81f6173032b72de10c1e9a519530ed80f18",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
