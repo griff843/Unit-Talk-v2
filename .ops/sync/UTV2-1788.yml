@@ -1,0 +1,943 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1788
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1788/evidence.json
+    - docs/06_status/proof/UTV2-1788/model-routing.json
+    - docs/06_status/proof/UTV2-1788/verification.md
+    - docs/06_status/proof/UTV2-1788/diff-summary.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1788
+  objective: |-
+    Turn the existing Command Center from several overlapping dashboard concepts into one coherent, honest, buildable internal operator workflow.
+    Command Center is an **internal operator/admin control plane. It is not customer-facing.**
+    This lane is **consolidation and stabilization** — not deployment, API expansion, database work, or new feature development.
+    Griff authorized this bounded app-only stabilization objective. That authorization does **not** permit touching shared runtime authority, migrations, production configuration, delivery behavior, or production data.
+    Successor to the canceled [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) (duplicated and incorrectly framed umbrella issue). [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) must not be reopened or reused.
+    ---
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      Turn the existing Command Center from several overlapping dashboard concepts into one coherent, honest, buildable internal operator workflow.
+
+      Command Center is an **internal operator/admin control plane. It is not customer-facing.**
+
+      This lane is **consolidation and stabilization** — not deployment, API expansion, database work, or new feature development.
+
+      Griff authorized this bounded app-only stabilization objective. That authorization does **not** permit touching shared runtime authority, migrations, production configuration, delivery behavior, or production data.
+
+      Successor to the canceled [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) (duplicated and incorrectly framed umbrella issue). [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) must not be reopened or reused.
+
+      ---
+
+      ## Tier classification (mechanical, not asserted)
+
+      Run 2026-08-30 via `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2 --files <lane scope>`:
+
+      ```
+      declared_tier: T2
+      mechanical_minimum: T3
+      derived_tier: T2
+      escalated: false
+      matches: []
+      advisory: success — "declared T2 matches the mechanical tier floor"
+      ```
+
+      Zero Tier C path matches. `docs/governance/LANE_TAXONOMY.md` §7 (Delivery/UI) sets **T2 default, T3 for isolated non-member-facing scaffolding**; `apps/command-center/**` is an explicitly listed Delivery/UI allowed path. **T2 is the correct tier. T1 is not applicable** — no migration, no new API write path, no delivery adapter, no lifecycle FSM change, no `packages/contracts` change (the seven T1 triggers in `docs/05_operations/CC_UNIFICATION_TIER_CLASSIFICATION.md`).
+
+      Lane type: `delivery-ui`. Executor: Codex CLI, profile `codex-sol-high`.
+
+      ---
+
+      ## Phase 0 established truth (2026-08-30, against origin/main @ 247f1504)
+
+      All findings below are **verified against source**, not repeated from prior docs. Prior claims that turned out false are marked.
+
+      ### Deployment reality — VERIFIED
+
+      Command Center is **not** in the production deployment. `deploy/production/docker-compose.yml` services are `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy`. Both `deploy.yml:160` and `staging-deploy.yml:91` build matrices are `[api, worker, ingestor, discord-bot]`. `docker-compose.prod.yml:77` references image tag `unit-talk/command-center:${COMMAND_CENTER_IMAGE_TAG}` that **no pipeline ever publishes**.
+
+      ### Competing navigation authorities — VERIFIED, and there are FOUR, not two
+
+      * **A — **`src/components/CommandCenterShell.tsx:24-82` (`NAV_GROUPS`, 32 hardcoded entries). The only nav actually rendered (mounted at `src/app/layout.tsx:19`); also drives the command palette and breadcrumbs.
+      * **B — **`src/lib/command-center-nav.ts:16-163` (`COMMAND_CENTER_ROUTES`, 12 hardcoded entries). Its consumers `NavLinks.tsx` and `ui/Sidebar.tsx` are **never imported** — dead. But `getPrimaryCommandCenterRoutes()` still exports them as authoritative, and `/events` + `/intelligence` still call `getRouteMeta` from it.
+      * **C — **`src/components/IntelligenceWorkspaceNav.tsx:12-18` (5 tabs).
+      * **D — **`src/app/decision/page.tsx:13-56` (hardcoded module index acting as nav for `/decision/*`).
+
+      Direct conflicts between A and B: B marks `/events`, `/pipeline`, `/api-health`, `/intelligence` as `state:'hidden', nav:false` ("Removed from primary navigation…") while **A ships all four as first-class sidebar items**. Same href, different labels: `/` Overview vs Executive Overview; `/picks` Active Picks vs Picks Explorer; `/pipeline` Pipeline vs Today's Action.
+
+      ### `/settlement` — VERIFIED absent
+
+      `src/lib/command-center-nav.ts:51-60` declares `href:'/settlement'`, `state:'authoritative'`, `nav:true`. **No **`src/app/settlement/` **directory exists.** The only settlement asset is `src/components/SettlementForm.tsx` (a component, no route). A governed settle path already exists: `src/app/actions/settle.ts:36-47` → `POST /api/picks/{id}/settle`.
+
+      ### Route reality — VERIFIED
+
+      **55 **`page.tsx` **files exist.** No document dated after 2026-04-14 enumerates them. Conflicting canonical lists: `PLATFORM_SURFACES_AUTHORITY.md` (2026-03-31, "Ratified") declares **9 pages** and asserts *"Surfaces not listed here are not recognized for routing, promotion, or governance purposes"*; `CC_NAV_REDESIGN_SPEC.md`/`CC_IA_RATIFICATION.md` (2026-04-07) declare ~10 existing + ~16 stub/shell/blocked; `CC_OPERATIONS_IA.md` (ARCHIVED) declares 23. **No current authoritative CC page list exists.**
+
+      12 routes are bare `redirect()` stubs: `/agents`, `/burn-in`, `/ops`, `/runtime-dashboard` → `/api-health`; `/decisions` → `/review`; `/exceptions`, `/interventions` → `/operations/results`; `/held` → `/operations/approvals`; `/picks-list` → `/picks`; `/research`, `/research/hit-rate`, `/research/matchups`.
+
+      ### Duplicate implementations — VERIFIED
+
+      `OverviewDashboardClient` (root vs `overview/`) · `PipelineFlow` (root vs `ui/`) · `TopBar` **(root vs **`ui/`**, incompatible APIs — **`/events` **and **`/intelligence` **render TWO STACKED HEADERS)** · `Sidebar` vs `WorkspaceSidebar` · `DetailPane` vs `DetailPanel` · `Sparkline`/`MicroSparkline`/`MiniSparkline` · `StatCard` vs `MetricsCard` · `EventStream` vs `LiveEventFeed` · `Table` vs `DataTable` (zero consumers) · four orphaned workspace shells.
+
+      18 components have zero non-test imports: `HealthSignalsPanel`, `MiniSparkline`, `EventsPageClient`, `NavLinks`, `PickFilters`, `PickLifecycleTable`, `ExceptionPanel`, `OpsWorkspace`, `IntelligenceWorkspace`, `PipelineLiveRefresh`, `ApiHealthMonitoring`, `InlineSettleButton`, `AgentsWorkspace`, `EventsWorkspace`, `PicksWorkflowClient`, `ui/Sidebar`, `ui/DataTable`, `overview/OverviewDashboardClient`.
+
+      ### Fake data in live render paths — VERIFIED (worse than "some placeholders")
+
+      `src/lib/command-center-data.ts` wraps every `getXContent()` query in `try` and returns **fabricated numbers in **`catch` — a DB outage renders as healthy invented data with no degradation signal:
+
+      * `:410-419` `getEventsContent` catch → **reaches **`/events`: `{label:'Events loaded', value:8}`, seeded event rows with `timestamp:'seeded'`
+      * `:514-535` `getIntelligenceContent` catch → **reaches **`/intelligence`: `{label:'Settled picks', value:42, delta:'57.1% hit'}`, fabricated model rows (`gpt-5.5`, cost 18.2), score bands `63.4/55.7/49.2`
+      * `:476` `getAgentsContent` has **no try at all** — 100% fabricated roster unconditionally, incl. invented `cpu:62, memory:54`
+      * `:266-286`, `:327-367`, `:455-472`, `:563+` — same pattern for overview/picks/api-health/ops content
+      * Only `getPipelineContent` (`:391`) returns `null` on failure and degrades honestly (`pipeline/page.tsx:37-44`) — **this is the correct pattern to generalize.**
+
+      No `Math.random` anywhere. 23 `?? 0` / `|| 0` sites in render paths can print a fake zero metric.
+
+      ### Auth — VERIFIED fail-closed, WITH A REAL FAIL-OPEN OVERRIDE
+
+      Production is fail-closed *by default*: `isCommandCenterAuthRequired` (`src/lib/server-api.ts:301-322`) returns true for `UNIT_TALK_APP_ENV=production|staging` or `NODE_ENV=production`, and `assertCommandCenterAuthConfig` turns a missing credential into `503 COMMAND_CENTER_AUTH_MISCONFIGURED` — unreachable, not open.
+
+      **But **`explicitMode` **is checked BEFORE the environment (**`:309-310`**).** Setting `COMMAND_CENTER_AUTH_MODE=fail_open` (or `UNIT_TALK_COMMAND_CENTER_AUTH_MODE`, or `UNIT_TALK_OPERATOR_RUNTIME_MODE=fail_open`) **overrides production**, returns `required=false`, and with no token configured `server-api.ts:212-215` authenticates **every request as a full operator** (`role:'operator'`, `method:'dev_bypass'`), which `middleware.ts:53-59` then logs as a legitimate privileged action. The same override satisfies the service-role DB gate at `src/lib/data/client.ts:55-57`.
+
+      `apps/command-center/.env.example:5` **ships **`COMMAND_CENTER_AUTH_MODE=fail_open` **with no warning comment.** Root `.env.example:217` does the same (out of this lane's scope — report only).
+
+      ### Database authority — VERIFIED
+
+      CC reads **directly from Supabase with service-role credentials** via `getDataClient()` (`src/lib/data/client.ts:74-81`), used across ~20 files in `src/lib/data/`. One page bypasses the data layer entirely: `src/app/intel/teams/page.tsx:31` calls `getDataClient()` inside the page. `src/lib/data/storage-health.ts:147-155` calls the Supabase Management API `POST /v1/projects/{ref}/database/query` (arbitrary SQL).
+
+      **All mutations correctly route through the canonical API** (`apps/api`) via `'use server'` actions — 10 POST paths, zero direct DB writes. This is already compliant and must stay that way.
+
+      ### Docs staleness — VERIFIED
+
+      `apps/command-center/CLAUDE.md` claims Next.js **14** (actual `15.5.18`, forced to `15.5.21` by workspace override), "**20+ components**" (actual 75 `.tsx` under `src/components/`), "**3 server actions**" (actual **6**), a 10-page list (actual **55**), "**Tests: None (traditional)**" (actual 23 *`.test.*` files, wired into CI at `ci.yml:268`), and "**no **`@unit-talk/*` **packages — frontend only**" (actual: declares and imports `@unit-talk/config`, `@unit-talk/db`, `@unit-talk/observability`). `docs/CODEBASE_GUIDE.md:84` repeats the Next 14 error.
+
+      ### Docker — VERIFIED unbuildable and never exercised
+
+      `next.config.mjs` does set `output:'standalone'`. But `apps/command-center/Dockerfile` fails twice:
+
+      1. **Line 13 **`pnpm install --frozen-lockfile` — the build context copies only `apps/command-center`, but `pnpm-workspace.yaml` globs `apps/*` + `packages/*` and `pnpm-lock.yaml` holds ~20 importers → `ERR_PNPM_OUTDATED_LOCKFILE`. Even unfrozen, the five declared `workspace:*` deps aren't in context → `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. Three of them are genuinely imported, so this is a real dependency, not a stale manifest entry.
+      2. **Line 26 **`COPY … /repo/apps/command-center/public` — there is **no **`public/` **directory**.
+
+      Also: CC pins `node:20-alpine` while every other service uses `node:22-alpine`. **No workflow builds this image.**
+
+      ### Test coverage gap — VERIFIED
+
+      `apps/command-center/package.json:9` is `tsx --test src/lib/*.test.ts src/lib/data/*.test.ts` — a two-directory, `.ts`-only glob. It **structurally excludes 4 of 23 test files**: `src/app/api/governance/lanes/route.test.ts` (only API-route test), `src/app/command-center-pages.test.tsx`, `src/app/command-center-rebuild.test.tsx` (**stale — asserts markup on pages that are now redirect stubs; would fail if run**), `src/components/ui/shared-components.test.tsx`.
+
+      **There is no **`test:e2e` **script.** The 7 Playwright specs (1798 lines) run only by manual invocation, and they navigate `/agents`, `/decisions`, `/exceptions`, `/held`, `/ops`, `/picks-list` — all now redirect stubs. **Zero e2e coverage** of `/fire-board`, `/operations/*`, `/intel/*`, `/execution/*`, `/decision/*`, `/model-health`, `/research/*`, `/settlement`.
+
+      ---
+
+      ## Product boundary
+
+      The primary Command Center workflow for this phase is exactly six surfaces:
+
+      1. **Overview**
+      2. **Review**
+      3. **Active Picks**
+      4. **Settlement**
+      5. **Exceptions**
+      6. **System Health**
+
+      Every other page must be deliberately classified as exactly one of: **authoritative and retained** · **degraded but honestly represented** · **deferred and removed from primary navigation** · **stub to remove** · **duplicate to consolidate** · **dead surface to retire**.
+
+      A page may not appear operational if its backing data is missing, stale, simulated, hardcoded, or unavailable. **Unknown/unavailable data must never be displayed as healthy, successful, or zero unless zero was authoritatively measured.**
+
+      ---
+
+      ## AUTHORIZATION CORRECTION (2026-08-30, PM-directed)
+
+      The original framing of this issue wrongly relied on the advisory path-based tier classifier alone. `docs/05_operations/DELEGATION_POLICY.md` is the controlling authority and it classifies several items previously written into this lane as **always-escalate Tier C**, independent of tier:
+
+      * `:117` — "**Security or privacy posture changes** — authentication, authorization... Even a 'small' change here is Tier C plus PM presence."
+      * `:123` — "**Dependency bumps** — any package.json change, any lockfile change, any tsconfig or build config change."
+      * `:124` / `:143` — "**Environment variable additions or removals**... default changes" / "Credentials / secrets / `.env*` (any env var addition, removal, or default change) — Always escalate. Configuration surface is PM-only."
+      * `:226` — "**A Codex lane is never authorized to run Tier C work** — Tier C is Claude Code only."
+
+      This lane therefore remains **T2 Codex**, but is **narrowed**. The authentication/authorization work moves to a Claude-owned Tier C successor.
+
+      ### Files this lane's Codex executor MUST NOT modify
+
+      * `apps/command-center/src/lib/server-api.ts`
+      * `apps/command-center/src/middleware.ts`
+      * `apps/command-center/.env.example`
+      * `apps/command-center/package.json` (and any lockfile / `tsconfig*.json`)
+      * any authentication test whose purpose is to change production authorization behavior
+
+      If any objective appears to require touching these, **STOP and report** — do not implement.
+
+      ### Superseded definition-of-done items
+
+      * **DoD 9 (auth fail-closed) is REMOVED from this lane.** The production `fail_open` override is now recorded as a *verified residual security defect* in this lane's proof packet (see Proof requirements) and is owned by the Tier C successor.
+      * **DoD 13 is narrowed:** new unit tests must land in directories the existing test glob already executes (`src/lib/*.test.ts`, `src/lib/data/*.test.ts`) so that **no** `package.json` **change is required**. Retiring the stale `src/app/command-center-rebuild.test.tsx` is permitted (deletion is not a build-config change). The structurally-unwired-glob gap is **reported, not fixed**, in this lane.
+
+      ## Allowed scope
+
+      * `apps/command-center/**` **except** the five excluded paths listed above
+      * this issue's normal lane/sync/proof artifacts (`.ops/sync/<ID>.yml`, `docs/06_status/lanes/<ID>.json`, `docs/06_status/proof/<ID>/**`)
+      * focused tests and E2E coverage **within** the Command Center application
+
+      Do not widen scope for cleanup convenience.
+
+      ## Prohibited scope
+
+      `apps/smart-form/**` · `apps/api/**` · `apps/worker/**` · any other application directory · `packages/contracts/**` · `packages/domain/**` · `packages/db/**` · `supabase/migrations/**` · `.github/workflows/**` · `deploy/production/**` · production environment variables or secrets · production database data · Discord delivery configuration · ingestion, grading, settlement, worker, or public-delivery behavior · branch protection or governance policy.
+
+      Also prohibited: **deploying Command Center**, **adding new operator mutation endpoints**, and adding any new research, modeling, intelligence, arbitrage, agent-control, governance, or trading-desk feature.
+
+      Note: root `.env.example` is **out of scope** — the `fail_open` default there must be reported as residual risk, not edited.
+
+      ## Definition of done
+
+       1. There is **one** navigation and route authority.
+       2. Competing hardcoded navigation systems are removed or consolidated (all four sources above).
+       3. The six primary operator workflows are coherent and reachable.
+       4. `/settlement` is either implemented as a real authoritative workflow **using existing governed capabilities** (`actions/settle.ts` → `POST /api/picks/{id}/settle`, `SettlementForm.tsx`) **or** removed from the authoritative route registry with an explicit truthful classification. **Do not create new API authority to force it into this lane.**
+       5. Duplicate shell and UI implementations are consolidated where proven safe. The `/events` + `/intelligence` double-header is fixed.
+       6. Every existing page is classified as authoritative, degraded, deferred, stub, duplicate, or retire.
+       7. Deferred and untrustworthy surfaces are removed from primary navigation.
+       8. No fake metrics, hardcoded success, silent zero fallbacks, or readiness theater remain in the primary workflow. Generalize the honest `getPipelineContent` → `null` → degraded-banner pattern; remove the fabricated `catch` payloads.
+       9. **REMOVED — moved to the Tier C successor.** This lane must not change authentication precedence, middleware auth behavior, or the example environment default. It must leave production auth behavior exactly as found and record the defect in proof.
+      10. No Command Center write bypasses the canonical API.
+      11. No new direct database authority is introduced.
+      12. Current direct privileged-read behavior (service-role `getDataClient()`, the `intel/teams` page-level client, and `storage-health.ts`'s Management-API SQL) is **documented in the proof as a residual deployment risk**. Do not redesign shared database authority in this lane.
+      13. Unit tests cover route classification, navigation authority, degraded/unknown rendering, and critical operator-state transformations — placed in `src/lib/` or `src/lib/data/` so the **existing** test glob executes them with **no** `package.json` **change**. The stale `command-center-rebuild.test.tsx` may be retired. The unwired-glob gap (4 excluded test files) is reported as deferred work requiring separate authorization.
+      14. Playwright covers **desktop and mobile** navigation through all six primary workflows.
+      15. Normal Command Center build, type-check, tests, and required repository verification pass.
+      16. Attempt the standalone Docker build with the repository's current supported method. Both known failures (workspace artifacts; missing `public/`) are fixable entirely within `apps/command-center/**` — the Dockerfile itself is in scope. **If any required fix falls outside **`apps/command-center/**`**, STOP and return the exact external dependency.**
+      17. Screenshots of the six primary workflows at representative desktop and mobile widths.
+      18. Independent exact-head review specifically attempts to find: hidden routes still reachable as apparently authoritative; missing routes named authoritative; conflicting navigation sources; fake healthy/zero fallbacks; auth fail-open behavior in production mode; direct mutation paths; broken container-build assumptions; overlap with Smart Form or production lanes.
+      19. **No file outside the approved scope is changed.**
+      20. The final PR states clearly that **Command Center is still not production-deployed and deployment requires a separate lane.**
+
+      ## Proof requirements
+
+      Standard Delivery/UI T2 proof bundle, plus: before/after route inventory; the page-classification table (all 55); duplicate/dead-surface disposition; navigation-authority proof; unit + type-check + build + E2E + Docker-build + `pnpm verify` results; desktop/mobile screenshots; independent exact-head reviewer verdict; explicit file-overlap check against Smart Form and production lanes.
+
+      ## Dependencies and sequencing
+
+      * [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) **(Smart Form Phase 1)** — authorized scope is `apps/api/**`, `packages/contracts/**`, `packages/db/{repositories,runtime-repositories}.ts`, `apps/smart-form/**`. **Zero file overlap** with `apps/command-center/**` (verified 2026-08-30). May run fully in parallel. One-way dependency to note: Smart Form SF-10 says Track Only picks "may be persisted and surfaced to Command Center" — that is a *future* CC read concern, not a file conflict, and is out of scope here.
+      * No active lane owns any `apps/command-center/**` path. All open PRs (#1461, #1453, #1451, #1429) touch **zero** CC files.
+      * This lane must not delay Smart Form or the primary production-recovery work. It uses a `delivery-ui` slot, **not** a runtime or migration singleton.
+
+      ## Stop conditions
+
+      Stop and report rather than widening scope if: an active lane takes any required CC path · completion requires modifying API, contracts, DB packages, domain logic, migrations, production deployment, or workflows · completion requires a production database write · a CC action bypasses the API and fixing it requires shared-authority changes · the app cannot be made buildable without changes outside authorized scope · route consolidation requires a new business/product decision from Griff · live repository/GitHub/Linear/lane truth cannot be established · policy refuses lane admission.
+
+      **Do not report completion based on files existing or pages rendering.** The exit is one coherent, truthfully classified internal operator application with exact-head verification — not another redesign layer.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Tier classification (mechanical, not asserted)
+
+      Run 2026-08-30 via `npx tsx scripts/ops/tier-classifier.ts --declared-tier
+      T2 --files <lane scope>`:
+
+
+      ```
+
+      declared_tier: T2
+
+      mechanical_minimum: T3
+
+      derived_tier: T2
+
+      escalated: false
+
+      matches: []
+
+      advisory: success — "declared T2 matches the mechanical tier floor"
+
+      ```
+
+
+      Zero Tier C path matches. `docs/governance/LANE_TAXONOMY.md` §7
+      (Delivery/UI) sets **T2 default, T3 for isolated non-member-facing
+      scaffolding**; `apps/command-center/**` is an explicitly listed
+      Delivery/UI allowed path. **T2 is the correct tier. T1 is not applicable**
+      — no migration, no new API write path, no delivery adapter, no lifecycle
+      FSM change, no `packages/contracts` change (the seven T1 triggers in
+      `docs/05_operations/CC_UNIFICATION_TIER_CLASSIFICATION.md`).
+
+
+      Lane type: `delivery-ui`. Executor: Codex CLI, profile `codex-sol-high`.
+
+
+      ---
+    - >-
+      Phase 0 established truth (2026-08-30, against origin/main @ 247f1504)
+
+      All findings below are **verified against source**, not repeated from
+      prior docs. Prior claims that turned out false are marked.
+
+
+      ### Deployment reality — VERIFIED
+
+
+      Command Center is **not** in the production deployment.
+      `deploy/production/docker-compose.yml` services are `api`, `worker`,
+      `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy`.
+      Both `deploy.yml:160` and `staging-deploy.yml:91` build matrices are
+      `[api, worker, ingestor, discord-bot]`. `docker-compose.prod.yml:77`
+      references image tag
+      `unit-talk/command-center:${COMMAND_CENTER_IMAGE_TAG}` that **no pipeline
+      ever publishes**.
+
+
+      ### Competing navigation authorities — VERIFIED, and there are FOUR, not
+      two
+
+
+      * **A — **`src/components/CommandCenterShell.tsx:24-82` (`NAV_GROUPS`, 32
+      hardcoded entries). The only nav actually rendered (mounted at
+      `src/app/layout.tsx:19`); also drives the command palette and breadcrumbs.
+
+      * **B — **`src/lib/command-center-nav.ts:16-163` (`COMMAND_CENTER_ROUTES`,
+      12 hardcoded entries). Its consumers `NavLinks.tsx` and `ui/Sidebar.tsx`
+      are **never imported** — dead. But `getPrimaryCommandCenterRoutes()` still
+      exports them as authoritative, and `/events` + `/intelligence` still call
+      `getRouteMeta` from it.
+
+      * **C — **`src/components/IntelligenceWorkspaceNav.tsx:12-18` (5 tabs).
+
+      * **D — **`src/app/decision/page.tsx:13-56` (hardcoded module index acting
+      as nav for `/decision/*`).
+
+
+      Direct conflicts between A and B: B marks `/events`, `/pipeline`,
+      `/api-health`, `/intelligence` as `state:'hidden', nav:false` ("Removed
+      from primary navigation…") while **A ships all four as first-class sidebar
+      items**. Same href, different labels: `/` Overview vs Executive Overview;
+      `/picks` Active Picks vs Picks Explorer; `/pipeline` Pipeline vs Today's
+      Action.
+
+
+      ### `/settlement` — VERIFIED absent
+
+
+      `src/lib/command-center-nav.ts:51-60` declares `href:'/settlement'`,
+      `state:'authoritative'`, `nav:true`. **No **`src/app/settlement/`
+      **directory exists.** The only settlement asset is
+      `src/components/SettlementForm.tsx` (a component, no route). A governed
+      settle path already exists: `src/app/actions/settle.ts:36-47` → `POST
+      /api/picks/{id}/settle`.
+
+
+      ### Route reality — VERIFIED
+
+
+      **55 **`page.tsx` **files exist.** No document dated after 2026-04-14
+      enumerates them. Conflicting canonical lists:
+      `PLATFORM_SURFACES_AUTHORITY.md` (2026-03-31, "Ratified") declares **9
+      pages** and asserts *"Surfaces not listed here are not recognized for
+      routing, promotion, or governance purposes"*;
+      `CC_NAV_REDESIGN_SPEC.md`/`CC_IA_RATIFICATION.md` (2026-04-07) declare ~10
+      existing + ~16 stub/shell/blocked; `CC_OPERATIONS_IA.md` (ARCHIVED)
+      declares 23. **No current authoritative CC page list exists.**
+
+
+      12 routes are bare `redirect()` stubs: `/agents`, `/burn-in`, `/ops`,
+      `/runtime-dashboard` → `/api-health`; `/decisions` → `/review`;
+      `/exceptions`, `/interventions` → `/operations/results`; `/held` →
+      `/operations/approvals`; `/picks-list` → `/picks`; `/research`,
+      `/research/hit-rate`, `/research/matchups`.
+
+
+      ### Duplicate implementations — VERIFIED
+
+
+      `OverviewDashboardClient` (root vs `overview/`) · `PipelineFlow` (root vs
+      `ui/`) · `TopBar` **(root vs **`ui/`**, incompatible APIs — **`/events`
+      **and **`/intelligence` **render TWO STACKED HEADERS)** · `Sidebar` vs
+      `WorkspaceSidebar` · `DetailPane` vs `DetailPanel` ·
+      `Sparkline`/`MicroSparkline`/`MiniSparkline` · `StatCard` vs `MetricsCard`
+      · `EventStream` vs `LiveEventFeed` · `Table` vs `DataTable` (zero
+      consumers) · four orphaned workspace shells.
+
+
+      18 components have zero non-test imports: `HealthSignalsPanel`,
+      `MiniSparkline`, `EventsPageClient`, `NavLinks`, `PickFilters`,
+      `PickLifecycleTable`, `ExceptionPanel`, `OpsWorkspace`,
+      `IntelligenceWorkspace`, `PipelineLiveRefresh`, `ApiHealthMonitoring`,
+      `InlineSettleButton`, `AgentsWorkspace`, `EventsWorkspace`,
+      `PicksWorkflowClient`, `ui/Sidebar`, `ui/DataTable`,
+      `overview/OverviewDashboardClient`.
+
+
+      ### Fake data in live render paths — VERIFIED (worse than "some
+      placeholders")
+
+
+      `src/lib/command-center-data.ts` wraps every `getXContent()` query in
+      `try` and returns **fabricated numbers in **`catch` — a DB outage renders
+      as healthy invented data with no degradation signal:
+
+
+      * `:410-419` `getEventsContent` catch → **reaches **`/events`:
+      `{label:'Events loaded', value:8}`, seeded event rows with
+      `timestamp:'seeded'`
+
+      * `:514-535` `getIntelligenceContent` catch → **reaches **`/intelligence`:
+      `{label:'Settled picks', value:42, delta:'57.1% hit'}`, fabricated model
+      rows (`gpt-5.5`, cost 18.2), score bands `63.4/55.7/49.2`
+
+      * `:476` `getAgentsContent` has **no try at all** — 100% fabricated roster
+      unconditionally, incl. invented `cpu:62, memory:54`
+
+      * `:266-286`, `:327-367`, `:455-472`, `:563+` — same pattern for
+      overview/picks/api-health/ops content
+
+      * Only `getPipelineContent` (`:391`) returns `null` on failure and
+      degrades honestly (`pipeline/page.tsx:37-44`) — **this is the correct
+      pattern to generalize.**
+
+
+      No `Math.random` anywhere. 23 `?? 0` / `|| 0` sites in render paths can
+      print a fake zero metric.
+
+
+      ### Auth — VERIFIED fail-closed, WITH A REAL FAIL-OPEN OVERRIDE
+
+
+      Production is fail-closed *by default*: `isCommandCenterAuthRequired`
+      (`src/lib/server-api.ts:301-322`) returns true for
+      `UNIT_TALK_APP_ENV=production|staging` or `NODE_ENV=production`, and
+      `assertCommandCenterAuthConfig` turns a missing credential into `503
+      COMMAND_CENTER_AUTH_MISCONFIGURED` — unreachable, not open.
+
+
+      **But **`explicitMode` **is checked BEFORE the environment
+      (**`:309-310`**).** Setting `COMMAND_CENTER_AUTH_MODE=fail_open` (or
+      `UNIT_TALK_COMMAND_CENTER_AUTH_MODE`, or
+      `UNIT_TALK_OPERATOR_RUNTIME_MODE=fail_open`) **overrides production**,
+      returns `required=false`, and with no token configured
+      `server-api.ts:212-215` authenticates **every request as a full operator**
+      (`role:'operator'`, `method:'dev_bypass'`), which `middleware.ts:53-59`
+      then logs as a legitimate privileged action. The same override satisfies
+      the service-role DB gate at `src/lib/data/client.ts:55-57`.
+
+
+      `apps/command-center/.env.example:5` **ships
+      **`COMMAND_CENTER_AUTH_MODE=fail_open` **with no warning comment.** Root
+      `.env.example:217` does the same (out of this lane's scope — report only).
+
+
+      ### Database authority — VERIFIED
+
+
+      CC reads **directly from Supabase with service-role credentials** via
+      `getDataClient()` (`src/lib/data/client.ts:74-81`), used across ~20 files
+      in `src/lib/data/`. One page bypasses the data layer entirely:
+      `src/app/intel/teams/page.tsx:31` calls `getDataClient()` inside the page.
+      `src/lib/data/storage-health.ts:147-155` calls the Supabase Management API
+      `POST /v1/projects/{ref}/database/query` (arbitrary SQL).
+
+
+      **All mutations correctly route through the canonical API** (`apps/api`)
+      via `'use server'` actions — 10 POST paths, zero direct DB writes. This is
+      already compliant and must stay that way.
+
+
+      ### Docs staleness — VERIFIED
+
+
+      `apps/command-center/CLAUDE.md` claims Next.js **14** (actual `15.5.18`,
+      forced to `15.5.21` by workspace override), "**20+ components**" (actual
+      75 `.tsx` under `src/components/`), "**3 server actions**" (actual **6**),
+      a 10-page list (actual **55**), "**Tests: None (traditional)**" (actual 23
+      *`.test.*` files, wired into CI at `ci.yml:268`), and "**no
+      **`@unit-talk/*` **packages — frontend only**" (actual: declares and
+      imports `@unit-talk/config`, `@unit-talk/db`, `@unit-talk/observability`).
+      `docs/CODEBASE_GUIDE.md:84` repeats the Next 14 error.
+
+
+      ### Docker — VERIFIED unbuildable and never exercised
+
+
+      `next.config.mjs` does set `output:'standalone'`. But
+      `apps/command-center/Dockerfile` fails twice:
+
+
+      1. **Line 13 **`pnpm install --frozen-lockfile` — the build context copies
+      only `apps/command-center`, but `pnpm-workspace.yaml` globs `apps/*` +
+      `packages/*` and `pnpm-lock.yaml` holds ~20 importers →
+      `ERR_PNPM_OUTDATED_LOCKFILE`. Even unfrozen, the five declared
+      `workspace:*` deps aren't in context → `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`.
+      Three of them are genuinely imported, so this is a real dependency, not a
+      stale manifest entry.
+
+      2. **Line 26 **`COPY … /repo/apps/command-center/public` — there is **no
+      **`public/` **directory**.
+
+
+      Also: CC pins `node:20-alpine` while every other service uses
+      `node:22-alpine`. **No workflow builds this image.**
+
+
+      ### Test coverage gap — VERIFIED
+
+
+      `apps/command-center/package.json:9` is `tsx --test src/lib/*.test.ts
+      src/lib/data/*.test.ts` — a two-directory, `.ts`-only glob. It
+      **structurally excludes 4 of 23 test files**:
+      `src/app/api/governance/lanes/route.test.ts` (only API-route test),
+      `src/app/command-center-pages.test.tsx`,
+      `src/app/command-center-rebuild.test.tsx` (**stale — asserts markup on
+      pages that are now redirect stubs; would fail if run**),
+      `src/components/ui/shared-components.test.tsx`.
+
+
+      **There is no **`test:e2e` **script.** The 7 Playwright specs (1798 lines)
+      run only by manual invocation, and they navigate `/agents`, `/decisions`,
+      `/exceptions`, `/held`, `/ops`, `/picks-list` — all now redirect stubs.
+      **Zero e2e coverage** of `/fire-board`, `/operations/*`, `/intel/*`,
+      `/execution/*`, `/decision/*`, `/model-health`, `/research/*`,
+      `/settlement`.
+
+
+      ---
+    - >-
+      Product boundary
+
+      The primary Command Center workflow for this phase is exactly six
+      surfaces:
+
+
+      1. **Overview**
+
+      2. **Review**
+
+      3. **Active Picks**
+
+      4. **Settlement**
+
+      5. **Exceptions**
+
+      6. **System Health**
+
+
+      Every other page must be deliberately classified as exactly one of:
+      **authoritative and retained** · **degraded but honestly represented** ·
+      **deferred and removed from primary navigation** · **stub to remove** ·
+      **duplicate to consolidate** · **dead surface to retire**.
+
+
+      A page may not appear operational if its backing data is missing, stale,
+      simulated, hardcoded, or unavailable. **Unknown/unavailable data must
+      never be displayed as healthy, successful, or zero unless zero was
+      authoritatively measured.**
+
+
+      ---
+    - >-
+      AUTHORIZATION CORRECTION (2026-08-30, PM-directed)
+
+      The original framing of this issue wrongly relied on the advisory
+      path-based tier classifier alone.
+      `docs/05_operations/DELEGATION_POLICY.md` is the controlling authority and
+      it classifies several items previously written into this lane as
+      **always-escalate Tier C**, independent of tier:
+
+
+      * `:117` — "**Security or privacy posture changes** — authentication,
+      authorization... Even a 'small' change here is Tier C plus PM presence."
+
+      * `:123` — "**Dependency bumps** — any package.json change, any lockfile
+      change, any tsconfig or build config change."
+
+      * `:124` / `:143` — "**Environment variable additions or removals**...
+      default changes" / "Credentials / secrets / `.env*` (any env var addition,
+      removal, or default change) — Always escalate. Configuration surface is
+      PM-only."
+
+      * `:226` — "**A Codex lane is never authorized to run Tier C work** — Tier
+      C is Claude Code only."
+
+
+      This lane therefore remains **T2 Codex**, but is **narrowed**. The
+      authentication/authorization work moves to a Claude-owned Tier C
+      successor.
+
+
+      ### Files this lane's Codex executor MUST NOT modify
+
+
+      * `apps/command-center/src/lib/server-api.ts`
+
+      * `apps/command-center/src/middleware.ts`
+
+      * `apps/command-center/.env.example`
+
+      * `apps/command-center/package.json` (and any lockfile / `tsconfig*.json`)
+
+      * any authentication test whose purpose is to change production
+      authorization behavior
+
+
+      If any objective appears to require touching these, **STOP and report** —
+      do not implement.
+
+
+      ### Superseded definition-of-done items
+
+
+      * **DoD 9 (auth fail-closed) is REMOVED from this lane.** The production
+      `fail_open` override is now recorded as a *verified residual security
+      defect* in this lane's proof packet (see Proof requirements) and is owned
+      by the Tier C successor.
+
+      * **DoD 13 is narrowed:** new unit tests must land in directories the
+      existing test glob already executes (`src/lib/*.test.ts`,
+      `src/lib/data/*.test.ts`) so that **no** `package.json` **change is
+      required**. Retiring the stale `src/app/command-center-rebuild.test.tsx`
+      is permitted (deletion is not a build-config change). The
+      structurally-unwired-glob gap is **reported, not fixed**, in this lane.
+    - >-
+      Allowed scope
+
+      * `apps/command-center/**` **except** the five excluded paths listed above
+
+      * this issue's normal lane/sync/proof artifacts (`.ops/sync/<ID>.yml`,
+      `docs/06_status/lanes/<ID>.json`, `docs/06_status/proof/<ID>/**`)
+
+      * focused tests and E2E coverage **within** the Command Center application
+
+
+      Do not widen scope for cleanup convenience.
+    - >-
+      Prohibited scope
+
+      `apps/smart-form/**` · `apps/api/**` · `apps/worker/**` · any other
+      application directory · `packages/contracts/**` · `packages/domain/**` ·
+      `packages/db/**` · `supabase/migrations/**` · `.github/workflows/**` ·
+      `deploy/production/**` · production environment variables or secrets ·
+      production database data · Discord delivery configuration · ingestion,
+      grading, settlement, worker, or public-delivery behavior · branch
+      protection or governance policy.
+
+
+      Also prohibited: **deploying Command Center**, **adding new operator
+      mutation endpoints**, and adding any new research, modeling, intelligence,
+      arbitrage, agent-control, governance, or trading-desk feature.
+
+
+      Note: root `.env.example` is **out of scope** — the `fail_open` default
+      there must be reported as residual risk, not edited.
+    - >-
+      Definition of done
+       1. There is **one** navigation and route authority.
+       2. Competing hardcoded navigation systems are removed or consolidated (all four sources above).
+       3. The six primary operator workflows are coherent and reachable.
+       4. `/settlement` is either implemented as a real authoritative workflow **using existing governed capabilities** (`actions/settle.ts` → `POST /api/picks/{id}/settle`, `SettlementForm.tsx`) **or** removed from the authoritative route registry with an explicit truthful classification. **Do not create new API authority to force it into this lane.**
+       5. Duplicate shell and UI implementations are consolidated where proven safe. The `/events` + `/intelligence` double-header is fixed.
+       6. Every existing page is classified as authoritative, degraded, deferred, stub, duplicate, or retire.
+       7. Deferred and untrustworthy surfaces are removed from primary navigation.
+       8. No fake metrics, hardcoded success, silent zero fallbacks, or readiness theater remain in the primary workflow. Generalize the honest `getPipelineContent` → `null` → degraded-banner pattern; remove the fabricated `catch` payloads.
+       9. **REMOVED — moved to the Tier C successor.** This lane must not change authentication precedence, middleware auth behavior, or the example environment default. It must leave production auth behavior exactly as found and record the defect in proof.
+      10. No Command Center write bypasses the canonical API.
+
+      11. No new direct database authority is introduced.
+
+      12. Current direct privileged-read behavior (service-role
+      `getDataClient()`, the `intel/teams` page-level client, and
+      `storage-health.ts`'s Management-API SQL) is **documented in the proof as
+      a residual deployment risk**. Do not redesign shared database authority in
+      this lane.
+
+      13. Unit tests cover route classification, navigation authority,
+      degraded/unknown rendering, and critical operator-state transformations —
+      placed in `src/lib/` or `src/lib/data/` so the **existing** test glob
+      executes them with **no** `package.json` **change**. The stale
+      `command-center-rebuild.test.tsx` may be retired. The unwired-glob gap (4
+      excluded test files) is reported as deferred work requiring separate
+      authorization.
+
+      14. Playwright covers **desktop and mobile** navigation through all six
+      primary workflows.
+
+      15. Normal Command Center build, type-check, tests, and required
+      repository verification pass.
+
+      16. Attempt the standalone Docker build with the repository's current
+      supported method. Both known failures (workspace artifacts; missing
+      `public/`) are fixable entirely within `apps/command-center/**` — the
+      Dockerfile itself is in scope. **If any required fix falls outside
+      **`apps/command-center/**`**, STOP and return the exact external
+      dependency.**
+
+      17. Screenshots of the six primary workflows at representative desktop and
+      mobile widths.
+
+      18. Independent exact-head review specifically attempts to find: hidden
+      routes still reachable as apparently authoritative; missing routes named
+      authoritative; conflicting navigation sources; fake healthy/zero
+      fallbacks; auth fail-open behavior in production mode; direct mutation
+      paths; broken container-build assumptions; overlap with Smart Form or
+      production lanes.
+
+      19. **No file outside the approved scope is changed.**
+
+      20. The final PR states clearly that **Command Center is still not
+      production-deployed and deployment requires a separate lane.**
+    - >-
+      Proof requirements
+
+      Standard Delivery/UI T2 proof bundle, plus: before/after route inventory;
+      the page-classification table (all 55); duplicate/dead-surface
+      disposition; navigation-authority proof; unit + type-check + build + E2E +
+      Docker-build + `pnpm verify` results; desktop/mobile screenshots;
+      independent exact-head reviewer verdict; explicit file-overlap check
+      against Smart Form and production lanes.
+    - |-
+      Dependencies and sequencing
+      * [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) **(Smart Form Phase 1)** — authorized scope is `apps/api/**`, `packages/contracts/**`, `packages/db/{repositories,runtime-repositories}.ts`, `apps/smart-form/**`. **Zero file overlap** with `apps/command-center/**` (verified 2026-08-30). May run fully in parallel. One-way dependency to note: Smart Form SF-10 says Track Only picks "may be persisted and surfaced to Command Center" — that is a *future* CC read concern, not a file conflict, and is out of scope here.
+      * No active lane owns any `apps/command-center/**` path. All open PRs (#1461, #1453, #1451, #1429) touch **zero** CC files.
+      * This lane must not delay Smart Form or the primary production-recovery work. It uses a `delivery-ui` slot, **not** a runtime or migration singleton.
+    - >-
+      Stop conditions
+
+      Stop and report rather than widening scope if: an active lane takes any
+      required CC path · completion requires modifying API, contracts, DB
+      packages, domain logic, migrations, production deployment, or workflows ·
+      completion requires a production database write · a CC action bypasses the
+      API and fixing it requires shared-authority changes · the app cannot be
+      made buildable without changes outside authorized scope · route
+      consolidation requires a new business/product decision from Griff · live
+      repository/GitHub/Linear/lane truth cannot be established · policy refuses
+      lane admission.
+
+
+      **Do not report completion based on files existing or pages rendering.**
+      The exit is one coherent, truthfully classified internal operator
+      application with exact-head verification — not another redesign layer.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative
+    title: Command Center Phase 0 stabilization — consolidate the authoritative
+      internal operator workflow
+    description: |-
+      ## Objective
+
+      Turn the existing Command Center from several overlapping dashboard concepts into one coherent, honest, buildable internal operator workflow.
+
+      Command Center is an **internal operator/admin control plane. It is not customer-facing.**
+
+      This lane is **consolidation and stabilization** — not deployment, API expansion, database work, or new feature development.
+
+      Griff authorized this bounded app-only stabilization objective. That authorization does **not** permit touching shared runtime authority, migrations, production configuration, delivery behavior, or production data.
+
+      Successor to the canceled [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) (duplicated and incorrectly framed umbrella issue). [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/nfl-command-center-launch-workbench-live-approval-exception-grading) must not be reopened or reused.
+
+      ---
+
+      ## Tier classification (mechanical, not asserted)
+
+      Run 2026-08-30 via `npx tsx scripts/ops/tier-classifier.ts --declared-tier T2 --files <lane scope>`:
+
+      ```
+      declared_tier: T2
+      mechanical_minimum: T3
+      derived_tier: T2
+      escalated: false
+      matches: []
+      advisory: success — "declared T2 matches the mechanical tier floor"
+      ```
+
+      Zero Tier C path matches. `docs/governance/LANE_TAXONOMY.md` §7 (Delivery/UI) sets **T2 default, T3 for isolated non-member-facing scaffolding**; `apps/command-center/**` is an explicitly listed Delivery/UI allowed path. **T2 is the correct tier. T1 is not applicable** — no migration, no new API write path, no delivery adapter, no lifecycle FSM change, no `packages/contracts` change (the seven T1 triggers in `docs/05_operations/CC_UNIFICATION_TIER_CLASSIFICATION.md`).
+
+      Lane type: `delivery-ui`. Executor: Codex CLI, profile `codex-sol-high`.
+
+      ---
+
+      ## Phase 0 established truth (2026-08-30, against origin/main @ 247f1504)
+
+      All findings below are **verified against source**, not repeated from prior docs. Prior claims that turned out false are marked.
+
+      ### Deployment reality — VERIFIED
+
+      Command Center is **not** in the production deployment. `deploy/production/docker-compose.yml` services are `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy`. Both `deploy.yml:160` and `staging-deploy.yml:91` build matrices are `[api, worker, ingestor, discord-bot]`. `docker-compose.prod.yml:77` references image tag `unit-talk/command-center:${COMMAND_CENTER_IMAGE_TAG}` that **no pipeline ever publishes**.
+
+      ### Competing navigation authorities — VERIFIED, and there are FOUR, not two
+
+      * **A — **`src/components/CommandCenterShell.tsx:24-82` (`NAV_GROUPS`, 32 hardcoded entries). The only nav actually rendered (mounted at `src/app/layout.tsx:19`); also drives the command palette and breadcrumbs.
+      * **B — **`src/lib/command-center-nav.ts:16-163` (`COMMAND_CENTER_ROUTES`, 12 hardcoded entries). Its consumers `NavLinks.tsx` and `ui/Sidebar.tsx` are **never imported** — dead. But `getPrimaryCommandCenterRoutes()` still exports them as authoritative, and `/events` + `/intelligence` still call `getRouteMeta` from it.
+      * **C — **`src/components/IntelligenceWorkspaceNav.tsx:12-18` (5 tabs).
+      * **D — **`src/app/decision/page.tsx:13-56` (hardcoded module index acting as nav for `/decision/*`).
+
+      Direct conflicts between A and B: B marks `/events`, `/pipeline`, `/api-health`, `/intelligence` as `state:'hidden', nav:false` ("Removed from primary navigation…") while **A ships all four as first-class sidebar items**. Same href, different labels: `/` Overview vs Executive Overview; `/picks` Active Picks vs Picks Explorer; `/pipeline` Pipeline vs Today's Action.
+
+      ### `/settlement` — VERIFIED absent
+
+      `src/lib/command-center-nav.ts:51-60` declares `href:'/settlement'`, `state:'authoritative'`, `nav:true`. **No **`src/app/settlement/` **directory exists.** The only settlement asset is `src/components/SettlementForm.tsx` (a component, no route). A governed settle path already exists: `src/app/actions/settle.ts:36-47` → `POST /api/picks/{id}/settle`.
+
+      ### Route reality — VERIFIED
+
+      **55 **`page.tsx` **files exist.** No document dated after 2026-04-14 enumerates them. Conflicting canonical lists: `PLATFORM_SURFACES_AUTHORITY.md` (2026-03-31, "Ratified") declares **9 pages** and asserts *"Surfaces not listed here are not recognized for routing, promotion, or governance purposes"*; `CC_NAV_REDESIGN_SPEC.md`/`CC_IA_RATIFICATION.md` (2026-04-07) declare ~10 existing + ~16 stub/shell/blocked; `CC_OPERATIONS_IA.md` (ARCHIVED) declares 23. **No current authoritative CC page list exists.**
+
+      12 routes are bare `redirect()` stubs: `/agents`, `/burn-in`, `/ops`, `/runtime-dashboard` → `/api-health`; `/decisions` → `/review`; `/exceptions`, `/interventions` → `/operations/results`; `/held` → `/operations/approvals`; `/picks-list` → `/picks`; `/research`, `/research/hit-rate`, `/research/matchups`.
+
+      ### Duplicate implementations — VERIFIED
+
+      `OverviewDashboardClient` (root vs `overview/`) · `PipelineFlow` (root vs `ui/`) · `TopBar` **(root vs **`ui/`**, incompatible APIs — **`/events` **and **`/intelligence` **render TWO STACKED HEADERS)** · `Sidebar` vs `WorkspaceSidebar` · `DetailPane` vs `DetailPanel` · `Sparkline`/`MicroSparkline`/`MiniSparkline` · `StatCard` vs `MetricsCard` · `EventStream` vs `LiveEventFeed` · `Table` vs `DataTable` (zero consumers) · four orphaned workspace shells.
+
+      18 components have zero non-test imports: `HealthSignalsPanel`, `MiniSparkline`, `EventsPageClient`, `NavLinks`, `PickFilters`, `PickLifecycleTable`, `ExceptionPanel`, `OpsWorkspace`, `IntelligenceWorkspace`, `PipelineLiveRefresh`, `ApiHealthMonitoring`, `InlineSettleButton`, `AgentsWorkspace`, `EventsWorkspace`, `PicksWorkflowClient`, `ui/Sidebar`, `ui/DataTable`, `overview/OverviewDashboardClient`.
+
+      ### Fake data in live render paths — VERIFIED (worse than "some placeholders")
+
+      `src/lib/command-center-data.ts` wraps every `getXContent()` query in `try` and returns **fabricated numbers in **`catch` — a DB outage renders as healthy invented data with no degradation signal:
+
+      * `:410-419` `getEventsContent` catch → **reaches **`/events`: `{label:'Events loaded', value:8}`, seeded event rows with `timestamp:'seeded'`
+      * `:514-535` `getIntelligenceContent` catch → **reaches **`/intelligence`: `{label:'Settled picks', value:42, delta:'57.1% hit'}`, fabricated model rows (`gpt-5.5`, cost 18.2), score bands `63.4/55.7/49.2`
+      * `:476` `getAgentsContent` has **no try at all** — 100% fabricated roster unconditionally, incl. invented `cpu:62, memory:54`
+      * `:266-286`, `:327-367`, `:455-472`, `:563+` — same pattern for overview/picks/api-health/ops content
+      * Only `getPipelineContent` (`:391`) returns `null` on failure and degrades honestly (`pipeline/page.tsx:37-44`) — **this is the correct pattern to generalize.**
+
+      No `Math.random` anywhere. 23 `?? 0` / `|| 0` sites in render paths can print a fake zero metric.
+
+      ### Auth — VERIFIED fail-closed, WITH A REAL FAIL-OPEN OVERRIDE
+
+      Production is fail-closed *by default*: `isCommandCenterAuthRequired` (`src/lib/server-api.ts:301-322`) returns true for `UNIT_TALK_APP_ENV=production|staging` or `NODE_ENV=production`, and `assertCommandCenterAuthConfig` turns a missing credential into `503 COMMAND_CENTER_AUTH_MISCONFIGURED` — unreachable, not open.
+
+      **But **`explicitMode` **is checked BEFORE the environment (**`:309-310`**).** Setting `COMMAND_CENTER_AUTH_MODE=fail_open` (or `UNIT_TALK_COMMAND_CENTER_AUTH_MODE`, or `UNIT_TALK_OPERATOR_RUNTIME_MODE=fail_open`) **overrides production**, returns `required=false`, and with no token configured `server-api.ts:212-215` authenticates **every request as a full operator** (`role:'operator'`, `method:'dev_bypass'`), which `middleware.ts:53-59` then logs as a legitimate privileged action. The same override satisfies the service-role DB gate at `src/lib/data/client.ts:55-57`.
+
+      `apps/command-center/.env.example:5` **ships **`COMMAND_CENTER_AUTH_MODE=fail_open` **with no warning comment.** Root `.env.example:217` does the same (out of this lane's scope — report only).
+
+      ### Database authority — VERIFIED
+
+      CC reads **directly from Supabase with service-role credentials** via `getDataClient()` (`src/lib/data/client.ts:74-81`), used across ~20 files in `src/lib/data/`. One page bypasses the data layer entirely: `src/app/intel/teams/page.tsx:31` calls `getDataClient()` inside the page. `src/lib/data/storage-health.ts:147-155` calls the Supabase Management API `POST /v1/projects/{ref}/database/query` (arbitrary SQL).
+
+      **All mutations correctly route through the canonical API** (`apps/api`) via `'use server'` actions — 10 POST paths, zero direct DB writes. This is already compliant and must stay that way.
+
+      ### Docs staleness — VERIFIED
+
+      `apps/command-center/CLAUDE.md` claims Next.js **14** (actual `15.5.18`, forced to `15.5.21` by workspace override), "**20+ components**" (actual 75 `.tsx` under `src/components/`), "**3 server actions**" (actual **6**), a 10-page list (actual **55**), "**Tests: None (traditional)**" (actual 23 *`.test.*` files, wired into CI at `ci.yml:268`), and "**no **`@unit-talk/*` **packages — frontend only**" (actual: declares and imports `@unit-talk/config`, `@unit-talk/db`, `@unit-talk/observability`). `docs/CODEBASE_GUIDE.md:84` repeats the Next 14 error.
+
+      ### Docker — VERIFIED unbuildable and never exercised
+
+      `next.config.mjs` does set `output:'standalone'`. But `apps/command-center/Dockerfile` fails twice:
+
+      1. **Line 13 **`pnpm install --frozen-lockfile` — the build context copies only `apps/command-center`, but `pnpm-workspace.yaml` globs `apps/*` + `packages/*` and `pnpm-lock.yaml` holds ~20 importers → `ERR_PNPM_OUTDATED_LOCKFILE`. Even unfrozen, the five declared `workspace:*` deps aren't in context → `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND`. Three of them are genuinely imported, so this is a real dependency, not a stale manifest entry.
+      2. **Line 26 **`COPY … /repo/apps/command-center/public` — there is **no **`public/` **directory**.
+
+      Also: CC pins `node:20-alpine` while every other service uses `node:22-alpine`. **No workflow builds this image.**
+
+      ### Test coverage gap — VERIFIED
+
+      `apps/command-center/package.json:9` is `tsx --test src/lib/*.test.ts src/lib/data/*.test.ts` — a two-directory, `.ts`-only glob. It **structurally excludes 4 of 23 test files**: `src/app/api/governance/lanes/route.test.ts` (only API-route test), `src/app/command-center-pages.test.tsx`, `src/app/command-center-rebuild.test.tsx` (**stale — asserts markup on pages that are now redirect stubs; would fail if run**), `src/components/ui/shared-components.test.tsx`.
+
+      **There is no **`test:e2e` **script.** The 7 Playwright specs (1798 lines) run only by manual invocation, and they navigate `/agents`, `/decisions`, `/exceptions`, `/held`, `/ops`, `/picks-list` — all now redirect stubs. **Zero e2e coverage** of `/fire-board`, `/operations/*`, `/intel/*`, `/execution/*`, `/decision/*`, `/model-health`, `/research/*`, `/settlement`.
+
+      ---
+
+      ## Product boundary
+
+      The primary Command Center workflow for this phase is exactly six surfaces:
+
+      1. **Overview**
+      2. **Review**
+      3. **Active Picks**
+      4. **Settlement**
+      5. **Exceptions**
+      6. **System Health**
+
+      Every other page must be deliberately classified as exactly one of: **authoritative and retained** · **degraded but honestly represented** · **deferred and removed from primary navigation** · **stub to remove** · **duplicate to consolidate** · **dead surface to retire**.
+
+      A page may not appear operational if its backing data is missing, stale, simulated, hardcoded, or unavailable. **Unknown/unavailable data must never be displayed as healthy, successful, or zero unless zero was authoritatively measured.**
+
+      ---
+
+      ## AUTHORIZATION CORRECTION (2026-08-30, PM-directed)
+
+      The original framing of this issue wrongly relied on the advisory path-based tier classifier alone. `docs/05_operations/DELEGATION_POLICY.md` is the controlling authority and it classifies several items previously written into this lane as **always-escalate Tier C**, independent of tier:
+
+      * `:117` — "**Security or privacy posture changes** — authentication, authorization... Even a 'small' change here is Tier C plus PM presence."
+      * `:123` — "**Dependency bumps** — any package.json change, any lockfile change, any tsconfig or build config change."
+      * `:124` / `:143` — "**Environment variable additions or removals**... default changes" / "Credentials / secrets / `.env*` (any env var addition, removal, or default change) — Always escalate. Configuration surface is PM-only."
+      * `:226` — "**A Codex lane is never authorized to run Tier C work** — Tier C is Claude Code only."
+
+      This lane therefore remains **T2 Codex**, but is **narrowed**. The authentication/authorization work moves to a Claude-owned Tier C successor.
+
+      ### Files this lane's Codex executor MUST NOT modify
+
+      * `apps/command-center/src/lib/server-api.ts`
+      * `apps/command-center/src/middleware.ts`
+      * `apps/command-center/.env.example`
+      * `apps/command-center/package.json` (and any lockfile / `tsconfig*.json`)
+      * any authentication test whose purpose is to change production authorization behavior
+
+      If any objective appears to require touching these, **STOP and report** — do not implement.
+
+      ### Superseded definition-of-done items
+
+      * **DoD 9 (auth fail-closed) is REMOVED from this lane.** The production `fail_open` override is now recorded as a *verified residual security defect* in this lane's proof packet (see Proof requirements) and is owned by the Tier C successor.
+      * **DoD 13 is narrowed:** new unit tests must land in directories the existing test glob already executes (`src/lib/*.test.ts`, `src/lib/data/*.test.ts`) so that **no** `package.json` **change is required**. Retiring the stale `src/app/command-center-rebuild.test.tsx` is permitted (deletion is not a build-config change). The structurally-unwired-glob gap is **reported, not fixed**, in this lane.
+
+      ## Allowed scope
+
+      * `apps/command-center/**` **except** the five excluded paths listed above
+      * this issue's normal lane/sync/proof artifacts (`.ops/sync/<ID>.yml`, `docs/06_status/lanes/<ID>.json`, `docs/06_status/proof/<ID>/**`)
+      * focused tests and E2E coverage **within** the Command Center application
+
+      Do not widen scope for cleanup convenience.
+
+      ## Prohibited scope
+
+      `apps/smart-form/**` · `apps/api/**` · `apps/worker/**` · any other application directory · `packages/contracts/**` · `packages/domain/**` · `packages/db/**` · `supabase/migrations/**` · `.github/workflows/**` · `deploy/production/**` · production environment variables or secrets · production database data · Discord delivery configuration · ingestion, grading, settlement, worker, or public-delivery behavior · branch protection or governance policy.
+
+      Also prohibited: **deploying Command Center**, **adding new operator mutation endpoints**, and adding any new research, modeling, intelligence, arbitrage, agent-control, governance, or trading-desk feature.
+
+      Note: root `.env.example` is **out of scope** — the `fail_open` default there must be reported as residual risk, not edited.
+
+      ## Definition of done
+
+       1. There is **one** navigation and route authority.
+       2. Competing hardcoded navigation systems are removed or consolidated (all four sources above).
+       3. The six primary operator workflows are coherent and reachable.
+       4. `/settlement` is either implemented as a real authoritative workflow **using existing governed capabilities** (`actions/settle.ts` → `POST /api/picks/{id}/settle`, `SettlementForm.tsx`) **or** removed from the authoritative route registry with an explicit truthful classification. **Do not create new API authority to force it into this lane.**
+       5. Duplicate shell and UI implementations are consolidated where proven safe. The `/events` + `/intelligence` double-header is fixed.
+       6. Every existing page is classified as authoritative, degraded, deferred, stub, duplicate, or retire.
+       7. Deferred and untrustworthy surfaces are removed from primary navigation.
+       8. No fake metrics, hardcoded success, silent zero fallbacks, or readiness theater remain in the primary workflow. Generalize the honest `getPipelineContent` → `null` → degraded-banner pattern; remove the fabricated `catch` payloads.
+       9. **REMOVED — moved to the Tier C successor.** This lane must not change authentication precedence, middleware auth behavior, or the example environment default. It must leave production auth behavior exactly as found and record the defect in proof.
+      10. No Command Center write bypasses the canonical API.
+      11. No new direct database authority is introduced.
+      12. Current direct privileged-read behavior (service-role `getDataClient()`, the `intel/teams` page-level client, and `storage-health.ts`'s Management-API SQL) is **documented in the proof as a residual deployment risk**. Do not redesign shared database authority in this lane.
+      13. Unit tests cover route classification, navigation authority, degraded/unknown rendering, and critical operator-state transformations — placed in `src/lib/` or `src/lib/data/` so the **existing** test glob executes them with **no** `package.json` **change**. The stale `command-center-rebuild.test.tsx` may be retired. The unwired-glob gap (4 excluded test files) is reported as deferred work requiring separate authorization.
+      14. Playwright covers **desktop and mobile** navigation through all six primary workflows.
+      15. Normal Command Center build, type-check, tests, and required repository verification pass.
+      16. Attempt the standalone Docker build with the repository's current supported method. Both known failures (workspace artifacts; missing `public/`) are fixable entirely within `apps/command-center/**` — the Dockerfile itself is in scope. **If any required fix falls outside **`apps/command-center/**`**, STOP and return the exact external dependency.**
+      17. Screenshots of the six primary workflows at representative desktop and mobile widths.
+      18. Independent exact-head review specifically attempts to find: hidden routes still reachable as apparently authoritative; missing routes named authoritative; conflicting navigation sources; fake healthy/zero fallbacks; auth fail-open behavior in production mode; direct mutation paths; broken container-build assumptions; overlap with Smart Form or production lanes.
+      19. **No file outside the approved scope is changed.**
+      20. The final PR states clearly that **Command Center is still not production-deployed and deployment requires a separate lane.**
+
+      ## Proof requirements
+
+      Standard Delivery/UI T2 proof bundle, plus: before/after route inventory; the page-classification table (all 55); duplicate/dead-surface disposition; navigation-authority proof; unit + type-check + build + E2E + Docker-build + `pnpm verify` results; desktop/mobile screenshots; independent exact-head reviewer verdict; explicit file-overlap check against Smart Form and production lanes.
+
+      ## Dependencies and sequencing
+
+      * [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) **(Smart Form Phase 1)** — authorized scope is `apps/api/**`, `packages/contracts/**`, `packages/db/{repositories,runtime-repositories}.ts`, `apps/smart-form/**`. **Zero file overlap** with `apps/command-center/**` (verified 2026-08-30). May run fully in parallel. One-way dependency to note: Smart Form SF-10 says Track Only picks "may be persisted and surfaced to Command Center" — that is a *future* CC read concern, not a file conflict, and is out of scope here.
+      * No active lane owns any `apps/command-center/**` path. All open PRs (#1461, #1453, #1451, #1429) touch **zero** CC files.
+      * This lane must not delay Smart Form or the primary production-recovery work. It uses a `delivery-ui` slot, **not** a runtime or migration singleton.
+
+      ## Stop conditions
+
+      Stop and report rather than widening scope if: an active lane takes any required CC path · completion requires modifying API, contracts, DB packages, domain logic, migrations, production deployment, or workflows · completion requires a production database write · a CC action bypasses the API and fixing it requires shared-authority changes · the app cannot be made buildable without changes outside authorized scope · route consolidation requires a new business/product decision from Griff · live repository/GitHub/Linear/lane truth cannot be established · policy refuses lane admission.
+
+      **Do not report completion based on files existing or pages rendering.** The exit is one coherent, truthfully classified internal operator application with exact-head verification — not another redesign layer.
+    captured_at: 2026-08-30T11:09:09.731Z
+    description_sha256: 7338a838f86d96ff364dd5a084e4b5c77c203eafd399ada2be8465edba3f6ce5
+  contract_hash: 73d3b587d6333378939430c90f359e463b112b56732d5a7ffc52992300d2412b

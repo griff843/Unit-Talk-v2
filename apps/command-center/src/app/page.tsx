@@ -1,20 +1,13 @@
 import { OverviewDashboardClient } from '@/components/OverviewDashboardClient';
+import { DegradedState } from '@/components/ui';
 import { getDashboardData, getDashboardRuntimeData, getDailyPickCounts } from '@/lib/data';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
-import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
+import { describeOperatorFailure } from '@/lib/describe-error';
+import type { DashboardData, DashboardRuntimeData } from '@/lib/types';
 
 export const metadata = { title: 'Executive Overview — Unit Talk Command Center' };
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
-
-const BROKEN_SIGNALS: LifecycleSignal[] = [
-  { signal: 'submission', status: 'BROKEN', detail: 'API unreachable' },
-  { signal: 'scoring', status: 'BROKEN', detail: 'API unreachable' },
-  { signal: 'promotion', status: 'BROKEN', detail: 'API unreachable' },
-  { signal: 'discord_delivery', status: 'BROKEN', detail: 'API unreachable' },
-  { signal: 'settlement', status: 'BROKEN', detail: 'API unreachable' },
-  { signal: 'stats_propagation', status: 'BROKEN', detail: 'API unreachable' },
-];
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
   const raw = searchParams?.refresh;
@@ -31,9 +24,10 @@ export default async function DashboardPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const searchParams = await searchParamsPromise;
-  let data: DashboardData;
-  let runtime: DashboardRuntimeData;
+  let data: DashboardData | null = null;
+  let runtime: DashboardRuntimeData | null = null;
   let dailyPickCounts: number[] | null = null;
+  let loadError: string | null = null;
   try {
     const [dashboardData, dashboardRuntimeData, dailyCounts] = await Promise.all([
       getDashboardData(),
@@ -43,133 +37,24 @@ export default async function DashboardPage({
     data = dashboardData;
     runtime = dashboardRuntimeData;
     dailyPickCounts = dailyCounts ? dailyCounts.map((d) => d.count) : null;
-  } catch {
-    data = {
-      signals: BROKEN_SIGNALS,
-      picks: [],
-      stats: { total: 0, wins: 0, losses: 0, pushes: 0, roiPct: null },
-      exceptions: [],
-      observedAt: new Date().toISOString(),
-    };
-    runtime = {
-      outbox: {
-        pending: 0,
-        processing: 0,
-        sent: 0,
-        failed: 0,
-        deadLetter: 0,
-        simulated: 0,
-      },
-      worker: {
-        drainState: 'unknown',
-        detail: 'Unavailable',
-        latestRunAt: null,
-        latestReceiptAt: null,
-      },
-      aging: {
-        staleValidated: 0,
-        stalePosted: 0,
-        staleProcessing: 0,
-      },
-      deliveryTargets: [],
-      providerSummary: {
-        active: 0,
-        stale: 0,
-        absent: 0,
-        distinctEventsLast24h: 0,
-        ingestorStatus: 'unknown',
-        latestLiveSnapshotAt: null,
-      },
-      providerCycleSummary: {
-        overallStatus: 'warning',
-        trackedLanes: 0,
-        mergedLanes: 0,
-        blockedLanes: 0,
-        failedLanes: 0,
-        staleLanes: 0,
-        proofRequiredLanes: 0,
-        latestCycleSnapshotAt: null,
-        latestUpdatedAt: null,
-      },
-      receipts: {
-        sent: 0,
-        failed: 0,
-        simulated: 0,
-        lastSentAt: null,
-        lastFailedAt: null,
-      },
-      grading: {
-        lastGradingRunAt: null,
-        lastGradingRunStatus: null,
-        lastPicksGraded: null,
-        lastFailed: null,
-        lastRecapPostAt: null,
-        lastRecapChannel: null,
-        runCount: 0,
-      },
-      observability: {
-        failedRuns: 0,
-        activeIncidents: 0,
-        pendingOutboxAgeMaxMinutes: null,
-        latestDistributionRunAt: null,
-        latestIngestorRunAt: null,
-        latestWorkerHeartbeatAt: null,
-        alertConditions: [],
-      },
-      db: {
-        disk: {
-          provisionedGiB: 0,
-          usedGiB: 0,
-          availableGiB: 0,
-          usedPct: 0,
-          iops: 0,
-          throughputMiBps: 0,
-          diskType: 'unknown',
-          observedAt: new Date().toISOString(),
-          projectedDaysToFull: null,
-          alertStatus: 'stable',
-        },
-        connections: {
-          used: 0,
-          max: 0,
-          waiting: 0,
-        },
-        locks: {
-          waiting: 0,
-        },
-        longTransactions: {
-          count: 0,
-          maxAgeSeconds: 0,
-        },
-        slowQueries: {
-          count: 0,
-          maxAgeSeconds: 0,
-        },
-        wal: {
-          sizeGiB: 0,
-          estimatedGrowthGiBPerDay: 0,
-          archiveMode: 'unknown',
-          archiveConfigured: false,
-        },
-        backups: {
-          pitrEnabled: false,
-          walGEnabled: false,
-          lastBackupAt: null,
-          lastBackupStatus: null,
-          restorePointCount: 0,
-        },
-        storageDomains: [],
-        topGrowthSources: [],
-      },
-      baseline: {
-        normal: [],
-        abnormal: [],
-      },
-    };
+  } catch (error) {
+    loadError = describeOperatorFailure(error, 'Dashboard and runtime sources did not return an authoritative snapshot.');
   }
 
-  const observedAt = data.observedAt ?? new Date().toISOString();
   const intervalMs = readRefreshIntervalMs(searchParams);
+
+  if (!data || !runtime) {
+    return (
+      <DegradedState
+        severity="critical"
+        title="Overview truth unavailable"
+        causes={[loadError ?? 'Dashboard and runtime sources did not return an authoritative snapshot.']}
+        action={{ label: 'System Health', href: '/api-health' }}
+      />
+    );
+  }
+
+  const observedAt = data.observedAt;
 
   return (
     <div className="flex flex-col gap-6">

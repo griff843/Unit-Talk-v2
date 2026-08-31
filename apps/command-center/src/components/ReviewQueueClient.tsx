@@ -70,7 +70,9 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
   if (picks.length === 0) {
     return (
       <Card>
-        <p className="text-sm text-gray-500">No picks awaiting review — the queue is clear.</p>
+        <p className="text-sm text-gray-500">
+          No review candidates were returned for this page. No full-queue clear state was inferred.
+        </p>
       </Card>
     );
   }
@@ -84,7 +86,7 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
       <div className="cc-surface overflow-hidden">
         <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
           <span className="text-xs text-gray-500">
-            Showing {picks.length} of {total} awaiting review
+            Loaded {picks.length} rows · source query reported {total} before fixture exclusion
           </span>
           <span className="text-[11px] text-gray-500">
             Routing score reflects promotion policy fit, not win probability.

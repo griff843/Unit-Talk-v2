@@ -5,10 +5,10 @@ import { Sparkline } from './Sparkline';
 
 export interface ProviderHealthCardProps {
   provider: string;
-  status: 'healthy' | 'degraded' | 'down';
+  status: 'healthy' | 'degraded' | 'down' | 'unknown';
   responseMs: number | null;
-  quotaPct: number;
-  callsToday: number;
+  quotaPct: number | null;
+  callsToday: number | null;
   lastCheckedAt: string | null;
   sparkline?: number[];
 }
@@ -22,7 +22,8 @@ export function resolveQuotaTone(quotaPct: number) {
 function resolveStatusTone(status: ProviderHealthCardProps['status']) {
   if (status === 'down') return 'bg-rose-400';
   if (status === 'degraded') return 'bg-amber-400';
-  return 'bg-emerald-400';
+  if (status === 'healthy') return 'bg-emerald-400';
+  return 'bg-slate-400';
 }
 
 function formatCheckedAt(value: string | null) {
@@ -62,7 +63,7 @@ export function ProviderHealthCard({
         </div>
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">Calls Today</p>
-          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">{callsToday.toLocaleString()}</p>
+          <p className="mt-1 text-sm text-[var(--cc-text-secondary)]">{callsToday == null ? 'Unavailable' : callsToday.toLocaleString()}</p>
         </div>
       </div>
 
@@ -77,11 +78,13 @@ export function ProviderHealthCard({
       <div className="mt-5">
         <div className="mb-2 flex items-center justify-between text-[11px] uppercase tracking-[0.16em] text-[var(--cc-text-muted)]">
           <span>Quota Usage</span>
-          <span>{quotaPct}%</span>
+          <span>{quotaPct == null ? 'Unavailable' : `${quotaPct}%`}</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-          <div className={`h-full rounded-full transition-[width] duration-[250ms] ${resolveQuotaTone(quotaPct)}`} style={{ width: `${Math.min(100, Math.max(0, quotaPct))}%` }} />
-        </div>
+        {quotaPct == null ? null : (
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div className={`h-full rounded-full transition-[width] duration-[250ms] ${resolveQuotaTone(quotaPct)}`} style={{ width: `${Math.min(100, Math.max(0, quotaPct))}%` }} />
+          </div>
+        )}
       </div>
     </article>
   );

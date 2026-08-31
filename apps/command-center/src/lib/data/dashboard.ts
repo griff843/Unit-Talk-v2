@@ -4,6 +4,7 @@ import { getProviderHealth } from './intelligence.js';
 import { getDataClient } from './client.js';
 import { getProviderCycleHealth } from './provider-cycle-health.js';
 import { getStorageHealth } from './storage-health.js';
+import { readAuthoritativeCount } from '../query-result.js';
 import type {
   DashboardData,
   DashboardRuntimeData,
@@ -237,15 +238,16 @@ function deriveSignals(
 
 // ── Lifecycle / promotion / delivery / settlement status mapping ──────────────
 
-function mapLifecycleStatus(status: string): PickRow['lifecycleStatus'] {
+export function mapLifecycleStatus(status: string): PickRow['lifecycleStatus'] {
   switch (status) {
     case 'submitted': return 'submitted';
     case 'validated': return 'validated';
+    case 'awaiting_approval': return 'awaiting_approval';
     case 'queued': return 'queued';
     case 'posted': return 'posted';
     case 'settled': return 'settled';
     case 'voided': return 'voided';
-    default: return 'validated';
+    default: return 'unknown';
   }
 }
 
@@ -823,6 +825,29 @@ export interface DailyPickCount {
   count: number;
 }
 
+export interface UtcDayWindow {
+  day: string;
+  startIso: string;
+  endIso: string;
+}
+
+export function buildUtcDayWindows(days: number, now = new Date()): UtcDayWindow[] {
+  const windowCount = Math.max(0, Math.floor(days));
+  const todayStartMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+  return Array.from({ length: windowCount }, (_, index) => {
+    const daysAgo = windowCount - index - 1;
+    const startMs = todayStartMs - daysAgo * 24 * 60 * 60 * 1000;
+    const endMs = startMs + 24 * 60 * 60 * 1000;
+
+    return {
+      day: new Date(startMs).toISOString().slice(0, 10),
+      startIso: new Date(startMs).toISOString(),
+      endIso: new Date(endMs).toISOString(),
+    };
+  });
+}
+
 /**
  * Pick submissions per UTC day over the trailing `days` window (default 7),
  * zero-filled for gap days. Backs the Overview KPI sparkline. Returns null on
@@ -831,29 +856,20 @@ export interface DailyPickCount {
 export async function getDailyPickCounts(days = 7): Promise<DailyPickCount[] | null> {
   try {
     const client = getDataClient();
-    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1000;
-    const sinceIso = new Date(sinceMs).toISOString();
-    const { data, error } = await client
-      .from('picks')
-      .select('created_at')
-      .gte('created_at', sinceIso)
-      .limit(10000);
-    if (error) throw error;
+    const windows = buildUtcDayWindows(days);
 
-    const byDay = new Map<string, number>();
-    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
-      const iso = typeof row['created_at'] === 'string' ? row['created_at'] : null;
-      if (!iso) continue;
-      const day = iso.slice(0, 10);
-      byDay.set(day, (byDay.get(day) ?? 0) + 1);
-    }
+    return await Promise.all(windows.map(async (window) => {
+      const result = await client
+        .from('picks')
+        .select('id', { count: 'exact', head: true })
+        .gte('created_at', window.startIso)
+        .lt('created_at', window.endIso);
 
-    const out: DailyPickCount[] = [];
-    for (let i = days - 1; i >= 0; i -= 1) {
-      const day = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      out.push({ day, count: byDay.get(day) ?? 0 });
-    }
-    return out;
+      return {
+        day: window.day,
+        count: readAuthoritativeCount(result, `pick submissions on ${window.day}`),
+      };
+    }));
   } catch {
     return null;
   }
