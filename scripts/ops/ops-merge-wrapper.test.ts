@@ -21,6 +21,7 @@ import {
   runExtendedMergeWrapper,
   runMergeWrapper,
   worktreeResidue,
+  abortInProgressSync,
   isNotFastForwardFailure,
   classifyDroppedPaths,
   PROTECTED_SYNC_PATH_PREFIXES,
@@ -149,6 +150,20 @@ const REBASE_APPLY_DIR_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'rebase-a
 // Order matches probeSyncResidue: MERGE_HEAD, REBASE_HEAD, the two sequencer
 // directories (reached only when REBASE_HEAD is absent), CHERRY_PICK_HEAD,
 // REVERT_HEAD, then unmerged paths.
+// UTV2-1790 (review round 8): `main-sync` now measures the worktree BEFORE it
+// stashes or pulls, and refuses over a tree that is mid-merge/rebase/cherry-pick/
+// revert. Mock-runner fixtures below are about command SEQUENCES, not about
+// worktree state, and their runners answer every vector with the mock's blanket
+// response -- which the pre-flight would correctly read as unanswerable.
+//
+// These fixtures therefore state their premise explicitly rather than encoding it
+// in a mock's incidental behaviour. The pre-flight itself is proven against REAL
+// git by tests 58, 63 and 64, never by this stub.
+const CLEAN_WORKTREE_PROBE = (): { clean: boolean; detail: string } => ({
+  clean: true,
+  detail: 'test fixture posits a clean worktree',
+});
+
 const CLEANUP_PROBE_CALLS = [
   MERGE_HEAD_PROBE_CALL,
   REBASE_HEAD_PROBE_CALL,
@@ -329,7 +344,7 @@ test('main-sync succeeds on fast-forward without rebase', () => {
     const calls: string[][] = [];
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
     assert.strictEqual(result.ok, true);
     assert.deepStrictEqual(calls, [
@@ -356,7 +371,7 @@ test('UTV2-1678: main-sync refuses on divergence and never invokes the rebase ve
     }));
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
-      { lockPath, deferredDir, runner: divergedRunner },
+      { lockPath, deferredDir, runner: divergedRunner , residueProbe: CLEAN_WORKTREE_PROBE },
     );
 
     assert.strictEqual(result.ok, false, 'a diverged main-sync must not report success');
@@ -415,6 +430,7 @@ test('UTV2-1678: a sync that drops a proof bundle is refused and the tree restor
       {
         lockPath,
         deferredDir,
+        residueProbe: CLEAN_WORKTREE_PROBE,
         runner: droppingSyncRunner(calls, [
           'docs/06_status/proof/UTV2-1584/evidence.json',
           'docs/06_status/proof/UTV2-1584/verification.md',
@@ -441,7 +457,7 @@ test('UTV2-1678: a sync that drops only non-governance paths succeeds with a war
     const calls: string[][] = [];
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: droppingSyncRunner(calls, ['scripts/ops/scratch.ts']) },
+      { lockPath, deferredDir, runner: droppingSyncRunner(calls, ['scripts/ops/scratch.ts']) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
 
     assert.strictEqual(result.ok, true, 'a non-governance drop is reported, not refused');
@@ -582,7 +598,7 @@ test('main-sync does not fall back to rebase on non-divergence error', () => {
     }));
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'main-sync' },
-      { lockPath, deferredDir, runner: networkErrorRunner },
+      { lockPath, deferredDir, runner: networkErrorRunner , residueProbe: CLEAN_WORKTREE_PROBE },
     );
     assert.strictEqual(result.ok, false);
     assert.strictEqual(result.code, 'merge_wrapper_command_failed');
@@ -616,7 +632,7 @@ test('git-merge-main fails closed when another unexpired merge lock exists', () 
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
 
     assert.strictEqual(result.ok, false);
@@ -643,7 +659,7 @@ test('git-rebase-main fails closed when another unexpired merge lock exists', ()
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-rebase-main' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
 
     assert.strictEqual(result.ok, false);
@@ -670,7 +686,7 @@ test('pr-merge fails closed when another unexpired merge lock exists', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'pr-merge', pr: '766', merge_method: 'squash' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
 
     assert.strictEqual(result.ok, false);
@@ -689,7 +705,7 @@ test('git-merge-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: withCleanCleanupProbes(
+      { lockPath, deferredDir, residueProbe: CLEAN_WORKTREE_PROBE, runner: withCleanCleanupProbes(
           calls,
           stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })),
         ) },
@@ -715,7 +731,7 @@ test('git-rebase-main releases the lock after command failure', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-rebase-main' },
-      { lockPath, deferredDir, runner: withCleanCleanupProbes(
+      { lockPath, deferredDir, residueProbe: CLEAN_WORKTREE_PROBE, runner: withCleanCleanupProbes(
           calls,
           stashAwareRunner(calls, () => ({ status: 128, stdout: '', stderr: 'conflict' })),
         ) },
@@ -807,7 +823,7 @@ test('git-merge-main completes successfully and releases the lock', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
     const lock = readMergeLock(lockPath);
 
@@ -833,7 +849,7 @@ test('git-rebase-main completes successfully and releases the lock', () => {
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-rebase-main' },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
     const lock = readMergeLock(lockPath);
 
@@ -863,7 +879,7 @@ test('dry-run for git-merge-main does not run the command and releases the lock'
 
     const result = runExtendedMergeWrapper(
       { ...BASE, operation: 'git-merge-main', dry_run: true },
-      { lockPath, deferredDir, runner: okRunner(calls) },
+      { lockPath, deferredDir, runner: okRunner(calls) , residueProbe: CLEAN_WORKTREE_PROBE },
     );
     const lock = readMergeLock(lockPath);
 
@@ -1955,7 +1971,18 @@ test('UTV2-1790: an undeterminable worktree state fails closed instead of report
 
       const result = runExtendedMergeWrapper(
         { ...BASE, operation: 'git-merge-main', cwd: dir },
-        { lockPath, deferredDir, runner },
+        {
+          lockPath,
+          deferredDir,
+          runner,
+          // Scope this fixture to the POST-command cleanup probe. Review round 8
+          // added a pre-flight residue measurement that runs before the merge, and
+          // it would (correctly) refuse this repo first, so the cleanup path under
+          // test would never be reached. The pre-flight's own undeterminable case
+          // is proven separately by test 63; `abortInProgressSync` does NOT use
+          // this stub -- it probes through `runner`, which still returns 128.
+          residueProbe: CLEAN_WORKTREE_PROBE,
+        },
       );
 
       assert.strictEqual(result.ok, false);
@@ -2017,6 +2044,7 @@ test('UTV2-1790: a cleanup hook that throws fails closed rather than escaping', 
             stdout: '',
             stderr: 'simulated failure',
           })),
+          residueProbe: CLEAN_WORKTREE_PROBE,
           onCommandFailure: () => {
             throw new Error('cleanup exploded');
           },
@@ -2457,7 +2485,18 @@ test('UTV2-1790: a stash-push failure over an in-progress merge fails closed and
       );
 
       assert.strictEqual(result.ok, false);
-      assert.strictEqual(result.code, 'merge_wrapper_stash_failed');
+      // Review round 8 moved the refusal EARLIER. This scenario used to be caught
+      // only after `git stash push` had already failed against the unmerged index;
+      // the pre-flight now refuses before anything is attempted, so the observable
+      // code changes. The fail-closed guarantees below are unchanged, and one is
+      // stronger: nothing was stashed at all.
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.strictEqual(
+        result.main_sync_stash?.attempted,
+        false,
+        'the pre-flight must refuse BEFORE the autostash is attempted',
+      );
+      assert.strictEqual(result.main_sync_stash?.stashed, false);
 
       // THE CONTROL: the mutex is not handed over a conflicted index.
       const lock = readMergeLock(lockPath);
@@ -2510,7 +2549,11 @@ test('UTV2-1790: without a residue probe the release decision fails closed rathe
     );
 
     assert.strictEqual(result.ok, false);
-    assert.strictEqual(result.code, 'merge_wrapper_stash_pop_conflict');
+    // Round 8: the first `measureResidue()` consumer is now the pre-flight, so the
+    // no-probe default is exercised there rather than at the pop. The property
+    // under test is unchanged and is what this test's title names: an UNMEASURED
+    // worktree is never treated as a clean one.
+    assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
 
     // THE CONTROL: no probe means no measurement, and no measurement means the
     // lock is retained.
@@ -2523,6 +2566,13 @@ test('UTV2-1790: without a residue probe the release decision fails closed rathe
     assert.strictEqual(result.release, undefined, 'no release may be reported');
     assert.match(result.message, /could not be measured/u, 'says why it fell back');
     assert.match(result.message, /NOT released/u);
+
+    // And nothing ran: refusing to measure must not mean half-syncing.
+    assert.strictEqual(result.main_sync_stash?.attempted, false);
+    assert.ok(
+      !calls.some((call) => call[1] === 'stash' || call[1] === 'pull'),
+      'no stash and no pull may be issued over an unmeasured worktree',
+    );
   });
 });
 
@@ -2639,12 +2689,16 @@ test('UTV2-1790: a residue probe that throws fails closed rather than escaping',
     );
 
     assert.strictEqual(result.ok, false, 'the throw must not escape');
-    assert.strictEqual(result.code, 'merge_wrapper_stash_pop_conflict');
+    // Round 8: reached at the pre-flight, which is the first `measureResidue()`
+    // consumer. The guarded property -- a thrown probe becomes a fail-closed
+    // structured result, never an escaping stack trace -- is unchanged.
+    assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
     const lock = readMergeLock(lockPath);
     assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'fail closed on a thrown probe');
     assert.strictEqual(result.release, undefined);
     assert.match(result.message, /probe exploded/u, 'surfaces the thrown message');
     assert.match(result.message, /could not be measured/u);
+    assert.strictEqual(result.main_sync_stash?.attempted, false);
   });
 });
 
@@ -2712,3 +2766,366 @@ test('UTV2-1790: a rebase stopped at a break step is NOT reported clean', () => 
   }
 });
 
+
+test('UTV2-1790: main-sync refuses over a mid-rebase worktree instead of advancing a detached HEAD', () => {
+  // Review round 8, P1. THE DESTRUCTIVE CASE. Round 7 taught `worktreeResidue` to
+  // see sequencer state (test 62), but wired the new terms only into the two
+  // FAILURE branches -- and both of those are reached from a conflicted index,
+  // which a mid-rebase/mid-cherry-pick worktree does not have. So every new term
+  // was unreachable from any production decision path, and `main-sync` over a
+  // stranded rebase still ran `git pull --ff-only`, which fast-forwarded the
+  // DETACHED HEAD out from under the rebase in progress, returned
+  // `merge_wrapper_completed`, and released the repo-wide mutex.
+  //
+  // The fix is a pre-flight measurement before the autostash. This regression
+  // pins the whole outcome: refusal, code, retained mutex, unmoved HEAD, surviving
+  // rebase state, and an untouched worktree.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-preflight-rebase-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // main advances, so a `--ff-only` pull would genuinely have something to do.
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    const mainSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', mainSha);
+    git(dir, 'remote', 'add', 'origin', dir);
+
+    // The lane is strictly BEHIND main -- so absent the pre-flight the ff pull
+    // succeeds and the wrapper reports success. That is the fail-open being closed.
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'b.txt'), 'lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+    git(dir, 'update-ref', 'refs/heads/lane', baseSha);
+    git(dir, 'checkout', '-q', '-B', 'lane', baseSha);
+
+    // Strand an interactive rebase at a `break` step: detached HEAD, no MERGE_HEAD,
+    // no REBASE_HEAD, no unmerged paths -- the state round 7's terms describe.
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-two\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane two');
+    const rebase = spawnSync('git', ['rebase', '-i', 'HEAD~1'], {
+      cwd: dir,
+      stdio: 'pipe',
+      env: { ...process.env, GIT_SEQUENCE_EDITOR: "sed -i '1i break'", GIT_EDITOR: 'true' },
+    });
+    assert.strictEqual(rebase.status, 0, 'the interactive rebase must stop, not fail');
+
+    const strandedHead = git(dir, 'rev-parse', 'HEAD');
+    const strandedTree = git(dir, 'status', '--porcelain');
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: index is CLEAN, not conflicted');
+    assert.ok(
+      fs.existsSync(path.join(dir, '.git', 'rebase-merge')),
+      'premise: a rebase really is in progress',
+    );
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      // 1. It refuses, rather than reporting merge_wrapper_completed.
+      assert.strictEqual(result.ok, false, 'a mid-rebase worktree must never sync successfully');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+
+      // 2. THE CONTROL: HEAD was not advanced out from under the rebase.
+      assert.strictEqual(
+        git(dir, 'rev-parse', 'HEAD'),
+        strandedHead,
+        'the detached HEAD must NOT be fast-forwarded while a rebase is in progress',
+      );
+      assert.notStrictEqual(strandedHead, mainSha, 'the fixture must have something to lose');
+
+      // 3. The rebase state survives for the operator to finish or abort.
+      assert.ok(
+        fs.existsSync(path.join(dir, '.git', 'rebase-merge')),
+        'the rebase in progress must be left intact',
+      );
+
+      // 4. Nothing was stashed, so the worktree is byte-identical.
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash was attempted');
+      assert.strictEqual(git(dir, 'status', '--porcelain'), strandedTree, 'worktree untouched');
+
+      // 5. The repo-wide mutex is retained, not handed to the next lane.
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
+      assert.strictEqual(result.release, undefined, 'no release may be reported');
+
+      // 6. The refusal is measured and actionable.
+      assert.match(result.message, /rebase is in progress/u, 'names the measured state');
+      assert.match(result.message, /was NOT run/u, 'says the command did not run');
+      assert.match(result.message, /ops:merge-lock release/u, 'names a real release command');
+    });
+
+    spawnSync('git', ['rebase', '--abort'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: main-sync refuses over a resolved-but-uncommitted cherry-pick', () => {
+  // Review round 8, P2. `CHERRY_PICK_HEAD` and `REVERT_HEAD` entered
+  // `worktreeResidue` alongside the rebase terms and were pinned by nothing: test
+  // 62 covers only the rebase directory. This models the state where the operator
+  // has already `git add`-ed the resolution -- so the index is CLEAN and the
+  // unmerged-paths probe sees nothing -- but the cherry-pick is still open.
+  // Fast-forwarding over it would silently discard the pending pick.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-preflight-pick-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // A side commit to cherry-pick, written to conflict with the lane.
+    git(dir, 'checkout', '-q', '-b', 'side');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-side\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'side');
+    const sideSha = git(dir, 'rev-parse', 'HEAD');
+
+    // main advances so a --ff-only pull has real work to do.
+    git(dir, 'checkout', '-q', 'main');
+    fs.writeFileSync(path.join(dir, 'other.txt'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    const mainSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', mainSha);
+    git(dir, 'remote', 'add', 'origin', dir);
+
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+    const laneHead = git(dir, 'rev-parse', 'HEAD');
+
+    const pick = spawnSync('git', ['cherry-pick', sideSha], { cwd: dir, stdio: 'pipe' });
+    assert.notStrictEqual(pick.status, 0, 'the fixture must produce a real cherry-pick conflict');
+    // Resolve and stage it, WITHOUT committing: index clean, pick still open.
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'resolved\n');
+    git(dir, 'add', 'a.txt');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is no longer conflicted');
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+    assert.strictEqual(
+      spawnSync('git', ['rev-parse', '--verify', '--quiet', 'CHERRY_PICK_HEAD'], { cwd: dir })
+        .status,
+      0,
+      'premise: CHERRY_PICK_HEAD is the ONLY signal left',
+    );
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.match(result.message, /CHERRY_PICK_HEAD is present/u, 'names the measured state');
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), laneHead, 'HEAD must not move');
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash was attempted');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
+    });
+
+    spawnSync('git', ['cherry-pick', '--abort'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a pre-flight that cannot measure the worktree refuses the sync', () => {
+  // Review round 8. Test 51 proves the POST-command cleanup fails closed on an
+  // undeterminable state; this is its pre-flight twin, and it is the case test 51
+  // no longer covers now that it stubs the pre-flight. `git rev-parse --verify`
+  // exits non-zero both when a ref is absent and when the command could not run,
+  // so an unanswerable probe must never be read as "nothing in progress".
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-preflight-unknown-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const head = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', head);
+    git(dir, 'remote', 'add', 'origin', dir);
+
+    // The worktree is genuinely pristine -- only the MEASUREMENT is broken.
+    assert.strictEqual(git(dir, 'status', '--porcelain'), '');
+
+    const runner = realGitRunner((command, args) => {
+      const isProbe =
+        command === 'git' &&
+        ((args[0] === 'rev-parse' && args.includes('--verify')) ||
+          (args[0] === 'diff' && args.includes('--diff-filter=U')));
+      if (isProbe) {
+        return {
+          status: 128,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from('fatal: not a git repository'),
+          error: undefined,
+        } as ReturnType<CommandRunner>;
+      }
+      return undefined;
+    });
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(result.ok, false, 'an unmeasurable worktree must not be synced');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.match(result.message, /could not be determined/u, 'says the state is unknown');
+      assert.strictEqual(result.main_sync_stash?.attempted, false);
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'HEAD must not move');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: the post-failure cleanup does not call a mid-cherry-pick worktree "nothing to abort"', () => {
+  // Review round 8, P2. `abortInProgressSync`'s before-abort early return decides
+  // whether there is anything to clean up at all. Round 7 taught `worktreeResidue`
+  // about CHERRY_PICK_HEAD/REVERT_HEAD but left this second residue reader
+  // checking only MERGE_HEAD/REBASE_HEAD/unmerged -- so a worktree whose ONLY
+  // signal is CHERRY_PICK_HEAD took the `{ cleaned: true }` early return, and a
+  // caller that trusts `cleaned` would go on to pop the autostash and release the
+  // repo-wide mutex over an open cherry-pick.
+  //
+  // Reachability, stated honestly: with the round-8 pre-flight in place this
+  // function can no longer be REACHED in that state through the wrapper, because
+  // the pre-flight refuses first and no merge/rebase command creates a
+  // CHERRY_PICK_HEAD. The term is therefore defence-in-depth for a second entry
+  // point rather than a live production path -- but it is exported, so it is
+  // pinned directly here rather than left as an unmeasured claim.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-abort-pick-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    git(dir, 'checkout', '-q', '-b', 'side');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-side\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'side');
+    const sideSha = git(dir, 'rev-parse', 'HEAD');
+
+    git(dir, 'checkout', '-q', '-b', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-lane\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+
+    const realRunner: CommandRunner = (command, args, options) =>
+      spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>;
+
+    // A HEALTHY tree must take the early return, or this test proves nothing.
+    assert.deepStrictEqual(
+      abortInProgressSync('git-merge-main', realRunner, dir),
+      { cleaned: true, aborted: false },
+      'a clean worktree has nothing to abort',
+    );
+
+    const pick = spawnSync('git', ['cherry-pick', sideSha], { cwd: dir, stdio: 'pipe' });
+    assert.notStrictEqual(pick.status, 0, 'the fixture must produce a real cherry-pick conflict');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'resolved\n');
+    git(dir, 'add', 'a.txt');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is clean again');
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+
+    // THE CONTROL: the only signal is CHERRY_PICK_HEAD, and it must not read as
+    // "nothing to abort".
+    const outcome = abortInProgressSync('git-merge-main', realRunner, dir);
+    assert.strictEqual(
+      outcome.cleaned,
+      false,
+      'an open cherry-pick must never be reported as cleaned',
+    );
+
+    spawnSync('git', ['cherry-pick', '--abort'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a sequencer-directory probe that fails is undetermined, not absent', () => {
+  // Review round 8, P2. `sequencerDir` distinguishes "the rebase-merge directory
+  // is not there" from "I could not ask". Collapsing the second into the first is
+  // the same fail-open this lane closes one layer down: an unanswerable probe
+  // would make a mid-rebase worktree read clean.
+  //
+  // In practice `git rev-parse --git-path` exits 0 even for a path that does not
+  // exist, so this branch is defensive; it is pinned by driving the runner
+  // directly rather than by asserting the branch is unreachable.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-gitpath-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'base\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'base');
+
+    const realRunner: CommandRunner = (command, args, options) =>
+      spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>;
+    assert.strictEqual(
+      worktreeResidue(realRunner, dir).clean,
+      true,
+      'the pristine repository must read clean, or this test proves nothing',
+    );
+
+    // Only `--git-path` is broken; every other probe answers truthfully.
+    const brokenGitPath: CommandRunner = (command, args, options) => {
+      if (command === 'git' && args[0] === 'rev-parse' && args[1] === '--git-path') {
+        return {
+          status: 128,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from('fatal: not a git repository'),
+          error: undefined,
+        } as ReturnType<CommandRunner>;
+      }
+      return realRunner(command, args, options);
+    };
+
+    // THE CONTROL.
+    const residue = worktreeResidue(brokenGitPath, dir);
+    assert.strictEqual(residue.clean, false, 'an unanswerable probe must not read as clean');
+    assert.match(residue.detail, /state could not be determined/u);
+    assert.match(residue.detail, /rebase-merge \(git rev-parse --git-path exited 128\)/u);
+    assert.match(residue.detail, /rebase-apply/u, 'both sequencer directories are reported');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

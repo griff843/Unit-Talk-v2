@@ -88,6 +88,7 @@ export type MergeWrapperResult =
         | 'merge_wrapper_release_failed'
         | 'merge_wrapper_invalid_input'
         | 'merge_wrapper_stash_failed'
+        | 'merge_wrapper_worktree_not_clean'
         | 'merge_wrapper_stash_pop_conflict'
         | 'merge_wrapper_authorization_failed'
         // UTV2-1678: `main-sync` used to silently re-invoke itself as
@@ -580,6 +581,55 @@ export function runMergeWrapper(
   // proceed, then restore them unconditionally afterward.
   let mainSyncStash: MainSyncStashState | undefined;
   if (input.operation === 'main-sync') {
+    // UTV2-1790 (review round 7 -> 8, P1): MEASURE BEFORE MUTATING.
+    //
+    // Round 7 taught `worktreeResidue` about the sequencer states
+    // (CHERRY_PICK_HEAD, REVERT_HEAD, a rebase stopped at a `break`/`edit` step)
+    // but consulted it only from the stash-push and stash-pop FAILURE branches.
+    // Those branches require `git stash push` to fail, and `git stash push` fails
+    // only over an unmerged INDEX. Every sequencer state round 7 added leaves the
+    // index clean, so the push succeeds and the new terms were unreachable from
+    // any production decision. The two populations are disjoint; the round-7
+    // comment claiming otherwise was measurably false.
+    //
+    // What actually happened, reproduced end to end by a round-8 reviewer: on a
+    // worktree with a rebase stopped at a `break` step, `git pull --ff-only`
+    // succeeded against the DETACHED head, silently advanced it out from under
+    // the in-progress rebase, reported `merge_wrapper_completed`, and released
+    // the repo-wide mutex. A destructive success.
+    //
+    // So the measurement moves to the front, where it gates the first mutation
+    // instead of explaining the last one. Nothing has been touched at this point,
+    // which is exactly why refusing here is cheap and safe.
+    //
+    // The lock is RETAINED, matching the round-6 semantics for every other
+    // "this worktree is mid-operation" refusal: the next holder of a serializing
+    // lock must not be handed a tree that is part-way through a merge, rebase,
+    // cherry-pick or revert.
+    const preflight = measureResidue();
+    if (!preflight.clean) {
+      return {
+        ok: false,
+        code: 'merge_wrapper_worktree_not_clean',
+        issue_id: issueId,
+        operation: input.operation,
+        command: commandVector,
+        lock,
+        message:
+          `Refusing to sync: the worktree at ${cwd} is not in a clean state, so ` +
+          `${commandVector.join(' ')} was NOT run and nothing was stashed, pulled or ` +
+          `merged.\n` +
+          `Measured: ${preflight.detail}.\n` +
+          `A fast-forward pull over a worktree that is mid-merge, mid-rebase, ` +
+          `mid-cherry-pick or mid-revert can advance a detached HEAD out from under ` +
+          `the operation in progress and report success. The merge mutex was ` +
+          `deliberately NOT released: the next lane must not be handed this tree. ` +
+          `Finish or abort the operation in progress, then release it with ` +
+          `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`,
+        main_sync_stash: { attempted: false, stashed: false, popped: false },
+      };
+    }
+
     const stashPush = stashMainSyncPaths(runner, cwd);
     if (!stashPush.ok) {
       // UTV2-1790 (review round 6, P2): `git stash push` can fail because the
@@ -587,6 +637,13 @@ export function runMergeWrapper(
       // entries. Releasing the serializing mutex over that tree is the same
       // fail-open the cleanup path exists to close, reached from the one branch
       // that returns before any cleanup hook can run. Measure first.
+      //
+      // Round 8: the pre-flight above now catches that condition before anything
+      // is attempted, so this measurement is DEFENCE IN DEPTH rather than the
+      // primary control -- it covers a tree that became dirty between the
+      // pre-flight and the push, and a `git stash push` that fails for some other
+      // reason entirely (disk, permissions). It is described that way in the proof
+      // rather than claimed as the control it used to be.
       const residue = measureResidue();
       const release = residue.clean
         ? releaseMergeLock(

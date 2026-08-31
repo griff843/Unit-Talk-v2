@@ -398,7 +398,19 @@ export function abortInProgressSync(
         `cannot be reported clean: ${before.undetermined.join('; ')}.`,
     };
   }
-  if (!before.mergeHead && !before.rebaseHead && before.unmerged.length === 0) {
+  // UTV2-1790 (review round 8, P2): this early return must use the SAME definition
+  // of "clean" as `worktreeResidue` and as the post-abort `residue` below. Round 7
+  // added `cherryPickHead`/`revertHead` to both of those and not to this one, so a
+  // failed merge over a resolved-but-uncommitted cherry-pick took the
+  // nothing-to-abort exit, the autostash was popped and the mutex released over a
+  // mid-cherry-pick worktree -- the exact fail-open round 7 said it had closed.
+  if (
+    !before.mergeHead &&
+    !before.rebaseHead &&
+    !before.cherryPickHead &&
+    !before.revertHead &&
+    before.unmerged.length === 0
+  ) {
     // The command failed without starting anything -- e.g. `git merge` refused
     // up front. There is nothing to abort and nothing left behind.
     return { cleaned: true, aborted: false };
@@ -600,8 +612,11 @@ export function runExtendedMergeWrapper(
     // whether to release the mutex from a measurement of the worktree, not from an
     // assumption about why a git command exited non-zero. That probe arrives via
     // `optionsWithProbe` above, which binds `options.runner ?? spawnSync` -- the
-    // same value as `realRunner` here, and deliberately NOT the intercepting
-    // runner, which substitutes the sync command.
+    // same value as `realRunner` here, and not the intercepting runner, which
+    // substitutes the sync command. Like the `onCommandFailure` binding, that is
+    // documentation of intent rather than a load-bearing control: no probe vector
+    // matches the intercepted `main-sync` pull, so the two runners are
+    // behaviourally identical at this site and a mutant swapping them survives.
     //
     // Round 7 removed a duplicate `residueProbe` override at this site: it was
     // byte-for-byte equivalent to the default, so deleting it changed no
