@@ -8,11 +8,11 @@
   "status": "pre_merge",
   "generated_at": "2026-08-31T03:20:00.000000Z",
   "sha_binding": {
-    "merge_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
-    "verified_source_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "merge_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
+    "verified_source_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
     "verified_source_note": "Last commit on this branch touching a non-proof path. It carries the complete substantive change plus the final mutation control for CANONICAL_SPORT_ID_GUARD. Every commit after it changes only docs/06_status/proof/UTV2-1672/. It is the anchor rather than the PR head only because a file cannot contain its own SHA. merge_sha is rebound to the real merge commit by post-merge-lane-close.yml per CEP-E7. evidence_commit_sha and current_pr_head_sha are resolved by CI.",
-    "evidence_commit_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
-    "current_pr_head_sha": "d8cb5d929968bbe593626eab4e28448a34211467",
+    "evidence_commit_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
+    "current_pr_head_sha": "2b0e2225b863fd9b5e16719c11202ba16fbb2cd3",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
@@ -50,6 +50,16 @@
       "gate": "track-only/recap-exclusion",
       "verdict": "PASS",
       "detail": "RECAP_TRACK_ONLY_EXCLUSION_GUARD excludes Track Only picks from recap top-play selection. Added after round-3 review found the outbox chokepoint would otherwise throw inside postRecapSummary (whose enqueue sits outside its own try block, with topPlayRow chosen purely by profit and no Track Only filter), silently killing daily and weekly recaps."
+    },
+    {
+      "gate": "track-only/zombie-health-exclusion",
+      "verdict": "PASS",
+      "detail": "ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD keeps a Track Only pick out of the zombie-health predicate. Confirmed in source that a Track Only submission lands as promotion_status=qualified, promotion_target=best-bets, lifecycle=validated -- matching every clause of that predicate. Without the guard /health reports 503 after the first legitimate capper submission and prescribes a requeue TRACK_ONLY_REQUEUE_GUARD refuses. Mutation-controlled."
+    },
+    {
+      "gate": "track-only/board-capacity-exclusion",
+      "verdict": "PASS",
+      "detail": "BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD keeps a Track Only pick out of live board capacity in both getPromotionBoardState implementations. Otherwise it inflates board, sport, game and duplicate counts for the full 7-day window and suppresses genuinely deliverable picks once a cap is reached. Proven by premise assertion plus a positive control rather than a mutation control -- see static_proof.controls.coverage."
     },
     {
       "gate": "identity/capper-track-only-pin",
@@ -94,7 +104,7 @@
     {
       "gate": "pnpm verify:static",
       "verdict": "PASS",
-      "detail": "exit 0 at the anchor head. 99 node:test suites, 5360 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines. Exit code captured from the pnpm process directly, not from a pipeline tail. executable-wiring PASS, unwired baselined=119 new=0."
+      "detail": "exit 0 at the anchor head. 99 node:test suites, 5363 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines. Exit code captured from the pnpm process directly, not from a pipeline tail. executable-wiring PASS, unwired baselined=119 new=0."
     },
     {
       "gate": "pnpm lint",
@@ -136,13 +146,13 @@
   "pm_verdict": null,
   "static_proof": {
     "status": "pass",
-    "profile_rationale": "Runtime lane verified by executing the changed code: 273 tests across the eight touched suites, including 15 mutation controls that import and execute mutated copies of the real modules. The live-DB half of pnpm verify is produced by the required verify CI job in the staging-ci environment.",
+    "profile_rationale": "Runtime lane verified by executing the changed code: 276 tests across the eight touched suites, including 17 mutation controls that import and execute mutated copies of the real modules. The live-DB half of pnpm verify is produced by the required verify CI job in the staging-ci environment.",
     "commands": [
       {
         "command": "pnpm verify:static",
         "exit_code": 0,
         "result": "pass",
-        "detail": "99 node:test suites, 5360 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines."
+        "detail": "99 node:test suites, 5363 passing, 0 fail, 0 cancelled, 0 skipped, 0 'not ok' lines."
       },
       {
         "command": "pnpm lint",
@@ -160,7 +170,7 @@
         "command": "pnpm exec tsx --test <8 touched suites>",
         "exit_code": 0,
         "result": "pass",
-        "detail": "273 tests, 0 failures."
+        "detail": "276 tests, 0 failures."
       },
       {
         "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -171,10 +181,10 @@
     ],
     "controls": {
       "method": "Each control reads the guard's own source, deletes the block between its UTV2-1672 <NAME>_START / _END markers by regex (g flag, so a guard marking multiple blocks is fully removed), asserts mutantSource !== source so a rename cannot make the control vacuous, writes a sibling module, imports it with a ?mutation= cache-buster, asserts the prevented behaviour now occurs, and unlinks in finally.",
-      "guards": 15,
-      "mutation_controls": 15,
+      "guards": 17,
+      "mutation_controls": 16,
       "result": "pass",
-      "coverage": "every UTV2-1672 guard has a mutation control; removal fails and restoration passes for all 15"
+      "coverage": "16 of 17 UTV2-1672 guards have a mutation control; removal fails and restoration passes for each. BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD lives in packages/db/src/runtime-repositories.ts, which an app test cannot import as source without violating the db-client-boundary check; it is instead proven by asserting its premise (the pick really is promotion_status=qualified, promotion_target=best-bets, lifecycle=validated -- exactly what the board query counts) plus a positive control showing an ordinary qualified pick still counts 1. Weaker than a mutation control and labelled as such."
     },
     "live_db": {
       "status": "not_applicable_locally",
@@ -189,12 +199,13 @@
     },
     "independent_review": {
       "performed": true,
-      "rounds": 4,
+      "rounds": 5,
       "scope": "rounds 2-4 adversarially reviewed the implementation; each round also audited the previous round's fixes",
-      "outcome": "all outage-class and vacuity-class findings fixed; two classes deliberately carried as disclosed residual risk",
+      "outcome": "all outage-class and vacuity-class findings fixed through five rounds; two classes deliberately carried as disclosed residual risk. Round 5 (Codex reviewer on PR #1466) raised three findings: two P1 confirmed in source and fixed (zombie-health and live-board capacity both count a Track Only pick, which is force-qualified to best-bets and never enqueued), one P2 deliberately deferred.",
       "not_fixed": [
         "isSameEntityName both under-refuses (a trailing extra or reordered token evades it: 'Knicks Basketball', 'Knicks NY') and over-refuses (a shared trailing token matches distinct entities: 'North Texas' refused as 'Texas'). Not independently fixable: round 3 required 'Alex Pereira Junior' NOT be treated as covered while round 4 requires 'Knicks Basketball' BE treated as covered -- the same structural case with opposite required verdicts. This is bypass-detection for a manual-override claim, not a safety boundary: it does not gate Track Only, member distribution, capper identity, or source spoofing, and a wrong verdict creates no member delivery.",
-        "getCatalog() is an uncached 7-query round trip on every Smart Form submission. Performance debt."
+        "getCatalog() is an uncached 7-query round trip on every Smart Form submission. Performance debt.",
+        "P2: DatabaseReferenceDataRepository.searchPlayers fetches an unordered global limit*5 batch matching %query% and only then filters by sport assignment, so a sport absent from that arbitrary batch is reported playersAvailable:false even when canonical players exist -- a fail-open that would enable the form's coverage-gap fallback. Confirmed real in source. Deferred because it is latent (it needs >500 players across sports; production has 12) and a correct fix changes the pagination and scoping semantics of a shared repository method other callers depend on -- the same shape of change that made rounds 2 and 3 introduce new defects. The review thread is left open rather than resolved."
       ],
       "disclosed_dependencies": [
         "apps/smart-form on this branch sends neither metadata.distributionMode nor metadata.participantResolution, so SMART_FORM_HTTP_CONTRACT_GUARD 400s the current frontend until Lane 2 (UTV2-1786) lands. Intended phased outcome -- production activation is disabled, and the alternative is leaving the HTTP boundary open.",

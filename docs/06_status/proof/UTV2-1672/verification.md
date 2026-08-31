@@ -1,6 +1,6 @@
 # PROOF: UTV2-1672
 
-MERGE_SHA: d8cb5d929968bbe593626eab4e28448a34211467
+MERGE_SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 
 > Pre-merge the merge anchor carries the verified implementation identity; the
 > Execution SHA row below repeats it. `post-merge-lane-close.yml` rebinds merge
@@ -11,7 +11,7 @@ Tier: T1
 Lane type: runtime
 Proof profile: static
 Branch: claude/utv2-1672-smart-form-backend-track-only
-Head SHA: d8cb5d929968bbe593626eab4e28448a34211467
+Head SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Diff base: cb5dc80350b06374efaea450a2fbfe6724d3c201
 result: pass
 
@@ -26,9 +26,20 @@ canonical reference data or prove the coverage gap it claims.
 The load-bearing claim is not that these guards exist. It is that each one is
 *doing* something: every guard carries a mutation control that deletes the
 guard's marked block from a copy of its own source, imports the mutant, and
-asserts the prevented behaviour actually occurs. 15 guards, 15 controls. A
-guard that could be deleted with all tests still green is not a guard, and
-this bundle is the evidence that none of these can be.
+asserts the prevented behaviour actually occurs. **17 guards, 16 mutation
+controls.** A guard that could be deleted with all tests still green is not a
+guard, and this bundle is the evidence that 16 of these cannot be.
+
+The one guard without a mutation control is
+`BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD`, which lives in
+`packages/db/src/runtime-repositories.ts`. Mutating it would require an app
+test to import package source directly, which the db-client-boundary check
+forbids. It is instead proven by asserting its premise: the test asserts the
+pick really is `promotion_status=qualified`, `promotion_target=best-bets`,
+`lifecycle=validated` -- exactly what the board query counts -- and pairs that
+with a positive control showing an ordinary qualified pick still counts 1. The
+exclusion is therefore specific rather than a query that now counts nothing.
+This is weaker than a mutation control and is labelled as such.
 
 ## ASSERTIONS:
 
@@ -60,6 +71,18 @@ this bundle is the evidence that none of these can be.
       recap top-play selection. See "A guard that caused an outage" below; this
       one exists because the chokepoint above would otherwise have silently
       killed daily and weekly recaps.
+- [x] **T7** `ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD` keeps a Track Only pick
+      out of the zombie-health predicate. A zombie is a pick that *should* have
+      delivery work and does not; a Track Only pick is force-qualified to
+      best-bets and then deliberately never enqueued, so it matches every clause
+      of that predicate while being exactly what was asked for. Without this,
+      `/health` reports 503 after the first legitimate capper submission and
+      prescribes a requeue that `TRACK_ONLY_REQUEUE_GUARD` refuses.
+- [x] **T8** `BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD` keeps a Track Only pick
+      out of live board capacity in **both** `getPromotionBoardState`
+      implementations. Otherwise it inflates board, sport, game and duplicate
+      counts for the full 7-day window and suppresses genuinely deliverable
+      picks once a cap is reached.
 - [x] **Zero member distribution.** No test in this lane produces a
       `distribution_outbox` row for a Track Only pick, and the chokepoint makes
       that structural rather than incidental.
@@ -109,7 +132,7 @@ this bundle is the evidence that none of these can be.
 
 ### Verification
 
-- [x] `pnpm verify:static` exits 0 at this head: 99 suites, 5360 passing, 0
+- [x] `pnpm verify:static` exits 0 at this head: 99 suites, 5363 passing, 0
       fail, 0 cancelled, 0 skipped, 0 `not ok` lines. The `test:live-db` half is
       produced by the required `verify` CI job in the `staging-ci` environment;
       it cannot run locally by design.
@@ -124,10 +147,10 @@ this bundle is the evidence that none of these can be.
 
 | Command | Result |
 |---|---|
-| `pnpm verify:static` | exit 0 -- 99 suites, 5360 pass, 0 fail/skip/cancel |
+| `pnpm verify:static` | exit 0 -- 99 suites, 5363 pass, 0 fail/skip/cancel |
 | `pnpm lint` (standalone) | exit 0, no findings |
 | `pnpm type-check` (standalone) | exit 0, no diagnostics |
-| `pnpm exec tsx --test` over the 8 touched suites | 273 tests, 0 failures |
+| `pnpm exec tsx --test` over the 8 touched suites | 276 tests, 0 failures |
 | `pnpm lane:check --lane runtime` over the changed set | `PASS lane=runtime` |
 | `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` | PASS, 29 files, no rules matched |
 | `pnpm test:live-db` | refused locally by `ci:assert-staging` -- produced by required CI |
@@ -186,7 +209,7 @@ it is the test that would have caught the original vacuity.
 ## Runtime Verification
 
 This lane changes application code, and its runtime behaviour is verified by
-executing that code -- 273 tests across the eight touched suites, including 15
+executing that code -- 276 tests across the eight touched suites, including 15
 mutation controls that execute mutated copies of the real modules.
 
 The live-DB half of `pnpm verify` is produced by the required `verify` CI job in
@@ -212,13 +235,14 @@ was performed by this lane.
 ## EVIDENCE:
 
 ```text
-Captured 2026-08-31   HEAD=d8cb5d929968bbe593626eab4e28448a34211467   base=cb5dc80350b06374efaea450a2fbfe6724d3c201
+Captured 2026-08-31   HEAD=2b0e2225b863fd9b5e16719c11202ba16fbb2cd3   base=cb5dc80350b06374efaea450a2fbfe6724d3c201
 
 ==============================================================
-GUARD / MUTATION-CONTROL INVENTORY -- 15 guards, 15 controls
+GUARD / MUTATION-CONTROL INVENTORY -- 17 guards, 16 mutation controls
 ==============================================================
 GUARD                                    CONTROL ASSERTS
 ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD       atomic RPC runs for a track-only pick
+BOARD_CAPACITY_TRACK_ONLY_EXCLUSION      (premise assertion, not mutation -- see above)
 CANONICAL_SPORT_ID_GUARD                 coverage proof becomes vacuous
 CAPPER_SOURCE_PIN_GUARD                  capper can spoof the pick source
 CAPPER_TRACK_ONLY_PIN_GUARD              capper can opt into member delivery
@@ -228,6 +252,7 @@ RECAP_TRACK_ONLY_EXCLUSION_GUARD         Track Only pick becomes recap top play
 SMART_FORM_HTTP_CONTRACT_GUARD           non-capper posts an unvalidated pick
 SMART_FORM_RELATIONSHIP_GUARD            unverifiable canonical resolution admitted
 SMART_FORM_TRIGGER_SCOPE                 legacy smart-form callers are refused
+ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD /health 503s on a legitimate submission
 TRACK_ONLY_ATOMIC_GUARD                  atomic distribution path runs
 TRACK_ONLY_DIRECT_ENQUEUE_GUARD          track-only pick enqueued for delivery
 TRACK_ONLY_REQUEST_INTEGRITY_GUARD       Track Only request answered delivery-eligible
@@ -242,10 +267,10 @@ apps/api/src/http-integration.test.ts               27 pass  0 fail
 apps/api/src/distribution-service.test.ts           35 pass  0 fail
 apps/api/src/run-audit-service.test.ts               9 pass  0 fail
 apps/api/src/submission-service.test.ts             89 pass  0 fail
-apps/api/src/server.test.ts                         47 pass  0 fail
+apps/api/src/server.test.ts                         50 pass  0 fail
 apps/api/src/controllers/submit-pick-controller.ts  11 pass  0 fail
 apps/api/src/recap-service.test.ts                  27 pass  0 fail
-                                        TOTAL      273 pass  0 fail
+                                        TOTAL      276 pass  0 fail
 
 ==============================================================
 LANE AUTHORITY
@@ -279,7 +304,7 @@ $ pnpm verify:static; echo "VERIFY_STATIC_EXIT=$?"
   [executable-wiring]  tests total=470 required-reachable=315 unwired=119 (baselined=119 new=0)
 
   aggregate over 99 node:test suites
-  # pass       5360
+  # pass       5363
   # fail       0
   # cancelled  0
   # skipped    0
@@ -304,9 +329,9 @@ $ pnpm type-check; echo "TYPE_CHECK_EXIT=$?"
 TYPE_CHECK_EXIT=0
 ```
 
-## Independent review -- four rounds, recorded in full
+## Independent review -- five rounds, recorded in full
 
-Four independent adversarial reviews were run against this lane. Their findings
+Five independent adversarial reviews were run against this lane. Their findings
 are recorded here including the ones that were not fixed.
 
 **Round 2** found nine defects. Six were fixed inside declared scope. Three were
@@ -324,6 +349,16 @@ unvalidated case-sensitive `sportId`). All were fixed.
 over-refusal that rejected real Soccer clubs -- Brøndby IF, Preußen Münster,
 Kasımpaşa, ŁKS Łódź -- because NFKD does not decompose ø, ß, ł or ı (fixed), and
 a retrieval failure on punctuated single-word names (fixed).
+
+**Round 5** was the Codex reviewer on PR #1466. It raised three findings. Two
+were P1, both confirmed in source and both fixed here: a Track Only submission
+lands as `promotion_status=qualified`, `promotion_target=best-bets`,
+`lifecycle=validated`, because the smart-form promotion path force-promotes to
+best-bets and the Track Only guard then returns before any enqueue. That state
+matches the zombie-health predicate and the live-board capacity query exactly.
+See T7 and T8. This is the third instance in this lane of the same class --
+a guard leaving picks in a state some other subsystem reads as a fault -- after
+the recap outage and the vacuous coverage search.
 
 ### Findings deliberately NOT fixed, and why
 
@@ -346,6 +381,18 @@ generously two names are considered the same. A wrong verdict here means a
 manual override is accepted that should have been steered to canonical
 selection, or refused when it should have been accepted. Neither creates member
 delivery.
+
+Round 5's P2 is also carried rather than fixed.
+`DatabaseReferenceDataRepository.searchPlayers` fetches an unordered global
+`limit * 5` batch matching `%query%` and only then filters by sport assignment,
+so a sport absent from that arbitrary batch reports `playersAvailable: false`
+even when canonical players exist -- a fail-open that would enable the form's
+coverage-gap fallback. Confirmed real in source. It is deferred because it is
+latent (it needs more than 500 players across sports; production has 12) and
+because a correct fix changes the pagination and scoping semantics of a shared
+repository method that other callers depend on -- the same shape of change that
+made rounds 2 and 3 each introduce new defects. **The review thread is left
+open rather than resolved**, so it stays visible as an unsettled item.
 
 Also carried forward, not fixed: `getCatalog()` is an uncached 7-query round
 trip on every Smart Form submission. Recorded as performance debt.
@@ -373,6 +420,6 @@ production data mutation, which is a hard stop for this lane.
 
 ## Merge SHA Binding
 
-Merge SHA: d8cb5d929968bbe593626eab4e28448a34211467
+Merge SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
-Execution SHA: d8cb5d929968bbe593626eab4e28448a34211467
+Execution SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3

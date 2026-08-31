@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1672
 
-Head: d8cb5d929968bbe593626eab4e28448a34211467
+Head: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Base: cb5dc80350b06374efaea450a2fbfe6724d3c201
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 
@@ -79,6 +79,18 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
   it, a settled Track Only pick with the day's best result becomes `topPlay`,
   hits the new outbox chokepoint, throws, and silently kills the recap.
   **Outside the declared file scope — covered by the requested scope-override.**
+
+### The zombie-health and board-capacity fixes
+
+- **`apps/api/src/routes/health.ts`** — `ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD`.
+  A Track Only pick is force-qualified to best-bets and never enqueued, matching
+  every clause of the zombie predicate; without this `/health` 503s after the
+  first legitimate capper submission and prescribes a requeue the Track Only
+  guard refuses. **Outside the declared file scope — covered by the requested
+  scope-override.**
+- **`packages/db/src/runtime-repositories.ts`** — `BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD`
+  in both `getPromotionBoardState` implementations, so Track Only picks do not
+  hold live board capacity for 7 days and suppress deliverable picks.
 
 ### Wiring
 
