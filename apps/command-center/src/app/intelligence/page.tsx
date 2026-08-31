@@ -1,28 +1,25 @@
 import React from 'react';
-import { LLMUsageChart, StatCard, TopBar } from '@/components/ui';
+import { DegradedState, LLMUsageChart, StatCard } from '@/components/ui';
 import { getIntelligenceContent } from '@/lib/command-center-data';
-import { getRouteMeta } from '@/lib/command-center-nav';
 
 export const metadata = { title: 'Intelligence — Unit Talk Command Center' };
 
 export default async function IntelligencePage() {
-  const meta = getRouteMeta('/intelligence');
   const content = await getIntelligenceContent();
+
+  if (!content) {
+    return (
+      <DegradedState
+        severity="warning"
+        title="Intelligence data unavailable"
+        causes={['Settled-pick and score-quality truth could not be loaded. No model metrics were inferred.']}
+        action={{ label: 'System Health', href: '/api-health' }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <TopBar
-        eyebrow={meta.eyebrow}
-        title={meta.label}
-        description={meta.description}
-        liveLabel={meta.liveLabel}
-        liveValue={content.usage.reduce((sum, row) => sum + row.requests, 0)}
-        chips={[
-          { label: 'score bands', value: `${content.scoreBands.length}` },
-          { label: 'warnings', value: `${content.warnings.length}` },
-        ]}
-      />
-
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {content.metrics.map((metric) => (
           <StatCard key={metric.label} label={metric.label} value={metric.value} delta={metric.delta} unit={metric.unit} liveUpdate />

@@ -1,10 +1,12 @@
 import { Card } from '@/components/ui/Card';
+import { DegradedState } from '@/components/ui';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
+import { describeOperatorFailure } from '@/lib/describe-error';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { getPickDetail } from '@/lib/data';
@@ -244,7 +246,19 @@ export async function generateMetadata({ params }: PickDetailPageProps) {
 
 export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const { id: pickId } = await params;
-  const detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
+  let detail: PickDetailViewResponse | null;
+  try {
+    detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
+  } catch (error) {
+    return (
+      <DegradedState
+        severity="critical"
+        title="Pick detail unavailable"
+        causes={[describeOperatorFailure(error, 'Canonical pick history could not be loaded. Governed actions are disabled.')]}
+        action={{ label: 'Active Picks', href: '/picks' }}
+      />
+    );
+  }
 
   if (detail == null) {
     notFound();

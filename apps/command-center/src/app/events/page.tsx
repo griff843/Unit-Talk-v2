@@ -1,28 +1,25 @@
 import React from 'react';
-import { EventStream, StatCard, TopBar } from '@/components/ui';
+import { DegradedState, EventStream, StatCard } from '@/components/ui';
 import { getEventsContent } from '@/lib/command-center-data';
-import { getRouteMeta } from '@/lib/command-center-nav';
 
 export const metadata = { title: 'Events — Unit Talk Command Center' };
 
 export default async function EventsPage() {
-  const meta = getRouteMeta('/events');
   const content = await getEventsContent();
+
+  if (!content) {
+    return (
+      <DegradedState
+        severity="warning"
+        title="Event replay unavailable"
+        causes={['Submission-event truth could not be loaded. No event counts were inferred.']}
+        action={{ label: 'System Health', href: '/api-health' }}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <TopBar
-        eyebrow={meta.eyebrow}
-        title={meta.label}
-        description={meta.description}
-        liveLabel={meta.liveLabel}
-        liveValue={content.metrics[0]?.value ?? 0}
-        chips={[
-          { label: 'mode', value: 'replay ready' },
-          { label: 'source', value: 'submission_events' },
-        ]}
-      />
-
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {content.metrics.map((metric) => (
           <StatCard key={metric.label} label={metric.label} value={metric.value} delta={metric.delta} unit={metric.unit} liveUpdate />

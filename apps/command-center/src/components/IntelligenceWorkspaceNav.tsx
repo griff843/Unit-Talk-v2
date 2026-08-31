@@ -2,23 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-type TabItem = {
-  href: string;
-  label: string;
-  badge?: string;
-};
-
-const INTELLIGENCE_TABS: TabItem[] = [
-  { href: '/performance', label: 'Performance' },
-  { href: '/intelligence', label: 'Form Windows' },
-  { href: '/intelligence/attribution', label: 'Governed Attribution' },
-  { href: '/intelligence/calibration', label: 'Model Feedback' },
-  { href: '/intelligence/roi', label: 'ROI Overview', badge: 'shell' },
-];
+import { getWorkspaceRoutes, isCommandCenterRouteActive } from '@/lib/command-center-nav';
 
 export function IntelligenceWorkspaceNav() {
   const pathname = usePathname();
+  const tabs = getWorkspaceRoutes('intelligence');
 
   return (
     <div className="mb-6 border-b border-gray-800">
@@ -29,12 +17,8 @@ export function IntelligenceWorkspaceNav() {
         className="flex gap-1 overflow-x-auto pb-px"
         aria-label="Intelligence workspace tabs"
       >
-        {INTELLIGENCE_TABS.map((tab) => {
-          // Exact match for top-level tabs to avoid /intelligence matching /intelligence/calibration
-          const isActive =
-            tab.href === '/intelligence' || tab.href === '/performance'
-              ? pathname === tab.href
-              : pathname === tab.href || pathname.startsWith(tab.href + '/');
+        {tabs.map((tab) => {
+          const isActive = isCommandCenterRouteActive(tab, pathname);
 
           return (
             <Link
@@ -48,9 +32,9 @@ export function IntelligenceWorkspaceNav() {
               aria-current={isActive ? 'page' : undefined}
             >
               {tab.label}
-              {tab.badge && (
+              {tab.classification !== 'authoritative' && (
                 <span className="rounded bg-gray-800 px-1 py-0.5 text-[10px] text-gray-500">
-                  {tab.badge}
+                  {tab.classification}
                 </span>
               )}
             </Link>

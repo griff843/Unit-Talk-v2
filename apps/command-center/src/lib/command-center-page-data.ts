@@ -33,10 +33,10 @@ export interface PipelinePageData {
 
 export interface ApiHealthCardData {
   provider: string;
-  status: 'healthy' | 'degraded' | 'down';
+  status: 'healthy' | 'degraded' | 'down' | 'unknown';
   responseMs: number | null;
-  quotaPct: number;
-  callsToday: number;
+  quotaPct: number | null;
+  callsToday: number | null;
   lastCheckedAt: string | null;
   sparkline: number[];
   detail: string;
@@ -62,6 +62,10 @@ function asNullableString(value: unknown): string | null {
 
 function asNumber(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
 function unwrapResponse(raw: unknown) {
@@ -377,10 +381,10 @@ export function buildApiHealthPageData(
     const baseKey = baseProviderKey(asString(row['providerKey']));
     const current = providerMap.get(baseKey) ?? {
       provider: baseKey.toUpperCase() === 'SGO' ? 'SGO' : baseKey.replace(/^odds-api$/i, 'Odds API'),
-      status: 'down' as const,
+      status: 'unknown' as const,
       responseMs: null,
-      quotaPct: 0,
-      callsToday: 0,
+      quotaPct: null,
+      callsToday: null,
       lastCheckedAt: null,
       sparkline: latencyByProvider.get(baseKey) ?? [],
       detail: '',
@@ -396,33 +400,45 @@ export function buildApiHealthPageData(
     providerMap.set(baseKey, {
       ...current,
       status: nextStatus,
-      callsToday: current.callsToday + asNumber(row['last24hRows']),
+      callsToday: current.callsToday == null || asNullableNumber(row['last24hRows']) == null
+        ? asNullableNumber(row['last24hRows'])
+        : current.callsToday + asNumber(row['last24hRows']),
       lastCheckedAt:
         current.lastCheckedAt == null || (latestSnapshotAt != null && Date.parse(latestSnapshotAt) > Date.parse(current.lastCheckedAt))
           ? latestSnapshotAt
           : current.lastCheckedAt,
-      detail: `${compactNumber(asNumber(row['totalRows']))} live rows / ${compactNumber(asNumber(row['last24hRows']))} rows in last 24h`,
+      detail: asNullableNumber(row['totalRows']) == null || asNullableNumber(row['last24hRows']) == null
+        ? 'Provider row counts unavailable'
+        : `${compactNumber(asNumber(row['totalRows']))} live rows / ${compactNumber(asNumber(row['last24hRows']))} rows in last 24h`,
     });
   }
 
   for (const row of quotaProviders) {
     const provider = baseProviderKey(asString(row['provider']));
-    const limit = asNumber(row['limit'], 0);
-    const used = asNumber(row['creditsUsed']);
-    const remaining = asNumber(row['remaining'], 0);
-    const quotaBasis = limit > 0 ? limit : used + remaining;
-    const quotaPct = quotaBasis > 0 ? Math.min(100, Math.round((used / quotaBasis) * 100)) : 0;
+    const limit = asNullableNumber(row['limit']);
+    const used = asNullableNumber(row['creditsUsed']);
+    const remaining = asNullableNumber(row['remaining']);
+    const quotaBasis = limit != null && limit > 0
+      ? limit
+      : used != null && remaining != null
+        ? used + remaining
+        : null;
+    const quotaPct = quotaBasis != null && quotaBasis > 0 && used != null
+      ? Math.min(100, Math.round((used / quotaBasis) * 100))
+      : null;
     const current = providerMap.get(provider) ?? {
       provider: provider.toUpperCase() === 'SGO' ? 'SGO' : provider.replace(/^odds-api$/i, 'Odds API'),
-      status: 'down' as const,
+      status: 'unknown' as const,
       responseMs: null,
-      quotaPct: 0,
-      callsToday: 0,
+      quotaPct: null,
+      callsToday: null,
       lastCheckedAt: null,
       sparkline: latencyByProvider.get(provider) ?? [],
       detail: '',
     };
     const sparkline = latencyByProvider.get(provider) ?? [];
+    const requestCount = asNullableNumber(row['requestCount']);
+    const runCount = asNullableNumber(row['runCount']);
 
     providerMap.set(provider, {
       ...current,
@@ -430,13 +446,19 @@ export function buildApiHealthPageData(
         ? Math.round(sparkline.reduce((sum, value) => sum + value, 0) / sparkline.length)
         : current.responseMs,
       quotaPct,
-      callsToday: Math.max(current.callsToday, asNumber(row['requestCount'])),
+      callsToday: requestCount == null
+        ? current.callsToday
+        : current.callsToday == null
+          ? requestCount
+          : Math.max(current.callsToday, requestCount),
       lastCheckedAt:
         current.lastCheckedAt == null || Date.parse(asString(row['lastSeenAt'], '1970-01-01T00:00:00.000Z')) > Date.parse(current.lastCheckedAt)
           ? asNullableString(row['lastSeenAt'])
           : current.lastCheckedAt,
       sparkline,
-      detail: current.detail || `${compactNumber(asNumber(row['runCount']))} ingest run(s) with quota headers`,
+      detail: current.detail || (runCount == null
+        ? 'Ingest run count unavailable'
+        : `${compactNumber(runCount)} ingest run(s) with quota headers`),
     });
   }
 

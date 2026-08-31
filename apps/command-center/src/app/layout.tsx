@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 import { CommandCenterShell } from '@/components/CommandCenterShell';
 import './globals.css';
 
+// Command Center pages read privileged, request-time operator truth. Never
+// execute those reads while constructing a standalone image.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Unit Talk — Command Center',
 };

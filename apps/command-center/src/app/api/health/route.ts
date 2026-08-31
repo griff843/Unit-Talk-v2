@@ -35,9 +35,9 @@ export async function GET() {
   let body: HealthBody;
   try {
     const data = await getDashboardData();
-    const min = data.signals.length === 0 ? 2 : Math.min(...data.signals.map(scoreSignal));
+    const min = data.signals.length === 0 ? null : Math.min(...data.signals.map(scoreSignal));
     body = {
-      status: min === 0 ? 'down' : min === 1 ? 'degraded' : 'healthy',
+      status: min === null ? 'unknown' : min === 0 ? 'down' : min === 1 ? 'degraded' : 'healthy',
       degradedSignals: data.signals
         .filter((signal) => signal.status !== 'WORKING')
         .map((signal) => signal.signal),
