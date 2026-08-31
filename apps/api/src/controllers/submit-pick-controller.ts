@@ -1,4 +1,4 @@
-import type { SubmissionPayload } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type SubmissionPayload } from '@unit-talk/contracts';
 import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
 import { transitionPickLifecycle } from '@unit-talk/db';
 import type { RepositoryBundle } from '@unit-talk/db';
@@ -10,6 +10,7 @@ import { isGovernanceBrakeSource } from '../distribution-service.js';
 import {
   type Logger,
 } from '@unit-talk/observability';
+import { validateSmartFormRelationships } from '../smart-form-validation.js';
 
 export interface SubmitPickControllerResult {
   submissionId: string;
@@ -31,6 +32,9 @@ export async function submitPickController(
     logger?: Logger | undefined;
   } = {},
 ): Promise<ApiResponse<SubmitPickControllerResult>> {
+  // UTV2-1672 SMART_FORM_RELATIONSHIP_GUARD_START
+  await validateSmartFormRelationships(payload, repositories.referenceData);
+  // UTV2-1672 SMART_FORM_RELATIONSHIP_GUARD_END
   const routingShadowEnabled = isModelDrivenRoutingShadowEnabled(payload);
   const result = routingShadowEnabled
     ? await processShadowSubmission(payload, repositories)
@@ -58,6 +62,43 @@ export async function submitPickController(
   // is the only way out of awaiting_approval.
   const governanceBrakeApplied =
     !routingShadowEnabled && isGovernanceBrakeSource(result.pick.source);
+
+  // UTV2-1672 TRACK_ONLY_REQUEST_INTEGRITY_GUARD_START
+  // The Track Only pin in handlers/submit-pick.ts marks the *incoming payload*.
+  // On the idempotent-duplicate path processSubmission discards that payload and
+  // returns the pre-existing row, whose metadata may say nothing about
+  // distribution -- so a Track Only request can resolve to a pick that every
+  // downstream guard reads as delivery-eligible. Refuse instead of silently
+  // handing back a pick that does not honour what was asked for.
+  if (
+    !routingShadowEnabled &&
+    isTrackOnlyPickMetadata(payload.metadata) &&
+    !isTrackOnlyPickMetadata(result.pick.metadata)
+  ) {
+    throw new ApiError(
+      409,
+      'TRACK_ONLY_CONFLICT',
+      'This submission matches an existing pick that is not Track Only; it cannot be reused for a Track Only submission.',
+    );
+  }
+  // UTV2-1672 TRACK_ONLY_REQUEST_INTEGRITY_GUARD_END
+
+  if (!routingShadowEnabled && isTrackOnlyPickMetadata(result.pick.metadata)) {
+    return {
+      status: 201,
+      body: {
+        ok: true,
+        data: {
+          submissionId: result.submission.id,
+          pickId: result.pick.id,
+          lifecycleState: result.pick.lifecycleState,
+          promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+          promotionTarget: result.pick.promotionTarget ?? null,
+          outboxEnqueued: false,
+        },
+      },
+    };
+  }
 
   if (governanceBrakeApplied) {
     // UTV2-1611: the brake is STATE-AWARE. An automated production admitted by

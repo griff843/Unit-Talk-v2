@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { CanonicalPick } from '@unit-talk/contracts';
 
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
-import { AwaitingApprovalBrakeError, DistributionTargetMismatchError } from './distribution-service.js';
+import {
+  AwaitingApprovalBrakeError,
+  DistributionTargetMismatchError,
+  TrackOnlyDistributionError,
+} from './distribution-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 // ---------------------------------------------------------------------------
@@ -194,6 +200,137 @@ function makeValidatedPick(overrides: Partial<CanonicalPick> = {}): CanonicalPic
     ...overrides,
   };
 }
+
+function installProductionAtomicMutationHarness(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  const enqueue = repositories.outbox.enqueue.bind(repositories.outbox);
+  let atomicCallCount = 0;
+
+  repositories.outbox.enqueueDistributionAtomic = async (input) => {
+    atomicCallCount += 1;
+    assert.equal(input.fromState, 'validated');
+    assert.equal(input.toState, 'queued');
+    assert.equal(input.writerRole, 'promoter');
+
+    const persistedPick = await repositories.picks.updatePickLifecycleState(input.pickId, 'queued');
+    const lifecycleEvent = await repositories.picks.saveLifecycleEvent({
+      pickId: input.pickId,
+      fromState: 'validated',
+      toState: 'queued',
+      writerRole: 'promoter',
+      reason: input.reason,
+      createdAt: input.lifecycleCreatedAt,
+    });
+    const outbox = await enqueue({
+      pickId: input.pickId,
+      target: input.outboxTarget,
+      payload: input.outboxPayload,
+      idempotencyKey: input.outboxIdempotencyKey,
+    });
+
+    return { pick: persistedPick, lifecycleEvent, outbox };
+  };
+
+  return () => atomicCallCount;
+}
+
+test('enqueueDistributionWithRunTracking: persisted Track Only metadata blocks the production atomic path', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const callerPick = makeValidatedPick({
+    id: 'pick-track-only-atomic-guard',
+    metadata: { sport: 'NBA' },
+  });
+  await repositories.picks.savePick({
+    ...callerPick,
+    metadata: { sport: 'NBA', distributionMode: 'track-only' },
+  });
+  const atomicCallCount = installProductionAtomicMutationHarness(repositories);
+
+  await assert.rejects(
+    () => enqueueDistributionWithRunTracking(
+      callerPick,
+      'discord:canary',
+      'test-actor',
+      repositories.picks,
+      repositories.outbox,
+      repositories.runs,
+      repositories.audit,
+    ),
+    TrackOnlyDistributionError,
+  );
+
+  assert.equal(atomicCallCount(), 0, 'Track Only guard must run before production atomic enqueue');
+  assert.equal((await repositories.picks.findPickById(callerPick.id))?.status, 'validated');
+  assert.equal((await repositories.outbox.listByPickId(callerPick.id)).length, 0);
+});
+
+test('mutation control: removing the pre-atomic Track Only guard lets the atomic distribution path run for a Track Only pick', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const callerPick = makeValidatedPick({
+    id: 'pick-track-only-atomic-mutant',
+    metadata: { sport: 'NBA' },
+  });
+  await repositories.picks.savePick({
+    ...callerPick,
+    metadata: { sport: 'NBA', distributionMode: 'track-only' },
+  });
+  const atomicCallCount = installProductionAtomicMutationHarness(repositories);
+
+  const sourcePath = fileURLToPath(new URL('./run-audit-service.ts', import.meta.url));
+  const mutantPath = fileURLToPath(
+    new URL(`./run-audit-service.__track_only_mutant_${process.pid}.ts`, import.meta.url),
+  );
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = /[ ]{2}\/\/ UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_START[\s\S]*?[ ]{2}\/\/ UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_END\n/u;
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, 'mutation control could not remove the Track Only guard');
+
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  let mutantOutcome: unknown = null;
+  try {
+    const mutant = await import(`${pathToFileURL(mutantPath).href}?mutation=track-only`) as typeof import('./run-audit-service.js');
+    await mutant.enqueueDistributionWithRunTracking(
+      callerPick,
+      'discord:canary',
+      'test-actor',
+      repositories.picks,
+      repositories.outbox,
+      repositories.runs,
+      repositories.audit,
+    ).catch((error: unknown) => {
+      mutantOutcome = error;
+    });
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+
+  // The guard is load-bearing: with it, the call is refused before the atomic
+  // enqueue is ever attempted (atomicCallCount() === 0 in the baseline test
+  // above). Without it, the call reaches the production atomic path.
+  assert.equal(atomicCallCount(), 1, 'mutant must reach production atomic enqueue');
+
+  // It is not, however, the last line of defence. UTV2-1672 added a chokepoint
+  // in the outbox repository itself, so the mutant is stopped there instead of
+  // creating delivery work. Asserting an outbox row here would be asserting a
+  // hole that no longer exists; what this control proves is that removing the
+  // pre-atomic guard changes behaviour from "refused early, atomic never
+  // attempted" to "atomic attempted, refused only by the repository chokepoint".
+  assert.equal(
+    (mutantOutcome as { name?: string } | null)?.name,
+    'TrackOnlyDeliveryForbiddenError',
+    'with the pre-atomic guard gone, only the repository chokepoint stops delivery',
+  );
+  // The lifecycle row does move to `queued` in this harness before the outbox
+  // write is refused, because the in-memory harness performs sequentially what
+  // `enqueue_distribution_atomic` performs in one Postgres transaction. That is
+  // a property of the harness, not of production, and it is recorded here
+  // rather than asserted away: the chokepoint is the last line of defence for
+  // *delivery*, not a substitute for the pre-atomic guard's lifecycle safety.
+  assert.equal((await repositories.picks.findPickById(callerPick.id))?.status, 'queued');
+  const outboxRows = await repositories.outbox.listByPickId(callerPick.id);
+  assert.equal(outboxRows.length, 0, 'the chokepoint must still prevent delivery work');
+});
 
 test('enqueueDistributionWithRunTracking: real DB errors (constraint violation) rethrow — no silent sequential fallback', async () => {
   const repositories = createInMemoryRepositoryBundle();

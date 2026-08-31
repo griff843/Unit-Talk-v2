@@ -1,0 +1,474 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1672
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1672/evidence.json
+    - docs/06_status/proof/UTV2-1672/verification.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1672
+  objective: >-
+    Land the server-side Smart Form safety boundary:
+
+    Track Only enforcement across submit, enqueue, requeue, retry, and
+    tracked-atomic paths;
+
+    canonical sport/event/team/participant relationship validation;
+
+    reference-data availability required by the form;
+
+    server-authoritative capper identity;
+
+    source-spoofing refusal;
+
+    zero member distribution;
+
+    associated API, database repository, contract, and focused regression
+    changes.
+  acceptance_criteria:
+    - |-
+      ## Controlled issue reshape
+
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Land the server-side Smart Form safety boundary:
+
+      * Track Only enforcement across submit, enqueue, requeue, retry, and tracked-atomic paths;
+      * canonical sport/event/team/participant relationship validation;
+      * reference-data availability required by the form;
+      * server-authoritative capper identity;
+      * source-spoofing refusal;
+      * zero member distribution;
+      * associated API, database repository, contract, and focused regression changes.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: runtime
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 1 of 3
+      * Blocked by: [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane)
+
+      ## Admission condition
+
+      Do not start this lane until [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) merges and current `runtime` lane authority accepts the two Smart Form contract paths.
+
+      ## Exact path contract requirement
+
+      Claude already mechanically validated the complete Lane 1 path set against live `lane:check`. Before `ops:lane-start`, paste that complete enumerated path set into this issue and verify it matches the preserved PR #1462 source diff exactly.
+
+      No “etc.”, directory shorthand, or undeclared path is permitted.
+
+      Root `package.json` must be omitted unless a current required CI contract mechanically proves canonical script inclusion is necessary. Direct execution of the regression is acceptable proof; convenience wiring alone is insufficient.
+
+      ## Explicit exclusions
+
+      * all `apps/smart-form/**`;
+      * all `apps/qa-agent/**`;
+      * migrations;
+      * lifecycle FSM changes;
+      * production-row mutation;
+      * governance brake sources;
+      * worker or Discord target changes;
+      * any delivery target or runtime unpark;
+      * direct-main work.
+
+      ## Definition of done
+
+      * backend Track Only remains load-bearing against a crafted `delivery-eligible` request;
+      * capper/source spoofing is refused;
+      * cross-sport and invalid relationship injection is refused;
+      * submit/enqueue/requeue/retry/tracked-atomic routes remain zero-delivery;
+      * focused mutation controls fail when each safety guard is removed and pass when restored;
+      * full required verification and writable staging proof pass;
+      * proof binds the exact final non-proof head;
+      * independent exact-head review and ERV pass;
+      * no unresolved substantive review thread remains.
+
+      ## Stop conditions
+
+      Stop on any need for:
+
+      * a migration;
+      * production data mutation;
+      * lifecycle FSM change;
+      * delivery target or governance brake change;
+      * undeclared path;
+      * broader lane authority;
+      * concurrent runtime singleton conflict.
+
+      No production write, member delivery, ingestion unpark, or direct-main action is authorized.
+
+      ---
+
+      ## Exact path contract (resolved and mechanically validated 2026-08-30)
+
+      Resolved from preserved PR #1462 at `40fdd4715fbbc6c05badab873df5026efb227030` (merge-base `c52c0a4623e1eff6cb2629adf6929a37e636003e`) against current `main` `cb5dc80350b06374efaea450a2fbfe6724d3c201`. Complete and enumerated. No shorthand, no `etc.`, no undeclared path.
+
+      ### Source paths (22)
+
+       1. `apps/api/src/controllers/requeue-controller.ts`
+       2. `apps/api/src/controllers/retry-delivery-controller.ts`
+       3. `apps/api/src/controllers/submit-pick-controller.test.ts`
+       4. `apps/api/src/controllers/submit-pick-controller.ts`
+       5. `apps/api/src/distribution-service.test.ts`
+       6. `apps/api/src/distribution-service.ts`
+       7. `apps/api/src/handlers/reference-data.ts`
+       8. `apps/api/src/handlers/submit-pick.ts`
+       9. `apps/api/src/http-integration.test.ts`
+      10. `apps/api/src/routes/index.ts`
+      11. `apps/api/src/routes/reference-data.ts`
+      12. `apps/api/src/run-audit-service.test.ts`
+      13. `apps/api/src/run-audit-service.ts`
+      14. `apps/api/src/server.test.ts`
+      15. `apps/api/src/server.ts`
+      16. `apps/api/src/smart-form-validation.test.ts` (new file)
+      17. `apps/api/src/smart-form-validation.ts` (new file)
+      18. `apps/api/src/submission-service.test.ts`
+      19. `packages/contracts/src/index.ts`
+      20. `packages/contracts/src/smart-form.ts` (new file)
+      21. `packages/db/src/repositories.ts`
+      22. `packages/db/src/runtime-repositories.ts`
+
+      ### Lane apparatus paths (3)
+
+      23. `.ops/sync/UTV2-1672.yml`
+      24. `docs/06_status/lanes/UTV2-1672.json`
+      25. `docs/06_status/proof/UTV2-1672/**`
+
+      ### Mechanical comparison against preserved PR #1462
+
+      PR #1462 changed 71 paths. The complement of the 22 source paths above is exactly the six excluded classes, with no residue:
+
+      | Excluded path / class | Reason |
+      | -- | -- |
+      | `apps/smart-form/**` | Lane 2 UI |
+      | `apps/qa-agent/**` | Lane 2 QA |
+      | `package.json` (root) | test-script convenience wiring only; omitted per contract |
+      | `.ops/sync/UTV2-1787.yml` | prior lane apparatus |
+      | `docs/06_status/lanes/UTV2-1787.json` | prior lane apparatus |
+      | `docs/06_status/proof/UTV2-1787/**` | prior lane proof |
+
+      No backend path from #1462 is dropped, and no path outside #1462 is added.
+
+      ### Lane authority result
+
+      `pnpm lane:check --lane runtime` against all 26 declared files (22 source + 4 concrete apparatus files):
+
+      ```
+      lane:check PASS lane=runtime files=26
+      ```
+
+      No refusal. No broader lane authority required. The two Smart Form contract paths are admitted by `.lane/lanes/runtime.yml:31-32`, landed by [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) at merge SHA `41341ba8dd8b09e0b78223268acfcef980410250`.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Controlled issue reshape
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+    - |-
+      Classification
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: runtime
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 1 of 3
+      * Blocked by: [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane)
+    - |-
+      Admission condition
+      Do not start this lane until [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) merges and current `runtime` lane authority accepts the two Smart Form contract paths.
+    - >-
+      Exact path contract requirement
+
+      Claude already mechanically validated the complete Lane 1 path set against
+      live `lane:check`. Before `ops:lane-start`, paste that complete enumerated
+      path set into this issue and verify it matches the preserved PR #1462
+      source diff exactly.
+
+
+      No “etc.”, directory shorthand, or undeclared path is permitted.
+
+
+      Root `package.json` must be omitted unless a current required CI contract
+      mechanically proves canonical script inclusion is necessary. Direct
+      execution of the regression is acceptable proof; convenience wiring alone
+      is insufficient.
+    - |-
+      Explicit exclusions
+      * all `apps/smart-form/**`;
+      * all `apps/qa-agent/**`;
+      * migrations;
+      * lifecycle FSM changes;
+      * production-row mutation;
+      * governance brake sources;
+      * worker or Discord target changes;
+      * any delivery target or runtime unpark;
+      * direct-main work.
+    - >-
+      Definition of done
+
+      * backend Track Only remains load-bearing against a crafted
+      `delivery-eligible` request;
+
+      * capper/source spoofing is refused;
+
+      * cross-sport and invalid relationship injection is refused;
+
+      * submit/enqueue/requeue/retry/tracked-atomic routes remain zero-delivery;
+
+      * focused mutation controls fail when each safety guard is removed and
+      pass when restored;
+
+      * full required verification and writable staging proof pass;
+
+      * proof binds the exact final non-proof head;
+
+      * independent exact-head review and ERV pass;
+
+      * no unresolved substantive review thread remains.
+    - >-
+      Stop conditions
+
+      Stop on any need for:
+
+
+      * a migration;
+
+      * production data mutation;
+
+      * lifecycle FSM change;
+
+      * delivery target or governance brake change;
+
+      * undeclared path;
+
+      * broader lane authority;
+
+      * concurrent runtime singleton conflict.
+
+
+      No production write, member delivery, ingestion unpark, or direct-main
+      action is authorized.
+
+
+      ---
+    - |-
+      Exact path contract (resolved and mechanically validated 2026-08-30)
+      Resolved from preserved PR #1462 at `40fdd4715fbbc6c05badab873df5026efb227030` (merge-base `c52c0a4623e1eff6cb2629adf6929a37e636003e`) against current `main` `cb5dc80350b06374efaea450a2fbfe6724d3c201`. Complete and enumerated. No shorthand, no `etc.`, no undeclared path.
+
+      ### Source paths (22)
+
+       1. `apps/api/src/controllers/requeue-controller.ts`
+       2. `apps/api/src/controllers/retry-delivery-controller.ts`
+       3. `apps/api/src/controllers/submit-pick-controller.test.ts`
+       4. `apps/api/src/controllers/submit-pick-controller.ts`
+       5. `apps/api/src/distribution-service.test.ts`
+       6. `apps/api/src/distribution-service.ts`
+       7. `apps/api/src/handlers/reference-data.ts`
+       8. `apps/api/src/handlers/submit-pick.ts`
+       9. `apps/api/src/http-integration.test.ts`
+      10. `apps/api/src/routes/index.ts`
+      11. `apps/api/src/routes/reference-data.ts`
+      12. `apps/api/src/run-audit-service.test.ts`
+      13. `apps/api/src/run-audit-service.ts`
+      14. `apps/api/src/server.test.ts`
+      15. `apps/api/src/server.ts`
+      16. `apps/api/src/smart-form-validation.test.ts` (new file)
+      17. `apps/api/src/smart-form-validation.ts` (new file)
+      18. `apps/api/src/submission-service.test.ts`
+      19. `packages/contracts/src/index.ts`
+      20. `packages/contracts/src/smart-form.ts` (new file)
+      21. `packages/db/src/repositories.ts`
+      22. `packages/db/src/runtime-repositories.ts`
+
+      ### Lane apparatus paths (3)
+
+      23. `.ops/sync/UTV2-1672.yml`
+      24. `docs/06_status/lanes/UTV2-1672.json`
+      25. `docs/06_status/proof/UTV2-1672/**`
+
+      ### Mechanical comparison against preserved PR #1462
+
+      PR #1462 changed 71 paths. The complement of the 22 source paths above is exactly the six excluded classes, with no residue:
+
+      | Excluded path / class | Reason |
+      | -- | -- |
+      | `apps/smart-form/**` | Lane 2 UI |
+      | `apps/qa-agent/**` | Lane 2 QA |
+      | `package.json` (root) | test-script convenience wiring only; omitted per contract |
+      | `.ops/sync/UTV2-1787.yml` | prior lane apparatus |
+      | `docs/06_status/lanes/UTV2-1787.json` | prior lane apparatus |
+      | `docs/06_status/proof/UTV2-1787/**` | prior lane proof |
+
+      No backend path from #1462 is dropped, and no path outside #1462 is added.
+
+      ### Lane authority result
+
+      `pnpm lane:check --lane runtime` against all 26 declared files (22 source + 4 concrete apparatus files):
+
+      ```
+      lane:check PASS lane=runtime files=26
+      ```
+
+      No refusal. No broader lane authority required. The two Smart Form contract paths are admitted by `.lane/lanes/runtime.yml:31-32`, landed by [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) at merge SHA `41341ba8dd8b09e0b78223268acfcef980410250`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation
+    title: Smart Form recovery Lane 1 — backend Track Only and canonical validation
+    description: |-
+      ## Controlled issue reshape
+
+      This identifier was a terminal canceled issue with no implementation. Its original record was preserved before reshaping in [Issue Capacity Recovery Audit — 2026-08-30](<https://linear.app/unit-talk-v2/document/issue-capacity-recovery-audit-2026-08-30-159ebb495984>).
+
+      PM authorization: Griff directed the board and issue-capacity blocker to be fixed so [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) Smart Form can proceed through the approved minimum three-lane Tier C recovery.
+
+      ## Objective
+
+      Land the server-side Smart Form safety boundary:
+
+      * Track Only enforcement across submit, enqueue, requeue, retry, and tracked-atomic paths;
+      * canonical sport/event/team/participant relationship validation;
+      * reference-data availability required by the form;
+      * server-authoritative capper identity;
+      * source-spoofing refusal;
+      * zero member distribution;
+      * associated API, database repository, contract, and focused regression changes.
+
+      ## Classification
+
+      * Tier: T1 / Tier C
+      * Executor: Claude
+      * Lane type: runtime
+      * Related source issue: [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and)
+      * Sequence: Lane 1 of 3
+      * Blocked by: [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane)
+
+      ## Admission condition
+
+      Do not start this lane until [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) merges and current `runtime` lane authority accepts the two Smart Form contract paths.
+
+      ## Exact path contract requirement
+
+      Claude already mechanically validated the complete Lane 1 path set against live `lane:check`. Before `ops:lane-start`, paste that complete enumerated path set into this issue and verify it matches the preserved PR #1462 source diff exactly.
+
+      No “etc.”, directory shorthand, or undeclared path is permitted.
+
+      Root `package.json` must be omitted unless a current required CI contract mechanically proves canonical script inclusion is necessary. Direct execution of the regression is acceptable proof; convenience wiring alone is insufficient.
+
+      ## Explicit exclusions
+
+      * all `apps/smart-form/**`;
+      * all `apps/qa-agent/**`;
+      * migrations;
+      * lifecycle FSM changes;
+      * production-row mutation;
+      * governance brake sources;
+      * worker or Discord target changes;
+      * any delivery target or runtime unpark;
+      * direct-main work.
+
+      ## Definition of done
+
+      * backend Track Only remains load-bearing against a crafted `delivery-eligible` request;
+      * capper/source spoofing is refused;
+      * cross-sport and invalid relationship injection is refused;
+      * submit/enqueue/requeue/retry/tracked-atomic routes remain zero-delivery;
+      * focused mutation controls fail when each safety guard is removed and pass when restored;
+      * full required verification and writable staging proof pass;
+      * proof binds the exact final non-proof head;
+      * independent exact-head review and ERV pass;
+      * no unresolved substantive review thread remains.
+
+      ## Stop conditions
+
+      Stop on any need for:
+
+      * a migration;
+      * production data mutation;
+      * lifecycle FSM change;
+      * delivery target or governance brake change;
+      * undeclared path;
+      * broader lane authority;
+      * concurrent runtime singleton conflict.
+
+      No production write, member delivery, ingestion unpark, or direct-main action is authorized.
+
+      ---
+
+      ## Exact path contract (resolved and mechanically validated 2026-08-30)
+
+      Resolved from preserved PR #1462 at `40fdd4715fbbc6c05badab873df5026efb227030` (merge-base `c52c0a4623e1eff6cb2629adf6929a37e636003e`) against current `main` `cb5dc80350b06374efaea450a2fbfe6724d3c201`. Complete and enumerated. No shorthand, no `etc.`, no undeclared path.
+
+      ### Source paths (22)
+
+       1. `apps/api/src/controllers/requeue-controller.ts`
+       2. `apps/api/src/controllers/retry-delivery-controller.ts`
+       3. `apps/api/src/controllers/submit-pick-controller.test.ts`
+       4. `apps/api/src/controllers/submit-pick-controller.ts`
+       5. `apps/api/src/distribution-service.test.ts`
+       6. `apps/api/src/distribution-service.ts`
+       7. `apps/api/src/handlers/reference-data.ts`
+       8. `apps/api/src/handlers/submit-pick.ts`
+       9. `apps/api/src/http-integration.test.ts`
+      10. `apps/api/src/routes/index.ts`
+      11. `apps/api/src/routes/reference-data.ts`
+      12. `apps/api/src/run-audit-service.test.ts`
+      13. `apps/api/src/run-audit-service.ts`
+      14. `apps/api/src/server.test.ts`
+      15. `apps/api/src/server.ts`
+      16. `apps/api/src/smart-form-validation.test.ts` (new file)
+      17. `apps/api/src/smart-form-validation.ts` (new file)
+      18. `apps/api/src/submission-service.test.ts`
+      19. `packages/contracts/src/index.ts`
+      20. `packages/contracts/src/smart-form.ts` (new file)
+      21. `packages/db/src/repositories.ts`
+      22. `packages/db/src/runtime-repositories.ts`
+
+      ### Lane apparatus paths (3)
+
+      23. `.ops/sync/UTV2-1672.yml`
+      24. `docs/06_status/lanes/UTV2-1672.json`
+      25. `docs/06_status/proof/UTV2-1672/**`
+
+      ### Mechanical comparison against preserved PR #1462
+
+      PR #1462 changed 71 paths. The complement of the 22 source paths above is exactly the six excluded classes, with no residue:
+
+      | Excluded path / class | Reason |
+      | -- | -- |
+      | `apps/smart-form/**` | Lane 2 UI |
+      | `apps/qa-agent/**` | Lane 2 QA |
+      | `package.json` (root) | test-script convenience wiring only; omitted per contract |
+      | `.ops/sync/UTV2-1787.yml` | prior lane apparatus |
+      | `docs/06_status/lanes/UTV2-1787.json` | prior lane apparatus |
+      | `docs/06_status/proof/UTV2-1787/**` | prior lane proof |
+
+      No backend path from #1462 is dropped, and no path outside #1462 is added.
+
+      ### Lane authority result
+
+      `pnpm lane:check --lane runtime` against all 26 declared files (22 source + 4 concrete apparatus files):
+
+      ```
+      lane:check PASS lane=runtime files=26
+      ```
+
+      No refusal. No broader lane authority required. The two Smart Form contract paths are admitted by `.lane/lanes/runtime.yml:31-32`, landed by [UTV2-1671](https://linear.app/unit-talk-v2/issue/UTV2-1671/smart-form-recovery-lane-0-admit-exact-contract-paths-to-runtime-lane) at merge SHA `41341ba8dd8b09e0b78223268acfcef980410250`.
+    captured_at: 2026-08-31T00:12:39.663Z
+    description_sha256: 72bcd0ad35b3bbbeb9a34e2cd7849a9bf1a1eeda8826d5bfa311db3ee18446ac
+  contract_hash: f5f9dd4e63e18a69b5130351883683ba631fe86e8cb5f5ef1d701cdcefdd13ff

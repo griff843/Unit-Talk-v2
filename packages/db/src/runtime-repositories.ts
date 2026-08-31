@@ -4,6 +4,7 @@ import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
   V1_REFERENCE_DATA,
+  isTrackOnlyPickMetadata,
   type ProviderOfferInsert,
   type ReferenceDataCatalog,
   type MemberTier,
@@ -657,7 +658,15 @@ export class InMemoryPickRepository implements PickRepository {
         pick.status !== 'settled' &&
         pick.status !== 'voided' &&
         pick.created_at >= boardWindowStart &&
-        pick.source != null,
+        pick.source != null &&
+        // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_START
+        // A Track Only pick is force-qualified to best-bets by the smart-form
+        // promotion path and then never enqueued, so it sits `validated` +
+        // `qualified` for the whole 7-day window. Without this it occupies live
+        // board capacity it can never use, and once caps are reached it
+        // suppresses picks that genuinely are deliverable.
+        !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null)
+        // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     );
 
     return {
@@ -709,10 +718,53 @@ export class InMemoryPickRepository implements PickRepository {
   }
 }
 
+/**
+ * Thrown when any caller tries to create delivery work for a pick whose
+ * persisted metadata says Track Only.
+ *
+ * UTV2-1672: the per-route guards in apps/api each protect one entry point, so
+ * a route that enqueues directly -- recap-service does exactly this -- reaches
+ * the outbox without passing any of them. This error is raised at the single
+ * place every delivery row must go through, so the invariant holds for routes
+ * that do not exist yet as well as the ones that do.
+ */
+export class TrackOnlyDeliveryForbiddenError extends Error {
+  readonly pickId: string;
+  readonly target: string;
+
+  constructor(pickId: string, target: string) {
+    super(
+      `Track Only pick ${pickId} cannot be enqueued for delivery to ${target}`,
+    );
+    this.name = 'TrackOnlyDeliveryForbiddenError';
+    this.pickId = pickId;
+    this.target = target;
+  }
+}
+
+/** Resolves the persisted metadata of a pick, for the chokepoint guard. */
+export type PickMetadataResolver = (
+  pickId: string,
+) => Promise<Record<string, unknown> | null>;
+
 export class InMemoryOutboxRepository implements OutboxRepository {
   private readonly entries: OutboxRecord[] = [];
+  private readonly resolvePickMetadata: PickMetadataResolver | null;
+
+  constructor(resolvePickMetadata: PickMetadataResolver | null = null) {
+    this.resolvePickMetadata = resolvePickMetadata;
+  }
 
   async enqueue(input: OutboxCreateInput): Promise<OutboxRecord> {
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (this.resolvePickMetadata) {
+      const metadata = await this.resolvePickMetadata(input.pickId);
+      if (isTrackOnlyPickMetadata(metadata)) {
+        throw new TrackOnlyDeliveryForbiddenError(input.pickId, input.target);
+      }
+    }
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     // Idempotency: reject if an active (pending/processing) row already exists
     // for the same pick+target combination.
     const activeStatuses = ['pending', 'processing'];
@@ -2340,6 +2392,7 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         participantId: row.id,
         displayName: row.display_name,
         sport: row.sport ?? sportId,
+        teamId: null,
       }));
   }
 
@@ -3371,7 +3424,14 @@ export class DatabasePickRepository implements PickRepository {
       );
     }
 
-    const promoted = data ?? [];
+    // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_START
+    // Same reason as the in-memory implementation: a Track Only pick is
+    // force-qualified to best-bets and never enqueued, so it would hold live
+    // board capacity for 7 days without ever being deliverable.
+    const promoted = (data ?? []).filter(
+      (pick) => !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null),
+    );
+    // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     return {
       currentBoardCount: promoted.length,
       sameSportCount: promoted.filter(
@@ -3489,11 +3549,59 @@ export class DatabasePickRepository implements PickRepository {
 export class DatabaseOutboxRepository implements OutboxRepository {
   private readonly client: UnitTalkSupabaseClient;
 
-  constructor(connection: DatabaseConnectionConfig) {
-    this.client = createDatabaseClientFromConnection(connection);
+  /**
+   * `client` exists so the Track Only chokepoint below is reachable from a
+   * test without a live connection. Production continues to pass a connection
+   * config and let the repository build its own client.
+   */
+  constructor(
+    connection: DatabaseConnectionConfig,
+    client?: UnitTalkSupabaseClient,
+  ) {
+    this.client = client ?? createDatabaseClientFromConnection(connection);
+  }
+
+  /** Reads the persisted metadata of a pick for the Track Only chokepoint. */
+  private async loadPickMetadata(
+    pickId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const { data, error } = await this.client
+      .from('picks')
+      .select('metadata')
+      .eq('id', pickId)
+      .maybeSingle();
+
+    if (error) {
+      // Fail closed: if we cannot establish that a pick is safe to deliver, we
+      // do not deliver it.
+      throw new Error(
+        `Failed to read pick metadata for delivery safety check: ${error.message}`,
+      );
+    }
+
+    if (!data) {
+      // An absent row is not evidence of safety. `maybeSingle()` reports both
+      // "no such pick" and "the pick exists but this role cannot see it" as
+      // data:null/error:null, and treating that as "not Track Only" would make
+      // the chokepoint fail open on exactly the case it cannot evaluate.
+      throw new Error(
+        `Refusing delivery work for pick ${pickId}: its row is not readable, so Track Only status cannot be established`,
+      );
+    }
+
+    const metadata = (data as { metadata?: unknown }).metadata;
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : null;
   }
 
   async enqueue(input: OutboxCreateInput): Promise<OutboxRecord> {
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (isTrackOnlyPickMetadata(await this.loadPickMetadata(input.pickId))) {
+      throw new TrackOnlyDeliveryForbiddenError(input.pickId, input.target);
+    }
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     const { data, error } = await this.client
       .from('distribution_outbox')
       .insert({
@@ -3519,6 +3627,15 @@ export class DatabaseOutboxRepository implements OutboxRepository {
   async enqueueDistributionAtomic(
     input: EnqueueDistributionAtomicInput,
   ): Promise<EnqueueDistributionAtomicResult | null> {
+    // UTV2-1672 ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (isTrackOnlyPickMetadata(await this.loadPickMetadata(input.pickId))) {
+      throw new TrackOnlyDeliveryForbiddenError(
+        input.pickId,
+        input.outboxTarget,
+      );
+    }
+    // UTV2-1672 ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     const { data, error } = await this.client.rpc(
       'enqueue_distribution_atomic',
       {
@@ -6176,8 +6293,17 @@ function deriveCatalogMarketCategories(marketTypeIds: string[]): string[] {
 export class DatabaseReferenceDataRepository implements ReferenceDataRepository {
   private readonly client: UnitTalkSupabaseClient;
 
-  constructor(connection: DatabaseConnectionConfig) {
-    this.client = createDatabaseClientFromConnection(connection);
+  /**
+   * `client` exists so the sport-scoped player search below is reachable from
+   * a test without a live connection, matching DatabaseOutboxRepository.
+   * Production continues to pass a connection config and let the repository
+   * build its own client.
+   */
+  constructor(
+    connection: DatabaseConnectionConfig,
+    client?: UnitTalkSupabaseClient,
+  ) {
+    this.client = client ?? createDatabaseClientFromConnection(connection);
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
@@ -6567,27 +6693,58 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     query: string,
     limit = 20,
   ): Promise<PlayerSearchResult[]> {
-    const { data, error } = await this.fromUntyped('players')
-      .select('id,display_name')
-      .ilike('display_name', `%${query}%`)
-      .limit(limit * 5);
+    // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_START
+    // This previously fetched an unordered global `limit * 5` batch of
+    // name-matching players and only then filtered by sport. A sport whose
+    // players fell outside that arbitrary slice reported no availability even
+    // though canonical players existed, and because the batch was unordered
+    // the result was not even stable between calls. Availability is a refusal
+    // input for Smart Form coverage, so a false negative there is a wrong
+    // answer, not a slow one.
+    //
+    // The name match is now paged through in a deterministic order and the
+    // sport filter is applied per page, so the search is bounded by how many
+    // players actually match the query rather than by a fixed cross-sport cap.
+    // Paging stops as soon as `limit` sport-matching players are collected or
+    // the match set is exhausted, so the common case is still one round trip.
+    const PAGE_SIZE = 500;
+    const results: PlayerSearchResult[] = [];
+    let offset = 0;
 
-    if (error) throw new Error(`Failed to search players: ${error.message}`);
+    while (results.length < limit) {
+      const { data, error } = await this.fromUntyped('players')
+        .select('id,display_name')
+        .ilike('display_name', `%${query}%`)
+        .order('display_name')
+        .range(offset, offset + PAGE_SIZE - 1);
 
-    const playerRows = (data ?? []) as CanonicalPlayerRow[];
-    const candidateIds = playerRows.map((row) => row.id as string);
-    const currentAssignments = await this.loadCurrentAssignments(candidateIds);
+      if (error) throw new Error(`Failed to search players: ${error.message}`);
 
-    return playerRows
-      .filter(
-        (row) => currentAssignments.get(row.id as string)?.sportId === sportId,
-      )
-      .slice(0, limit)
-      .map((row) => ({
-        participantId: row.id as string,
-        displayName: row.display_name as string,
-        sport: sportId,
-      }));
+      const playerRows = (data ?? []) as CanonicalPlayerRow[];
+      if (playerRows.length === 0) break;
+
+      const currentAssignments = await this.loadCurrentAssignments(
+        playerRows.map((row) => row.id as string),
+      );
+
+      for (const row of playerRows) {
+        const assignment = currentAssignments.get(row.id as string);
+        if (assignment?.sportId !== sportId) continue;
+        results.push({
+          participantId: row.id as string,
+          displayName: row.display_name as string,
+          sport: sportId,
+          teamId: assignment.teamId ?? null,
+        });
+        if (results.length === limit) break;
+      }
+
+      if (playerRows.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+
+    return results;
+    // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_END
   }
 
   async listEvents(
@@ -8589,10 +8746,17 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const participants = new InMemoryParticipantRepository(seededTeams);
   const events = new InMemoryEventRepository();
   const eventParticipants = new InMemoryEventParticipantRepository();
+  const picks = new InMemoryPickRepository();
   return {
     submissions: new InMemorySubmissionRepository(),
-    picks: new InMemoryPickRepository(),
-    outbox: new InMemoryOutboxRepository(),
+    picks,
+    outbox: new InMemoryOutboxRepository(async (pickId) => {
+      const pick = await picks.findPickById(pickId);
+      const metadata = pick?.metadata;
+      return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : null;
+    }),
     alertDetections: new InMemoryAlertDetectionRepository(),
     hedgeOpportunities: new InMemoryHedgeOpportunityRepository(),
     receipts: new InMemoryReceiptRepository(),

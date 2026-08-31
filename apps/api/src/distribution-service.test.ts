@@ -1,9 +1,12 @@
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import { InMemoryOutboxRepository } from '@unit-talk/db';
 import {
   AwaitingApprovalBrakeError,
+  TrackOnlyDistributionError,
   DistributionTargetMismatchError,
   UnsupportedDeliveryTargetError,
   enqueueDistributionWork,
@@ -15,6 +18,7 @@ import {
   type DistributionSkippedResult,
 } from './distribution-service.js';
 import { retryDeliveryController } from './controllers/retry-delivery-controller.js';
+import { requeuePickController } from './controllers/requeue-controller.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 // ---------------------------------------------------------------------------
@@ -96,6 +100,24 @@ test('enqueueDistributionWork: refuses picks in awaiting_approval (defense-in-de
   // Outbox must remain empty — no enqueue should have been attempted
   const outboxRows = await outbox.listByPickId(pick.id);
   assert.equal(outboxRows.length, 0);
+});
+
+test('enqueueDistributionWork: track-only metadata blocks direct enqueue', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({ metadata: { distributionMode: 'track-only' } });
+  await assert.rejects(() => enqueueDistributionWork(pick, outbox, TARGET_CANARY), TrackOnlyDistributionError);
+  assert.equal((await outbox.listByPickId(pick.id)).length, 0);
+});
+
+test('requeuePickController: track-only pick cannot be requeued', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makePick({ id: 'pick-track-only-requeue', metadata: { distributionMode: 'track-only' } });
+  await repositories.picks.savePick(pick);
+  const result = await requeuePickController(pick.id, repositories);
+  assert.equal(result.status, 409);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'TRACK_ONLY_DELIVERY_BLOCKED');
+  assert.equal((await repositories.outbox.listByPickId(pick.id)).length, 0);
 });
 
 test('resolveDeliveryTarget rewrites governed discord targets to canary in local env', () => {
@@ -399,6 +421,29 @@ test('retryDeliveryController: succeeds for failed row with no active conflict',
   assert.equal(result.body.data.newStatus, 'pending');
 });
 
+test('retryDeliveryController: track-only pick cannot revive a dead-letter delivery', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makePick({ id: 'pick-track-only-retry', metadata: {} });
+  await repositories.picks.savePick(pick);
+  const row = await repositories.outbox.enqueue({
+    pickId: pick.id,
+    target: TARGET_CANARY,
+    payload: {},
+    idempotencyKey: 'track-only-dead-letter',
+  });
+  await repositories.outbox.claimNext(TARGET_CANARY, 'worker');
+  await repositories.outbox.markDeadLetter(row.id, 'synthetic failure');
+  // The pick becomes Track Only only after the delivery row already exists.
+  await repositories.picks.savePick(
+    makePick({ id: 'pick-track-only-retry', metadata: { distributionMode: 'track-only' } }),
+  );
+
+  const result = await retryDeliveryController(pick.id, { reason: 'retry', actor: 'operator' }, repositories);
+  assert.equal(result.status, 409);
+  assert.ok(!result.body.ok);
+  if (!result.body.ok) assert.equal(result.body.error.code, 'TRACK_ONLY_DELIVERY_BLOCKED');
+});
+
 // ---------------------------------------------------------------------------
 // UTV2-982: fail-closed validation for unsupported non-promotion targets
 // ---------------------------------------------------------------------------
@@ -447,6 +492,423 @@ test('enqueueDistributionWork: throws UnsupportedDeliveryTargetError for unsuppo
       assert.ok(err instanceof UnsupportedDeliveryTargetError);
       assert.equal((err as UnsupportedDeliveryTargetError).target, 'discord:qa-pick-delivery');
       return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: mutation controls for the Track Only delivery guards.
+//
+// A guard that is merely present proves nothing. Each control below physically
+// deletes one named guard from its own source file, imports the mutated module,
+// and asserts the mutant reaches the delivery behaviour the guard exists to
+// prevent. If a control ever passes without the deletion changing behaviour,
+// the guard it names is not load-bearing and the control is worthless.
+// ---------------------------------------------------------------------------
+
+async function withGuardRemoved<T>(
+  relativeModulePath: string,
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL(relativeModulePath, import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = new RegExp(
+    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    // Global: a guard name can mark more than one block (the chokepoint marks
+    // both the in-memory and the database outbox repository). Removing only the
+    // first would leave the control covering half the feature.
+    'gu',
+  );
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=${guardName}`
+    )) as Record<string, unknown>;
+    return await run(mutant);
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+test('mutation control: removing TRACK_ONLY_DIRECT_ENQUEUE_GUARD lets a track-only pick be enqueued for delivery', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({ id: 'pick-mc-direct-enqueue', metadata: { distributionMode: 'track-only' } });
+
+  // Baseline: the guard refuses.
+  await assert.rejects(
+    () => enqueueDistributionWork(pick, outbox, TARGET_CANARY),
+    (err: unknown) => {
+      assert.ok(err instanceof TrackOnlyDistributionError);
+      return true;
+    },
+    'guarded build must refuse to enqueue a track-only pick',
+  );
+  assert.equal((await outbox.listByPickId(pick.id)).length, 0);
+
+  // Mutant: the same call now creates real delivery work.
+  await withGuardRemoved('./distribution-service.ts', 'TRACK_ONLY_DIRECT_ENQUEUE_GUARD', async (mutant) => {
+    const mutantEnqueue = mutant.enqueueDistributionWork as typeof enqueueDistributionWork;
+    const mutantOutbox = new InMemoryOutboxRepository();
+    await mutantEnqueue(pick, mutantOutbox, TARGET_CANARY);
+    const rows = await mutantOutbox.listByPickId(pick.id);
+    assert.equal(rows.length, 1, 'mutant must create member-facing delivery work');
+    assert.equal(rows[0]?.target, TARGET_CANARY);
+  });
+});
+
+test('mutation control: removing TRACK_ONLY_RETRY_GUARD re-arms a dead-lettered track-only delivery', async () => {
+  async function seedDeadLetter() {
+    const repositories = createInMemoryRepositoryBundle();
+    const pick = makePick({ id: 'pick-mc-retry', metadata: {} });
+    await repositories.picks.savePick(pick);
+    const row = await repositories.outbox.enqueue({
+      pickId: pick.id,
+      target: TARGET_CANARY,
+      payload: {},
+      idempotencyKey: `mc-retry-${Math.random().toString(36).slice(2, 10)}`,
+    });
+    await repositories.outbox.claimNext(TARGET_CANARY, 'worker');
+    await repositories.outbox.markDeadLetter(row.id, 'synthetic failure');
+    await repositories.picks.savePick(
+      makePick({ id: 'pick-mc-retry', metadata: { distributionMode: 'track-only' } }),
+    );
+    return { repositories, pick, rowId: row.id };
+  }
+
+  // Baseline: the guard refuses and the row stays dead-lettered.
+  const guarded = await seedDeadLetter();
+  const guardedResult = await retryDeliveryController(
+    guarded.pick.id,
+    { reason: 'retry', actor: 'operator' },
+    guarded.repositories,
+  );
+  assert.equal(guardedResult.status, 409);
+  const guardedRows = await guarded.repositories.outbox.listByPickId(guarded.pick.id);
+  assert.equal(guardedRows[0]?.status, 'dead_letter', 'guarded build must leave the row dead-lettered');
+
+  // Mutant: the dead-lettered delivery is reset to pending — real member-facing
+  // work is revived. Nothing downstream of this guard stops it.
+  await withGuardRemoved(
+    './controllers/retry-delivery-controller.ts',
+    'TRACK_ONLY_RETRY_GUARD',
+    async (mutant) => {
+      const mutantRetry = mutant.retryDeliveryController as typeof retryDeliveryController;
+      const seeded = await seedDeadLetter();
+      const result = await mutantRetry(
+        seeded.pick.id,
+        { reason: 'retry', actor: 'operator' },
+        seeded.repositories,
+      );
+      assert.equal(result.status, 200, 'mutant must accept the retry');
+      const rows = await seeded.repositories.outbox.listByPickId(seeded.pick.id);
+      assert.equal(rows[0]?.status, 'pending', 'mutant must re-arm the delivery');
+      assert.equal(rows[0]?.attempt_count ?? -1, 0, 'mutant must reset the attempt count');
+    },
+  );
+});
+
+test('mutation control: removing TRACK_ONLY_REQUEUE_GUARD sends a track-only pick down the delivery path', async () => {
+  async function seed() {
+    const repositories = createInMemoryRepositoryBundle();
+    const pick = makePick({
+      id: `pick-mc-requeue-${Math.random().toString(36).slice(2, 8)}`,
+      metadata: { distributionMode: 'track-only' },
+    });
+    await repositories.picks.savePick(pick);
+    return { repositories, pick };
+  }
+
+  // Baseline: the guard refuses with its own named error, before any promotion
+  // or delivery evaluation happens.
+  const guarded = await seed();
+  const guardedResult = await requeuePickController(guarded.pick.id, guarded.repositories);
+  assert.equal(guardedResult.status, 409);
+  assert.ok(!guardedResult.body.ok);
+  if (!guardedResult.body.ok) {
+    assert.equal(guardedResult.body.error.code, 'TRACK_ONLY_DELIVERY_BLOCKED');
+  }
+  assert.equal((await guarded.repositories.outbox.listByPickId(guarded.pick.id)).length, 0);
+
+  // Mutant: the request is no longer refused at this guard. It proceeds into
+  // the delivery path and is stopped only by the INDEPENDENT pre-atomic guard
+  // in run-audit-service, which throws TrackOnlyDistributionError. That
+  // defence-in-depth is real and deliberate, so this control asserts what it
+  // can honestly assert: the requeue guard changes observable behaviour, and
+  // the fallback that catches the mutant is a different, named guard.
+  await withGuardRemoved(
+    './controllers/requeue-controller.ts',
+    'TRACK_ONLY_REQUEUE_GUARD',
+    async (mutant) => {
+      const mutantRequeue = mutant.requeuePickController as typeof requeuePickController;
+      const seeded = await seed();
+      let observed: string;
+      try {
+        const result = await mutantRequeue(seeded.pick.id, seeded.repositories);
+        observed = result.body.ok ? 'ok' : result.body.error.code;
+      } catch (err) {
+        observed = err instanceof Error ? err.name : 'unknown';
+      }
+      assert.notEqual(
+        observed,
+        'TRACK_ONLY_DELIVERY_BLOCKED',
+        'mutant must no longer refuse at the requeue guard',
+      );
+      assert.equal(
+        observed,
+        'TrackOnlyDistributionError',
+        'mutant must be caught by the independent pre-atomic guard instead',
+      );
+      assert.equal(
+        (await seeded.repositories.outbox.listByPickId(seeded.pick.id)).length,
+        0,
+        'the pre-atomic guard must still prevent any outbox row',
+      );
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the outbox chokepoint.
+//
+// The per-route guards each protect one entry point. recap-service reaches the
+// outbox without passing any of them, so the invariant "a Track Only pick never
+// gets delivery work" cannot rest on them alone. The control below deletes the
+// chokepoint from the repository layer and shows that a Track Only pick then
+// receives a real outbox row.
+// ---------------------------------------------------------------------------
+
+test('mutation control: removing OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD lets any route create delivery work for a track-only pick', async () => {
+  const trackOnly = async () => ({ distributionMode: 'track-only' });
+  const enqueueInput = {
+    pickId: 'pick-track-only-chokepoint',
+    target: 'discord:best-bets',
+    payload: { note: 'recap-shaped direct enqueue' },
+    idempotencyKey: 'utv2-1672-chokepoint-control',
+  };
+
+  // Baseline: the shipped repository refuses.
+  const { InMemoryOutboxRepository: RealOutbox, TrackOnlyDeliveryForbiddenError } =
+    await import('@unit-talk/db');
+  const real = new RealOutbox(trackOnly);
+  await assert.rejects(
+    () => real.enqueue(enqueueInput),
+    (error: unknown) => error instanceof TrackOnlyDeliveryForbiddenError,
+    'baseline: the chokepoint must refuse delivery work for a track-only pick',
+  );
+
+  // Mutant: with the marked block deleted, the same call succeeds.
+  await withGuardRemoved(
+    '../../../packages/db/src/runtime-repositories.ts',
+    'OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD',
+    async (mutant) => {
+      const MutantOutbox = mutant['InMemoryOutboxRepository'] as new (
+        resolve: () => Promise<Record<string, unknown>>,
+      ) => { enqueue: (input: typeof enqueueInput) => Promise<{ pick_id: string; target: string }> };
+      const mutated = new MutantOutbox(trackOnly);
+      const row = await mutated.enqueue(enqueueInput);
+      assert.equal(
+        row.pick_id,
+        enqueueInput.pickId,
+        'mutant must create real delivery work for a track-only pick',
+      );
+      assert.equal(row.target, 'discord:best-bets');
+    },
+  );
+});
+
+test('the outbox chokepoint is wired into the repository bundle, not just available on the class', async () => {
+  const { createInMemoryRepositoryBundle, TrackOnlyDeliveryForbiddenError } =
+    await import('@unit-talk/db');
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makePick({
+    id: 'pick-chokepoint-wiring',
+    metadata: { distributionMode: 'track-only' },
+  });
+  await repositories.picks.savePick(pick);
+
+  await assert.rejects(
+    () =>
+      repositories.outbox.enqueue({
+        pickId: pick.id,
+        target: 'discord:best-bets',
+        payload: {},
+        idempotencyKey: 'utv2-1672-chokepoint-wiring',
+      }),
+    (error: unknown) => error instanceof TrackOnlyDeliveryForbiddenError,
+    'the bundle must wire the pick lookup, or the guard is inert in production shape',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the database-side half of the chokepoint.
+//
+// `DatabaseOutboxRepository` is the repository production actually runs. Its
+// two guards, and the metadata read they depend on, were previously executed by
+// no test at all -- the in-memory control above proved only the in-memory half.
+// A stub client makes both reachable without a live connection.
+// ---------------------------------------------------------------------------
+
+interface StubPickRow {
+  metadata: Record<string, unknown> | null;
+}
+
+function stubSupabaseClient(options: {
+  pickRow?: StubPickRow | null;
+  pickError?: { message: string } | null;
+}) {
+  const inserted: Array<Record<string, unknown>> = [];
+  const rpcCalls: string[] = [];
+  const client = {
+    from(table: string) {
+      if (table === 'picks') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: options.pickError ? null : (options.pickRow ?? null),
+                error: options.pickError ?? null,
+              }),
+            }),
+          }),
+        };
+      }
+      return {
+        insert: (row: Record<string, unknown>) => {
+          inserted.push(row);
+          return {
+            select: () => ({
+              single: async () => ({ data: { id: 'outbox-1', ...row }, error: null }),
+            }),
+          };
+        },
+      };
+    },
+    async rpc(name: string) {
+      rpcCalls.push(name);
+      return { data: null, error: null };
+    },
+  };
+  return { client, inserted, rpcCalls };
+}
+
+const dbConnection = {
+  url: 'https://stub.invalid',
+  serviceRoleKey: 'stub',
+} as never;
+
+const atomicInput = {
+  pickId: 'pick-db-chokepoint',
+  fromState: 'qualified',
+  toState: 'distributing',
+  writerRole: 'api',
+  reason: 'test',
+  lifecycleCreatedAt: '2026-08-30T00:00:00.000Z',
+  outboxTarget: 'discord:best-bets',
+  outboxPayload: {},
+  outboxIdempotencyKey: 'utv2-1672-db-atomic',
+} as never;
+
+test('DatabaseOutboxRepository.enqueue refuses delivery work for a persisted track-only pick', async () => {
+  const { DatabaseOutboxRepository, TrackOnlyDeliveryForbiddenError } = await import('@unit-talk/db');
+  const stub = stubSupabaseClient({ pickRow: { metadata: { distributionMode: 'track-only' } } });
+  const repository = new DatabaseOutboxRepository(dbConnection, stub.client as never);
+
+  await assert.rejects(
+    () =>
+      repository.enqueue({
+        pickId: 'pick-db-chokepoint',
+        target: 'discord:best-bets',
+        payload: {},
+        idempotencyKey: 'utv2-1672-db-enqueue',
+      }),
+    (error: unknown) => error instanceof TrackOnlyDeliveryForbiddenError,
+  );
+  assert.equal(stub.inserted.length, 0, 'no row may be inserted for a track-only pick');
+});
+
+test('DatabaseOutboxRepository.enqueue still inserts for a delivery-eligible pick', async () => {
+  const { DatabaseOutboxRepository } = await import('@unit-talk/db');
+  const stub = stubSupabaseClient({ pickRow: { metadata: { distributionMode: 'delivery-eligible' } } });
+  const repository = new DatabaseOutboxRepository(dbConnection, stub.client as never);
+
+  await repository.enqueue({
+    pickId: 'pick-db-eligible',
+    target: 'discord:best-bets',
+    payload: {},
+    idempotencyKey: 'utv2-1672-db-eligible',
+  });
+  assert.equal(stub.inserted.length, 1, 'the chokepoint must not block ordinary delivery work');
+});
+
+test('DatabaseOutboxRepository refuses when the pick row is unreadable rather than assuming it is safe', async () => {
+  const { DatabaseOutboxRepository } = await import('@unit-talk/db');
+
+  // Row absent or invisible: maybeSingle reports data:null/error:null.
+  const missing = stubSupabaseClient({ pickRow: null });
+  const withMissingRow = new DatabaseOutboxRepository(dbConnection, missing.client as never);
+  await assert.rejects(
+    () =>
+      withMissingRow.enqueue({
+        pickId: 'pick-absent',
+        target: 'discord:best-bets',
+        payload: {},
+        idempotencyKey: 'utv2-1672-db-absent',
+      }),
+    /Track Only status cannot be established/u,
+  );
+  assert.equal(missing.inserted.length, 0);
+
+  // Query error: already fail-closed, asserted here so both branches are covered.
+  const failed = stubSupabaseClient({ pickError: { message: 'permission denied' } });
+  const withError = new DatabaseOutboxRepository(dbConnection, failed.client as never);
+  await assert.rejects(
+    () =>
+      withError.enqueue({
+        pickId: 'pick-error',
+        target: 'discord:best-bets',
+        payload: {},
+        idempotencyKey: 'utv2-1672-db-error',
+      }),
+    /delivery safety check/u,
+  );
+  assert.equal(failed.inserted.length, 0);
+});
+
+test('mutation control: removing ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD lets the atomic RPC run for a track-only pick', async () => {
+  const { DatabaseOutboxRepository, TrackOnlyDeliveryForbiddenError } = await import('@unit-talk/db');
+  const pickRow = { metadata: { distributionMode: 'track-only' } };
+
+  // Baseline: the shipped repository refuses before the RPC is reached.
+  const baseline = stubSupabaseClient({ pickRow });
+  const shipped = new DatabaseOutboxRepository(dbConnection, baseline.client as never);
+  await assert.rejects(
+    () => shipped.enqueueDistributionAtomic(atomicInput),
+    (error: unknown) => error instanceof TrackOnlyDeliveryForbiddenError,
+  );
+  assert.deepEqual(baseline.rpcCalls, [], 'the atomic RPC must not be reached');
+
+  // Mutant: with the marked block deleted, the RPC runs.
+  await withGuardRemoved(
+    '../../../packages/db/src/runtime-repositories.ts',
+    'ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD',
+    async (mutant) => {
+      const MutantRepository = mutant['DatabaseOutboxRepository'] as new (
+        connection: never,
+        client: never,
+      ) => { enqueueDistributionAtomic: (input: never) => Promise<unknown> };
+      const mutated = stubSupabaseClient({ pickRow });
+      const repository = new MutantRepository(dbConnection, mutated.client as never);
+      await repository.enqueueDistributionAtomic(atomicInput);
+      assert.deepEqual(
+        mutated.rpcCalls,
+        ['enqueue_distribution_atomic'],
+        'mutant must reach the server-side enqueue for a track-only pick',
+      );
     },
   );
 });

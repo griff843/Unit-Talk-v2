@@ -249,7 +249,16 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
         confidence: 0.9,
         metadata: {
           sport: 'NBA',
-          eventName: 'Suns vs Nuggets',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Supersonics vs Bullets',
+            enteredParticipants: [
+              { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+              { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+            ],
+          },
+          eventName: 'Supersonics vs Bullets',
           // edge=78 < 85 → trader-insights suppressed; bb qualifies (score ≥ 70).
           promotionScores: { edge: 78, trust: 79, readiness: 88, uniqueness: 82, boardFit: 90 },
         },
@@ -337,9 +346,18 @@ test('handleSubmitPick smart-form pick below promotion threshold still enqueues 
         odds: -110,
         stakeUnits: 1.5,
         confidence: 0.4,
-        eventName: 'Knicks vs Celtics',
+        eventName: 'Supersonics vs Bullets',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Supersonics vs Bullets',
+            enteredParticipants: [
+              { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+              { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+            ],
+          },
           capper: 'griff843',
           capperConviction: 4,
           promotionScores: { edge: 45, trust: 40, readiness: 50, uniqueness: 40, boardFit: 35 },
@@ -380,9 +398,18 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
         odds: 120,
         stakeUnits: 1,
         confidence: 0.8,
-        eventName: 'Lakers vs Celtics',
+        eventName: 'Supersonics vs Bullets',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Supersonics vs Bullets',
+            enteredParticipants: [
+              { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+              { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+            ],
+          },
           capper: 'griff843',
           capperConviction: 8,
           promotionScores: { edge: 78, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
@@ -406,9 +433,18 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
         odds: -110,
         stakeUnits: 1,
         confidence: 0.7,
-        eventName: 'Lakers vs Celtics',
+        eventName: 'Supersonics vs Bullets',
         metadata: {
           sport: 'NBA',
+          distributionMode: 'delivery-eligible',
+          participantResolution: {
+            resolution: 'manual', sportId: 'NBA', eventId: null, manualOverride: true,
+            reason: 'canonical-coverage-gap', enteredEventName: 'Supersonics vs Bullets',
+            enteredParticipants: [
+              { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+              { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+            ],
+          },
           capper: 'griff843',
           capperConviction: 7,
           promotionScores: { edge: 55, trust: 70, readiness: 65, uniqueness: 50, boardFit: 45 },
