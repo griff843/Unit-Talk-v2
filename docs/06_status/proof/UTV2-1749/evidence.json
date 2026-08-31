@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1749",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "ready_for_review",
+  "generated_at": "2026-08-31T20:21:40.394Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99",
+    "verified_source_note": "The implementation commit containing the complete workflow and regression-test change. Proof-only artifacts follow it; authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    }
+  },
+  "scope": {
+    "implementation_files": [
+      ".github/workflows/ingestor-staleness-alert.yml",
+      "scripts/ci/ingestor-alert-wiring.test.ts"
+    ],
+    "workflow_delta": [
+      "alerting-pass: bind SUPABASE_ANON_KEY from secrets.SUPABASE_ANON_KEY",
+      "alerting-pass: bind UNIT_TALK_OPS_ALERT_WEBHOOK_URL from secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
+      "monitor: bind SUPABASE_ANON_KEY from secrets.SUPABASE_ANON_KEY"
+    ],
+    "unchanged_controls": [
+      "schedule cadence */5 * * * *",
+      "permissions contents: read",
+      "ALERT_MEMBER_CHANNELS_ENABLED=false",
+      "SYSTEM_PICKS_ENABLED=false",
+      "all alert thresholds"
+    ]
+  },
+  "expected_runtime_effect": {
+    "alerting_pass": "The scheduled alerting process receives the full Supabase configuration triplet required by the application config loader and receives the operations webhook needed to report through the authorized operations sink.",
+    "monitor": "The freshness monitor receives the full Supabase configuration triplet required by the application config loader while retaining its existing operations webhook binding.",
+    "delivery_posture": "Canary-only and parked controls are unchanged. This pre-merge YAML proof does not claim a successful scheduled run; post-merge observation is still required."
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "status": "PASS",
+      "included_stages": [
+        "env:check",
+        "lint",
+        "type-check",
+        "build",
+        "test",
+        "smart-form verify",
+        "verify:commands"
+      ],
+      "ops_suite_observation": {
+        "tests": 2745,
+        "pass": 2745,
+        "fail": 0,
+        "skipped": 0
+      }
+    },
+    "focused_test": {
+      "command": "pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts",
+      "exit_code": 0,
+      "tests": 2,
+      "pass": 2,
+      "fail": 0,
+      "skipped": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "changed_files": 5,
+      "rules_matched": "none",
+      "artifacts_required": []
+    }
+  },
+  "runtime_proof": {
+    "status": "BLOCKED_DEFERRED_PENDING_STAGING_CI_AND_POST_MERGE_SCHEDULE",
+    "test_db": {
+      "required": true,
+      "local_status": "BLOCKED_DEFERRED",
+      "literal_disposition": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "production_mutation_performed": false,
+      "secret_values_exposed": false
+    },
+    "scheduled_run": {
+      "status": "PENDING_POST_MERGE",
+      "required_evidence": [
+        "scheduled workflow run URL",
+        "run attempt",
+        "alerting-pass conclusion",
+        "monitor conclusion",
+        "evidence that alerting-pass can reach the canary-only operations path"
+      ],
+      "success_claimed": false
+    }
+  },
+  "mutation_testing": {
+    "method": "Removed each new workflow env binding independently from the real YAML, ran the named focused test, restored with apply_patch, and verified the original workflow SHA-256 after every restore.",
+    "baseline_sha256": "e22d77d0bf2c31755ffeb639e5a63bafe60d506e8a3367e8fd6f32d16cfdf64a",
+    "named_test": "scheduled alert workflow gives each runtime step its required configuration",
+    "mutations": [
+      {
+        "removed": "alerting-pass SUPABASE_ANON_KEY",
+        "result": "FAIL",
+        "diagnostic": "alerting-pass/Run one alerting pass must bind SUPABASE_ANON_KEY"
+      },
+      {
+        "removed": "alerting-pass UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
+        "result": "FAIL",
+        "diagnostic": "alerting-pass/Run one alerting pass must bind UNIT_TALK_OPS_ALERT_WEBHOOK_URL"
+      },
+      {
+        "removed": "monitor SUPABASE_ANON_KEY",
+        "result": "FAIL",
+        "diagnostic": "monitor/Check ingestion and alert-system freshness must bind SUPABASE_ANON_KEY"
+      }
+    ],
+    "restore_verified_byte_identical": true
+  },
+  "safety_posture": {
+    "production_remains_parked": true,
+    "member_delivery_enabled": false,
+    "system_picks_enabled": false,
+    "secret_mutation_performed": false,
+    "database_ddl_performed": false,
+    "ingestion_or_worker_activation_performed": false
+  },
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "ready_for_pm_review": false,
+    "pending": [
+      "independent exact-head review",
+      "T1 approval at the stationary reviewed head",
+      "staging-ci writable DB proof",
+      "post-merge scheduled-run observation"
+    ]
+  }
+}
