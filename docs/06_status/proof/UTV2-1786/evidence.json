@@ -8,6 +8,8 @@
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "9c8d2d431303c80066feef79df4c3326171b2267",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
