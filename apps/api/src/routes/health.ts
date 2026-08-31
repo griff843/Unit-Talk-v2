@@ -4,7 +4,7 @@ import { writeJson } from '../http-utils.js';
 import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
 import { isProductionLikeRuntime } from '@unit-talk/config';
-import type { PickLifecycleState } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type PickLifecycleState } from '@unit-talk/contracts';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
 const ZOMBIE_PICK_LIFECYCLE_STATES: PickLifecycleState[] = ['draft', 'validated'];
@@ -88,6 +88,23 @@ export async function checkZombiePickHealth(
     ) {
       continue;
     }
+
+    // UTV2-1672 ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD_START
+    // A zombie is a pick that *should* have delivery work and does not. A Track
+    // Only pick is force-qualified to best-bets by the smart-form promotion
+    // path and then deliberately never enqueued, so it matches every clause of
+    // the predicate above while being exactly what was asked for. Without this,
+    // /health reports 503 after the first legitimate capper submission and
+    // prescribes a requeue that the Track Only guard refuses -- an unresolvable
+    // alarm that trains operators to ignore a real one.
+    const pickMetadata =
+      pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
+        ? (pick.metadata as Record<string, unknown>)
+        : null;
+    if (isTrackOnlyPickMetadata(pickMetadata)) {
+      continue;
+    }
+    // UTV2-1672 ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD_END
 
     const target = `discord:${pick.promotion_target}`;
     const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(

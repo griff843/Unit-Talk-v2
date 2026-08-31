@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { before, after } from 'node:test';
 import { once } from 'node:events';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { AddressInfo } from 'node:net';
 import type { UnitTalkSupabaseClient } from '@unit-talk/db';
 import { evaluateQueueHealth } from '@unit-talk/observability';
@@ -2489,3 +2491,136 @@ function createFakeRateLimitRpcClient(): UnitTalkSupabaseClient {
     },
   } as unknown as UnitTalkSupabaseClient;
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: a Track Only pick is force-qualified to best-bets and then never
+// enqueued. Two subsystems read that state as a fault. Both exclusions below
+// exist because of an adversarial review finding on PR #1466.
+// ---------------------------------------------------------------------------
+
+async function createTrackOnlyQualifiedPick(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  return processSubmission(
+    {
+      source: 'api',
+      market: 'NBA assists',
+      selection: 'Track Only Over 8.5',
+      confidence: 0.9,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Suns vs Nuggets',
+        distributionMode: 'track-only',
+        promotionScores: {
+          edge: 78,
+          trust: 79,
+          readiness: 88,
+          uniqueness: 82,
+          boardFit: 90,
+        },
+      },
+    },
+    repositories,
+  );
+}
+
+async function withHealthGuardRemoved<T>(
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL('./routes/health.ts', import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const mutantSource = source.replace(
+    new RegExp(
+      `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+      'gu',
+    ),
+    '',
+  );
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    return await run(
+      (await import(`${pathToFileURL(mutantPath).href}?mutation=${guardName}`)) as Record<
+        string,
+        unknown
+      >,
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+test('a Track Only pick is not a zombie: it is force-qualified and deliberately never enqueued', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createTrackOnlyQualifiedPick(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  const health = await checkZombiePickHealth(runtime);
+  assert.equal(health.count, 0);
+  assert.equal(health.status, 'healthy');
+  assert.equal(health.remediation, null);
+});
+
+test('mutation control: removing ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD makes /health 503 on a legitimate Track Only submission', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createTrackOnlyQualifiedPick(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  // Baseline: healthy.
+  assert.equal((await checkZombiePickHealth(runtime)).status, 'healthy');
+
+  // Mutant: the same pick is counted as a zombie and /health reports down,
+  // prescribing a requeue that TRACK_ONLY_REQUEUE_GUARD refuses.
+  await withHealthGuardRemoved('ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD', async (mutant) => {
+    const check = mutant['checkZombiePickHealth'] as typeof checkZombiePickHealth;
+    const mutated = await check(runtime);
+    assert.equal(mutated.count, 1);
+    assert.equal(mutated.status, 'down');
+    assert.match(mutated.remediation ?? '', /requeue/iu);
+  });
+});
+
+test('a Track Only pick does not occupy live board capacity', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createTrackOnlyQualifiedPick(repositories);
+
+  // The premise, asserted rather than assumed: the smart-form promotion path
+  // force-qualifies this pick to best-bets and the Track Only guard leaves it
+  // `validated`. That is precisely the shape the board query counts, so absent
+  // the exclusion below every assertion in this test would read 1.
+  assert.equal(created.pick.promotionStatus, 'qualified');
+  assert.equal(created.pick.promotionTarget, 'best-bets');
+  assert.equal(created.pick.lifecycleState, 'validated');
+
+  const board = await repositories.picks.getPromotionBoardState({
+    target: 'best-bets',
+    sport: 'NBA',
+    eventName: 'Suns vs Nuggets',
+    market: 'NBA assists',
+    selection: 'Track Only Over 8.5',
+  });
+
+  // Every counter, not just the total: a Track Only pick that inflated
+  // sameSportCount or sameGameCount would suppress deliverable picks just as
+  // effectively as one that inflated the board count.
+  assert.equal(board.currentBoardCount, 0);
+  assert.equal(board.sameSportCount, 0);
+  assert.equal(board.sameGameCount, 0);
+  assert.equal(board.duplicateCount, 0);
+
+  // Control: an ordinary qualified pick still counts, so the exclusion is
+  // specific to Track Only rather than a query that now counts nothing.
+  await createQualifiedPick(repositories);
+  const withDeliverable = await repositories.picks.getPromotionBoardState({
+    target: 'best-bets',
+    sport: 'NBA',
+    eventName: 'Suns vs Nuggets',
+    market: 'NBA assists',
+    selection: 'Player Over 8.5',
+  });
+  assert.equal(withDeliverable.currentBoardCount, 1);
+  assert.equal(withDeliverable.sameSportCount, 1);
+});

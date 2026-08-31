@@ -658,7 +658,15 @@ export class InMemoryPickRepository implements PickRepository {
         pick.status !== 'settled' &&
         pick.status !== 'voided' &&
         pick.created_at >= boardWindowStart &&
-        pick.source != null,
+        pick.source != null &&
+        // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_START
+        // A Track Only pick is force-qualified to best-bets by the smart-form
+        // promotion path and then never enqueued, so it sits `validated` +
+        // `qualified` for the whole 7-day window. Without this it occupies live
+        // board capacity it can never use, and once caps are reached it
+        // suppresses picks that genuinely are deliverable.
+        !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null)
+        // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     );
 
     return {
@@ -3416,7 +3424,14 @@ export class DatabasePickRepository implements PickRepository {
       );
     }
 
-    const promoted = data ?? [];
+    // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_START
+    // Same reason as the in-memory implementation: a Track Only pick is
+    // force-qualified to best-bets and never enqueued, so it would hold live
+    // board capacity for 7 days without ever being deliverable.
+    const promoted = (data ?? []).filter(
+      (pick) => !isTrackOnlyPickMetadata(isRecord(pick.metadata) ? pick.metadata : null),
+    );
+    // UTV2-1672 BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD_END
     return {
       currentBoardCount: promoted.length,
       sameSportCount: promoted.filter(
