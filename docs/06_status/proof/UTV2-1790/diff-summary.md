@@ -1,15 +1,15 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 129d2f2bd1720d3e6a061c2e1282aa8374555fb5
+MERGE_SHA: 0f93008bef9766aed1809cd9340e540461244314
 
 Three code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/ops-merge-wrapper.ts` | +225 / −4 |
-| `scripts/ops/merge-wrapper.ts` | +219 / −16 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +1063 / −5 |
+| `scripts/ops/ops-merge-wrapper.ts` | +327 / −6 |
+| `scripts/ops/merge-wrapper.ts` | +216 / −16 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +1281 / −5 |
 
 (`git diff --numstat origin/main -- scripts/ops/`, the full lane diff.)
 
@@ -56,7 +56,7 @@ repository it cannot read — and after it.
 **real** runner (not the intercepting one) and to the cwd the failure occurred in.
 No other operation passes it.
 
-**4. `probeSyncResidue` and `worktreeResidue`** (round 6). The probe that lived
+**4. `probeSyncResidue` and `worktreeResidue`** (round 6, extended round 7). The probe that lived
 inside `abortInProgressSync` is hoisted to module scope and re-exported as
 `worktreeResidue`, so the two mutex-release decisions in `merge-wrapper.ts` can ASK
 the same question instead of asserting an answer they never measured. It is wired in
@@ -138,7 +138,9 @@ is about live here and nowhere else.
      Same measurement, same rule.
 
    `measureResidue` fails closed when no probe is supplied or the probe throws: an
-   unmeasured tree is not a clean tree. `popMainSyncStash`'s message no longer asserts
+   unmeasured tree is not a clean tree. Round 7 dropped the dead `runner` argument
+   from the `residueProbe` context type — the only production probe closed over the
+   real runner and ignored it. `popMainSyncStash`'s message no longer asserts
    which of the two failures occurred; it names both and defers to the caller's
    measurement.
 
@@ -154,7 +156,7 @@ unmodified (21/21).
    genuinely issues them. The four remaining `--ff-only` occurrences belong to
    `main-sync`'s legitimate `git pull --ff-only origin main` and are unchanged.
 
-2. **Thirteen real-git regressions.** Helpers `git(cwd, ...args)`,
+2. **Sixteen real-git regressions.** Helpers `git(cwd, ...args)`,
    `withDivergedRepo({conflicting}, run)`, `realGitRunner(hook)`, `unmergedPaths(dir)`
    and `mergeHeadPresent(dir)` build a temporary repository with a real
    `refs/remotes/origin/main` ref and genuine divergence, asserted mechanically before
@@ -234,7 +236,20 @@ unmodified (21/21).
    `node:child_process`'s `spawnSync` is used by the helpers; existing conventions
    (`withTempOps`, `BASE`, `readMergeLock`) are reused unchanged.
 
-6. **Round 6 additions.** Test 57 is the negative case test 55 never had: a real
+6. **Round 7 additions.** Test 60 is test 57's fixture reached through `main-sync`
+   instead of the bridge — the round-7 P1, where round 6's lock-leak fix had never
+   applied at all. Test 61 pins the residue probe's own `try`/`catch`. Test 62 drives
+   a real interactive rebase stopped at a `break` step and first asserts a healthy
+   repository reads clean, so it cannot pass vacuously. Mutants M20, M21 and M22.
+
+   `withCleanCleanupProbes` and `CLEANUP_PROBE_CALLS` were extended to the four refs
+   and the two `--git-path` probes the residue sweep now issues. `git rev-parse
+   --git-path` always exits 0 and prints a path whether or not the directory exists,
+   so the helper answers it that way; answering it with the blanket failure that
+   runner uses for the sync command would make the tree read UNDETERMINABLE, which is
+   a different test (51).
+
+7. **Round 6 additions.** Test 57 is the negative case test 55 never had: a real
    repository where `origin/main` starts TRACKING a lane-state path that is untracked
    at the lane head, so the merge succeeds, the pop refuses outright, the tree is
    byte-clean (asserted directly on disk before the control), and the mutex must
