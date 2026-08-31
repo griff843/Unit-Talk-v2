@@ -150,6 +150,9 @@ const REBASE_APPLY_DIR_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'rebase-a
 // UTV2-1790 (review round 10, P1): bisect state lives in plain files, not refs.
 const BISECT_LOG_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'BISECT_LOG'];
 const BISECT_START_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'BISECT_START'];
+// UTV2-1790 (review round 11, P1/P2): the sequencer directory, and HEAD attachment.
+const SEQUENCER_DIR_PROBE_CALL = ['git', 'rev-parse', '--git-path', 'sequencer'];
+const SYMBOLIC_REF_PROBE_CALL = ['git', 'symbolic-ref', '-q', 'HEAD'];
 // Order matches probeSyncResidue: MERGE_HEAD, REBASE_HEAD, the two sequencer
 // directories (reached only when REBASE_HEAD is absent), CHERRY_PICK_HEAD,
 // REVERT_HEAD, the two bisect files, then unmerged paths.
@@ -176,6 +179,8 @@ const CLEANUP_PROBE_CALLS = [
   REVERT_HEAD_PROBE_CALL,
   BISECT_LOG_PROBE_CALL,
   BISECT_START_PROBE_CALL,
+  SEQUENCER_DIR_PROBE_CALL,
+  SYMBOLIC_REF_PROBE_CALL,
   UNMERGED_PROBE_CALL,
 ];
 const DIFF_BEFORE_CALL = ['git', 'diff', '--name-only', 'origin/main...ok'];
@@ -234,11 +239,25 @@ function withCleanCleanupProbes(calls: string[][], inner: CommandRunner): Comman
     const isSequencerDirProbe =
       command === 'git' && args[0] === 'rev-parse' && args[1] === '--git-path';
     const isUnmergedProbe = command === 'git' && args[0] === 'diff' && args.includes('--diff-filter=U');
-    if (isRefProbe || isSequencerDirProbe || isUnmergedProbe) {
+    // UTV2-1790 (review round 11, P2): HEAD attachment. `git symbolic-ref -q HEAD`
+    // exits 0 with the ref when attached and 1 when detached; anything else is
+    // undetermined. These fixtures are about command SEQUENCES on a normal branch, so
+    // they state that premise explicitly rather than let the blanket failure runner
+    // answer it -- which would make every one of them read as an undeterminable tree
+    // and silently become a copy of test 51.
+    const isSymbolicRefProbe =
+      command === 'git' && args[0] === 'symbolic-ref' && args.includes('HEAD');
+    if (isRefProbe || isSequencerDirProbe || isUnmergedProbe || isSymbolicRefProbe) {
       calls.push([command, ...args]);
       return {
         status: isRefProbe ? 1 : 0,
-        stdout: Buffer.from(isSequencerDirProbe ? `.git/${args[2]}-does-not-exist\n` : ''),
+        stdout: Buffer.from(
+          isSequencerDirProbe
+            ? `.git/${args[2]}-does-not-exist\n`
+            : isSymbolicRefProbe
+              ? 'refs/heads/lane\n'
+              : '',
+        ),
         stderr: Buffer.from(''),
         error: undefined,
       };
@@ -247,9 +266,16 @@ function withCleanCleanupProbes(calls: string[][], inner: CommandRunner): Comman
   };
 }
 
+// The real-git fixtures below all build their lane branch as `lane`, and round 12's
+// allowlist precondition requires HEAD to be attached to the branch the wrapper was
+// INVOKED for. Before round 12 these two disagreed in every real-repo test -- the
+// input named a codex branch that no fixture ever created -- and nothing noticed,
+// because nothing had ever asked whether HEAD was on the branch being synced. They
+// are one name now so the fixtures exercise a self-consistent lane.
+const LANE_BRANCH = 'lane';
 const BASE = {
   issue_id: 'UTV2-1061',
-  branch: 'codex/utv2-1061-merge-mutex-wrapper',
+  branch: LANE_BRANCH,
   cwd: process.cwd(),
 };
 
@@ -1647,6 +1673,16 @@ function mergeHeadPresent(dir: string): boolean {
   );
 }
 
+// UTV2-1790 (review round 11): a plain `git commit` finishing a conflicted pick CLEARS
+// CHERRY_PICK_HEAD while leaving the sequence live, so tests 72 and 74 assert its
+// absence as a premise rather than assuming it.
+function cherryPickHeadPresent(dir: string): boolean {
+  return (
+    spawnSync('git', ['rev-parse', '--verify', '--quiet', 'CHERRY_PICK_HEAD'], { cwd: dir })
+      .status === 0
+  );
+}
+
 test('UTV2-1790: git-merge-main merges a genuinely diverged branch (real git)', () => {
   withDivergedRepo({ conflicting: false }, ({ dir, branchSha, mainSha }) => {
     withTempOps(({ lockPath, deferredDir }) => {
@@ -2418,7 +2454,7 @@ test('UTV2-1790: a NON-conflicting autostash pop failure releases the mutex over
       assert.match(result.message, /measured after the failed pop and is clean/u);
       assert.match(
         result.message,
-        /no MERGE_HEAD, no rebase\/cherry-pick\/revert\/bisect in progress and no unmerged paths/u,
+        /HEAD is attached and there is no MERGE_HEAD, no rebase\/cherry-pick\/revert\/bisect\/sequencer in progress and no unmerged paths/u,
       );
       assert.doesNotMatch(
         result.message,
@@ -3449,4 +3485,819 @@ test('UTV2-1790: a pre-flight refusal whose release FAILS does not tell the oper
     assert.match(result.message, /could NOT be released/u, 'it says what actually happened');
     assert.match(result.message, /may still\s+be held/u, 'and what that means for other lanes');
   });
+});
+
+test('UTV2-1790: main-sync refuses over a paused cherry-pick SEQUENCE, on the branch', () => {
+  // Review round 11, P1. THE STATE THE ROUND-10 BUNDLE SAID DID NOT EXIST.
+  //
+  // Round 10 swept the enumeration, found bisect, and wrote that a `.git/sequencer`
+  // term had been "considered and REJECTED" as provably equivalent to
+  // CHERRY_PICK_HEAD/REVERT_HEAD/unmerged paths. That was a reasoning error printed as
+  // a measurement. A round-11 reviewer produced the counterexample by execution:
+  //
+  //   git cherry-pick A B      -> conflicts on A
+  //   <resolve>                -> git add
+  //   git commit               -> a PLAIN commit, not `git cherry-pick --continue`
+  //
+  // git accepts it, clears CHERRY_PICK_HEAD, and leaves the sequence live -- `git
+  // status` still says "Cherry-pick currently in progress". HEAD is ON THE BRANCH, the
+  // index is clean, and every term the round-10 probe enumerated reads absent. So
+  // `main-sync` fast-forwarded the branch, returned `merge_wrapper_completed`, and the
+  // operator's later `--continue` replayed the remaining picks onto a base they never
+  // chose.
+  //
+  // This case matters beyond the one state: it is the only reproduced hazard in this
+  // lane where HEAD is ATTACHED, so it is not covered by the detached-HEAD predicate
+  // that test 73 pins. Both controls are needed.
+  const build = (dir: string): void => {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+
+    // Two commits to pick, the first of which will conflict.
+    git(dir, 'checkout', '-q', '-b', 'source');
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'pick-one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'pick one');
+    fs.writeFileSync(path.join(dir, 'q.txt'), 'pick-two\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'pick two');
+
+    git(dir, 'remote', 'add', 'origin', dir);
+
+    // The lane carries a conflicting p.txt.
+    git(dir, 'checkout', '-q', '-B', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'lane-version\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+
+    // Start the SEQUENCE, hit the conflict, resolve it, and commit the ordinary way.
+    spawnSync('git', ['cherry-pick', 'source~1', 'source'], { cwd: dir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'resolved\n');
+    git(dir, 'add', 'p.txt');
+    spawnSync('git', ['commit', '-q', '-m', 'resolved by hand'], { cwd: dir, stdio: 'pipe' });
+
+    // main then advances PAST the lane tip, so the lane is strictly behind and a
+    // --ff-only pull genuinely succeeds -- the fixture has something to lose. Built
+    // with commit-tree so the worktree, and the live sequence in it, is never touched.
+    const ahead = git(dir, 'commit-tree', 'HEAD^{tree}', '-p', 'HEAD', '-m', 'main moves on');
+    git(dir, 'update-ref', 'refs/heads/main', ahead);
+    git(dir, 'update-ref', 'refs/remotes/origin/main', ahead);
+  };
+  const sequencing = (dir: string): boolean =>
+    fs.existsSync(path.join(dir, '.git', 'sequencer'));
+
+  // --- NEGATIVE CONTROL: the hazard is real in this exact fixture. ---
+  const control = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-seq-control-'));
+  try {
+    build(control);
+    const head = git(control, 'rev-parse', 'HEAD');
+    assert.ok(sequencing(control), 'premise: the cherry-pick SEQUENCE is still live');
+    assert.ok(git(control, 'symbolic-ref', '-q', 'HEAD'), 'premise: HEAD is ON THE BRANCH');
+    assert.strictEqual(mergeHeadPresent(control), false, 'premise: no MERGE_HEAD');
+    assert.deepStrictEqual(unmergedPaths(control), [], 'premise: the index is clean');
+    assert.strictEqual(
+      cherryPickHeadPresent(control),
+      false,
+      'premise: the plain commit CLEARED CHERRY_PICK_HEAD -- invisible to every round-10 term',
+    );
+    const pull = spawnSync('git', ['pull', '--ff-only', 'origin', 'main'], {
+      cwd: control,
+      stdio: 'pipe',
+    });
+    assert.strictEqual(pull.status, 0, 'the raw pull succeeds -- that is the hazard');
+    assert.notStrictEqual(git(control, 'rev-parse', 'HEAD'), head, 'and it moves the branch');
+    assert.ok(sequencing(control), 'while the pending picks survive, now aimed at a new base');
+  } finally {
+    fs.rmSync(control, { recursive: true, force: true });
+  }
+
+  // --- THE REGRESSION. ---
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-seq-'));
+  try {
+    build(dir);
+    const head = git(dir, 'rev-parse', 'HEAD');
+    const tree = git(dir, 'status', '--porcelain');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false, 'a live cherry-pick sequence must never sync');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'HEAD must not move');
+      assert.ok(sequencing(dir), 'the pending picks must be left intact');
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash attempted');
+      assert.strictEqual(git(dir, 'status', '--porcelain'), tree, 'worktree untouched');
+
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+      assert.match(result.message, /sequence is in progress/u, 'names the measured state');
+    });
+
+    spawnSync('git', ['cherry-pick', '--quit'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: main-sync refuses on a bare detached HEAD, which leaves no state to enumerate', () => {
+  // Review round 11, P2, and the reason this lane stops enumerating for the off-branch
+  // half. Rounds 8, 10 and 11 each found a state that read clean and was destroyed by a
+  // fast-forward; the first two shared one property, a DETACHED HEAD. A bare detached
+  // HEAD -- `git checkout <sha>` to test a commit by hand, which is the manual form of
+  // exactly the bisect workflow round 10 was about -- leaves NO state file anywhere, so
+  // no enumeration can reach it, however long the list grows.
+  //
+  // Refusing here is not over-refusal, and that distinction is the whole justification:
+  // `main-sync` exists to bring origin/main into the LANE BRANCH, and with HEAD
+  // detached `git pull --ff-only origin main` moves HEAD while leaving
+  // refs/heads/<branch> exactly where it was. This test asserts that too, so the
+  // "cannot do its job" premise is measured rather than argued.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-detached-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+    git(dir, 'remote', 'add', 'origin', dir);
+    git(dir, 'checkout', '-q', '-B', 'lane', baseSha);
+    const laneRef = git(dir, 'rev-parse', 'refs/heads/lane');
+
+    // Detach onto the commit under manual test. Nothing else is in progress.
+    git(dir, 'checkout', '-q', '--detach', baseSha);
+    assert.strictEqual(
+      spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: dir, stdio: 'pipe' }).status,
+      1,
+      'premise: HEAD is detached',
+    );
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is clean');
+    for (const name of ['rebase-merge', 'rebase-apply', 'sequencer', 'BISECT_LOG']) {
+      assert.strictEqual(
+        fs.existsSync(path.join(dir, '.git', name)),
+        false,
+        `premise: no ${name} -- this state leaves NOTHING to enumerate`,
+      );
+    }
+    const detachedHead = git(dir, 'rev-parse', 'HEAD');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false, 'a detached HEAD must never sync successfully');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), detachedHead, 'HEAD must not move');
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash attempted');
+
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+      assert.match(result.message, /HEAD is detached/u, 'names the measured state');
+      assert.match(result.message, /branch ref/u, 'and says why the sync could not work');
+    });
+
+    // THE PREMISE, MEASURED: a raw ff pull here moves HEAD and does NOT move the branch,
+    // so the refusal costs the operator nothing they could otherwise have had.
+    const pull = spawnSync('git', ['pull', '--ff-only', 'origin', 'main'], {
+      cwd: dir,
+      stdio: 'pipe',
+    });
+    assert.strictEqual(pull.status, 0, 'the raw pull succeeds');
+    assert.notStrictEqual(git(dir, 'rev-parse', 'HEAD'), detachedHead, 'it moves HEAD');
+    assert.strictEqual(
+      git(dir, 'rev-parse', 'refs/heads/lane'),
+      laneRef,
+      'and leaves the lane branch exactly where it was -- the sync did not sync anything',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: the post-failure cleanup does not call a live cherry-pick sequence "nothing to abort"', () => {
+  // Review round 11, P1, second consumer. `git-merge-main` and `git-rebase-main` never
+  // run the main-sync pre-flight, so `abortInProgressSync` is the only guard on that
+  // path. Round 8's finding was that a term wired into one consumer and not the others
+  // leaves two definitions of "clean" divergent; this pins the sequencer term in the
+  // consumer the pre-flight does not cover.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-seq-abort-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    git(dir, 'checkout', '-q', '-b', 'source');
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'pick-one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'pick one');
+    fs.writeFileSync(path.join(dir, 'q.txt'), 'pick-two\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'pick two');
+    git(dir, 'checkout', '-q', '-B', 'lane', baseSha);
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'lane-version\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane');
+    spawnSync('git', ['cherry-pick', 'source~1', 'source'], { cwd: dir, stdio: 'pipe' });
+    fs.writeFileSync(path.join(dir, 'p.txt'), 'resolved\n');
+    git(dir, 'add', 'p.txt');
+    spawnSync('git', ['commit', '-q', '-m', 'resolved by hand'], { cwd: dir, stdio: 'pipe' });
+
+    assert.ok(fs.existsSync(path.join(dir, '.git', 'sequencer')), 'premise: sequence is live');
+    assert.strictEqual(cherryPickHeadPresent(dir), false, 'premise: CHERRY_PICK_HEAD cleared');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is clean');
+
+    const realRunner: CommandRunner = (command, args, options) =>
+      spawnSync(command, args, { cwd: options?.cwd, stdio: 'pipe' });
+
+    const residue = worktreeResidue(realRunner, dir);
+    assert.strictEqual(residue.clean, false, 'a live sequence is not a clean worktree');
+    assert.match(residue.detail, /sequence is in progress/u);
+
+    const outcome = abortInProgressSync('git-merge-main', realRunner, dir);
+    assert.strictEqual(outcome.cleaned, false, 'a live sequence is never "cleaned"');
+    assert.match(outcome.message ?? '', /sequence is still in progress/u);
+
+    spawnSync('git', ['cherry-pick', '--quit'], { cwd: dir, stdio: 'pipe' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: main-sync refuses when HEAD is attached to a DIFFERENT branch than the lane', () => {
+  // Review round 12. This is the ALLOWLIST term, and it is the reason this lane stops
+  // growing a blocklist. Rounds 8, 10 and 11 each found one more in-progress state that
+  // read clean and was destroyed by a fast-forward, and round 10 explicitly REJECTED a
+  // `.git/sequencer` term as an equivalent mutant that round 11 then proved live. Four
+  // rounds of "add the missing term" is the signature of enumerating an open-ended
+  // space, and round 11's own detached-HEAD finding is the proof it cannot close: that
+  // hazard is defined by the ABSENCE of a marker, so there is no term to add.
+  //
+  // The inversion closes the off-branch half completely. Rather than refuse on any of N
+  // known-bad markers, require positive proof of the one acceptable state -- HEAD
+  // ATTACHED, to exactly the branch the wrapper was INVOKED for -- and refuse
+  // everything else, including states nobody has enumerated yet.
+  //
+  // Scope, stated honestly rather than overclaimed: this closes the OFF-BRANCH half.
+  // A paused cherry-pick sequence leaves HEAD attached to the lane branch (test 72), so
+  // the on-branch mid-operation half is still an enumeration and the enumerated terms
+  // remain load-bearing there. What the allowlist removes is the class where HEAD is
+  // somewhere other than the lane branch, which is where every round-8/10/11 escape
+  // actually lived.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1790-wrong-branch-'));
+  try {
+    git(dir, 'init', '--initial-branch=main', '--quiet');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    git(dir, 'config', 'commit.gpgsign', 'false');
+    fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'one');
+    const baseSha = git(dir, 'rev-parse', 'HEAD');
+    fs.writeFileSync(path.join(dir, 'a.txt'), 'from-main\n');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'main advances');
+    git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+    git(dir, 'remote', 'add', 'origin', dir);
+
+    // The lane the wrapper is invoked for...
+    git(dir, 'checkout', '-q', '-B', LANE_BRANCH, baseSha);
+    const laneRefBefore = git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`);
+
+    // ...and the branch HEAD is actually sitting on. An operator checked out a
+    // neighbouring branch and forgot. NOTHING is in progress: every enumerated term is
+    // absent, exactly as in the bare-detached case, but here HEAD is even ATTACHED --
+    // so the round-11 detached term does not reach this either.
+    git(dir, 'checkout', '-q', '-B', 'other', baseSha);
+    assert.strictEqual(
+      spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: dir, stdio: 'pipe' }).status,
+      0,
+      'premise: HEAD is ATTACHED, so the detached term cannot catch this',
+    );
+    assert.strictEqual(mergeHeadPresent(dir), false, 'premise: no MERGE_HEAD');
+    assert.strictEqual(cherryPickHeadPresent(dir), false, 'premise: no CHERRY_PICK_HEAD');
+    assert.deepStrictEqual(unmergedPaths(dir), [], 'premise: the index is clean');
+    for (const name of ['rebase-merge', 'rebase-apply', 'sequencer', 'BISECT_LOG', 'BISECT_START']) {
+      assert.strictEqual(
+        fs.existsSync(path.join(dir, '.git', name)),
+        false,
+        `premise: no ${name} -- every ENUMERATED term is absent here`,
+      );
+    }
+    const otherBefore = git(dir, 'rev-parse', 'refs/heads/other');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+
+      assert.strictEqual(result.ok, false, 'syncing the wrong branch must never succeed');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.strictEqual(
+        git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`),
+        laneRefBefore,
+        'the lane branch must not move',
+      );
+      assert.strictEqual(
+        git(dir, 'rev-parse', 'refs/heads/other'),
+        otherBefore,
+        'and the branch that was NOT asked for must not move either',
+      );
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash attempted');
+
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'released',
+        'nothing changed, so the mutex must not be held',
+      );
+      assert.match(result.message, /HEAD is on refs\/heads\/other/u, 'names the OBSERVED ref');
+      assert.match(
+        result.message,
+        new RegExp(`not the expected refs/heads/${LANE_BRANCH}`, 'u'),
+        'and the EXPECTED one, so the operator can see the mismatch',
+      );
+    });
+
+    // THE PREMISE, MEASURED: a raw ff pull here succeeds and silently advances `other`
+    // -- the branch nobody asked to sync -- while the lane branch stays behind. That is
+    // the hazard, and it leaves no marker of any kind for an enumeration to find.
+    const pull = spawnSync('git', ['pull', '--ff-only', 'origin', 'main'], {
+      cwd: dir,
+      stdio: 'pipe',
+    });
+    assert.strictEqual(pull.status, 0, 'the raw pull succeeds -- that is the hazard');
+    assert.notStrictEqual(
+      git(dir, 'rev-parse', 'refs/heads/other'),
+      otherBefore,
+      'and it moved the WRONG branch',
+    );
+    assert.strictEqual(
+      git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`),
+      laneRefBefore,
+      'while the lane branch it was supposed to sync never moved at all',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+/**
+ * UTV2-1790 (round 12): build a repository whose lane branch is strictly BEHIND
+ * origin/main, with an untracked lane-state file so the autostash has real work to do.
+ * Returns the directory and the two SHAs a refusal must leave untouched.
+ */
+function behindLaneRepo(prefix: string): { dir: string; laneRef: string; head: string } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  git(dir, 'init', '--initial-branch=main', '--quiet');
+  git(dir, 'config', 'user.email', 'test@example.com');
+  git(dir, 'config', 'user.name', 'test');
+  git(dir, 'config', 'commit.gpgsign', 'false');
+  fs.mkdirSync(path.join(dir, 'docs', '06_status', 'lanes'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'docs', '06_status', 'lanes', '.gitkeep'), '');
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'one\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-q', '-m', 'one');
+  const baseSha = git(dir, 'rev-parse', 'HEAD');
+  fs.writeFileSync(path.join(dir, 'a.txt'), 'from-main\n');
+  git(dir, 'add', '-A');
+  git(dir, 'commit', '-q', '-m', 'main advances');
+  git(dir, 'update-ref', 'refs/remotes/origin/main', git(dir, 'rev-parse', 'HEAD'));
+  git(dir, 'remote', 'add', 'origin', dir);
+  git(dir, 'checkout', '-q', '-B', LANE_BRANCH, baseSha);
+  // The non-vacuity guard: without something for the autostash to stash, every
+  // "stash restored" assertion below would be vacuously true.
+  fs.mkdirSync(path.join(dir, '.ops', 'sync'), { recursive: true });
+  fs.writeFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'lane: state\n');
+  return { dir, laneRef: git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`), head: git(dir, 'rev-parse', 'HEAD') };
+}
+
+test('UTV2-1790: the tree going bad BETWEEN the pre-flight and the merge is caught (TOCTOU)', () => {
+  // Round 12, PM disposition. A single pre-flight is a check-then-use gap: this run
+  // itself mutates the worktree with `git stash push` after measuring it, and the
+  // operator's shell stays live throughout. Every state the pre-flight refuses can be
+  // reintroduced in that window, and the pre-flight would never know.
+  //
+  // Simulated the way it actually happens: a concurrent operator switches branch after
+  // the autostash lands. Nothing is faked about the state itself -- the REAL probe
+  // measures a REAL repository that has genuinely changed underneath the run.
+  const { dir, laneRef, head } = behindLaneRepo('utv2-1790-toctou-');
+  try {
+    let stashPushSeen = false;
+    let mergeAttempted = false;
+    const runner: CommandRunner = (command, args, options) => {
+      if (command === 'git' && args[0] === 'pull') mergeAttempted = true;
+      const r = spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' }) as ReturnType<
+        CommandRunner
+      >;
+      // AFTER the autostash succeeds, and only then, the concurrent operator moves.
+      if (!stashPushSeen && command === 'git' && args[0] === 'stash' && args[1] === 'push') {
+        stashPushSeen = true;
+        spawnSync('git', ['checkout', '-q', '-B', 'other'], { cwd: dir, stdio: 'pipe' });
+      }
+      return r;
+    };
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(stashPushSeen, true, 'premise: the autostash really ran');
+      assert.strictEqual(result.ok, false, 'a tree that went bad mid-run must not sync');
+      assert.strictEqual(
+        result.code,
+        'merge_wrapper_worktree_changed_during_sync',
+        'a DISTINCT code from the pre-flight refusal: this one unwound an autostash, ' +
+          'the pre-flight touched nothing, and anything reading `code` must be able to ' +
+          'tell them apart without parsing prose',
+      );
+      assert.strictEqual(mergeAttempted, false, 'and the pull must never have been issued');
+      assert.match(
+        result.message,
+        /BETWEEN the pre-flight check and the merge/u,
+        'the message must say WHICH check refused, so this is not mistaken for the pre-flight',
+      );
+      assert.strictEqual(
+        result.main_sync_stash?.popped,
+        true,
+        'the operator gets their lane state back rather than finding it parked in a stash',
+      );
+      assert.strictEqual(
+        fs.readFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'utf8'),
+        'lane: state\n',
+        'restored byte-for-byte, not merely reported as restored',
+      );
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released', 'nothing changed, so no lock leak');
+    });
+
+    assert.strictEqual(git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`), laneRef, 'lane branch unmoved');
+    assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'HEAD unmoved');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a detached HEAD DURING a bisect is refused by both terms independently', () => {
+  // Round 12. This is round 10's exact hazard -- the destructive success that started
+  // the enumeration problem -- and it is now covered twice over: by the enumerated
+  // bisect term and, independently, by the allowlist, because bisect detaches HEAD.
+  // Asserted here as defence in depth rather than assumed from the two separately.
+  const { dir, laneRef } = behindLaneRepo('utv2-1790-bisect-detached-');
+  try {
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-q', '-m', 'lane state');
+    const laneTip = git(dir, 'rev-parse', 'HEAD');
+    spawnSync('git', ['bisect', 'start'], { cwd: dir, stdio: 'pipe' });
+    spawnSync('git', ['bisect', 'bad'], { cwd: dir, stdio: 'pipe' });
+    spawnSync('git', ['bisect', 'good', git(dir, 'rev-parse', 'HEAD~1')], { cwd: dir, stdio: 'pipe' });
+    const detachedAt = git(dir, 'rev-parse', 'HEAD');
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+      assert.strictEqual(result.ok, false, 'a bisecting worktree must never sync');
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+      assert.match(result.message, /bisect is in progress/u, 'the ENUMERATED term names it');
+      assert.match(result.message, /HEAD is detached/u, 'and the ALLOWLIST term names it too');
+      assert.strictEqual(result.main_sync_stash?.attempted, false, 'nothing was stashed');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+    });
+
+    assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), detachedAt, 'HEAD unmoved');
+    assert.notStrictEqual(laneRef, undefined);
+    assert.strictEqual(
+      git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`),
+      laneTip,
+      'and the lane branch unmoved -- the commit under test is still the one being bisected',
+    );
+    assert.strictEqual(
+      fs.existsSync(path.join(dir, '.git', 'BISECT_LOG')),
+      true,
+      'the bisect log survives, so later good/bad verdicts still land on the right commit',
+    );
+  } finally {
+    spawnSync('git', ['bisect', 'reset'], { cwd: dir, stdio: 'pipe' });
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: EVERY recognized operation state is refused with branch and HEAD unmoved', () => {
+  // Round 12, PM disposition: "proof that EVERY refusal leaves the branch and HEAD
+  // unmoved". Table-driven so a term added later without a refusal case is visible as
+  // a gap in this table rather than as an absent test nobody notices.
+  const states: Array<{
+    name: string;
+    expect: RegExp;
+    /** Proves the row really built the state it names, so it cannot pass on some other. */
+    premise: (dir: string) => boolean;
+    setUp: (dir: string) => void;
+  }> = [
+    {
+      name: 'mid-merge',
+      premise: (dir) => mergeHeadPresent(dir),
+      expect: /MERGE_HEAD is present/u,
+      setUp: (dir) => {
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane');
+        fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-side\n');
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane edits a');
+        spawnSync('git', ['merge', 'origin/main'], { cwd: dir, stdio: 'pipe' });
+      },
+    },
+    {
+      name: 'mid-cherry-pick',
+      premise: (dir) => cherryPickHeadPresent(dir),
+      expect: /CHERRY_PICK_HEAD is present/u,
+      setUp: (dir) => {
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane');
+        fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-side\n');
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane edits a');
+        spawnSync('git', ['cherry-pick', 'origin/main'], { cwd: dir, stdio: 'pipe' });
+      },
+    },
+    {
+      name: 'mid-revert',
+      premise: (dir) =>
+        spawnSync('git', ['rev-parse', '--verify', '--quiet', 'REVERT_HEAD'], { cwd: dir }).status === 0,
+      expect: /REVERT_HEAD is present/u,
+      setUp: (dir) => {
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane');
+        fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-side\n');
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane edits a');
+        fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-again\n');
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane edits a again');
+        spawnSync('git', ['revert', '-n', 'HEAD~1'], { cwd: dir, stdio: 'pipe' });
+      },
+    },
+    {
+      name: 'mid-rebase',
+      premise: (dir) =>
+        fs.existsSync(path.join(dir, '.git', 'rebase-merge')) ||
+        fs.existsSync(path.join(dir, '.git', 'rebase-apply')),
+      expect: /rebase is in progress/u,
+      setUp: (dir) => {
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane');
+        fs.writeFileSync(path.join(dir, 'a.txt'), 'lane-side\n');
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane edits a');
+        spawnSync('git', ['rebase', 'origin/main'], { cwd: dir, stdio: 'pipe' });
+      },
+    },
+    {
+      name: 'bisect',
+      premise: (dir) => fs.existsSync(path.join(dir, '.git', 'BISECT_LOG')),
+      expect: /bisect is in progress/u,
+      setUp: (dir) => {
+        git(dir, 'add', '-A');
+        git(dir, 'commit', '-q', '-m', 'lane');
+        spawnSync('git', ['bisect', 'start'], { cwd: dir, stdio: 'pipe' });
+        spawnSync('git', ['bisect', 'bad'], { cwd: dir, stdio: 'pipe' });
+        spawnSync('git', ['bisect', 'good', git(dir, 'rev-parse', 'HEAD~1')], {
+          cwd: dir,
+          stdio: 'pipe',
+        });
+      },
+    },
+    {
+      name: 'wrong branch',
+      premise: (dir) => git(dir, 'symbolic-ref', '-q', 'HEAD') === 'refs/heads/other',
+      expect: /not the expected refs\/heads\//u,
+      setUp: (dir) => {
+        git(dir, 'checkout', '-q', '-B', 'other');
+      },
+    },
+    {
+      name: 'bare detached HEAD',
+      premise: (dir) =>
+        spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: dir, stdio: 'pipe' }).status === 1,
+      expect: /HEAD is detached/u,
+      setUp: (dir) => {
+        git(dir, 'checkout', '-q', '--detach', 'HEAD');
+      },
+    },
+  ];
+
+  for (const state of states) {
+    const { dir } = behindLaneRepo(`utv2-1790-state-${state.name.replace(/[^a-z]+/gu, '-')}-`);
+    try {
+      state.setUp(dir);
+      assert.strictEqual(
+        state.premise(dir),
+        true,
+        `${state.name}: PREMISE -- the fixture must really be in this state, or the ` +
+          `refusal below proves nothing about it`,
+      );
+      const headBefore = git(dir, 'rev-parse', 'HEAD');
+      const laneBefore = git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`);
+
+      withTempOps(({ lockPath, deferredDir }) => {
+        const result = runExtendedMergeWrapper(
+          { ...BASE, operation: 'main-sync', cwd: dir },
+          { lockPath, deferredDir },
+        );
+        assert.strictEqual(result.ok, false, `${state.name}: must be refused`);
+        assert.strictEqual(
+          result.code,
+          'merge_wrapper_worktree_not_clean',
+          `${state.name}: refused for the right reason`,
+        );
+        assert.match(result.message, state.expect, `${state.name}: names the state it measured`);
+        const lock = readMergeLock(lockPath);
+        assert.strictEqual(
+          lock.ok ? lock.lock.status : '',
+          'released',
+          `${state.name}: a run that changed nothing must not hold the mutex`,
+        );
+      });
+
+      assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), headBefore, `${state.name}: HEAD unmoved`);
+      assert.strictEqual(
+        git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`),
+        laneBefore,
+        `${state.name}: lane branch unmoved`,
+      );
+    } finally {
+      spawnSync('git', ['bisect', 'reset'], { cwd: dir, stdio: 'pipe' });
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
+
+test('UTV2-1790: the VALID attached-expected-branch path still syncs over a dirty tree', () => {
+  // Round 12. The control that keeps every refusal above honest. A guard that refuses
+  // everything is trivially safe and useless, and each round has added terms, so the
+  // over-refusal risk grows monotonically. Here the lane is behind, HEAD is attached to
+  // the expected branch, no operation is in progress, and the tree is DIRTY with
+  // lane state -- the ordinary case -- and it must sync.
+  const { dir, laneRef } = behindLaneRepo('utv2-1790-valid-path-');
+  try {
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir },
+      );
+      assert.strictEqual(result.ok, true, `the ordinary case must sync; got ${result.code}`);
+      assert.strictEqual(result.main_sync_stash?.stashed, true, 'the dirty lane state was stashed');
+      assert.strictEqual(result.main_sync_stash?.popped, true, 'and restored afterwards');
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(lock.ok ? lock.lock.status : '', 'released');
+    });
+
+    assert.notStrictEqual(
+      git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`),
+      laneRef,
+      'the lane branch actually advanced -- otherwise this control proves nothing',
+    );
+    assert.strictEqual(
+      git(dir, 'symbolic-ref', '-q', 'HEAD'),
+      `refs/heads/${LANE_BRANCH}`,
+      'and HEAD is still attached to the lane branch afterwards',
+    );
+    assert.strictEqual(
+      fs.readFileSync(path.join(dir, '.ops', 'sync', 'UTV2-1790.yml'), 'utf8'),
+      'lane: state\n',
+      'the lane state survived the round trip byte-for-byte',
+    );
+    assert.strictEqual(
+      fs.readFileSync(path.join(dir, 'a.txt'), 'utf8'),
+      'from-main\n',
+      'and main content actually arrived',
+    );
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1790: a re-probe refusal whose autostash pop FAILS retains the merge mutex', () => {
+  // Round 12. The battery reported M36 SURVIVING -- nothing pinned the retention
+  // decision on the new pre-merge re-probe path -- and that is not an obscure gap: it
+  // is round 5's original failure reappearing in new code. Round 5 released the
+  // repo-wide mutex on a stash-pop failure and justified it with prose nothing had
+  // measured; the fix was to measure. This path was written with the same measurement
+  // and no test made it load-bearing, so the mutant proved it and this test closes it.
+  //
+  // Two things must both hold, and they pull in opposite directions: the operator's
+  // lane state is still parked in a stash they did not create, so the message must say
+  // so, AND the serializing mutex must NOT be handed to the next lane over a worktree
+  // carrying half-finished state this run created.
+  const { dir, laneRef, head } = behindLaneRepo('utv2-1790-reprobe-pop-fails-');
+  try {
+    let stashPushSeen = false;
+    let popAttempted = false;
+    const runner: CommandRunner = (command, args, options) => {
+      if (command === 'git' && args[0] === 'stash' && args[1] === 'pop') {
+        // Do NOT execute it: the stash genuinely survives, so the assertions below
+        // measure a real unrestored stash rather than a reported one.
+        popAttempted = true;
+        return {
+          status: 1,
+          stdout: Buffer.from(''),
+          stderr: Buffer.from('error: could not restore untracked files from stash'),
+          error: undefined,
+        } as ReturnType<CommandRunner>;
+      }
+      const r = spawnSync(command, args, { cwd: options.cwd, stdio: 'pipe' }) as ReturnType<
+        CommandRunner
+      >;
+      if (!stashPushSeen && command === 'git' && args[0] === 'stash' && args[1] === 'push') {
+        stashPushSeen = true;
+        // The concurrent operator moves, so the re-probe -- not the pre-flight -- refuses.
+        spawnSync('git', ['checkout', '-q', '-B', 'other'], { cwd: dir, stdio: 'pipe' });
+      }
+      return r;
+    };
+
+    withTempOps(({ lockPath, deferredDir }) => {
+      const result = runExtendedMergeWrapper(
+        { ...BASE, operation: 'main-sync', cwd: dir },
+        { lockPath, deferredDir, runner },
+      );
+
+      assert.strictEqual(stashPushSeen, true, 'premise: the autostash really ran');
+      assert.strictEqual(popAttempted, true, 'premise: the restore was really attempted');
+      assert.strictEqual(result.ok, false);
+      assert.strictEqual(result.code, 'merge_wrapper_worktree_changed_during_sync');
+      assert.strictEqual(
+        result.main_sync_stash?.popped,
+        false,
+        'the failed restore is REPORTED, not assumed away',
+      );
+      assert.strictEqual(
+        result.release,
+        undefined,
+        'no release is even attempted while lane state is parked in an unrestored stash',
+      );
+
+      const lock = readMergeLock(lockPath);
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'held',
+        'THE CONTROL: the serializing mutex must NOT be handed to the next lane over a ' +
+          'worktree carrying half-finished state this run created -- that is the round-5 ' +
+          'fail-open, and M36 showed nothing was pinning it here',
+      );
+      assert.match(
+        result.message,
+        /could NOT be restored/u,
+        'and the operator is told their lane state is still in a stash',
+      );
+      assert.match(
+        result.message,
+        /deliberately NOT released/u,
+        'and told the lock is held on purpose, with the command to release it',
+      );
+    });
+
+    // The stash really does still exist -- the assertions above are not vacuous.
+    assert.match(
+      spawnSync('git', ['stash', 'list'], { cwd: dir, encoding: 'utf8' }).stdout ?? '',
+      /stash@\{0\}/u,
+      'the lane state is genuinely still parked',
+    );
+    assert.strictEqual(git(dir, 'rev-parse', `refs/heads/${LANE_BRANCH}`), laneRef, 'lane branch unmoved');
+    assert.notStrictEqual(head, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

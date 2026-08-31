@@ -89,6 +89,14 @@ export type MergeWrapperResult =
         | 'merge_wrapper_invalid_input'
         | 'merge_wrapper_stash_failed'
         | 'merge_wrapper_worktree_not_clean'
+        // UTV2-1790 (round 12): the PRE-MERGE re-probe gets its own code rather than
+        // reusing the pre-flight's. They are different failures with different
+        // operator consequences -- the pre-flight refused a tree it found dirty and
+        // touched nothing, while this one refused a tree that went bad UNDER the run,
+        // after an autostash that had to be unwound. Collapsing them would make the
+        // two indistinguishable to anything reading `code` instead of prose, which is
+        // the aggregate-status conflation this lane keeps finding elsewhere.
+        | 'merge_wrapper_worktree_changed_during_sync'
         | 'merge_wrapper_stash_pop_conflict'
         | 'merge_wrapper_authorization_failed'
         // UTV2-1678: `main-sync` used to silently re-invoke itself as
@@ -485,7 +493,10 @@ export function runMergeWrapper(
      * measured. Absent this probe both paths fall back to fail-closed retention,
      * which is safe but unmeasured.
      */
-    residueProbe?: (ctx: { cwd: string }) => { clean: boolean; detail: string };
+    residueProbe?: (ctx: { cwd: string; expectedBranch?: string }) => {
+      clean: boolean;
+      detail: string;
+    };
   } = {},
 ): MergeWrapperResult {
   let issueId: string;
@@ -554,7 +565,7 @@ export function runMergeWrapper(
 
   // UTV2-1790 (review round 6). Fail closed when no probe is injected: an
   // unmeasured tree is not a clean tree.
-  const measureResidue = (): { clean: boolean; detail: string } => {
+  const measureResidue = (expectedBranch?: string): { clean: boolean; detail: string } => {
     if (!options.residueProbe) {
       return {
         clean: false,
@@ -563,7 +574,7 @@ export function runMergeWrapper(
       };
     }
     try {
-      return options.residueProbe({ cwd });
+      return options.residueProbe({ cwd, expectedBranch });
     } catch (error) {
       return {
         clean: false,
@@ -622,7 +633,7 @@ export function runMergeWrapper(
     // this run never touched. Note also that if a previous wrapper run had left
     // this residue, that run would already be holding the lock and this one could
     // not have acquired it.
-    const preflight = measureResidue();
+    const preflight = measureResidue(input.branch);
     if (!preflight.clean) {
       const release = releaseMergeLock(
         { issue_id: issueId, branch: input.branch },
@@ -642,9 +653,10 @@ export function runMergeWrapper(
           `merged.\n` +
           `Measured: ${preflight.detail}.\n` +
           `A fast-forward pull over a worktree that is mid-merge, mid-rebase, ` +
-          `mid-cherry-pick, mid-revert or mid-bisect can advance a detached HEAD out ` +
+          `mid-cherry-pick, mid-revert, mid-bisect or mid-sequence can advance HEAD out ` +
           `from under the operation in progress and report success, which is why this ` +
-          `refuses instead. ` +
+          `refuses instead. If HEAD is detached the pull moves HEAD and leaves the ` +
+          `branch ref where it was, so it cannot sync the lane branch at all. ` +
           // UTV2-1790 (review round 10, P3): this sentence is the MEASURED release
           // outcome, not an assertion about it. It read "The merge mutex WAS
           // released" unconditionally while never consulting `release.ok`, so a
@@ -713,6 +725,73 @@ export function runMergeWrapper(
       };
     }
     mainSyncStash = { attempted: true, stashed: stashPush.stashed, popped: false };
+
+    // UTV2-1790 (round 12, PM disposition): TOCTOU closure.
+    //
+    // The pre-flight above measured the tree BEFORE the autostash. Between that
+    // measurement and the merge, this run itself mutates the worktree (`git stash
+    // push`), and the operator's shell is still live. A single pre-flight is
+    // therefore a check-then-use gap: everything it established could be false by
+    // the time the merge runs, and every state the pre-flight refuses is one this
+    // window can reintroduce. Re-probe against the POST-autostash tree,
+    // immediately before the command, and refuse on anything the pre-flight would
+    // have refused.
+    //
+    // On refusal the autostash is popped FIRST, so the operator's lane state is
+    // returned to them rather than left parked in a stash they did not create and
+    // may not know about. The pop outcome is REPORTED, never assumed: if it fails
+    // the mutex is retained, because a stash that could not be restored is
+    // half-finished state and handing the serializing lock on over it is the
+    // fail-open this lane exists to close.
+    const reprobe = measureResidue(input.branch);
+    if (!reprobe.clean) {
+      const stashPop = stashPush.stashed ? popMainSyncStash(runner, cwd) : undefined;
+      const popFailed = stashPop !== undefined && !stashPop.ok;
+      const release = popFailed
+        ? undefined
+        : releaseMergeLock(
+            { issue_id: issueId, branch: input.branch },
+            { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+          );
+      return {
+        ok: false,
+        code: 'merge_wrapper_worktree_changed_during_sync',
+        issue_id: issueId,
+        operation: input.operation,
+        command: commandVector,
+        lock,
+        release,
+        message:
+          `Refusing to sync: the worktree at ${cwd} stopped being in a clean state ` +
+          `BETWEEN the pre-flight check and the merge, so ${commandVector.join(' ')} ` +
+          `was NOT run.\n` +
+          `Measured immediately before the merge: ${reprobe.detail}.\n` +
+          (stashPop === undefined
+            ? `Nothing had been stashed, so nothing needed restoring. `
+            : stashPop.ok
+              ? `The lane-state autostash this run created WAS restored, so the ` +
+                `worktree is as it was found. `
+              : `The lane-state autostash this run created could NOT be restored ` +
+                `(${stashPop.message ?? 'git stash pop failed'}), so lane state is ` +
+                `still parked in a stash entry; recover it with 'git stash list' and ` +
+                `'git stash pop'. `) +
+          (release === undefined
+            ? `The merge mutex was deliberately NOT released, because an unrestored ` +
+              `stash is half-finished state and the next lane must not inherit it. ` +
+              `After recovering, release it with 'pnpm ops:merge-lock release --issue ` +
+              `${issueId} --branch ${input.branch}'.`
+            : release.ok
+              ? `The merge mutex WAS released: the tree is back as it was found, so ` +
+                `this run has nothing to protect and must not halt other lanes.`
+              : `The merge mutex could NOT be released (${release.code}), so it may ` +
+                `still be held and may block other lanes until it is reclaimed.`),
+        main_sync_stash: {
+          attempted: true,
+          stashed: stashPush.stashed,
+          popped: stashPop?.ok ?? false,
+        },
+      };
+    }
   }
 
   // UTV2-1592: pr-merge must never invoke the actual merge command without

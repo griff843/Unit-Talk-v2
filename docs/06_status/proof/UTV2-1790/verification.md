@@ -302,12 +302,14 @@ ASSERTIONS:
       directory but two plain files, `BISECT_START` and `BISECT_LOG` (a
       `BISECT_HEAD` ref exists only under `--no-checkout`, so a ref probe misses the
       common case), and both are now asked for. The claim this bullet makes is bounded
-      and stated as such: the probe is an ENUMERATION, not a general predicate. Eight
-      candidate in-progress states were built against real git and measured against the
-      round-9 probe to find what else was missing; only bisect was, and a
-      `.git/sequencer` term was considered and rejected because no state was found that
-      it catches and the existing terms do not. Tests 69 and 70 and mutant M28; the
-      residual is `known_gaps`.
+      and stated as such. **Round 10 also wrote here that a `.git/sequencer` term was
+      considered and rejected as an equivalent mutant. That claim was WRONG and is
+      retracted:** round 11 built the state and destroyed it. `git cherry-pick A B`,
+      conflict, resolve, then a plain `git commit` instead of `--continue` CLEARS
+      `CHERRY_PICK_HEAD` and leaves `.git/sequencer` live with HEAD still attached;
+      `main-sync` fast-forwarded and returned `merge_wrapper_completed`. The term is
+      now present and pinned by test 72 and mutant M30. Tests 69 and 70 and mutant M28
+      cover bisect; the residual is `known_gaps`.
 - [x] **A residue probe that throws fails closed.** Same class as the
       `onCommandFailure` guard proven by test 52, and correct in round 6 but pinned
       by nothing. Test 61 and mutant M21.
@@ -548,31 +550,55 @@ is therefore the executed behaviour of the wrapper against real git repositories
 corrected figures are below.** Round 8 claimed 21 of 67 and "nothing about git is
 mocked" in 17 of them. Both were overstated.
 
-**Twenty** of the sixty-eight regressions build a real git repository on disk with
-real commits: they create real conflicts on both the merge and the cherry-pick verbs
-and drive a real interactive rebase to a `break` step. (Round 8 said 21 by counting
-test 32, which builds no repository at all — it is a lock-guard unit test.)
+**These counts were WRONG AGAIN in rounds 9 and 10 and a round-11 reviewer caught
+them: the suite had grown and the prose had not.** The figures below are recounted
+against the suite at this head, and every number below is now GENERATED rather
+than transcribed.
 
-Of those twenty, **thirteen** inject no runner and no probe stub whatsoever, so the
-wrapper drives the real `git` binary end to end. **Four more** (49, 54, 56, 65) run
-against a real repository but substitute a synthetic result for one specific git
-invocation through `realGitRunner`'s hook — 49 fakes a `merge --abort` failure, 54 and
-65 fake exit-128 probes, 56 fakes an abort success — and each says which one in its own
-comment. Round 8 counted all seventeen as "nothing about git is mocked", which was
-false for those four. Test 48's hook is a pure observer and is correctly counted as
-unmocked. The remaining three of the twenty (46, 51, 52) inject a runner over a real
-repository to reach one specific branch.
+<!-- BEGIN GENERATED: regression-counts. Produced by the count generator from the
+     suite source and an actual TAP run; do not hand-edit. PM disposition, round 12. -->
 
-Seventeen of the twenty (46, 47, 48, 49, 50, 51, 53, 54, 55, 57, 58, 60, 62, 63, 64,
-65, 66) inspect the on-disk repository directly — `MERGE_HEAD`, `CHERRY_PICK_HEAD`,
-`git diff --diff-filter=U`, `git stash list`, `git status --porcelain`,
-`git rev-parse HEAD` — rather than trusting the wrapper's own report.
+The suite has **80** tests (80 passing, 0 failing) and **34** of them
+carry the UTV2-1790 prefix: tests 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79 and 80.
+
+**24** of the 80 regressions construct a real git repository on disk
+directly (via `mkdtempSync` or the `behindLaneRepo` helper) and drive real commits
+through it. That predicate is stated because it is what the generator actually
+measures: a test that reaches a repository through some other helper would not be
+counted, so this is a floor rather than an exact census. They create real conflicts on the merge, cherry-pick and revert verbs, drive a
+real interactive rebase to a `break` step, pause a real cherry-pick SEQUENCE, run a real
+bisect, and detach HEAD. They are tests 32, 46, 50, 55, 57, 58, 60, 62, 63, 64, 65, 66, 67, 69, 70, 72, 73, 74, 75, 76, 77, 78, 79 and 80.
+
+**4** of them carry an explicit NEGATIVE CONTROL — tests 69, 72, 73 and 75 —
+which run the raw `git pull --ff-only` in the same fixture and assert it SUCCEEDS, so
+each refusal is measured against a real fast-forward rather than asserted against an
+imagined one. A refusal test without one proves only that the wrapper said no.
+
+**19** of the 24 inject no runner at all, so the wrapper drives the real
+`git` binary end to end: tests 50, 55, 57, 58, 60, 62, 63, 64, 66, 67, 69, 70, 72, 73, 74, 75, 77, 78 and 79. The other **5** — tests
+32, 46, 65, 76 and 80 — run against a real repository but route one or more git
+invocations through an injected runner, either to substitute a synthetic result for a
+single command or to observe ordering, and each says which in its own comment. Round 8
+described all of them as "nothing about git is mocked", which was false; the split is
+generated here so it cannot drift again.
+
+**23** inspect the on-disk repository directly — `MERGE_HEAD`, `CHERRY_PICK_HEAD`,
+`REVERT_HEAD`, `BISECT_LOG`, `.git/sequencer`, `git symbolic-ref`,
+`git diff --diff-filter=U`, `git stash list`, `git rev-parse` — rather than trusting the
+wrapper's own report. Tests 46, 50, 55, 57, 58, 60, 62, 63, 64, 65, 66, 67, 69, 70, 72, 73, 74, 75, 76, 77, 78, 79 and 80.
+
+These figures are regenerated from the suite source and from an actual TAP run, with
+the run cross-checked against the source name-by-name; the generator refuses to write
+anything from a red run or from a source parse that disagrees with the run. Rounds 9,
+10 and 11 each shipped a wrong number in this section, every one of them hand-typed.
+
+<!-- END GENERATED: regression-counts -->
 
 ### Unit test output
 
 Focused suite, `scripts/ops/ops-merge-wrapper.test.ts`. This is a SELECTION, copied
-verbatim from the run: tests 1, 2, 23, 24, 27 and every test from 47 to 71 — that is,
-all 22 UTV2-1790 tests plus the five pre-existing tests this lane's mutants reach.
+verbatim from the run: tests 1, 2, 23, 24, 27 and every test from 47 to 75 — that is,
+all 29 UTV2-1790 tests plus the five pre-existing tests this lane's mutants reach.
 Tests 3–22, 25, 26 and 28–46 are unrelated pre-existing coverage and are elided; the
 `# tests` / `# pass` counters below are the whole suite, not the excerpt. Round 10
 found this block still carrying round-6 names for `ok 58` and `ok 59` — two lines that
@@ -1112,13 +1138,20 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     round-9 probe. Exactly one was invisible — bisect, in all three of its variants
     (plain, `--no-checkout`, and started-with-no-verdict-yet, all of which write both
     `BISECT_START` and `BISECT_LOG`). A `.git/sequencer` term was considered and
-    REJECTED: no state was found that it catches and `CHERRY_PICK_HEAD`/`REVERT_HEAD`/
-    unmerged paths do not, so it would have been an equivalent mutant of the kind
-    round 7 retired as M17. Multi-commit revert, `cherry-pick --quit` residue and a
-    stopped `git am` were each measured and each already caught. The sweep is the
-    evidence; the single new term is its conclusion.
+    REJECTED as an equivalent mutant. **That rejection was WRONG.** Round 11 falsified
+    it by execution (finding 19), and the retraction is the lesson this round records:
+    the sweep found no state that `sequencer` caught alone, and round 10 read that
+    absence as proof rather than as the limit of what it had built. It had not built
+    the resolve-then-plain-`commit` path, which is the one that leaves the sequencer
+    live with `CHERRY_PICK_HEAD` already cleared.
 
-    Fixed by `sequencerFile('BISECT_LOG') || sequencerFile('BISECT_START')` in
+    Round 10 also wrote that `cherry-pick --quit` residue was "measured and already
+    caught". **That is not what was measured, and it is corrected here:** after
+    `--quit` there is no residue at all, so nothing catches it because there is
+    nothing to catch. The outcome is benign; the sentence described a measurement
+    that did not happen.
+
+    Fixed by `gitPathExists('BISECT_LOG') || gitPathExists('BISECT_START')` in
     `probeSyncResidue`, threaded into `worktreeResidue`, into `abortInProgressSync`'s
     nothing-to-abort early return and into its post-abort residue check — all three
     consumers, because round 8's finding was precisely that a new term wired into one
@@ -1175,6 +1208,243 @@ $ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1790
     releasing and reporting the real command rather than the bridged pull; and five
     mutation rows (M1, M16, M19, M26, M27) re-inverted independently, every count and
     every killed-test list matching this bundle exactly.
+
+19. **Round-11 independent review: FAIL — two P1s, one P2, two P3s. All fixed here.**
+    An eleventh reviewer, authoring none of this implementation or proof, falsified
+    round 10's central judgement by execution.
+
+    **P1 — the `.git/sequencer` rejection was wrong, and the state is destructive.**
+    Round 10 swept eight candidate in-progress states, found none that a `sequencer`
+    term caught alone, and recorded it as an equivalent mutant. Round 11 built the
+    state round 10 had not: `git cherry-pick A B`, conflict, resolve the conflict,
+    then a plain `git commit` instead of `git cherry-pick --continue`. That CLEARS
+    `CHERRY_PICK_HEAD` and leaves `.git/sequencer` live **with HEAD still attached to
+    the lane branch** — `git status` says "Cherry-pick currently in progress" while
+    every enumerated term reads absent. `main-sync` fast-forwarded the branch and
+    returned `merge_wrapper_completed`; the operator's later `--continue` then replays
+    the pending picks onto a base they never chose. Fixed by the `sequencer` term,
+    pinned by test 72 and mutant M30. The retraction is recorded at both sites where
+    round 10 asserted the rejection, unedited and refuted rather than deleted.
+
+    **P1 — a bare detached HEAD leaves NO state to enumerate.** `git checkout <sha>`
+    to inspect a commit by hand writes no marker anywhere. It was silently
+    fast-forwarded, with no head-move notice — that notice exists only on the bridged
+    `git-merge-main`/`git-rebase-main` path, not on `main-sync`. The reviewer also
+    measured the related pre-existing defect: driven from a detached HEAD the wrapper
+    returned `merge_wrapper_completed` while `refs/heads/<lane>` never moved at all.
+    Fixed by the `detachedHead` term, pinned by test 73 and mutant M31.
+
+    **P2 — the regression counts were stale again.** The prose said sixty-eight
+    regressions against a suite of 71, "twenty of the sixty-eight" build a real
+    repository when 22 did, an on-disk list that stopped at 66, "all 22 UTV2-1790
+    tests" when 25 carried the prefix, and a `regression_fixtures` block whose count
+    and coverage note silently omitted tests 60, 61 and 62. Recounted mechanically
+    against the suite at this head and corrected, in both artifacts.
+
+    **P3 — the eight swept states were never enumerated.** Round 10 asserted a sweep
+    and reported only its conclusion, so a reader could not check the population the
+    conclusion rested on — which is exactly how the sequencer case survived. The
+    population is listed here, each state built against a real repository and measured
+    against the round-9 probe:
+
+    | # | State built | Command | Round-9 probe saw | Verdict |
+    |---|---|---|---|---|
+    | 1 | mid-merge, conflicted | `git merge <br>` → conflict | `MERGE_HEAD` + unmerged | already caught |
+    | 2 | mid-rebase, conflicted | `git rebase <br>` → conflict | `rebase-merge` dir | already caught |
+    | 3 | interactive rebase at `break` | `GIT_SEQUENCE_EDITOR` → `break` | `rebase-merge` dir | already caught |
+    | 4 | mid-cherry-pick, conflicted | `git cherry-pick <c>` → conflict | `CHERRY_PICK_HEAD` + unmerged | already caught |
+    | 5 | mid-revert, multi-commit | `git revert -n <a> <b>` | `REVERT_HEAD` / unmerged | already caught |
+    | 6 | `cherry-pick --quit` residue | resolve, then `--quit` | **nothing** | nothing to catch — see below |
+    | 7 | stopped `git am` | `git am --3way` → conflict | `rebase-apply` dir | already caught |
+    | 8 | bisect (3 variants) | `git bisect start/good/bad` | **nothing** | **MISSED — round 10's fix** |
+
+    Round 11 then added the ninth and tenth states round 10 never built — a paused
+    cherry-pick SEQUENCE resolved with a plain `git commit`, and a bare detached HEAD
+    — and both were destructive. State 6 is the one round 10 described wrongly: after
+    `--quit` there is no residue at all, so "already caught" was never measured.
+
+    **P3 — `sequencerDir` and `sequencerFile` were byte-identical duplicates.**
+    Collapsed into one `gitPathExists`.
+
+    A separate round-10 sentence claiming `cherry-pick --quit` residue was "measured
+    and already caught" is also corrected: after `--quit` there is no residue at all,
+    so nothing catches it because there is nothing to catch. The outcome is benign,
+    but the sentence described a measurement that did not happen.
+
+    **What round 11 could not break**, recorded because negative results bound what a
+    review covered: bisect in both variants, `git am --3way`, an interactive rebase
+    stopped at `edit`, `git revert -n`, and a conflicted `git stash apply` were all
+    correctly refused with HEAD unmoved and the mutex released. A **linked worktree
+    whose `.git` is a file** and a **cwd inside a repository subdirectory** both
+    resolved correctly, confirming the `path.isAbsolute(rel) ? rel : path.join(...)`
+    handling against the two cases that actually differ. Mutation spot-checks M28,
+    M29, M23 and M26 re-inverted independently and matched exactly. Scope clean,
+    `verified_source_sha` correct, PR body accurate.
+
+20. **Round 12 — the guard stops being a blocklist.** Not a defect report but a
+    design change, and it is the most important thing in this bundle.
+
+    Rounds 8, 10 and 11 each found one more in-progress state that read clean and was
+    destroyed by a fast-forward, and each was fixed by adding the missing term. Round
+    10 went further and REJECTED a term that round 11 proved live. Four rounds of
+    "add the missing term" is not four unlucky misses; it is the signature of an
+    enumeration standing in for a predicate over an open-ended space. Round 11's own
+    detached-HEAD finding is the proof the enumeration cannot close: that hazard is
+    defined by the ABSENCE of a marker, so there is no term to add, and any future git
+    feature or hand-rolled operator state lands in the same blind spot.
+
+    The inversion: rather than refuse when any of N known-bad markers is present,
+    require positive proof of the one acceptable state before touching anything —
+    **HEAD attached, to exactly the branch the wrapper was invoked for** — and refuse
+    everything else, including states nobody has enumerated. `probeSyncResidue` now
+    captures `headRef`; `worktreeResidue` takes an optional `expectedBranch` and
+    refuses any other ref, naming both observed and expected; the `main-sync`
+    pre-flight passes `input.branch`. The post-failure cleanup path passes nothing:
+    it measures residue, not fitness to sync, and has no branch to expect. Pinned by
+    test 75 and mutants M32 and M33.
+
+    **What this closes, stated without overclaim.** It closes the OFF-BRANCH half
+    completely — bisect, rebase, bare-detached, and anything future that moves HEAD
+    off the lane branch, caught without being enumerated. Every round-8/10/11 escape
+    lived there. It does **not** close the ON-BRANCH mid-operation half: the round-11
+    sequencer case, a conflicted merge and a conflicted cherry-pick all leave HEAD
+    attached to the lane branch, so the enumerated terms remain load-bearing for
+    those and that half is still an enumeration. Recorded as a named residual in
+    `known_gaps` rather than allowed to look subsumed. Delegating that half to git's
+    own state enumeration (`wt_status_get_state`) was considered and rejected: its
+    only access is `git status` prose, which is i18n-dependent and not
+    porcelain-stable, and a fail-closed guard cannot rest on that.
+
+    **TOCTOU closure (PM disposition).** The allowlist alone would still have been a
+    check-then-use gap. The pre-flight measures the tree, then this run itself mutates
+    it with `git stash push`, and the operator's shell stays live throughout — so every
+    state the pre-flight refuses can be reintroduced in that window, and the pre-flight
+    would never know. The tree is now RE-PROBED against the post-autostash state
+    immediately before the merge command, and refuses on anything the pre-flight would
+    have refused. On refusal the autostash is popped FIRST so the operator's lane state
+    is returned rather than left parked in a stash they did not create; the pop outcome
+    is measured, and if it fails the mutex is deliberately RETAINED, because a stash
+    that could not be restored is half-finished state. Pinned by test 76 — where a
+    concurrent operator really does switch branch after the autostash lands, and the
+    real probe measures a real repository that genuinely changed underneath the run —
+    and by mutants M34, M35 and M36.
+
+    **The enumeration is retained as defence in depth.** The allowlist does not replace
+    the operation detection, it joins it: the attached-branch invariant alone does not
+    exclude every sequencer state, as the round-11 P1 shows. Test 78 is table-driven
+    over every recognized operation state — mid-merge, mid-cherry-pick, mid-revert,
+    mid-rebase, bisect, wrong branch, bare detached HEAD — and each row asserts a
+    PREMISE that the fixture really is in the state it names before asserting the
+    refusal, so no row can pass on a state other than its own, and each row asserts
+    that both HEAD and the lane branch are unmoved afterwards. Test 77 covers a
+    detached HEAD DURING a bisect, round 10's exact hazard, and asserts it is now named
+    by both terms independently.
+
+    **The control that keeps every refusal honest.** Five rounds have added terms, so
+    over-refusal risk grows monotonically, and a guard that refuses everything is
+    trivially safe and useless. Test 79 drives the ordinary case end to end — lane
+    behind, HEAD attached to the expected branch, no operation in progress, tree dirty
+    with real lane state — and asserts it SYNCS: the branch actually advances, main's
+    content actually arrives, and the autostashed lane state comes back byte-for-byte.
+
+    **Counts in this bundle are now generated, not transcribed.** Rounds 9, 10 and 11
+    each shipped a wrong number here — 68 against a suite of 71, "twenty" against 22,
+    "22 UTV2-1790 tests" against 25, and a `regression_fixtures` array that silently
+    omitted six tests and then three more. Every one was hand-typed and stopped
+    tracking a suite that kept growing. They are derived now from the suite source for
+    names and shapes and from an actual TAP run for the totals, with the run
+    cross-checked against the source name-by-name and the generator refusing to write
+    anything from a red run. A third omission would be a script defect rather than a
+    memory lapse.
+
+    **A latent defect the inversion exposed.** Every real-git fixture in this suite
+    built its lane branch as `lane` while the input named
+    `codex/utv2-1061-merge-mutex-wrapper` — a branch no fixture ever created. Ten
+    tests went red the instant the allowlist landed. The mismatch survived the entire
+    life of the suite because nothing had ever asked whether HEAD was on the branch
+    being synced, so no assertion constrained the value. This is the same class as
+    round 9's finding, where an evidence correction reached `mutants[]` but not the
+    six neighbouring sites quoting it: a suite agreeing with itself about a value
+    nothing checks. Fixtures and input are one `LANE_BRANCH` constant now.
+
+21. **A ratified PM decision on the re-probe's scope.** The round-12 disposition worded
+    the pre-merge re-probe as requiring a "clean index/worktree". Implemented as clean
+    INDEX — no unmerged paths, correct attached branch, no active operation — and
+    deliberately TOLERANT of unrelated tracked-dirty and untracked files. After the
+    autostash only lane-state paths are stashed, so unrelated operator work legitimately
+    remains, and preserving it across a sync is a documented guarantee of this wrapper
+    (a round-4 negative result). The strict spotless-worktree reading was declared to PM
+    rather than narrowed silently, and PM RATIFIED the clean-index reading with this
+    reasoning: every P1 across rounds 8–11 was a state hazard, not a dirty-file hazard,
+    so the strict reading would have added refusals without closing any reproduced
+    failure — over-refusal rather than safety. Test 79 is the control that would have
+    gone red under the strict reading. Recorded here as a ratified decision, not as an
+    implementer's narrowing.
+
+22. **The same decision lost its control twice, in one lane.** The round-12 battery
+    reported **M36 SURVIVING**: on the new pre-merge re-probe path, when the refusal's
+    autostash pop FAILS, nothing pinned whether the merge mutex is retained.
+
+    The behaviour was already correct — the path was written to retain, and it retains.
+    But "correct and unpinned" is precisely what round 5 shipped: round 5 RELEASED the
+    repo-wide mutex on a stash-pop failure and justified it with prose that nothing on
+    that path had measured, and finding 11 records that as a fail-open the previous
+    round's proof had certified as impossible. Round 12 then wrote the same decision
+    again, in new code, after that instance had been found and fixed — correctly this
+    time, and again with no control over it.
+
+    That is a recurring blind spot around one specific decision point, the failure-path
+    mutex-retention choice, and it is recorded as such rather than compressed into
+    "added test 80". The pattern is that this decision reads as obviously right while
+    being written, which is exactly the condition under which nobody writes the test.
+    Any future edit touching a release-or-retain choice on a failure path should be
+    treated as needing its control written first.
+
+    **Classification, stated explicitly because the round-12 escalation rule turns on
+    it.** The rule is to stop and return to PM on another P1 IN THE SYNCHRONIZATION
+    STATE MODEL, and not to continue by adding another isolated marker. M36 meets
+    neither condition: no hazard state was missed and no operator-visible defect
+    existed, so it is a COVERAGE defect over a correct decision rather than a state-model
+    defect; and the remediation is one executed regression against real git, with no
+    change to the state model or the enumeration — the opposite of the add-one-more-term
+    ratchet the rule exists to end. Proceeding was therefore in-rule, and the call is
+    recorded here so it is reviewable rather than assumed.
+
+    Test 80 pins it: real repository, real autostash, a concurrent branch switch so the
+    RE-PROBE refuses rather than the pre-flight, and an injected `git stash pop` that
+    fails WITHOUT executing — so the stash genuinely survives and `git stash list`
+    confirms it. That is the difference between measuring an unrestored stash and
+    measuring a reported one. It asserts the mutex is HELD, that no release is even
+    attempted, that `popped: false` is reported rather than assumed away, and that the
+    operator is told both that their lane state is parked and that the lock is held on
+    purpose. Verified to die to test 80 and to nothing else.
+
+23. **A finding about the measurement apparatus, not the code.** During this round the
+    mutation battery was stopped mid-mutation twice, and each time it left a mutant live
+    in the worktree. The first (M5) was caught. The second was **M16, which is this
+    bundle's documented SURVIVOR** — so its mutant sat live across several runs while
+    the suite reported 79/79, and the green suite was read as evidence of a clean tree.
+
+    That inference was wrong, and it is wrong structurally rather than by accident: a
+    green suite can only ever detect residue from mutants the suite KILLS. It is
+    incapable, by construction, of detecting residue from exactly the survivors a
+    mutation bundle depends on reporting honestly. The check is `git diff` against
+    `HEAD`, never the suite. The battery now restores its sources on `SIGTERM`,
+    `SIGINT`, `SIGHUP` and at exit, and it checkpoints each measured row so a kill costs
+    one row rather than the whole pass. Recorded because the next person to run a
+    battery here will hit the same thing, and nothing else in this bundle would warn
+    them.
+
+    A second apparatus slip, recorded for the same reason: the first attempt to
+    regenerate `regression_fixtures` normalised test names without stripping their
+    `(test N)` suffix, silently dropped the `asserts` detail from fourteen real entries
+    and duplicated the array to forty-one. It was caught by checking the output rather
+    than by any test, `evidence.json` was reverted to `HEAD` and rebuilt with the
+    generator, and nothing wrong shipped. It is the second instance in this lane of a
+    self-consistent artifact that no assertion constrained — the first being the
+    fixtures that built branch `lane` while the input named a branch no fixture created
+    — and that class is precisely what the "generate, do not transcribe" instruction
+    exists to remove.
 
 ## Independent review
 
@@ -1278,9 +1548,20 @@ own negative control; its second was an audit of this bundle against the head it
 claims to describe. It re-inverted five mutation rows independently and matched every
 count.
 
-**Review of the current head is PENDING.** The round-10 corrections moved the head, so
-none of the eight reviews above covers the code now proposed for merge. No claim of
-completed independent review at this head is made.
+**Round 11 review, of head `ab21ffcd`.** A ninth reviewer, authoring none of this
+implementation or proof, returned **FAIL** on the two P1s, one P2 and two P3s recorded
+in finding 19. Both P1s were demonstrated by execution against real repositories and
+each carried its own negative control showing the raw `--ff-only` pull is genuinely
+destructive in that state. Its first P1 falsified round 10's explicit judgement that a
+`.git/sequencer` term was an equivalent mutant, which is the reason round 12 stopped
+enumerating (finding 20). It re-inverted four mutation rows independently and matched
+every count, and recorded seven states it could NOT break — including the two path-
+resolution cases (a linked worktree with a `.git` file, and a cwd inside a repository
+subdirectory) that are the only ones where `--git-path` behaviour actually differs.
+
+**Review of the current head is PENDING.** The round-11 corrections and the round-12
+allowlist moved the head, so none of the nine reviews above covers the code now
+proposed for merge. No claim of completed independent review at this head is made.
 
 ## Scope
 

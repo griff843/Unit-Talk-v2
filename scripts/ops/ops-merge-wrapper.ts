@@ -259,6 +259,16 @@ interface SyncResidue {
   cherryPickHead: boolean;
   revertHead: boolean;
   bisect: boolean;
+  sequencer: boolean;
+  detachedHead: boolean;
+  /**
+   * The fully-qualified ref HEAD is attached to (`refs/heads/<branch>`), or null
+   * when HEAD is detached or the probe could not determine it. Round 12 turned
+   * the off-branch half of this guard from a blocklist into an ALLOWLIST: the
+   * caller states which branch it expects and anything else is refused, so a
+   * state nobody has enumerated yet still cannot pass.
+   */
+  headRef: string | null;
   unmerged: string[];
   undetermined: string[];
 }
@@ -291,24 +301,20 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
     }
     return r.status === 0;
   };
-  const sequencerDir = (name: string): boolean => {
-    const r = runner('git', ['rev-parse', '--git-path', name], { cwd });
-    if (r.error || r.status !== 0) {
-      undetermined.push(`${name} (git rev-parse --git-path exited ${r.status ?? 'with an error'})`);
-      return false;
-    }
-    const rel = bufferToText(r.stdout).trim();
-    if (!rel) {
-      undetermined.push(`${name} (git rev-parse --git-path returned no path)`);
-      return false;
-    }
-    return fs.existsSync(path.isAbsolute(rel) ? rel : path.join(cwd, rel));
-  };
-  // UTV2-1790 (review round 10, P1): bisect state is neither a ref nor a
-  // directory -- `git bisect start` writes the plain files `.git/BISECT_START`
-  // and `.git/BISECT_LOG`. `git rev-parse --verify BISECT_HEAD` answers only
-  // under `--no-checkout`, so a ref probe misses the common case entirely.
-  const sequencerFile = (name: string): boolean => {
+  // UTV2-1790 (review round 11, P3): one helper, not two. Round 10 added
+  // `sequencerFile` beside `sequencerDir` with a byte-identical body -- `fs.existsSync`
+  // does not care whether the path is a file or a directory -- and the duplication
+  // immediately cost something real: it made M25's mutation anchor match twice, so the
+  // battery reported that control as SKIPPED rather than measured. Named for what it
+  // actually does.
+  //
+  // `git rev-parse --git-path` is used rather than joining `.git` by hand because in a
+  // LINKED WORKTREE (which is how every lane in this repo runs) `.git` is a file, not a
+  // directory, and the real path lives under `.git/worktrees/<name>/`. Measured in both
+  // shapes: from a linked worktree it returns an absolute path, and from a
+  // subdirectory of a normal repo it returns a relative one, which is why both cases
+  // are handled below.
+  const gitPathExists = (name: string): boolean => {
     const r = runner('git', ['rev-parse', '--git-path', name], { cwd });
     if (r.error || r.status !== 0) {
       undetermined.push(`${name} (git rev-parse --git-path exited ${r.status ?? 'with an error'})`);
@@ -333,7 +339,7 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
   // PRE-EXISTING stranded state -- which is exactly the population the stash-push
   // failure path exists to catch.
   const rebaseHead =
-    ref('REBASE_HEAD') || sequencerDir('rebase-merge') || sequencerDir('rebase-apply');
+    ref('REBASE_HEAD') || gitPathExists('rebase-merge') || gitPathExists('rebase-apply');
   const cherryPickHead = ref('CHERRY_PICK_HEAD');
   const revertHead = ref('REVERT_HEAD');
   // UTV2-1790 (review round 10, P1): a round-10 reviewer reproduced the round-8
@@ -354,7 +360,54 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
   // `git bisect reset` removes both. Measured against a real repository in three
   // variants -- plain, `--no-checkout`, and started-but-no-verdict-yet -- all
   // three wrote both files and all three read clean under the round-9 probe.
-  const bisect = sequencerFile('BISECT_LOG') || sequencerFile('BISECT_START');
+  const bisect = gitPathExists('BISECT_LOG') || gitPathExists('BISECT_START');
+  // UTV2-1790 (review round 11, P1): a paused cherry-pick or revert SEQUENCE leaves
+  // `.git/sequencer` and nothing else. Reproduced: `git cherry-pick A B` conflicts on
+  // A, the operator resolves and commits with a plain `git commit` instead of
+  // `git cherry-pick --continue` (git's own advice mentions --continue, but a plain
+  // commit is accepted and clears CHERRY_PICK_HEAD). HEAD stays ON THE BRANCH, the
+  // index is clean, `git status` says "Cherry-pick currently in progress" -- and every
+  // term above reads absent. `main-sync` then fast-forwarded HEAD, returned
+  // `merge_wrapper_completed`, and the operator's later `--continue` applied the
+  // remaining picks onto a base they never chose.
+  //
+  // The round-10 bundle asserted this term had been "considered and REJECTED" as
+  // provably equivalent to CHERRY_PICK_HEAD/REVERT_HEAD/unmerged paths. That was a
+  // reasoning error presented as a measurement, and this is its retraction: the state
+  // above is caught by this term and by no other.
+  const sequencer = gitPathExists('sequencer');
+  // UTV2-1790 (review round 11, P2): stop enumerating, for the off-branch half.
+  //
+  // Rounds 8, 10 and 11 each found a different state that reads clean and is destroyed
+  // by a fast-forward, and the first two shared one property: HEAD was DETACHED. A bare
+  // detached HEAD -- `git checkout <sha>` to test a commit by hand, the manual form of
+  // the very bisect workflow round 10 was about -- leaves no state file anywhere, so no
+  // enumeration can ever reach it.
+  //
+  // Refusing on a detached HEAD is not over-refusal, and that matters because refusing
+  // too much is its own failure. `main-sync` exists to bring origin/main into the LANE
+  // BRANCH. With HEAD detached, `git pull --ff-only origin main` moves HEAD and leaves
+  // `refs/heads/<branch>` exactly where it was -- measured, and reported as a related
+  // finding by the same reviewer -- so the operation cannot accomplish what it claims
+  // no matter what the worktree looks like. It is always wrong here, which makes this a
+  // predicate over the operation rather than one more guess about git's state space.
+  //
+  // `git symbolic-ref -q HEAD` exits 0 with the ref when attached and 1 when detached.
+  // Any other status is undetermined, never "attached".
+  const symbolicRef = runner('git', ['symbolic-ref', '-q', 'HEAD'], { cwd });
+  let detachedHead = false;
+  let headRef: string | null = null;
+  if (symbolicRef.error || (symbolicRef.status !== 0 && symbolicRef.status !== 1)) {
+    undetermined.push(
+      `HEAD attachment (git symbolic-ref exited ${symbolicRef.status ?? 'with an error'})`,
+    );
+  } else {
+    detachedHead = symbolicRef.status === 1;
+    headRef = detachedHead ? null : bufferToText(symbolicRef.stdout).trim() || null;
+    if (!detachedHead && headRef === null) {
+      undetermined.push('HEAD attachment (git symbolic-ref reported attached but named no ref)');
+    }
+  }
   const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
   let unmerged: string[] = [];
   if (unmergedRun.error || unmergedRun.status !== 0) {
@@ -365,7 +418,18 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
       .map((line) => line.trim())
       .filter(Boolean);
   }
-  return { mergeHead, rebaseHead, cherryPickHead, revertHead, bisect, unmerged, undetermined };
+  return {
+    mergeHead,
+    rebaseHead,
+    cherryPickHead,
+    revertHead,
+    bisect,
+    sequencer,
+    detachedHead,
+    headRef,
+    unmerged,
+    undetermined,
+  };
 }
 
 /**
@@ -383,6 +447,7 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
 export function worktreeResidue(
   runner: CommandRunner,
   cwd: string,
+  expectedBranch?: string,
 ): { clean: boolean; detail: string } {
   const r = probeSyncResidue(runner, cwd);
   const parts: string[] = [];
@@ -391,6 +456,22 @@ export function worktreeResidue(
   if (r.cherryPickHead) parts.push('CHERRY_PICK_HEAD is present');
   if (r.revertHead) parts.push('REVERT_HEAD is present');
   if (r.bisect) parts.push('a bisect is in progress (BISECT_LOG or BISECT_START is present)');
+  if (r.sequencer) parts.push('a cherry-pick or revert sequence is in progress (.git/sequencer is present)');
+  if (r.detachedHead) parts.push('HEAD is detached, so a sync would move HEAD and leave the branch ref behind');
+  // The ALLOWLIST term. Every term above names one known-bad state; this one names
+  // the only acceptable state and refuses everything else, so a hazard nobody has
+  // enumerated cannot pass merely by leaving no marker behind. Only asked when the
+  // caller states an expectation -- the post-failure cleanup path measures residue,
+  // not fitness to sync, and has no branch to expect.
+  if (expectedBranch !== undefined && !r.detachedHead && r.headRef !== null) {
+    const expectedRef = `refs/heads/${expectedBranch}`;
+    if (r.headRef !== expectedRef) {
+      parts.push(
+        `HEAD is on ${r.headRef}, not the expected ${expectedRef}, so a sync would ` +
+          `move the wrong branch`,
+      );
+    }
+  }
   if (r.unmerged.length > 0) parts.push(`unmerged paths: ${r.unmerged.join(', ')}`);
   if (r.undetermined.length > 0) {
     parts.push(`state could not be determined: ${r.undetermined.join('; ')}`);
@@ -399,7 +480,9 @@ export function worktreeResidue(
     clean: parts.length === 0,
     detail:
       parts.length === 0
-        ? 'no MERGE_HEAD, no rebase/cherry-pick/revert/bisect in progress and no unmerged paths'
+        ? (expectedBranch === undefined
+            ? 'HEAD is attached and there is no MERGE_HEAD, no rebase/cherry-pick/revert/bisect/sequencer in progress and no unmerged paths'
+            : `HEAD is attached to the expected refs/heads/${expectedBranch} and there is no MERGE_HEAD, no rebase/cherry-pick/revert/bisect/sequencer in progress and no unmerged paths`)
         : parts.join('; '),
   };
 }
@@ -448,6 +531,8 @@ export function abortInProgressSync(
     !before.cherryPickHead &&
     !before.revertHead &&
     !before.bisect &&
+    !before.sequencer &&
+    !before.detachedHead &&
     before.unmerged.length === 0
   ) {
     // The command failed without starting anything -- e.g. `git merge` refused
@@ -465,6 +550,8 @@ export function abortInProgressSync(
     after.cherryPickHead ||
     after.revertHead ||
     after.bisect ||
+    after.sequencer ||
+    after.detachedHead ||
     after.unmerged.length > 0 ||
     after.undetermined.length > 0;
 
@@ -484,6 +571,8 @@ export function abortInProgressSync(
   if (after.cherryPickHead) detail.push('CHERRY_PICK_HEAD is still present');
   if (after.revertHead) detail.push('REVERT_HEAD is still present');
   if (after.bisect) detail.push('a bisect is still in progress');
+  if (after.sequencer) detail.push('a cherry-pick/revert sequence is still in progress');
+  if (after.detachedHead) detail.push('HEAD is still detached');
   if (after.unmerged.length > 0) {
     detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
   }
@@ -532,12 +621,13 @@ export function runExtendedMergeWrapper(
     ...options,
     residueProbe:
       options.residueProbe ??
-      (({ cwd: probeCwd }) =>
+      (({ cwd: probeCwd, expectedBranch }) =>
         worktreeResidue(
           options.runner ??
             ((c: string, a: string[], o: { cwd: string }) =>
               spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>),
           probeCwd,
+          expectedBranch,
         )),
   };
 
