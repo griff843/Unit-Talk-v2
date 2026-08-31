@@ -14,6 +14,18 @@ export async function validateSmartFormRelationships(
 ): Promise<void> {
   if (payload.source !== 'smart-form') return;
 
+  // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_START
+  // `smart-form` predates this product as a generic submission source, and
+  // service-role callers still use it as a plain label with none of the Smart
+  // Form fields. Applying the strict contract to that shape would refuse
+  // submissions this lane never intended to govern. Anything the Smart Form
+  // itself sends carries a distributionMode -- the capper pin in
+  // handlers/submit-pick.ts guarantees it -- or a participantResolution, so
+  // keying on the presence of either covers all real Smart Form traffic
+  // without retrofitting the contract onto the legacy label.
+  if (!carriesSmartFormFields(payload)) return;
+  // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_END
+
   const metadata = payload.metadata;
   const distributionMode = metadata?.['distributionMode'];
   if (distributionMode !== 'track-only' && distributionMode !== 'delivery-eligible') {
@@ -30,7 +42,7 @@ export async function validateSmartFormRelationships(
   }
 
   if (resolution.resolution === 'manual') {
-    validateManualResolution(payload, resolution);
+    await validateManualResolution(payload, resolution, sportId, referenceData);
     return;
   }
 
@@ -50,9 +62,11 @@ export async function validateSmartFormRelationships(
   validateCanonicalEvent(payload, resolution, sportId, event);
 }
 
-function validateManualResolution(
+async function validateManualResolution(
   payload: SubmissionPayload,
   resolution: Extract<SmartFormParticipantResolution, { resolution: 'manual' }>,
+  sportId: string,
+  referenceData: ReferenceDataRepository,
 ) {
   if (resolution.eventId !== null || resolution.manualOverride !== true) {
     fail('manual participant resolution cannot include a canonical event ID');
@@ -80,6 +94,47 @@ function validateManualResolution(
   if (payload.eventName && normalize(payload.eventName) !== normalize(resolution.enteredEventName)) {
     fail('manual enteredEventName does not match submission eventName');
   }
+
+  // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_START
+  // Without this block `resolution: 'manual'` is a caller-declared opt-out of
+  // every canonical check: an empty participant list satisfies the loop above
+  // vacuously, and a fabricated event reaches distribution. A manual override
+  // is only legitimate when the canonical gap it names is real, so the claim is
+  // verified against reference data rather than taken on trust.
+  if (resolution.enteredParticipants.length === 0) {
+    fail('manual participant resolution requires at least one entered participant');
+  }
+
+  const seen = new Map<string, string>();
+  for (const participant of resolution.enteredParticipants) {
+    const key = aliasKey(participant.displayName);
+    const priorRole = seen.get(key);
+    if (priorRole !== undefined) {
+      fail(
+        `manual participants must be distinct: "${participant.displayName}" is entered as both ${priorRole} and ${participant.role}`,
+      );
+    }
+    seen.set(key, participant.role);
+  }
+
+  if (TEAM_SPORTS.has(sportId.toUpperCase())) {
+    const matches = await Promise.all(
+      resolution.enteredParticipants.map(async (participant) => {
+        const rows = await referenceData.searchTeams(sportId, participant.displayName, 25);
+        const canonical = rows.find(
+          (row) => aliasKey(row.displayName) === aliasKey(participant.displayName),
+        );
+        return canonical ? { entered: participant.displayName, canonical } : null;
+      }),
+    );
+    const covered = matches.find((match) => match !== null);
+    if (covered) {
+      fail(
+        `manual override claims a canonical coverage gap, but "${covered.entered}" resolves to canonical participant ${covered.canonical.participantId}; use the canonical selection`,
+      );
+    }
+  }
+  // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_END
 }
 
 async function validateStructuredTeamFallback(
@@ -247,6 +302,30 @@ function readRequiredString(value: unknown, field: string) {
 
 function normalize(value: string) {
   return value.trim().toLocaleLowerCase();
+}
+
+/**
+ * A deliberately aggressive key used only to decide whether two names refer to
+ * the same entity. `normalize` stays strict because it backs mismatch
+ * refusals, where collapsing more strings would let a mismatch through; this
+ * collapses more so an alias spelling cannot be used to claim a canonical
+ * entity does not exist.
+ */
+function aliasKey(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/gu, '')
+    .toLocaleLowerCase()
+    .replace(/[^a-z0-9]+/gu, '');
+}
+
+/** True when the payload carries anything the Smart Form itself would send. */
+function carriesSmartFormFields(payload: SubmissionPayload): boolean {
+  const metadata = payload.metadata;
+  return (
+    metadata?.['distributionMode'] !== undefined ||
+    metadata?.['participantResolution'] !== undefined
+  );
 }
 
 function matchesCanonicalEventName(submitted: string, canonical: string) {

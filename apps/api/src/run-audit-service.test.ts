@@ -287,6 +287,7 @@ test('mutation control: removing the pre-atomic Track Only guard reopens lifecyc
   assert.notEqual(mutantSource, source, 'mutation control could not remove the Track Only guard');
 
   await writeFile(mutantPath, mutantSource, 'utf8');
+  let mutantOutcome: unknown = null;
   try {
     const mutant = await import(`${pathToFileURL(mutantPath).href}?mutation=track-only`) as typeof import('./run-audit-service.js');
     await mutant.enqueueDistributionWithRunTracking(
@@ -297,16 +298,38 @@ test('mutation control: removing the pre-atomic Track Only guard reopens lifecyc
       repositories.outbox,
       repositories.runs,
       repositories.audit,
-    );
+    ).catch((error: unknown) => {
+      mutantOutcome = error;
+    });
   } finally {
     await unlink(mutantPath).catch(() => undefined);
   }
 
+  // The guard is load-bearing: with it, the call is refused before the atomic
+  // enqueue is ever attempted (atomicCallCount() === 0 in the baseline test
+  // above). Without it, the call reaches the production atomic path.
   assert.equal(atomicCallCount(), 1, 'mutant must reach production atomic enqueue');
+
+  // It is not, however, the last line of defence. UTV2-1672 added a chokepoint
+  // in the outbox repository itself, so the mutant is stopped there instead of
+  // creating delivery work. Asserting an outbox row here would be asserting a
+  // hole that no longer exists; what this control proves is that removing the
+  // pre-atomic guard changes behaviour from "refused early, atomic never
+  // attempted" to "atomic attempted, refused only by the repository chokepoint".
+  assert.equal(
+    (mutantOutcome as { name?: string } | null)?.name,
+    'TrackOnlyDeliveryForbiddenError',
+    'with the pre-atomic guard gone, only the repository chokepoint stops delivery',
+  );
+  // The lifecycle row does move to `queued` in this harness before the outbox
+  // write is refused, because the in-memory harness performs sequentially what
+  // `enqueue_distribution_atomic` performs in one Postgres transaction. That is
+  // a property of the harness, not of production, and it is recorded here
+  // rather than asserted away: the chokepoint is the last line of defence for
+  // *delivery*, not a substitute for the pre-atomic guard's lifecycle safety.
   assert.equal((await repositories.picks.findPickById(callerPick.id))?.status, 'queued');
   const outboxRows = await repositories.outbox.listByPickId(callerPick.id);
-  assert.equal(outboxRows.length, 1, 'mutant must create Discord/member delivery work');
-  assert.equal(outboxRows[0]?.target, 'discord:canary');
+  assert.equal(outboxRows.length, 0, 'the chokepoint must still prevent delivery work');
 });
 
 test('enqueueDistributionWithRunTracking: real DB errors (constraint violation) rethrow — no silent sequential fallback', async () => {

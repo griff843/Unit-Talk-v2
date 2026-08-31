@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { EventBrowseResult, ReferenceDataRepository } from '@unit-talk/db';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { createInMemoryRepositoryBundle } from './persistence.js';
@@ -360,4 +362,182 @@ test('non-team canonical identity without an event must use explicit manual prov
     () => validateSmartFormRelationships(invalid, referenceData()),
     /not verifiable; use explicit manual override/,
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the manual override must prove the coverage gap it claims.
+//
+// Without MANUAL_COVERAGE_GAP_PROOF_GUARD, `resolution: 'manual'` is a
+// caller-declared opt-out of every canonical check in this module: the entered
+// participants are never checked against reference data, so a submission can
+// name a team that plainly exists canonically -- or name none at all -- and
+// still be admitted. These are the bypasses the guard closes.
+// ---------------------------------------------------------------------------
+
+function manualPayload(participants: Array<Record<string, unknown>>, sport = 'NBA') {
+  const manual = payload({
+    sport,
+    participantResolution: {
+      resolution: 'manual',
+      sportId: sport,
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Entered Matchup',
+      enteredParticipants: participants,
+    },
+  });
+  manual.eventName = 'Entered Matchup';
+  return manual;
+}
+
+/** Reference data in which "Lakers" is a real canonical NBA team. */
+function referenceDataWithCanonicalTeams(): ReferenceDataRepository {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData.searchTeams = async (sportId: string, query: string) =>
+    sportId.toUpperCase() === 'NBA' && /lakers/iu.test(query)
+      ? [{ participantId: 'team-lakers', displayName: 'Los Angeles Lakers', participantType: 'team' } as never]
+      : [];
+  return repositories.referenceData;
+}
+
+test('manual override is refused when it names a participant that is canonically covered', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'Los Angeles Lakers', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        referenceDataWithCanonicalTeams(),
+      ),
+    /resolves to canonical participant team-lakers/u,
+  );
+});
+
+test('manual override is refused for an alias spelling of a canonically covered participant', async () => {
+  // "L.A. LAKERS" differs from the canonical display name by punctuation, case
+  // and spacing only. Strict normalization would miss it; the alias key does not.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'L.A. LAKERS', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        {
+          ...referenceDataWithCanonicalTeams(),
+          searchTeams: async () =>
+            [{ participantId: 'team-lakers', displayName: 'la lakers', participantType: 'team' }] as never,
+        } as ReferenceDataRepository,
+      ),
+    /resolves to canonical participant team-lakers/u,
+  );
+});
+
+test('manual override is refused when it enters no participants at all', async () => {
+  await assert.rejects(
+    () => validateSmartFormRelationships(manualPayload([], 'MMA'), referenceData()),
+    /at least one entered participant/u,
+  );
+});
+
+test('manual override is refused when the same participant is entered on both sides', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload(
+          [
+            { role: 'away', displayName: 'Fighter A', canonicalParticipantId: null },
+            { role: 'home', displayName: 'fighter-a', canonicalParticipantId: null },
+          ],
+          'MMA',
+        ),
+        referenceData(),
+      ),
+    /must be distinct/u,
+  );
+});
+
+test('a legacy smart-form submission carrying no Smart Form fields is not retrofitted with the contract', async () => {
+  // `smart-form` predates this product as a generic submission source. Service
+  // callers still use it as a plain label, and refusing those would be a
+  // regression this lane never intended.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nfl-spread',
+    selection: 'legacy submission',
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 70,
+    metadata: { proof_fixture_id: 'legacy-shape' },
+  };
+  await validateSmartFormRelationships(legacy, referenceData());
+});
+
+async function withGuardRemoved<T>(
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL('./smart-form-validation.ts', import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = new RegExp(
+    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    'u',
+  );
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    return await run(
+      (await import(`${pathToFileURL(mutantPath).href}?mutation=${guardName}`)) as Record<string, unknown>,
+    );
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+test('mutation control: removing MANUAL_COVERAGE_GAP_PROOF_GUARD admits a fabricated coverage gap over a canonical team', async () => {
+  const crafted = manualPayload([
+    { role: 'away', displayName: 'Los Angeles Lakers', canonicalParticipantId: null },
+    { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+  ]);
+
+  // Baseline: the guard refuses.
+  await assert.rejects(
+    () => validateSmartFormRelationships(crafted, referenceDataWithCanonicalTeams()),
+    /resolves to canonical participant/u,
+  );
+
+  // Mutant: with the marked block deleted, the same payload is admitted, and so
+  // is a manual override that enters no participants at all.
+  await withGuardRemoved('MANUAL_COVERAGE_GAP_PROOF_GUARD', async (mutant) => {
+    const validate = mutant['validateSmartFormRelationships'] as typeof validateSmartFormRelationships;
+    await validate(crafted, referenceDataWithCanonicalTeams());
+    await validate(manualPayload([], 'MMA'), referenceData());
+  });
+});
+
+test('mutation control: removing SMART_FORM_TRIGGER_SCOPE refuses legacy smart-form submissions', async () => {
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nfl-spread',
+    selection: 'legacy submission',
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 70,
+    metadata: { proof_fixture_id: 'legacy-shape' },
+  };
+
+  // Baseline: admitted.
+  await validateSmartFormRelationships(legacy, referenceData());
+
+  // Mutant: the scope narrowing is what keeps pre-existing service-role callers
+  // working; without it they are refused with a 422.
+  await withGuardRemoved('SMART_FORM_TRIGGER_SCOPE', async (mutant) => {
+    const validate = mutant['validateSmartFormRelationships'] as typeof validateSmartFormRelationships;
+    await assert.rejects(() => validate(legacy, referenceData()), /distributionMode must be/u);
+  });
 });

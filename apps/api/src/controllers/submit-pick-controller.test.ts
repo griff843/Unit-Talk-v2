@@ -150,7 +150,10 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
           manualOverride: true,
           reason: 'canonical-coverage-gap',
           enteredEventName: 'Manual event',
-          enteredParticipants: [],
+          enteredParticipants: [
+            { role: 'away', displayName: 'Challenger One', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Challenger Two', canonicalParticipantId: null },
+          ],
         },
       },
     }),
@@ -184,7 +187,10 @@ test('submit-pick-controller: track-only smart-form pick persists without outbox
           manualOverride: true,
           reason: 'canonical-coverage-gap',
           enteredEventName: 'Manual event',
-          enteredParticipants: [],
+          enteredParticipants: [
+            { role: 'away', displayName: 'Challenger One', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Challenger Two', canonicalParticipantId: null },
+          ],
         },
       },
     }),
@@ -363,6 +369,93 @@ test('mutation control: removing SMART_FORM_RELATIONSHIP_GUARD admits an unverif
       const result = await mutantSubmit(makeUnverifiablePayload(), repositories);
       assert.equal(result.status, 201, 'mutant must admit the unverifiable payload');
       assert.ok(result.body.ok);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the idempotent-duplicate path.
+//
+// The Track Only pin marks the incoming payload. processSubmission discards
+// that payload when the submission collides with an existing pick and returns
+// the stored row instead, so without this guard a Track Only request can be
+// answered with a pick that every downstream guard reads as delivery-eligible.
+// ---------------------------------------------------------------------------
+
+function makeCollidingPayload(distributionMode: string): SubmissionPayload {
+  return makePayload('smart-form', {
+    market: 'NBA moneyline',
+    selection: 'Supersonics ML',
+    odds: -110,
+    eventName: 'Supersonics vs Bullets',
+    metadata: {
+      sport: 'NBA',
+      distributionMode,
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NBA',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Supersonics vs Bullets',
+        enteredParticipants: [
+          { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+        ],
+      },
+    },
+  });
+}
+
+test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Track Only request with a delivery-eligible pick', async () => {
+  // The two payloads differ only in metadata, which the idempotency key
+  // deliberately excludes -- so the second submission resolves to the first pick.
+  async function seed() {
+    const repositories = createInMemoryRepositoryBundle();
+    const first = await submitPickController(
+      makeCollidingPayload('delivery-eligible'),
+      repositories,
+    );
+    assert.equal(first.status, 201, 'seed submission must be accepted');
+    return repositories;
+  }
+
+  // Baseline: the guard refuses rather than reusing the delivery-eligible pick.
+  const guarded = await seed();
+  const guardedResult = await submitPickController(
+    makeCollidingPayload('track-only'),
+    guarded,
+  ).then(
+    (response) => ({ kind: 'response' as const, response }),
+    (error: unknown) => ({ kind: 'error' as const, error }),
+  );
+  assert.equal(guardedResult.kind, 'error', 'baseline must refuse the colliding Track Only request');
+  if (guardedResult.kind === 'error') {
+    const error = guardedResult.error as { status?: number; code?: string };
+    assert.equal(error.status, 409);
+    assert.equal(error.code, 'TRACK_ONLY_CONFLICT');
+  }
+
+  // Mutant: with the marked block deleted, the request succeeds and hands back
+  // a pick that is not Track Only.
+  await withGuardRemoved(
+    './submit-pick-controller.ts',
+    'TRACK_ONLY_REQUEST_INTEGRITY_GUARD',
+    async (mutant) => {
+      const mutantController = mutant['submitPickController'] as typeof submitPickController;
+      const repositories = createInMemoryRepositoryBundle();
+      const seeded = await mutantController(makeCollidingPayload('delivery-eligible'), repositories);
+      assert.equal(seeded.status, 201);
+
+      const response = await mutantController(makeCollidingPayload('track-only'), repositories);
+      assert.equal(response.status, 201, 'mutant must accept the colliding Track Only request');
+      if (!response.body.ok) throw new Error('expected ok response');
+      const pick = await repositories.picks.findPickById(response.body.data.pickId);
+      assert.notEqual(
+        (pick?.metadata as Record<string, unknown> | undefined)?.['distributionMode'],
+        'track-only',
+        'mutant must hand back a pick that is not Track Only',
+      );
     },
   );
 });

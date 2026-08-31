@@ -31,6 +31,7 @@
     "apps/api/src/smart-form-validation.ts",
     "apps/api/src/submission-service.test.ts",
     "docs/06_status/proof/UTV2-1672/**",
+    "package.json",
     "packages/contracts/src/index.ts",
     "packages/contracts/src/smart-form.ts",
     "packages/db/src/repositories.ts",

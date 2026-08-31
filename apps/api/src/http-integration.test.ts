@@ -376,9 +376,9 @@ test('capper JWT submissions cannot spoof source or opt into member delivery', a
     source: 'smart-form',
     submittedBy: 'spoofed-capper',
     market: 'NBA moneyline',
-    selection: 'Celtics ML',
+    selection: 'Supersonics ML',
     stakeUnits: 1,
-    eventName: 'Celtics vs Knicks',
+    eventName: 'Supersonics vs Bullets',
     metadata: {
       sport: 'NBA',
       participantResolution: {
@@ -387,8 +387,11 @@ test('capper JWT submissions cannot spoof source or opt into member delivery', a
         eventId: null,
         manualOverride: true,
         reason: 'canonical-coverage-gap',
-        enteredEventName: 'Celtics vs Knicks',
-        enteredParticipants: [],
+        enteredEventName: 'Supersonics vs Bullets',
+        enteredParticipants: [
+          { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+        ],
       },
     },
   };
@@ -1072,9 +1075,9 @@ function capperBody(overrides: Record<string, unknown> = {}) {
     source: 'smart-form',
     submittedBy: 'spoofed-capper',
     market: 'NBA moneyline',
-    selection: 'Celtics ML',
+    selection: 'Supersonics ML',
     stakeUnits: 1,
-    eventName: 'Celtics vs Knicks',
+    eventName: 'Supersonics vs Bullets',
     metadata: {
       sport: 'NBA',
       participantResolution: {
@@ -1083,8 +1086,11 @@ function capperBody(overrides: Record<string, unknown> = {}) {
         eventId: null,
         manualOverride: true,
         reason: 'canonical-coverage-gap',
-        enteredEventName: 'Celtics vs Knicks',
-        enteredParticipants: [],
+        enteredEventName: 'Supersonics vs Bullets',
+        enteredParticipants: [
+          { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+        ],
       },
     },
     ...overrides,

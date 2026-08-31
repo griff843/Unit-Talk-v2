@@ -4,6 +4,7 @@ import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
   V1_REFERENCE_DATA,
+  isTrackOnlyPickMetadata,
   type ProviderOfferInsert,
   type ReferenceDataCatalog,
   type MemberTier,
@@ -709,10 +710,53 @@ export class InMemoryPickRepository implements PickRepository {
   }
 }
 
+/**
+ * Thrown when any caller tries to create delivery work for a pick whose
+ * persisted metadata says Track Only.
+ *
+ * UTV2-1672: the per-route guards in apps/api each protect one entry point, so
+ * a route that enqueues directly -- recap-service does exactly this -- reaches
+ * the outbox without passing any of them. This error is raised at the single
+ * place every delivery row must go through, so the invariant holds for routes
+ * that do not exist yet as well as the ones that do.
+ */
+export class TrackOnlyDeliveryForbiddenError extends Error {
+  readonly pickId: string;
+  readonly target: string;
+
+  constructor(pickId: string, target: string) {
+    super(
+      `Track Only pick ${pickId} cannot be enqueued for delivery to ${target}`,
+    );
+    this.name = 'TrackOnlyDeliveryForbiddenError';
+    this.pickId = pickId;
+    this.target = target;
+  }
+}
+
+/** Resolves the persisted metadata of a pick, for the chokepoint guard. */
+export type PickMetadataResolver = (
+  pickId: string,
+) => Promise<Record<string, unknown> | null>;
+
 export class InMemoryOutboxRepository implements OutboxRepository {
   private readonly entries: OutboxRecord[] = [];
+  private readonly resolvePickMetadata: PickMetadataResolver | null;
+
+  constructor(resolvePickMetadata: PickMetadataResolver | null = null) {
+    this.resolvePickMetadata = resolvePickMetadata;
+  }
 
   async enqueue(input: OutboxCreateInput): Promise<OutboxRecord> {
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (this.resolvePickMetadata) {
+      const metadata = await this.resolvePickMetadata(input.pickId);
+      if (isTrackOnlyPickMetadata(metadata)) {
+        throw new TrackOnlyDeliveryForbiddenError(input.pickId, input.target);
+      }
+    }
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     // Idempotency: reject if an active (pending/processing) row already exists
     // for the same pick+target combination.
     const activeStatuses = ['pending', 'processing'];
@@ -3494,7 +3538,37 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
+  /** Reads the persisted metadata of a pick for the Track Only chokepoint. */
+  private async loadPickMetadata(
+    pickId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const { data, error } = await this.client
+      .from('picks')
+      .select('metadata')
+      .eq('id', pickId)
+      .maybeSingle();
+
+    if (error) {
+      // Fail closed: if we cannot establish that a pick is safe to deliver, we
+      // do not deliver it.
+      throw new Error(
+        `Failed to read pick metadata for delivery safety check: ${error.message}`,
+      );
+    }
+
+    const metadata = (data as { metadata?: unknown } | null)?.metadata;
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      ? (metadata as Record<string, unknown>)
+      : null;
+  }
+
   async enqueue(input: OutboxCreateInput): Promise<OutboxRecord> {
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (isTrackOnlyPickMetadata(await this.loadPickMetadata(input.pickId))) {
+      throw new TrackOnlyDeliveryForbiddenError(input.pickId, input.target);
+    }
+    // UTV2-1672 OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     const { data, error } = await this.client
       .from('distribution_outbox')
       .insert({
@@ -3520,6 +3594,15 @@ export class DatabaseOutboxRepository implements OutboxRepository {
   async enqueueDistributionAtomic(
     input: EnqueueDistributionAtomicInput,
   ): Promise<EnqueueDistributionAtomicResult | null> {
+    // UTV2-1672 ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD_START
+    if (isTrackOnlyPickMetadata(await this.loadPickMetadata(input.pickId))) {
+      throw new TrackOnlyDeliveryForbiddenError(
+        input.pickId,
+        input.outboxTarget,
+      );
+    }
+    // UTV2-1672 ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD_END
+
     const { data, error } = await this.client.rpc(
       'enqueue_distribution_atomic',
       {
@@ -8591,10 +8674,17 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const participants = new InMemoryParticipantRepository(seededTeams);
   const events = new InMemoryEventRepository();
   const eventParticipants = new InMemoryEventParticipantRepository();
+  const picks = new InMemoryPickRepository();
   return {
     submissions: new InMemorySubmissionRepository(),
-    picks: new InMemoryPickRepository(),
-    outbox: new InMemoryOutboxRepository(),
+    picks,
+    outbox: new InMemoryOutboxRepository(async (pickId) => {
+      const pick = await picks.findPickById(pickId);
+      const metadata = pick?.metadata;
+      return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : null;
+    }),
     alertDetections: new InMemoryAlertDetectionRepository(),
     hedgeOpportunities: new InMemoryHedgeOpportunityRepository(),
     receipts: new InMemoryReceiptRepository(),
