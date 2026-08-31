@@ -6,7 +6,9 @@ Head: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Base: cb5dc80350b06374efaea450a2fbfe6724d3c201
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 
-28 files changed, 3757 insertions, 25 deletions.
+33 files changed. Excluding this proof bundle's own three documents, whose
+line counts move with every proof-only edit: 29 files, 4001 insertions,
+73 deletions.
 
 ## Changed files
 
@@ -24,22 +26,27 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 | `apps/api/src/http-integration.test.ts` | +308 / -1 |
 | `apps/api/src/recap-service.test.ts` | +107 / -0 |
 | `apps/api/src/recap-service.ts` | +18 / -0 |
+| `apps/api/src/routes/health.ts` | +18 / -1 |
 | `apps/api/src/routes/index.ts` | +1 / -0 |
 | `apps/api/src/routes/reference-data.ts` | +25 / -2 |
 | `apps/api/src/run-audit-service.test.ts` | +138 / -1 |
 | `apps/api/src/run-audit-service.ts` | +21 / -1 |
-| `apps/api/src/server.test.ts` | +90 / -0 |
+| `apps/api/src/server.test.ts` | +225 / -0 |
 | `apps/api/src/server.ts` | +5 / -0 |
 | `apps/api/src/smart-form-validation.test.ts` | +857 / -0 |
 | `apps/api/src/smart-form-validation.ts` | +570 / -0 |
 | `apps/api/src/submission-service.test.ts` | +40 / -4 |
 | `docs/06_status/lanes/UTV2-1672.json` | +61 / -0 |
 | `docs/06_status/proof/UTV2-1672/.gitkeep` | +0 / -0 |
+| `docs/06_status/proof/UTV2-1672/diff-summary.md` | this bundle |
+| `docs/06_status/proof/UTV2-1672/evidence.json` | this bundle |
+| `docs/06_status/proof/UTV2-1672/verification.md` | this bundle |
+| `docs/06_status/readiness/readiness-score.json` | +45 / -45 |
 | `package.json` | +1 / -1 |
 | `packages/contracts/src/index.ts` | +1 / -0 |
 | `packages/contracts/src/smart-form.ts` | +57 / -0 |
 | `packages/db/src/repositories.ts` | +1 / -0 |
-| `packages/db/src/runtime-repositories.ts` | +114 / -4 |
+| `packages/db/src/runtime-repositories.ts` | +131 / -6 |
 
 ## What each file does
 
@@ -94,6 +101,15 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
   in both `getPromotionBoardState` implementations, so Track Only picks do not
   hold live board capacity for 7 days and suppress deliverable picks.
 
+### Health and board capacity
+
+- **`apps/api/src/routes/health.ts`** — `ZOMBIE_HEALTH_TRACK_ONLY_EXCLUSION_GUARD`.
+  A Track Only pick sits at `qualified` / `best-bets` / `validated` with no
+  outbox row, which the zombie-pick health probe reads as a delivery fault and
+  reports as a degraded system needing requeue. The guard skips Track Only
+  picks. **Outside the declared file scope — covered by the requested
+  scope-override.**
+
 ### Wiring
 
 - **`apps/api/src/server.ts`, `routes/index.ts`, `routes/reference-data.ts`,
@@ -108,7 +124,11 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1466
 ### Tests
 
 857 lines of new Smart Form validation tests plus additions to seven existing
-suites. 15 of these are mutation controls — one per guard.
+suites. 16 of these are mutation controls, against 17 guards.
+BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD has no mutation control: it lives in
+`packages/db`, which an `apps/api` test cannot import as source without
+violating the db-client-boundary check. It is proven by premise assertion
+instead, and labelled as the weaker proof in verification.md.
 `apps/api/src/recap-service.test.ts` is **outside the declared file scope —
 covered by the requested scope-override.**
 
