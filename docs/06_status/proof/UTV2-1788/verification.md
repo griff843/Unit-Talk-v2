@@ -1,4 +1,19 @@
-# UTV2-1788 — Command Center stabilization verification
+# PROOF: UTV2-1788 — Command Center stabilization verification
+
+## Merge SHA Binding
+
+MERGE_SHA: 216098727bf2508393adb3902137aade4f04697d
+Head SHA: 216098727bf2508393adb3902137aade4f04697d
+Merge SHA: 216098727bf2508393adb3902137aade4f04697d
+Execution SHA: 216098727bf2508393adb3902137aade4f04697d
+Diff base: origin/main at the time of this binding
+
+`21609872` is this branch's last non-proof commit -- the `main` sync that
+carries every implementation change under review. It is execution identity, not
+merge authority: the authoritative merge SHA does not exist until the PR merges,
+at which point `post-merge-lane-close.yml` rebinds these anchors to it. The
+proof-only commit that adds this section sits on top of `21609872` and changes
+no implementation byte.
 
 ## Verification
 
@@ -94,7 +109,7 @@ docker build -f apps/command-center/Dockerfile -t unit-talk/command-center:utv2-
 
 Result: blocked before build-context processing because `/var/run/docker.sock` is unavailable. `docker version` confirmed a 29.7.2 client and no reachable daemon; Podman, Buildah, and nerdctl are not installed. The in-scope Dockerfile corrections are static and buildable in shape: Node 22, repository-root workspace context, workspace package copy, filtered build, and no nonexistent `public/` copy. A hosted Docker-capable runner must execute the image build before any deployment lane may rely on it.
 
-## Assertions
+## ASSERTIONS: product and safety claims proven by this lane
 
 - The primary navigation contains exactly six workflows and is derived from the route registry.
 - All 55 baseline page routes are classified; the added `/settlement` route is also classified.
@@ -106,6 +121,38 @@ Result: blocked before build-context processing because `/var/run/docker.sock` i
 - Request-time privileged reads are forced dynamic, preventing image build from presenting build-time data as runtime truth.
 - The Tier C auth/config files named in the authorization correction are byte-unchanged.
 - No file overlaps Smart Form Phase 1 or the production deployment/recovery lanes.
+
+## EVIDENCE: executed command receipts
+
+Every row in the Verification table above was produced by one of these runs. The
+focused package suite is reproduced verbatim:
+
+```text
+$ pnpm --filter @unit-talk/command-center type-check   -> exit 0
+$ pnpm --filter @unit-talk/command-center build        -> exit 0 (56 dynamic routes, including /settlement)
+$ pnpm --filter @unit-talk/command-center test         -> exit 0
+1..132
+# tests 132
+# pass 132
+# fail 0
+# cancelled 0
+# skipped 0
+
+$ pnpm verify:static                                   -> exit 0
+$ pnpm type-check                                      -> exit 0 (inside verify:static)
+$ pnpm test                                            -> exit 0 (inside verify:static)
+$ pnpm verify                                          -> static stages exit 0; test:live-db refused a loopback target (see below)
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD -> exit 0
+$ git diff --check                                     -> exit 0
+$ COMMAND_CENTER_AUTH_MODE=fail_open pnpm exec playwright test e2e/command-center.spec.ts -> 2 passed
+$ docker build -f apps/command-center/Dockerfile ...    -> BLOCKED BY HOST (no reachable daemon)
+```
+
+The writable-DB leg is not claimed as executed. `pnpm test:db` did not run
+against a real database on this workstation; the staging assertion refused the
+loopback target before any client was constructed, and this app-only T2 lane
+makes no DB change. CI's `Writable DB proof (staging only)` job carries the
+authoritative receipt for this head.
 
 ## Residual risks and deferred work
 

@@ -1,5 +1,8 @@
 # UTV2-1788 — Command Center stabilization diff summary
 
+MERGE_SHA: 216098727bf2508393adb3902137aade4f04697d
+Merge SHA: 216098727bf2508393adb3902137aade4f04697d
+
 ## Summary
 
 This app-only lane consolidates Command Center into one internal operator control plane with exactly six primary workflows: Overview, Review, Active Picks, Settlement, Exceptions, and System Health. `COMMAND_CENTER_ROUTES` is now the single route/navigation authority, `/settlement` uses the existing governed settlement action, and unavailable data renders as unavailable rather than as fabricated success or inferred zero.
