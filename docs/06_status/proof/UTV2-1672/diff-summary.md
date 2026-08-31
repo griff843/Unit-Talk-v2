@@ -1,5 +1,7 @@
 # DIFF SUMMARY: UTV2-1672
 
+MERGE_SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
+
 Head: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Base: cb5dc80350b06374efaea450a2fbfe6724d3c201
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1466

@@ -9,7 +9,7 @@ MERGE_SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Issue: UTV2-1672
 Tier: T1
 Lane type: runtime
-Proof profile: static
+Proof profile: app-runtime
 Branch: claude/utv2-1672-smart-form-backend-track-only
 Head SHA: 2b0e2225b863fd9b5e16719c11202ba16fbb2cd3
 Diff base: cb5dc80350b06374efaea450a2fbfe6724d3c201
@@ -205,6 +205,32 @@ now checks the catalog team list first, so the branch that carries the refusal
 is one backed by data that actually exists. The regression test for this
 stubs both search methods to return `[]` and asserts the refusal still fires --
 it is the test that would have caught the original vacuity.
+
+## Close eligibility -- one item is structurally pre-merge-only
+
+`Close eligibility preflight` reports CEP-E7 `runtime_proof: app-runtime proof
+requires a populated runtime_proof block`. That block is **deliberately empty
+here, and cannot be filled pre-merge**, for a mechanical reason rather than an
+omission.
+
+`runtime_proof.queries` and `runtime_proof.row_counts` are not hand-authored.
+They are harvested from CI's own `Writable DB proof (staging only)` receipt --
+the sanctioned staging path -- by `scripts/ops/ci-db-proof-harvest.ts`, whose
+entry point is `harvestCiDbProofForMergeSha(mergeSha)`. It keys on a merge SHA,
+which does not exist until the merge happens. `post-merge-lane-close.yml` runs
+`ops:proof-generate --merge-sha` (line 348, step "Bind proof artifacts to merge
+SHA") **before** `ops:lane-close` (line 352, the hard gate that runs
+`ops:truth-check`), so the block is populated by the time anything checks it.
+
+Hand-authoring those fields instead would be fabricating measurement evidence,
+which `proof-repair.ts`'s design contract explicitly forbids ("NEVER fabricates
+test output, query evidence, or row counts"). Leaving it empty and stating why
+is the honest option. `Close eligibility preflight` is not a required check.
+
+The other two CEP failures were real and are fixed: `diff-summary.md` now
+carries a `MERGE_SHA:` anchor (CEP-E5), and `sha_binding.merge_sha` is `null`
+pre-merge rather than carrying a branch SHA (CEP-E7) -- a branch SHA must never
+be represented as a merge SHA.
 
 ## Runtime Verification
 
