@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import {
@@ -985,6 +987,7 @@ async function createSettledPick(
     result: 'win' | 'loss' | 'push';
     settledAt: string;
     evidencePlane?: boolean;
+    trackOnly?: boolean;
   },
 ) {
   const created = await processSubmission(
@@ -997,6 +1000,7 @@ async function createSettledPick(
       submittedBy: input.submittedBy,
       metadata: {
         submittedBy: input.submittedBy,
+        ...(input.trackOnly ? { distributionMode: 'track-only' } : {}),
       },
     },
     repositories,
@@ -1016,3 +1020,106 @@ async function createSettledPick(
 
   return created.pick.id;
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: Track Only picks are excluded from recaps.
+//
+// Two reasons, and the second is an availability regression rather than a
+// product preference. A Track Only pick is internal tracking, so it does not
+// belong in member-facing W/L or ROI. And postRecapSummary enqueues the top
+// play by pick id *outside* its try block, so if a Track Only pick were ever
+// selected as topPlay the outbox chokepoint's refusal would propagate and fail
+// the entire recap instead of skipping one pick.
+// ---------------------------------------------------------------------------
+
+test('computeRecapSummary excludes Track Only picks from recap stats and from top play', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // The Track Only pick has by far the best result, so without the exclusion it
+  // would be topPlay -- the exact case that breaks the recap post.
+  await createSettledPick(repositories, {
+    selection: 'Track Only Monster',
+    market: 'points-all-game-ou',
+    odds: 900,
+    stakeUnits: 5,
+    submittedBy: 'capper-track-only',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+    trackOnly: true,
+  });
+  await createSettledPick(repositories, {
+    selection: 'Ordinary Play',
+    market: 'assists-all-game-ou',
+    odds: 100,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T10:00:00.000Z',
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary?.settledCount, 1, 'the Track Only pick must not be counted');
+  assert.equal(summary?.topPlay.selection, 'Ordinary Play');
+  assert.equal(summary?.netUnits, 1);
+});
+
+test('mutation control: removing RECAP_TRACK_ONLY_EXCLUSION_GUARD makes a Track Only pick the recap top play', async () => {
+  const seed = async (repositories: ReturnType<typeof createInMemoryRepositoryBundle>) => {
+    await createSettledPick(repositories, {
+      selection: 'Track Only Monster',
+      market: 'points-all-game-ou',
+      odds: 900,
+      stakeUnits: 5,
+      submittedBy: 'capper-track-only',
+      result: 'win',
+      settledAt: '2026-03-27T04:00:00.000Z',
+      trackOnly: true,
+    });
+    await createSettledPick(repositories, {
+      selection: 'Ordinary Play',
+      market: 'assists-all-game-ou',
+      odds: 100,
+      stakeUnits: 1,
+      submittedBy: 'griff843',
+      result: 'win',
+      settledAt: '2026-03-27T10:00:00.000Z',
+    });
+  };
+
+  const sourcePath = fileURLToPath(new URL('./recap-service.ts', import.meta.url));
+  const suffix = `__mutant_recap_track_only_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const mutantSource = source.replace(
+    /[ ]*\/\/ UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_START[\s\S]*?\/\/ UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_END\n/u,
+    '',
+  );
+  assert.notEqual(mutantSource, source, 'mutation control could not remove the guard');
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=recap-track-only`
+    )) as Record<string, unknown>;
+    const mutantCompute = mutant['computeRecapSummary'] as typeof computeRecapSummary;
+    const repositories = createInMemoryRepositoryBundle();
+    await seed(repositories);
+    const summary = await mutantCompute(
+      'daily',
+      repositories,
+      new Date('2026-03-28T16:00:00.000Z'),
+    );
+    assert.equal(
+      summary?.topPlay.selection,
+      'Track Only Monster',
+      'mutant must promote the Track Only pick to top play',
+    );
+    assert.equal(summary?.settledCount, 2, 'mutant must count the Track Only pick');
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+});

@@ -41,6 +41,21 @@ export async function validateSmartFormRelationships(
     fail('participantResolution sport does not match metadata sport');
   }
 
+  // UTV2-1672 CANONICAL_SPORT_ID_GUARD_START
+  // Every reference-data lookup below filters on `sportId` with a
+  // case-sensitive equality (`.eq('sport_id', ...)` for teams, and a current
+  // assignment's `sportId` for players). An unrecognised or wrong-case sport
+  // therefore returns no rows and makes every downstream proof vacuous rather
+  // than failing. The sport has to be canonical before it can be trusted as a
+  // search key.
+  const catalog = await referenceData.getCatalog();
+  const canonicalSport = catalog.sports.find((sport) => sport.id === sportId);
+  if (!canonicalSport) {
+    const known = catalog.sports.map((sport) => sport.id).join(', ');
+    fail(`participantResolution.sportId "${sportId}" is not a canonical sport (known: ${known})`);
+  }
+  // UTV2-1672 CANONICAL_SPORT_ID_GUARD_END
+
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
     return;
@@ -111,10 +126,29 @@ async function validateManualResolution(
   if (resolution.enteredParticipants.length === 0) {
     fail('manual participant resolution requires at least one entered participant');
   }
-  if (resolution.enteredParticipants.length < 2) {
+  if (TEAM_SPORTS.has(sportId.toUpperCase()) && resolution.enteredParticipants.length < 2) {
+    // Only for team sports. `validateStructuredTeamFallback` requires both an
+    // away and a home side, so a one-sided manual entry would be strictly
+    // weaker than the canonical path it substitutes for. Individual sports have
+    // no such fallback and legitimately have one-participant markets (golf
+    // outrights, futures on a single competitor), so the same rule there would
+    // refuse real submissions.
     fail(
       'manual participant resolution requires both sides of the entered matchup; the canonical path it replaces requires two participants',
     );
+  }
+
+  for (const participant of resolution.enteredParticipants) {
+    if (hasNonAscii(foldConfusables(participant.displayName))) {
+      // Confusable folding covers the Cyrillic and Greek look-alike blocks, but
+      // Unicode has many more. Rather than pretend an enumerated table is
+      // complete, anything that still holds a non-ASCII letter after folding is
+      // refused outright: the alias comparison below cannot honestly establish
+      // that such a name is uncovered.
+      fail(
+        `manual participant "${participant.displayName}" must use Latin characters so the canonical-coverage claim can be verified`,
+      );
+    }
   }
 
   const seen = new Map<string, string>();
@@ -349,10 +383,74 @@ function aliasKey(value: string) {
  */
 function foldConfusables(value: string) {
   return Array.from(
-    value.normalize('NFD').replace(/[\u0300-\u036f]/gu, '').toLocaleLowerCase(),
+    value
+      // NFKD, not NFD: it also decomposes compatibility forms, so a fullwidth
+      // "\uff2b" folds to "K" rather than surviving as a look-alike.
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/gu, '')
+      .toLocaleLowerCase(),
   )
+    // Zero-width and other default-ignorable characters are invisible in the
+    // form and are deleted by the alias key anyway; dropping them here means
+    // they are also gone from the search queries, where leaving them in made
+    // every ILIKE match nothing. Expressed as a code-point predicate rather
+    // than a character class: several of these are combining or variation
+    // selectors, which a regex class cannot carry unambiguously.
+    .filter((character) => !isDefaultIgnorable(character))
     .map((character) => CONFUSABLE_LATIN.get(character) ?? character)
     .join('');
+}
+
+/** Invisible formatting characters that must not survive into a search query. */
+function isDefaultIgnorable(character: string): boolean {
+  const code = character.codePointAt(0) ?? 0;
+  return (
+    code === 0x00ad ||
+    code === 0x034f ||
+    code === 0x061c ||
+    code === 0xfeff ||
+    (code >= 0x180b && code <= 0x180e) ||
+    (code >= 0x200b && code <= 0x200f) ||
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2060 && code <= 0x2064) ||
+    (code >= 0x2066 && code <= 0x206f) ||
+    (code >= 0xfe00 && code <= 0xfe0f)
+  );
+}
+
+/** True when any code point falls outside ASCII. */
+function hasNonAscii(value: string): boolean {
+  for (const character of value) {
+    if ((character.codePointAt(0) ?? 0) > 0x7f) return true;
+  }
+  return false;
+}
+
+/** Alias-folded word tokens, used for name-boundary comparison. */
+function aliasTokens(value: string): string[] {
+  return foldConfusables(value).split(/[^a-z0-9]+/u).filter(Boolean);
+}
+
+/**
+ * True when two names denote the same entity.
+ *
+ * Equality is not enough, because the catalog and the caller can disagree about
+ * a city prefix in either direction ("Knicks" vs "New York Knicks"). Substring
+ * containment is too much: it refuses "Alex Pereira Junior" because "Alex
+ * Pereira" is canonical, and "Manchester" because "Manchester United" is. The
+ * honest rule is a *suffix* match on word tokens -- a name may carry extra
+ * leading words the other omits, and nothing else.
+ */
+function isSameEntityName(entered: string[], canonical: string[]): boolean {
+  if (entered.length === 0 || canonical.length === 0) return false;
+  // Collapsed-key equality first: it catches spellings that tokenize
+  // differently but denote one name ("L.A. Lakers" -> [l, a, lakers] against a
+  // catalog's [la, lakers]).
+  if (entered.join('') === canonical.join('')) return true;
+  const [short, long] =
+    entered.length <= canonical.length ? [entered, canonical] : [canonical, entered];
+  const offset = long.length - short.length;
+  return short.every((token, index) => token === long[offset + index]);
 }
 
 /**
@@ -374,8 +472,8 @@ async function findCanonicalCoverage(
   sportId: string,
   referenceData: ReferenceDataRepository,
 ): Promise<{ participantId: string; displayName: string } | null> {
-  const enteredKey = aliasKey(displayName);
-  if (!enteredKey) return null;
+  const enteredTokens = aliasTokens(displayName);
+  if (enteredTokens.length === 0) return null;
 
   const trimmed = displayName.trim();
   const queries = new Set<string>([trimmed, foldConfusables(trimmed)]);
@@ -390,16 +488,7 @@ async function findCanonicalCoverage(
   for (const query of queries) {
     const rows = await search(query);
     for (const row of rows) {
-      const rowKey = aliasKey(row.displayName);
-      if (!rowKey) continue;
-      const equal = rowKey === enteredKey;
-      // Containment is restricted to keys long enough that a shared substring is
-      // evidence of the same entity rather than a coincidence ("Jets"/"Jetsons").
-      const contained =
-        rowKey.length >= 5 &&
-        enteredKey.length >= 5 &&
-        (rowKey.includes(enteredKey) || enteredKey.includes(rowKey));
-      if (equal || contained) {
+      if (isSameEntityName(enteredTokens, aliasTokens(row.displayName))) {
         return { participantId: row.participantId, displayName: row.displayName };
       }
     }

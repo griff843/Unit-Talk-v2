@@ -21,6 +21,8 @@
     "apps/api/src/handlers/reference-data.ts",
     "apps/api/src/handlers/submit-pick.ts",
     "apps/api/src/http-integration.test.ts",
+    "apps/api/src/recap-service.test.ts",
+    "apps/api/src/recap-service.ts",
     "apps/api/src/routes/index.ts",
     "apps/api/src/routes/reference-data.ts",
     "apps/api/src/run-audit-service.test.ts",

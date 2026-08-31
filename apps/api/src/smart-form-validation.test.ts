@@ -425,11 +425,12 @@ test('manual override is refused for an alias spelling of a canonically covered 
           { role: 'away', displayName: 'L.A. LAKERS', canonicalParticipantId: null },
           { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
         ]),
-        {
-          ...referenceDataWithCanonicalTeams(),
-          searchTeams: async () =>
-            [{ participantId: 'team-lakers', displayName: 'la lakers', participantType: 'team' }] as never,
-        } as ReferenceDataRepository,
+        (() => {
+          const repository = referenceDataWithCanonicalTeams();
+          repository.searchTeams = async () =>
+            [{ participantId: 'team-lakers', displayName: 'la lakers', participantType: 'team' }] as never;
+          return repository;
+        })(),
       ),
     /resolves to canonical participant team-lakers/u,
   );
@@ -564,7 +565,7 @@ test('manual override is verified for non-team sports, whose only supported rout
   );
 });
 
-test('manual override is refused when only one side of the matchup is entered', async () => {
+test('manual override is refused when only one side of a team-sport matchup is entered', async () => {
   // The canonical structured fallback requires both away and home; the manual
   // route must not be weaker than the path it substitutes for.
   await assert.rejects(
@@ -572,11 +573,108 @@ test('manual override is refused when only one side of the matchup is entered', 
       validateSmartFormRelationships(
         manualPayload(
           [{ role: 'away', displayName: 'Nobody Atall', canonicalParticipantId: null }],
-          'MMA',
+          'NBA',
         ),
-        referenceData(),
+        seededReferenceData(),
       ),
     /requires both sides of the entered matchup/u,
+  );
+});
+
+test('a one-participant manual entry is admitted for an individual sport', async () => {
+  // Golf outrights and futures on a single competitor are legitimate one-sided
+  // markets, and there is no structured fallback for them to be weaker than.
+  await validateSmartFormRelationships(
+    manualPayload(
+      [{ role: 'competitor', displayName: 'Nobody Atall', canonicalParticipantId: null }],
+      'MMA',
+    ),
+    seededReferenceData(),
+  );
+});
+
+test('manual participant names that still hold a non-Latin look-alike after folding are refused', async () => {
+  // Confusable folding covers Cyrillic and Greek. Anything left over -- a
+  // Cherokee "\u13e6", say -- is refused rather than silently treated as a name
+  // no catalog holds.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'New York \u13e6nicks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        seededReferenceData(),
+      ),
+    /must use Latin characters/u,
+  );
+});
+
+test('a fullwidth look-alike folds to ASCII and is caught as canonical coverage', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'New York \uff2bnicks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        seededReferenceData(),
+      ),
+    /resolves to canonical participant team:NBA:Knicks/u,
+  );
+});
+
+test('zero-width characters in every word do not hide a canonical name', async () => {
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'Ne\u200bw Yor\u200bk Kni\u200bcks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        seededReferenceData(),
+      ),
+    /resolves to canonical participant team:NBA:Knicks/u,
+  );
+});
+
+test('a name that merely extends a canonical one is not treated as covered', async () => {
+  // "Alex Pereira Junior" is a different fighter from "Alex Pereira", and
+  // "Manchester" is a different club from "Manchester United". Substring
+  // containment refused both; token-suffix matching does not.
+  const repository = seededReferenceData();
+  repository.searchPlayers = async (_sportId, query) =>
+    /pereira/iu.test(query)
+      ? ([{ participantId: 'player-pereira', displayName: 'Alex Pereira', sport: 'MMA' }] as never)
+      : [];
+  await validateSmartFormRelationships(
+    manualPayload(
+      [
+        { role: 'competitor', displayName: 'Alex Pereira Junior', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Nobody Atall', canonicalParticipantId: null },
+      ],
+      'MMA',
+    ),
+    repository,
+  );
+});
+
+test('an unknown or wrong-case sport is refused rather than silently searching nothing', async () => {
+  // Every reference-data lookup filters on sportId with case-sensitive
+  // equality, so "nba" would return no rows and make the coverage proof vacuous.
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload(
+          [
+            { role: 'away', displayName: 'Nobody Atall', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+          ],
+          'nba',
+        ),
+        seededReferenceData(),
+      ),
+    /is not a canonical sport/u,
   );
 });
 

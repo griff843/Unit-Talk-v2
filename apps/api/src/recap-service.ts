@@ -1,4 +1,5 @@
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
+import { isTrackOnlyPickMetadata } from '@unit-talk/contracts';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
@@ -186,6 +187,23 @@ export async function computeRecapSummary(
       if (!pick) {
         return null;
       }
+
+      // UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_START
+      // A Track Only pick is internal tracking. It must not appear in a
+      // member-facing recap, and it must never become `topPlay`: postRecapSummary
+      // enqueues the top play by pick id, and the outbox chokepoint refuses
+      // delivery work for a Track Only pick by throwing -- outside that
+      // function's try block, so the whole recap would fail rather than skip
+      // one pick. Excluding it here also keeps Track Only results out of the
+      // member-facing W/L and ROI totals, which is the product answer anyway.
+      const pickMetadata =
+        pick.metadata && typeof pick.metadata === 'object' && !Array.isArray(pick.metadata)
+          ? (pick.metadata as Record<string, unknown>)
+          : null;
+      if (isTrackOnlyPickMetadata(pickMetadata)) {
+        return null;
+      }
+      // UTV2-1672 RECAP_TRACK_ONLY_EXCLUSION_GUARD_END
 
       const result = settlement.result as 'win' | 'loss' | 'push';
       const stakeUnits = readStakeUnits(pick);
