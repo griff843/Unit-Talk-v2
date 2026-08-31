@@ -855,3 +855,168 @@ test('mutation control: removing CANONICAL_SPORT_ID_GUARD makes the whole covera
     await validate(lowercased, seededReferenceData());
   });
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1672 review round 5, P2 (confirmed): DatabaseReferenceDataRepository
+// .searchPlayers fetched an unordered global `limit * 5` batch of name matches
+// and only then filtered by sport, so a sport whose players fell outside that
+// arbitrary slice reported no availability even though canonical players
+// existed. Availability is a refusal input for Smart Form coverage, so that is
+// a wrong answer rather than a slow one.
+//
+// The fixture below is built so the old implementation is provably wrong: 250
+// MLB players sort ahead of the single NBA player, and the old code capped at
+// limit * 5 = 100 rows. The NBA player is row 251 of the name match, so it was
+// never in the batch and NBA reported unavailable.
+// ---------------------------------------------------------------------------
+
+interface StubPlayerRow {
+  id: string;
+  display_name: string;
+}
+
+function stubReferenceDataClient(players: StubPlayerRow[], assignments: Map<string, string>) {
+  const pageRequests: Array<[number, number]> = [];
+  const client = {
+    from(table: string) {
+      if (table === 'players') {
+        return {
+          select: () => ({
+            ilike: (_column: string, pattern: string) => {
+              const needle = pattern.replace(/%/gu, '').toLowerCase();
+              return {
+                // The old implementation called .limit(); the new one orders
+                // and pages. Both are exposed so this fixture cannot silently
+                // pass by the method simply being absent.
+                limit: async (count: number) => ({
+                  data: players
+                    .filter((row) => row.display_name.toLowerCase().includes(needle))
+                    .slice(0, count),
+                  error: null,
+                }),
+                order: () => ({
+                  range: async (from: number, to: number) => {
+                    pageRequests.push([from, to]);
+                    const matched = players
+                      .filter((row) => row.display_name.toLowerCase().includes(needle))
+                      .sort((left, right) =>
+                        left.display_name.localeCompare(right.display_name),
+                      );
+                    return { data: matched.slice(from, to + 1), error: null };
+                  },
+                }),
+              };
+            },
+          }),
+        };
+      }
+      if (table === 'player_team_assignments') {
+        return {
+          select: () => ({
+            in: (_column: string, ids: string[]) => ({
+              is: async () => ({
+                data: ids
+                  .filter((id) => assignments.has(id))
+                  .map((id) => ({
+                    player_id: id,
+                    team_id: `team-${assignments.get(id)}`,
+                    league_id: `league-${assignments.get(id)}`,
+                    effective_until: null,
+                  })),
+                error: null,
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === 'leagues') {
+        return {
+          select: () => ({
+            in: async (_column: string, ids: string[]) => ({
+              data: ids.map((id) => ({
+                id,
+                sport_id: id.replace(/^league-/u, ''),
+              })),
+              error: null,
+            }),
+          }),
+        };
+      }
+      throw new Error(`unexpected table ${table}`);
+    },
+  };
+  return { client, pageRequests };
+}
+
+function buildCrossSportFixture() {
+  const players: StubPlayerRow[] = [];
+  const assignments = new Map<string, string>();
+  // 250 MLB players whose names sort ahead of the NBA player.
+  for (let index = 0; index < 250; index += 1) {
+    const id = `mlb-${String(index).padStart(3, '0')}`;
+    players.push({ id, display_name: `AAA Jordan Filler ${String(index).padStart(3, '0')}` });
+    assignments.set(id, 'MLB');
+  }
+  const nbaId = 'nba-target';
+  players.push({ id: nbaId, display_name: 'ZZZ Jordan Target' });
+  assignments.set(nbaId, 'NBA');
+  return { players, assignments, nbaId };
+}
+
+test('searchPlayers finds an NBA player that sorts beyond the former global cap', async () => {
+  const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
+  const { players, assignments, nbaId } = buildCrossSportFixture();
+  const { client } = stubReferenceDataClient(players, assignments);
+
+  const repository = new DatabaseReferenceDataRepository(
+    { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
+    client as never,
+  );
+
+  const results = await repository.searchPlayers('NBA', 'Jordan', 20);
+
+  // The old implementation fetched limit*5 = 100 rows and filtered afterwards.
+  // The NBA player is match number 251, so it returned [] and the Smart Form
+  // reported playersAvailable:false for a sport that has a canonical player.
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.participantId, nbaId);
+  assert.equal(results[0]?.sport, 'NBA');
+  assert.equal(results[0]?.teamId, 'team-NBA');
+});
+
+test('searchPlayers still returns the requested sport and never leaks another', async () => {
+  const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
+  const { players, assignments } = buildCrossSportFixture();
+  const { client } = stubReferenceDataClient(players, assignments);
+
+  const repository = new DatabaseReferenceDataRepository(
+    { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
+    client as never,
+  );
+
+  const mlb = await repository.searchPlayers('MLB', 'Jordan', 20);
+  assert.equal(mlb.length, 20);
+  assert.ok(mlb.every((row) => row.sport === 'MLB'));
+  // Positive control: the sport filter is doing work, not just passing
+  // everything through. A sport with no players must still return nothing.
+  const nhl = await repository.searchPlayers('NHL', 'Jordan', 20);
+  assert.deepEqual(nhl, []);
+});
+
+test('searchPlayers stops paging once the limit is satisfied', async () => {
+  const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
+  const { players, assignments } = buildCrossSportFixture();
+  const { client, pageRequests } = stubReferenceDataClient(players, assignments);
+
+  const repository = new DatabaseReferenceDataRepository(
+    { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
+    client as never,
+  );
+
+  await repository.searchPlayers('MLB', 'Jordan', 5);
+
+  // 251 matches fit in the first 500-row page, and the limit is met there, so
+  // the common case must not have become a multi-round-trip search.
+  assert.equal(pageRequests.length, 1);
+  assert.deepEqual(pageRequests[0], [0, 499]);
+});

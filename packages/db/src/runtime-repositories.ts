@@ -6293,8 +6293,17 @@ function deriveCatalogMarketCategories(marketTypeIds: string[]): string[] {
 export class DatabaseReferenceDataRepository implements ReferenceDataRepository {
   private readonly client: UnitTalkSupabaseClient;
 
-  constructor(connection: DatabaseConnectionConfig) {
-    this.client = createDatabaseClientFromConnection(connection);
+  /**
+   * `client` exists so the sport-scoped player search below is reachable from
+   * a test without a live connection, matching DatabaseOutboxRepository.
+   * Production continues to pass a connection config and let the repository
+   * build its own client.
+   */
+  constructor(
+    connection: DatabaseConnectionConfig,
+    client?: UnitTalkSupabaseClient,
+  ) {
+    this.client = client ?? createDatabaseClientFromConnection(connection);
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
@@ -6684,28 +6693,58 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     query: string,
     limit = 20,
   ): Promise<PlayerSearchResult[]> {
-    const { data, error } = await this.fromUntyped('players')
-      .select('id,display_name')
-      .ilike('display_name', `%${query}%`)
-      .limit(limit * 5);
+    // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_START
+    // This previously fetched an unordered global `limit * 5` batch of
+    // name-matching players and only then filtered by sport. A sport whose
+    // players fell outside that arbitrary slice reported no availability even
+    // though canonical players existed, and because the batch was unordered
+    // the result was not even stable between calls. Availability is a refusal
+    // input for Smart Form coverage, so a false negative there is a wrong
+    // answer, not a slow one.
+    //
+    // The name match is now paged through in a deterministic order and the
+    // sport filter is applied per page, so the search is bounded by how many
+    // players actually match the query rather than by a fixed cross-sport cap.
+    // Paging stops as soon as `limit` sport-matching players are collected or
+    // the match set is exhausted, so the common case is still one round trip.
+    const PAGE_SIZE = 500;
+    const results: PlayerSearchResult[] = [];
+    let offset = 0;
 
-    if (error) throw new Error(`Failed to search players: ${error.message}`);
+    while (results.length < limit) {
+      const { data, error } = await this.fromUntyped('players')
+        .select('id,display_name')
+        .ilike('display_name', `%${query}%`)
+        .order('display_name')
+        .range(offset, offset + PAGE_SIZE - 1);
 
-    const playerRows = (data ?? []) as CanonicalPlayerRow[];
-    const candidateIds = playerRows.map((row) => row.id as string);
-    const currentAssignments = await this.loadCurrentAssignments(candidateIds);
+      if (error) throw new Error(`Failed to search players: ${error.message}`);
 
-    return playerRows
-      .filter(
-        (row) => currentAssignments.get(row.id as string)?.sportId === sportId,
-      )
-      .slice(0, limit)
-      .map((row) => ({
-        participantId: row.id as string,
-        displayName: row.display_name as string,
-        sport: sportId,
-        teamId: currentAssignments.get(row.id as string)?.teamId ?? null,
-      }));
+      const playerRows = (data ?? []) as CanonicalPlayerRow[];
+      if (playerRows.length === 0) break;
+
+      const currentAssignments = await this.loadCurrentAssignments(
+        playerRows.map((row) => row.id as string),
+      );
+
+      for (const row of playerRows) {
+        const assignment = currentAssignments.get(row.id as string);
+        if (assignment?.sportId !== sportId) continue;
+        results.push({
+          participantId: row.id as string,
+          displayName: row.display_name as string,
+          sport: sportId,
+          teamId: assignment.teamId ?? null,
+        });
+        if (results.length === limit) break;
+      }
+
+      if (playerRows.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
+    }
+
+    return results;
+    // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_END
   }
 
   async listEvents(
