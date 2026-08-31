@@ -206,31 +206,42 @@ is one backed by data that actually exists. The regression test for this
 stubs both search methods to return `[]` and asserts the refusal still fires --
 it is the test that would have caught the original vacuity.
 
-## Close eligibility -- one item is structurally pre-merge-only
+## Close eligibility -- and a claim of mine that was wrong
 
-`Close eligibility preflight` reports CEP-E7 `runtime_proof: app-runtime proof
-requires a populated runtime_proof block`. That block is **deliberately empty
-here, and cannot be filled pre-merge**, for a mechanical reason rather than an
-omission.
+All three CEP findings were real and all three are fixed. Recording the third
+properly, because an earlier revision of this bundle got it wrong in a way that
+would have misled the approver.
 
-`runtime_proof.queries` and `runtime_proof.row_counts` are not hand-authored.
-They are harvested from CI's own `Writable DB proof (staging only)` receipt --
-the sanctioned staging path -- by `scripts/ops/ci-db-proof-harvest.ts`, whose
-entry point is `harvestCiDbProofForMergeSha(mergeSha)`. It keys on a merge SHA,
-which does not exist until the merge happens. `post-merge-lane-close.yml` runs
-`ops:proof-generate --merge-sha` (line 348, step "Bind proof artifacts to merge
-SHA") **before** `ops:lane-close` (line 352, the hard gate that runs
-`ops:truth-check`), so the block is populated by the time anything checks it.
+- **CEP-E5** -- `diff-summary.md` now carries a `MERGE_SHA:` anchor.
+- **CEP-E7** -- `sha_binding.merge_sha` is `null` pre-merge rather than
+  carrying a branch SHA. A branch SHA must never be represented as a merge SHA;
+  `post-merge-lane-close.yml` binds the real one.
+- **CEP-E7** -- `proof_profile` was `static`, which conflicts with the
+  manifest's `lane_type: runtime`. It is now `app-runtime`. The wrong value came
+  from copying the UTV2-1671 exemplar, which is a *governance* lane, without
+  checking it against this lane's own type.
 
-Hand-authoring those fields instead would be fabricating measurement evidence,
-which `proof-repair.ts`'s design contract explicitly forbids ("NEVER fabricates
-test output, query evidence, or row counts"). Leaving it empty and stating why
-is the honest option. `Close eligibility preflight` is not a required check.
+**The retracted claim.** An earlier revision of this section asserted that the
+remaining CEP-E7 item -- a populated `runtime_proof` block -- was *structurally
+impossible* to satisfy pre-merge, on the grounds that those fields are harvested
+by `harvestCiDbProofForMergeSha`, which keys on a merge SHA that does not exist
+yet, and that authoring them by hand would be fabricating evidence.
 
-The other two CEP failures were real and are fixed: `diff-summary.md` now
-carries a `MERGE_SHA:` anchor (CEP-E5), and `sha_binding.merge_sha` is `null`
-pre-merge rather than carrying a branch SHA (CEP-E7) -- a branch SHA must never
-be represented as a merge SHA.
+That was wrong on both halves, and it was checked rather than assumed only after
+the fact. Of the two `app-runtime` bundles merged on `main`, UTV2-1740 carries a
+populated `runtime_proof` **at its own merge commit** (`934fdb1d`), so the block
+was authored pre-merge, not harvested afterwards. And its `queries` are not
+Postgres queries at all -- they are described measurements from an in-process
+counting harness, with `row_counts` recording probe values such as "focused
+tests passing: 23" and "mutations killed: 3". The schema asks for real
+measurements, not for live SQL.
+
+This lane has such measurements in quantity, so `runtime_proof` is now authored
+from them: eight probes over the chokepoints, board capacity, zombie health,
+recap exclusion, coverage verification and identity pinning, each recording the
+method and the observed result, and nine row counts. None is invented; each
+corresponds to an assertion that executes in this bundle's test set. The harvest
+remains free to add CI's own staging receipt on top post-merge.
 
 ## Runtime Verification
 

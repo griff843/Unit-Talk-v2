@@ -212,5 +212,100 @@
         "teams and player_team_assignments are empty in production AND staging. The catalog-backed branch (participants, 124 teams) is what makes the coverage guard non-vacuous today; the search-backed branch becomes load-bearing only once those tables are populated. Backfilling is production data mutation -- a hard stop for this lane."
       ]
     }
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "defect_fixed": "Smart Form had no server-side Track Only enforcement: the client declared distribution intent, capper identity and pick source were accepted from the payload, and participant resolution was unverified. Every backend path that can create member delivery work is now pinned closed for a Track Only pick, identity is derived server-side, and a manual coverage-gap claim is verified against reference data rather than trusted.",
+    "measurement_basis": "In-process measurement against the real modules, plus mutation controls that delete a guard's marked block from a copy of its own source and execute the mutant. Live Postgres is exercised separately by the required verify job's test:live-db half in the staging-ci environment; these probes measure this lane's own behaviour, which is what the guards claim.",
+    "queries": [
+      {
+        "name": "outbox chokepoint refuses delivery work for a Track Only pick",
+        "method": "OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD exercised through both InMemoryOutboxRepository.enqueue and DatabaseOutboxRepository.enqueue, the latter against a stub Supabase client modelling .from('picks').select().eq().maybeSingle() and .from().insert().select().single()",
+        "result": "enqueue refused in both implementations; zero delivery_outbox inserts observed. A delivery-eligible pick still inserts, so the refusal is specific rather than a repository that now writes nothing.",
+        "significance": "This is the chokepoint every delivery path funnels through, so a route that omits its own check still cannot create member delivery."
+      },
+      {
+        "name": "atomic distribution path is refused before the RPC is issued",
+        "method": "ATOMIC_TRACK_ONLY_CHOKEPOINT_GUARD measured by recording the RPC call list rather than catching an exception",
+        "result": "baseline rpcCalls === []; with the guard block deleted, rpcCalls === ['enqueue_distribution_atomic']",
+        "significance": "Proven by the absence of the database call itself, not by an error message that could be thrown for any reason."
+      },
+      {
+        "name": "an unreadable pick row is refused rather than treated as deliverable",
+        "method": "DatabaseOutboxRepository.loadPickMetadata driven with an absent row and with a query error",
+        "result": "both refused with an explicit message; neither fell through to enqueue",
+        "significance": "Fail-closed: an unreadable row means Track Only status cannot be established, which is not the same as 'not Track Only'."
+      },
+      {
+        "name": "Track Only picks do not occupy live board capacity",
+        "method": "getPromotionBoardState after a real processSubmission of a Track Only pick, asserting its promotion state first (promotion_status=qualified, promotion_target=best-bets, lifecycle=validated) so the probe cannot pass vacuously",
+        "result": "currentBoardCount 0, sameSportCount 0, sameGameCount 0, duplicateCount 0; an ordinary qualified pick still counts 1",
+        "significance": "Without the exclusion these picks hold board capacity for 7 days and suppress genuinely deliverable picks once a cap is reached."
+      },
+      {
+        "name": "a Track Only pick is not reported as a zombie",
+        "method": "checkZombiePickHealth over the same submission, with a mutation control removing the exclusion",
+        "result": "baseline count 0 status healthy; mutant count 1 status down with a remediation matching /requeue/",
+        "significance": "The mutant's prescribed remediation is refused by TRACK_ONLY_REQUEUE_GUARD, so without this /health raises an alarm operators cannot resolve."
+      },
+      {
+        "name": "a Track Only pick is excluded from recap aggregation",
+        "method": "computeRecapSummary with a settled Track Only pick holding the best result, plus a mutation control",
+        "result": "baseline settledCount 1 and the Track Only pick is not topPlay; mutant settledCount 2 and it becomes topPlay",
+        "significance": "postRecapSummary enqueues the top play outside its own try block, so absent this the outbox chokepoint would throw and silently kill daily and weekly recaps."
+      },
+      {
+        "name": "manual coverage-gap claims are verified against populated reference data",
+        "method": "MANUAL_COVERAGE_GAP_PROOF_GUARD with searchTeams and searchPlayers both stubbed to return [] -- reproducing production, where teams and player_team_assignments are empty",
+        "result": "the canonical name is still refused, via the catalog branch (participants, 124 teams)",
+        "significance": "A search-only proof returned null for every name in every sport and accepted every override while appearing to work."
+      },
+      {
+        "name": "identity and source are server-derived, not client-declared",
+        "method": "CAPPER_TRACK_ONLY_PIN_GUARD, CAPPER_SOURCE_PIN_GUARD and SMART_FORM_HTTP_CONTRACT_GUARD exercised over the real HTTP surface, each with a mutation control",
+        "result": "baseline refuses the spoofed source, refuses opting into member delivery, and refuses a Smart Form submission missing its contract fields; each mutant permits the corresponding bypass",
+        "significance": "Establishes that the pins are load-bearing rather than incidental to some other check."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "delivery_outbox rows created for a Track Only pick, across every backend path",
+        "value": 0
+      },
+      {
+        "probe": "enqueue_distribution_atomic RPC calls for a Track Only pick",
+        "value": 0
+      },
+      {
+        "probe": "live board slots occupied by a Track Only pick",
+        "value": 0
+      },
+      {
+        "probe": "zombie-health count with a Track Only pick present",
+        "value": 0
+      },
+      {
+        "probe": "UTV2-1672 guards",
+        "value": 17
+      },
+      {
+        "probe": "mutation controls, all killed",
+        "value": 16
+      },
+      {
+        "probe": "tests passing across the eight touched suites",
+        "value": 276
+      },
+      {
+        "probe": "tests passing under pnpm verify:static",
+        "value": 5363
+      },
+      {
+        "probe": "test failures, skips and cancellations",
+        "value": 0
+      }
+    ],
+    "mutation_testing": "16 controls, all killed. Each deletes a guard's marked block from a copy of its own source, asserts the mutated text actually differs (so a rename cannot make the control vacuous), imports the mutant with a cache-buster and asserts the prevented behaviour occurs. The removal regex carries the g flag because OUTBOX_TRACK_ONLY_CHOKEPOINT_GUARD marks two blocks, one per repository implementation; an earlier revision removed only the first and so proved half the feature while reporting success. The one guard without a control, BOARD_CAPACITY_TRACK_ONLY_EXCLUSION_GUARD, lives in packages/db and cannot be imported as source by an app test without violating the db-client-boundary check; it is proven by premise assertion plus a positive control instead, which is weaker and labelled as such.",
+    "known_limitations": "The DatabaseOutboxRepository chokepoint is measured against a faithful stub Supabase client rather than real Postgres. A dedicated live-DB proof test was written and withdrawn: registering it requires editing docs/05_operations/db-writer-classification.json, which is outside_allowed_paths for lane runtime, and this lane's authorization forbids widening lane authority. Separately, teams and player_team_assignments are empty in production and staging, so the search-backed branch of the coverage guard is not exercised against real rows; the catalog-backed branch is what carries the refusal today."
   }
 }
