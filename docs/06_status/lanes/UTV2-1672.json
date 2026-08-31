@@ -30,8 +30,6 @@
     "apps/api/src/smart-form-validation.test.ts",
     "apps/api/src/smart-form-validation.ts",
     "apps/api/src/submission-service.test.ts",
-    "apps/api/src/t1-proof-smart-form-track-only.test.ts",
-    "docs/05_operations/db-writer-classification.json",
     "docs/06_status/proof/UTV2-1672/**",
     "package.json",
     "packages/contracts/src/index.ts",
