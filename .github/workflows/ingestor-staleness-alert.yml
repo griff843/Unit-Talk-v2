@@ -31,6 +31,12 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # UTV2-1749: the secret bindings below are what let these jobs authenticate
+      # at all. Assert them here, in the workflow they guard, so a removed or
+      # relocated binding fails this run rather than degrading silently at 03:00.
+      - name: Assert alert workflow secret wiring
+        run: pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts
+
       - name: Run one alerting pass
         run: pnpm ingestor:alert-check -- --run-alerting-pass
         env:
