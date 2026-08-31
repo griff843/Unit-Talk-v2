@@ -504,11 +504,20 @@ export function isTeamSportId(sportId: string | null | undefined): boolean {
  * Client-side approximation of the server's `aliasKey`: NFKD-fold, drop
  * diacritics, lower-case, then keep only `[a-z0-9]`.
  *
- * The server additionally maps Cyrillic and Greek look-alikes back to ASCII.
- * That difference is safe in this direction: a homoglyph spelling the client
- * fails to collapse is refused by the server's non-ASCII check before the
- * duplicate rule is ever reached, so the client can only be more permissive
- * about names the server rejects for a different, louder reason.
+ * The server additionally maps Cyrillic and Greek look-alikes back to ASCII
+ * (`foldConfusables`), which this copy does not do. The consequence is
+ * one-directional and worth stating precisely, because the obvious guess about
+ * it is wrong: the server's non-ASCII refusal is `hasNonAscii(foldConfusables(
+ * name))`, so a look-alike that IS in the confusable table folds to ASCII and
+ * passes that check rather than being refused by it. What actually catches the
+ * duplicate is `aliasKey`, which folds as well.
+ *
+ * So a manual entry spelling one side with a Cyrillic look-alike is still
+ * refused — by the server, fail-closed — but this client does not collapse the
+ * pair and will not stop it first. The cost is a raw 400 instead of the
+ * pre-submit toast; there is no path where the client admits something the
+ * server accepts. The reverse direction cannot happen: dropping an unmapped
+ * character removes it rather than mapping two distinct names onto one key.
  */
 export function participantAliasKey(value: string): string {
   return value
