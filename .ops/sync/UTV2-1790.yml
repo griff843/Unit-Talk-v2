@@ -1,0 +1,238 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1790
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1790/verification.md
+    - docs/06_status/proof/UTV2-1790/diff-summary.md
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1790
+  objective: ops-merge-wrapper git-merge-main executes --ff-only and cannot
+    perform the history-preserving merge it recommends
+  acceptance_criteria:
+    - "`git-merge-main` performs a history-preserving merge that **succeeds on a
+      genuinely diverged test repository** — a fixture with real divergent
+      commits on both sides, not a mocked runner."
+    - "Negative control: a conflicting diverged repository still fails, with an
+      actionable message and the mutex released."
+    - All five invariants above proven by test, including a case asserting that
+      pre-existing commit SHAs are byte-identical after the merge.
+    - "`main-sync` refusal semantics unchanged — it still never substitutes a
+      verb
+      ([UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-mu\
+      st-never-silently-rebase-remove-implicit-fallback-preserve) regression
+      test stays green)."
+    - "`pnpm verify` green."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Defect
+      `scripts/ops/ops-merge-wrapper.ts:93-97` builds the `git-merge-main` operation as:
+
+      ```ts
+      case 'git-merge-main':
+        return { command: 'git', args: ['merge', '--ff-only', 'origin/main'], deferred: false };
+      ```
+
+      `--ff-only` **cannot merge a diverged branch by definition.** This makes the sanctioned history-preserving sync path unreachable on the exact condition it exists for:
+
+      1. `main-sync` on a diverged branch refuses with `merge_wrapper_diverged_requires_explicit_sync` and directs the caller to `git-merge-main`, describing it as *"preserves history and SHAs"* (`:286`).
+      2. `git-merge-main` then fails with the identical `fatal: Not possible to fast-forward, aborting.`
+
+      Both sanctioned exits dead-end. The only operable verb left is `git-rebase-main`, which **rewrites history and moves the head SHA**, invalidating every head-pinned governance artifact (`pm-verdict`, `t1-approved` evidence, executor-result). [UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-must-never-silently-rebase-remove-implicit-fallback-preserve) deliberately removed the automatic rebase substitution precisely so this would never happen silently — but with `git-merge-main` inoperable, rebase is once again the only path, reintroducing the risk by omission rather than by substitution.
+
+      ### Live reproduction (2026-08-30)
+
+      `codex/utv2-1788-command-center-stabilization`, genuinely diverged (5 behind / 13 ahead of `origin/main`, `mergeStateStatus: BEHIND`):
+
+      ```
+      $ pnpm ops:merge-wrapper main-sync --issue UTV2-1788 --branch codex/utv2-1788-...
+        → merge_wrapper_diverged_requires_explicit_sync
+          "Re-run naming the verb explicitly: ... git-merge-main ... # preserves history and SHAs"
+
+      $ pnpm ops:merge-wrapper git-merge-main --issue UTV2-1788 --branch codex/utv2-1788-...
+        → "fatal: Not possible to fast-forward, aborting."  (status 128)
+      ```
+
+      PR #1463 cannot be synchronized to `main` through any non-rewriting sanctioned path. This is a **merge blocker**, not a cleanup.
+    - |-
+      Scope
+      **In scope — these two files only:**
+
+      * `scripts/ops/ops-merge-wrapper.ts` — make `git-merge-main` perform a real history-preserving merge (`--no-ff`)
+      * `scripts/ops/ops-merge-wrapper.test.ts` — update the command-shape assertion at `:198` and add diverged-repository coverage
+
+      **Explicitly NOT in scope** (each requires its own issue; do not bundle):
+
+      * the `codex-exec` dual-root task-contract persistence defect
+      * lane concurrency not modelling CPU/RAM for E2E-heavy lanes
+      * any change to `main-sync` refusal semantics ([UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-must-never-silently-rebase-remove-implicit-fallback-preserve) behaviour is correct and stays)
+    - >-
+      Invariants that must be preserved
+
+      The repair must not weaken any of these. All five live in the mutex path
+      and post-run analysis, **not** in `buildExtendedCommand`, so a
+      command-shape change should preserve them structurally — but each must be
+      proven, not assumed:
+
+
+      1. **Merge mutex acquisition and release** — including release on command
+      failure and on exception (`:538`, `:623`, `:733` cover this today)
+
+      2. **No history rewriting** — head SHAs of existing commits must be
+      unchanged; a merge commit is added, nothing is replayed
+
+      3. **Protected proof/manifest dropped-path refusal** —
+      `PROTECTED_PREFIXES` incl. `docs/06_status/proof/` (`:113-161`)
+
+      4. **Head-move invalidation reporting** — `renderHeadMoveNotice` /
+      `HEAD_MOVE_REAUTHORIZATION_ORDER` (`:165-212`)
+
+      5. **Actionable failure behaviour** — a genuine merge conflict must fail
+      with a usable message, not a bare status code
+    - >-
+      Classification (full policy, not the advisory classifier alone)
+
+      | Authority | Result |
+
+      | -- | -- |
+
+      | `tier-classifier.ts` (advisory) | declared T2, mechanical_minimum T3,
+      derived T2, escalated **false**, matches `[]` |
+
+      | `DELEGATION_POLICY.md` always-escalate | **no category matches** — not
+      security/auth posture, not a `package.json`/lockfile/tsconfig change, not
+      env vars, not member-visible, not financial, not a live-DB mutation |
+
+      | `DELEGATION_POLICY.md` sensitive-path matrix | **no entry covers**
+      `scripts/ops/**` |
+
+      | `LANE_TAXONOMY.md` §4 Hygiene | `scripts/**` (non-runtime helpers) is an
+      allowed path; **T3 by definition, "any behavioral change escalates to
+      T2"** — this changes the executed git verb, so **T2** |
+
+
+      **Tier: T2. Lane type: hygiene. Executor: Claude.**
+
+
+      **PM touchpoint required.** Two independent reasons:
+
+
+      * Hygiene merge authority is *"orchestrator on green, no PM touchpoint
+      required if (1) T3 label..."* — this is T2, so the exemption does not
+      apply.
+
+      * This modifies the **merge tooling the orchestrator uses on its own
+      lanes**, and the orchestrator is the party that needs it unblocked.
+      `DELEGATION_POLICY.md` carries an explicit principle against the
+      orchestrator widening its own autonomy (the proof-coverage-guard
+      sensitive-path rule) and *"Anything the orchestrator is uncertain about —
+      when in doubt, escalate."* Self-approving a change to one's own merge
+      authority is exactly the shape that rule guards.
+
+
+      Not Tier C: no listed always-escalate category or sensitive path applies.
+    - |-
+      Blocks
+      [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative) / PR #1463 cannot be synchronized to `main` without either this repair or a history-rewriting rebase that would invalidate its governance artifacts.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1790/ops-merge-wrapper-git-merge-main-executes-ff-only-and-cannot-perform
+    title: ops-merge-wrapper git-merge-main executes --ff-only and cannot perform
+      the history-preserving merge it recommends
+    description: |-
+      ## Defect
+
+      `scripts/ops/ops-merge-wrapper.ts:93-97` builds the `git-merge-main` operation as:
+
+      ```ts
+      case 'git-merge-main':
+        return { command: 'git', args: ['merge', '--ff-only', 'origin/main'], deferred: false };
+      ```
+
+      `--ff-only` **cannot merge a diverged branch by definition.** This makes the sanctioned history-preserving sync path unreachable on the exact condition it exists for:
+
+      1. `main-sync` on a diverged branch refuses with `merge_wrapper_diverged_requires_explicit_sync` and directs the caller to `git-merge-main`, describing it as *"preserves history and SHAs"* (`:286`).
+      2. `git-merge-main` then fails with the identical `fatal: Not possible to fast-forward, aborting.`
+
+      Both sanctioned exits dead-end. The only operable verb left is `git-rebase-main`, which **rewrites history and moves the head SHA**, invalidating every head-pinned governance artifact (`pm-verdict`, `t1-approved` evidence, executor-result). [UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-must-never-silently-rebase-remove-implicit-fallback-preserve) deliberately removed the automatic rebase substitution precisely so this would never happen silently — but with `git-merge-main` inoperable, rebase is once again the only path, reintroducing the risk by omission rather than by substitution.
+
+      ### Live reproduction (2026-08-30)
+
+      `codex/utv2-1788-command-center-stabilization`, genuinely diverged (5 behind / 13 ahead of `origin/main`, `mergeStateStatus: BEHIND`):
+
+      ```
+      $ pnpm ops:merge-wrapper main-sync --issue UTV2-1788 --branch codex/utv2-1788-...
+        → merge_wrapper_diverged_requires_explicit_sync
+          "Re-run naming the verb explicitly: ... git-merge-main ... # preserves history and SHAs"
+
+      $ pnpm ops:merge-wrapper git-merge-main --issue UTV2-1788 --branch codex/utv2-1788-...
+        → "fatal: Not possible to fast-forward, aborting."  (status 128)
+      ```
+
+      PR #1463 cannot be synchronized to `main` through any non-rewriting sanctioned path. This is a **merge blocker**, not a cleanup.
+
+      ## Scope
+
+      **In scope — these two files only:**
+
+      * `scripts/ops/ops-merge-wrapper.ts` — make `git-merge-main` perform a real history-preserving merge (`--no-ff`)
+      * `scripts/ops/ops-merge-wrapper.test.ts` — update the command-shape assertion at `:198` and add diverged-repository coverage
+
+      **Explicitly NOT in scope** (each requires its own issue; do not bundle):
+
+      * the `codex-exec` dual-root task-contract persistence defect
+      * lane concurrency not modelling CPU/RAM for E2E-heavy lanes
+      * any change to `main-sync` refusal semantics ([UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-must-never-silently-rebase-remove-implicit-fallback-preserve) behaviour is correct and stays)
+
+      ## Invariants that must be preserved
+
+      The repair must not weaken any of these. All five live in the mutex path and post-run analysis, **not** in `buildExtendedCommand`, so a command-shape change should preserve them structurally — but each must be proven, not assumed:
+
+      1. **Merge mutex acquisition and release** — including release on command failure and on exception (`:538`, `:623`, `:733` cover this today)
+      2. **No history rewriting** — head SHAs of existing commits must be unchanged; a merge commit is added, nothing is replayed
+      3. **Protected proof/manifest dropped-path refusal** — `PROTECTED_PREFIXES` incl. `docs/06_status/proof/` (`:113-161`)
+      4. **Head-move invalidation reporting** — `renderHeadMoveNotice` / `HEAD_MOVE_REAUTHORIZATION_ORDER` (`:165-212`)
+      5. **Actionable failure behaviour** — a genuine merge conflict must fail with a usable message, not a bare status code
+
+      ## Acceptance criteria
+
+      1. `git-merge-main` performs a history-preserving merge that **succeeds on a genuinely diverged test repository** — a fixture with real divergent commits on both sides, not a mocked runner.
+      2. Negative control: a conflicting diverged repository still fails, with an actionable message and the mutex released.
+      3. All five invariants above proven by test, including a case asserting that pre-existing commit SHAs are byte-identical after the merge.
+      4. `main-sync` refusal semantics unchanged — it still never substitutes a verb ([UTV2-1678](https://linear.app/unit-talk-v2/issue/UTV2-1678/main-sync-must-never-silently-rebase-remove-implicit-fallback-preserve) regression test stays green).
+      5. `pnpm verify` green.
+
+      ## Classification (full policy, not the advisory classifier alone)
+
+      | Authority | Result |
+      | -- | -- |
+      | `tier-classifier.ts` (advisory) | declared T2, mechanical_minimum T3, derived T2, escalated **false**, matches `[]` |
+      | `DELEGATION_POLICY.md` always-escalate | **no category matches** — not security/auth posture, not a `package.json`/lockfile/tsconfig change, not env vars, not member-visible, not financial, not a live-DB mutation |
+      | `DELEGATION_POLICY.md` sensitive-path matrix | **no entry covers** `scripts/ops/**` |
+      | `LANE_TAXONOMY.md` §4 Hygiene | `scripts/**` (non-runtime helpers) is an allowed path; **T3 by definition, "any behavioral change escalates to T2"** — this changes the executed git verb, so **T2** |
+
+      **Tier: T2. Lane type: hygiene. Executor: Claude.**
+
+      **PM touchpoint required.** Two independent reasons:
+
+      * Hygiene merge authority is *"orchestrator on green, no PM touchpoint required if (1) T3 label..."* — this is T2, so the exemption does not apply.
+      * This modifies the **merge tooling the orchestrator uses on its own lanes**, and the orchestrator is the party that needs it unblocked. `DELEGATION_POLICY.md` carries an explicit principle against the orchestrator widening its own autonomy (the proof-coverage-guard sensitive-path rule) and *"Anything the orchestrator is uncertain about — when in doubt, escalate."* Self-approving a change to one's own merge authority is exactly the shape that rule guards.
+
+      Not Tier C: no listed always-escalate category or sensitive path applies.
+
+      ## Blocks
+
+      [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative) / PR #1463 cannot be synchronized to `main` without either this repair or a history-rewriting rebase that would invalidate its governance artifacts.
+    captured_at: 2026-08-30T20:14:36.478Z
+    description_sha256: ea69bec5f2ca21709cd7df282e445fdc5fbed9e893e34a2208fb5af5f4d65c3c
+  contract_hash: f819d02b3b016ad123e005e820914046a3aebfc8ba41ad1c6ce74a0420ffa0c0
