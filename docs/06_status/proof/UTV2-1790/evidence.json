@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "title": "main-sync git-merge-main uses --no-ff so a diverged branch can sync, and its failure path is transactional",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-08-31T06:40:00Z",
+  "generated_at": "2026-08-31T00:00:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9162d2c926856ccef5a1b26372140ac4106fab5b",
-    "verified_source_note": "Last commit on this branch touching a non-proof path (round-5 remediation). merge_sha is null pre-merge as the shared evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml.",
+    "verified_source_sha": "129d2f2bd1720d3e6a061c2e1282aa8374555fb5",
+    "verified_source_note": "Last commit on this branch touching a non-proof path (round-6 remediation). merge_sha is null pre-merge as the shared evidence schema requires.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,8 +18,8 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "merge_sha",
-    "bound_at": "2026-08-31T06:40:00Z",
-    "previous_verified_source_sha": "1486d510ffd6aff27fbc34fc89daedf1949e03f8",
+    "bound_at": "2026-08-31T00:00:00Z",
+    "previous_verified_source_sha": "9162d2c926856ccef5a1b26372140ac4106fab5b",
     "verified_source_sha_history": [
       {
         "sha": "54e03d861d5c53d0990bffd933d5a75f2148f6a5",
@@ -36,6 +36,11 @@
       {
         "sha": "1486d510ffd6aff27fbc34fc89daedf1949e03f8",
         "superseded_reason": "Round-4 head. Superseded by the round-5 remediation commit: an independent reviewer demonstrated by execution a fail-open that this bundle certified as impossible -- after a SUCCESSFUL merge, a conflicting `git stash pop` leaves unmerged index entries and conflict markers and the wrapper released the merge mutex anyway -- plus an unpinned third term of `residue` (an undeterminable POST-abort state read clean), and three mutation rows (M1/M2/M3) carried forward from round 3 while corroboration claimed all twelve were measured against the current source."
+      },
+      {
+        "sha": "129d2f2bd1720d3e6a061c2e1282aa8374555fb5",
+        "round": 6,
+        "note": "round-6 remediation: measured release decisions, stash-push fail-closed, head-move notice reachability"
       }
     ]
   },
@@ -43,9 +48,9 @@
     "recommended_divergence_exit_is_operable": true,
     "commit_shas_preserved_on_both_sides": true,
     "no_history_rewriting": true,
-    "mutex_acquire_release_preserved": true,
+    "mutex_acquire_release_preserved": "QUALIFIED \u2014 the safety invariant is preserved; the release SITE is deliberately moved by this lane. Round 5 recorded this as a flat true while round 5 was itself relocating the release, and round 6 recorded it as flat true while a stash-push failure still released over a conflicted index. It is now: released after a successful merge, after a cleanly-aborted failing one, and after a non-conflicting pop failure over a MEASURED-clean tree; retained on cleanup failure, on a conflicting pop, on a stash-push failure over an in-progress merge, and whenever the tree could not be measured. Tests 27, 48, 49, 51, 52, 55, 56, 57, 58, 59.",
     "protected_path_refusal_preserved": true,
-    "head_move_invalidation_reporting_preserved": true,
+    "head_move_invalidation_reporting_preserved": "QUALIFIED \u2014 the reporting primitives are untouched, but this lane created a path that reached the post-sync analysis with ok:false after a COMMITTED merge (merge_wrapper_stash_pop_conflict), and the `!result.ok` early return skipped both classifyDroppedPaths and renderHeadMoveNotice on it. Reachability repaired in round 6: a failed result keeps its code and the notice is appended to its stderr. Test 57, mutant M18.",
     "actionable_failure_behaviour_preserved": true,
     "statement": "git-merge-main built `git merge --ff-only origin/main`, which cannot merge a diverged branch by definition, so main-sync's recommended exit for divergence failed on exactly the condition it exists for -- leaving git-rebase-main, which rewrites history and invalidates every head-pinned governance artifact, as the only operable path. The command is now `git merge --no-ff --no-edit origin/main`: it merges a genuinely diverged branch while preserving both sides' commit SHAs byte-for-byte, is deliberately not a bare `git merge` (which would fast-forward a merely-behind branch and make the verb's effect depend on divergence state), and is noninteractive. Permitting a non-fast-forward merge also permits a conflicting one, which exposed a second defect on the same path and was raised as a review P1: the wrapper popped its lane-state autostash and released the merge mutex while MERGE_HEAD and unmerged index entries were still present, stranding lane state in the stash and letting the next lane acquire a mutex over a half-merged worktree. The failure path is now transactional: abortInProgressSync aborts the in-progress merge/rebase and verifies the result before the stash is restored and before the lock is released, and a cleanup that cannot restore the pre-attempt state fails closed with the distinct merge_wrapper_cleanup_failed code, the mutex retained and the stash left intact. All five wrapper safety invariants are preserved; the mutex ordering is hardened, not weakened. Round 3 closed two fail-open residuals found by independent review: an undeterminable probe result (git exit 128) was being read as 'the ref is absent', which sent an unreadable repository down the 'nothing to abort' early return; and the caller-supplied onCommandFailure hook was called unguarded, so a throwing hook escaped runMergeWrapper with the lock held and no structured result. Both now force the fail-closed branch. The fail-closed recovery message also named `pnpm ops:merge-wrapper guard`, which only asserts the lock is held; it now names `pnpm ops:merge-lock release`. Round 4 corrected a FALSE claim that round 3's proof made and three controls that nothing pinned, all found by a second independent reviewer. The false claim: the fail-closed message was asserted to name the git command that actually ran, but commandVector was built from the bridged input, so it rendered `git pull --ff-only origin main` -- an invocation that cannot leave MERGE_HEAD behind -- and pointed the operator away from the residue. runMergeWrapper now takes a reportedCommand option: what is run is still `command`, what is reported is the caller's real vector. The three unpinned controls were the abort verb (hardcoding `merge` survived the whole suite; `git merge --abort` during a rebase exits 128 and the residue survives), the not-attempted autostash pop (test 49's assertions were satisfied by git's own refusal to pop into an unmerged index, not by the control), and the unmerged-paths term of the nothing-to-abort early return. Each is now pinned by a test and a mutant (M9-M12). Round 5 closed a fail-open that round 4's proof certified as impossible. Every prior regression entered through the command FAILURE path; this one enters through the SUCCESS path -- the merge completes, `git stash pop` then conflicts because the commit just merged from main touches an autostashed path, and the wrapper released the serializing mutex over a worktree carrying unmerged entries and conflict markers. The release now happens after that branch and the branch returns without releasing. Round 5 also pinned the third term of `residue` (an undeterminable POST-abort state was read as clean, killed by nothing until M13) and re-measured every mutation row: M1/M2/M3 had been carried forward from round 3 at 7/3/5 while the suite grew, and are 10/4/8 against the current source.",
     "merge_is_noninteractive": true,
@@ -60,7 +65,11 @@
     "abort_verb_follows_the_operation": true,
     "mutex_released_only_after_cleanup_succeeds_note": "Round 4 asserted this true while a counterexample existed on the SUCCESS path: a conflicting autostash pop left unmerged entries and the mutex was released anyway. Round 5 fixed the code, so the field is true as of 9162d2c9 -- but it was certified before it was proven, and that is recorded in finding 11 rather than quietly corrected.",
     "mutex_retained_when_autostash_pop_conflicts": true,
-    "post_abort_undeterminable_state_fails_closed": true
+    "post_abort_undeterminable_state_fails_closed": true,
+    "non_conflicting_pop_failure_releases_over_a_measured_clean_tree": true,
+    "stash_push_failure_over_an_in_progress_merge_fails_closed": true,
+    "unmeasured_worktree_is_never_treated_as_clean": true,
+    "release_decisions_are_measurements_not_assumptions": true
   },
   "static_proof": {
     "type_check": {
@@ -70,8 +79,8 @@
     },
     "focused_tests": {
       "command": "pnpm exec tsx --test scripts/ops/ops-merge-wrapper.test.ts",
-      "tests": 56,
-      "pass": 56,
+      "tests": 59,
+      "pass": 59,
       "fail": 0,
       "skipped": 0
     },
@@ -107,9 +116,9 @@
     },
     "ops_suite": {
       "command": "pnpm test:ops",
-      "tests": 2663,
+      "tests": 2666,
       "suites": 20,
-      "pass": 2663,
+      "pass": 2666,
       "fail": 0,
       "skipped": 0,
       "verified_in_session": true
@@ -118,27 +127,28 @@
   "mutation_controls": {
     "executed_by": "the certifying session, in this worktree",
     "method": "each control inverted individually from a pre-mutation backup, focused suite re-run against the mutant, source restored and the restored baseline re-confirmed green. Round 5 re-measured EVERY row in one pass against the current source rather than carrying earlier numbers forward.",
-    "baseline": "56 pass, 0 fail",
-    "restored": "56 pass, 0 fail",
-    "count": 14,
+    "baseline": "59 pass, 0 fail",
+    "restored": "59 pass, 0 fail",
+    "count": 19,
     "surviving": 0,
     "mutants": [
       {
         "id": "M1",
         "name": "['merge','--no-ff','--no-edit','origin/main'] -> ['merge','--ff-only','origin/main']",
         "result": "KILLED",
-        "mutant_fail_count": 10,
+        "mutant_fail_count": 11,
         "failing_tests": [
-          "2",
-          "23",
-          "27",
-          "47",
-          "48",
-          "49",
-          "50",
-          "54",
-          "55",
-          "56"
+          2,
+          23,
+          27,
+          47,
+          48,
+          49,
+          50,
+          54,
+          55,
+          56,
+          57
         ],
         "note": "Killed behaviourally, not only by shape: 47-50 fail because the merge genuinely does not occur under --ff-only against a real diverged repository."
       },
@@ -284,14 +294,66 @@
         "id": "M14",
         "name": "the mutex released on a conflicting autostash pop",
         "result": "KILLED",
-        "mutant_fail_count": 1,
+        "mutant_fail_count": 2,
         "failing_tests": [
-          "55"
+          55,
+          59
         ],
         "note": "Round 5, the reviewed P1. Reproduces the fail-open exactly: after a SUCCESSFUL merge a conflicting `git stash pop` leaves unmerged entries and conflict markers, and the serializing mutex is handed to the next lane over that worktree."
+      },
+      {
+        "id": "M15",
+        "name": "the mutex NEVER released on a failed `git stash pop` (round-5 behaviour restored: `const release = false`)",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          57
+        ],
+        "note": "Round-6 P1. The deliberate opposite of M14: M14 proves the lock must be RETAINED over a conflicted index, M15 proves it must be RELEASED over a measured-clean one. Only a measurement distinguishes them, which is exactly why round 5's unmeasured retention read as safe."
+      },
+      {
+        "id": "M16",
+        "name": "the mutex released unconditionally on a stash-PUSH failure (pre-fix behaviour)",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          58
+        ],
+        "note": "Round-6 P2. That branch returns before any cleanup hook can run, so it bypasses every other guard; `git stash push` refuses over an already-conflicted index, which is precisely the state an earlier failed sync leaves behind."
+      },
+      {
+        "id": "M17",
+        "name": "the `residueProbe` wiring removed from the sync path in ops-merge-wrapper.ts",
+        "result": "KILLED",
+        "mutant_fail_count": 2,
+        "failing_tests": [
+          57,
+          58
+        ],
+        "note": "Proves the probe is load-bearing rather than decorative: without it both release decisions fall back to fail-closed and neither message can name what was measured."
+      },
+      {
+        "id": "M18",
+        "name": "`if (!preSyncHead)` -> `if (!result.ok || !preSyncHead)`, i.e. the pre-fix post-sync early return",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          57
+        ],
+        "note": "Round-6 P2. Proves the head-move re-authorization notice is actually REACHED on the one failure path where the merge had already been committed and the head really moved."
+      },
+      {
+        "id": "M19",
+        "name": "`measureResidue`'s no-probe default reports `clean: true`",
+        "result": "KILLED",
+        "mutant_fail_count": 1,
+        "failing_tests": [
+          59
+        ],
+        "note": "Proves the fail-closed default. runMergeWrapper is callable directly, without the probe runExtendedMergeWrapper injects; an unmeasured tree must never buy a release. Test 59 is the only test that reaches this default."
       }
     ],
-    "corroboration": "All fourteen mutants were re-executed against the CURRENT source in a single round-5 pass, with the restored baseline re-confirmed green after each. No mutation result from the unattributed diff (see provenance) is carried forward. M1/M2/M3's counts in the round-3 and round-4 bundles were STALE -- 7/3/5, carried forward while the suite grew -- and a round-5 reviewer caught it; they are 10/4/8 here."
+    "corroboration": "All NINETEEN mutants were re-executed against the CURRENT source in a single round-6 pass by an automated battery that asserts a byte-exact md5 restore after each mutant and aborts if it differs. Baseline and restored both 0 fail. M1 moved 10 -> 11 and M14 moved 1 -> 2 because tests 57 and 59 now also kill them; no count below is carried forward from an earlier round."
   },
   "regression_fixtures": {
     "type": "real git subprocesses, nothing mocked",
@@ -406,14 +468,45 @@
           "code is merge_wrapper_cleanup_failed with a 'could not be determined' message",
           "mutex retained and the autostash not popped"
         ]
+      },
+      {
+        "name": "a NON-conflicting autostash pop failure releases the mutex over a clean tree",
+        "asserts": [
+          "origin/main STARTS TRACKING a lane-state path that is untracked at the lane head, so `git stash pop` refuses with `already exists, no checkout` -- the real production shape, not a simulated one",
+          "the merge itself succeeded and moved HEAD (asserted against the captured pre-sync SHA)",
+          "code is merge_wrapper_stash_pop_conflict and main_sync_stash.popped === false; the stash entry is kept (lane-state data really is stranded)",
+          "premise asserted directly on disk before the control: git diff --diff-filter=U is empty and MERGE_HEAD is absent",
+          "THE CONTROL: the merge lock reads `released` and a release receipt is reported",
+          "the message reports the measurement (`measured after the failed pop and is clean`, `no MERGE_HEAD, no REBASE_HEAD and no unmerged paths`) and must NOT say `left the worktree with unmerged entries`",
+          "the head-move re-authorization notice is present on result.stderr and names the pre-sync SHA"
+        ]
+      },
+      {
+        "name": "a stash-push failure over an in-progress merge fails closed and retains the mutex",
+        "asserts": [
+          "the fixture leaves a REAL stranded conflicted merge before the wrapper runs: MERGE_HEAD present and other.txt unmerged, both asserted",
+          "code is merge_wrapper_stash_failed",
+          "THE CONTROL: the merge lock reads `held` and no release is reported",
+          "the message names what was measured (`MERGE_HEAD is present`, `unmerged paths: other.txt`) and a real release command",
+          "the lane HEAD is unchanged and the stranded merge is left intact for the operator"
+        ]
+      },
+      {
+        "name": "without a residue probe the release decision fails closed rather than guessing",
+        "asserts": [
+          "runMergeWrapper is called DIRECTLY for main-sync, so no residueProbe is injected -- the only test that reaches that default",
+          "the pull succeeds and `git stash pop` fails",
+          "THE CONTROL: the merge lock reads `held` and no release is reported",
+          "the message says the state could not be measured and that the lock was NOT released"
+        ]
       }
     ]
   },
   "invariants_preserved": [
-    "merge mutex acquisition and release -- asserted released on the success path and on the cleanly-aborted failure path, and asserted RETAINED on the cleanup-failure path, on an unverifiable post-abort state, and (round 5) on a conflicting autostash pop after a successful merge. That last case was certified as impossible by the round-4 bundle and was not; see finding 11.",
+    "merge mutex acquisition and release -- asserted released on the success path, on the cleanly-aborted failure path, and (round 6) after a non-conflicting autostash pop failure over a MEASURED-clean tree; asserted RETAINED on the cleanup-failure path, on an unverifiable post-abort state, on a conflicting autostash pop after a successful merge (round 5), on a stash-PUSH failure over an in-progress merge (round 6), and whenever the worktree could not be measured at all. The round-4 bundle certified the conflicting-pop case impossible and it was not (finding 11); the round-5 bundle then retained the lock on EVERY failed pop, which leaked it over clean trees (finding 12). The invariant is about safety, not about the release site, which this lane deliberately moves.",
     "no history rewriting (parent SHAs asserted byte-for-byte)",
     "protected proof/manifest dropped-path refusal (PROTECTED_SYNC_PATH_PREFIXES / classifyDroppedPaths untouched, outside buildExtendedCommand)",
-    "head-move invalidation reporting (buildHeadMoveInvalidation / renderHeadMoveNotice / HEAD_MOVE_REAUTHORIZATION_ORDER untouched)",
+    "head-move invalidation reporting -- buildHeadMoveInvalidation / renderHeadMoveNotice / HEAD_MOVE_REAUTHORIZATION_ORDER are untouched, AND their reachability was repaired in round 6: this lane created a path (merge_wrapper_stash_pop_conflict) that reaches the post-sync analysis with ok:false after the merge has already been committed, and the `!result.ok` early return silently skipped both the notice and classifyDroppedPaths on it. Test 57, mutant M18.",
     "actionable failure behaviour (conflict diagnostic asserted on both failure paths)",
     "main-sync's merge_wrapper_diverged_requires_explicit_sync refusal is retained; no automatic rebase substitution is restored",
     "BLOCKED_RAW_COMMANDS unchanged",
@@ -422,7 +515,9 @@
     "the caller-supplied onCommandFailure hook cannot escape runMergeWrapper: a throw becomes the fail-closed result rather than an unwind with the lock held",
     "the reported command is the invocation that actually ran: `reportedCommand` carries the real vector through the main-sync bridge, so result.command and the fail-closed message never name `git pull --ff-only origin main` for a merge or rebase",
     "the abort verb follows the operation, pinned by a real conflicted rebase rather than a mock",
-    "an unverifiable POST-abort state is never reported clean: `residue` fails closed on `after.undetermined` as well as on surviving refs and unmerged paths"
+    "an unverifiable POST-abort state is never reported clean: `residue` fails closed on `after.undetermined` as well as on surviving refs and unmerged paths",
+    "release decisions are MEASUREMENTS, not assumptions: worktreeResidue probes MERGE_HEAD, REBASE_HEAD and `git diff --name-only --diff-filter=U` after a failed stash push or pop, and the operator-facing message reports what it found rather than asserting a conflict the code never observed",
+    "an UNMEASURED worktree is never treated as a clean one: with no residueProbe supplied, or if the probe throws, measureResidue returns not-clean and the mutex is retained (test 59, mutant M19)"
   ],
   "scope_refusals": [
     "scripts/ops/merge-wrapper.ts was added to file_scope_lock for the P1 remediation only: the stash pop and the mutex release live there and nowhere else, and correcting the ordering elsewhere would have required re-acquiring a released lock, which is racy. One new optional option, one new result code, one guarded early return.",
@@ -438,7 +533,8 @@
     "--no-edit is pinned by command-shape assertions only (see mutation M2); it cannot be made behaviourally load-bearing under piped stdio.",
     "Rounds 2, 3 and 4 each installed the next defect, and two of the four found in round 4 were proof-integrity failures rather than product failures: a claim with no test behind it, and an assertion that could not fail. Recorded because the pattern is the finding.",
     "`abortInProgressSync` returns an `aborted` field that no caller reads -- `runMergeWrapper` branches on `cleaned` alone. It is dead and pinned by nothing. Left in place rather than removed to keep the round-5 diff to the defects under review; recorded here so it is not mistaken for a control.",
-    "Rounds 2, 3, 4 and 5 each installed the next defect. Two of the four found in round 4 and two of the four found in round 5 were proof-integrity failures rather than product failures: claims with no test behind them, assertions that could not fail, and measurements carried forward instead of retaken. That pattern is the durable finding of this lane."
+    "Rounds 2, 3, 4 and 5 each installed the next defect. Two of the four found in round 4 and two of the four found in round 5 were proof-integrity failures rather than product failures: claims with no test behind them, assertions that could not fail, and measurements carried forward instead of retaken. That pattern is the durable finding of this lane.",
+    "Four consecutive review rounds each found a defect the previous round installed, and three of them found at least one claim the PROOF asserted rather than something the code did. Round 5's fix (retain the mutex on any failed pop) was itself round 6's P1 (a lock leak), and the two are literally each other's mutant (M14/M15). The durable lesson recorded here: a control changed under review pressure needs a mutant in the OPPOSITE direction, or the next round finds it."
   ],
   "provenance": {
     "summary": "Part of the implementation proven here was authored by a different session and adopted as untrusted input after review and re-execution, not as authored work.",
@@ -521,9 +617,9 @@
       ]
     },
     "current_head": {
-      "sha": "9162d2c926856ccef5a1b26372140ac4106fab5b",
+      "sha": "129d2f2bd1720d3e6a061c2e1282aa8374555fb5",
       "status": "PENDING",
-      "note": "The round-5 corrections moved the head, so neither the round-4 nor the round-5 review covers the code now proposed for merge. No claim of completed independent review at this head is made."
+      "note": "The round-6 corrections moved the head, so none of the four reviews on record covers the code now proposed for merge. No claim of completed independent review at this head is made."
     },
     "round_5": {
       "head_reviewed": "009cfe4627a46ca944afdb69ba6ee45e21f060db",
@@ -545,6 +641,21 @@
         "abortInProgressSync destroying legitimate uncommitted work on either the merge or the rebase path",
         "the five invariants other than the mutex one: no history rewriting, protected-path refusal and head-move invalidation reporting are untouched, and actionable failure behaviour is improved by reportedCommand"
       ]
+    },
+    "round_6": {
+      "head_reviewed": "7372df54",
+      "reviewer": "a fourth session that authored none of this implementation or proof",
+      "verdict": "FAIL",
+      "measurements_reproduced": "all fourteen round-5 mutation rows byte-for-byte, plus the headline suite counts.",
+      "findings": [
+        "P1: round 5 traded the fail-open for a LOCK LEAK. popMainSyncStash sets conflict:true on any non-zero exit and the round-5 message asserted unmerged entries nothing had probed for; `already exists, no checkout` leaves a byte-clean tree and a permanently retained repo-wide mutex. Demonstrated by execution: reverting merge-wrapper.ts to the round-4 head showed the lock released where the round-5 head showed it held.",
+        "P2: `if (!result.ok || !preSyncHead) return result;` skipped classifyDroppedPaths and renderHeadMoveNotice on merge_wrapper_stash_pop_conflict, a result that is ok:false AFTER the merge was committed; a real head move was demonstrated with no notice emitted.",
+        "P2: merge_wrapper_stash_failed released the mutex with MERGE_HEAD and unmerged entries present.",
+        "P3: the bundle described the pop-path retention as conditional while the code was unconditional.",
+        "P3: mutex_acquire_release_preserved and head_move_invalidation_reporting_preserved were flat booleans and both were false."
+      ],
+      "all_findings_fixed_at": "this head",
+      "fixes_pinned_by": "tests 57, 58, 59 and mutants M15, M16, M17, M18, M19"
     }
   }
 }

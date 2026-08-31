@@ -1,17 +1,17 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 9162d2c926856ccef5a1b26372140ac4106fab5b
+MERGE_SHA: 129d2f2bd1720d3e6a061c2e1282aa8374555fb5
 
 Three code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/ops-merge-wrapper.ts` | +142 / −2 |
-| `scripts/ops/merge-wrapper.ts` | +135 / −10 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +667 / −15 |
+| `scripts/ops/ops-merge-wrapper.ts` | +225 / −4 |
+| `scripts/ops/merge-wrapper.ts` | +219 / −16 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +1063 / −5 |
 
-(`git diff --numstat 11920f2d..9162d2c9 -- scripts/ops/`, the full lane diff.)
+(`git diff --numstat origin/main -- scripts/ops/`, the full lane diff.)
 
 Plus lane metadata: `docs/06_status/lanes/UTV2-1790.json` (`file_scope_lock` extended
 by exactly one path, `scripts/ops/merge-wrapper.ts`, under explicit PM approval),
@@ -55,6 +55,21 @@ repository it cannot read — and after it.
 `git-merge-main` / `git-rebase-main` now passes `onCommandFailure`, bound to the
 **real** runner (not the intercepting one) and to the cwd the failure occurred in.
 No other operation passes it.
+
+**4. `probeSyncResidue` and `worktreeResidue`** (round 6). The probe that lived
+inside `abortInProgressSync` is hoisted to module scope and re-exported as
+`worktreeResidue`, so the two mutex-release decisions in `merge-wrapper.ts` can ASK
+the same question instead of asserting an answer they never measured. It is wired in
+as `residueProbe`, alongside `onCommandFailure`, and bound to the real runner for the
+same reason.
+
+**5. The post-sync analysis is reachable on a failed-but-committed sync** (round 6).
+`if (!result.ok || !preSyncHead) return result;` becomes `if (!preSyncHead) return
+result;`. This lane created a path — `merge_wrapper_stash_pop_conflict` — that is
+`ok: false` **after the merge has already been committed**, so the head genuinely
+moved and neither `classifyDroppedPaths` nor `renderHeadMoveNotice` ran. A failed
+result now keeps its own code (reclassifying it would hide the failure) and gains the
+re-authorization notice, plus any dropped-path warning, appended to its `stderr`.
 
 Nothing else in the file changes. All five safety invariants the wrapper is
 responsible for live **outside** `buildExtendedCommand`:
@@ -104,8 +119,32 @@ is about live here and nowhere else.
    Round 3's proof asserted the opposite of what the code did; see finding 10 in
    `verification.md`.
 
-No existing caller passes `onCommandFailure`, so every other operation's behaviour is
-unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
+5. **New option `residueProbe` and the `measureResidue` helper** (round 6). Both
+   mutex-release decisions that this lane's failure paths reach now MEASURE the
+   worktree before deciding, and report the measurement:
+
+   - **stash-pop failure.** Round 5 retained the lock on every non-zero
+     `git stash pop` exit, with a message asserting "the pop left the worktree with
+     unmerged entries" that nothing on that path had probed for. `git stash pop` also
+     exits 1 with `already exists, no checkout` when the pulled commit starts TRACKING
+     a path that was autostashed while untracked — a byte-clean tree, and a
+     permanently retained repo-wide mutex. The lock is now retained only over real
+     residue or an unanswerable state, and released over a measured-clean tree. It is
+     a hard failure either way: lane-state data is stranded in the stash.
+   - **stash-push failure.** That branch returns before any cleanup hook can run and
+     released the lock unconditionally. `git stash push` refuses over an already
+     unmerged index (`could not write index ... needs merge`) — exactly what an
+     earlier failed sync leaves behind — so it handed the next lane a conflicted tree.
+     Same measurement, same rule.
+
+   `measureResidue` fails closed when no probe is supplied or the probe throws: an
+   unmeasured tree is not a clean tree. `popMainSyncStash`'s message no longer asserts
+   which of the two failures occurred; it names both and defers to the caller's
+   measurement.
+
+No existing caller passes `onCommandFailure` or `residueProbe`, so every other
+operation's behaviour is unchanged; `scripts/ops/merge-wrapper.test.ts` is green
+unmodified (21/21).
 
 ## `scripts/ops/ops-merge-wrapper.test.ts`
 
@@ -115,7 +154,7 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
    genuinely issues them. The four remaining `--ff-only` occurrences belong to
    `main-sync`'s legitimate `git pull --ff-only origin main` and are unchanged.
 
-2. **Ten real-git regressions.** Helpers `git(cwd, ...args)`,
+2. **Thirteen real-git regressions.** Helpers `git(cwd, ...args)`,
    `withDivergedRepo({conflicting}, run)`, `realGitRunner(hook)`, `unmergedPaths(dir)`
    and `mergeHeadPresent(dir)` build a temporary repository with a real
    `refs/remotes/origin/main` ref and genuine divergence, asserted mechanically before
@@ -194,3 +233,19 @@ unchanged; `scripts/ops/merge-wrapper.test.ts` is green unmodified (21/21).
 
    `node:child_process`'s `spawnSync` is used by the helpers; existing conventions
    (`withTempOps`, `BASE`, `readMergeLock`) are reused unchanged.
+
+6. **Round 6 additions.** Test 57 is the negative case test 55 never had: a real
+   repository where `origin/main` starts TRACKING a lane-state path that is untracked
+   at the lane head, so the merge succeeds, the pop refuses outright, the tree is
+   byte-clean (asserted directly on disk before the control), and the mutex must
+   therefore be **released**. It also asserts the head-move re-authorization notice
+   survives on `result.stderr` and names the pre-sync SHA. Test 58 leaves a genuinely
+   stranded conflicted merge in place before the wrapper is invoked, so the autostash
+   push refuses, and asserts the lock stays `held` with the residue named. Test 59
+   calls `runMergeWrapper` directly, without the injected probe, and asserts the
+   unmeasured default is fail-closed — the only test that reaches it.
+
+   Mutants M15 and M16 pin the two release directions, M17 the probe wiring, M18 the
+   head-move reachability and M19 the fail-closed default. M14 and M15 are deliberately
+   each other's inverse: round 5's fix and round 6's fix differ only by a measurement,
+   which is why an unmeasured retention read as safe for a whole round.
