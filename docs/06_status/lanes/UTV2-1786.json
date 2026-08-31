@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1786",
+  "lane_type": "delivery-ui",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1786-smart-form-lane-2",
+  "branch": "claude/utv2-1786-smart-form-lane-2",
+  "base_branch": "main",
+  "commit_sha": "63d76eb6744943e7782e3b3645e7018da84bbb56",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1469",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/smart-form/.env.example",
+    "apps/smart-form/app/login/page.tsx",
+    "apps/smart-form/app/submit/components/BetForm.tsx",
+    "apps/smart-form/app/submit/components/BetSlipPanel.tsx",
+    "apps/smart-form/app/submit/page.tsx",
+    "apps/smart-form/auth.ts",
+    "apps/smart-form/e2e/auth-gate.spec.ts",
+    "apps/smart-form/e2e/phase-one.spec.ts",
+    "apps/smart-form/e2e/real-reference.spec.ts",
+    "apps/smart-form/e2e/smart-form-submission.spec.ts",
+    "apps/smart-form/lib/api-client.ts",
+    "apps/smart-form/lib/auth-allowlist.ts",
+    "apps/smart-form/lib/auth-config.ts",
+    "apps/smart-form/lib/form-schema.ts",
+    "apps/smart-form/lib/form-utils.ts",
+    "apps/smart-form/lib/participant-search.ts",
+    "apps/smart-form/package.json",
+    "apps/smart-form/test/allowlist.test.ts",
+    "apps/smart-form/test/api-client.test.ts",
+    "apps/smart-form/test/auth-config.test.ts",
+    "apps/smart-form/tsconfig.json",
+    "docs/06_status/proof/UTV2-1786/01-capper-portal-login.png",
+    "docs/06_status/proof/UTV2-1786/02-forged-claim-refused.png",
+    "docs/06_status/proof/UTV2-1786/03-recovery-token-stored-not-signed-in.png",
+    "docs/06_status/proof/UTV2-1786/diff-summary.md",
+    "docs/06_status/proof/UTV2-1786/evidence.json",
+    "docs/06_status/proof/UTV2-1786/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1786/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-08-31T20:07:06.004Z",
+  "heartbeat_at": "2026-08-31T23:14:52.521Z",
+  "closed_at": "2026-08-31T23:14:52.521Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-31T23:14:50.675Z",
+      "verdict": "pass",
+      "merge_sha": "63d76eb6744943e7782e3b3645e7018da84bbb56",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1786-smart-form-lane-2",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -13,6 +13,8 @@ export const betFormSchema = z
     sport: z.string().min(1, 'Sport is required'),
     marketType: z.enum(MARKET_TYPE_IDS, { required_error: 'Market type is required' }),
     eventName: z.string().min(1, 'Matchup / event is required'),
+    awayParticipantName: z.string().optional(),
+    homeParticipantName: z.string().optional(),
     // Player prop fields
     playerName: z.string().optional(),
     statType: z.string().optional(),
@@ -40,6 +42,7 @@ export const betFormSchema = z
     // capper identity is derived from the bearer token on the server (UTV2-658)
     capper: z.string().optional(),
     gameDate: z.string().min(1, 'Date is required'),
+    trackOnly: z.boolean().default(true),
   })
   .superRefine((data, ctx) => {
     const marketFamily = getMarketTypeFamily(data.marketType);

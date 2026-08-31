@@ -89,6 +89,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
           <Separator className="bg-border/50" />
 
           <Button
+            data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
             disabled={isSubmitting}
@@ -137,6 +138,7 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
             <p className="text-xs font-bold text-primary shrink-0">+{payout.toFixed(2)}u</p>
           )}
           <Button
+            data-testid="smart-form-submit-button"
             type="submit"
             onClick={onSubmit}
             disabled={isSubmitting}
