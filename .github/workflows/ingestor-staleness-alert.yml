@@ -35,7 +35,9 @@ jobs:
         run: pnpm ingestor:alert-check -- --run-alerting-pass
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           ALERT_AGENT_ENABLED: 'true'
           ALERT_DRY_RUN: 'false'
           SYSTEM_PICKS_ENABLED: 'false'
@@ -71,6 +73,7 @@ jobs:
         run: pnpm ingestor:alert-check -- --production-cadence
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES: ${{ vars.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES || '30' }}
           INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES: ${{ vars.INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES || '30' }}
