@@ -602,12 +602,32 @@ export function runMergeWrapper(
     // instead of explaining the last one. Nothing has been touched at this point,
     // which is exactly why refusing here is cheap and safe.
     //
-    // The lock is RETAINED, matching the round-6 semantics for every other
-    // "this worktree is mid-operation" refusal: the next holder of a serializing
-    // lock must not be handed a tree that is part-way through a merge, rebase,
-    // cherry-pick or revert.
+    // UTV2-1790 (review round 9, P2): the lock is RELEASED here, and that is a
+    // deliberate difference from every other refusal in this function.
+    //
+    // The first draft of this pre-flight retained it, by analogy with the round-6
+    // "this worktree is mid-operation" refusals. A round-9 reviewer showed the
+    // analogy is false and the retention is a repo-wide merge-mutex LEAK: this
+    // branch sits AFTER `acquireMergeLock`, so a run that reaches it acquires the
+    // serializing lock, does nothing at all, and then never gives it back for the
+    // full TTL -- halting every lane until a human reclaims it by hand. The
+    // reviewer blocked its own next command with it.
+    //
+    // The round-6 retentions are correct because THIS wrapper put the worktree
+    // into the state being refused: it stashed, it pulled, it merged, and the
+    // residue is its own. Here it has done nothing -- no stash, no pull, no merge
+    // -- so the tree is exactly as it was found, the residue predates the lock,
+    // and holding a repo-wide lock over it protects nothing. The next lane merges
+    // in its OWN worktree; serializing merges does not mean quarantining a tree
+    // this run never touched. Note also that if a previous wrapper run had left
+    // this residue, that run would already be holding the lock and this one could
+    // not have acquired it.
     const preflight = measureResidue();
     if (!preflight.clean) {
+      const release = releaseMergeLock(
+        { issue_id: issueId, branch: input.branch },
+        { lockPath: options.lockPath, now: new Date(now.getTime() + 1) },
+      );
       return {
         ok: false,
         code: 'merge_wrapper_worktree_not_clean',
@@ -615,6 +635,7 @@ export function runMergeWrapper(
         operation: input.operation,
         command: commandVector,
         lock,
+        release,
         message:
           `Refusing to sync: the worktree at ${cwd} is not in a clean state, so ` +
           `${commandVector.join(' ')} was NOT run and nothing was stashed, pulled or ` +
@@ -622,10 +643,10 @@ export function runMergeWrapper(
           `Measured: ${preflight.detail}.\n` +
           `A fast-forward pull over a worktree that is mid-merge, mid-rebase, ` +
           `mid-cherry-pick or mid-revert can advance a detached HEAD out from under ` +
-          `the operation in progress and report success. The merge mutex was ` +
-          `deliberately NOT released: the next lane must not be handed this tree. ` +
-          `Finish or abort the operation in progress, then release it with ` +
-          `'pnpm ops:merge-lock release --issue ${issueId} --branch ${input.branch}'.`,
+          `the operation in progress and report success, which is why this refuses ` +
+          `instead. The merge mutex WAS released: this run changed nothing, so it ` +
+          `has no half-finished state to protect and must not halt other lanes. ` +
+          `Finish or abort the operation in progress, then re-run this command.`,
         main_sync_stash: { attempted: false, stashed: false, popped: false },
       };
     }

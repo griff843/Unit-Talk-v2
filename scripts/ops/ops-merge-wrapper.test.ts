@@ -2436,7 +2436,7 @@ test('UTV2-1790: a NON-conflicting autostash pop failure releases the mutex over
   }
 });
 
-test('UTV2-1790: a stash-push failure over an in-progress merge fails closed and retains the mutex', () => {
+test('UTV2-1790: an in-progress merge is refused before the autostash, and the mutex is released', () => {
   // Review round 6, P2. The stash-PUSH failure branch returns before any cleanup
   // hook can run, and released the mutex unconditionally. `git stash push`
   // refuses ("error: could not write index ... needs merge") when the worktree is
@@ -2498,19 +2498,24 @@ test('UTV2-1790: a stash-push failure over an in-progress merge fails closed and
       );
       assert.strictEqual(result.main_sync_stash?.stashed, false);
 
-      // THE CONTROL: the mutex is not handed over a conflicted index.
+      // THE CONTROL, as revised in round 9: the mutex IS released. Round 8 asserted
+      // 'held' here by analogy with the round-6 retentions, and a round-9 reviewer
+      // showed the analogy is false -- those retain because the WRAPPER created the
+      // residue, whereas this run has done nothing at all and the residue predates
+      // the lock. Holding a repo-wide lock over a tree this run never touched
+      // protects nothing and halts every other lane for the full TTL.
       const lock = readMergeLock(lockPath);
       assert.strictEqual(
         lock.ok ? lock.lock.status : '',
-        'held',
-        'the mutex must NOT be released while MERGE_HEAD and unmerged entries survive',
+        'released',
+        'a refusal that changed nothing must not hold the repo-wide merge mutex',
       );
-      assert.strictEqual(result.release, undefined, 'no release may be reported');
+      assert.ok(result.release, 'the release must be reported in the result');
 
       // Measured, not assumed, and actionable.
       assert.match(result.message, /MERGE_HEAD is present/u);
       assert.match(result.message, /unmerged paths: other\.txt/u);
-      assert.match(result.message, /ops:merge-lock release/u);
+      assert.match(result.message, /mutex WAS released/u);
 
       // Nothing was disturbed: no merge was attempted on top of the stranded one.
       assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), laneHead, 'lane HEAD unchanged');
@@ -2521,7 +2526,7 @@ test('UTV2-1790: a stash-push failure over an in-progress merge fails closed and
   }
 });
 
-test('UTV2-1790: without a residue probe the release decision fails closed rather than guessing', () => {
+test('UTV2-1790: without a residue probe the SYNC is refused rather than run over an unmeasured tree', () => {
   // Review round 6. `measureResidue` decides whether the merge mutex is safe to
   // hand over. `runMergeWrapper` is also called directly (not only through
   // `runExtendedMergeWrapper`, which injects the probe), so its DEFAULT when no
@@ -2549,23 +2554,25 @@ test('UTV2-1790: without a residue probe the release decision fails closed rathe
     );
 
     assert.strictEqual(result.ok, false);
-    // Round 8: the first `measureResidue()` consumer is now the pre-flight, so the
-    // no-probe default is exercised there rather than at the pop. The property
-    // under test is unchanged and is what this test's title names: an UNMEASURED
-    // worktree is never treated as a clean one.
+    // Round 8 moved the first `measureResidue()` consumer to the pre-flight, so the
+    // no-probe default is exercised there rather than at the pop. THE CONTROL is
+    // that an UNMEASURED worktree is never treated as a clean one -- the sync is
+    // refused.
     assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
 
-    // THE CONTROL: no probe means no measurement, and no measurement means the
-    // lock is retained.
+    // Round 9 correction, stated rather than glossed: the fail-closed property is
+    // the REFUSAL, not a retained lock. Round 8 conflated the two and thereby leaked
+    // the repo-wide mutex on a run that had done nothing. The lock is released.
     const lock = readMergeLock(lockPath);
     assert.strictEqual(
       lock.ok ? lock.lock.status : '',
-      'held',
-      'an unmeasured worktree must not release the mutex',
+      'released',
+      'refusing to sync is the protection; holding a repo-wide lock over an '
+        + 'untouched tree is not',
     );
-    assert.strictEqual(result.release, undefined, 'no release may be reported');
+    assert.ok(result.release, 'the release must be reported in the result');
     assert.match(result.message, /could not be measured/u, 'says why it fell back');
-    assert.match(result.message, /NOT released/u);
+    assert.match(result.message, /mutex WAS released/u);
 
     // And nothing ran: refusing to measure must not mean half-syncing.
     assert.strictEqual(result.main_sync_stash?.attempted, false);
@@ -2694,8 +2701,13 @@ test('UTV2-1790: a residue probe that throws fails closed rather than escaping',
     // structured result, never an escaping stack trace -- is unchanged.
     assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
     const lock = readMergeLock(lockPath);
-    assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'fail closed on a thrown probe');
-    assert.strictEqual(result.release, undefined);
+    assert.strictEqual(
+      lock.ok ? lock.lock.status : '',
+      'released',
+      'the guarded property is that the throw becomes a structured refusal, not '
+        + 'that a repo-wide lock is held over a tree this run never touched',
+    );
+    assert.ok(result.release);
     assert.match(result.message, /probe exploded/u, 'surfaces the thrown message');
     assert.match(result.message, /could not be measured/u);
     assert.strictEqual(result.main_sync_stash?.attempted, false);
@@ -2859,15 +2871,22 @@ test('UTV2-1790: main-sync refuses over a mid-rebase worktree instead of advanci
       assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash was attempted');
       assert.strictEqual(git(dir, 'status', '--porcelain'), strandedTree, 'worktree untouched');
 
-      // 5. The repo-wide mutex is retained, not handed to the next lane.
+      // 5. THE ROUND-9 CONTROL: the repo-wide mutex is RELEASED. This run changed
+      //    nothing, so it has no half-finished state to protect; retaining the lock
+      //    here (the first draft of this pre-flight) leaked it for the full TTL and
+      //    halted every other lane until a human reclaimed it by hand.
       const lock = readMergeLock(lockPath);
-      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
-      assert.strictEqual(result.release, undefined, 'no release may be reported');
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'released',
+        'a refusal that changed nothing must not hold the repo-wide merge mutex',
+      );
+      assert.ok(result.release, 'the release must be reported in the result');
 
       // 6. The refusal is measured and actionable.
       assert.match(result.message, /rebase is in progress/u, 'names the measured state');
       assert.match(result.message, /was NOT run/u, 'says the command did not run');
-      assert.match(result.message, /ops:merge-lock release/u, 'names a real release command');
+      assert.match(result.message, /mutex WAS released/u, 'says plainly that it released');
     });
 
     spawnSync('git', ['rebase', '--abort'], { cwd: dir, stdio: 'pipe' });
@@ -2944,7 +2963,11 @@ test('UTV2-1790: main-sync refuses over a resolved-but-uncommitted cherry-pick',
       assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), laneHead, 'HEAD must not move');
       assert.strictEqual(result.main_sync_stash?.attempted, false, 'no autostash was attempted');
       const lock = readMergeLock(lockPath);
-      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'released',
+        'a refusal that changed nothing must not hold the repo-wide merge mutex',
+      );
     });
 
     spawnSync('git', ['cherry-pick', '--abort'], { cwd: dir, stdio: 'pipe' });
@@ -3003,7 +3026,12 @@ test('UTV2-1790: a pre-flight that cannot measure the worktree refuses the sync'
       assert.strictEqual(result.main_sync_stash?.attempted, false);
       assert.strictEqual(git(dir, 'rev-parse', 'HEAD'), head, 'HEAD must not move');
       const lock = readMergeLock(lockPath);
-      assert.strictEqual(lock.ok ? lock.lock.status : '', 'held', 'the mutex must be retained');
+      assert.strictEqual(
+        lock.ok ? lock.lock.status : '',
+        'released',
+        'even an UNMEASURABLE tree releases here: this run changed nothing, and the '
+          + 'refusal itself is the protection, not the lock',
+      );
     });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
@@ -3128,4 +3156,60 @@ test('UTV2-1790: a sequencer-directory probe that fails is undetermined, not abs
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('UTV2-1790: a probe-less caller does not strand the repo-wide merge mutex', () => {
+  // Review round 9, P2. THE REGRESSION THE ROUND-8 PROOF GOT WRONG.
+  //
+  // `scripts/ops/merge-wrapper.ts` has its own `runCli()` entry that calls
+  // `runMergeWrapper` directly and supplies no `residueProbe`. Round 8's pre-flight
+  // sits AFTER `acquireMergeLock`, and its first draft RETAINED the lock on refusal.
+  // So any probe-less caller acquired the repo-wide serializing mutex, did nothing
+  // at all -- no stash, no pull, no merge -- and then never released it, halting
+  // every other lane for the full TTL until a human reclaimed it by hand. The
+  // round-8 bundle disclosed the refusal but asserted "no safety property
+  // regresses", which was false: this is a lock leak, and a reviewer blocked its own
+  // next command with it.
+  //
+  // The distinction that makes the round-6 retentions correct and this one wrong:
+  // those retain because the WRAPPER put the tree into the state being refused. Here
+  // it has done nothing, so there is no half-finished state to protect.
+  //
+  // This test is deliberately the probe-less shape -- the CLI's shape -- rather than
+  // a repeat of the mid-rebase fixture, because the leak was reachable from ANY
+  // caller that omits the probe, not only from a dirty tree.
+  const runner: CommandRunner = () => ({
+    status: 0,
+    stdout: Buffer.from('ok'),
+    stderr: Buffer.from(''),
+    error: undefined,
+  });
+
+  withTempOps(({ lockPath }) => {
+    const before = readMergeLock(lockPath);
+    assert.strictEqual(before.ok, false, 'premise: no lock is held before the run');
+
+    const result = runMergeWrapper({ ...BASE, operation: 'main-sync' }, { lockPath, runner });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_wrapper_worktree_not_clean');
+
+    // THE CONTROL: the lock this run acquired is given back.
+    const after = readMergeLock(lockPath);
+    assert.strictEqual(
+      after.ok ? after.lock.status : '',
+      'released',
+      'a run that acquired the mutex and then did nothing must give it back',
+    );
+
+    // And the proof of harm if it does not: a SECOND run must be able to proceed
+    // past acquisition rather than bouncing off a stale held lock.
+    const second = runMergeWrapper({ ...BASE, operation: 'main-sync' }, { lockPath, runner });
+    assert.notStrictEqual(
+      second.code,
+      'merge_lock_stale_reclaim_required',
+      'the next run must not be blocked by the previous run leaking the mutex',
+    );
+    assert.strictEqual(second.code, 'merge_wrapper_worktree_not_clean');
+  });
 });
