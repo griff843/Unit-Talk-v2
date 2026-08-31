@@ -13,6 +13,36 @@ import { normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
 import { errorResponse, successResponse } from '../http.js';
 
+export interface ReferenceDataAvailability {
+  sportId: string;
+  teamsAvailable: boolean;
+  playersAvailable: boolean;
+}
+
+export async function handleGetReferenceDataAvailability(
+  params: { sport?: string },
+  repository: ReferenceDataRepository,
+): Promise<ApiResponse<ReferenceDataAvailability>> {
+  if (!params.sport) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "sport" is required');
+  }
+
+  try {
+    const [teams, players] = await Promise.all([
+      repository.searchTeams(params.sport, '', 1),
+      repository.searchPlayers(params.sport, '', 100),
+    ]);
+    return successResponse(200, {
+      sportId: params.sport,
+      teamsAvailable: teams.length > 0,
+      playersAvailable: players.length > 0,
+    });
+  } catch (error) {
+    const apiError = normalizeApiError(error);
+    return errorResponse(apiError.status, apiError.code, apiError.message);
+  }
+}
+
 export async function handleGetCatalog(
   repository: ReferenceDataRepository,
 ): Promise<ApiResponse<ReferenceDataCatalog>> {
@@ -26,7 +56,7 @@ export async function handleGetCatalog(
 }
 
 export async function handleSearchTeams(
-  params: { sport?: string; q?: string },
+  params: { sport?: string; q?: string; eventId?: string },
   repository: ReferenceDataRepository,
 ): Promise<ApiResponse<TeamSearchResult[]>> {
   if (!params.sport) {
@@ -37,7 +67,21 @@ export async function handleSearchTeams(
   }
 
   try {
-    const results = await repository.searchTeams(params.sport, params.q);
+    let results = await repository.searchTeams(params.sport, params.q);
+    if (params.eventId) {
+      const event = await repository.getEventBrowse(params.eventId);
+      if (!event) {
+        return errorResponse(404, 'EVENT_NOT_FOUND', `Event not found: ${params.eventId}`);
+      }
+      const allowedIds = new Set(
+        event.participants
+          .filter((participant) => participant.participantType === 'team')
+          .flatMap((participant) => [participant.participantId, participant.canonicalId].filter(
+            (participantId): participantId is string => Boolean(participantId),
+          )),
+      );
+      results = results.filter((result) => allowedIds.has(result.participantId));
+    }
     return successResponse(200, results);
   } catch (error) {
     const apiError = normalizeApiError(error);
@@ -46,7 +90,7 @@ export async function handleSearchTeams(
 }
 
 export async function handleSearchPlayers(
-  params: { sport?: string; q?: string },
+  params: { sport?: string; q?: string; eventId?: string; teamId?: string },
   repository: ReferenceDataRepository,
 ): Promise<ApiResponse<PlayerSearchResult[]>> {
   if (!params.sport) {
@@ -57,7 +101,24 @@ export async function handleSearchPlayers(
   }
 
   try {
-    const results = await repository.searchPlayers(params.sport, params.q);
+    let results = await repository.searchPlayers(params.sport, params.q);
+    if (params.teamId) {
+      results = results.filter((result) => result.teamId === params.teamId);
+    }
+    if (params.eventId) {
+      const event = await repository.getEventBrowse(params.eventId);
+      if (!event) {
+        return errorResponse(404, 'EVENT_NOT_FOUND', `Event not found: ${params.eventId}`);
+      }
+      const allowedIds = new Set(
+        event.participants
+          .filter((participant) => participant.participantType === 'player')
+          .flatMap((participant) => [participant.participantId, participant.canonicalId].filter(
+            (participantId): participantId is string => Boolean(participantId),
+          )),
+      );
+      results = results.filter((result) => allowedIds.has(result.participantId));
+    }
     return successResponse(200, results);
   } catch (error) {
     const apiError = normalizeApiError(error);

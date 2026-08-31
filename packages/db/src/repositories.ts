@@ -983,6 +983,7 @@ export interface PlayerSearchResult {
   participantId: string;
   displayName: string;
   sport: string;
+  teamId?: string | null;
 }
 
 export interface EventSearchResult {

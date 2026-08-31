@@ -7,7 +7,7 @@ import type {
   SystemRunRecord,
   SystemRunRepository,
 } from '@unit-talk/db';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import { isTrackOnlyPickMetadata, type CanonicalPick } from '@unit-talk/contracts';
 import {
   bestBetsPromotionPolicy,
   exclusiveInsightsPromotionPolicy,
@@ -18,6 +18,7 @@ import {
   enqueueDistributionWork,
   evaluateDistributionTargetGate,
   resolveDeliveryTarget,
+  TrackOnlyDistributionError,
   type DistributionEnqueueResult,
 } from './distribution-service.js';
 import { ensurePickLifecycleState } from './lifecycle-service.js';
@@ -57,6 +58,21 @@ export async function enqueueDistributionWithRunTracking(
   // caller (submit-pick-controller) already gates based on source, but any
   // other helper path that reaches this function must also be safe.
   const currentPick = await pickRepository.findPickById(pick.id);
+
+  // UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_START
+  // This guard must remain before promotion evaluation and, critically, before
+  // enqueueDistributionAtomic(). The persisted row is authoritative: callers
+  // can hold stale or spoofed CanonicalPick objects, while the database record
+  // determines whether distribution is prohibited.
+  if (
+    currentPick &&
+    isRecord(currentPick.metadata) &&
+    isTrackOnlyPickMetadata(currentPick.metadata)
+  ) {
+    throw new TrackOnlyDistributionError(pick.id, resolvedTarget);
+  }
+  // UTV2-1672 TRACK_ONLY_ATOMIC_GUARD_END
+
   const currentLifecycleState =
     currentPick?.status ?? pick.lifecycleState;
   if (currentLifecycleState === 'awaiting_approval') {
@@ -279,4 +295,8 @@ function needsPromotionEvaluationForTarget(
   // submission time. If a decision has already been recorded, skip re-evaluation — the
   // distribution gate alone determines routing based on picks.promotion_target.
   return pick.promotionDecidedAt == null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

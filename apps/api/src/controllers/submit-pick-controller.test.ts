@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { readFile, writeFile, unlink } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import assert from 'node:assert/strict';
 import type { SubmissionPayload, PickSource } from '@unit-talk/contracts';
 
@@ -136,7 +138,25 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const repositories = createInMemoryRepositoryBundle();
 
   const result = await submitPickController(
-    makePayload('smart-form'),
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'delivery-eligible',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [
+            { role: 'away', displayName: 'Challenger One', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Challenger Two', canonicalParticipantId: null },
+          ],
+        },
+      },
+    }),
     repositories,
   );
 
@@ -150,6 +170,39 @@ test('submit-pick-controller: smart-form path is NOT braked (regression guard)',
   const pick = await repositories.picks.findPickById(result.body.data.pickId);
   assert.ok(pick);
   assert.notEqual(pick.status, 'awaiting_approval');
+});
+
+test('submit-pick-controller: track-only smart-form pick persists without outbox work', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await submitPickController(
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'track-only',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [
+            { role: 'away', displayName: 'Challenger One', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Challenger Two', canonicalParticipantId: null },
+          ],
+        },
+      },
+    }),
+    repositories,
+  );
+  assert.equal(result.status, 201);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.outboxEnqueued, false);
+  assert.equal((await repositories.outbox.listByPickId(result.body.data.pickId)).length, 0);
+  const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.equal((persisted?.metadata as Record<string, unknown>)['distributionMode'], 'track-only');
 });
 
 test('submit-pick-controller: api source is NOT braked (human path preserved)', async () => {
@@ -234,4 +287,175 @@ test('submit-pick-controller: enqueue failure writes operator-visible zombie pic
   assert.ok(alertDetails && typeof alertDetails === 'object' && !Array.isArray(alertDetails));
   assert.equal(alertDetails.pickId, result.body.data.pickId);
   assert.equal(alertDetails.recoveryAction, 'POST /api/picks/:id/requeue');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: mutation controls for the controller-level Smart Form guards.
+// Each control deletes one named guard from its own source file and asserts the
+// mutant admits input the guarded build refuses.
+// ---------------------------------------------------------------------------
+
+async function withGuardRemoved<T>(
+  relativeModulePath: string,
+  guardName: string,
+  run: (mutant: Record<string, unknown>) => Promise<T>,
+): Promise<T> {
+  const sourcePath = fileURLToPath(new URL(relativeModulePath, import.meta.url));
+  const suffix = `__mutant_${guardName}_${process.pid}_${Math.random().toString(36).slice(2, 8)}`;
+  const mutantPath = sourcePath.replace(/\.ts$/u, `${suffix}.ts`);
+  const source = await readFile(sourcePath, 'utf8');
+  const guardPattern = new RegExp(
+    `[ ]*// UTV2-1672 ${guardName}_START[\\s\\S]*?// UTV2-1672 ${guardName}_END\\n`,
+    'u',
+  );
+  const mutantSource = source.replace(guardPattern, '');
+  assert.notEqual(mutantSource, source, `mutation control could not remove ${guardName}`);
+  await writeFile(mutantPath, mutantSource, 'utf8');
+  try {
+    const mutant = (await import(
+      `${pathToFileURL(mutantPath).href}?mutation=${guardName}`
+    )) as Record<string, unknown>;
+    return await run(mutant);
+  } finally {
+    await unlink(mutantPath).catch(() => undefined);
+  }
+}
+
+/**
+ * A Smart Form payload whose typed participantResolution is structurally
+ * invalid: it claims canonical resolution for a sport with no canonical event
+ * and no participants at all, which cannot be verified against reference data.
+ * The relationship validator refuses it; without the validator it is admitted.
+ */
+function makeUnverifiablePayload(): SubmissionPayload {
+  return makePayload('smart-form', {
+    eventName: 'Unverifiable event',
+    metadata: {
+      sport: 'MMA',
+      distributionMode: 'track-only',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: 'MMA',
+        eventId: null,
+      },
+    },
+  });
+}
+
+test('mutation control: removing SMART_FORM_RELATIONSHIP_GUARD admits an unverifiable canonical resolution', async () => {
+  // Baseline: the guard refuses with its own error code.
+  const guardedRepositories = createInMemoryRepositoryBundle();
+  await assert.rejects(
+    () => submitPickController(makeUnverifiablePayload(), guardedRepositories),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(
+        (err as { code?: string }).code,
+        'SMART_FORM_RELATIONSHIP_INVALID',
+        'guarded build must refuse via the relationship validator',
+      );
+      return true;
+    },
+  );
+
+  // Mutant: the same payload is accepted and persisted with no canonical
+  // verification whatsoever.
+  await withGuardRemoved(
+    './submit-pick-controller.ts',
+    'SMART_FORM_RELATIONSHIP_GUARD',
+    async (mutant) => {
+      const mutantSubmit = mutant.submitPickController as typeof submitPickController;
+      const repositories = createInMemoryRepositoryBundle();
+      const result = await mutantSubmit(makeUnverifiablePayload(), repositories);
+      assert.equal(result.status, 201, 'mutant must admit the unverifiable payload');
+      assert.ok(result.body.ok);
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1672: the idempotent-duplicate path.
+//
+// The Track Only pin marks the incoming payload. processSubmission discards
+// that payload when the submission collides with an existing pick and returns
+// the stored row instead, so without this guard a Track Only request can be
+// answered with a pick that every downstream guard reads as delivery-eligible.
+// ---------------------------------------------------------------------------
+
+function makeCollidingPayload(distributionMode: string): SubmissionPayload {
+  return makePayload('smart-form', {
+    market: 'NBA moneyline',
+    selection: 'Supersonics ML',
+    odds: -110,
+    eventName: 'Supersonics vs Bullets',
+    metadata: {
+      sport: 'NBA',
+      distributionMode,
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NBA',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Supersonics vs Bullets',
+        enteredParticipants: [
+          { role: 'away', displayName: 'Supersonics', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Bullets', canonicalParticipantId: null },
+        ],
+      },
+    },
+  });
+}
+
+test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Track Only request with a delivery-eligible pick', async () => {
+  // The two payloads differ only in metadata, which the idempotency key
+  // deliberately excludes -- so the second submission resolves to the first pick.
+  async function seed() {
+    const repositories = createInMemoryRepositoryBundle();
+    const first = await submitPickController(
+      makeCollidingPayload('delivery-eligible'),
+      repositories,
+    );
+    assert.equal(first.status, 201, 'seed submission must be accepted');
+    return repositories;
+  }
+
+  // Baseline: the guard refuses rather than reusing the delivery-eligible pick.
+  const guarded = await seed();
+  const guardedResult = await submitPickController(
+    makeCollidingPayload('track-only'),
+    guarded,
+  ).then(
+    (response) => ({ kind: 'response' as const, response }),
+    (error: unknown) => ({ kind: 'error' as const, error }),
+  );
+  assert.equal(guardedResult.kind, 'error', 'baseline must refuse the colliding Track Only request');
+  if (guardedResult.kind === 'error') {
+    const error = guardedResult.error as { status?: number; code?: string };
+    assert.equal(error.status, 409);
+    assert.equal(error.code, 'TRACK_ONLY_CONFLICT');
+  }
+
+  // Mutant: with the marked block deleted, the request succeeds and hands back
+  // a pick that is not Track Only.
+  await withGuardRemoved(
+    './submit-pick-controller.ts',
+    'TRACK_ONLY_REQUEST_INTEGRITY_GUARD',
+    async (mutant) => {
+      const mutantController = mutant['submitPickController'] as typeof submitPickController;
+      const repositories = createInMemoryRepositoryBundle();
+      const seeded = await mutantController(makeCollidingPayload('delivery-eligible'), repositories);
+      assert.equal(seeded.status, 201);
+
+      const response = await mutantController(makeCollidingPayload('track-only'), repositories);
+      assert.equal(response.status, 201, 'mutant must accept the colliding Track Only request');
+      if (!response.body.ok) throw new Error('expected ok response');
+      const pick = await repositories.picks.findPickById(response.body.data.pickId);
+      assert.notEqual(
+        (pick?.metadata as Record<string, unknown> | undefined)?.['distributionMode'],
+        'track-only',
+        'mutant must hand back a pick that is not Track Only',
+      );
+    },
+  );
 });

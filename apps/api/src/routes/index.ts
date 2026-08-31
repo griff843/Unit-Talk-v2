@@ -13,6 +13,7 @@ export {
 } from './picks.js';
 export {
   handleReferenceDataCatalog,
+  handleReferenceDataAvailability,
   handleReferenceDataLeagues,
   handleReferenceDataMatchups,
   handleReferenceDataEventBrowse,

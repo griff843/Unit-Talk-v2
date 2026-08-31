@@ -464,3 +464,191 @@ after(async () => {
     assert.equal(rows[0]!.from_state, 'awaiting_approval');
   }
 });
+
+// ─── STEP 5: UTV2-1672 Track Only chokepoint against live Postgres ──────────
+//
+// The Track Only guards were previously proven only against an in-memory
+// repository and a stub Supabase client. Both are faithful, but neither is
+// Postgres, and this class of change has shipped broken twice precisely
+// because unit tests pass under InMemory while production diverges.
+//
+// This step submits a Track Only pick through the real in-process submit-pick
+// controller against real database repositories, then attacks the persisted
+// row directly through DatabaseOutboxRepository — the repository production
+// actually runs — and proves no `distribution_outbox` row can be created for
+// it. Fixtures are tagged `utv2-1672-track-only-<runId>` and voided through
+// the lifecycle FSM in the `after` hook, so nothing is left actionable.
+
+const trackOnlyRunId = randomUUID();
+const trackOnlyFixtureId = `utv2-1672-track-only-${trackOnlyRunId}`;
+const trackOnlyPickIds: string[] = [];
+let trackOnlyPickId = '';
+
+test('UTV2-1672: a Track Only submission persists as track-only and creates no outbox row', { skip: skipReason }, async () => {
+  // The Smart Form relationship contract runs for `smart-form` submissions, so
+  // this fixture has to satisfy it rather than route around it — that keeps the
+  // proof end-to-end instead of proving only the chokepoint in isolation.
+  //
+  // The sport is read from the live catalog rather than hardcoded: a hardcoded
+  // id that staging happened not to carry would fail CANONICAL_SPORT_ID_GUARD
+  // and produce a red that says nothing about Track Only.
+  const catalog = await repositories.referenceData.getCatalog();
+  const teamSports = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
+  const sport = catalog.sports.find((candidate) => teamSports.has(candidate.id.toUpperCase()));
+  assert.ok(sport, `no canonical team sport in the live catalog (found: ${catalog.sports.map((s) => s.id).join(', ')})`);
+  const sportId = sport.id;
+
+  // Deliberately non-canonical participant names, so the coverage gap the
+  // manual resolution claims is genuine. MANUAL_COVERAGE_GAP_PROOF_GUARD
+  // refuses a fabricated gap, so these must not collide with real reference
+  // data — the run id makes that certain.
+  const awayName = `UTV2-1672 Proof Away ${trackOnlyRunId}`;
+  const homeName = `UTV2-1672 Proof Home ${trackOnlyRunId}`;
+  const enteredEventName = `${awayName} at ${homeName}`;
+
+  const payload: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'spread',
+    selection: `UTV2-1672 TRACK ONLY ${trackOnlyRunId}`,
+    line: -3.5,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 60,
+    eventName: enteredEventName,
+    metadata: {
+      proof_fixture_id: trackOnlyFixtureId,
+      proof_issue: 'UTV2-1672',
+      distributionMode: 'track-only',
+      participantResolution: {
+        resolution: 'manual',
+        sportId,
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName,
+        enteredParticipants: [
+          { role: 'away', displayName: awayName, canonicalParticipantId: null },
+          { role: 'home', displayName: homeName, canonicalParticipantId: null },
+        ],
+      },
+    },
+  };
+
+  const response = await submitPickController(payload, repositories);
+  assert.equal(response.status, 201, `expected 201, got ${response.status}`);
+  const data = (response.body as { ok: true; data: { pickId: string; outboxEnqueued: boolean } }).data;
+  assert.equal(data.outboxEnqueued, false, 'a Track Only submission must not enqueue delivery work');
+
+  trackOnlyPickId = data.pickId;
+  trackOnlyPickIds.push(trackOnlyPickId);
+  createdPickIds.push(trackOnlyPickId);
+
+  // The metadata must be durable in Postgres, not merely present on the
+  // in-process result object. Every downstream guard reads the persisted row.
+  const pickRows = await restQuery<{ id: string; status: string; metadata: Record<string, unknown> | null }>(
+    `picks?id=eq.${trackOnlyPickId}&select=id,status,metadata`,
+  );
+  assert.equal(pickRows.length, 1, 'pick row not found in Postgres');
+  assert.equal(
+    (pickRows[0]!.metadata as { distributionMode?: string } | null)?.distributionMode,
+    'track-only',
+    'persisted metadata must carry distributionMode=track-only',
+  );
+
+  const outboxRows = await restQuery<OutboxRow>(
+    `distribution_outbox?pick_id=eq.${trackOnlyPickId}&select=id,pick_id,status`,
+  );
+  assert.equal(outboxRows.length, 0, `expected 0 outbox rows, got ${outboxRows.length}`);
+});
+
+test('UTV2-1672: DatabaseOutboxRepository refuses to enqueue the persisted Track Only pick', { skip: skipReason }, async () => {
+  assert.ok(trackOnlyPickId, 'the Track Only fixture must exist before the chokepoint is attacked');
+  const { TrackOnlyDeliveryForbiddenError } = await import('@unit-talk/db');
+
+  // This is the direct attack the controller-level test cannot make: call the
+  // production outbox repository against live Postgres and ask it to create
+  // delivery work for a pick whose Track Only status exists only as a
+  // persisted row.
+  await assert.rejects(
+    () =>
+      repositories.outbox.enqueue({
+        pickId: trackOnlyPickId,
+        target: 'discord:best-bets',
+        payload: {},
+        idempotencyKey: `${trackOnlyFixtureId}-enqueue`,
+      }),
+    (error: unknown) => {
+      // Asserting the specific error type is the control here, not decoration.
+      // The chokepoint throws a DIFFERENT error ("Track Only status cannot be
+      // established") when it cannot read the pick row. Getting
+      // TrackOnlyDeliveryForbiddenError therefore proves it read the real row
+      // out of Postgres and refused on the metadata it found — not that it
+      // failed closed for an unrelated reason such as the row being invisible.
+      assert.ok(
+        error instanceof TrackOnlyDeliveryForbiddenError,
+        `expected TrackOnlyDeliveryForbiddenError, got ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+      );
+      return true;
+    },
+  );
+
+  // The refusal must also have written nothing. An exception raised after an
+  // insert would still leave deliverable work in the queue.
+  const outboxRows = await restQuery<OutboxRow>(
+    `distribution_outbox?pick_id=eq.${trackOnlyPickId}&select=id,pick_id,status`,
+  );
+  assert.equal(outboxRows.length, 0, `refusal still created ${outboxRows.length} outbox row(s)`);
+});
+
+test('UTV2-1672: no outbox row exists for any Track Only fixture from this run', { skip: skipReason }, async () => {
+  // Scoped to this run so the assertion cannot be satisfied or broken by
+  // unrelated production rows.
+  const fixturePicks = await restQuery<{ id: string }>(
+    `picks?metadata->>proof_fixture_id=eq.${trackOnlyFixtureId}&select=id`,
+  );
+  assert.ok(fixturePicks.length > 0, 'this run must have created at least one fixture');
+  for (const pick of fixturePicks) {
+    const rows = await restQuery<OutboxRow>(
+      `distribution_outbox?pick_id=eq.${pick.id}&select=id,pick_id,status`,
+    );
+    assert.equal(rows.length, 0, `fixture ${pick.id} has ${rows.length} outbox row(s)`);
+  }
+});
+
+after(async () => {
+  if (skipReason) return;
+  // Same discipline as UTV2-1611: void through the lifecycle FSM, never a
+  // direct status PATCH, so the cleanup is itself governed and auditable.
+  for (const pickId of trackOnlyPickIds) {
+    try {
+      await transitionPickLifecycle(
+        repositories.picks,
+        pickId,
+        'voided',
+        'UTV2-1672 live proof fixture cleanup',
+        'operator_override',
+      );
+    } catch (cleanupError) {
+      console.error(
+        JSON.stringify({
+          proof: 'UTV2-1672',
+          event: 'fixture_cleanup_failed',
+          pickId,
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        }),
+      );
+      throw cleanupError;
+    }
+  }
+
+  for (const pickId of trackOnlyPickIds) {
+    const rows = await restQuery<LifecycleRow>(
+      `pick_lifecycle?pick_id=eq.${pickId}&to_state=eq.voided&select=id,pick_id,from_state,to_state,writer_role,reason`,
+    );
+    assert.equal(rows.length, 1, `voiding fixture ${pickId} must write exactly one lifecycle event`);
+    const outboxRows = await restQuery<OutboxRow>(
+      `distribution_outbox?pick_id=eq.${pickId}&select=id,pick_id,status`,
+    );
+    assert.equal(outboxRows.length, 0, `fixture ${pickId} left ${outboxRows.length} actionable outbox row(s)`);
+  }
+});
