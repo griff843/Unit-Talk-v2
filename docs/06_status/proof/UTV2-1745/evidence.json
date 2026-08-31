@@ -212,11 +212,27 @@
       {
         "id": "Q7",
         "purpose": "Rung 2/3 evidence: the latest pre-cutoff provider_offer_history snapshot for each alive triple, pinnacle and consensus.",
-        "statement": "select id, provider_event_id, provider_market_key, provider_participant_id, provider_key, bookmaker_key, is_closing, line, over_odds, under_odds, snapshot_at from public.provider_offer_history where provider_event_id = $1 and provider_market_key = $2 and provider_participant_id is not distinct from $3 and snapshot_at <= $4 order by snapshot_at desc limit 1  -- executed in 4 batches of 24 LATERAL probes (.out/replay/b0.sql..b3.sql)",
+        "statement": "select id, provider_event_id, provider_market_key, provider_participant_id, provider_key, bookmaker_key, is_closing, line, over_odds, under_odds, snapshot_at from public.provider_offer_history where provider_event_id = $1 and provider_market_key = $2 and provider_participant_id is not distinct from $3 and snapshot_at <= $4 order by snapshot_at desc limit 1  -- executed in 4 batches of 24/24/24/22 TRIPLES (.out/replay/b0.sql..b3.sql), each batch covering both provider tiers",
         "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
         "measured_at": "2026-08-30",
         "rows_returned": 111,
-        "note": "Batched because a single 188-probe LATERAL timed out: the only index is (provider_event_id, snapshot_at)."
+        "note": "Batched because a single 188-probe LATERAL timed out: the only index is (provider_event_id, snapshot_at).",
+        "receipt": {
+          "file": ".out/replay/q7_receipt.json",
+          "generated_by": ".out/replay/q7_receipt.ts",
+          "fields_cited": [
+            "alive_triples",
+            "tiers_per_triple",
+            "probes_issued",
+            "batch_triples",
+            "batch_triples_total",
+            "probe_results_non_empty",
+            "probe_results_pinnacle",
+            "probe_results_any",
+            "rows_returned"
+          ]
+        },
+        "rows_note": "Rungs 2 and 3 select `order by snapshot_at desc limit 1`, so each non-empty probe yields exactly one row (asserted above). rows_returned therefore equals probe_results_non_empty. It is NOT the sum of field counts over the row objects — that sum is 11 x 111 = 1221 and is not a row count."
       },
       {
         "id": "Q8",
@@ -254,6 +270,35 @@
       "entrypoint_already_correct": "runPickTruthAudit (:2088) already passes createMarketUniverseClosingLookup(client) (:2102), which queries the full table, and loadAuditDataset already selects payload/metadata unpruned (:1671, :1697, :1760). No audit-logic change was required to obtain the corrected numbers and none was made. This correction is proof-only.",
       "pruned_dataset_defect_not_reproduced": "The round-11 dataset selects settlement_records.payload, picks.metadata and events.metadata whole (Q3) and carries participants.sport (Q5); the round-10 dataset.json pruned all four.",
       "temporal_semantics": "No cutoff was widened or relaxed. Where a resolved line post-dates its own cutoff (44 of 194 rows) that is production-parity rung-1/rung-4 behaviour and is reported as a defect, not absorbed."
+    },
+    "q7_receipt": {
+      "note": "Every field below is counted from a retained artifact by q7_receipt.ts. Cite these fields; do not restate them by hand.",
+      "generated_by": "q7_receipt.ts",
+      "alive_triples": 94,
+      "tiers_per_triple": 2,
+      "probes_issued": 188,
+      "batch_triples": [
+        24,
+        24,
+        24,
+        22
+      ],
+      "batch_triples_rendered": "24/24/24/22",
+      "batch_triples_total": 94,
+      "probe_results_non_empty": 111,
+      "probe_results_pinnacle": 17,
+      "probe_results_any": 94,
+      "distinct_triples_probed": 94,
+      "rows_returned": 111,
+      "rows_per_non_empty_probe": 1,
+      "rows_note": "Rungs 2 and 3 select `order by snapshot_at desc limit 1`, so each non-empty probe yields exactly one row (asserted above). rows_returned therefore equals probe_results_non_empty. It is NOT the sum of field counts over the row objects — that sum is 11 x 111 = 1221 and is not a row count.",
+      "universe_probes": 90,
+      "reconciliations": {
+        "batches_equal_alive_triples": true,
+        "probes_equal_two_per_triple": true,
+        "pinnacle_plus_any_equals_results": true,
+        "distinct_triples_equal_alive": true
+      }
     }
   },
   "static_proof": {
@@ -635,14 +680,14 @@
         "agreements": 200,
         "disagreements": 0,
         "unresolvable": 0,
-        "agreement_rate_pct": 100.0
+        "agreement_rate_pct": 100
       },
       "corrected": {
         "resolvable": 100,
         "agreements": 100,
         "disagreements": 0,
         "unresolvable": 100,
-        "agreement_rate_pct": 100.0
+        "agreement_rate_pct": 100
       },
       "corrected_unresolvable_by_reason": {
         "game_result_identity_unverifiable": 100,
@@ -667,7 +712,7 @@
         "old": {
           "resolvable": 4,
           "unresolvable": 196,
-          "resolvability_rate_pct": 2.0,
+          "resolvability_rate_pct": 2,
           "failure_classes": {
             "missing_closing_line": 193,
             "missing_priced_side": 2,
@@ -677,7 +722,7 @@
         "corrected": {
           "resolvable": 98,
           "unresolvable": 102,
-          "resolvability_rate_pct": 49.0,
+          "resolvability_rate_pct": 49,
           "failure_classes": {
             "missing_closing_line": 100,
             "missing_priced_side": 2
@@ -1417,105 +1462,53 @@
       "manual_steps_removed": "replay11.ts previously read the cohort order from a /tmp scratch file, which is exactly the undocumented manual input the review objected to. It now reads .out/replay/cohort11.json. Re-running it reproduces report11.json BYTE-IDENTICALLY (generated_at is a pinned literal, not a clock read); all 16 retained digests were re-verified after a clean re-execution of both scripts and all matched.",
       "delta_from_the_pre_review_artifact": "Re-deriving per_row11_final.json changed exactly 6 of 200 rows, and only in the coarse resolution_source label: the six rung-1 rows previously read 'none' and now read 'market_universe:closing_line'. source_exact, cutoff_enforced, clv_resolvable, clv_failure_class, grade_resolvable and structural_blocked are identical on all 200 rows. No published number changed.",
       "artifact_digests": {
-        "cohort11.json": "6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c",
-        "fresh_tables.json": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4",
-        "player_pool_all.json": "33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6",
-        "fwd_aliases11.json": "df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc",
-        "rev_aliases11.json": "dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3",
-        "offer_rows11.json": "227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34",
-        "universe_rows11.json": "735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372",
-        "row_counts11.json": "1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376",
-        "em_ranges.json": "84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5",
-        "parity_receipt.json": "ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289",
-        "per_row11_final.json": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a",
-        "report11.json": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
-        "derive_final.ts": "50e4586c8d825a274bbe72f398429767f9d12094b931a6655acd32f3a6de5f69",
-        "replay11.ts": "6b4b2497fa42c1ac3a743f32ab8684c5a2e3aa3888f15de611de5c5c2ba3a940",
-        "parity.ts": "473ac5eeafa26161c0cf3babc2c13c38975836dba60783da82e345d9c6507724",
-        "attribute.ts": "53803e9ae9fdb073e532a18426c93b5ad27a0cbcb47e2d65ed88e2b043f1eff0"
+        "retained inputs (production reads)": {
+          "cohort11.json": "6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c",
+          "fresh_tables.json": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4",
+          "player_pool_all.json": "33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6",
+          "fwd_aliases11.json": "df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc",
+          "rev_aliases11.json": "dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3",
+          "offer_rows11.json": "227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34",
+          "universe_rows11.json": "735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372",
+          "row_counts11.json": "1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376",
+          "em_ranges.json": "84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5",
+          "triples_alive11.json": "d5d681741d6a6f4b387fc3b30776569333d79523a3ab2256093f36c55acff318"
+        },
+        "derived outputs": {
+          "per_row11_final.json": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a",
+          "report11.json": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
+          "parity_receipt.json": "ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289",
+          "q7_receipt.json": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba",
+          "matrix_results.json": "76459b6bacd02b930168275ca6e32f6426f90c185c0b3da55bde67645af4f5db"
+        },
+        "derivation scripts": {
+          "derive_final.ts": "8491fbeebdfd262c3156487d61d756dd63d17501c99a26af5ac41e9738767dcd",
+          "replay11.ts": "bb0d221660569f09a4b36c9a03be9c6c33945748003f6989bce425250663933d",
+          "parity.ts": "467e3a6c4dacbbe91f353d66b48876cade1fe3773cae9b69d4703d74ebcde657",
+          "attribute.ts": "034c82d755a12d098690bdb4ba7abd8f206e4e8e5721a8af6c937969a1aac80c",
+          "q7_receipt.ts": "7510f1e174b0c4a321c34900566fb5e7fac383a47ae18854f6d3e449ae96dde3",
+          "matrix_check.ts": "5800f783ee524d202e96c242689e4a3bf6742bf912b4c96489a08f9bd63a4381",
+          "render_matrix.ts": "62d183ffc6b27afb72fd8b36fa92467dea629eec9f8d8d93e8b8dc19d922d79e",
+          "render_digests.ts": "06ff124635dc0f54ca59a7f79ea6df462012344973b7961bf5c5d1019880fc33",
+          "contradiction_scan.ts": "ff08c9da65d2023495bb6412fb70a0d3c00e53a6081978d1bb040d1d3043c4f3"
+        },
+        "mutation battery": {
+          "mutations.json": "3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae",
+          "battery.py": "24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152"
+        },
+        "verbatim command receipts": {
+          "proof-binding-validator.txt": "be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a",
+          "round12-commit-scope.txt": "1d9c13699b3864b93b6216c927f308ad54a1f1a9a837d0e302ad457fe71802a1"
+        }
       },
-      "mutation_digests": {
-        "mutations.json": "3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae",
-        "battery.py": "24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152"
-      },
-      "reproduce": "pnpm exec tsx .out/replay/derive_final.ts   # prints the full reconciliation and both digests"
+      "reproduce": "pnpm exec tsx .out/replay/derive_final.ts   # prints the full reconciliation and both digests",
+      "digest_manifest_generated_by": ".out/replay/render_digests.ts"
     }
   },
   "round12_remediation": {
     "authorization": "PM DISPOSITION -- UTV2-1745 ROUND 12 AUTHORIZED: one bounded proof-only remediation round and one tenth independent review.",
     "scope": "PROOF-ONLY. scripts/ops/pick-truth-audit.ts, scripts/ops/pick-truth-audit.test.ts and package.json are byte-identical to their state at 3a99f504 (verified: git diff --stat 3a99f504 -- <path> is empty for all three). No shipped audit logic, package behaviour or production execution semantic was touched.",
-    "findings_dispositioned": 9,
     "note": "All nine ninth-review findings are dispositioned, including the three P3s that were not in the summary returned to PM.",
-    "matrix": [
-      {
-        "n": 1,
-        "severity": "P1",
-        "finding": "Shipped systemic_defect flipped true->false between rounds 10 and 11, undisclosed",
-        "disposition": "FIXED -- disclosed",
-        "where": "verification.md 'The shipped systemic_defect detector flipped true -> false'; evidence.json post_fix_validation.systemic_defect_detector"
-      },
-      {
-        "n": 2,
-        "severity": "P1",
-        "finding": "Withdrawn 'persisted computed but unresolvable = 82' had a measured successor never reported",
-        "disposition": "FIXED -- 16/200 = 8.00% reported, split 13/2/1, bound to report11.json clv.persisted_status_mismatches",
-        "where": "verification.md Finding 7; evidence.json post_fix_validation.persisted_clv_status_mismatches"
-      },
-      {
-        "n": 3,
-        "severity": "P2",
-        "finding": "git diff --name-status 3a99f504 HEAD asserted a fixed result that committing the assertion falsified",
-        "disposition": "FIXED -- every comparison pinned to two immutable SHAs and re-executed; the one unpinnable leg stated as a reviewer-verifiable property, not asserted output. Four further moving-ref receipts found and pinned in the same sweep (git rev-parse origin/main, origin/main...c4715923, r-level-check --base origin/main --head HEAD in two places, git show HEAD, git diff HEAD origin/main).",
-        "where": "verification.md git receipt block, Proof re-anchor, Main synchronization"
-      },
-      {
-        "n": 4,
-        "severity": "P2",
-        "finding": "Round-10 harness described as emptying 'one' picks.metadata; the real count is three",
-        "disposition": "FIXED -- corrected to three, ids listed, independently re-measured against fresh_tables.json",
-        "ids": [
-          "01a77b3f-462d-4daa-b0ef-0b96ca120c15",
-          "9c8833ff-6738-4bf7-8874-257c5ef6cdfd",
-          "aec0db94-7ff9-42f4-8951-e39343f3f58c"
-        ],
-        "where": "verification.md CLV superseded-measurements block"
-      },
-      {
-        "n": 5,
-        "severity": "P2",
-        "finding": "The 102,155 market_universe denominator had no executed query receipt",
-        "disposition": "FIXED -- Q9 added with statement, channel, project ref, environment, server-clock timestamp, all three counts and an internal reconciliation; no credentials",
-        "where": "verification.md Q9 receipt; evidence.json runtime_proof.queries Q9"
-      },
-      {
-        "n": 6,
-        "severity": "P2",
-        "finding": "No retained script produced per_row11_final.json; source_exact and cutoff_enforced came from undocumented manual steps",
-        "disposition": "FIXED -- .out/replay/derive_final.ts retained; imports the shipped exports, reproduces 194/150/44/40/4 from retained inputs, separates rung 1 from rung 4, applies asProductionClosingLine at tier granularity. replay11.ts de-/tmp/-ed and reproduces report11.json byte-identically. Outputs and 18 digests recorded.",
-        "where": "verification.md 'How the per-row artifact is produced'; evidence.json post_fix_validation.retained_derivation"
-      },
-      {
-        "n": 7,
-        "severity": "P3",
-        "finding": "The rung-4 cutoff comparison used an unnamed proxy column",
-        "disposition": "FIXED -- named as market_universe.last_offer_snapshot_at, stated as a proxy, with the direction of inference it does and does not support made explicit",
-        "where": "verification.md 'Why the April half resolves'"
-      },
-      {
-        "n": 8,
-        "severity": "P3",
-        "finding": "Q7 probe accounting (4 x 24, 188, 94) was mutually inconsistent",
-        "disposition": "FIXED -- recounted from offer_rows11.json: 94 alive triples x 2 tiers = 188 probes; one 188-way query timed out; re-issued as 4 batches of <=24 TRIPLES covering both tiers; 111 non-empty results (17 pinnacle, 94 ANY); 1,221 offer rows. The batching unit is the triple, not the probe.",
-        "where": "verification.md Q7 receipt"
-      },
-      {
-        "n": 9,
-        "severity": "P3",
-        "finding": "diff-summary.md mixed the round-8/9 mutation count (34) with the current one (42)",
-        "disposition": "FIXED -- counts attributed by round: 34 (round 9) + 5 (round 10) + 3 (round 11) = 42",
-        "where": "diff-summary.md mutation bullet"
-      }
-    ],
     "verification_before_review": {
       "derived_outputs_regenerated": "derive_final.ts and replay11.ts re-executed from clean invocations; all 18 retained digests re-verified and matched",
       "partitions_reconcile_to_200": true,
@@ -1546,6 +1539,197 @@
         "violation_4": "Inherited from main, not lane-authored. readiness-score.json entered the branch through the synchronization merge as main's own content; last author github-actions[bot], 'ops(readiness): refresh ledger [skip ci]', commit 249da64b. The rule compares every path rather than lane-authored paths, so any lane that synchronizes with main trips it. Same class as the defect already routed to UTV2-1790; not remediated here."
       },
       "disclosed_because": "A reviewer should not have to discover a failing validator by running it themselves, even one that does not gate."
+    },
+    "matrix_superseded_by": "remediation_matrix (combined 9 + 5); the round-12-only matrix is removed to avoid two disagreeing tables",
+    "round13_corrections": {
+      "authorization": "PM DISPOSITION -- UTV2-1745 FINAL PROOF CLOSURE AUTHORIZED",
+      "scope": "PROOF-ONLY plus retained (gitignored) replay-script portability fixes. No shipped audit logic touched.",
+      "corrections": [
+        "Q7 row count 1,221 -> 111, generated from q7_receipt.json rows_returned, never restated by hand",
+        "batch structure -> 24/24/24/22 (counted from b0..b3.sql), corrected in prose AND in evidence.json Q7.statement",
+        "removed the self-invalidating worktree claim; the round-12 commit's file scope is now stated with immutable endpoints and a retained receipt",
+        "removed every absolute path from derive_final.ts, replay11.ts, parity.ts, attribute.ts; proved execution from a different checkout path yields an identical digest",
+        "captured proof-binding-validator output verbatim in a retained receipt and referenced it instead of paraphrasing",
+        "removed the vacuous equality claim; the comparison now covers only fields present on both artifacts and names the two that are not comparable"
+      ]
     }
+  },
+  "remediation_matrix": {
+    "note": "Combined disposition matrix: all 9 findings from the ninth adversarial review and all 5 from the tenth. Every row's `result` is EXECUTED by .out/replay/matrix_check.ts and read from matrix_results.json -- no row's result is hand-asserted. Regenerate with: pnpm exec tsx .out/replay/matrix_check.ts",
+    "generated_by": ".out/replay/matrix_check.ts",
+    "results_file": ".out/replay/matrix_results.json",
+    "total": 14,
+    "passing": 14,
+    "failing": [],
+    "rows": [
+      {
+        "id": "9.1",
+        "review": "ninth",
+        "severity": "P1",
+        "finding": "systemic_defect flipped true->false undisclosed",
+        "authoritative_source": ".out/replay/report.json + report11.json",
+        "corrected_artifact": "verification.md detector section",
+        "verification_command": "compare report.json/report11.json systemic_defect against the disclosed text",
+        "result": "round10 detected=true, round11 detected=false, disclosed=true",
+        "pass": true,
+        "immutable_binding": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b"
+      },
+      {
+        "id": "9.2",
+        "review": "ninth",
+        "severity": "P1",
+        "finding": "withdrawn \"=82\" had an unreported successor",
+        "authoritative_source": "report11.json clv.persisted_status_mismatches",
+        "corrected_artifact": "verification.md Finding 7",
+        "verification_command": "count mismatches and their reason split",
+        "result": "n=16",
+        "pass": true,
+        "immutable_binding": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b"
+      },
+      {
+        "id": "9.3",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "git receipt asserted a result publishing it falsified",
+        "authoritative_source": "git",
+        "corrected_artifact": "verification.md git receipt block",
+        "verification_command": "git diff --name-status 3a99f504 c4715923",
+        "result": "M docs/06_status/readiness/readiness-score.json",
+        "pass": true,
+        "immutable_binding": "c4715923"
+      },
+      {
+        "id": "9.4",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "emptied picks.metadata count stated as one",
+        "authoritative_source": "dataset.json vs fresh_tables.json",
+        "corrected_artifact": "verification.md CLV supersession block",
+        "verification_command": "count picks emptied in dataset.json but populated upstream",
+        "result": "3: 01a77b3f-462d-4daa-b0ef-0b96ca120c15 9c8833ff-6738-4bf7-8874-257c5ef6cdfd aec0db94-7ff9-42f4-8951-e39343f3f58c",
+        "pass": true,
+        "immutable_binding": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4"
+      },
+      {
+        "id": "9.5",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "102,155 denominator had no executed receipt",
+        "authoritative_source": "evidence.json runtime_proof.queries Q9",
+        "corrected_artifact": "verification.md Q9 block",
+        "verification_command": "check Q9 fields and internal reconciliation",
+        "result": "102155 = 88213 + 13942 @ 2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)",
+        "pass": true,
+        "immutable_binding": "Q9 executed_at 2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)"
+      },
+      {
+        "id": "9.6",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "no retained script produced per_row11_final.json",
+        "authoritative_source": ".out/replay/derive_final.ts",
+        "corrected_artifact": "per_row11_final.json",
+        "verification_command": "pnpm exec tsx .out/replay/derive_final.ts",
+        "result": "rows=200 resolvable=194 cutoff_enforced=150",
+        "pass": true,
+        "immutable_binding": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a"
+      },
+      {
+        "id": "9.7",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "rung-4 cutoff proxy unnamed",
+        "authoritative_source": "market_universe schema",
+        "corrected_artifact": "verification.md April-half section",
+        "verification_command": "grep last_offer_snapshot_at verification.md",
+        "result": "named=true",
+        "pass": true,
+        "immutable_binding": "n/a"
+      },
+      {
+        "id": "9.8",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "Q7 probe accounting inconsistent",
+        "authoritative_source": ".out/replay/q7_receipt.json",
+        "corrected_artifact": "verification.md Q7 block",
+        "verification_command": "pnpm exec tsx .out/replay/q7_receipt.ts",
+        "result": "alive=94 probes=188 batches=24/24/24/22 rows=111",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "9.9",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "diff-summary mixed mutation counts 34 and 42",
+        "authoritative_source": "diff-summary.md",
+        "corrected_artifact": "diff-summary.md mutation bullet",
+        "verification_command": "check round attribution present",
+        "result": "attributed=true",
+        "pass": true,
+        "immutable_binding": "n/a"
+      },
+      {
+        "id": "10.A",
+        "review": "tenth",
+        "severity": "P2",
+        "finding": "\"1,221 offer rows\" does not reconcile; contradicts evidence.json rows_returned:111",
+        "authoritative_source": ".out/replay/q7_receipt.json rows_returned",
+        "corrected_artifact": "verification.md / diff-summary.md / evidence.json",
+        "verification_command": "pnpm exec tsx .out/replay/q7_receipt.ts; bundle-wide scan for the retired figure asserted as live",
+        "result": "rows_returned=111; retired figure asserted as live=false",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "10.B",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "evidence.json Q7 retained \"4 batches of 24 LATERAL probes\"",
+        "authoritative_source": ".out/replay/b0..b3.sql",
+        "corrected_artifact": "evidence.json Q7.statement",
+        "verification_command": "count tuples per retained batch file",
+        "result": "batches=24/24/24/22 total=94; stale wording present=false",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "10.C",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "self-invalidating \"worktree contains changes to exactly three files\"",
+        "authoritative_source": "git",
+        "corrected_artifact": "diff-summary.md closing paragraph",
+        "verification_command": "git diff --name-only b10d8aa8 3f2f4ba8",
+        "result": "3 paths, all under the proof dir",
+        "pass": true,
+        "immutable_binding": "3f2f4ba8"
+      },
+      {
+        "id": "10.D",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "derive_final.ts hardcoded absolute worktree paths",
+        "authoritative_source": ".out/replay/*.ts",
+        "corrected_artifact": "the retained replay scripts",
+        "verification_command": "grep /home/griff843 in every retained script; execute derive_final.ts from a different path",
+        "result": "scripts with absolute paths: none",
+        "pass": true,
+        "immutable_binding": "8491fbeebdfd262c3156487d61d756dd63d17501c99a26af5ac41e9738767dcd"
+      },
+      {
+        "id": "10.E",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "validator output paraphrased; vacuous equality claim",
+        "authoritative_source": ".out/receipts/proof-binding-validator.txt",
+        "corrected_artifact": "verification.md validator + re-derivation sections",
+        "verification_command": "capture validator output verbatim; compare only fields present on both artifacts",
+        "result": "verbatim [FAIL] lines=4; NOT COMPARABLE stated=true",
+        "pass": true,
+        "immutable_binding": "be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a"
+      }
+    ]
   }
 }

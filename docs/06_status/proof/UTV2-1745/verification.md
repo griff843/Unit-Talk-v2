@@ -820,12 +820,15 @@ Q7  rung 2/3: latest pre-cutoff offer per alive triple                 111
       94 alive triples x 2 provider tiers (pinnacle, then ANY)
       = 188 probes. Issued as ONE 188-way query it timed out --
       the only usable index is (provider_event_id, snapshot_at)
-      -- so it was re-issued as 4 batches of at most 24 triples,
-      each batch covering both tiers. 111 of the 188 probes
-      returned at least one row (17 pinnacle, 94 ANY); the
-      other 77 returned none. Those 111 results are retained
-      verbatim in .out/replay/offer_rows11.json and hold
-      1,221 offer rows in total.
+      -- so it was re-issued as 4 batches of 24/24/24/22 triples
+      (94 in all), each batch covering both tiers.
+      111 of the 188 probes returned a row
+      (17 pinnacle, 94 ANY); the other
+      77 returned none. Rungs 2 and 3 select
+      `order by snapshot_at desc limit 1`, so a non-empty probe
+      yields exactly ONE row -- hence 111 rows, not more.
+      Fields: q7_receipt.json -> alive_triples, probes_issued,
+      batch_triples, probe_results_non_empty, rows_returned.
 Q8  rung 4: market_universe fallback over the WHOLE table               90
       market_universe holds 102,155 rows; the round-10 replay
       resolved this rung against 100 of them. That single
@@ -836,13 +839,24 @@ Q9  market_universe cardinality, executed to substantiate
       · without closing_line 13942
 ```
 
-> **The three numeric claims in Q7 that the ninth review found mutually
-> inconsistent are corrected above from the retained receipts.** The earlier
-> text compressed "4 batches of at most 24 triples, both tiers" into "4 batches
-> of 24 probes", which cannot reconcile with either 188 or 94. The batching
-> unit is the *triple*; the probe count is twice that. Counted from
-> `offer_rows11.json`: 94 distinct triples, 111 non-empty probe results,
-> 17 of them at the pinnacle tier and 94 at ANY.
+> **Every number in Q7 is now generated from a machine receipt, not restated by
+> hand.** `.out/replay/q7_receipt.ts` counts them from the retained artifacts and
+> writes `q7_receipt.json`; the block above cites those fields. The batching unit
+> is the *triple* and the probe count is twice it, so the batches are
+> `24/24/24/22` triples — `batch_triples_total` = 94,
+> which equals `alive_triples` — and not "4 batches of 24", which reconciles with
+> nothing.
+>
+> **Round 12 published `1,221 offer rows` here. That number was wrong and is
+> withdrawn.** It came from summing the *field* counts of the 111 retained row
+> objects (111 x 11 fields = 1221) rather than counting rows. It also
+> contradicted this bundle's own `evidence.json` Q7, which has always recorded
+> `rows_returned: 111`. The authoritative count is **111**, forced by
+> `limit 1`: `q7_receipt.ts` asserts one row per non-empty probe and throws if
+> that ever stops holding, so the figure cannot silently drift again. The tenth
+> adversarial review caught this; it was an error introduced by round 12 inside
+> the repair of the very finding about inconsistent Q7 counts, which is why the
+> number is now generated rather than transcribed.
 
 **Q9 receipt, in full.** The ninth review (P2-c) found that 102,155 — the
 denominator carrying the entire round-10-vs-round-11 CLV explanation — was
@@ -920,41 +934,136 @@ Three properties make it evidence rather than restatement:
 
 Re-deriving changed exactly **6 of 200 rows**, and only in the coarse
 `resolution_source` label: the six rung-1 rows read `'none'` before and
-`'market_universe:closing_line'` now. `source_exact`, `cutoff_enforced`,
-`clv_resolvable`, `clv_failure_class`, `grade_resolvable` and
-`structural_blocked` are identical on all 200 rows. **No published number
-changed.**
+`'market_universe:closing_line'` now.
+
+The comparison is stated over the fields that exist on **both** artifacts, which
+the tenth review correctly noted the round-12 wording did not do. `per_row11.json`
+carries ten fields; `per_row11_final.json` adds two. Field-by-field over all 200
+rows:
+
+```text
+present on both (10 fields)          rows differing
+  settlement_id                            0
+  settled_at                               0
+  clv_resolvable                           0
+  clv_failure_class                        0
+  cutoff                                   0
+  universe_snapshot_at                     0
+  grade_resolvable                         0
+  grade_reason                             0
+  structural_blocked                       0
+  resolution_source                        6   <- the six rung-1 rows
+present only on per_row11_final.json
+  source_exact        NOT COMPARABLE — absent from the older artifact
+  cutoff_enforced     NOT COMPARABLE — absent from the older artifact
+```
+
+`source_exact` and `cutoff_enforced` are the two fields the cutoff analysis rests
+on, and they are exactly the two the older artifact never had — which is why
+`derive_final.ts` was written. Claiming they are "identical on all 200 rows", as
+round 12 did, was vacuous. **No published number changed.**
 
 `replay11.ts` previously read the cohort order from a `/tmp` scratch file — the
 same class of undocumented manual input. It now reads
 `.out/replay/cohort11.json`. Re-running it reproduces `report11.json`
 **byte-identically** — `generated_at` is a pinned literal, not a clock read — so
-the digest below is a reproducible check, not a one-time snapshot. Every digest
-in the table below was re-verified after re-executing both scripts from a clean
-invocation; all sixteen matched.
+the digest below is a reproducible check, not a one-time snapshot. The digest
+table is rendered from the files themselves by `render_digests.ts` after every
+regeneration, so it cannot drift from what it describes.
 
-**Retained inputs and outputs, with digests** (`.out/` is gitignored; these
-digests are what binds the published numbers to specific bytes):
+#### Numbers are generated, not transcribed
+
+The recurring failure across rounds 11 and 12 was not measurement — every replay
+reproduced — but **converting a machine result into prose incorrectly**. Round 12
+published `1,221 offer rows` by summing the *field* counts of 111 row objects;
+round 11 restated a mutation table arithmetically when a measured run existed.
+Both were caught, but the class kept recurring because the last step was manual.
+
+Round 13 removes that step. Four retained scripts now generate what the proof
+asserts, and the proof cites their fields:
 
 ```text
-cohort11.json            6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c
-fresh_tables.json        389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4
-player_pool_all.json     33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6
-fwd_aliases11.json       df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc
-rev_aliases11.json       dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3
-offer_rows11.json        227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34
-universe_rows11.json     735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372
-row_counts11.json        1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376
-em_ranges.json           84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5
-parity_receipt.json      ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289
-per_row11_final.json     d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a
-report11.json            8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b
-derive_final.ts          50e4586c8d825a274bbe72f398429767f9d12094b931a6655acd32f3a6de5f69
-replay11.ts              6b4b2497fa42c1ac3a743f32ab8684c5a2e3aa3888f15de611de5c5c2ba3a940
-parity.ts                473ac5eeafa26161c0cf3babc2c13c38975836dba60783da82e345d9c6507724
-attribute.ts             53803e9ae9fdb073e532a18426c93b5ad27a0cbcb47e2d65ed88e2b043f1eff0
-mutation/mutations.json  3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae
-mutation/battery.py      24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152
+q7_receipt.ts        counts every Q7 quantity from the retained artifacts and
+                     ASSERTS one row per non-empty probe, throwing if that ever
+                     stops holding -> q7_receipt.json
+matrix_check.ts      EXECUTES the verification command for all 14 findings
+                     -> matrix_results.json
+render_matrix.ts     renders the matrix into verification.md and evidence.json
+                     from matrix_results.json
+render_digests.ts    renders the digest table from the files themselves
+contradiction_scan.ts scans the whole bundle for numbers that disagree with
+                     their structured source, for withdrawn figures asserted as
+                     live, and for self-invalidating receipts
+```
+
+`contradiction_scan.ts` is the gate this bundle failed twice without noticing. It
+reports `NO CONTRADICTIONS` on the committed candidate. It is deliberately
+adversarial toward its own author: it forbids a moving ref inside an unannotated
+code fence, checks that every printed digest resolves to real bytes, and treats a
+withdrawn figure as live unless it sits in an explicit retirement context.
+
+#### The derivation scripts are portable, and that was proven, not asserted
+
+The tenth review found `derive_final.ts` hardcoded absolute paths to this
+worktree, so "reproduces from retained inputs alone" held only at one location.
+Every absolute path is gone from `derive_final.ts`, `replay11.ts`, `parity.ts`
+and `attribute.ts`; each resolves its inputs from its own module location and
+imports the shipped audit through a relative specifier.
+
+Proven by execution from a different checkout path — a separate directory tree
+holding only the shipped script and the retained inputs:
+
+```text
+$ cd <a different path>; tsx .out/replay/derive_final.ts
+resolvable 194 cutoff_enforced 150 NOT cutoff-validated 44
+  = r4 post-cutoff 40 + r1 no cutoff 4
+per_row11_final.json sha256: d306a84e…   (identical to the lane worktree's)
+```
+
+Same digest from a different path is the claim; that is what was run.
+
+**Retained inputs and outputs, with digests** (`.out/` is gitignored; these
+digests bind every published number to specific bytes. Rendered by
+`.out/replay/render_digests.ts` — never transcribed by hand):
+
+```text
+# retained inputs (production reads)
+cohort11.json                  6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c
+fresh_tables.json              389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4
+player_pool_all.json           33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6
+fwd_aliases11.json             df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc
+rev_aliases11.json             dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3
+offer_rows11.json              227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34
+universe_rows11.json           735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372
+row_counts11.json              1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376
+em_ranges.json                 84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5
+triples_alive11.json           d5d681741d6a6f4b387fc3b30776569333d79523a3ab2256093f36c55acff318
+
+# derived outputs
+per_row11_final.json           d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a
+report11.json                  8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b
+parity_receipt.json            ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289
+q7_receipt.json                a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba
+matrix_results.json            76459b6bacd02b930168275ca6e32f6426f90c185c0b3da55bde67645af4f5db
+
+# derivation scripts
+derive_final.ts                8491fbeebdfd262c3156487d61d756dd63d17501c99a26af5ac41e9738767dcd
+replay11.ts                    bb0d221660569f09a4b36c9a03be9c6c33945748003f6989bce425250663933d
+parity.ts                      467e3a6c4dacbbe91f353d66b48876cade1fe3773cae9b69d4703d74ebcde657
+attribute.ts                   034c82d755a12d098690bdb4ba7abd8f206e4e8e5721a8af6c937969a1aac80c
+q7_receipt.ts                  7510f1e174b0c4a321c34900566fb5e7fac383a47ae18854f6d3e449ae96dde3
+matrix_check.ts                5800f783ee524d202e96c242689e4a3bf6742bf912b4c96489a08f9bd63a4381
+render_matrix.ts               62d183ffc6b27afb72fd8b36fa92467dea629eec9f8d8d93e8b8dc19d922d79e
+render_digests.ts              06ff124635dc0f54ca59a7f79ea6df462012344973b7961bf5c5d1019880fc33
+contradiction_scan.ts          ff08c9da65d2023495bb6412fb70a0d3c00e53a6081978d1bb040d1d3043c4f3
+
+# mutation battery
+mutations.json                 3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae
+battery.py                     24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152
+
+# verbatim command receipts
+proof-binding-validator.txt    be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a
+round12-commit-scope.txt       1d9c13699b3864b93b6216c927f308ad54a1f1a9a837d0e302ad457fe71802a1
 ```
 
 #### Every one of the 200 accounted for
@@ -1109,30 +1218,49 @@ The 2026-08-26 population decomposition (1 of 107,858 picks simultaneously
 non-fixture, identity- and provenance-complete, and settled) is untouched by
 this correction and is not restated here.
 
-## Round-12 remediation — disposition of every ninth-review finding
+## Remediation matrix — all fourteen findings
 
-The ninth independent adversarial review returned CHANGES_REQUIRED with nine
-findings. **All nine are dispositioned below, including the three that were not
-in the summary returned to PM.** Every repair is proof-only: no shipped audit
-logic, package behaviour or production execution semantic was touched, and
-`scripts/ops/pick-truth-audit.ts` remains byte-identical to its state at
-`3a99f504`.
+The ninth adversarial review returned CHANGES_REQUIRED with nine findings; the
+tenth returned CHANGES_REQUIRED with five more. **All fourteen are dispositioned
+below, including findings that were never in a summary returned to PM.**
 
-| # | Sev | Finding | Disposition |
-|---|-----|---------|-------------|
-| 1 | P1 | Shipped `systemic_defect` flipped `true` → `false` between rounds 10 and 11, undisclosed | **Fixed — disclosed.** New section "The shipped `systemic_defect` detector flipped true → false" gives both rounds' verbatim output, the cause of each, why the verdict is independent and unchanged, what the flag does *not* mean, and the detector-expansion successor. No rule was hand-authored to compensate. |
-| 2 | P1 | Withdrawn "persisted `computed` but unresolvable = 82" had a measured successor (16 mismatches) that was never reported | **Fixed — reported.** New Finding 7: 16 / 200 = 8.00%, split 13 / 2 / 1, bound to `report11.json` → `clv.persisted_status_mismatches`, where each entry carries `settlement_id`, `pick_id` and reason. |
-| 3 | P2 | `git diff --name-status 3a99f504 HEAD` asserted a fixed one-path result, which committing that assertion falsified | **Fixed — endpoints pinned.** Every comparison now uses two immutable SHAs (`3a99f504`/`c4715923`/`b10d8aa8`/`249da64b`) and was re-executed against them. The one leg that cannot be pinned is stated as a property for the reviewer to verify, not as asserted output. |
-| 4 | P2 | Round-10 harness described as emptying "one" `picks.metadata`; the real count is three | **Fixed — corrected to three,** with all three ids listed. Independently re-measured against `fresh_tables.json`: exactly three, and all three had real metadata upstream. |
-| 5 | P2 | The 102,155 `market_universe` denominator had no executed query receipt | **Fixed — receipt added** as Q9: statement, channel, project ref, environment, server-clock timestamp, all three counts, and the internal reconciliation `102155 = 88213 + 13942`. No credential appears in, or is recoverable from, this bundle. |
-| 6 | P2 | No retained script produced `per_row11_final.json`; `source_exact` and `cutoff_enforced` came from undocumented manual steps | **Fixed — `derive_final.ts` retained.** Imports the shipped exports, reproduces the 194 / 150 / 44 / 40 / 4 analysis from retained inputs, separates rung 1 from rung 4, applies `asProductionClosingLine` at tier granularity. `replay11.ts` de-`/tmp`-ed. Outputs and digests recorded. |
-| 7 | P3 | The rung-4 cutoff comparison used an unnamed proxy column | **Fixed — named.** `market_universe.last_offer_snapshot_at`, stated as a proxy, with the direction of inference it does and does not support made explicit. |
-| 8 | P3 | Q7's probe accounting (4 × 24, 188, 94) was mutually inconsistent | **Fixed — recounted from `offer_rows11.json`.** The batching unit is the *triple*, not the probe: 94 alive triples × 2 tiers = 188 probes, one 188-way query timed out, re-issued as 4 batches of ≤24 triples covering both tiers, 111 non-empty results (17 pinnacle, 94 ANY), 1,221 offer rows. |
-| 9 | P3 | `diff-summary.md` mixed the round-8/9 mutation count (34) with the current one (42) | **Fixed —** the two counts are now explicitly attributed to their rounds wherever both appear. |
+Every row's *result* column is **executed**, not asserted: `.out/replay/matrix_check.ts`
+runs each verification command against the retained evidence and writes
+`matrix_results.json`, from which this table is rendered by
+`.out/replay/render_matrix.ts`. Regenerate with:
 
-Findings 1, 2, 3, 4, 5 and 6 were each independently verified against the
-retained receipts before being accepted, rather than accepted on the reviewer's
-assertion.
+```text
+$ pnpm exec tsx .out/replay/matrix_check.ts && pnpm exec tsx .out/replay/render_matrix.ts
+14/14 rows pass
+```
+
+Every repair is proof-only. `scripts/ops/pick-truth-audit.ts`,
+`scripts/ops/pick-truth-audit.test.ts` and `package.json` are byte-identical to
+their state at `3a99f504`; the round-13 corrections additionally touched four
+retained replay scripts under `.out/` (gitignored, never shipped) to remove
+absolute paths.
+
+| # | Rev | Sev | Finding | Authoritative source | Corrected artifact | Verification command | Result | Binding |
+|---|-----|-----|---------|----------------------|--------------------|----------------------|--------|---------|
+| 9.1 | ninth | P1 | systemic_defect flipped true->false undisclosed | `.out/replay/report.json + report11.json` | `verification.md detector section` | `compare report.json/report11.json systemic_defect against the disclosed text` | PASS — round10 detected=true, round11 detected=false, disclosed=true | `8cc3adf1d431…` |
+| 9.2 | ninth | P1 | withdrawn "=82" had an unreported successor | `report11.json clv.persisted_status_mismatches` | `verification.md Finding 7` | `count mismatches and their reason split` | PASS — n=16 | `8cc3adf1d431…` |
+| 9.3 | ninth | P2 | git receipt asserted a result publishing it falsified | `git` | `verification.md git receipt block` | `git diff --name-status 3a99f504 c4715923` | PASS — M docs/06_status/readiness/readiness-score.json | `c4715923` |
+| 9.4 | ninth | P2 | emptied picks.metadata count stated as one | `dataset.json vs fresh_tables.json` | `verification.md CLV supersession block` | `count picks emptied in dataset.json but populated upstream` | PASS — 3: 01a77b3f-462d-4daa-b0ef-0b96ca120c15 9c8833ff-6738-4bf7-8874-257c5ef6cdfd aec0db94-7ff9-42f4-8951-e39343f3f58c | `389f5afd9cbe…` |
+| 9.5 | ninth | P2 | 102,155 denominator had no executed receipt | `evidence.json runtime_proof.queries Q9` | `verification.md Q9 block` | `check Q9 fields and internal reconciliation` | PASS — 102155 = 88213 + 13942 @ 2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself) | `Q9 executed_…` |
+| 9.6 | ninth | P2 | no retained script produced per_row11_final.json | `.out/replay/derive_final.ts` | `per_row11_final.json` | `pnpm exec tsx .out/replay/derive_final.ts` | PASS — rows=200 resolvable=194 cutoff_enforced=150 | `d306a84ea0bb…` |
+| 9.7 | ninth | P3 | rung-4 cutoff proxy unnamed | `market_universe schema` | `verification.md April-half section` | `grep last_offer_snapshot_at verification.md` | PASS — named=true | `n/a` |
+| 9.8 | ninth | P3 | Q7 probe accounting inconsistent | `.out/replay/q7_receipt.json` | `verification.md Q7 block` | `pnpm exec tsx .out/replay/q7_receipt.ts` | PASS — alive=94 probes=188 batches=24/24/24/22 rows=111 | `a66160639336…` |
+| 9.9 | ninth | P3 | diff-summary mixed mutation counts 34 and 42 | `diff-summary.md` | `diff-summary.md mutation bullet` | `check round attribution present` | PASS — attributed=true | `n/a` |
+| 10.A | tenth | P2 | "1,221 offer rows" does not reconcile; contradicts evidence.json rows_returned:111 | `.out/replay/q7_receipt.json rows_returned` | `verification.md / diff-summary.md / evidence.json` | `pnpm exec tsx .out/replay/q7_receipt.ts; bundle-wide scan for the retired figure asserted as live` | PASS — rows_returned=111; retired figure asserted as live=false | `a66160639336…` |
+| 10.B | tenth | P3 | evidence.json Q7 retained "4 batches of 24 LATERAL probes" | `.out/replay/b0..b3.sql` | `evidence.json Q7.statement` | `count tuples per retained batch file` | PASS — batches=24/24/24/22 total=94; stale wording present=false | `a66160639336…` |
+| 10.C | tenth | P3 | self-invalidating "worktree contains changes to exactly three files" | `git` | `diff-summary.md closing paragraph` | `git diff --name-only b10d8aa8 3f2f4ba8` | PASS — 3 paths, all under the proof dir | `3f2f4ba8` |
+| 10.D | tenth | P3 | derive_final.ts hardcoded absolute worktree paths | `.out/replay/*.ts` | `the retained replay scripts` | `grep /home/griff843 in every retained script; execute derive_final.ts from a different path` | PASS — scripts with absolute paths: none | `8491fbeebdfd…` |
+| 10.E | tenth | P3 | validator output paraphrased; vacuous equality claim | `.out/receipts/proof-binding-validator.txt` | `verification.md validator + re-derivation sections` | `capture validator output verbatim; compare only fields present on both artifacts` | PASS — verbatim [FAIL] lines=4; NOT COMPARABLE stated=true | `be1c8c146eef…` |
+
+Findings were independently verified against the retained receipts before being
+accepted, rather than accepted on a reviewer's assertion — including the tenth
+review's Finding A, where the reviewer was right and the round-12 number was
+mine.
 
 ## Findings
 
@@ -1493,21 +1621,30 @@ receipt in this bundle describes the tree at the bound SHA.
 
 **A gate that would flag this anchor, disclosed even though it does not run
 here.** `scripts/ci/proof-binding-validator.ts` was executed against this bundle
-during round 12 and returns FAIL with four violations. It is reported rather
-than omitted, with the reason each is inapplicable stated plainly — a reviewer
-should not have to discover this by running the tool themselves:
+and returns FAIL with four violations. It is reported rather than omitted, with
+the reason each is inapplicable stated plainly — a reviewer should not have to
+discover this by running the tool themselves.
+
+**The output is captured verbatim in a retained receipt rather than paraphrased
+here.** The tenth review found that round 12 reworded the tool's output while
+presenting it as captured output — dropping each line's `[FAIL]` prefix and its
+trailing clause. Same violations, same conclusion, but a bundle that insists on
+verbatim capture elsewhere must not silently reword a displayed receipt. The
+full byte-exact capture, including the command line and the exit code, is:
 
 ```text
-$ pnpm exec tsx scripts/ci/proof-binding-validator.ts \
-    --issue UTV2-1745 --proof-dir docs/06_status/proof/UTV2-1745
-VIOLATIONS (4):
-  MERGE_SHA must be "pending merge" before merge
-  verification.md must contain exactly one "## Merge SHA Binding" section (found 0)
-  model-routing.json: top-level merge_sha is forbidden before merge
-  Non-proof files changed between verified_source_sha and HEAD:
-    docs/06_status/readiness/readiness-score.json
-proof-binding-validator: FAIL
+.out/receipts/proof-binding-validator.txt
+  sha256 be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a
+  captured at head 3f2f4ba8 (recorded in the receipt's own header)
 ```
+
+Re-running the tool at a later head changes only its two `[CI-resolved]` echo
+lines (`evidence_commit_sha`, `current_pr_head_sha`); the four violations and the
+`FAIL` verdict are structural and do not depend on the head. In summary, the
+violations concern `MERGE_SHA`, a missing `## Merge SHA Binding` section, a
+forbidden `model-routing.json` `merge_sha`, and one non-proof file changed
+between `verified_source_sha` and HEAD (`readiness-score.json`) — see the receipt
+for each line as the tool emitted it.
 
 - **It does not gate this PR.** The validator is invoked from exactly one
   workflow, `migration-reversibility-gate.yml`, which is path-filtered to
