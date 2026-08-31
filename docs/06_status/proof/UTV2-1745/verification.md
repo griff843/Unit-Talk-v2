@@ -1779,3 +1779,10 @@ from the resolved merge SHA, which is the behaviour this repair restores.
 Executed controls live in `scripts/ops/lane-close.test.ts` and run the real
 exported `rebindRepairedLaneProof` path. Defect recorded as UTV2-1792, a
 required child beneath this lane.
+
+## Merge SHA Binding
+
+Merge SHA: 85c572edf5d6061cf4e2ece9ddebc730cae3e0d3
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1453
+Approved PR head: 79dcd534d2e5e47f68dff7f707e760ad2d2383a9
+Execution SHA: 3a99f5043e950b6f5610b26aab4d761bc8fc46fb
