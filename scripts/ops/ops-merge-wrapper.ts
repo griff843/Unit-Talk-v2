@@ -256,6 +256,8 @@ export function isNotFastForwardFailure(result: MergeWrapperResult): boolean {
 interface SyncResidue {
   mergeHead: boolean;
   rebaseHead: boolean;
+  cherryPickHead: boolean;
+  revertHead: boolean;
   unmerged: string[];
   undetermined: string[];
 }
@@ -288,8 +290,34 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
     }
     return r.status === 0;
   };
+  const sequencerDir = (name: string): boolean => {
+    const r = runner('git', ['rev-parse', '--git-path', name], { cwd });
+    if (r.error || r.status !== 0) {
+      undetermined.push(`${name} (git rev-parse --git-path exited ${r.status ?? 'with an error'})`);
+      return false;
+    }
+    const rel = bufferToText(r.stdout).trim();
+    if (!rel) {
+      undetermined.push(`${name} (git rev-parse --git-path returned no path)`);
+      return false;
+    }
+    return fs.existsSync(path.isAbsolute(rel) ? rel : path.join(cwd, rel));
+  };
   const mergeHead = ref('MERGE_HEAD');
-  const rebaseHead = ref('REBASE_HEAD');
+  // UTV2-1790 (review round 7, P3): a rebase stopped at a `break`/`edit` step has
+  // NO REBASE_HEAD, no MERGE_HEAD and no unmerged paths -- it is a detached HEAD
+  // with a `.git/rebase-merge` directory. A conflict resolved with `git add` but
+  // not committed leaves CHERRY_PICK_HEAD or REVERT_HEAD and nothing else. All
+  // three read as "clean" under a MERGE_HEAD/REBASE_HEAD/unmerged sweep, so the
+  // release decisions would hand the repo-wide mutex to the next lane over a
+  // worktree that is mid-sequencer. This wrapper's own commands cannot produce
+  // those states (it runs git non-interactively), so they are reachable only from
+  // PRE-EXISTING stranded state -- which is exactly the population the stash-push
+  // failure path exists to catch.
+  const rebaseHead =
+    ref('REBASE_HEAD') || sequencerDir('rebase-merge') || sequencerDir('rebase-apply');
+  const cherryPickHead = ref('CHERRY_PICK_HEAD');
+  const revertHead = ref('REVERT_HEAD');
   const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
   let unmerged: string[] = [];
   if (unmergedRun.error || unmergedRun.status !== 0) {
@@ -300,7 +328,7 @@ function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
       .map((line) => line.trim())
       .filter(Boolean);
   }
-  return { mergeHead, rebaseHead, unmerged, undetermined };
+  return { mergeHead, rebaseHead, cherryPickHead, revertHead, unmerged, undetermined };
 }
 
 /**
@@ -322,14 +350,19 @@ export function worktreeResidue(
   const r = probeSyncResidue(runner, cwd);
   const parts: string[] = [];
   if (r.mergeHead) parts.push('MERGE_HEAD is present');
-  if (r.rebaseHead) parts.push('REBASE_HEAD is present');
+  if (r.rebaseHead) parts.push('a rebase is in progress (REBASE_HEAD or a rebase-merge/rebase-apply directory)');
+  if (r.cherryPickHead) parts.push('CHERRY_PICK_HEAD is present');
+  if (r.revertHead) parts.push('REVERT_HEAD is present');
   if (r.unmerged.length > 0) parts.push(`unmerged paths: ${r.unmerged.join(', ')}`);
   if (r.undetermined.length > 0) {
     parts.push(`state could not be determined: ${r.undetermined.join('; ')}`);
   }
   return {
     clean: parts.length === 0,
-    detail: parts.length === 0 ? 'no MERGE_HEAD, no REBASE_HEAD and no unmerged paths' : parts.join('; '),
+    detail:
+      parts.length === 0
+        ? 'no MERGE_HEAD, no rebase/cherry-pick/revert in progress and no unmerged paths'
+        : parts.join('; '),
   };
 }
 
@@ -378,6 +411,8 @@ export function abortInProgressSync(
   const residue =
     after.mergeHead ||
     after.rebaseHead ||
+    after.cherryPickHead ||
+    after.revertHead ||
     after.unmerged.length > 0 ||
     after.undetermined.length > 0;
 
@@ -393,7 +428,9 @@ export function abortInProgressSync(
     );
   }
   if (after.mergeHead) detail.push('MERGE_HEAD is still present');
-  if (after.rebaseHead) detail.push('REBASE_HEAD is still present');
+  if (after.rebaseHead) detail.push('a rebase is still in progress');
+  if (after.cherryPickHead) detail.push('CHERRY_PICK_HEAD is still present');
+  if (after.revertHead) detail.push('REVERT_HEAD is still present');
   if (after.unmerged.length > 0) {
     detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
   }
@@ -425,8 +462,34 @@ export function runExtendedMergeWrapper(
   },
   options: Parameters<typeof runMergeWrapper>[1] = {},
 ): MergeWrapperResult {
+  // UTV2-1790 (review round 7, P1): the probe belongs to EVERY delegation, not
+  // just the bridged sync verbs.
+  //
+  // Round 6 injected `residueProbe` only inside the `git-merge-main` /
+  // `git-rebase-main` bridge. But `runMergeWrapper` runs the whole autostash
+  // push -> pull -> pop sequence for a plain `main-sync` too, and the CLI routes
+  // `main-sync` straight to the delegation below. So on the lane's own headline
+  // verb `measureResidue` always took the no-probe default, reported "could not
+  // be measured", and retained the mutex forever -- the exact lock leak round 6
+  // exists to close, still live, and with an operator message that reports an
+  // internal wiring gap in the slot reserved for a state measurement.
+  //
+  // Bound here once, so a delegation added later cannot silently miss it.
+  const optionsWithProbe: Parameters<typeof runMergeWrapper>[1] = {
+    ...options,
+    residueProbe:
+      options.residueProbe ??
+      (({ cwd: probeCwd }) =>
+        worktreeResidue(
+          options.runner ??
+            ((c: string, a: string[], o: { cwd: string }) =>
+              spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>),
+          probeCwd,
+        )),
+  };
+
   if (input.operation === 'main-sync') {
-    const ffResult = runMergeWrapper(input as MergeWrapperInput, options);
+    const ffResult = runMergeWrapper(input as MergeWrapperInput, optionsWithProbe);
     if (ffResult.ok) return ffResult;
     // UTV2-1678: this branch used to re-invoke itself as `git-rebase-main`.
     //
@@ -464,7 +527,7 @@ export function runExtendedMergeWrapper(
   }
 
   if (input.operation !== 'git-merge-main' && input.operation !== 'git-rebase-main') {
-    return runMergeWrapper(input as MergeWrapperInput, options);
+    return runMergeWrapper(input as MergeWrapperInput, optionsWithProbe);
   }
 
   // For git-merge-main / git-rebase-main we build and run the command
@@ -523,7 +586,7 @@ export function runExtendedMergeWrapper(
   // load-bearing control, and is described as such rather than claimed as one.
   const syncOperation = input.operation;
   const result = runMergeWrapper(bridgedInput, {
-    ...options,
+    ...optionsWithProbe,
     runner: interceptingRunner,
     onCommandFailure: ({ cwd: failureCwd }) =>
       abortInProgressSync(syncOperation, realRunner, failureCwd),
@@ -533,10 +596,17 @@ export function runExtendedMergeWrapper(
     // command that left MERGE_HEAD behind -- an invocation that cannot leave a
     // merge in progress at all.
     reportedCommand: [cmd.command, ...cmd.args],
-    // UTV2-1790 (review round 6): the stash-push and stash-pop failure paths must
-    // DECIDE whether to release the mutex from a measurement of the worktree, not
-    // from an assumption about why a git command exited non-zero.
-    residueProbe: ({ cwd: probeCwd }) => worktreeResidue(realRunner, probeCwd),
+    // UTV2-1790 (review round 6): the stash-push and stash-pop failure paths DECIDE
+    // whether to release the mutex from a measurement of the worktree, not from an
+    // assumption about why a git command exited non-zero. That probe arrives via
+    // `optionsWithProbe` above, which binds `options.runner ?? spawnSync` -- the
+    // same value as `realRunner` here, and deliberately NOT the intercepting
+    // runner, which substitutes the sync command.
+    //
+    // Round 7 removed a duplicate `residueProbe` override at this site: it was
+    // byte-for-byte equivalent to the default, so deleting it changed no
+    // behaviour and its mutant survived. An override that cannot fail is not a
+    // control, and leaving it would have implied the two runners differed here.
   });
   // Only a sync that actually ran can have dropped anything or moved the head.
   //
@@ -576,16 +646,46 @@ export function runExtendedMergeWrapper(
   // re-authorization notice and any dropped-path warning are appended to stderr
   // rather than dropped on the floor.
   if (!result.ok) {
-    const warning =
-      classification.dropped.length > 0
-        ? `\n\nWARNING: this sync also dropped paths relative to the pre-sync head: ` +
-          `${classification.dropped.join(', ')}` +
-          (classification.protectedPaths.length > 0
-            ? `\nPROTECTED artifacts are among them: ${classification.protectedPaths.join(', ')}. ` +
-              `Recover with: git reset --keep ${preSyncHead}`
-            : '')
-        : '';
-    const extra = `${headMoveNotice}${warning}`;
+    let warning = '';
+    let restoredHead = false;
+    if (classification.dropped.length > 0) {
+      warning =
+        `\n\nWARNING: this sync also dropped paths relative to the pre-sync head: ` +
+        `${classification.dropped.join(', ')}`;
+      if (classification.protectedPaths.length > 0) {
+        // UTV2-1790 (review round 7, P3): the `ok` path below RESTORES the tree;
+        // this path only described how to. That asymmetry is closed here -- a
+        // dropped proof bundle or lane manifest usually exists on no other ref, so
+        // the recovery is the same regardless of why the sync also failed.
+        //
+        // It is conditional on the worktree being clean, which the `ok` path can
+        // take for granted and this one cannot: `git reset --keep` refuses over an
+        // unmerged index, and firing it at a tree that is mid-merge would turn a
+        // recoverable failure into a confusing one. When it is not safe, the
+        // instruction is still printed, exactly as before.
+        const residue = worktreeResidue(realRunner, cwd);
+        const restore = residue.clean
+          ? realRunner('git', ['reset', '--keep', preSyncHead], { cwd })
+          : undefined;
+        const restored = restore !== undefined && !restore.error && restore.status === 0;
+        restoredHead = restored;
+        warning +=
+          `\nPROTECTED artifacts are among them: ${classification.protectedPaths.join(', ')}. ` +
+          (restored
+            ? `Working tree restored to the pre-sync head ${preSyncHead} (git reset --keep). ` +
+              `No artifact was lost, and the head is back where it started, so no ` +
+              `governance artifact was invalidated. The reported failure above still ` +
+              `stands and still needs handling.`
+            : `NOT restored automatically (${
+                residue.clean
+                  ? 'git reset --keep failed'
+                  : `the worktree is not clean: ${residue.detail}`
+              }). Recover with: git reset --keep ${preSyncHead}`);
+      }
+    }
+    // If the restore succeeded the head is back where it started, so the
+    // re-authorization notice would be false. `restoredHead` records that.
+    const extra = `${restoredHead ? '' : headMoveNotice}${warning}`;
     return extra ? { ...result, stderr: `${result.stderr ?? ''}${extra}` } : result;
   }
 

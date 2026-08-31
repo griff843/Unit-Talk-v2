@@ -484,10 +484,7 @@ export function runMergeWrapper(
      * measured. Absent this probe both paths fall back to fail-closed retention,
      * which is safe but unmeasured.
      */
-    residueProbe?: (ctx: { runner: CommandRunner; cwd: string }) => {
-      clean: boolean;
-      detail: string;
-    };
+    residueProbe?: (ctx: { cwd: string }) => { clean: boolean; detail: string };
   } = {},
 ): MergeWrapperResult {
   let issueId: string;
@@ -565,7 +562,7 @@ export function runMergeWrapper(
       };
     }
     try {
-      return options.residueProbe({ runner, cwd });
+      return options.residueProbe({ cwd });
     } catch (error) {
       return {
         clean: false,
