@@ -5,11 +5,11 @@ Issue: UTV2-1749
 Tier: T1
 Lane type: governance
 Branch: codex/utv2-1749-alert-workflow-wiring
-PR URL: N/A
-Head SHA: 6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99
-Merge SHA: N/A
-Diff base: fd0e7b19b7ebeaf5a336e1ea296015f843af7561
-Diff target: 6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1468
+Head SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
+Merge SHA: pending merge (anchor b8795cb58665b66b2e04840159c589f4f9e31b5e)
+Diff base: 1522ac4613651131544e1c8812c50e9d25534677
+Diff target: b8795cb58665b66b2e04840159c589f4f9e31b5e
 
 ## Git Diff Stat
 ```
@@ -35,6 +35,7 @@ A	scripts/ci/ingestor-alert-wiring.test.ts
 - `alerting-pass`: add `SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}`.
 - `alerting-pass`: add `UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}`.
 - `monitor`: add `SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}`.
+- `alerting-pass`: add an `Assert alert workflow secret wiring` step running the regression test inside the workflow it guards, placed **before** `Run one alerting pass` so a removed binding fails the scheduled run rather than degrading it silently. This is also what makes the test reachable to `ops:automation-coverage-check`, so no root `package.json` / `test:ops` change is required.
 - Add `scripts/ci/ingestor-alert-wiring.test.ts`, which parses the workflow YAML, locates both runtime steps, and requires the exact secret expressions for the Supabase triplet and operations webhook.
 
 Expected effect: both scheduled jobs can satisfy the application configuration loader's full Supabase credential contract; `alerting-pass` can also consume the existing operations webhook secret for its authorized canary-only reporting path. The cadence, workflow permissions, alert thresholds, member-channel control, and system-pick control are byte-unchanged.
@@ -42,8 +43,9 @@ Expected effect: both scheduled jobs can satisfy the application configuration l
 This is pre-merge static evidence only. A successful scheduled execution is not claimed until a post-merge run is observed.
 
 ## Manifest Files Changed
-- No files_changed entries recorded.
+- `.github/workflows/ingestor-staleness-alert.yml`
+- `scripts/ci/ingestor-alert-wiring.test.ts`
 
 ## SHA Binding
-Head SHA: 6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99
-Merge SHA: N/A
+Head SHA: b8795cb58665b66b2e04840159c589f4f9e31b5e
+Merge SHA: pending merge (anchor b8795cb58665b66b2e04840159c589f4f9e31b5e)

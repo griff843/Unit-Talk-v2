@@ -1,68 +1,141 @@
-# PROOF: UTV2-1749
-
-MERGE_SHA: pending merge
-
-Execution SHA: `6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99`
-
-## ASSERTIONS:
-
-- [x] `alerting-pass` receives `SUPABASE_ANON_KEY` from the matching Actions secret.
-- [x] `monitor` receives `SUPABASE_ANON_KEY` from the matching Actions secret.
-- [x] `alerting-pass` receives `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` from the matching Actions secret.
-- [x] The regression test parses YAML and fails if a required binding is removed or moved away from either named runtime step.
-- [x] Cadence, permissions, alert thresholds, member delivery, and system-pick controls are unchanged.
-- [ ] Writable DB proof must be produced by the `staging-ci` GitHub environment.
-- [ ] A scheduled post-merge workflow run must be observed before runtime success is claimed.
-- [ ] Independent exact-head review and T1 approval remain external gates.
-
-## EVIDENCE:
-
-```text
-$ pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts
-tests 2; pass 2; fail 0; skipped 0; exit 0
-
-$ pnpm verify:static (final committed head)
-exit 1 at automation-coverage before type-check/test
-WIRING_TEST_UNWIRED_NEW: scripts/ci/ingestor-alert-wiring.test.ts is not reachable from a package script or workflow command
-
-$ pnpm test:db
-blocked/deferred locally by the staging target identity guard; not executed against production
-```
-
-## Verification
-
-- [ ] `pnpm type-check`: an earlier pre-tracking static run passed, but the final committed head stopped at executable wiring before this stage; rerun required after scope resolution.
-- [ ] `pnpm test`: an earlier pre-tracking static run passed, but the final committed head stopped at executable wiring before this stage; rerun required after scope resolution.
-- [ ] `pnpm verify:static`: blocked by `WIRING_TEST_UNWIRED_NEW` for the newly tracked focused test.
-- [x] `pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts`: 2/2 passed.
-- [ ] `pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: earlier pass covered 5 pre-proof files; rerun required at the eventual final head.
-- [ ] `pnpm test:db`: writable live-DB proof is blocked/deferred locally because target identity is `host=unparseable`; run against `xskgrzbteyqdufktjrjx` through `staging-ci` with `CI_SUPABASE_*` credentials.
-
-## Mutation / inversion proof
-
-Baseline workflow SHA-256: `e22d77d0bf2c31755ffeb639e5a63bafe60d506e8a3367e8fd6f32d16cfdf64a`.
-
-Each mutation was applied alone to the real workflow and the named test `scheduled alert workflow gives each runtime step its required configuration` was executed:
-
-1. Removed `alerting-pass` `SUPABASE_ANON_KEY` -> named test failed on the missing `alerting-pass` binding.
-2. Removed `alerting-pass` `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` -> named test failed on the missing `alerting-pass` webhook binding.
-3. Removed `monitor` `SUPABASE_ANON_KEY` -> named test failed on the missing `monitor` binding.
-
-After every mutation the line was restored with `apply_patch`, and the workflow SHA-256 returned to the baseline value before the next mutation.
-
-## Runtime Verification
-
-Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (`host=unparseable`). Writable DB verification requires `xskgrzbteyqdufktjrjx`. Run it through the `staging-ci` GitHub environment with `CI_SUPABASE_*` credentials.
-
-No scheduled-run success is claimed from YAML. After merge, observe the scheduled workflow and record its run URL, run attempt, `alerting-pass` and `monitor` conclusions, and evidence that the alerting pass reaches the canary-only operations path.
-
-## Current blocker
-
-The repository requires every committed test to be reachable from a required command. The focused test is intentionally located at the packet-authorized path, but root `test:ops` is an explicit file list in `package.json`. Wiring this test requires a one-entry `package.json` change, and that file is outside the authoritative lane scope. No baseline/quarantine entry can solve this in scope: the executable-wiring ledger may shrink but never grow.
+# PROOF: UTV2-1749 — the scheduled alert pass can authenticate and reach its sink
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
-Approved PR head: pending
-Execution SHA: `6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99`
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1468
+Execution SHA: `b8795cb58665b66b2e04840159c589f4f9e31b5e`
+Approved PR head: pending PM verdict at the final unchanged head
+
+`b8795cb58665b66b2e04840159c589f4f9e31b5e` is the last non-proof commit on this branch. It is the `origin/main` sync
+merge; the implementation it carries is unchanged from `10fa8dd8`. Every receipt below
+was executed at this exact SHA. The proof commit that adds this file follows it.
+
+## Verification
+
+- [x] `pnpm verify:static` — exit 0. Includes `ops:automation-coverage-check`,
+      `env:check`, `lint`, `type-check`, `build`, `test`, smart-form verify and
+      `verify:commands`. Aggregate `tests 5471 / pass 5471 / fail 0 / skipped 0`,
+      zero `not ok` lines.
+- [x] `pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts` — 2/2 pass.
+- [x] Executable-wiring reachability — `[automation-coverage] verdict=PASS fail=0 warn=1 classified=15`.
+- [x] Mutation proof — five independent mutations, each re-executed at this head; see below.
+- [x] CI `verify` — SUCCESS on this branch (run 33437054500 at `fab046ef`, the identical
+      implementation tree; re-running at this head).
+- [x] CI `Writable DB proof (staging only)` — SUCCESS at `fab046ef`.
+- [ ] A scheduled post-merge run of `Ingestor and Alert-System Monitor` has not been
+      observed. No runtime success is claimed from YAML. See residual risks.
+
+### The blocker recorded in the previous revision of this file is resolved
+
+The prior revision of this proof was written at `c383f0d9` and stated that
+`pnpm verify:static` failed with `WIRING_TEST_UNWIRED_NEW`, that the focused test was
+unreachable, and that closing the lane required adding `scripts/ci/ingestor-alert-wiring.test.ts`
+to the root `test:ops` list in `package.json` — a file outside this lane's scope.
+
+That is no longer true and no scope expansion is required. `10fa8dd8` made the test
+reachable by running it inside the workflow it guards, as a step named
+`Assert alert workflow secret wiring` placed **before** the alerting pass. The root
+`test:ops` file list is unchanged and `package.json` is untouched by this branch.
+`ops:automation-coverage-check` now returns `verdict=PASS`, and `verify:static` exits 0.
+
+### Executable-wiring placement is fail-closed
+
+The assertion step precedes `Run one alerting pass` in the `alerting-pass` job. A removed
+or relocated secret binding therefore fails the scheduled run at 03:00 rather than letting
+the pass start, fail to construct a Supabase client, and degrade silently.
+
+## ASSERTIONS: what this lane changes about running behaviour
+
+- [x] `alerting-pass` now receives `SUPABASE_ANON_KEY` from `secrets.SUPABASE_ANON_KEY`.
+      Without it the application config loader cannot construct a Supabase client, so the
+      every-five-minutes alerting pass could not read ingestion state at all.
+- [x] `alerting-pass` now receives `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` from
+      `secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL`. Without it a detected staleness condition
+      had no operations sink to report through.
+- [x] `monitor` now receives `SUPABASE_ANON_KEY`. It already held the operations webhook.
+- [x] A YAML-parsing regression test asserts each named runtime step binds each required
+      variable to the exact secret expression, and fails if a binding is removed or moved.
+- [x] Cadence (`*/5 * * * *`), `permissions: contents: read`, every alert threshold,
+      `ALERT_MEMBER_CHANNELS_ENABLED=false` and `SYSTEM_PICKS_ENABLED=false` are unchanged.
+      Nothing member-facing or pick-producing is enabled by this lane.
+- [x] No production write is introduced. The workflow already ran on this schedule against
+      these same credentials; this lane supplies configuration it was already expected to have.
+
+## EVIDENCE: executed command receipts
+
+Focused regression test at `b8795cb58665b66b2e04840159c589f4f9e31b5e`:
+
+```text
+$ pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts
+ok 1 - scheduled alert workflow gives each runtime step its required configuration
+ok 2 - scheduled alert workflow remains parked and canary-only
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+```
+
+Repository gate at `b8795cb58665b66b2e04840159c589f4f9e31b5e`:
+
+```text
+$ pnpm verify:static
+[automation-coverage] verdict=PASS fail=0 warn=1 classified=15
+...
+# tests 5471
+# pass 5471
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+exit 0
+```
+
+### Mutation evidence — every assertion is proven to fail on the condition it names
+
+Baseline `.github/workflows/ingestor-staleness-alert.yml` SHA-256:
+`d64248b36bcf5b013c289152e7cb17cd032643cb78be7aa8cbbca8ccfec33303`.
+
+Each mutation was applied alone to the real workflow, the focused test was executed, and the
+file was restored and its SHA-256 re-checked against the baseline before the next mutation.
+
+| Mutation | Result | Failing assertion |
+|---|---|---|
+| remove `alerting-pass` `SUPABASE_ANON_KEY` | exit 1, pass 1 / fail 1 | `not ok 1 - ...required configuration` |
+| remove `alerting-pass` `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` | exit 1, pass 1 / fail 1 | `not ok 1 - ...required configuration` |
+| remove `monitor` `SUPABASE_ANON_KEY` | exit 1, pass 1 / fail 1 | `not ok 1 - ...required configuration` |
+| flip `SYSTEM_PICKS_ENABLED` to `'true'` | exit 1, pass 1 / fail 1 | `not ok 2 - ...parked and canary-only` |
+| flip `ALERT_MEMBER_CHANNELS_ENABLED` to `'true'` | exit 1, pass 1 / fail 1 | `not ok 2 - ...parked and canary-only` |
+| baseline restored | exit 0, pass 2 / fail 0 | — |
+
+The last two mutations matter beyond this lane: they prove the parked-posture assertion is
+load-bearing, so a future change that quietly enables member channels or system picks in this
+scheduled workflow fails this test rather than shipping.
+
+## Residual risks and deferred work
+
+### No scheduled run has been observed
+
+This proof establishes that the workflow declares the configuration its runtime steps need and
+that the declaration is defended by an executed test. It does **not** establish that a real
+03:00 run authenticated, detected a staleness condition, and delivered to the operations sink.
+That requires observing a post-merge scheduled run and recording its run URL, attempt, and the
+`alerting-pass` and `monitor` conclusions. Until then, alert delivery is proven wired, not
+proven delivered.
+
+### `test:db` is not runnable from a local worktree
+
+`pnpm test:db` refuses locally: `assert-staging` resolves `host=127.0.0.1 ref=unidentified`
+against the required `xskgrzbteyqdufktjrjx`. The writable receipt is produced inside CI by the
+`staging-ci` environment and verified within the required `verify` job; `Writable DB proof
+(staging only)` is SUCCESS on this branch. This lane changes no database code path.
+
+### Pre-merge `ops:proof-check` staleness is expected
+
+`ops:proof-check` compares `source_sha` to the current branch head by strict equality. A proof
+committed to its own branch can never satisfy that before merge: committing the proof moves the
+head past the SHA the proof names. The binding above is to the last non-proof commit, which is
+the anchor the shared schema and the Close Eligibility Preflight actually read.

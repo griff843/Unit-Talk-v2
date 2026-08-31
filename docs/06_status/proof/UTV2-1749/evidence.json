@@ -4,12 +4,12 @@
   "tier": "T1",
   "lane_type": "governance",
   "proof_profile": "static",
-  "status": "changes_in_progress",
-  "generated_at": "2026-08-31T20:21:40.394Z",
+  "status": "verified",
+  "generated_at": "2026-08-31T22:46:35.000Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "6a4fb2415e6519de6a1f716b2e33d4d2d5a4cf99",
-    "verified_source_note": "The implementation commit containing the complete workflow and regression-test change. Proof-only artifacts follow it; authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
+    "verified_source_sha": "b8795cb58665b66b2e04840159c589f4f9e31b5e",
+    "verified_source_note": "The last non-proof commit on this branch: the origin/main sync merge, carrying the implementation unchanged from 10fa8dd8. Every receipt in verification.md was executed at this SHA. Authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -38,17 +38,19 @@
   "expected_runtime_effect": {
     "alerting_pass": "The scheduled alerting process receives the full Supabase configuration triplet required by the application config loader and receives the operations webhook needed to report through the authorized operations sink.",
     "monitor": "The freshness monitor receives the full Supabase configuration triplet required by the application config loader while retaining its existing operations webhook binding.",
-    "delivery_posture": "Canary-only and parked controls are unchanged. This pre-merge YAML proof does not claim a successful scheduled run; post-merge observation is still required."
+    "delivery_posture": "Canary-only and parked controls are unchanged and are now defended by an executed assertion: flipping SYSTEM_PICKS_ENABLED or ALERT_MEMBER_CHANNELS_ENABLED to true fails the regression test. This proof does not claim a successful scheduled run; post-merge observation of Ingestor and Alert-System Monitor is still required before alert delivery is claimed as proven."
   },
   "static_proof": {
     "verify_static": {
       "command": "pnpm verify:static",
-      "exit_code": 1,
-      "status": "BLOCKED_BY_SCOPE_WIRING_GAP",
-      "final_head_failure": "WIRING_TEST_UNWIRED_NEW: scripts/ci/ingestor-alert-wiring.test.ts is not reachable from a package script or workflow command",
-      "required_fix": "Add scripts/ci/ingestor-alert-wiring.test.ts to the root test:ops command in package.json, which requires authoritative scope expansion because package.json is outside this lane's file_scope_lock.",
-      "earlier_run_note": "An earlier run exited 0 while the focused test was still untracked; executable-wiring scans tracked repository tests, so that run is not sufficient for the committed head.",
+      "exit_code": 0,
+      "status": "PASS",
+      "executed_at_sha": "b8795cb58665b66b2e04840159c589f4f9e31b5e",
       "included_stages": [
+        "ci:db-client-boundary",
+        "ops:sync-check",
+        "ops:system-alignment-check",
+        "ops:automation-coverage-check",
         "env:check",
         "lint",
         "type-check",
@@ -57,12 +59,15 @@
         "smart-form verify",
         "verify:commands"
       ],
-      "ops_suite_observation": {
-        "tests": 2745,
-        "pass": 2745,
+      "automation_coverage": "verdict=PASS fail=0 warn=1 classified=15",
+      "aggregate_tests": {
+        "tests": 5471,
+        "pass": 5471,
         "fail": 0,
-        "skipped": 0
-      }
+        "skipped": 0,
+        "not_ok_lines": 0
+      },
+      "prior_blocker_resolution": "The earlier WIRING_TEST_UNWIRED_NEW failure recorded at c383f0d9 is resolved by 10fa8dd8, which made scripts/ci/ingestor-alert-wiring.test.ts reachable by running it inside .github/workflows/ingestor-staleness-alert.yml as the \"Assert alert workflow secret wiring\" step, placed before the alerting pass. No package.json change and no scope expansion were required; the root test:ops file list is unchanged."
     },
     "focused_test": {
       "command": "pnpm exec tsx --test scripts/ci/ingestor-alert-wiring.test.ts",
@@ -70,7 +75,8 @@
       "tests": 2,
       "pass": 2,
       "fail": 0,
-      "skipped": 0
+      "skipped": 0,
+      "executed_at_sha": "b8795cb58665b66b2e04840159c589f4f9e31b5e"
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
@@ -145,5 +151,58 @@
       "staging-ci writable DB proof",
       "post-merge scheduled-run observation"
     ]
-  }
+  },
+  "mutation_proof": {
+    "workflow_baseline_sha256": "d64248b36bcf5b013c289152e7cb17cd032643cb78be7aa8cbbca8ccfec33303",
+    "method": "Each mutation applied alone to the real workflow, focused test executed, file restored and its SHA-256 re-checked against the baseline before the next mutation.",
+    "executed_at_sha": "b8795cb58665b66b2e04840159c589f4f9e31b5e",
+    "mutations": [
+      {
+        "mutation": "remove alerting-pass SUPABASE_ANON_KEY",
+        "exit_code": 1,
+        "pass": 1,
+        "fail": 1,
+        "failing_assertion": "scheduled alert workflow gives each runtime step its required configuration"
+      },
+      {
+        "mutation": "remove alerting-pass UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
+        "exit_code": 1,
+        "pass": 1,
+        "fail": 1,
+        "failing_assertion": "scheduled alert workflow gives each runtime step its required configuration"
+      },
+      {
+        "mutation": "remove monitor SUPABASE_ANON_KEY",
+        "exit_code": 1,
+        "pass": 1,
+        "fail": 1,
+        "failing_assertion": "scheduled alert workflow gives each runtime step its required configuration"
+      },
+      {
+        "mutation": "SYSTEM_PICKS_ENABLED -> 'true'",
+        "exit_code": 1,
+        "pass": 1,
+        "fail": 1,
+        "failing_assertion": "scheduled alert workflow remains parked and canary-only"
+      },
+      {
+        "mutation": "ALERT_MEMBER_CHANNELS_ENABLED -> 'true'",
+        "exit_code": 1,
+        "pass": 1,
+        "fail": 1,
+        "failing_assertion": "scheduled alert workflow remains parked and canary-only"
+      },
+      {
+        "mutation": "baseline restored",
+        "exit_code": 0,
+        "pass": 2,
+        "fail": 0,
+        "failing_assertion": null
+      }
+    ]
+  },
+  "open_items": [
+    "No post-merge scheduled run of Ingestor and Alert-System Monitor has been observed; alert delivery is proven wired, not proven delivered.",
+    "pnpm test:db is not runnable from a local worktree (assert-staging resolves host=127.0.0.1); the writable receipt is produced inside CI by the staging-ci environment and verified within the required verify job."
+  ]
 }
