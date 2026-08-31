@@ -172,7 +172,7 @@ async function validateManualResolution(
   const covered = matches.find((match) => match !== null);
   if (covered) {
     fail(
-      `manual override claims a canonical coverage gap, but "${covered.entered}" resolves to canonical participant ${covered.canonical.participantId}; use the canonical selection`,
+      `manual override claims a canonical coverage gap, but "${covered.entered}" resolves to canonical participant ${covered.canonical.participantId ?? covered.canonical.displayName}; use the canonical selection`,
     );
   }
   // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_END
@@ -397,9 +397,39 @@ function foldConfusables(value: string) {
     // than a character class: several of these are combining or variation
     // selectors, which a regex class cannot carry unambiguously.
     .filter((character) => !isDefaultIgnorable(character))
-    .map((character) => CONFUSABLE_LATIN.get(character) ?? character)
+    .map(
+      (character) =>
+        CONFUSABLE_LATIN.get(character) ?? LATIN_EXPANSION.get(character) ?? character,
+    )
     .join('');
 }
+
+/**
+ * Latin letters that NFKD does not decompose.
+ *
+ * NFKD strips diacritics ("Munchen" from "M\u00fcnchen"), but a handful of real
+ * Latin letters are atomic under it: \u00f8, \u00df, \u00e6, \u00fe, \u0111, \u0142, \u0131. Without an
+ * explicit expansion the non-ASCII refusal below rejects legitimate club names
+ * -- Br\u00f8ndby IF, Bod\u00f8/Glimt, Preu\u00dfen M\u00fcnster, Kas\u0131mpa\u015fa, \u0141KS \u0141\u00f3d\u017a -- and the
+ * manual path becomes unusable for top-flight Soccer.
+ */
+const LATIN_EXPANSION: ReadonlyMap<string, string> = new Map([
+  ['\u00f8', 'o'],
+  ['\u0153', 'oe'],
+  ['\u00e6', 'ae'],
+  ['\u00df', 'ss'],
+  ['\u1e9e', 'ss'],
+  ['\u00fe', 'th'],
+  ['\u00f0', 'd'],
+  ['\u0111', 'd'],
+  ['\u0110', 'd'],
+  ['\u0142', 'l'],
+  ['\u0141', 'l'],
+  ['\u0131', 'i'],
+  ['\u0127', 'h'],
+  ['\u014b', 'n'],
+  ['\u0294', ''],
+]);
 
 /** Invisible formatting characters that must not survive into a search query. */
 function isDefaultIgnorable(character: string): boolean {
@@ -471,15 +501,36 @@ async function findCanonicalCoverage(
   displayName: string,
   sportId: string,
   referenceData: ReferenceDataRepository,
-): Promise<{ participantId: string; displayName: string } | null> {
+): Promise<{ participantId: string | null; displayName: string } | null> {
   const enteredTokens = aliasTokens(displayName);
   if (enteredTokens.length === 0) return null;
 
-  const trimmed = displayName.trim();
-  const queries = new Set<string>([trimmed, foldConfusables(trimmed)]);
-  for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
-    if (aliasKey(word).length >= 3) queries.add(word);
+  // The catalog first, and not only as an optimisation. `searchTeams` reads the
+  // `teams` table and `searchPlayers` joins current assignments; both are empty
+  // in production today, so a search-only proof returns null for every name in
+  // every sport and the guard degrades to accepting whatever it is told. The
+  // catalog reads `participants`, which is populated, so this is the branch
+  // that actually carries the refusal.
+  const catalog = await referenceData.getCatalog();
+  const sport = catalog.sports.find((candidate) => candidate.id === sportId);
+  for (const team of sport?.teams ?? []) {
+    if (isSameEntityName(enteredTokens, aliasTokens(team))) {
+      return { participantId: null, displayName: team };
+    }
   }
+
+  const trimmed = displayName.trim();
+  const queries = new Set<string>([trimmed, foldConfusables(trimmed), aliasKey(trimmed)]);
+  for (const word of [...trimmed.split(/\s+/u), ...foldConfusables(trimmed).split(/\s+/u)]) {
+    if (aliasKey(word).length >= 3) {
+      queries.add(word);
+      // The alias key drops punctuation. Without it, "Knicks." is only ever
+      // searched verbatim, ILIKE '%knicks.%' matches nothing, and a name the
+      // catalog plainly carries is reported as an uncovered gap.
+      queries.add(aliasKey(word));
+    }
+  }
+  queries.delete('');
 
   const search = TEAM_SPORTS.has(sportId.toUpperCase())
     ? (query: string) => referenceData.searchTeams(sportId, query, 25)

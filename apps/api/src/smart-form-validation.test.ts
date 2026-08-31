@@ -411,7 +411,7 @@ test('manual override is refused when it names a participant that is canonically
         ]),
         referenceDataWithCanonicalTeams(),
       ),
-    /resolves to canonical participant team-lakers/u,
+    /resolves to canonical participant Lakers/u,
   );
 });
 
@@ -432,7 +432,7 @@ test('manual override is refused for an alias spelling of a canonically covered 
           return repository;
         })(),
       ),
-    /resolves to canonical participant team-lakers/u,
+    /resolves to canonical participant Lakers/u,
   );
 });
 
@@ -500,7 +500,7 @@ test('manual override is refused when a canonical name is spelled with a Cyrilli
         ]),
         seededReferenceData(),
       ),
-    /resolves to canonical participant team:NBA:Knicks/u,
+    /resolves to canonical participant Knicks/u,
   );
 });
 
@@ -516,27 +516,29 @@ test('manual override is refused when a canonical name is entered with a city pr
         ]),
         seededReferenceData(),
       ),
-    /resolves to canonical participant team:NBA:Knicks/u,
+    /resolves to canonical participant Knicks/u,
   );
 });
 
 test('manual override is refused when the catalog carries a city prefix the entry omits', async () => {
   // The opposite convention: the catalog is verbose, the caller is terse.
   const repository = seededReferenceData();
+  // "Sonics" is deliberately absent from the static catalog, so the catalog
+  // branch cannot short-circuit this and the search branch is what is proven.
   repository.searchTeams = async (_sportId, query) =>
-    /knicks/iu.test(query)
-      ? ([{ participantId: 'team-nyk', displayName: 'New York Knicks', sport: 'NBA' }] as never)
+    /sonics/iu.test(query)
+      ? ([{ participantId: 'team-sea', displayName: 'Seattle Sonics', sport: 'NBA' }] as never)
       : [];
   await assert.rejects(
     () =>
       validateSmartFormRelationships(
         manualPayload([
-          { role: 'away', displayName: 'Knicks', canonicalParticipantId: null },
+          { role: 'away', displayName: 'Sonics', canonicalParticipantId: null },
           { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
         ]),
         repository,
       ),
-    /resolves to canonical participant team-nyk/u,
+    /resolves to canonical participant team-sea/u,
   );
 });
 
@@ -620,7 +622,7 @@ test('a fullwidth look-alike folds to ASCII and is caught as canonical coverage'
         ]),
         seededReferenceData(),
       ),
-    /resolves to canonical participant team:NBA:Knicks/u,
+    /resolves to canonical participant Knicks/u,
   );
 });
 
@@ -634,7 +636,7 @@ test('zero-width characters in every word do not hide a canonical name', async (
         ]),
         seededReferenceData(),
       ),
-    /resolves to canonical participant team:NBA:Knicks/u,
+    /resolves to canonical participant Knicks/u,
   );
 });
 
@@ -757,4 +759,70 @@ test('mutation control: removing SMART_FORM_TRIGGER_SCOPE refuses legacy smart-f
     const validate = mutant['validateSmartFormRelationships'] as typeof validateSmartFormRelationships;
     await assert.rejects(() => validate(legacy, referenceData()), /distributionMode must be/u);
   });
+});
+
+test('the coverage proof survives an empty search backend, because the catalog is what is populated', async () => {
+  // `searchTeams` reads the `teams` table and `searchPlayers` joins current
+  // assignments; both are empty in production. A search-only proof therefore
+  // returns null for every name in every sport and the guard degrades to
+  // accepting whatever it is told. The catalog reads `participants`, which is
+  // populated, so this is the branch that actually carries the refusal.
+  const repository = seededReferenceData();
+  repository.searchTeams = async () => [];
+  repository.searchPlayers = async () => [];
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: 'Knicks', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        repository,
+      ),
+    /resolves to canonical participant Knicks/u,
+  );
+});
+
+test('punctuation on a single-word name does not defeat retrieval', async () => {
+  // The raw query "Knicks." is searched verbatim, and ILIKE '%knicks.%' matches
+  // nothing, so without the alias-collapsed spelling in the query set the row
+  // is never fetched and the name reads as an uncovered gap.
+  const repository = seededReferenceData();
+  const queries: string[] = [];
+  repository.searchTeams = async (_sportId: string, query: string) => {
+    queries.push(query);
+    return /^sonics$/iu.test(query)
+      ? ([{ participantId: 'team-sea', displayName: 'Sonics', sport: 'NBA' }] as never)
+      : [];
+  };
+  await assert.rejects(
+    () =>
+      validateSmartFormRelationships(
+        manualPayload([
+          { role: 'away', displayName: "Sonic's", canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ]),
+        repository,
+      ),
+    /resolves to canonical participant team-sea/u,
+  );
+  assert.ok(queries.includes('sonics'), `alias-collapsed spelling was never searched: ${queries.join(', ')}`);
+});
+
+test('Latin letters NFKD does not decompose are admitted rather than refused as non-Latin', async () => {
+  // NFKD strips diacritics but leaves o-slash, sharp-s, ash, l-stroke and
+  // dotless-i intact. Without an explicit expansion the non-ASCII refusal
+  // rejects real top-flight Soccer clubs and the manual path is unusable.
+  for (const name of ['Brøndby IF', 'Preußen Münster', 'Kasımpaşa', 'ŁKS Łódź']) {
+    await validateSmartFormRelationships(
+      manualPayload(
+        [
+          { role: 'away', displayName: name, canonicalParticipantId: null },
+          { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+        ],
+        'Soccer',
+      ),
+      seededReferenceData(),
+    );
+  }
 });
