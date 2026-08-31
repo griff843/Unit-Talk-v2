@@ -3814,3 +3814,285 @@ test('TGC-9: every failing condition is reported, not just the first', () => {
   // short-circuit already demonstrated.
   assert.strictEqual(result.unsatisfied.length, 5);
 });
+
+// ── UTV2-1745: legacy-section-only closeout shape ─────────────────────────────
+//
+// The lane merged at 85c572ed and then could not be closed. Its evidence bundle
+// was schema-valid -- CEP-E7 requires `sha_binding.merge_sha` to be present and
+// null before merge, and it was -- while `verification.md` predated the
+// canonical `## Merge SHA Binding` section. The structural-repair DETECTOR
+// recognised only two shapes, "both omissions" and "both already repaired", so
+// this third and entirely legitimate shape fell through to the tolerant
+// rebindMergeSha path, where planVerificationRebind refuses on the absent
+// section. The lane stayed merged-but-unclosed with no sanctioned exit.
+//
+// Every control below runs the real exported closeout path. The fixtures are
+// self-contained rather than copied from the live UTV2-1745 bundle on purpose:
+// once that bundle is repaired on main it stops exhibiting the shape, and a
+// control sourced from it would silently stop proving anything.
+
+const UTV2_1745_MERGE_SHA = '85c572edf5d6061cf4e2ece9ddebc730cae3e0d3';
+const UTV2_1745_EXECUTION_SHA = '3a99f5043e950b6f5610b26aab4d761bc8fc46fb';
+const UTV2_1745_APPROVED_HEAD = '79dcd534d2e5e47f68dff7f707e760ad2d2383a9';
+
+/**
+ * Writes the exact pre-closeout shape UTV2-1745 carried: a schema-v2 static
+ * bundle whose merge slot exists and is null, whose verification.md has a
+ * top-level MERGE_SHA: line and NO binding section, and a model-routing sidecar
+ * with no merge identity of its own.
+ */
+function writeLegacySectionOnlyBundle(
+  repoRoot: string,
+  issueId: string,
+  options: { legacyRoutingMergeSha?: string; mergeSlot?: unknown; includeBindingSection?: boolean } = {},
+): string {
+  const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', issueId);
+  fs.mkdirSync(proofDir, { recursive: true });
+
+  const shaBinding: Record<string, unknown> = {
+    verified_source_sha: UTV2_1745_EXECUTION_SHA,
+    evidence_commit_sha: 'set-by-ci',
+    current_pr_head_sha: 'set-by-ci',
+    ci_sentinels: { evidence_commit_sha: 'set-by-ci', current_pr_head_sha: 'set-by-ci' },
+    sha_type: 'merge_sha',
+    bound_at: '2026-08-30T20:15:00.000Z',
+  };
+  if (!('mergeSlot' in options) || options.mergeSlot !== undefined) {
+    shaBinding['merge_sha'] = 'mergeSlot' in options ? options.mergeSlot : null;
+  }
+  fs.writeFileSync(
+    path.join(proofDir, 'evidence.json'),
+    `${JSON.stringify({
+      schema_version: 2,
+      issue_id: issueId,
+      tier: 'T1',
+      lane_type: 'verification',
+      proof_profile: 'static',
+      status: 'READY_FOR_REVIEW',
+      sha_binding: shaBinding,
+    }, null, 2)}\n`,
+  );
+
+  const verification = [
+    `# ${issueId} verification`,
+    '',
+    `MERGE_SHA: ${UTV2_1745_EXECUTION_SHA}`,
+    '',
+    '## Verification',
+    '',
+    'The audit ran read-only against production and wrote nothing.',
+    ...(options.includeBindingSection
+      ? [
+          '',
+          '## Merge SHA Binding',
+          '',
+          `Merge SHA: ${UTV2_1745_MERGE_SHA}`,
+          'PR: https://github.com/griff843/Unit-Talk-v2/pull/1453',
+          `Approved PR head: ${UTV2_1745_APPROVED_HEAD}`,
+          `Execution SHA: ${UTV2_1745_EXECUTION_SHA}`,
+        ]
+      : []),
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(proofDir, 'verification.md'), verification);
+
+  const routing: Record<string, unknown> = {
+    issue_id: issueId,
+    manifest_schema_version: 2,
+    model_profile: 'codex-sol-high',
+    model: 'gpt-5.6-sol',
+    reasoning_effort: 'high',
+    policy_version: '1.0.0',
+    override_used: false,
+    override_authorized_by: null,
+    generated_at: '2026-08-26T20:32:09.972Z',
+  };
+  if (options.legacyRoutingMergeSha !== undefined) {
+    routing['merge_sha'] = options.legacyRoutingMergeSha;
+  }
+  fs.writeFileSync(path.join(proofDir, 'model-routing.json'), `${JSON.stringify(routing, null, 2)}\n`);
+  return proofDir;
+}
+
+function utv2_1745Manifest(issueId: string): LaneManifest {
+  return createManifest({
+    schema_version: 2,
+    issue_id: issueId,
+    lane_type: 'verification',
+    tier: 'T1',
+    branch: 'codex/utv2-1745-pick-truth-audit',
+    commit_sha: UTV2_1745_MERGE_SHA,
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1453',
+    expected_proof_paths: [
+      path.posix.join('docs', '06_status', 'proof', issueId, 'evidence.json'),
+      path.posix.join('docs', '06_status', 'proof', issueId, 'model-routing.json'),
+    ],
+    model_routing: {
+      profile: 'codex-sol-high',
+      model: 'gpt-5.6-sol',
+      reasoning_effort: 'high',
+      selected_by: 'three-brain',
+      policy_version: '1.0.0',
+    },
+  } as Partial<LaneManifest>);
+}
+
+function utv2_1745RebindDeps(manifest: LaneManifest) {
+  let attestedHeadAvailable = false;
+  return {
+    isCommitReachable: (ancestor: string, descendant: string): boolean => {
+      assert.strictEqual(attestedHeadAvailable, true, 'PR head must be materialized before ancestry checks');
+      return (
+        (ancestor === UTV2_1745_MERGE_SHA && descendant === 'origin/main') ||
+        (ancestor === UTV2_1745_EXECUTION_SHA && descendant === UTV2_1745_APPROVED_HEAD)
+      );
+    },
+    ensurePrHeadAvailable: (prNumber: number, headSha: string): void => {
+      assert.strictEqual(prNumber, 1453);
+      assert.strictEqual(headSha, UTV2_1745_APPROVED_HEAD);
+      attestedHeadAvailable = true;
+    },
+    pr: {
+      url: manifest.pr_url,
+      number: 1453,
+      repository: 'griff843/Unit-Talk-v2',
+      state: 'merged',
+      merged: true,
+      // A squash merge: the merge SHA is a brand-new commit that is NOT the PR
+      // head and shares no identity with any branch commit. This is precisely
+      // why a pre-merge sidecar can never name merge authority.
+      mergeSha: UTV2_1745_MERGE_SHA,
+      headSha: UTV2_1745_APPROVED_HEAD,
+      baseRefName: 'main',
+    } as RepairMergedPrInfo,
+  };
+}
+
+// Control 1 (negative / reproduction): the pre-fix detector shape. Before the
+// fix this exact input produced a refusal, leaving the lane unclosable.
+// Controls 2, 3, 4 and 6 ride on the same executed run.
+test('UTV2-1745: a schema-valid bundle missing the binding section is repaired and bound to the squash merge SHA', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1745';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId);
+    const manifest = utv2_1745Manifest(issueId);
+
+    // Control 4 (precondition): the section really is absent, and control 2:
+    // the merge slot really is present and null before the run.
+    const beforeVerification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.doesNotMatch(beforeVerification, /## Merge SHA Binding/);
+    const beforeEvidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.ok(
+      Object.prototype.hasOwnProperty.call(beforeEvidence.sha_binding, 'merge_sha'),
+      'CEP-E7 requires the merge slot to exist before merge',
+    );
+    assert.strictEqual(beforeEvidence.sha_binding.merge_sha, null, 'pre-merge binding must be null, never speculative');
+
+    const outcomes = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-08-31T15:00:00.000Z'),
+      ...utv2_1745RebindDeps(manifest),
+    });
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+
+    // Control 3: the authoritative GitHub merge SHA is now bound.
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, UTV2_1745_MERGE_SHA);
+    assert.strictEqual(evidence.sha_binding.verified_source_sha, UTV2_1745_EXECUTION_SHA);
+
+    // Control 4: the canonical section was created -- from the resolved merge
+    // SHA, not invented -- and carries the full identity, not just a SHA.
+    const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+    assert.match(verification, /^## Merge SHA Binding$/mu);
+    assert.match(verification, new RegExp(`^Merge SHA: ${UTV2_1745_MERGE_SHA}$`, 'mu'));
+    assert.match(verification, /^PR: https:\/\/github\.com\/griff843\/Unit-Talk-v2\/pull\/1453$/mu);
+    assert.match(verification, new RegExp(`^Approved PR head: ${UTV2_1745_APPROVED_HEAD}$`, 'mu'));
+    assert.match(verification, new RegExp(`^Execution SHA: ${UTV2_1745_EXECUTION_SHA}$`, 'mu'));
+    assert.strictEqual(
+      verification.match(/^## Merge SHA Binding$/gmu)?.length,
+      1,
+      'exactly one canonical section -- a duplicate would let a stale binding survive',
+    );
+    // The pre-existing narrative is preserved byte-for-byte.
+    assert.match(verification, /The audit ran read-only against production and wrote nothing\./);
+
+    // Control 6: the model-routing sidecar is bound in the SAME run, to the
+    // same merge SHA, and the manifest agrees. Three artifacts, one identity.
+    const routing = JSON.parse(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'));
+    assert.strictEqual(routing.closeout_binding.sha_type, 'merge_sha');
+    assert.strictEqual(routing.closeout_binding.merge_sha, UTV2_1745_MERGE_SHA);
+    assert.strictEqual(routing.closeout_binding.pr_url, 'https://github.com/griff843/Unit-Talk-v2/pull/1453');
+    assert.strictEqual(routing.merge_sha, undefined, 'a sidecar must never carry a top-level merge identity');
+    assert.strictEqual(manifest.commit_sha, UTV2_1745_MERGE_SHA);
+    assert.strictEqual(evidence.sha_binding.merge_sha, manifest.commit_sha);
+    assert.strictEqual(routing.closeout_binding.merge_sha, manifest.commit_sha);
+
+    // Replay is idempotent: the repaired shape is recognised as already correct.
+    const replay = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-08-31T16:00:00.000Z'),
+      ...utv2_1745RebindDeps(manifest),
+    });
+    assert.ok(replay.every((outcome) => outcome.status === 'unchanged'));
+  });
+});
+
+// Control 5: fail-closed conflict handling is NOT relaxed by the widened
+// detector. A sidecar naming a different, unrelated merge identity still
+// refuses -- the fix must not become a silent overwrite.
+test('UTV2-1745: a conflicting non-null sidecar merge_sha is still refused, not silently overwritten', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1745';
+    const unrelatedSha = 'daad7b0080bfaa87bf10989c2dc93996ba0591a5';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId, { legacyRoutingMergeSha: unrelatedSha });
+    const manifest = utv2_1745Manifest(issueId);
+    const before = fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8');
+    const evidenceBefore = fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8');
+    const verificationBefore = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
+
+    assert.throws(
+      () =>
+        rebindRepairedLaneProof(manifest, {
+          repoRoot,
+          now: new Date('2026-08-31T15:00:00.000Z'),
+          ...utv2_1745RebindDeps(manifest),
+        }),
+      (error: unknown) => {
+        const message = (error as Error).message;
+        assert.match(message, new RegExp(unrelatedSha));
+        assert.match(message, new RegExp(UTV2_1745_MERGE_SHA));
+        return true;
+      },
+      'a sidecar asserting a different merge identity must fail closed',
+    );
+
+    // And the refusal is atomic: nothing was written, so a failed closeout can
+    // never leave a partially-bound bundle behind.
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'model-routing.json'), 'utf8'), before);
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'), evidenceBefore);
+    assert.strictEqual(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), verificationBefore);
+  });
+});
+
+// Control 1 (positive, unchanged behaviour): the original both-omissions shape
+// the detector already recognised still repairs, so widening did not displace it.
+test('UTV2-1745: the original both-omissions generator shape still repairs', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1745';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId, { mergeSlot: undefined });
+    const manifest = utv2_1745Manifest(issueId);
+    const evidenceBefore = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.ok(!Object.prototype.hasOwnProperty.call(evidenceBefore.sha_binding, 'merge_sha'));
+
+    const outcomes = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-08-31T15:00:00.000Z'),
+      ...utv2_1745RebindDeps(manifest),
+    });
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+    const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
+    assert.strictEqual(evidence.sha_binding.merge_sha, UTV2_1745_MERGE_SHA);
+    assert.match(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), /^## Merge SHA Binding$/mu);
+  });
+});
