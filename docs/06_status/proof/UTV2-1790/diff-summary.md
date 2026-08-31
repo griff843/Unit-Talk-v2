@@ -1,17 +1,24 @@
 # Diff summary — UTV2-1790
 
-MERGE_SHA: 0f93008bef9766aed1809cd9340e540461244314
+MERGE_SHA: 370097343393241ffa7d3db4db33530b4949e2fe
 
-Three code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
+Four code files. No `package.json`, no lockfile, no tsconfig, no workflow, no
 runtime/DB/application code.
 
 | File | Change |
 |---|---|
-| `scripts/ops/ops-merge-wrapper.ts` | +327 / −6 |
-| `scripts/ops/merge-wrapper.ts` | +216 / −16 |
-| `scripts/ops/ops-merge-wrapper.test.ts` | +1281 / −5 |
+| `scripts/ops/ops-merge-wrapper.ts` | +342 / −6 |
+| `scripts/ops/merge-wrapper.ts` | +273 / −16 |
+| `scripts/ops/ops-merge-wrapper.test.ts` | +1708 / −15 |
+| `scripts/ops/merge-wrapper.test.ts` | +37 / −4 |
 
-(`git diff --numstat origin/main -- scripts/ops/`, the full lane diff.)
+(`git diff --numstat origin/main -- scripts/ops/`, the full lane diff, re-measured at
+this head. The fourth file is a round-8 consequence and is called out in
+`verification.md` under **Scope** rather than left to be discovered here: the new
+`main-sync` pre-flight changed behaviour four PRE-EXISTING fixtures in that sibling
+suite depend on, and the edit adds one shared clean-worktree constant plus one option
+on each of the four calls. No assertion, expected result code or command-sequence
+expectation changes.)
 
 Plus lane metadata: `docs/06_status/lanes/UTV2-1790.json` (`file_scope_lock` extended
 by exactly one path, `scripts/ops/merge-wrapper.ts`, under explicit PM approval),

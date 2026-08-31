@@ -13,6 +13,7 @@
   "file_scope_lock": [
     ".ops/sync/UTV2-1790.yml",
     "docs/06_status/proof/UTV2-1790/**",
+    "scripts/ops/merge-wrapper.test.ts",
     "scripts/ops/merge-wrapper.ts",
     "scripts/ops/ops-merge-wrapper.test.ts",
     "scripts/ops/ops-merge-wrapper.ts"
