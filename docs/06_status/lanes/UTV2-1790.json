@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1790",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1790-merge-wrapper-ff-only",
+  "branch": "claude/utv2-1790-merge-wrapper-ff-only",
+  "base_branch": "main",
+  "commit_sha": "c6d2b81f6173032b72de10c1e9a519530ed80f18",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1464",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1790.yml",
+    "docs/06_status/proof/UTV2-1790/**",
+    "scripts/ops/merge-wrapper.test.ts",
+    "scripts/ops/merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    "scripts/ops/ops-merge-wrapper.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1790/diff-summary.md",
+    "docs/06_status/proof/UTV2-1790/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-08-30T20:14:47.410Z",
+  "heartbeat_at": "2026-08-31T12:29:05.654Z",
+  "closed_at": "2026-08-31T12:29:05.654Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-08-31T12:29:03.853Z",
+      "verdict": "pass",
+      "merge_sha": "c6d2b81f6173032b72de10c1e9a519530ed80f18",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1790-merge-wrapper-ff-only",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

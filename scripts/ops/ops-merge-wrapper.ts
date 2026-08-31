@@ -91,9 +91,29 @@ export function buildExtendedCommand(
 ): { command: 'git' | 'gh'; args: string[]; deferred: boolean } {
   switch (operation) {
     case 'git-merge-main':
+      // UTV2-1790: this was `--ff-only`, which cannot merge a diverged branch
+      // by definition -- so the one verb `main-sync` recommends *for* a
+      // diverged branch ("preserves history and SHAs") failed on exactly the
+      // condition it exists for. Both sanctioned exits dead-ended and the only
+      // operable verb left was `git-rebase-main`, which rewrites history and
+      // moves the head SHA, invalidating pm-verdict, t1-approved evidence and
+      // executor-result. UTV2-1678 removed the *silent* rebase substitution;
+      // leaving this unusable reintroduced the same risk by omission.
+      //
+      // `--no-ff` always records a merge commit: existing commit SHAs on both
+      // sides are preserved byte-for-byte and nothing is replayed. It is also
+      // deliberately not a bare `git merge` -- on a branch that happens to be
+      // merely behind, a bare merge would fast-forward and silently move the
+      // branch with no merge commit, making the operation's effect depend on
+      // divergence state. `--no-ff` behaves identically in both cases.
+      //
+      // `--no-edit` keeps it noninteractive: without it `git merge --no-ff`
+      // opens $GIT_EDITOR for the merge commit message, and this runs under
+      // spawnSync with piped stdio, where an editor cannot be driven and the
+      // call would hang or fail depending on the configured editor.
       return {
         command: 'git',
-        args: ['merge', '--ff-only', 'origin/main'],
+        args: ['merge', '--no-ff', '--no-edit', 'origin/main'],
         deferred: false,
       };
     case 'git-rebase-main':
@@ -233,6 +253,339 @@ export function isNotFastForwardFailure(result: MergeWrapperResult): boolean {
   );
 }
 
+interface SyncResidue {
+  mergeHead: boolean;
+  rebaseHead: boolean;
+  cherryPickHead: boolean;
+  revertHead: boolean;
+  bisect: boolean;
+  sequencer: boolean;
+  detachedHead: boolean;
+  /**
+   * The fully-qualified ref HEAD is attached to (`refs/heads/<branch>`), or null
+   * when HEAD is detached or the probe could not determine it. Round 12 turned
+   * the off-branch half of this guard from a blocklist into an ALLOWLIST: the
+   * caller states which branch it expects and anything else is refused, so a
+   * state nobody has enumerated yet still cannot pass.
+   */
+  headRef: string | null;
+  unmerged: string[];
+  undetermined: string[];
+}
+
+/**
+ * UTV2-1790 (review round 2): a probe that cannot DETERMINE the state must never
+ * be read as "clean".
+ *
+ * `git rev-parse --verify --quiet MERGE_HEAD` exits non-zero both when the ref is
+ * absent and when the command could not run at all (a broken repository, a
+ * permissions failure, git missing). Collapsing those two into `false`
+ * reintroduces the very fail-open the cleanup path exists to close: an
+ * undeterminable tree takes the "nothing to abort" early return, the autostash is
+ * popped into a possibly-unmerged index and the mutex is released.
+ * `undetermined` is therefore tracked separately and always forces fail-closed.
+ *
+ * Round 5 hoisted this out of `abortInProgressSync` so the release decisions on
+ * the stash-push and stash-pop failure paths can ask the same question, rather
+ * than asserting an answer they never measured (review round 6, P1).
+ */
+function probeSyncResidue(runner: CommandRunner, cwd: string): SyncResidue {
+  const undetermined: string[] = [];
+  const ref = (name: string): boolean => {
+    const r = runner('git', ['rev-parse', '--verify', '--quiet', name], { cwd });
+    // Absent ref: status 1 and no output. Anything else non-zero -- notably
+    // git's fatal exit 128 -- means the question was not answered.
+    if (r.error || (r.status !== 0 && r.status !== 1)) {
+      undetermined.push(`${name} (git rev-parse exited ${r.status ?? 'with an error'})`);
+      return false;
+    }
+    return r.status === 0;
+  };
+  // UTV2-1790 (review round 11, P3): one helper, not two. Round 10 added
+  // `sequencerFile` beside `sequencerDir` with a byte-identical body -- `fs.existsSync`
+  // does not care whether the path is a file or a directory -- and the duplication
+  // immediately cost something real: it made M25's mutation anchor match twice, so the
+  // battery reported that control as SKIPPED rather than measured. Named for what it
+  // actually does.
+  //
+  // `git rev-parse --git-path` is used rather than joining `.git` by hand because in a
+  // LINKED WORKTREE (which is how every lane in this repo runs) `.git` is a file, not a
+  // directory, and the real path lives under `.git/worktrees/<name>/`. Measured in both
+  // shapes: from a linked worktree it returns an absolute path, and from a
+  // subdirectory of a normal repo it returns a relative one, which is why both cases
+  // are handled below.
+  const gitPathExists = (name: string): boolean => {
+    const r = runner('git', ['rev-parse', '--git-path', name], { cwd });
+    if (r.error || r.status !== 0) {
+      undetermined.push(`${name} (git rev-parse --git-path exited ${r.status ?? 'with an error'})`);
+      return false;
+    }
+    const rel = bufferToText(r.stdout).trim();
+    if (!rel) {
+      undetermined.push(`${name} (git rev-parse --git-path returned no path)`);
+      return false;
+    }
+    return fs.existsSync(path.isAbsolute(rel) ? rel : path.join(cwd, rel));
+  };
+  const mergeHead = ref('MERGE_HEAD');
+  // UTV2-1790 (review round 7, P3): a rebase stopped at a `break`/`edit` step has
+  // NO REBASE_HEAD, no MERGE_HEAD and no unmerged paths -- it is a detached HEAD
+  // with a `.git/rebase-merge` directory. A conflict resolved with `git add` but
+  // not committed leaves CHERRY_PICK_HEAD or REVERT_HEAD and nothing else. All
+  // three read as "clean" under a MERGE_HEAD/REBASE_HEAD/unmerged sweep, so the
+  // release decisions would hand the repo-wide mutex to the next lane over a
+  // worktree that is mid-sequencer. This wrapper's own commands cannot produce
+  // those states (it runs git non-interactively), so they are reachable only from
+  // PRE-EXISTING stranded state -- which is exactly the population the stash-push
+  // failure path exists to catch.
+  const rebaseHead =
+    ref('REBASE_HEAD') || gitPathExists('rebase-merge') || gitPathExists('rebase-apply');
+  const cherryPickHead = ref('CHERRY_PICK_HEAD');
+  const revertHead = ref('REVERT_HEAD');
+  // UTV2-1790 (review round 10, P1): a round-10 reviewer reproduced the round-8
+  // destructive success again, on a state this probe did not enumerate. During a
+  // `git bisect`, HEAD is detached at the commit under test and there is no
+  // MERGE_HEAD, no REBASE_HEAD, no sequencer directory and no unmerged path --
+  // the tree reads byte-clean. `git pull --ff-only` then fast-forwards that
+  // detached HEAD off the commit being tested, returns `merge_wrapper_completed`,
+  // and leaves BISECT_LOG intact, so every subsequent `git bisect good|bad`
+  // records a verdict against the WRONG commit and the search converges on a
+  // fabricated answer. The hazard is the round-8 one exactly; only the state
+  // reaching it is new, which is why the fix belongs here in the enumeration
+  // rather than in another consumer.
+  //
+  // Both files are checked because they answer slightly different questions:
+  // BISECT_START exists from `git bisect start` onward (even before any
+  // good/bad is recorded) and BISECT_LOG is what `git bisect` itself reads back.
+  // `git bisect reset` removes both. Measured against a real repository in three
+  // variants -- plain, `--no-checkout`, and started-but-no-verdict-yet -- all
+  // three wrote both files and all three read clean under the round-9 probe.
+  const bisect = gitPathExists('BISECT_LOG') || gitPathExists('BISECT_START');
+  // UTV2-1790 (review round 11, P1): a paused cherry-pick or revert SEQUENCE leaves
+  // `.git/sequencer` and nothing else. Reproduced: `git cherry-pick A B` conflicts on
+  // A, the operator resolves and commits with a plain `git commit` instead of
+  // `git cherry-pick --continue` (git's own advice mentions --continue, but a plain
+  // commit is accepted and clears CHERRY_PICK_HEAD). HEAD stays ON THE BRANCH, the
+  // index is clean, `git status` says "Cherry-pick currently in progress" -- and every
+  // term above reads absent. `main-sync` then fast-forwarded HEAD, returned
+  // `merge_wrapper_completed`, and the operator's later `--continue` applied the
+  // remaining picks onto a base they never chose.
+  //
+  // The round-10 bundle asserted this term had been "considered and REJECTED" as
+  // provably equivalent to CHERRY_PICK_HEAD/REVERT_HEAD/unmerged paths. That was a
+  // reasoning error presented as a measurement, and this is its retraction: the state
+  // above is caught by this term and by no other.
+  const sequencer = gitPathExists('sequencer');
+  // UTV2-1790 (review round 11, P2): stop enumerating, for the off-branch half.
+  //
+  // Rounds 8, 10 and 11 each found a different state that reads clean and is destroyed
+  // by a fast-forward, and the first two shared one property: HEAD was DETACHED. A bare
+  // detached HEAD -- `git checkout <sha>` to test a commit by hand, the manual form of
+  // the very bisect workflow round 10 was about -- leaves no state file anywhere, so no
+  // enumeration can ever reach it.
+  //
+  // Refusing on a detached HEAD is not over-refusal, and that matters because refusing
+  // too much is its own failure. `main-sync` exists to bring origin/main into the LANE
+  // BRANCH. With HEAD detached, `git pull --ff-only origin main` moves HEAD and leaves
+  // `refs/heads/<branch>` exactly where it was -- measured, and reported as a related
+  // finding by the same reviewer -- so the operation cannot accomplish what it claims
+  // no matter what the worktree looks like. It is always wrong here, which makes this a
+  // predicate over the operation rather than one more guess about git's state space.
+  //
+  // `git symbolic-ref -q HEAD` exits 0 with the ref when attached and 1 when detached.
+  // Any other status is undetermined, never "attached".
+  const symbolicRef = runner('git', ['symbolic-ref', '-q', 'HEAD'], { cwd });
+  let detachedHead = false;
+  let headRef: string | null = null;
+  if (symbolicRef.error || (symbolicRef.status !== 0 && symbolicRef.status !== 1)) {
+    undetermined.push(
+      `HEAD attachment (git symbolic-ref exited ${symbolicRef.status ?? 'with an error'})`,
+    );
+  } else {
+    detachedHead = symbolicRef.status === 1;
+    headRef = detachedHead ? null : bufferToText(symbolicRef.stdout).trim() || null;
+    if (!detachedHead && headRef === null) {
+      undetermined.push('HEAD attachment (git symbolic-ref reported attached but named no ref)');
+    }
+  }
+  const unmergedRun = runner('git', ['diff', '--name-only', '--diff-filter=U'], { cwd });
+  let unmerged: string[] = [];
+  if (unmergedRun.error || unmergedRun.status !== 0) {
+    undetermined.push(`unmerged paths (git diff exited ${unmergedRun.status ?? 'with an error'})`);
+  } else {
+    unmerged = bufferToText(unmergedRun.stdout)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+  }
+  return {
+    mergeHead,
+    rebaseHead,
+    cherryPickHead,
+    revertHead,
+    bisect,
+    sequencer,
+    detachedHead,
+    headRef,
+    unmerged,
+    undetermined,
+  };
+}
+
+/**
+ * UTV2-1790 (review round 6): report whether the worktree is safe to hand to the
+ * next lane, as a MEASUREMENT rather than an assumption.
+ *
+ * Round 5 retained the merge mutex on any `git stash pop` failure and justified it
+ * with the words "the pop left the worktree with unmerged entries" -- text that
+ * nothing on that path had probed for. The most likely production failure is the
+ * opposite: `git stash pop` exits 1 with "already exists, no checkout" when
+ * origin/main starts TRACKING a lane-state path that was autostashed while
+ * untracked, and that leaves a byte-clean tree. Retaining the repo-wide merge
+ * mutex there halts every lane until a human releases it by hand.
+ */
+export function worktreeResidue(
+  runner: CommandRunner,
+  cwd: string,
+  expectedBranch?: string,
+): { clean: boolean; detail: string } {
+  const r = probeSyncResidue(runner, cwd);
+  const parts: string[] = [];
+  if (r.mergeHead) parts.push('MERGE_HEAD is present');
+  if (r.rebaseHead) parts.push('a rebase is in progress (REBASE_HEAD or a rebase-merge/rebase-apply directory)');
+  if (r.cherryPickHead) parts.push('CHERRY_PICK_HEAD is present');
+  if (r.revertHead) parts.push('REVERT_HEAD is present');
+  if (r.bisect) parts.push('a bisect is in progress (BISECT_LOG or BISECT_START is present)');
+  if (r.sequencer) parts.push('a cherry-pick or revert sequence is in progress (.git/sequencer is present)');
+  if (r.detachedHead) parts.push('HEAD is detached, so a sync would move HEAD and leave the branch ref behind');
+  // The ALLOWLIST term. Every term above names one known-bad state; this one names
+  // the only acceptable state and refuses everything else, so a hazard nobody has
+  // enumerated cannot pass merely by leaving no marker behind. Only asked when the
+  // caller states an expectation -- the post-failure cleanup path measures residue,
+  // not fitness to sync, and has no branch to expect.
+  if (expectedBranch !== undefined && !r.detachedHead && r.headRef !== null) {
+    const expectedRef = `refs/heads/${expectedBranch}`;
+    if (r.headRef !== expectedRef) {
+      parts.push(
+        `HEAD is on ${r.headRef}, not the expected ${expectedRef}, so a sync would ` +
+          `move the wrong branch`,
+      );
+    }
+  }
+  if (r.unmerged.length > 0) parts.push(`unmerged paths: ${r.unmerged.join(', ')}`);
+  if (r.undetermined.length > 0) {
+    parts.push(`state could not be determined: ${r.undetermined.join('; ')}`);
+  }
+  return {
+    clean: parts.length === 0,
+    detail:
+      parts.length === 0
+        ? (expectedBranch === undefined
+            ? 'HEAD is attached and there is no MERGE_HEAD, no rebase/cherry-pick/revert/bisect/sequencer in progress and no unmerged paths'
+            : `HEAD is attached to the expected refs/heads/${expectedBranch} and there is no MERGE_HEAD, no rebase/cherry-pick/revert/bisect/sequencer in progress and no unmerged paths`)
+        : parts.join('; '),
+  };
+}
+
+/**
+ * UTV2-1790: return the worktree to its pre-attempt state after a failed
+ * `git-merge-main` / `git-rebase-main`.
+ *
+ * A conflicted `git merge` exits non-zero and leaves `MERGE_HEAD` plus unmerged
+ * index entries in place. If the wrapper then pops its lane-state autostash and
+ * releases the merge mutex -- which is what it did before this function existed
+ * -- the pop fails with "needs merge" and the next lane acquires a mutex that is
+ * supposed to serialize merges while this worktree is still inside the previous
+ * lane's. Every subsequent wrapper run also fails until a human aborts by hand.
+ *
+ * Fail-closed by construction: `cleaned` is true only when the abort command
+ * itself succeeded AND a fresh probe shows no `MERGE_HEAD`, no `REBASE_HEAD` and
+ * no unmerged paths. A dirty tree we could not clean is never reported as clean.
+ */
+export function abortInProgressSync(
+  operation: 'git-merge-main' | 'git-rebase-main',
+  runner: CommandRunner,
+  cwd: string,
+): { cleaned: boolean; aborted: boolean; message?: string } {
+  const before = probeSyncResidue(runner, cwd);
+  if (before.undetermined.length > 0) {
+    // Fail closed: we do not know whether anything is in progress, so we may not
+    // claim the tree is clean, and we must not guess by firing a blind --abort.
+    return {
+      cleaned: false,
+      aborted: false,
+      message:
+        `Could not determine the worktree state after the failed ${operation}, so it ` +
+        `cannot be reported clean: ${before.undetermined.join('; ')}.`,
+    };
+  }
+  // UTV2-1790 (review round 8, P2): this early return must use the SAME definition
+  // of "clean" as `worktreeResidue` and as the post-abort `residue` below. Round 7
+  // added `cherryPickHead`/`revertHead` to both of those and not to this one, so a
+  // failed merge over a resolved-but-uncommitted cherry-pick took the
+  // nothing-to-abort exit, the autostash was popped and the mutex released over a
+  // mid-cherry-pick worktree -- the exact fail-open round 7 said it had closed.
+  if (
+    !before.mergeHead &&
+    !before.rebaseHead &&
+    !before.cherryPickHead &&
+    !before.revertHead &&
+    !before.bisect &&
+    !before.sequencer &&
+    !before.detachedHead &&
+    before.unmerged.length === 0
+  ) {
+    // The command failed without starting anything -- e.g. `git merge` refused
+    // up front. There is nothing to abort and nothing left behind.
+    return { cleaned: true, aborted: false };
+  }
+
+  const verb = operation === 'git-rebase-main' ? 'rebase' : 'merge';
+  const abort = runner('git', [verb, '--abort'], { cwd });
+  const abortOk = !abort.error && abort.status === 0;
+  const after = probeSyncResidue(runner, cwd);
+  const residue =
+    after.mergeHead ||
+    after.rebaseHead ||
+    after.cherryPickHead ||
+    after.revertHead ||
+    after.bisect ||
+    after.sequencer ||
+    after.detachedHead ||
+    after.unmerged.length > 0 ||
+    after.undetermined.length > 0;
+
+  if (abortOk && !residue) {
+    return { cleaned: true, aborted: true };
+  }
+
+  const detail: string[] = [];
+  if (!abortOk) {
+    detail.push(
+      `git ${verb} --abort exited ${abort.status ?? 'with an error'}: ` +
+        `${abort.error?.message ?? (bufferToText(abort.stderr) || bufferToText(abort.stdout) || '(no output)')}`,
+    );
+  }
+  if (after.mergeHead) detail.push('MERGE_HEAD is still present');
+  if (after.rebaseHead) detail.push('a rebase is still in progress');
+  if (after.cherryPickHead) detail.push('CHERRY_PICK_HEAD is still present');
+  if (after.revertHead) detail.push('REVERT_HEAD is still present');
+  if (after.bisect) detail.push('a bisect is still in progress');
+  if (after.sequencer) detail.push('a cherry-pick/revert sequence is still in progress');
+  if (after.detachedHead) detail.push('HEAD is still detached');
+  if (after.unmerged.length > 0) {
+    detail.push(`unmerged paths remain: ${after.unmerged.join(', ')}`);
+  }
+  if (after.undetermined.length > 0) {
+    detail.push(`state could not be determined: ${after.undetermined.join('; ')}`);
+  }
+  return {
+    cleaned: false,
+    aborted: false,
+    message: `Could not clean up the failed ${operation}: ${detail.join('; ')}.`,
+  };
+}
+
 /**
  * Run an extended merge wrapper operation through the merge mutex.
  *
@@ -251,8 +604,35 @@ export function runExtendedMergeWrapper(
   },
   options: Parameters<typeof runMergeWrapper>[1] = {},
 ): MergeWrapperResult {
+  // UTV2-1790 (review round 7, P1): the probe belongs to EVERY delegation, not
+  // just the bridged sync verbs.
+  //
+  // Round 6 injected `residueProbe` only inside the `git-merge-main` /
+  // `git-rebase-main` bridge. But `runMergeWrapper` runs the whole autostash
+  // push -> pull -> pop sequence for a plain `main-sync` too, and the CLI routes
+  // `main-sync` straight to the delegation below. So on the lane's own headline
+  // verb `measureResidue` always took the no-probe default, reported "could not
+  // be measured", and retained the mutex forever -- the exact lock leak round 6
+  // exists to close, still live, and with an operator message that reports an
+  // internal wiring gap in the slot reserved for a state measurement.
+  //
+  // Bound here once, so a delegation added later cannot silently miss it.
+  const optionsWithProbe: Parameters<typeof runMergeWrapper>[1] = {
+    ...options,
+    residueProbe:
+      options.residueProbe ??
+      (({ cwd: probeCwd, expectedBranch }) =>
+        worktreeResidue(
+          options.runner ??
+            ((c: string, a: string[], o: { cwd: string }) =>
+              spawnSync(c, a, { cwd: o.cwd, stdio: 'pipe' }) as ReturnType<CommandRunner>),
+          probeCwd,
+          expectedBranch,
+        )),
+  };
+
   if (input.operation === 'main-sync') {
-    const ffResult = runMergeWrapper(input as MergeWrapperInput, options);
+    const ffResult = runMergeWrapper(input as MergeWrapperInput, optionsWithProbe);
     if (ffResult.ok) return ffResult;
     // UTV2-1678: this branch used to re-invoke itself as `git-rebase-main`.
     //
@@ -290,7 +670,7 @@ export function runExtendedMergeWrapper(
   }
 
   if (input.operation !== 'git-merge-main' && input.operation !== 'git-rebase-main') {
-    return runMergeWrapper(input as MergeWrapperInput, options);
+    return runMergeWrapper(input as MergeWrapperInput, optionsWithProbe);
   }
 
   // For git-merge-main / git-rebase-main we build and run the command
@@ -341,9 +721,48 @@ export function runExtendedMergeWrapper(
   // UTV2-1678 criteria 3-4: prove the sync destroyed nothing before reporting
   // success. Applied to every sync verb, not just rebase — a merge with a bad
   // conflict resolution can drop a file just as permanently.
-  const result = runMergeWrapper(bridgedInput, { ...options, runner: interceptingRunner });
-  // Only a sync that actually ran and succeeded can have dropped anything.
-  if (!result.ok || !preSyncHead) return result;
+  // UTV2-1790: cleanup runs inside runMergeWrapper before the autostash pop and
+  // the release. It is bound to the REAL runner for clarity rather than for
+  // behaviour -- no call abortInProgressSync makes matches the main-sync pull
+  // vector, so passing the intercepting runner would be equivalent. Review round
+  // 5 confirmed that by mutation; the binding is documentation of intent, not a
+  // load-bearing control, and is described as such rather than claimed as one.
+  const syncOperation = input.operation;
+  const result = runMergeWrapper(bridgedInput, {
+    ...optionsWithProbe,
+    runner: interceptingRunner,
+    onCommandFailure: ({ cwd: failureCwd }) =>
+      abortInProgressSync(syncOperation, realRunner, failureCwd),
+    // UTV2-1790 (review round 3): report the command the intercepting runner
+    // actually executes, not the `main-sync` pull it is bridged through. Without
+    // this, a fail-closed result names `git pull --ff-only origin main` as the
+    // command that left MERGE_HEAD behind -- an invocation that cannot leave a
+    // merge in progress at all.
+    reportedCommand: [cmd.command, ...cmd.args],
+    // UTV2-1790 (review round 6): the stash-push and stash-pop failure paths DECIDE
+    // whether to release the mutex from a measurement of the worktree, not from an
+    // assumption about why a git command exited non-zero. That probe arrives via
+    // `optionsWithProbe` above, which binds `options.runner ?? spawnSync` -- the
+    // same value as `realRunner` here, and not the intercepting runner, which
+    // substitutes the sync command. Like the `onCommandFailure` binding, that is
+    // documentation of intent rather than a load-bearing control: no probe vector
+    // matches the intercepted `main-sync` pull, so the two runners are
+    // behaviourally identical at this site and a mutant swapping them survives.
+    //
+    // Round 7 removed a duplicate `residueProbe` override at this site: it was
+    // byte-for-byte equivalent to the default, so deleting it changed no
+    // behaviour and its mutant survived. An override that cannot fail is not a
+    // control, and leaving it would have implied the two runners differed here.
+  });
+  // Only a sync that actually ran can have dropped anything or moved the head.
+  //
+  // UTV2-1790 (review round 6, P2): this used to bail on `!result.ok`, which
+  // silently skipped BOTH the dropped-path refusal and the head-move
+  // re-authorization notice on the one failure path where the merge had already
+  // been committed -- `merge_wrapper_stash_pop_conflict`. The head really had
+  // moved, and nothing said so. `ok` is the wrong question; whether HEAD moved is
+  // the right one, and it is asked below.
+  if (!preSyncHead) return result;
 
   const cwd = input.cwd ?? process.cwd();
   const gitLines = (args: string[]): string[] => {
@@ -367,6 +786,54 @@ export function runExtendedMergeWrapper(
   const headMoveNotice = renderHeadMoveNotice(
     buildHeadMoveInvalidation(preSyncHead, postSyncHead),
   );
+
+  // An already-failed result keeps its code: the operator must act on the failure
+  // itself, and reclassifying it would hide that. But the head DID move, so the
+  // re-authorization notice and any dropped-path warning are appended to stderr
+  // rather than dropped on the floor.
+  if (!result.ok) {
+    let warning = '';
+    let restoredHead = false;
+    if (classification.dropped.length > 0) {
+      warning =
+        `\n\nWARNING: this sync also dropped paths relative to the pre-sync head: ` +
+        `${classification.dropped.join(', ')}`;
+      if (classification.protectedPaths.length > 0) {
+        // UTV2-1790 (review round 7, P3): the `ok` path below RESTORES the tree;
+        // this path only described how to. That asymmetry is closed here -- a
+        // dropped proof bundle or lane manifest usually exists on no other ref, so
+        // the recovery is the same regardless of why the sync also failed.
+        //
+        // It is conditional on the worktree being clean, which the `ok` path can
+        // take for granted and this one cannot: `git reset --keep` refuses over an
+        // unmerged index, and firing it at a tree that is mid-merge would turn a
+        // recoverable failure into a confusing one. When it is not safe, the
+        // instruction is still printed, exactly as before.
+        const residue = worktreeResidue(realRunner, cwd);
+        const restore = residue.clean
+          ? realRunner('git', ['reset', '--keep', preSyncHead], { cwd })
+          : undefined;
+        const restored = restore !== undefined && !restore.error && restore.status === 0;
+        restoredHead = restored;
+        warning +=
+          `\nPROTECTED artifacts are among them: ${classification.protectedPaths.join(', ')}. ` +
+          (restored
+            ? `Working tree restored to the pre-sync head ${preSyncHead} (git reset --keep). ` +
+              `No artifact was lost, and the head is back where it started, so no ` +
+              `governance artifact was invalidated. The reported failure above still ` +
+              `stands and still needs handling.`
+            : `NOT restored automatically (${
+                residue.clean
+                  ? 'git reset --keep failed'
+                  : `the worktree is not clean: ${residue.detail}`
+              }). Recover with: git reset --keep ${preSyncHead}`);
+      }
+    }
+    // If the restore succeeded the head is back where it started, so the
+    // re-authorization notice would be false. `restoredHead` records that.
+    const extra = `${restoredHead ? '' : headMoveNotice}${warning}`;
+    return extra ? { ...result, stderr: `${result.stderr ?? ''}${extra}` } : result;
+  }
 
   if (classification.dropped.length === 0) {
     return headMoveNotice

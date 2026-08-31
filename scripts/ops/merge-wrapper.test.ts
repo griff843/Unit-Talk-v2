@@ -260,10 +260,28 @@ const MAIN_SYNC_INPUT = {
   operation: 'main-sync' as const,
 };
 
+// UTV2-1790: `main-sync` now measures the worktree BEFORE it stashes or pulls and
+// refuses over a tree that is mid-merge/rebase/cherry-pick/revert, because a
+// `--ff-only` pull there can advance a detached HEAD out from under the operation
+// in progress and still report success. These fixtures are about the stash/pull/pop
+// command SEQUENCE, and their runners answer every vector with a blanket response
+// that the pre-flight would correctly read as unanswerable -- so they state their
+// clean-worktree premise explicitly instead. The pre-flight itself is proven
+// against real git in scripts/ops/ops-merge-wrapper.test.ts.
+const CLEAN_WORKTREE_PROBE = (): { clean: boolean; detail: string } => ({
+  clean: true,
+  detail: 'test fixture posits a clean worktree',
+});
+
 test('main-sync: nothing to stash runs the pull with no pop', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const { runner, calls } = mainSyncRunner({ stashed: false, pullOk: true });
-    const result = runMergeWrapper(MAIN_SYNC_INPUT, { lockPath, deferredDir, runner });
+    const result = runMergeWrapper(MAIN_SYNC_INPUT, {
+      lockPath,
+      deferredDir,
+      runner,
+      residueProbe: CLEAN_WORKTREE_PROBE,
+    });
 
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.ok && result.code, 'merge_wrapper_completed');
@@ -290,7 +308,12 @@ test('main-sync: nothing to stash runs the pull with no pop', () => {
 test('main-sync: untracked lane files are stashed, pulled, then popped in order', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const { runner, calls } = mainSyncRunner({ stashed: true, pullOk: true });
-    const result = runMergeWrapper(MAIN_SYNC_INPUT, { lockPath, deferredDir, runner });
+    const result = runMergeWrapper(MAIN_SYNC_INPUT, {
+      lockPath,
+      deferredDir,
+      runner,
+      residueProbe: CLEAN_WORKTREE_PROBE,
+    });
 
     assert.strictEqual(result.ok, true);
     assert.strictEqual(result.ok && result.code, 'merge_wrapper_completed');
@@ -308,7 +331,12 @@ test('main-sync: untracked lane files are stashed, pulled, then popped in order'
 test('main-sync: stash is still popped for cleanup when the pull fails', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const { runner, calls } = mainSyncRunner({ stashed: true, pullOk: false });
-    const result = runMergeWrapper(MAIN_SYNC_INPUT, { lockPath, deferredDir, runner });
+    const result = runMergeWrapper(MAIN_SYNC_INPUT, {
+      lockPath,
+      deferredDir,
+      runner,
+      residueProbe: CLEAN_WORKTREE_PROBE,
+    });
 
     assert.strictEqual(result.ok, false);
     assert.strictEqual(!result.ok && result.code, 'merge_wrapper_command_failed');
@@ -324,7 +352,12 @@ test('main-sync: stash is still popped for cleanup when the pull fails', () => {
 test('main-sync: a stash pop conflict surfaces a clear error and keeps the stash', () => {
   withTempOps(({ lockPath, deferredDir }) => {
     const { runner, calls } = mainSyncRunner({ stashed: true, pullOk: true, popConflict: true });
-    const result = runMergeWrapper(MAIN_SYNC_INPUT, { lockPath, deferredDir, runner });
+    const result = runMergeWrapper(MAIN_SYNC_INPUT, {
+      lockPath,
+      deferredDir,
+      runner,
+      residueProbe: CLEAN_WORKTREE_PROBE,
+    });
 
     assert.strictEqual(result.ok, false);
     assert.strictEqual(!result.ok && result.code, 'merge_wrapper_stash_pop_conflict');
