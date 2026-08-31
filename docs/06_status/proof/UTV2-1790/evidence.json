@@ -9,8 +9,8 @@
  "generated_at": "2026-08-31T00:00:00Z",
  "sha_binding": {
   "merge_sha": null,
-  "verified_source_sha": "3f3955cd05a4a52e0e7e9e800c332d2fc94d08d9",
-  "verified_source_note": "Last commit on this branch touching a non-proof path (round-10 remediation: the bisect enumeration and the measured release prose). merge_sha is null pre-merge as the shared evidence schema requires.",
+  "verified_source_sha": "4e234a49e6273f45825fec49453e2bd7c21c9940",
+  "verified_source_note": "Last commit on this branch touching a non-proof path (round 12: the bad-state blocklist replaced by a fail-closed synchronization invariant -- HEAD attached to exactly the invoked branch -- with the operation enumeration retained as defence in depth, a TOCTOU re-probe against the post-autostash tree, and tests 72-80). Derived mechanically by walking `git rev-list <base>..HEAD --no-merges` newest-first and taking the first commit with a path outside docs/06_status/proof/ and docs/06_status/lanes/; ab21ffcd and da6d0d63 are proof-only and correctly skipped.",
   "evidence_commit_sha": "set-by-ci",
   "current_pr_head_sha": "set-by-ci",
   "ci_sentinels": {
@@ -19,7 +19,7 @@
   },
   "sha_type": "merge_sha",
   "bound_at": "2026-08-31T00:00:00Z",
-  "previous_verified_source_sha": "905c14d403306d7c179922a0bf6a47a39cff6b0f",
+  "previous_verified_source_sha": "3f3955cd05a4a52e0e7e9e800c332d2fc94d08d9",
   "verified_source_sha_history": [
    {
     "sha": "54e03d861d5c53d0990bffd933d5a75f2148f6a5",
@@ -55,7 +55,8 @@
     "sha": "370097343393241ffa7d3db4db33530b4949e2fe",
     "superseded_reason": "Round-8 head. Superseded by the round-9 remediation commit: an independent reviewer proved by execution that the round-8 pre-flight, which sits after acquireMergeLock, retained the repo-wide merge mutex on a refusal that had changed nothing -- so any probe-less caller acquired the serializing lock, did nothing, and never released it for the full TTL, and the reviewer blocked its own next sanctioned command with it. The round-8 bundle had disclosed that code path and asserted 'no safety property regresses', which was false. The same review found evidence.json's mutants[] array left at round-7 data, recording the known survivor M16 as KILLED and omitting M23-M26. NOTE: this SHA no longer exists on the branch; see sha_rewrite_record."
    },
-   "905c14d403306d7c179922a0bf6a47a39cff6b0f"
+   "905c14d403306d7c179922a0bf6a47a39cff6b0f",
+   "3f3955cd05a4a52e0e7e9e800c332d2fc94d08d9"
   ],
   "sha_rewrite_record": {
    "why": "Governed remediation, in four passes. (1) commit 9162d2c9's BODY contained the token `(UTV2-1678)`, which the branch-discipline guard scans for and rejects on a UTV2-1790 branch; removing it rewrote that commit and every commit after it. (2) a descendant SUBJECT cited 9162d2c9 by SHA and was repointed. (3) round 9 found the round-8 rewrite had fixed that subject but MISSED a commit BODY that still cited 9162d2c9, so the claim 'no message names a commit that is not on it' was false when first written; it was repointed too. (4) fixing (3) renamed the next commit in turn and invalidated ITS SHA-bearing subject, so the SHA was removed from that subject rather than repointed. The durable lesson: a SHA in a commit subject is self-invalidating under any message rewrite. Verified after the final pass: every hex token in every commit message on this branch that resolves to a commit is an ancestor of HEAD.",
@@ -71,7 +72,8 @@
    "unchanged_prefix": "ac6e3307, 54e03d86, 9b45a62e, 11920f2d, 77028bb5, 26b5740e, 3ed0be33, da425fad, 1486d510 and 009cfe46 are byte-identical before and after; the rewrite begins at the reworded commit.",
    "consequence": "Every head-pinned governance artifact bound to cb059ebb or earlier is invalidated by this rewrite and must be re-posted against the new head. The earlier history entries in verified_source_sha_history name pre-rewrite SHAs on purpose: they are the SHAs those rounds were actually reviewed at, and rewriting them would falsify the review record. Use the map above to resolve any of them.",
    "note_on_map": "The map records the first two passes. Passes 3 and 4 moved every commit from d79820c6 and 740c0267 onward again; the pre-rewrite SHAs in verified_source_sha_history are deliberately left as the SHAs those rounds were actually reviewed at, since rewriting them would falsify the review record."
-  }
+  },
+  "superseded_reason": "3f3955cd was the round-10 anchor and remained in place after round 12's commit 4e234a49 landed, so the binding certified the BLOCKLIST state model that round 12 deliberately removed -- every round-12 change sat outside the anchor. Caught before any EXECUTOR_RESULT was posted. Re-anchored here in a proof-only commit so the anchor does not chase itself."
  },
  "verdict": {
   "recommended_divergence_exit_is_operable": true,
