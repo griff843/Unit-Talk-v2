@@ -25,3 +25,24 @@ export function describeThrown(error: unknown): string {
   }
   return String(error);
 }
+
+/**
+ * Compact, bounded error text for operator UI. Detailed transport errors stay
+ * in server logs; rendered surfaces show the source failure without leaking a
+ * stack trace or allowing an error payload to dominate the workflow.
+ */
+export function describeOperatorFailure(error: unknown, fallback = 'Data source unavailable'): string {
+  let description: string;
+  if (error !== null && typeof error === 'object' && !(error instanceof Error)) {
+    const record = error as Record<string, unknown>;
+    const message = typeof record['message'] === 'string' ? record['message'] : null;
+    const code = typeof record['code'] === 'string' && record['code'].trim().length > 0 ? record['code'] : null;
+    description = message ? `${message}${code ? ` (${code})` : ''}` : describeThrown(error);
+  } else {
+    description = describeThrown(error);
+  }
+
+  const compact = description.replace(/\s+/g, ' ').trim();
+  if (!compact) return fallback;
+  return compact.length > 180 ? `${compact.slice(0, 177)}…` : compact;
+}

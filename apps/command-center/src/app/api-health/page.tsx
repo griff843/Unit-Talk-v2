@@ -4,7 +4,7 @@ import { getProviderHealth, getSnapshotData } from '@/lib/data';
 import { getProviderCycleLatencySamples } from '@/lib/data/provider-cycle-health';
 import { buildApiHealthPageData } from '@/lib/command-center-page-data';
 import { fetchRuntimeTruth } from '@/lib/server-api';
-import { describeThrown } from '@/lib/describe-error';
+import { describeOperatorFailure } from '@/lib/describe-error';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
 export const metadata = { title: 'System Health — Unit Talk Command Center' };
@@ -15,7 +15,7 @@ export default async function ApiHealthPage() {
   const failures: string[] = [];
   const degrade = <T,>(promise: Promise<T>, label: string, fallback: T): Promise<T> =>
     promise.catch((error: unknown) => {
-      failures.push(`${label}: ${describeThrown(error)}`);
+      failures.push(`${label}: ${describeOperatorFailure(error)}`);
       return fallback;
     });
 
@@ -27,7 +27,7 @@ export default async function ApiHealthPage() {
       .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
       .catch((error: unknown) => ({
         runtimeTruth: null,
-        error: describeThrown(error),
+        error: describeOperatorFailure(error),
       })),
   ]);
 
@@ -70,6 +70,12 @@ export default async function ApiHealthPage() {
           />
         ))}
       </div>
+
+      {cards.length === 0 ? (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          No provider telemetry was returned. Provider health is unknown; no zero or healthy state was inferred.
+        </div>
+      ) : null}
 
       <RuntimeTruthPanel
         runtimeTruth={runtimeTruthState.runtimeTruth}

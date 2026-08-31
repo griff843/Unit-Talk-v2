@@ -1,4 +1,5 @@
 import { getDataClient, isTestFixturePick } from './client';
+import { assertQuerySucceeded } from '../query-result';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;
@@ -57,6 +58,7 @@ async function enrichPickRowsWithIdentity(client: Client, rows: Array<JsonObject
   const submissionMap = new Map<string, { id: string; submitted_by: string | null; payload: JsonObject | null }>();
   for (const batch of chunkValues(submissionIds, ENRICHMENT_BATCH_SIZE)) {
     const result = await client.from('submissions').select('id, submitted_by, payload').in('id', batch);
+    assertQuerySucceeded(result, 'exception submission identity enrichment');
     for (const row of ((result.data ?? []) as Array<JsonObject>)) {
       const id = readTrimmedString(row['id']);
       if (id) submissionMap.set(id, { id, submitted_by: readTrimmedString(row['submitted_by']), payload: readJsonObject(row['payload']) });
@@ -66,6 +68,7 @@ async function enrichPickRowsWithIdentity(client: Client, rows: Array<JsonObject
   const participantMap = new Map<string, { id: string; display_name: string | null; participant_type: string | null }>();
   for (const batch of chunkValues(participantIds, ENRICHMENT_BATCH_SIZE)) {
     const result = await client.from('participants').select('id, display_name, participant_type').in('id', batch);
+    assertQuerySucceeded(result, 'exception participant identity enrichment');
     for (const row of ((result.data ?? []) as Array<JsonObject>)) {
       const id = readTrimmedString(row['id']);
       if (id) participantMap.set(id, { id, display_name: readTrimmedString(row['display_name']), participant_type: readTrimmedString(row['participant_type']) });
@@ -82,6 +85,7 @@ async function enrichPickRowsWithIdentity(client: Client, rows: Array<JsonObject
   const eventMap = new Map<string, { id: string; event_name: string | null; event_date: string | null }>();
   for (const batch of chunkValues(eventIds, ENRICHMENT_BATCH_SIZE)) {
     const result = await client.from('events').select('id, event_name, event_date').in('id', batch);
+    assertQuerySucceeded(result, 'exception event identity enrichment');
     for (const row of ((result.data ?? []) as Array<JsonObject>)) {
       const id = readTrimmedString(row['id']);
       if (id) eventMap.set(id, { id, event_name: readTrimmedString(row['event_name']), event_date: readTrimmedString(row['event_date']) });
@@ -162,6 +166,20 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
     client.from('provider_market_aliases').select('provider, provider_market_key, sport_id'),
   ]);
 
+  for (const [label, result] of [
+    ['failed outbox', failedResult],
+    ['dead-letter outbox', deadLetterResult],
+    ['manual-review settlements', manualReviewResult],
+    ['stale picks', stalePicksResult],
+    ['awaiting-approval picks', awaitingApprovalResult],
+    ['promotion rerun candidates', rerunCandidatesResult],
+    ['provider offers', providerOffersResult],
+    ['provider book aliases', bookAliasesResult],
+    ['provider market aliases', marketAliasesResult],
+  ] as const) {
+    assertQuerySucceeded(result, `getExceptionQueues ${label}`);
+  }
+
   const failed = (failedResult.data ?? []) as Array<JsonObject>;
   const deadLetter = (deadLetterResult.data ?? []) as Array<JsonObject>;
   const manualReview = (manualReviewResult.data ?? []) as Array<JsonObject>;
@@ -181,8 +199,9 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const allOutboxPickIds = [...new Set([...failed, ...deadLetter].map((r) => r['pick_id'] as string))];
   const pickMap = new Map<string, JsonObject>();
   if (allOutboxPickIds.length > 0) {
-    const { data: picks } = await client.from('picks').select('id, submission_id, participant_id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
-    const enrichedPicks = (await enrichPickRowsWithIdentity(client, (picks ?? []) as Array<JsonObject>))
+    const picksResult = await client.from('picks').select('id, submission_id, participant_id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
+    assertQuerySucceeded(picksResult, 'getExceptionQueues outbox pick context');
+    const enrichedPicks = (await enrichPickRowsWithIdentity(client, (picksResult.data ?? []) as Array<JsonObject>))
       .filter((row) => includeFixtures || !isFixtureLikePick(row));
     for (const p of enrichedPicks) pickMap.set(p['id'] as string, p);
   }
@@ -217,8 +236,9 @@ export async function getExceptionQueues(filter?: { includeFixtures?: boolean })
   const awaitingApprovalIds = [...new Set(awaitingApproval.map((row) => row['id']).filter((v): v is string => typeof v === 'string'))];
   const lifecycleByPick = new Map<string, Array<JsonObject>>();
   if (awaitingApprovalIds.length > 0) {
-    const { data: lifecycleRows } = await client.from('pick_lifecycle').select('id, pick_id, from_state, to_state, created_at').in('pick_id', awaitingApprovalIds).order('created_at', { ascending: false });
-    for (const row of ((lifecycleRows ?? []) as Array<JsonObject>)) {
+    const lifecycleResult = await client.from('pick_lifecycle').select('id, pick_id, from_state, to_state, created_at').in('pick_id', awaitingApprovalIds).order('created_at', { ascending: false });
+    assertQuerySucceeded(lifecycleResult, 'getExceptionQueues lifecycle evidence');
+    for (const row of ((lifecycleResult.data ?? []) as Array<JsonObject>)) {
       const pickId = row['pick_id'];
       if (typeof pickId !== 'string') continue;
       const existing = lifecycleByPick.get(pickId);

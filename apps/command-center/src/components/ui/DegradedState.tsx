@@ -8,6 +8,7 @@
  * is specifically for degraded/failed sources.
  */
 import Link from 'next/link';
+import React from 'react';
 
 export interface DegradedStateProps {
   severity: 'warning' | 'critical';

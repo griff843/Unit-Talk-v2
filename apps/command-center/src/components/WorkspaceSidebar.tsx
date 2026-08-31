@@ -23,7 +23,9 @@ type WorkspaceSidebarProps = {
   healthStatus: SidebarHealthStatus;
   healthLabel?: string;
   collapsed: boolean;
+  mobileOpen: boolean;
   onToggle: () => void;
+  onCloseMobile: () => void;
 };
 
 function cx(...values: Array<string | false | null | undefined>) {
@@ -66,7 +68,7 @@ function NavItemIcon({ children }: { children: React.ReactNode }) {
   return <span className="flex h-5 w-5 items-center justify-center">{children}</span>;
 }
 
-function OperatorBadge({ collapsed }: { collapsed: boolean }) {
+function BoundaryBadge({ collapsed }: { collapsed: boolean }) {
   return (
     <div
       className={cx(
@@ -74,14 +76,14 @@ function OperatorBadge({ collapsed }: { collapsed: boolean }) {
         collapsed && 'justify-center px-0',
       )}
     >
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#f97316,#fb7185)] text-sm font-semibold text-white">
-        OA
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--cc-border-strong)] bg-[var(--cc-bg-surface-elevated)] text-sm font-semibold text-[var(--cc-text-secondary)]">
+        IN
       </div>
       {!collapsed && (
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Operator Alpha</div>
+          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Internal operator</div>
           <div className="mt-1 inline-flex items-center rounded-full border border-[var(--cc-border-strong)] px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
-            Runtime Lane
+            Access restricted
           </div>
         </div>
       )}
@@ -95,15 +97,27 @@ export function WorkspaceSidebar({
   healthStatus,
   healthLabel,
   collapsed,
+  mobileOpen,
   onToggle,
+  onCloseMobile,
 }: WorkspaceSidebarProps) {
   return (
-    <aside
-      className={cx(
-        'cc-sidebar sticky top-0 flex h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
-        collapsed ? 'w-16' : 'w-60',
+    <>
+      {mobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-30 bg-black/70 backdrop-blur-sm md:hidden"
+          aria-label="Close navigation"
+          onClick={onCloseMobile}
+        />
       )}
-    >
+      <aside
+        className={cx(
+          'cc-sidebar fixed inset-y-0 left-0 z-40 flex h-screen w-72 shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-transform duration-[200ms] ease-[var(--ease-out)] md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width]',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          collapsed ? 'md:w-16' : 'md:w-60',
+        )}
+      >
       <div className={cx('flex items-center gap-3 px-3 py-4', collapsed && 'justify-center px-2')}>
         <LogoMark />
         {!collapsed && (
@@ -179,7 +193,8 @@ export function WorkspaceSidebar({
         ))}
       </nav>
 
-      <OperatorBadge collapsed={collapsed} />
-    </aside>
+      <BoundaryBadge collapsed={collapsed} />
+      </aside>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getDataClient, isTestFixturePick } from './client';
+import { assertQuerySucceeded, readAuthoritativeCount } from '../query-result';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -206,6 +207,10 @@ function asBooleanOrNull(v: unknown): boolean | null {
   return typeof v === 'boolean' ? v : null;
 }
 
+function isMissingSingleRowError(error: unknown): boolean {
+  return error !== null && typeof error === 'object' && (error as Record<string, unknown>)['code'] === 'PGRST116';
+}
+
 /**
  * picks_current_state has no event_name/event_start_time columns — event
  * context lives in picks.metadata. Fail-closed: null when absent.
@@ -333,7 +338,7 @@ export async function getReviewQueue(
     // Base query: awaiting_approval lifecycle OR pending approval_status
     let query = client
       .from('picks_current_state')
-      .select(QUEUE_SELECT, { count: 'estimated' })
+      .select(QUEUE_SELECT, { count: 'exact' })
       .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
     // Exclude held picks (review_decision = 'hold')
@@ -347,20 +352,21 @@ export async function getReviewQueue(
 
     const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
-    if (error) {
-      console.error('getReviewQueue error:', error);
-      return { picks: [], total: 0, degraded: describeQueueError(error) };
-    }
+    assertQuerySucceeded({ error }, 'getReviewQueue');
 
     const rows = (data ?? []) as JsonObject[];
     const picks = rows
       .filter((row) => !isFixtureLikePick(row))
       .map(mapReviewPick);
 
-    return { picks, total: count ?? picks.length, degraded: null };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'review queue picks'),
+      degraded: null,
+    };
   } catch (err) {
     console.error('getReviewQueue exception:', err);
-    return { picks: [], total: 0, degraded: err instanceof Error ? err.message : String(err) };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -493,7 +499,7 @@ export async function searchPicks(
 
     let query = client
       .from('picks_current_state')
-      .select(selectCols, { count: 'estimated' });
+      .select(selectCols, { count: 'exact' });
 
     // Full-text / substring search on market + selection + source
     const q = params['q']?.trim();
@@ -531,10 +537,7 @@ export async function searchPicks(
 
     const { data, count, error } = await awaitWithTimeoutRetry(() => query);
 
-    if (error) {
-      console.error('searchPicks error:', error);
-      return { picks: [], total: 0, limit, offset };
-    }
+    assertQuerySucceeded({ error }, 'searchPicks');
 
     const rows = (data ?? []) as JsonObject[];
 
@@ -549,10 +552,15 @@ export async function searchPicks(
         submitter: asStringOrNull(row['capper_display_name']),
       }));
 
-    return { picks, total: count ?? picks.length, limit, offset };
+    return {
+      picks,
+      total: readAuthoritativeCount({ error, count }, 'active picks'),
+      limit,
+      offset,
+    };
   } catch (err) {
     console.error('searchPicks exception:', err);
-    return { picks: [], total: 0, limit, offset };
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 
@@ -591,7 +599,11 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
       .eq('id', pickId)
       .single();
 
-    if (pickResult.error || !pickResult.data) {
+    if (isMissingSingleRowError(pickResult.error)) {
+      return null;
+    }
+    assertQuerySucceeded(pickResult, 'getPickDetail pick');
+    if (!pickResult.data) {
       return null;
     }
 
@@ -624,6 +636,11 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .order('created_at', { ascending: false }),
     ]);
 
+    assertQuerySucceeded(lifecycleResult, 'getPickDetail lifecycle');
+    assertQuerySucceeded(promotionHistResult, 'getPickDetail promotion history');
+    assertQuerySucceeded(outboxResult, 'getPickDetail distribution outbox');
+    assertQuerySucceeded(settlementResult, 'getPickDetail settlements');
+
     const lifecycleRows = (lifecycleResult.data ?? []) as JsonObject[];
     const promotionHistRows = (promotionHistResult.data ?? []) as JsonObject[];
     const outboxRows = (outboxResult.data ?? []) as JsonObject[];
@@ -654,6 +671,10 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
         .limit(1)
         .maybeSingle(),
     ]);
+
+    assertQuerySucceeded(receiptsResult, 'getPickDetail distribution receipts');
+    assertQuerySucceeded(auditResult, 'getPickDetail audit trail');
+    assertQuerySucceeded(submissionResult, 'getPickDetail submission');
 
     const receiptRows = (receiptsResult.data ?? []) as JsonObject[];
     const auditRows = (auditResult.data ?? []) as JsonObject[];
@@ -881,7 +902,7 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
     };
   } catch (err) {
     console.error('getPickDetail exception:', err);
-    return null;
+    throw err instanceof Error ? err : new Error(String(err));
   }
 }
 

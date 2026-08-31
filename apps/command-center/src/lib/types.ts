@@ -8,7 +8,15 @@ export interface LifecycleSignal {
 
 export type DeliveryStatus = 'not_promoted' | 'queued' | 'delivered' | 'failed' | 'dead_letter';
 export type SettlementStatus = 'pending' | 'settled' | 'corrected' | 'manual_review';
-export type LifecycleStatus = 'submitted' | 'validated' | 'queued' | 'posted' | 'settled' | 'voided';
+export type LifecycleStatus =
+  | 'submitted'
+  | 'validated'
+  | 'awaiting_approval'
+  | 'queued'
+  | 'posted'
+  | 'settled'
+  | 'voided'
+  | 'unknown';
 
 export interface PickIntelligenceSummary {
   domainAnalysis: boolean;

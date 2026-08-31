@@ -37,9 +37,6 @@ export type { SkeletonShimmerProps } from './SkeletonShimmer';
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
 
-export { DataTable } from './DataTable';
-export type { Column } from './DataTable';
-
 export { HealthBadge } from './HealthBadge';
 export { LoadingState } from './LoadingState';
 export { EmptyState } from './EmptyState';
@@ -50,11 +47,6 @@ export type { EventStreamItem } from './EventStream';
 
 export { LLMUsageChart } from './LLMUsageChart';
 export type { LlmUsageRow } from './LLMUsageChart';
-
-export { Sidebar } from './Sidebar';
-
-export { TopBar } from './TopBar';
-export type { TopBarProps } from './TopBar';
 
 // Pre-existing ui primitives
 export { Breadcrumb } from './Breadcrumb';
