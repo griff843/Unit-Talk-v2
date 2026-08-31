@@ -1,0 +1,1735 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1745",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "title": "Retrospective pick trustworthiness audit: the current population cannot support a trustworthy-pick claim",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-08-31T01:05:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3a99f5043e950b6f5610b26aab4d761bc8fc46fb",
+    "verified_source_note": "Final non-proof substantive branch head: the round-11 commit adding the three call-site regression tests to scripts/ops/pick-truth-audit.test.ts. It is the last commit on this branch authoring a change to any non-proof file. The one commit after it (c47159233decfab0c1268e4c634772105b4b104d) is the synchronization merge with origin/main 249da64b; git diff --name-status 3a99f504 c4715923 reports exactly one path, docs/06_status/readiness/readiness-score.json, an upstream [skip ci] bot ledger refresh this lane did not author. scripts/ops/pick-truth-audit.ts, its test file and all proof artifacts are byte-identical across the two commits, so every receipt in this bundle was captured on the bound tree. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); it is bound to the real merge commit by post-merge-lane-close.yml. SYNC PROVENANCE (post-UTV2-1790): on 2026-08-31 this branch was synchronized with origin/main d8c77b8e using the sanctioned `ops:merge-wrapper git-merge-main` path, which UTV2-1790 (merged as c6d2b81f) repaired from `--ff-only` to `git merge --no-ff --no-edit origin/main`; before that repair this branch could not be synchronized at all, having diverged 5/17. The resulting merge commit is e4e434e19b5db509dfb4f0cebe2857d6f0f1d080, a true two-parent merge of 3ef5f69e and d8c77b8e with both parents still resolving and no history rewritten. e4e434e1 is SYNC PROVENANCE ONLY and is NOT the substantive source anchor: it authored no change to any file this lane owns. `git diff --name-status 3ef5f69e e4e434e1` reports 17 paths, every one of them upstream content arriving from main (UTV2-1790 and UTV2-1671 bundles, the readiness ledger, .lane/lanes/runtime.yml and the merge-wrapper sources), and scripts/ops/pick-truth-audit.ts, scripts/ops/pick-truth-audit.test.ts and package.json are byte-identical across it (blobs d39d784c, 801f343d, 64d1bb09 respectively, unchanged from 3a99f504). All seven UTV2-1745 lane artifacts are byte-identical across the synchronization. verified_source_sha therefore remains 3a99f504.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-08-30T20:15:00Z",
+    "previous_verified_source_sha": "f616d5cb88e414303ae3d43063421c85df450b4a",
+    "verified_source_sha_history": [
+      {
+        "sha": "daad7b0080bfaa87bf10989c2dc93996ba0591a5",
+        "superseded_reason": "Original proof bundle anchor, before the lane synchronized with main."
+      },
+      {
+        "sha": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+        "superseded_reason": "Sync merge that resolved the package.json test:ops conflict. It was CORRECT when written and became STALE when rounds 8-10 landed substantive code after it. The note it carried -- \"every later commit touches proof artifacts only\" -- was false by a wide margin at the time the seventh adversarial review measured it: at 149b60ee the audit is 1105 lines with 4 tests, while the tree it described has 2120 lines and 52 tests. The entire P1-A/P1-B hardening was outside the bound SHA. Retracted here rather than silently overwritten."
+      },
+      {
+        "sha": "f616d5cb88e414303ae3d43063421c85df450b4a",
+        "superseded_reason": "Round-10 substantive head. It was CORRECT for round 10 and became STALE when round 11 landed 3a99f504: the three call-site regression tests, and the three mutations they kill, are outside f616d5cb. Superseded on the round that made it stale, not a round later."
+      }
+    ]
+  },
+  "verdict": {
+    "can_currently_produce_trustworthy_pick": false,
+    "statement": "Of 107858 picks in production, exactly 1 is simultaneously non-fixture, fully identity- and provenance-complete, and settled. The population cannot support a trustworthy-pick, ROI, or CLV claim."
+  },
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0,
+      "note": "The CLI could not run locally: production containment neuters local.env and this session holds no PICK_TRUTH_AUDIT_READ_KEY. Live reads were issued through the Supabase MCP read path. Every statement was a SELECT. These counts are a read-only production measurement taken on 2026-08-26. They were deliberately NOT re-measured during the 2026-08-30 main synchronization; the historical measurement is preserved verbatim.",
+      "measured_at": "2026-08-26",
+      "re_measured_on_sync": false
+    },
+    "row_counts": [
+      {
+        "table": "picks",
+        "metric": "total",
+        "value": 107858
+      },
+      {
+        "table": "picks",
+        "metric": "null_participant_id",
+        "value": 101842
+      },
+      {
+        "table": "picks",
+        "metric": "null_line",
+        "value": 8981
+      },
+      {
+        "table": "picks",
+        "metric": "null_odds",
+        "value": 8588
+      },
+      {
+        "table": "picks",
+        "metric": "null_market_type_id",
+        "value": 28376
+      },
+      {
+        "table": "picks",
+        "metric": "fixture_marked",
+        "value": 79557
+      },
+      {
+        "table": "picks",
+        "metric": "non_fixture",
+        "value": 28301
+      },
+      {
+        "table": "picks",
+        "metric": "has_event_identity",
+        "value": 7197
+      },
+      {
+        "table": "picks",
+        "metric": "has_participant_identity",
+        "value": 6017
+      },
+      {
+        "table": "picks",
+        "metric": "has_market_type",
+        "value": 79482
+      },
+      {
+        "table": "picks",
+        "metric": "has_line_and_odds",
+        "value": 98877
+      },
+      {
+        "table": "picks",
+        "metric": "has_source_provenance",
+        "value": 7180
+      },
+      {
+        "table": "picks",
+        "metric": "settled",
+        "value": 10307
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture",
+        "value": 3055
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture_settled",
+        "value": 1
+      },
+      {
+        "table": "picks",
+        "metric": "traceable_non_fixture_graded",
+        "value": 2
+      },
+      {
+        "table": "game_results",
+        "metric": "rows",
+        "value": 135249
+      }
+    ],
+    "structural_findings": [
+      "public.picks has no event_id column. Event linkage exists only as a camelCase eventId key inside the metadata jsonb, on 7197 rows (6.7%).",
+      "101842 of 107858 picks (94.4%) have a NULL participant_id; including the metadata.participantId fallback still leaves only 6017 (5.6%).",
+      "79557 picks (73.8%) carry an explicit fixture marker (testRun 60206, proof_fixture_id 19346, proof_issue 19351). Any aggregate over public.picks that does not exclude these is measuring the test harness.",
+      "game_results holds 135249 rows and IS a usable independent regrade source, so the blocker is the absence of a join key on the pick side, not the absence of outcome data."
+    ],
+    "queries": [
+      {
+        "id": "Q1",
+        "purpose": "Machine-derive exact table cardinalities used everywhere in this bundle.",
+        "statement": "select count(*) from public.<t>  -- t in (picks, events, provider_offer_history, settlement_records, game_results, participants)",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "results": {
+          "picks": 107858,
+          "events": 789,
+          "provider_offer_history": 14456685,
+          "settlement_records": 37496,
+          "game_results": 135249,
+          "participants": 1647
+        }
+      },
+      {
+        "id": "Q2",
+        "purpose": "Reconstruct the exact 200-settlement cohort in its canonical order (100 earliest + 100 latest by settled_at).",
+        "statement": "select id, pick_id, status, result, source, evidence_ref, payload, settled_at, corrects_id from public.settlement_records where status='settled' and source='grading' and corrects_id is null and result in ('win','loss','push') and evidence_ref like 'game-result:%' order by settled_at asc/desc limit 100 (each half)",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": 200
+      },
+      {
+        "id": "Q3",
+        "purpose": "Fetch every row the shipped loader reads for the cohort, with JSON columns UNPRUNED (settlement_records.payload, picks.metadata, events.metadata all selected whole).",
+        "statement": "select ... from public.picks / public.game_results / public.events / public.participants / public.market_universe where id = any(<cohort-derived id set>)",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": {
+          "settlement_records": 200,
+          "picks": 200,
+          "game_results": 192,
+          "events": 42,
+          "participants": 132,
+          "market_universe": 100
+        },
+        "note": "These six id-sets were independently re-derived and matched the round-10 sets exactly, which is what allows the round-10 dataset to be identified as pruned rather than differently-scoped."
+      },
+      {
+        "id": "Q4",
+        "purpose": "Fetch provider_market_aliases in BOTH directions (forward market_type_id->provider key, reverse provider key->market_type_id) so ownership of a provider key can be checked.",
+        "statement": "select market_type_id, provider_market_key, priority from public.provider_market_aliases where market_type_id = any(...) / where provider_market_key = any(...)",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": {
+          "forward": 30,
+          "reverse": 19
+        }
+      },
+      {
+        "id": "Q5",
+        "purpose": "Build the full participant name-fallback pool, sport-scoped, without a rows.length pager terminator.",
+        "statement": "select id, external_id, display_name, participant_type, sport from public.participants  -- exact-count paged",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": 1523
+      },
+      {
+        "id": "Q6",
+        "purpose": "Bound the provider_offer_history search: per (provider_event_id, provider_market_key) min/max snapshot_at, so the 14,456,685-row table is never scanned blindly.",
+        "statement": "select provider_event_id, provider_market_key, min(snapshot_at), max(snapshot_at) from public.provider_offer_history where provider_event_id = any(...) group by 1,2",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": 480,
+        "note": "Of the 186 (event, market, participant) triples the replay needs, 92 are provably empty from these ranges; 94 remain 'alive' and were probed directly."
+      },
+      {
+        "id": "Q7",
+        "purpose": "Rung 2/3 evidence: the latest pre-cutoff provider_offer_history snapshot for each alive triple, pinnacle and consensus.",
+        "statement": "select id, provider_event_id, provider_market_key, provider_participant_id, provider_key, bookmaker_key, is_closing, line, over_odds, under_odds, snapshot_at from public.provider_offer_history where provider_event_id = $1 and provider_market_key = $2 and provider_participant_id is not distinct from $3 and snapshot_at <= $4 order by snapshot_at desc limit 1  -- executed in 4 batches of 24/24/24/22 TRIPLES (.out/replay/b0.sql..b3.sql), each batch covering both provider tiers",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": 111,
+        "note": "Batched because a single 188-probe LATERAL timed out: the only index is (provider_event_id, snapshot_at).",
+        "receipt": {
+          "file": ".out/replay/q7_receipt.json",
+          "generated_by": ".out/replay/q7_receipt.ts",
+          "fields_cited": [
+            "alive_triples",
+            "tiers_per_triple",
+            "probes_issued",
+            "batch_triples",
+            "batch_triples_total",
+            "probe_results_non_empty",
+            "probe_results_pinnacle",
+            "probe_results_any",
+            "rows_returned"
+          ]
+        },
+        "rows_note": "Rungs 2 and 3 select `order by snapshot_at desc limit 1`, so each non-empty probe yields exactly one row (asserted above). rows_returned therefore equals probe_results_non_empty. It is NOT the sum of field counts over the row objects — that sum is 11 x 111 = 1221 and is not a row count."
+      },
+      {
+        "id": "Q8",
+        "purpose": "Rung 4 evidence: the market_universe fallback, queried over the WHOLE table rather than only the 100 rows reachable by picks.metadata.marketUniverseId. This is the query the round-10 harness under-scoped.",
+        "statement": "select closing_line, closing_over_odds, closing_under_odds, provider_key, last_offer_snapshot_at from public.market_universe where provider_event_id = $1 and provider_market_key = $2 and closing_line is not null and provider_participant_id is not distinct from $3 limit 1",
+        "executed_via": "Supabase MCP execute_sql (read-only SELECT)",
+        "measured_at": "2026-08-30",
+        "rows_returned": 90,
+        "note": "market_universe holds 102,155 rows; the round-10 replay resolved this rung against 100 of them. That single scoping defect accounts for the entire 98 -> 194 movement in CLV resolvable."
+      },
+      {
+        "id": "Q9",
+        "purpose": "Executed receipt for the 102,155 market_universe denominator. The ninth adversarial review (P2-c) found that this number -- which carries the entire round-10 vs round-11 CLV explanation, since the round-10 harness resolved rung 4 against only 100 of these rows -- was asserted with no executed query behind it.",
+        "statement": "select count(*) as total_rows, count(*) filter (where closing_line is not null) as rows_with_closing_line, count(*) filter (where closing_line is null) as rows_without_closing_line, now() as executed_at from public.market_universe;",
+        "channel": "Supabase MCP execute_sql (read-only SELECT)",
+        "project_ref": "zfzdnfwdarxucxtaojxm",
+        "environment": "production read path; no credential is stored in or recoverable from this bundle",
+        "executed_at": "2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)",
+        "rows_returned": 1,
+        "result": {
+          "total_rows": 102155,
+          "rows_with_closing_line": 88213,
+          "rows_without_closing_line": 13942
+        },
+        "reconciles": "102155 = 88213 + 13942",
+        "writes": 0
+      }
+    ],
+    "queries_note": "Executed read-only query receipts for the round-11 replay (2026-08-30). These are separate from row_counts, which is the preserved 2026-08-26 population decomposition. Every statement is a SELECT; writes_performed remains 0. Q9 added in round 12 to substantiate the 102,155 denominator that Q8's explanation depends on.",
+    "mechanism_parity": {
+      "claim": "The audit mechanism, not a one-off manual query, is what was measured.",
+      "method": "The SHIPPED factories createClosingOfferLookup (:1987) and createMarketUniverseClosingLookup (:2025) were driven against a recording PostgREST client (.out/replay/parity.ts); the emitted criteria were compared to the SQL actually executed in Q7/Q8.",
+      "receipt": ".out/replay/parity_receipt.json",
+      "result": "Predicate-for-predicate agreement on both rungs. The comparison is between the criteria the shipped factories EMIT and the SQL the replay EXECUTED; it is not a byte comparison of two identical strings, because the shipped path speaks PostgREST and the replay spoke SQL through the MCP read channel. What is established is that every filter, its operator, its null semantics, its ordering and its limit correspond one to one: eq. on provider_event_id and provider_market_key, eq./is.null on provider_participant_id, lte.<cutoff> with order=snapshot_at.desc&limit=1 for rungs 2-3, and closing_line=not.is.null&limit=1 with NO time predicate for rung 4. No predicate present on one side is absent on the other.",
+      "entrypoint_already_correct": "runPickTruthAudit (:2088) already passes createMarketUniverseClosingLookup(client) (:2102), which queries the full table, and loadAuditDataset already selects payload/metadata unpruned (:1671, :1697, :1760). No audit-logic change was required to obtain the corrected numbers and none was made. This correction is proof-only.",
+      "pruned_dataset_defect_not_reproduced": "The round-11 dataset selects settlement_records.payload, picks.metadata and events.metadata whole (Q3) and carries participants.sport (Q5); the round-10 dataset.json pruned all four.",
+      "temporal_semantics": "No cutoff was widened or relaxed. Where a resolved line post-dates its own cutoff (44 of 194 rows) that is production-parity rung-1/rung-4 behaviour and is reported as a defect, not absorbed."
+    },
+    "q7_receipt": {
+      "note": "Every field below is counted from a retained artifact by q7_receipt.ts. Cite these fields; do not restate them by hand.",
+      "generated_by": "q7_receipt.ts",
+      "alive_triples": 94,
+      "tiers_per_triple": 2,
+      "probes_issued": 188,
+      "batch_triples": [
+        24,
+        24,
+        24,
+        22
+      ],
+      "batch_triples_rendered": "24/24/24/22",
+      "batch_triples_total": 94,
+      "probe_results_non_empty": 111,
+      "probe_results_pinnacle": 17,
+      "probe_results_any": 94,
+      "distinct_triples_probed": 94,
+      "rows_returned": 111,
+      "rows_per_non_empty_probe": 1,
+      "rows_note": "Rungs 2 and 3 select `order by snapshot_at desc limit 1`, so each non-empty probe yields exactly one row (asserted above). rows_returned therefore equals probe_results_non_empty. It is NOT the sum of field counts over the row objects — that sum is 11 x 111 = 1221 and is not a row count.",
+      "universe_probes": 90,
+      "reconciliations": {
+        "batches_equal_alive_triples": true,
+        "probes_equal_two_per_triple": true,
+        "pinnacle_plus_any_equals_results": true,
+        "distinct_triples_equal_alive": true
+      }
+    }
+  },
+  "static_proof": {
+    "lane_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/pick-truth-audit.test.ts",
+      "status": "PASS",
+      "tests": 55,
+      "fail": 0,
+      "detail": "Wired into test:ops under a PM-authorized scope extension. 55 tests: 4 original; 7 for the P1-A game_result identity proof; 7 for the P1-B canonical closing-line source; 3 for cohort and report integrity; 2 isolating the round-2 P1-A hardening mechanisms; 6 added in round 3 (self-validating market claim, provenance still seeds when unmapped, retained cutoff, moneyline structural class, market_universe lookup semantics, zero pick odds); and 10 added in round 4 (a provider key owned by another market cannot seed identity, with a negative control showing it WOULD be admitted without the reverse index; a genuinely unowned key may still seed; CLV uses the event production graded against; the grading event is used for CLV only and never rescues a wrong-event row; the name-based participant fallback and its uniqueness rule; zero closing odds are priced (reverted in round 5); the offer lookup takes its event id from events.external_id; the participant external id comes from the participants table first; an external_id shared by two events is unverifiable rather than a mismatch; selection-side branches in production order). Round 5 added 3 more from the fourth adversarial review: a null participant issues the offer query (with the captured is.null filter as the receipt) instead of bailing, a grading context naming an unresolvable event fails closed under its own reason with a resolvable-event negative control, and a saturated page is refused rather than silently truncated with a short-page negative control. Test 35 was inverted: zero closing odds are missing_priced_side, because both callers of readClosingSideOdds test its return for truthiness and zero is falsy. Round 6 added 1 more from the fifth adversarial review (a resolved grading context whose participantExternalId is null is not overridden by the market_universe/metadata resolver), and rewrote the saturation test: the guard now compares rows against Prefer: count=exact rather than against the limit, because above PostgREST's max_rows cap a truncated page arrives SHORTER than the limit and a length check reads it as complete. Round 8 added 4 covering loadAuditDataset, which had been module-private and wholly untested: a short participants name-fallback pool is refused, a pool page with no exact count is refused, a truncated forward provider_market_aliases page is refused, and a complete-pages negative control loads the dataset so the three refusals are shown to be caused by incompleteness rather than by an unusable stub. Round 9 added 1 more: a truncated REVERSE alias page is refused. That test exists because the round-8 mutation battery left the reverse guard alive -- the earlier test truncated both alias pages, so the forward read threw first, and the fixture carried no providerMarketKey so the reverse read had no ids and never ran. It now serves a complete forward page beside a truncated reverse one. Round 10 added 4 for the seventh adversarial review: the name-fallback pool is scoped to the pick's sport exactly as production scopes it (with a negative control reproducing the flat-pool divergence and a case proving an unsported pick still uses the all-players pool); loadAuditDataset builds one pool PER SPORT and issues the sport filter production issues (asserted on the captured query, since the unit test alone would pass against a flat pool); a closing row production would discard skips the TIER rather than falling back to the second-latest row in it, with a valid-latest negative control; and a whitespace-padded starts_at is passed through untrimmed. Test 34 was corrected: it had supplied a pre-built index keyed by bare name, so the pool construction never executed and its ambiguity fixture put both players in the same sport. Round 11 added 3 from the eighth adversarial review, which found that the round-10 tests exercised the HELPER BODIES (asProductionClosingLine, the untrimmed starts_at passthrough) but never the CALL SITES that invoke them, so deleting a call-site wrapper left every test green: 'call site: the pinnacle-tier closing line passes through asProductionClosingLine', 'call site: the consensus-tier closing line passes through asProductionClosingLine', and 'call site: buildGradingClvContext passes starts_at to the cutoff untrimmed'. Each is paired with a mutation that deletes the wrapper at that call site; all three now die."
+    },
+    "suite": {
+      "command": "pnpm test:ops",
+      "status": "PASS",
+      "tests": 2708,
+      "fail": 0,
+      "detail": "Full ops suite re-run on the round-11 merged head c4715923: 2708 pass, 0 fail (2653 before the lane, +55 lane tests). Measured by direct run, not derived. pnpm verify:static exits 0 on the same tree; r-level-check --base origin/main --head HEAD returns PASS with no required artifacts for this diff."
+    },
+    "static_verification": {
+      "command": "pnpm verify:static",
+      "status": "PASS",
+      "detail": "Re-run on the round-11 merged head c4715923: pnpm verify:static exits 0, pnpm test:ops is 2708 pass / 0 fail, r-level-check --base origin/main --head HEAD is PASS, and the local close-eligibility evaluator returns PASS."
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "status": "PASS",
+      "detail": "Changed files: 11. Rules matched: none."
+    },
+    "mutation_controls": {
+      "method": "Each mutation was applied to scripts/ops/pick-truth-audit.ts in isolation, the suite re-run, and the file restored byte-exact. A control that cannot fail proves nothing. Every mutation is SEMANTIC -- none relies on a compile error. Two rounds of this battery left survivors, and both were fixed by adding the isolating test rather than by weakening the mutation: round 2 left the drift guard and conflict detection alive because one combined scenario was blocked by either alone; round 4 left `gradingClv = null` alive because the fixture's market_universe row still pointed at the right event, so the fallback reconstruction reached the same answer.",
+      "baseline": "55 pass, 0 fail",
+      "results": [
+        {
+          "mutation": "identity check removed from the grade ladder",
+          "result": "47 pass, 8 fail"
+        },
+        {
+          "mutation": "game_result event match dropped",
+          "result": "52 pass, 3 fail"
+        },
+        {
+          "mutation": "game_result participant match dropped",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "game_result market match dropped",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "event-scoped drift guard removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "market identity conflict detection removed",
+          "result": "52 pass, 3 fail"
+        },
+        {
+          "mutation": "provenance re-admitted as an identity seed (self-validating market claim)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "reverse alias ownership check removed (foreign provider key may seed)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "grading CLV context ignored (event identity reconstructed instead)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "name-based participant fallback dropped",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "closing table reverted to provider_offers",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "snapshot_at closing cutoff dropped",
+          "result": "50 pass, 5 fail"
+        },
+        {
+          "mutation": "retained pick-side cutoff ignored (event-derived cutoff used instead)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "pinnacle bookmaker preference pass dropped",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "market_universe participant semantics reverted to truthiness",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "odds gate over-tightened with `|| pick.odds === 0`",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "zero closing odds priced (caller falsy-check semantics ignored)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "null participant bail re-introduced (query production issues is refused)",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "truncated page accepted instead of refused (exact-count guard removed)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "missing exact count treated as complete",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "grading context null participant re-admits the metadata resolver (`??`)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "unresolvable grading context falls back to a weaker resolver",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "offer-lookup event id taken from market_universe first",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "participant precedence reverted to market_universe first",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "ambiguous external_id resolves to one of the events",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "selection side branch order collapsed into two families",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "moneyline structural classification reverted to eventScoped",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "superseded-correction check removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "alias priority ordering removed (last-wins Map)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "read_only reverted to asserted literals",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "participants name-fallback pager reverted to a rows.length terminator",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "participants name-fallback exact-count requirement removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "forward alias completeness assertion removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "reverse alias completeness assertion removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "name-fallback pool key reverted to a bare normalized name (all sports pooled)",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "name-fallback LOOKUP ignores the pick sport",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "sport pools collapsed to a single all-players pool when any pick lacks sport",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "production closing-line validity gate removed (asClosingLineLike unmirrored)",
+          "result": "52 pass, 3 fail"
+        },
+        {
+          "mutation": "starts_at trimmed, diverging from production's untrimmed passthrough",
+          "result": "53 pass, 2 fail"
+        },
+        {
+          "mutation": "call site: tier-1 pinnacle asProductionClosingLine wrapper removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "call site: tier-2 consensus asProductionClosingLine wrapper removed",
+          "result": "54 pass, 1 fail"
+        },
+        {
+          "mutation": "call site: trim reintroduced at buildGradingClvContext eventStartTime",
+          "result": "54 pass, 1 fail"
+        }
+      ],
+      "surviving_mutations": 0,
+      "restored": "55 pass, 0 fail",
+      "mutations": 42,
+      "survivors": 0,
+      "note": "42 independent SEMANTIC mutations, each applied to scripts/ops/pick-truth-audit.ts in isolation and reverted byte-exact; baseline 55 pass / 0 fail, restored 55 pass / 0 fail, 0 survivors. No mutation relies on a compile error. Round 10 added five for the seventh review's findings (name-fallback pool key reverted to a bare normalized name, lookup ignoring the pick sport, sport pools collapsed to one all-players pool, asClosingLineLike validity gate removed, starts_at trimmed). Round 11 added three CALL-SITE mutations for the eighth review's finding that the round-10 battery mutated only helper BODIES: deleting the asProductionClosingLine wrapper at the pinnacle call site, deleting it at the consensus call site, and reintroducing a trim at buildGradingClvContext's eventStartTime. All three survived the round-10 suite and all three die against the round-11 suite. Every earlier row's pass count is restated against the 55-test baseline; no earlier mutation's outcome changed.",
+      "scope_note": "Every mutation is applied to scripts/ops/pick-truth-audit.ts and killed by a test in scripts/ops/pick-truth-audit.test.ts. The two readByIds truncation rows are covered by the readByIds truncation test directly. loadAuditDataset was module-private and untested through round 7 -- removing assertCompletePage from either alias call site, or reverting the participants name-fallback pager to a rows.length terminator, turned NO test red. That gap is now closed: loadAuditDataset is exported and driven end-to-end by a routing fetch stub, and all four of its guards carry a mutation control plus a complete-pages negative control. The residual limitation is unchanged and real: the shipped CLI has never been executed end-to-end against production in this lane (no read key under containment), so createClosingOfferLookup's real query construction is exercised only by fixtures.",
+      "surviving": 0,
+      "count": 42,
+      "survivor_note": "Round 8 ran 34 mutations against a 47-test baseline and left ONE alive: 'reverse alias completeness assertion removed'. Two independent causes, both in the test rather than the guard. (1) The truncation test truncated BOTH alias pages, so the forward read threw first and the reverse guard never executed. (2) The loader fixture supplied no market_universe row and no metadata.providerMarketKey, so claimedProviderKeys was empty and the reverse read's loop body never ran at all. Fixed by adding providerMarketKey to the fixture and adding a test that serves a COMPLETE forward page beside a truncated reverse page, making the reverse guard the only thing that can reject. Round 9 re-ran all 34 against the new 48-test baseline: 0 survivors.",
+      "baseline_restatement_note": "Every row above is a DIRECT measurement from a single end-to-end re-execution of the full 42-mutation battery on the merged head c4715923 against the 55-test baseline (receipt: .out/mutation/mutations.json). Earlier revisions of this block reported the first 39 rows against a 52-test baseline; those numbers are replaced, not arithmetically restated, because three of them moved by more than the test-count delta (for example 'snapshot_at closing cutoff dropped' went from 4 fail to 5 fail, since the new pinnacle call-site test also depends on the cutoff). No mutation changed from dead to alive or the reverse."
+    }
+  },
+  "scope_refusals": [
+    "Read-only. The production adapter exposes only HTTP GET and has no write method.",
+    "No regrade, backfill, CLV persistence, replay, production write, or schema change.",
+    "No attempt to repair the 107858 historical picks; the population must not be represented as trustworthy.",
+    "Forward-flow trustworthiness is a separate successor requiring explicit event identity, participant identity, standardized selection, line/source provenance, settlement traceability, and closing-line capture as first-class fields at admission time."
+  ],
+  "main_synchronization": {
+    "history": [
+      {
+        "sequence": 1,
+        "merged_parent": "e9f62e5e164edd861606334d479eb4c7ef1762f3",
+        "merge_commit": "149b60ee39eb662fe8c30757e7f1d8bbd7464814",
+        "routed_through_wrapper": true,
+        "conflicts": [
+          "package.json"
+        ],
+        "resolution": "current main's complete scripts['test:ops'] (130 entries, including scripts/ops/outbox-triage.test.ts landed by UTV2-1744) plus this lane's scripts/ops/pick-truth-audit.test.ts = 131 entries. Nothing removed, no formatting churn, no dependency or other script change.",
+        "authored_paths": [
+          "package.json"
+        ],
+        "inherited_proof_revalidated": false,
+        "hook_behaviour": "The UTV2-1785 repaired pre-proof validator allowed this merge commit without --no-verify and without editing any inherited historical proof. A positive control that corrupted this lane's own evidence.json was blocked with exit 2 naming that file, then reverted byte-exact."
+      },
+      {
+        "sequence": 2,
+        "merged_parent": "87f93bf6",
+        "merge_commit": "87f93bf6",
+        "routed_through_wrapper": true,
+        "note": "Round-10 sync with origin/main d847fbae. Contributed one path, docs/06_status/readiness/readiness-score.json."
+      },
+      {
+        "sequence": 3,
+        "merged_parent": "3a99f5043e950b6f5610b26aab4d761bc8fc46fb",
+        "merge_commit": "c47159233decfab0c1268e4c634772105b4b104d",
+        "merged_main_tip": "249da64b1108815f1bde07e82414535e64fe4382",
+        "routed_through_wrapper": false,
+        "process_deviation": true,
+        "deviation_disposition": "PM-recorded as a process deviation, NOT a general precedent. The branch was not rewritten and the synchronization was not repeated to force it through the broken verb.",
+        "why_not_routed": "pnpm ops:merge-wrapper git-merge-main cannot succeed on this branch. buildExtendedCommand in scripts/ops/ops-merge-wrapper.ts:88-108 emits `git merge --ff-only origin/main` for the git-merge-main verb; a branch with its own commits is by definition diverged, so --ff-only can never succeed and the safe non-rebasing exit UTV2-1678 advertises is unreachable for every lane that has committed anything.",
+        "reproduction": "$ pnpm ops:merge-wrapper git-merge-main -> fatal: Not possible to fast-forward, aborting.",
+        "defect_routing": "Reported to the UTV2-1790 owner as cross-lane coordination. That worktree was not touched from this lane and no second wrapper lane was opened.",
+        "command_used": "git merge --no-ff --no-edit origin/main, with the wrapper's own dropped-path check replicated by hand.",
+        "admissibility_evidence": {
+          "first_parent_is_lane_head": "git rev-list --parents -n1 c4715923 -> c4715923 3a99f504 249da64b",
+          "ancestry": "git merge-base --is-ancestor 3a99f504 HEAD -> true",
+          "second_parent_is_origin_main_tip": "git rev-parse origin/main -> 249da64b1108815f1bde07e82414535e64fe4382, identical to parent 2",
+          "main_contribution": "git diff --name-status 3a99f504 HEAD -> M docs/06_status/readiness/readiness-score.json (one path, an upstream [skip ci] bot ledger refresh this lane did not author)",
+          "lane_contribution": "git diff --name-status 249da64b HEAD -> A .ops/sync/UTV2-1745.yml, A docs/06_status/lanes/UTV2-1745.json, A docs/06_status/proof/UTV2-1745/{.gitkeep,diff-summary.md,evidence.json,model-routing.json,verification.md}, M package.json, A scripts/ops/pick-truth-audit.ts, A scripts/ops/pick-truth-audit.test.ts — the merged tree is main's tree plus exactly the ten paths this lane authors and nothing else",
+          "dropped_paths_lane_side": 0,
+          "dropped_paths_main_side": 0,
+          "dropped_paths_method": "comm -23 <(git ls-tree -r --name-only <parent> | sort) <(git ls-tree -r --name-only HEAD | sort) run against both parents",
+          "behind_origin_main": 0,
+          "ahead_origin_main": 14,
+          "worktree_clean_before_reanchor": true
+        }
+      }
+    ],
+    "current": "sequence 3 (c4715923)"
+  },
+  "corrections": {
+    "P1_A": {
+      "defect": "resolveEvent consulted gameResult.event_id first, so the referenced game_results row manufactured the event identity it was then validated against; the grade ladder performed no identity validation at all before recomputing. A wrong-but-real game_results id could produce an apparent grading agreement.",
+      "correction": "buildPickIdentityContext establishes event, participant and market identity from the pick, its metadata, its market_universe provenance row, the canonical events/participants tables and provider_market_aliases. It takes no game result argument. validateGameResultIdentity then validates the referenced row against that context and fails closed.",
+      "named_reasons": [
+        "game_result_event_mismatch",
+        "game_result_participant_mismatch",
+        "game_result_market_mismatch",
+        "game_result_identity_unverifiable"
+      ],
+      "scope": "scripts/ops/pick-truth-audit.ts only; read-only; no packages/db, apps/api, migration or runtime change",
+      "round_2_hardening": [
+        "isEventScopedTotalPick now ports clv-service.ts's drift guard in full: a pick whose market_type_id is a game total but which carries player_* market, participant_id, or player/playerId/providerParticipantId metadata is NOT treated as event-scoped. Without the guard a drifted pick was allowed a null-participant game_results row and could still agree.",
+        "market identity candidates are narrowed to {pick-side provider market key, canonical market key} instead of a union of every claim the pick makes, and any additional, non-aliasable market claim sets marketIdentityConflict, which fails closed as game_result_identity_unverifiable.",
+        "provider market alias resolution is deterministic: buildProviderMarketKeyIndex sorts by production's providerMarketKeyPriority then localeCompare instead of last-wins Map insertion, and the alias page limit was raised from 4x to 8x per market_type_id so an added alias cannot silently truncate the winner."
+      ],
+      "round_3_hardening": [
+        "the market identity candidate set is now seeded ONLY from the canonical market column and its provider spelling in provider_market_aliases. An earlier revision seeded it from market_universe.provider_market_key and metadata.providerMarketKey and then re-checked those same claims against the set they had populated, so a pick-side claim validated itself: a pick naming a different market in metadata could admit a real game_results row for that other market and book a fabricated agreement. Pick-side provenance may now seed identity only when the alias table has no mapping at all, and only when every provenance claim agrees; disagreement is a conflict and fails closed.",
+        "structural classification no longer counts a team moneyline pick with a null participant as missing_participant. Production sends a null participant for moneyline as well as for event-level totals, so usesNullParticipantForClosingLookup, not eventScoped, is the correct predicate."
+      ],
+      "round_4_hardening": [
+        "the `no alias mapping` branch was still a hole: for any pick whose canonical market has no provider_market_aliases row, its own metadata/market_universe provider-key claim became the candidate set and validated itself. A reverse alias index (provider_market_key -> owning market_type_id) is now loaded, and a claimed provider key OWNED by a different market_type_id sets marketIdentityConflict. Only a key that no market_type_id claims may seed identity.",
+        "an events.external_id shared by more than one events row now resolves to NO event (game_result_identity_unverifiable) instead of silently selecting one of them and reporting game_result_event_mismatch, which would assert contradicted identity where the truth is unproven identity.",
+        "inferSelectionSide reproduces production's four sequential branches (\\\\bover\\\\b, \\\\bunder\\\\b, O<digit>, U<digit>) rather than two over/under families, which differ for a selection carrying both an `under` word and an `O <digit>` token."
+      ],
+      "round_5_hardening": "Two fail-open paths closed. (1) readByIds budgeted limit as idsChunk.length * rowsPerId for the WHOLE chunk, so a few ids with many rows could push others' rows off the end; a full page is indistinguishable from a truncated one, and a truncated read makes an ambiguous events.external_id look UNIQUE -- failing open in exactly the place the ambiguity guard exists to close. The limit now escalates while saturated and the read is refused rather than guessed. (2) When a settlement names a grading event that cannot be resolved, the audit no longer substitutes events.external_id: production would run resolvePickEventContext, which for a player prop also needs a resolved participant, event_participants links and chooseEventForPick proximity selection, none of which this audit models. It fails closed as grading_context_unresolvable instead of over-claiming. Both are unreachable on the measured cohort and are guards against a future one.",
+      "round_6_hardening": "Fifth adversarial review. The round-5 saturation guard was itself fail-open: it compared rows.length against the requested limit, but PostgREST caps every response at the project's max_rows setting, so above that cap a truncated page arrives SHORTER than the limit and reads as complete. readByIds now sends Prefer: count=exact and compares the rows read against the true matching total from content-range, which is exact regardless of any server cap; the escalation ladder is gone. The same assertCompletePage guard was added to the forward and reverse provider_market_aliases pages, where a truncated page would change the resolved provider key. The participants name-fallback pager needed a different fix, not the same one: with count=exact the header total is the FULL match count, so a per-page completeness assertion would always throw on a paged read. Its loop is now driven by that total instead of by `rows.length < PAGE` -- the same fail-open terminator -- and refuses when the server stops returning rows before the total is reached. A short pool is the dangerous direction: it makes a genuinely non-unique display name look unique, and production's fallback resolves a participant only on a UNIQUE normalized-name match. Live: participants holds 1523 players and 2 normalized display names are genuinely duplicated, so the uniqueness rule is live; only 1 pick in the 1571-row cohort takes the name fallback and it carries a sport, so the pool is one page today. An earlier revision of this note claimed the pager had received assertCompletePage; it had been given exactCount and nothing read the count. The sixth review caught that."
+    },
+    "P1_B": {
+      "SUPERSEDED_COUNTS_LIVE_MECHANISM": "SUPERSEDED NUMBERS, LIVE MECHANISM. Every CLV COUNT appearing in the P1_B correction narrative — including 'missing_event_context = 99 of 102' and 'moved 3 picks to missing_closing_line' — describes an intermediate measurement and is withdrawn by post_fix_validation.round11_clv_replay (194 resolvable, 6 unresolvable: 3 missing_closing_line + 3 missing_priced_side). The MECHANISM corrections themselves stand and are unaffected: mirroring buildCLVContextFromGradingEvent, and removing the audit-invented missing_participant_context bail, are both still correct and still in the shipped code. Only the counts they were measured to produce are superseded. See post_fix_validation.superseded_claims_index.",
+      "correction": {
+        "defect": "the CLV fallback read the legacy/frozen provider_offers surface with a provider_key/is_closing filter and no closing-time cutoff, which is not what production resolves against.",
+        "correction": "the lookup reads provider_offer_history and mirrors DatabaseProviderOfferRepository.findClosingLine filter-for-filter (provider event identity, provider market identity, participant eq/is-null semantics, snapshot_at <= before, order snapshot_at desc limit 1) plus apps/api/src/clv-service.ts's pinnacle-then-consensus bookmaker preference with the market_universe fallback last. The cutoff mirrors production's readEventStartTime: metadata.starts_at, else event_date + 'T23:59:59Z'.",
+        "production_reference": [
+          "packages/db/src/runtime-repositories.ts DatabaseProviderOfferRepository.findClosingLine",
+          "apps/api/src/clv-service.ts closing-line resolution order and PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS",
+          "apps/api/src/clv-service.ts readEventStartTime"
+        ],
+        "scope": "scripts/ops/pick-truth-audit.ts only; read-only; no packages/db, apps/api, migration or runtime change",
+        "round_2_hardening": [
+          "the CLV path now mirrors clv-service.ts's resolution order exactly, including the market_universe provenance short-circuit that runs BEFORE event context, cutoff and participant resolution, and the moneyline side gate (moneyline_side_not_independently_resolvable).",
+          "the offer-lookup market key is resolved the way production resolves it — through the alias table only, never through pick metadata — via resolveProductionMarketKey.",
+          "the late market_universe provider-key fallback is modelled explicitly rather than folded into the primary lookup."
+        ],
+        "round_3_hardening": [
+          "the closing cutoff now mirrors clv-service.ts's readRetainedEventStartTime: on the event-scoped-total path production prefers the start time retained on the pick (metadata.eventStartTime / metadata.eventTime) over anything derived from the event row. Using the event-derived value sent a LATER cutoff than production and could select an in-play snapshot production would never see.",
+          "the event-context gate was widened to match resolveEventScopedTotalContext, which resolves from metadata.providerEventId plus a retained start time with no event row at all; requiring an event row denied CLV that production does resolve.",
+          "the odds gate is exactly production's `!Number.isFinite(pick.odds ?? null)`. An extra `|| pick.odds === 0` had been refusing a pick production still prices.",
+          "createMarketUniverseClosingLookup branches on `=== null` and createClosingOfferLookup on `=== undefined || === null`, matching each production call site; an empty-string participant id is therefore an eq filter, not is.null."
+        ],
+        "round_4_hardening": [
+          "the audited cohort is source='grading', and those rows are written by recordGradedSettlement (apps/api/src/settlement-service.ts), which resolves CLV context from the GRADING EVENT and passes it as preResolvedContext -- short-circuiting resolvePickEventContext entirely. The audit now mirrors buildCLVContextFromGradingEvent: provider event id from events.external_id keyed by the persisted gradingContext.eventId, cutoff from that event's starts_at (else event_date + 'T23:59:59Z'), participant from participants.findById(pick.participant_id). Reconstructing the event from market_universe/metadata instead was denying CLV production does have, and reported it as a production defect under the missing_event_context class, which this correction drives to zero. The counts that class carried are superseded by post_fix_validation.round11_clv_replay and are not restated here.",
+          "the name-based participant fallback is modelled: with no participant_id but metadata.player, production reads participants.listByType('player', sport) and takes a UNIQUE normalized display_name match. Absent sport means EVERY player, not none. The candidate pool is fetched the same way rather than narrowed by name server-side, because narrowing could make an ambiguous name look unique and manufacture CLV production does not have.",
+          "pricedSideAvailable no longer refuses zero odds. Production's readClosingSideOdds gates on Number.isFinite alone and americanToImplied(0) is 0.5, so it computes a normal CLV; refusing it both denied CLV and manufactured a false persisted-status mismatch.",
+          "the offer-lookup event id falls back to events.external_id, then metadata.providerEventId -- never market_universe.provider_event_id, which owns the provenance short-circuit and not this query. The participant external id is resolved from the participants table first, with market_universe/metadata only as a fallback.",
+          "gradingContext.eventId is used for CLV ONLY. apps/api/src/grading-service.ts sets it to gameResult.event_id, so admitting it into the P1-A identity proof would restore the circularity P1-A exists to remove. A test asserts a wrong-event row is still unverifiable even when the grading context names that same wrong event."
+        ],
+        "round_5_hardening": "Fourth adversarial review. Three CLV-semantics divergences from production were removed, each verified against apps/api source before the change. (1) missing_participant_context was an audit-invented bail: computeCLVOutcome passes providerParticipantId -- possibly null -- straight into findClosingLine, which filters is(provider_participant_id, null), so production ISSUES the query. The class is also not a member of production's CLVComputationStatus, so comparing persisted status against it was comparing against a state production can never have persisted. Removing it moved 3 picks to missing_closing_line. (2) Zero closing odds are refused again. Round 4 had priced them on the grounds that readClosingSideOdds gates on Number.isFinite alone -- true, but it RETURNS the raw number and both callers do `if (!pricedSide) return missing_priced_side` (clv-service.ts:415 and :542). Zero is falsy. Round 4 read the helper in isolation and missed the callers; this was a regression I introduced and the review caught it. (3) The moneyline decline is renamed moneyline_clv_unreachable_on_grading_path: buildCLVContextFromGradingEvent never sets participantSide, so moneyline CLV is unconditionally dead on this cohort's path, and the previous name attributed the outcome to an event_participants lookup the audit merely did not perform.",
+        "round_6_hardening": "`gradingClv?.participantExternalId ?? participantExternalId` re-admitted a participant production had resolved to null: a resolved grading context with a null participant is production's own answer, and production passes that null into findClosingLine and filters is(provider_participant_id, null). The `??` fell through to the market_universe/metadata resolver and would have sent eq.<id>, finding a closing line production never sees -- the same over-claim class as the missing_participant_context bail deleted in round 5, reintroduced by an operator. Only an ABSENT context now falls back. Measured impact on the cohort: zero, because the only sampled pick reaching the condition is a game_total_ou whose participant is forced null anyway. Separately, the moneyline comment claimed every moneyline pick on this path dies at missing_selection_side; clv-service.ts returns missing_closing_line first when no closing line exists. What is unconditional is that no moneyline pick on the grading path can reach `computed`, which is what the reason name asserts, and the comment now says that instead.",
+        "round_10_hardening": "The seventh adversarial review found that the name-based participant fallback was NOT scoped by sport, diverging from production in BOTH directions. Production calls participants.listByType('player', metadata.sport) (apps/api/src/settlement-service.ts:1023) and DatabaseParticipantRepository.listByType (packages/db/src/runtime-repositories.ts:5878) applies .eq('sport', sport) whenever sport is truthy, so the candidate pool is scoped to each PICK's own sport. The audit built ONE FLAT POOL keyed by normalized name alone, and collapsed to an all-players pool as soon as any single pick in the cohort lacked metadata.sport. Two players sharing a normalized display_name in different sports therefore read as ambiguous, resolving the participant to null where production -- scoped to one sport -- resolves it: the audit DENIES CLV production has, and additionally books a false persisted_computed_but_currently_missing_closing_line mismatch, which is the very resolver-bug signal the report exists to surface. In the other direction the resulting null participant emits provider_participant_id=is.null, which can match an event-scoped provider_offer_history row that production's eq.<player> query never sees -- the same over-claim class the round-6 `??` fix removed. Reachability is high rather than theoretical: 94.4% of the audited picks carry a null participant_id, so this fallback is the dominant path for the cohort. Fixed by keying the index ${sport}|${normalizedName} via participantNameKey, building one candidate pool per sport (the all-players pool is fetched only when some pick genuinely lacks a sport, so a fully-sported cohort does not read the whole table), and threading the pick's metadata.sport into buildGradingClvContext's lookup.",
+        "round_10_divergences_mirrored": "Two further divergences the same review found, both fixed rather than merely recorded. (1) asClosingLineLike (apps/api/src/clv-service.ts:867) nulls any offer whose snapshot_at or provider_key is not a non-empty string, and production applies it to EVERY findClosingLine result, so a rejected pinnacle row falls through to the consensus tier. asProductionClosingLine now mirrors it, applied AFTER the latest row is selected rather than as a filter on the candidate list -- production's query already returned a single row, so a bad row makes production skip that TIER, not fall back to the second-latest row in it; filtering first would resolve a line production never sees. Both columns are NOT NULL, so only the empty-string case is reachable, but the bundle claims filter-for-filter parity and an unmirrored gate is a divergence whether or not it is currently reachable. (2) resolveEventStartTime used readString, which TRIMS; production (settlement-service.ts:999) tests startsAt.trim().length > 0 but returns startsAt untrimmed, and that raw string becomes the lte. cutoff filter. Now read raw and tested trimmed.",
+        "round_10_recorded_divergence": "Recorded, NOT fixed, and deliberately in the fail-closed direction: production's own listByType (runtime-repositories.ts:5906) terminates its pagination on page.length < PAGE_SIZE -- the rows.length terminator the audit's own comment calls dangerous -- so production can itself decide uniqueness on a short pool. The audit refuses instead. It can therefore report a participant unresolved where production resolved one. Refusing to audit is preferable to reproducing a bug in order to agree with it, but it IS a divergence and is named in the source and here rather than glossed as parity."
+      }
+    },
+    "cohort_and_report_integrity": {
+      "defect": "three report fields asserted rather than measured, and the cohort ignored corrections that supersede a sampled settlement.",
+      "corrections": [
+        "settlement_records rows whose id appears as a later row's corrects_id are collected and fail closed as settlement_superseded_by_correction. corrects_id IS NULL only excludes the corrections themselves, not the settlements they supersede. Measured incidence in this sample: 0.",
+        "read_only is now derived from ReadOnlyPostgrestClient.transportEvidence(), a tally of the HTTP methods actually issued, instead of the literals database_writes_performed: 0 / write_method_reachable: false / transport_method: 'GET'.",
+        "runtime_proof.queries[2].row_count reports closing rows actually returned rather than restating the CLV resolvable count.",
+        "structural.affected_picks counts distinct pick ids rather than itemised entries.",
+        "readByIds no longer caps a non-unique-column lookup at one row per id; events-by-external_id and the corrections lookup request 8x headroom, so a shared external_id cannot truncate into a false orphaned_event."
+      ],
+      "scope": "scripts/ops/pick-truth-audit.ts only; read-only"
+    }
+  },
+  "post_fix_validation": {
+    "measured_at": "2026-08-30",
+    "relationship_to_historical_evidence": "Separate from and additional to the 2026-08-26 population decomposition in runtime_proof, which is unchanged and remains the historical measurement. The two must not be conflated.",
+    "method": "Direct replay. The 200-settlement cohort and every row the loader reads (settlement payloads including the persisted gradingContext, picks, game_results, events, participants, market_universe, provider_market_aliases in both directions, and the pre-cutoff provider_offer_history snapshots) were exported read-only from production zfzdnfwdarxucxtaojxm through the Supabase MCP read path, then both the pre-fix and the corrected buildPickTruthAuditReport were executed over that identical dataset. Both columns come from running the shipped code, not from a SQL re-derivation of its semantics. No write of any kind was issued.",
+    "method_change_note": "Three earlier revisions of this block are superseded and the changes are recorded rather than silently replaced. (1) The pre-fix CLV column was once reported as 44 resolvable (22%) from a SQL re-derivation; executing the pre-fix code itself over the same rows yields 4. (2) The corrected CLV column once showed missing_event_context = 99, an artifact of the audit reconstructing an event production never consulted; mirroring buildCLVContextFromGradingEvent removes that class entirely and re-attributes those picks to missing_closing_line. (3) The corrected column once showed missing_closing_line = 97 plus missing_participant_context = 3. That third class was an audit-invented bail: production never refuses to issue the offer query on a null participant -- computeCLVOutcome passes providerParticipantId (possibly null) straight into findClosingLine, which filters is(provider_participant_id, null). Removing the bail moves all 3 to missing_closing_line, which is what production would report, and eliminates a class that is not a member of production's CLVComputationStatus at all. Each revision moved the measurement toward what production actually does, and each is disclosed here.",
+    "writes_performed": 0,
+    "cohort": "settlement_records where status='settled', source='grading', corrects_id IS NULL, result IN ('win','loss','push'), evidence_ref LIKE 'game-result:%'",
+    "population": {
+      "grading_settlements": 8620,
+      "independently_auditable": 1571,
+      "sampled": 200
+    },
+    "closing_line_evidence": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. Withdrawn: triples_requested_by_the_corrected_run=167, triples_fetched=167, triples_with_no_eligible_snapshot=90, candidate_rows_surfaced_by_the_replay_lookup=191, and the note's conclusion that the 90 unresolved triples represent a real absence of closing lines. provider_offer_history genuinely holds no pre-2026-06-25 snapshot for those events — that part is true — but production does NOT stop there: it falls back to market_universe, which retains the closing line. The round-11 receipts are runtime_proof.queries Q6-Q8. The replay_lookup_substitution caveat is also now superseded in one respect: runtime_proof.mechanism_parity drives the SHIPPED createClosingOfferLookup and createMarketUniverseClosingLookup against a recording client, so the shipped query construction IS now proven (.out/replay/parity_receipt.json), not only unit-tested.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "table": "provider_offer_history",
+        "triples_with_at_least_one_eligible_snapshot": 77,
+        "legacy_provider_offers_rows_total": 8191206,
+        "legacy_provider_offers_rows_for_sampled_events": 0,
+        "note": "provider_offers holds 8,191,206 rows but none for any provider_event_id in the sample, which is why the pre-fix lookup resolved almost nothing. Of the 167 triples the corrected run requests, 90 have no eligible pre-cutoff snapshot; all 90 fall in 8 provider events, and a direct unbounded re-query confirms provider_offer_history holds ZERO rows for those 8 events at any time. They are the April 2026 half of the cohort, which predates the closing-line history. The absence is real, not an export gap.",
+        "triples_requested_by_the_corrected_run": 167,
+        "triples_fetched": 167,
+        "triples_with_no_eligible_snapshot": 90,
+        "candidate_rows_surfaced_by_the_replay_lookup": 191,
+        "candidate_rows_surfaced_on_the_pinnacle_pass": 17,
+        "replay_lookup_substitution": "Disclosed rather than left implicit. The replay executed the shipped buildPickTruthAuditReport, but the ClosingOfferLookup it was handed was an in-memory function over the exported provider_offer_history rows, not the shipped createClosingOfferLookup. The substitute applies the same four predicates (provider_event_id, provider_market_key, participant with null-vs-eq semantics, snapshot_at <= cutoff) and honours bookmakerKey, so the pinnacle-then-consensus precedence IS exercised -- but it returns every matching row instead of the shipped query's `order snapshot_at desc limit 1`. buildPickTruthAuditReport then applies selectLatestClosingOffer, which picks the same row the shipped query would have returned, so the reported CLV outcomes are unaffected. What the replay therefore does NOT prove is the shipped query's own construction -- the limit, the order clause and the emitted filter strings. Those are covered by unit tests that assert the captured PostgREST parameters (tests 12-18, 36, 40, 43), not by this production replay. The two counts below are candidate rows the substitute surfaced across all calls; the shipped lookup returns at most one row per call, so they are NOT a count of rows the shipped query would fetch, and an earlier revision of this block mislabelled them as such."
+      }
+    },
+    "grading": {
+      "old": {
+        "resolvable": 200,
+        "agreements": 200,
+        "disagreements": 0,
+        "unresolvable": 0,
+        "agreement_rate_pct": 100
+      },
+      "corrected": {
+        "resolvable": 100,
+        "agreements": 100,
+        "disagreements": 0,
+        "unresolvable": 100,
+        "agreement_rate_pct": 100
+      },
+      "corrected_unresolvable_by_reason": {
+        "game_result_identity_unverifiable": 100,
+        "game_result_event_mismatch": 0,
+        "game_result_participant_mismatch": 0,
+        "game_result_market_mismatch": 0
+      },
+      "unverifiable_breakdown": {
+        "no_pick_side_event_identity": 99,
+        "no_pick_side_market_identity": 1
+      },
+      "apparent_agreements_revoked": 100,
+      "transitions": {
+        "resolvable -> game_result_identity_unverifiable": 100,
+        "resolvable -> resolvable": 100
+      },
+      "interpretation": "Half of the sampled picks previously produced an apparent independent agreement that the corrected audit refuses to claim, because the referenced game_results row cannot be proven to belong to the pick. No sampled pick produced an event, participant or market MISMATCH: the failure is absent pick-side identity, not contradicted identity."
+    },
+    "clv": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. Every figure in this block is withdrawn: corrected.resolvable=98, corrected.unresolvable=102, resolvability_rate_pct=49.0, failure_classes.missing_closing_line=100, persisted_computed_but_currently_unresolvable.corrected=82, the whole transitions array, and the interpretation string. The authoritative CLV measurement is 194 resolvable / 6 unresolvable (3 missing_closing_line, 3 missing_priced_side). Cause: the round-10 harness resolved the market_universe fallback against 100 rows instead of the whole 102,155-row table. Retained here as superseded historical evidence only. The `old` column (pre-fix, 4 resolvable) is also historical and is not quantitative authority.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "old": {
+          "resolvable": 4,
+          "unresolvable": 196,
+          "resolvability_rate_pct": 2,
+          "failure_classes": {
+            "missing_closing_line": 193,
+            "missing_priced_side": 2,
+            "missing_participant_context": 1
+          }
+        },
+        "corrected": {
+          "resolvable": 98,
+          "unresolvable": 102,
+          "resolvability_rate_pct": 49,
+          "failure_classes": {
+            "missing_closing_line": 100,
+            "missing_priced_side": 2
+          }
+        },
+        "persisted_computed_but_currently_unresolvable": {
+          "old": 176,
+          "corrected": 82
+        },
+        "transitions": [
+          {
+            "old": "missing_closing_line",
+            "corrected": "missing_closing_line",
+            "n": 99
+          },
+          {
+            "old": "missing_closing_line",
+            "corrected": "resolvable",
+            "n": 94
+          },
+          {
+            "old": "resolvable",
+            "corrected": "resolvable",
+            "n": 4
+          },
+          {
+            "old": "missing_priced_side",
+            "corrected": "missing_priced_side",
+            "n": 2
+          },
+          {
+            "old": "missing_participant_context",
+            "corrected": "missing_closing_line",
+            "n": 1
+          }
+        ],
+        "interpretation": "Reading the canonical source and mirroring production's grading-context resolver raises CLV resolvability from 2% to 49%. The residual 51% is not a resolver defect and is not a participant-resolution defect: 100 picks have no pre-cutoff snapshot because provider_offer_history holds nothing for their events at all, and 2 have a closing row whose priced side is unusable. missing_event_context and missing_participant_context are both zero -- neither class survives contact with production's actual semantics."
+      }
+    },
+    "structural": {
+      "old": {
+        "orphaned_event": 0,
+        "missing_participant": 1,
+        "unresolvable_market": 0,
+        "affected_picks": 1
+      },
+      "corrected": {
+        "orphaned_event": 99,
+        "missing_participant": 4,
+        "unresolvable_market": 4,
+        "affected_picks": 100
+      }
+    },
+    "verdict_impact": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. The verdict itself is unchanged and correct (can_currently_produce_trustworthy_pick: false), but the `note` field's stated cause is withdrawn: it asserts that 'the same 100 are the ones with no closing-line history at all' and that 'the June-July half is both provable and priced'. The first is false. The verdict's actual basis is the 100 unverifiable grading identities and 100 structurally blocked picks; CLV unavailability is NOT the basis. See post_fix_validation.materiality.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "old": {
+          "can_currently_produce_trustworthy_pick": false
+        },
+        "corrected": {
+          "can_currently_produce_trustworthy_pick": false
+        },
+        "changed": false,
+        "stated_cause_changed": true,
+        "note": "The answer is unchanged, but the reason is now truthful in both directions. Before the corrections the audit reported a fully trustworthy grading path (200/200 agreement) blocked only by missing closing-line data; then, after the first correction, it blamed a resolver gap (missing_event_context) that was the audit's own reconstruction rather than production's behaviour; then it attributed 3 picks to a participant-context defect that production does not have. Each revision removed a mis-causation. The corrected measurement shows the grading path is independently unverifiable for exactly the 100 April settlements, that the same 100 are the ones with no closing-line history at all, and that the June-July half is both provable and priced."
+      }
+    },
+    "re_measured_after_round_3": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. Only the CLV figures in the note ('CLV 98 resolvable', '191 closing rows returned') are withdrawn. The grading (100/100/0/100), structural (99/4/4/100) and identity-breakdown (99 + 1) figures are unchanged and are reconfirmed by the round-11 replay.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "re_run": true,
+        "result": "identical",
+        "note": "The replay was executed again over the same exported rows after the round-3 hardening. Every figure in that block reproduced exactly: grading 100/100/0/100, CLV 98 resolvable, structural 99/4/4/100, 191 closing rows returned, 17 pinnacle. (An earlier draft of this sentence said 126 closing rows, carried over from the pre-round-4 lookup; the block's own rows_returned_to_the_corrected_lookup has been 191 since the grading-context correction, and 191 is the measured value.) The round-3 corrections govern what the audit is willing to ADMIT (a self-validating market claim, an in-play cutoff, a moneyline participant complaint); none of those conditions occurs in this 200-settlement sample, so the measured production result is unmoved. The identity breakdown was recomputed directly and remains 99 with no pick-side event identity and 1 with no pick-side market identity, with 0 market-identity conflicts."
+      }
+    },
+    "identity_vs_clv": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. This 100/98/2 cross-tabulation rests on the withdrawn CLV column and is not quantitative authority. The round-11 cross-tabulation is: identity-unverifiable 100, structurally blocked 100, CLV resolvable 194, CLV resolvable AND cutoff-valid 150.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "identity_unverifiable x clv_unresolvable": 100,
+        "identity_proven x clv_resolvable": 98,
+        "identity_proven x clv_unresolvable": 2
+      }
+    },
+    "by_half": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. The claim that all 100 earliest (April 2026) settlements are CLV-unresolvable is FALSE. They resolve on ladder rung 4 (market_universe by provider key), because market_universe retains a closing_line after provider_offer_history has aged out. The identity half of this block (100 April settlements identity-unverifiable) remains true and is reconciled by the round-11 replay.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "earliest_100_april_2026": {
+          "identity_unverifiable / clv_missing_closing_line": 100
+        },
+        "latest_100_june_july_2026": {
+          "identity_proven / clv_resolvable": 98,
+          "identity_proven / clv_missing_priced_side": 2
+        }
+      }
+    },
+    "by_half_interpretation": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. The 'clean split' claim is false and is removed rather than restated: the April half is NOT CLV-unresolvable. What survives is the identity finding — every one of the 100 earliest settlements is independently unverifiable — which the round-11 replay reconfirms. Original text, retained only as superseded historical evidence: The split is clean and is the substantive finding. Every one of the 100 earliest (April 2026) settlements is BOTH independently unverifiable and CLV-unresolvable, and after the round-5 correction all 100 fail for the same single reason -- missing_closing_line, a genuine absence of closing-line history rather than any resolver or participant defect. Every one of the 100 latest (June-July 2026) settlements has provable pick-side identity, and 98 of them resolve CLV. The failure is a historical cohort with no retained identity or closing-line data, not a defect spread evenly across the population.",
+    "re_measured_after_round_5": {
+      "SUPERSEDED": "SUPERSEDED — DO NOT CITE. Withdrawn by post_fix_validation.round11_clv_replay. clv_failure_classes_after_round_5 (missing_closing_line=100, missing_priced_side=2) is withdrawn, as is 'resolvable is unchanged at 98'. The round-11 classes are missing_closing_line=3 and missing_priced_side=3. Findings (b) and (c) in the note — zero zero-odds rows, zero zero-price market_universe rows, all 1571 cohort settlements persisting a resolvable gradingContext.eventId — are independent of the CLV scoping defect and remain true.",
+      "SUPERSEDED_DO_NOT_CITE": {
+        "note": "Re-run after the round-5 corrections, which came out of the fourth independent adversarial review. Two of the three code changes are semantics corrections that could have moved the numbers, and one did. (a) Removing the audit-invented missing_participant_context bail moved 3 picks to missing_closing_line, so the corrected CLV failure classes are now 100 missing_closing_line + 2 missing_priced_side; resolvable is unchanged at 98. (b) Restoring the zero-odds refusal moved nothing, because provider_offer_history holds 0 rows with over_odds = 0 or under_odds = 0 and market_universe holds 0 rows with a zero closing price -- verified by direct query, so the correction is right on the semantics and inert on this sample. (c) The grading_context_unresolvable branch and the readByIds saturation refusal are both unreachable here: all 1571 cohort settlements persist a resolvable gradingContext.eventId, and no page came back saturated. Grading, structural and verdict figures are unchanged.",
+        "clv_failure_classes_before_round_5": {
+          "missing_closing_line": 97,
+          "missing_participant_context": 3,
+          "missing_priced_side": 2
+        },
+        "clv_failure_classes_after_round_5": {
+          "missing_closing_line": 100,
+          "missing_priced_side": 2
+        },
+        "zero_odds_rows_in_provider_offer_history": 0,
+        "zero_closing_price_rows_in_market_universe": 0
+      }
+    },
+    "round11_clv_replay": {
+      "supersedes": "All CLV figures in revisions 1-4 of this bundle, specifically resolvable=98, unresolvable=102, missing_closing_line=100, resolvability_rate=49.00%, persisted_computed_but_unresolvable=82, the 'all 100 April settlements are CLV-unresolvable' claim, and the 51.00% materiality framing. Withdrawn, not restated.",
+      "cause_of_the_superseded_numbers": "The round-10 replay harness (a) resolved the market_universe fallback against only the 100 rows reachable from picks.metadata.marketUniverseId instead of the whole table, and (b) pruned load-bearing JSON columns. Both defects were in that ad-hoc harness, not in scripts/ops/pick-truth-audit.ts.",
+      "definition_clv_resolvable": "A settlement is counted resolvable when the audit reaches a non-null closing line by the same four-rung ladder production uses AND a priced side exists for the pick's selection. It asserts nothing about grading correctness, provenance trustworthiness, temporal validity, or traceability.",
+      "resolution_ladder": [
+        "r1  market_universe by id (picks.metadata.marketUniverseId -> closing_line); production returns `computed` immediately and applies NO cutoff",
+        "r2  provider_offer_history, bookmaker_key=pinnacle, snapshot_at <= cutoff",
+        "r3  provider_offer_history, no bookmaker filter, snapshot_at <= cutoff",
+        "r4  market_universe by provider key, closing_line not null, limit 1; production applies NO time filter"
+      ],
+      "partition": [
+        {
+          "resolution_source": "market_universe:by_id_short_circuit (r1)",
+          "outcome": "resolvable",
+          "n": 4
+        },
+        {
+          "resolution_source": "market_universe:by_id_short_circuit (r1)",
+          "outcome": "unresolvable:missing_priced_side",
+          "n": 2
+        },
+        {
+          "resolution_source": "provider_offer_history:pinnacle (r2)",
+          "outcome": "resolvable",
+          "n": 17
+        },
+        {
+          "resolution_source": "provider_offer_history:consensus (r3)",
+          "outcome": "resolvable",
+          "n": 77
+        },
+        {
+          "resolution_source": "market_universe:provider_key_lookup (r4)",
+          "outcome": "resolvable",
+          "n": 96
+        },
+        {
+          "resolution_source": "market_universe:provider_key_lookup (r4)",
+          "outcome": "unresolvable:missing_priced_side",
+          "n": 1
+        },
+        {
+          "resolution_source": "none",
+          "outcome": "unresolvable:missing_closing_line",
+          "n": 3
+        }
+      ],
+      "partition_total": 200,
+      "clv_resolvable": 194,
+      "clv_unresolvable": 6,
+      "clv_unresolvable_classes": {
+        "missing_closing_line": 3,
+        "missing_priced_side": 3
+      },
+      "cutoff_validity": {
+        "resolvable": 194,
+        "cutoff_enforced": 150,
+        "not_cutoff_validated": 44,
+        "not_cutoff_validated_breakdown": {
+          "r4_snapshot_strictly_after_cutoff": 40,
+          "r1_no_cutoff_applied": 4
+        },
+        "note": "All 40 post-cutoff rows carry the identical snapshot 2026-04-24T00:00:00+00:00 -- one uniform midnight watermark across 40 distinct markets, i.e. a batch backfill, not 40 per-market closing captures."
+      },
+      "april_retention_explanation": "provider_offer_history retains no snapshot earlier than 2026-06-25 for these events, so all 200 April-cutoff offer criteria correctly return zero rows on rungs 2-3. The April picks resolve on rung 4 because market_universe retains a closing_line after the underlying history has aged out. The prior bundle mistook that retention gap for an absence of closing lines outright.",
+      "method": "Each of the 200 settlements was replayed individually through buildPickTruthAuditReport (.out/replay/attribute.ts, 200 runs) to attribute its rung; the per-row attribution reconciles exactly to the whole-cohort run (194/194 resolvable, 100/100 grading-resolvable, 100/100 structurally blocked).",
+      "per_row_receipt": ".out/replay/per_row11_final.json"
+    },
+    "materiality": {
+      "note": "The prior 51.00% CLV-unresolvable framing is withdrawn; its numerator no longer exists. These metrics replace it, each with an explicit numerator and denominator over the 200-row cohort.",
+      "metrics": [
+        {
+          "metric": "grading identity independently unverifiable",
+          "numerator": 100,
+          "denominator": 200,
+          "rate": "50.00%",
+          "denominator_definition": "the 200-settlement cohort"
+        },
+        {
+          "metric": "structurally blocked picks",
+          "numerator": 100,
+          "denominator": 200,
+          "rate": "50.00%",
+          "denominator_definition": "the 200-settlement cohort"
+        },
+        {
+          "metric": "CLV resolved without cutoff-valid provenance",
+          "numerator": 44,
+          "denominator": 194,
+          "rate": "22.68%",
+          "denominator_definition": "the CLV-resolvable subset only"
+        },
+        {
+          "metric": "CLV technically resolvable",
+          "numerator": 194,
+          "denominator": 200,
+          "rate": "97.00%",
+          "denominator_definition": "the 200-settlement cohort"
+        },
+        {
+          "metric": "CLV resolvable AND cutoff-valid",
+          "numerator": 150,
+          "denominator": 200,
+          "rate": "75.00%",
+          "denominator_definition": "the 200-settlement cohort"
+        }
+      ],
+      "load_bearing": "The first two. CLV unavailability is NOT the basis for the verdict. A closing line being technically resolvable does not itself prove the pick was trustworthy, correctly graded, or fully traceable; read honestly the CLV column adds a third defect (44/194 resolutions rest on a line never shown to precede its cutoff) rather than an exoneration."
+    },
+    "cohort_identity": {
+      "digest_definition": "sha256 over the ids joined by a single ',' with no trailing separator, in the cohort's canonical order (100 earliest by settled_at ascending, then 100 latest by settled_at descending).",
+      "settlement_id_digest": "41edbf1b3ab8a1c2074e22e3613c357d36009468971dda8928b823336f96244e",
+      "pick_id_digest": "f2f7f039e61137adbd8614046c438a115bdc97afa05b2e0cfde394b8ef868c53",
+      "count": 200,
+      "distinct_settlement_ids": 200,
+      "distinct_pick_ids": 200,
+      "settlement_ids": [
+        "980e9f90-e526-4c22-b307-97b1daa7f773",
+        "4a4b918a-ede2-4ea8-9ac7-9f6bb0f87a81",
+        "3237cc49-57d5-4178-9bf3-47953a682adf",
+        "cafeaf39-eafa-47fe-93c9-d9eaf48bab06",
+        "be81aba5-3541-4d69-9781-e4cab7aa989c",
+        "612412c0-2182-44b8-8c8f-aaa6b12746b0",
+        "8aa539c7-96d6-4df8-b6fa-e390f0df9360",
+        "73749d55-a634-4a36-8250-6e23f74cf443",
+        "88e30d7c-7712-4ae3-aa2e-ee94afc01e89",
+        "df97d76c-afd8-465f-8908-bf7a05b46a65",
+        "be405050-eb1a-47a8-b341-bf620f8c4ecd",
+        "a26fa9ce-3556-4951-aa38-0b922f6b3beb",
+        "846c9837-ce9b-4a67-b49a-95c0a29d3371",
+        "4d463bbf-18c5-4b1f-9d6b-fcdd44582690",
+        "6ece1e6c-28b1-4855-8eab-07139e7409f9",
+        "7e4de7d5-9bd1-4dbd-9c97-8e712ee2ce7d",
+        "fbffee48-d20f-49a8-87d7-59735ea2331f",
+        "00514f03-f6bd-4424-82a9-2fe28ed60f76",
+        "eb4ba00d-d3ac-49fd-bc0f-8b23bafcc249",
+        "badf8bfd-d29c-4da0-bcdf-9be3ed39c5dd",
+        "a97d2fe5-1b2d-40b2-80ab-a407849a1f87",
+        "2dc94bf1-ad7e-486f-b6ca-9c69d639b650",
+        "914e2838-9de8-47a6-9a35-e2b7ef8352dd",
+        "3524c8ad-1367-4147-b6c5-dcf98e279e19",
+        "45c721a2-4b35-44b8-946d-c510a0f97f45",
+        "434b64d9-c574-4fee-b906-04b7964efa0d",
+        "36af0b7a-a96d-44db-9a81-d10fb9f1f462",
+        "938902a2-2a2f-422d-a3f1-6aea797c7a15",
+        "d6adef75-bef5-499b-adf7-2fa2a3010c1a",
+        "55bdc250-8fdd-485d-b16c-1708239ffd7f",
+        "9b9365d5-7b85-4da6-a791-070bdfe25e88",
+        "b6d6e9e6-fa49-4d28-995e-fa5b28281644",
+        "a72384ca-80b9-4876-9992-6750f515dfd3",
+        "7f1fccf2-b30f-470f-96e4-6e616d137bc2",
+        "3c30d251-545f-4129-8c53-868c27cd48ff",
+        "248b7006-b474-41c3-97b8-759acac57cbb",
+        "12d76988-585a-4ec7-bde5-6b209e264354",
+        "89ba0f7e-2c9d-478b-b66e-13c73f5a17ac",
+        "c144e7fd-33c2-49ac-a6af-32aa39b8ab49",
+        "b05d733e-5d85-43a1-aeac-906ab3a5b208",
+        "cbb7aa78-1a2a-459c-97d4-81a53d34b720",
+        "cd6030bd-a6ec-4e4b-a586-5c0aaf4c96f9",
+        "aaf3edd7-62eb-4c52-8b46-fdf000589151",
+        "73f85126-029c-4b9c-8a3d-777574e07374",
+        "7aef8f47-73e4-47db-86bc-12cd2960bfbf",
+        "dfd84ac7-6731-4e14-96e2-ffac1abb093e",
+        "b3c1c99b-1348-477f-9db6-ecadc357ee6f",
+        "1fcbdcd5-e150-4f0b-be68-c32e4024096b",
+        "eb4d8cd9-e44b-49c4-9559-876042eba3ed",
+        "ac211dc2-bf71-4c37-b3ba-db3cbfe17978",
+        "b6af1c42-96e1-4efa-acc0-b7b238d0bd0f",
+        "d96898d1-704d-4939-a6ba-1545090347db",
+        "5e56b5b3-704d-4cf0-b532-5e816ee66c3a",
+        "e8561b42-fade-41d1-90af-62812cebfb27",
+        "b7d6e248-f8a0-4000-9131-e7c63e5c8571",
+        "4d4409f0-1bb6-4357-97c7-81822b472409",
+        "26de8124-e41e-42f1-a413-30e14818190e",
+        "9dbe516a-7d76-47e1-82b8-fc6f1aa63278",
+        "2b7c24e7-e3e2-4328-bfb2-178beccffc48",
+        "af514306-88da-404a-824b-5250b366013c",
+        "aa2007e2-ef9b-4d60-ba78-cb7930049f3a",
+        "360e0b9d-838e-4706-888c-6a4cfcbe5ca4",
+        "03167495-6fbb-481d-8bb5-28cb9550cd9a",
+        "d5fd040a-7e7c-4e4f-aa48-d889ffe6d982",
+        "0e113435-6b25-47b5-b84e-df319c04e066",
+        "c87c241d-d416-4d21-82f6-61137fe7c4bf",
+        "3dc84ece-50ad-4d2a-8ee2-d51f1b0ff963",
+        "5b5bb3d0-0609-4526-93c2-08d5c526f725",
+        "c6d25dc6-2f49-41d8-8ea1-f2517c11b320",
+        "44ecd467-99f0-4a5f-b1a9-09bc973949bb",
+        "b1d0984e-1626-46f4-935e-fb09e348d1e3",
+        "a96025db-d086-40e5-b9e7-35358c97fe66",
+        "4a626eaf-c5f0-4829-89db-60cc17f0fa96",
+        "96a5d28e-e07c-49d2-bf05-1f6218cff83c",
+        "c8fcc248-9c9c-4b00-bb17-0701dd6fde83",
+        "f08f32ce-3463-4e44-bab2-d3fb71e2dd4d",
+        "fe734708-6c52-43c0-931b-7aef7ae0d4e7",
+        "73784411-067c-4ced-bf49-31d3239deb82",
+        "9c2b5883-22bd-487e-aa31-e56e9312e9f1",
+        "0f71b7af-4551-4bd1-94c9-23df804e14d8",
+        "f52014e9-6f1f-4ebf-aa24-10bed6c82504",
+        "28207ee2-e87a-49ad-abcf-48e2f02ef598",
+        "b96e354b-e1c0-415b-99a6-03bd19c68f18",
+        "f172f68b-f0b8-46c8-8271-f4f74ca009b4",
+        "8ffb6ca5-8bd6-4308-8a0d-ccb775b6df28",
+        "1dd6599a-8a17-4a65-9134-f1acd3940d17",
+        "a2418d78-ca0d-4a2c-83cb-b4c88153c5b9",
+        "ecda39b2-8b9b-4bdf-9159-5bc0c2e03ce9",
+        "743d2941-afea-4bb9-9a50-e83ac75f5065",
+        "58947f90-e89a-4546-b7d6-5463b0f54637",
+        "0f9000f6-c160-4f00-8249-b125e441e495",
+        "4afb63b2-54cf-4ba6-b581-3c404cbd6623",
+        "dbbe373a-f65f-4ce9-8c07-4a5403a3d1aa",
+        "28d8fcf9-1d62-46de-aba1-dafde2afb087",
+        "b1b3536c-8fc1-415a-a47a-31988abef121",
+        "06e7078d-81a2-43a6-909c-be1f997ea789",
+        "62ccccd0-14ef-4a0e-a127-f815b483f522",
+        "6c2bf981-8f32-4c03-bd43-7f6e451ebc26",
+        "92deddbe-b64a-45a5-917f-644a417bfceb",
+        "4e75ab88-a3a9-4631-8de1-4eaaa215161d",
+        "c95335fa-bf03-4fdd-a1d6-ab1b5c3d7dd7",
+        "41920895-b99b-4dff-bd81-69a85e48f07d",
+        "d4f19ed5-9fb9-4b29-85f7-1463f325a18c",
+        "4790fa14-4ecb-46ad-a881-967acf44ad59",
+        "41e5e273-bade-48d9-a011-ca60056f02b8",
+        "cbc15348-59ad-4c7b-92bb-bbd48e04711f",
+        "9174dc58-7918-4aae-975d-2eb001be389c",
+        "2b3d66ca-8cd0-4c94-b8a4-f85fd516d6b6",
+        "000235a1-b2ec-4675-afe8-7405fb5dc9ad",
+        "e1550e8c-5886-4b8b-bb42-3c5da54240f0",
+        "9beb1792-bce7-42bc-9d9a-60fec04f2497",
+        "453589d2-0e8a-4a86-972f-3db60f062137",
+        "aebed3f9-44cd-493b-98d5-4396a53596c3",
+        "0b7a17e9-4c29-436f-a6a4-09ae048c2591",
+        "209bee5d-b7a7-44b5-88a4-906465248a00",
+        "3dc9acc9-d088-4e4c-80a4-ce563f6cb591",
+        "847ef7ab-7bbb-4e8c-bea2-550c60d078e5",
+        "50b89ebe-bc81-4f0e-aa4e-9baead99cb46",
+        "c12ef5cb-695b-4d13-9d1b-ea73c4899445",
+        "a439f633-7d85-4702-8cf3-230805c1f3d7",
+        "b15bd467-e922-44ae-84fe-0fc621be3594",
+        "4ec386b5-eb63-4dc8-8d1e-d6c6dcd3cd64",
+        "057f552c-48ef-46b1-9231-2bcf519a245b",
+        "97ae3678-3f03-4329-827a-672eeb0dc774",
+        "3d7bb463-5ead-4ff6-92ed-1dc801221544",
+        "13d8b73d-fb7d-44c3-8502-08f7f5e8e0b0",
+        "60ee69f5-a0b9-468a-977c-3fb785c921bd",
+        "5b6c15a0-ef25-4afe-b9f0-44bc73ffb350",
+        "3f7d2993-439d-4e0f-8119-ab99ec05e136",
+        "62a06a21-34ac-41f8-b265-897d35e27ad5",
+        "030b5a3a-7255-4cd2-97a6-02b7cb77dc45",
+        "c8ee9fbc-4c65-4fb0-8214-c90ebbbf2fea",
+        "38c1894f-6d08-475b-96a9-444072d00b2f",
+        "588c46e1-0487-4964-a83e-22ae10a89aeb",
+        "25a0c7f7-fe61-41cd-b474-7f739808feb7",
+        "e80e1bc4-09e9-451a-874e-988b199214a2",
+        "7fe875a3-cb0a-4ab5-9310-f20d578a8f8d",
+        "6e18b474-fbf1-492e-9d1a-0e76180bede5",
+        "68bc560d-251c-4d1c-b2e6-f36c806548b4",
+        "a70ec2fc-532d-4fbf-babd-c7081719dca7",
+        "c42578d2-53e3-4ab5-8d4e-0a5c765d5f76",
+        "a2fb7101-687e-4907-9a90-7ae49bd4e3b9",
+        "ebf942af-1210-4e43-b679-7bf58cf8bc5d",
+        "2b479a05-81f4-462f-991e-0f279bab878a",
+        "c28efff6-bac2-44eb-a2a6-6d55b8d59214",
+        "a65fcdff-d517-4342-b540-8194cb65aa92",
+        "d19b8c32-f516-4eb0-8c80-1345b87368d4",
+        "f60d4197-6ea6-48ca-8a26-3bb5ebab34c8",
+        "a6af0f30-5741-45a3-91bd-1bf0ba311345",
+        "ee812679-1c80-4319-956e-0fa8184189ab",
+        "5083300b-2940-4e60-a916-424a59d6d4f2",
+        "69626abe-f52b-4da1-a29a-dac9cc4fc8b8",
+        "110e8727-8abd-46e1-bc21-8eed39f3bdcd",
+        "30af09f8-80fe-44bf-bfbc-2695392bba72",
+        "3adbae58-cce5-4566-969c-ceaa48fe7e14",
+        "da496343-3e04-4be8-bcd9-4139ee9b31e8",
+        "6e50d35b-8193-4d45-be15-ee71d9dae3ab",
+        "41366904-8826-4e0a-8bdc-99bc41b2db97",
+        "883782db-07db-4113-9b87-29ca4635fd83",
+        "84d409ed-7ab6-49f0-86cd-abbed3f53ac9",
+        "3161a698-8e6f-4bc0-aada-288a00e444c5",
+        "de1e16f8-776e-447c-af76-2d3072c096e7",
+        "8f67331c-f883-425b-b0f8-70b400dc2df0",
+        "490dd80a-752c-4fcd-85d0-bfdc3c77dae4",
+        "acea9423-a064-49ec-9993-7fda99a1d9c6",
+        "283b137e-f2f8-45b2-b129-319035199350",
+        "ad302921-0857-4635-b700-c8a56f37e883",
+        "62e1b232-b5e4-4ab9-8034-45536057161d",
+        "5dbca1e7-dcc1-4607-b6ac-188df2b8372c",
+        "a65091b7-05cf-455d-ae62-68c421684db7",
+        "79999fb1-e5e8-472d-af94-bc40eab10388",
+        "5f980edc-4d8f-4b95-ad92-c0f526439c1a",
+        "63563bbb-1b80-47dd-a929-c01249b376fd",
+        "b64f635e-b76a-40d7-abe0-feea97cfdaab",
+        "4a3795f3-4096-4531-a19f-de504e2889be",
+        "ad9a5f03-3bb6-4f87-b30a-51d6e5f0d0dd",
+        "4f4bdf84-893e-4f11-bcc7-37844c3a9e51",
+        "25318092-87de-476c-a333-4df8c501885d",
+        "4935a7a4-e8ff-4811-b255-ee171ae1d552",
+        "b47a7822-72c5-40ec-8bd9-4fd8046dd6c1",
+        "8731c5f2-df44-402f-95fb-11b378f1bd90",
+        "fc9e35d6-85e7-456a-aee2-5c168c2809e9",
+        "51a61c7c-6820-4d77-aa32-5256f6890143",
+        "e65130f6-ce49-4194-8cc5-d26fb0a9dfd4",
+        "888ba4c9-490d-47df-9c8c-28b2f8a60203",
+        "022dbebb-a8f8-4c38-a399-9d8c757ad813",
+        "f56e8d9d-cf9c-40fc-af97-70c72ec9b30e",
+        "c123affe-3156-4b8d-b795-5e74d1ec2f84",
+        "5b14aef4-419f-4d96-b88a-67d7d297c9a4",
+        "aa675e2f-0d07-4dc5-afc8-33ba56c42ab3",
+        "6412b61b-3b09-4bb7-9cd5-9d8a4034e778",
+        "56c63ee1-b84d-4755-8631-3f1849343067",
+        "4cb8d86d-ee66-44e4-aa79-0c92681ae8a1",
+        "75ffb2ce-d1d7-473a-8d61-16c8367cb026",
+        "2b4a786c-beda-4e33-b48f-d8ab960222ee",
+        "931ed7ce-510a-44c5-8242-76082e221d85",
+        "c667d2b7-f93c-418d-bf98-4979dedfa2d8",
+        "8d86a1e1-b366-4117-8274-e383324e29e6",
+        "c7bf579f-2fa6-481f-b865-10d72093401a",
+        "78d0dd8d-6757-4f56-b35d-7103a7121d33"
+      ],
+      "pick_ids": [
+        "b6764d3c-bafe-439f-9770-4932ec5253d8",
+        "1b762490-5e8c-4edf-9a39-7212692576a9",
+        "ede52e01-f7ee-4df5-bd02-f5a77cf58977",
+        "46fdac6b-8ec6-4311-af71-b7f422858975",
+        "ce407160-9022-4ff6-afe8-d7bc4d98cf61",
+        "f02bb3e2-d193-499a-a8fe-d0302f9e63a0",
+        "d14b8fe6-aeec-45c2-aa82-83eb856a2c54",
+        "716e0c91-9185-4437-b54d-273f34445787",
+        "0e55c20b-f3b3-4a47-90c2-e525db5db4fb",
+        "cfcf3f1a-06a4-4f24-b560-22b31d96fc6b",
+        "b2e0d304-f990-423a-9035-ce217f969224",
+        "13e7db5a-e78d-4095-803c-001d653ddf9a",
+        "28cc8d54-f851-4f9c-bfd3-c18ff6159df6",
+        "1c53e8d7-54e4-47c7-86df-1562bb35b98a",
+        "67327931-bd7b-461f-a38c-2b5c921e4039",
+        "ef10d993-31d2-4f1f-bf81-45cec830a189",
+        "aab77f26-9aba-4aeb-9b9b-a07a380ba33f",
+        "162a4bd6-9e28-41c0-8f9a-d43a06d8fff4",
+        "50c13860-7984-4575-8737-a1fe39cd646e",
+        "3fa58788-1363-476e-8eda-49aac62ece91",
+        "82873242-49ea-4205-8808-efaf920ca745",
+        "79d45366-f432-40dd-9e39-487779ba1ed1",
+        "e650913e-2474-4b5f-9ea3-a9996e75176b",
+        "0c1cef1c-e4a5-48b2-934a-19de7fe2125b",
+        "e3e4b682-2311-4977-a43b-2e0d62b88c22",
+        "2f75a195-dfe1-49e4-b0f7-e0f3fd0c4680",
+        "49681d73-ff41-4a68-81e4-bd6abd9d7a3d",
+        "350f5efb-876b-4309-b1cb-2269623f3be0",
+        "8d978339-9294-466e-b8d9-880e81fcdc19",
+        "e2b3ba9b-5c7c-4d1a-a0bb-9da9d32a7a38",
+        "27573cb7-838a-4756-a8db-ff205830b0ff",
+        "db240184-a722-4c96-80cb-76549ecdcfc5",
+        "4cb3b0c0-2209-43a8-be1f-ba729b10b89e",
+        "ee401700-4d6e-44a3-b728-9a7960603266",
+        "fd53918e-8fd7-4181-8f4f-79516d025703",
+        "62d1d023-f707-409e-a570-d788cd54b495",
+        "5cde0b3e-f2fb-485e-87e7-3ee1db4f794c",
+        "eabcbed4-f4f9-4f0e-84ae-67da01b994e2",
+        "06ceb35b-b359-4219-8d98-afb31f875151",
+        "e2acf393-45de-462d-bfeb-4329c7ff5882",
+        "2a3b0fd5-e6b8-4961-8a06-fccb0c24543e",
+        "9a6d6bd6-38e1-49a5-acb7-e98e85c0b170",
+        "a447d539-bd0c-4c9f-9077-a39b5d8c40b3",
+        "d23d09f9-1bfc-4bbc-9084-1d5631e9426e",
+        "a0a8ed20-904b-41c8-a4fa-6e6593e876a4",
+        "5ea94399-1f92-4e47-a9a4-a82be1293449",
+        "087f4d67-5a86-44d5-a382-90c1b5877854",
+        "46d96235-840f-42ac-80cc-8e54127a7b3d",
+        "dc40b92a-e698-467b-b2b5-6beb15d4e1d7",
+        "8d256a1b-f989-4af9-a1ca-00d3b1fd1137",
+        "f0249f34-2ae2-4a48-a610-1c97934ff2c5",
+        "762628ed-bcc2-4c97-b183-71aa6246e5db",
+        "bd32dce5-72e1-4a20-8e91-96de752516ae",
+        "2a17a248-420d-4c0a-b5e2-fda04d61fc3c",
+        "9c8833ff-6738-4bf7-8874-257c5ef6cdfd",
+        "01a77b3f-462d-4daa-b0ef-0b96ca120c15",
+        "aec0db94-7ff9-42f4-8951-e39343f3f58c",
+        "a15e7fd9-cadc-44d5-9085-11e37ce474c3",
+        "aca78ae7-fb92-400a-9542-afd4109197bf",
+        "f46dcd8e-04b4-4042-bebb-ca6e0501d482",
+        "fec6af66-49dc-43c4-a977-413d67ab1f46",
+        "e4d4bfbf-3d84-4b0d-bf5c-25cb9626a90b",
+        "c1d81e97-749e-4598-b2f0-f62064a89070",
+        "1f705d8c-52e9-4233-8156-44472d8f271b",
+        "a677bbe5-2f71-4872-96a6-12aa860d6764",
+        "0ccef9b0-7ed8-4656-b2c6-e6e7e286bfb1",
+        "445654d6-c141-43ae-9c1f-1803a8ff41c8",
+        "9e8dbe71-84bc-4b2f-8541-771147486f31",
+        "5097d7b6-cdd6-463f-bc8a-21bd9529f5b6",
+        "361a9401-4e8c-486a-b6c8-6a57feb66552",
+        "ef3631a0-cd94-44eb-819f-b9ed7ac2752b",
+        "234eea61-867a-4c55-8f9a-4478bd78415a",
+        "380bd630-aab9-4a17-8b6d-0f4e4fb24fe8",
+        "f39ddea0-74d8-4f75-8dd6-73411aae578e",
+        "015321e9-6d7e-422b-a011-80699be65771",
+        "74185a43-7853-499d-8284-e908efd5834d",
+        "1874fc7a-50ba-4cb7-832a-5babfd89ae83",
+        "8b644a77-1ed2-4d55-9e74-36eba3d96e9d",
+        "6f28b17e-40fd-41fb-8c48-10613f0e9c8b",
+        "24892e69-c968-4380-bc6d-3ca640beecb9",
+        "7032a7b0-960a-4d91-b776-c5b1f79137e8",
+        "458051e2-e4f6-468f-9598-f3bf5c814ecb",
+        "0f7f7b46-5a92-42eb-b7c7-973709d96254",
+        "7e04490c-80ad-49f9-aeea-ddbad84b6c6b",
+        "a604d241-26cc-4a50-9bce-aaba01fe7e64",
+        "7d8eb58c-b7d9-422d-8249-3328a35bbef9",
+        "2f2db1c7-3cf4-478b-a4a8-7e5d0c87245b",
+        "0f493c35-1673-47ca-a20c-28de1a225277",
+        "9926e27a-bce5-49bf-afc4-fd8b56bd2326",
+        "69d94d98-1d27-4d79-b403-b698eed5bcfc",
+        "70d5353a-2111-46ee-9212-c3d3dc3b924e",
+        "fe20117c-7e56-4d32-92e9-402e57edd808",
+        "df0cf7d5-f3e0-4d50-9617-97a24127e7b1",
+        "3a02dcab-836f-4784-a97c-8cd293279586",
+        "3855b82d-9167-4962-bf16-337d1ac269d1",
+        "7611db8c-d01a-4e8b-8e0c-67c627be088e",
+        "e3b2aac1-eba0-4687-ac28-23675b9a7b5b",
+        "cf212b8c-4375-40e3-af8c-e9fef115d047",
+        "c54416fb-bc45-41d1-8f91-315b735fe128",
+        "88c4408d-7495-4dbb-a4da-f70f3feaa8f2",
+        "39c6d9f8-9a06-45b6-bbae-f961476db86f",
+        "16ec7045-d55a-4b81-9fe6-4347885c68c8",
+        "5720cb57-00e2-4f98-8708-761d23f55bb0",
+        "bc1262d0-56a4-42d5-ac8e-f9c153ddd3dd",
+        "67b94d6d-0e0d-4123-a193-264b698c3530",
+        "b5c14d8b-3219-47f7-ba98-8ba8df805483",
+        "be7173b5-1a21-4176-be86-dfb5b3798108",
+        "f367cbd9-0cb2-4d45-8a35-679b7fa072cf",
+        "9eed879f-84fb-4e81-b83c-f3caa6a6fd18",
+        "67623ca1-0e2f-4910-8cfb-4830e4781faf",
+        "5681323f-37d4-44d9-acf3-3ae1f990023b",
+        "300e1c46-2d1e-46c1-8de1-940cd0bc087e",
+        "6f756066-713b-4f2a-9d4b-d29db0e27957",
+        "ca3129b4-9f75-4c6b-bdcc-97ee805e2c45",
+        "c5cdd901-26de-42cb-a4b7-50ace0b01e8d",
+        "66723c1f-7f35-4a11-ac51-e87e19715485",
+        "e9760a58-878f-4c9e-b28c-82b9be707e16",
+        "10cde778-3c87-4541-a2ad-98cd5f27cfe1",
+        "04c45f81-fb96-4218-904b-398398c4c7b8",
+        "2314a288-9fa4-4137-b139-39a1bdb79c79",
+        "20f75b2f-1179-4436-b114-cb8b7a455d9c",
+        "0c42bd0b-6280-45ee-9eb1-0417ee09f513",
+        "0b4162d6-48d9-45b3-8ca5-43494b7c1d56",
+        "29ebd714-0426-4703-973e-724f844f45ca",
+        "36ff2398-616c-49da-b21c-d56ed6fc5b5f",
+        "ccfe7ee0-7e93-4523-9cfc-287736383436",
+        "4912685a-9208-4488-bbf3-4fb2fee7c947",
+        "d616c19c-6a79-472f-ac00-182352212b61",
+        "1f49ecf9-d18f-42e4-853b-503474350f49",
+        "1a881889-57bb-40e9-9a36-4851a3d81e88",
+        "b3f84178-6d8b-4640-b86e-538e339cfb71",
+        "2aa6e41a-7551-48b5-8e49-16793efa7fe8",
+        "1dff92cb-aa7b-4838-98bf-ce621aad77e8",
+        "ba52a751-790b-4c15-8fe6-80bf9ab36d03",
+        "067f0c14-6013-4389-b207-fe5dbe220fbc",
+        "00b53a19-2bd6-42ba-b741-c2e1284cf565",
+        "8723aa3f-3888-40e9-a31e-4c42f6ec03d6",
+        "e931bbf8-8a49-4d3b-8963-de0add9142f1",
+        "a58ad78a-3e9f-4dd2-bfd4-b21a2737346d",
+        "3ebf7cdb-76d6-48c0-b8d1-cf467c95246c",
+        "69fe4fd1-712c-40bf-94b7-a99db53a841c",
+        "283da23b-06ca-4b87-8100-61f2914ae26e",
+        "597fb42e-25bf-4296-8a32-0eebd408165c",
+        "b948f1f3-36ae-4a79-8da5-b4e496967f36",
+        "6f3b0ab7-c01a-40b4-ab02-0ff7819825c4",
+        "3d9b59cb-b960-4a33-b510-d942f67107dc",
+        "6f99ec52-a0af-432c-9af5-623b8568d5af",
+        "a2e84f64-3a6d-46a5-9d45-49e43ce8756d",
+        "81cffd08-1ec2-411a-a2cf-971c7f4139c3",
+        "69189eaa-7841-4ff0-a900-df5afc952f86",
+        "1ae9697d-8c8b-4206-a5dd-856b1575b870",
+        "3ded211d-d410-427e-a395-500953cd63a9",
+        "5cf97410-2749-49a4-8899-8bdbcbdeefe5",
+        "aa1c9356-5396-4eaf-898b-fdfb7f74dcb4",
+        "85963e5e-819e-40ef-8a07-4b9a429d0e26",
+        "348dadc4-694e-4ea0-b93e-ea5cb08500c8",
+        "fc369755-1eee-4700-a39d-9c0e4d6a97e8",
+        "e008d87f-ccf0-4c52-8ae4-e6dbade739b2",
+        "e0ed72a7-5f8c-411c-a8dd-61e404ade915",
+        "f2b557f9-d200-4cc2-8d82-b8edfd001e80",
+        "5dbb9072-873a-4f4d-9ba1-31eb4bc065bd",
+        "f7c9a7c5-3bf1-44ec-8f11-26a2dac53372",
+        "63961221-67ec-4f01-8b83-0edb3380949b",
+        "9cd76876-33a2-487f-8f6e-c6622c329ffd",
+        "91e0d683-b69a-48c5-a868-6612865c44ae",
+        "8fd4a643-c0ee-4fd2-8099-3a1e60ac7954",
+        "b2822bd5-9e56-4a2b-84b3-9c5da65bffe4",
+        "38a3c90d-e074-4950-ae0c-53d0deea306f",
+        "a167a3f9-ce38-4db5-a802-3fdc3dd9968a",
+        "ce081e1b-650a-4892-b8a6-88841b54286e",
+        "238aafa9-70fb-4941-8a23-3e4b82686b29",
+        "c5952fbf-7aec-42e1-8cf8-ad93be45b022",
+        "cf534682-3b44-49e9-9a14-6aae0c42eb4d",
+        "354d5193-6ade-4a94-b97b-834b2a53046f",
+        "b301b61f-31eb-45ae-a853-a6da2c409896",
+        "5c95dc9d-088d-48b5-bf39-038f0965cd6e",
+        "d2f72854-d21f-4064-9f11-97d4952a63c1",
+        "d2ed07f0-1250-4e8d-a041-0c2fb4740c78",
+        "74cf70ce-448a-48ad-bbed-7730cfc4a3be",
+        "4a19b0f4-bf58-4a83-ba9a-b565cbe4b079",
+        "d43501fb-7d20-46c6-aebd-aec3615d48ba",
+        "c61e04c0-f05f-4b8f-a165-f678787826fb",
+        "581d1e20-f0c7-432f-94a4-b028f50a1b97",
+        "2841bfba-7f14-404e-8301-ff5cae0693d3",
+        "8a3a842c-cb7e-4937-a14a-2559943ef9c3",
+        "7fcfac07-b865-4e5a-99d6-cf55e790a51d",
+        "cefeee3b-5556-4299-b89f-1156483475a6",
+        "41cb7c2c-76da-4e4f-a16a-b04d219f959b",
+        "d5454035-16e8-4aa1-ac4e-f7d5b334dc49",
+        "e37ab24a-bc0f-4e47-9d0d-bde4af0c04c5",
+        "7aaa3bdd-5e30-4104-adc9-6603b1ebce43",
+        "306d8c22-e965-4c3e-92f1-45fe42697d73",
+        "bf708457-a991-4e8a-943f-651d3f5c5f28",
+        "bd53a907-e5f0-4a69-b556-cfec990bf34a",
+        "32b2f889-839b-4a8c-bde7-9399f7546026",
+        "e981c7c9-b91e-43bf-bbec-ad7f75c6479b",
+        "66d46240-e919-4b3b-b8a0-424a7512095f",
+        "bd8a0d73-131d-401a-b699-08608f1a1555",
+        "f187a0a5-a0d4-4f2c-acdc-49cd8a9c303a",
+        "5dc821fb-a8b0-4830-891d-9ef0d43d474a"
+      ],
+      "reproduction": "python3 -c \"import json,hashlib;c=json.load(open('.out/replay/cohort11.json'));print(hashlib.sha256(','.join(c['settlement_ids']).encode()).hexdigest());print(hashlib.sha256(','.join(c['pick_ids']).encode()).hexdigest())\"",
+      "continuity": "The round-10 dataset.json reproduces the settlement digest in exact order, which is what establishes that round 11 measured the same cohort and that the movement in the CLV numbers is entirely attributable to the fallback scoping, not to a different sample."
+    },
+    "superseded_claims_index": {
+      "purpose": "One place a reviewer can check that no withdrawn CLV claim is still asserted anywhere in this bundle.",
+      "withdrawn_values": [
+        "clv resolvable = 98",
+        "clv unresolvable = 102",
+        "clv resolvability rate = 49.00%",
+        "clv unresolvable rate = 51.00%",
+        "missing_closing_line = 100",
+        "missing_closing_line = 97 + missing_participant_context = 3",
+        "persisted computed but unresolvable = 82",
+        "all 100 April settlements are CLV-unresolvable",
+        "the April/June-July split is clean",
+        "191 candidate closing rows",
+        "167 triples requested / 90 with no eligible snapshot as evidence of absent closing lines",
+        "the 51.00% materiality framing"
+      ],
+      "still_true_and_reconfirmed": [
+        "grading resolvable 100 / unresolvable 100, agreements 100, disagreements 0",
+        "game_result_identity_unverifiable = 100",
+        "structural orphaned_event 99, missing_participant 4, unresolvable_market 4, affected_picks 100",
+        "verdict can_currently_produce_trustworthy_pick = false",
+        "the 2026-08-26 population decomposition in runtime_proof.row_counts",
+        "provider_offer_history retains no snapshot earlier than 2026-06-25 for these events"
+      ],
+      "locations_marked": [
+        "post_fix_validation.clv.SUPERSEDED",
+        "post_fix_validation.by_half.SUPERSEDED",
+        "post_fix_validation.by_half_interpretation",
+        "post_fix_validation.identity_vs_clv.SUPERSEDED",
+        "post_fix_validation.verdict_impact.SUPERSEDED",
+        "post_fix_validation.closing_line_evidence.SUPERSEDED",
+        "post_fix_validation.re_measured_after_round_3.SUPERSEDED",
+        "post_fix_validation.re_measured_after_round_5.SUPERSEDED",
+        "post_fix_validation.method_change_note",
+        "verification.md '### CLV — superseded measurements, and the round-11 replay'"
+      ]
+    },
+    "systemic_defect_detector": {
+      "disclosure": "PROMINENT AND REQUIRED. The shipped audit's own systemic_defect detector moved from detected=true (round 10) to detected=false (round 11) as a DIRECT consequence of the round-11 CLV correction. This is disclosed rather than left for a reviewer to find in a gitignored receipt.",
+      "round10": {
+        "detected": true,
+        "reasons": [
+          "CLV unresolvable rate 51% is at least the 10% materiality rule"
+        ],
+        "receipt": ".out/replay/report.json"
+      },
+      "round11": {
+        "detected": false,
+        "reasons": [],
+        "receipt": ".out/replay/report11.json"
+      },
+      "implemented_rules": [
+        "grading disagreement rate >= 5% of independently resolvable grades",
+        "CLV unresolvable rate >= 10% of sampled grading settlements"
+      ],
+      "why_it_stopped_firing": "The detector implements exactly two threshold rules. The grading-disagreement rule has measured 0 in every round (no sampled pick produced an event, participant or market MISMATCH; the failure is ABSENT pick-side identity, not contradicted identity). The CLV-unresolvable rule fired in round 10 at 51%. The corrected round-11 measurement is 6/200 = 3%, below the 10% threshold. Both rules are therefore now below threshold and the detector reports no systemic defect.",
+      "what_this_does_NOT_mean": "systemic_defect=false means only that neither of the detector's two CURRENTLY IMPLEMENTED threshold rules fired. It does NOT mean the cohort is trustworthy, nor that it is free of systemic deficiencies. The detector has no rule for grading UNVERIFIABILITY and no rule for structural blockers, which are the two conditions that actually carry this lane's verdict.",
+      "verdict_is_independent": "can_currently_produce_trustworthy_pick=false is produced by the shipped verdict logic, not by the detector, and is unchanged across both rounds. Its recorded reasons in .out/replay/report11.json are verbatim: '100 sampled grades cannot be independently resolved', '6 sampled picks cannot currently resolve CLV', '100 sampled picks have structural blockers'. The verdict therefore does not depend on the detector and did not move when the detector did.",
+      "framing_status_of_the_materiality_table": "post_fix_validation.materiality is PROOF-NARRATIVE FRAMING for a human reader. It is explicitly NOT a materiality rule the tool applies, and it does not replace, extend or redefine the detector. No hand-authored rule was added to the shipped code.",
+      "proposed_successor": "Expanding systemic_defect to cover grading unverifiability and/or structural blockers is recorded here as a PROPOSED SUCCESSOR ISSUE and was deliberately NOT implemented in UTV2-1745. Doing so would be substantive audit logic, outside a proof-only remediation round. Note for the successor's author: the governing issue's stop condition is worded 'a systemic grading or CLV defect affecting a material share of picks'. On the corrected measurement the CLV arm no longer trips, but 100/200 = 50% of the cohort cannot have its grade independently verified, which is arguably a systemic grading defect affecting a material share and which no implemented rule detects. That gap is the successor's subject.",
+      "contract_check": "The governing UTV2-1745 issue (acceptance tests 1-5 and its Required-proof section) does not mention systemic_defect and does not require it to classify grading unverifiability, structural blockers, or every condition that makes the verdict false. Acceptance test 4 requires 'a single honest verdict ... yes or no, with the evidence', which is verdict.can_currently_produce_trustworthy_pick and remains false and correctly reasoned. Verified against the issue text on 2026-08-30 before this remediation began."
+    },
+    "persisted_clv_status_mismatches": {
+      "supersedes": "The withdrawn 'persisted computed but unresolvable = 82'. That figure is retired; this is its measured successor, reported rather than dropped.",
+      "total": 16,
+      "denominator": 200,
+      "rate": "8.00%",
+      "by_reason": {
+        "currently_resolvable_but_persisted_missing_closing_line": 13,
+        "currently_resolvable_but_persisted_missing_priced_side": 2,
+        "persisted_computed_but_currently_missing_priced_side": 1
+      },
+      "meaning": "Settlements where the corrected audit's CLV outcome disagrees with the clvStatus production actually persisted. 15 of the 16 are cases where the audit can now resolve CLV but production recorded a failure; 1 is the reverse. This is the resolver-disagreement signal the report exists to surface, and it is a defect class independent of the cutoff-provenance finding.",
+      "materiality_placement": "Deliberately NOT added to the materiality table, and the reason is stated rather than left implicit: the materiality table is proof narrative, and adding a metric to it does not make it a rule the tool applies. This class is also not one the shipped detector scores. It is reported here as a standalone measured finding and is named in Finding 7.",
+      "evidence": {
+        "file": ".out/replay/report11.json",
+        "json_path": "clv.persisted_status_mismatches",
+        "sha256": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
+        "note": "Each entry carries settlement_id, pick_id and reason, so all 16 are individually traceable to a cohort row."
+      }
+    },
+    "retained_derivation": {
+      "why": "The ninth adversarial review (P2-d) found that no retained script produced the authoritative per-row artifact: attribute.ts wrote per_row11.json, which reports resolution_source='none' for all six rung-1 rows and carries neither source_exact nor cutoff_enforced -- the two fields the entire 194/150/44/40/4 cutoff analysis rests on. Those fields had been derived by undocumented manual steps. That gap is closed here.",
+      "script": ".out/replay/derive_final.ts",
+      "what_it_does": "Imports the SHIPPED buildPickTruthAuditReport, selectLatestClosingOffer and asProductionClosingLine, replays each of the 200 settlements individually, and decides the rung by applying the shipped ladder: a rung wins only if the row it returns SURVIVES asProductionClosingLine, because a discarded row makes production skip the TIER. That is the latent misattribution the review identified in attribute.ts. Rung 1 is identified as the case where NO lookup fired at all, which is what the by-id short-circuit at pick-truth-audit.ts:1276 does -- it returns before any cutoff is derived.",
+      "reads_only": "It reads the shipped module; it does not and cannot modify it. No shipped audit logic changed in round 12.",
+      "reproduces": {
+        "partition_total": 200,
+        "clv_resolvable": 194,
+        "cutoff_enforced": 150,
+        "not_cutoff_validated": 44,
+        "r4_post_cutoff": 40,
+        "r1_no_cutoff": 4,
+        "grade_unresolvable": 100,
+        "structural_blocked": 100,
+        "post_cutoff_watermarks": [
+          "2026-04-24T00:00:00+00:00"
+        ],
+        "cohort_settlement_digest": "41edbf1b3ab8a1c2074e22e3613c357d36009468971dda8928b823336f96244e"
+      },
+      "manual_steps_removed": "replay11.ts previously read the cohort order from a /tmp scratch file, which is exactly the undocumented manual input the review objected to. It now reads .out/replay/cohort11.json. Re-running it reproduces report11.json BYTE-IDENTICALLY (generated_at is a pinned literal, not a clock read); all 16 retained digests were re-verified after a clean re-execution of both scripts and all matched.",
+      "delta_from_the_pre_review_artifact": "Re-deriving per_row11_final.json changed exactly 6 of 200 rows, and only in the coarse resolution_source label: the six rung-1 rows previously read 'none' and now read 'market_universe:closing_line'. source_exact, cutoff_enforced, clv_resolvable, clv_failure_class, grade_resolvable and structural_blocked are identical on all 200 rows. No published number changed.",
+      "artifact_digests": {
+        "retained inputs (production reads)": {
+          "cohort11.json": "6041a861de23e0d0cd5fd4fe33772eb718b79385289590075022c831b664c24c",
+          "fresh_tables.json": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4",
+          "player_pool_all.json": "33d3c6f1aa2ce597f6b2357f27861896498d5b8759941f4b67751765559520f6",
+          "fwd_aliases11.json": "df46a50c6c17799b41508c3d441932dc314890710a4a04f3c0addd08a8da1bbc",
+          "rev_aliases11.json": "dafa75135a8d163e06b696b9ed85119d4d0b3dd245f7e52fbd1557a4ab8660a3",
+          "offer_rows11.json": "227f3b9848929fcd8cca353d29628b2743824ea9152c691d63b6e543a0cd8c34",
+          "universe_rows11.json": "735e46a704781bd77e2678b092340483de72c32135a72e4439785b40ea43d372",
+          "row_counts11.json": "1290d62e1e30f1a6bef44bea220658f0d3b597282605e4eaeb8a06e99334e376",
+          "em_ranges.json": "84081bbe4337b3c6700c0a4387425244494f0050af3c663b49d630a1e83263f5",
+          "triples_alive11.json": "d5d681741d6a6f4b387fc3b30776569333d79523a3ab2256093f36c55acff318"
+        },
+        "derived outputs": {
+          "per_row11_final.json": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a",
+          "report11.json": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b",
+          "parity_receipt.json": "ea94c041583dc054ef97dd300be22dc4e896728b194e5cae010da824b9cfd289",
+          "q7_receipt.json": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba",
+          "matrix_results.json": "76459b6bacd02b930168275ca6e32f6426f90c185c0b3da55bde67645af4f5db"
+        },
+        "derivation scripts": {
+          "derive_final.ts": "8491fbeebdfd262c3156487d61d756dd63d17501c99a26af5ac41e9738767dcd",
+          "replay11.ts": "bb0d221660569f09a4b36c9a03be9c6c33945748003f6989bce425250663933d",
+          "parity.ts": "467e3a6c4dacbbe91f353d66b48876cade1fe3773cae9b69d4703d74ebcde657",
+          "attribute.ts": "034c82d755a12d098690bdb4ba7abd8f206e4e8e5721a8af6c937969a1aac80c",
+          "q7_receipt.ts": "7510f1e174b0c4a321c34900566fb5e7fac383a47ae18854f6d3e449ae96dde3",
+          "matrix_check.ts": "5800f783ee524d202e96c242689e4a3bf6742bf912b4c96489a08f9bd63a4381",
+          "render_matrix.ts": "62d183ffc6b27afb72fd8b36fa92467dea629eec9f8d8d93e8b8dc19d922d79e",
+          "render_digests.ts": "06ff124635dc0f54ca59a7f79ea6df462012344973b7961bf5c5d1019880fc33",
+          "contradiction_scan.ts": "ff08c9da65d2023495bb6412fb70a0d3c00e53a6081978d1bb040d1d3043c4f3"
+        },
+        "mutation battery": {
+          "mutations.json": "3f564ab2b0c336168b7e1316e3c8f97cddb4245a793195fee7f071b60431bdae",
+          "battery.py": "24d929a9c93a9fb176b9b29ba3356e78665a82af34804a5234ead89e88613152"
+        },
+        "verbatim command receipts": {
+          "proof-binding-validator.txt": "be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a",
+          "round12-commit-scope.txt": "1d9c13699b3864b93b6216c927f308ad54a1f1a9a837d0e302ad457fe71802a1"
+        }
+      },
+      "reproduce": "pnpm exec tsx .out/replay/derive_final.ts   # prints the full reconciliation and both digests",
+      "digest_manifest_generated_by": ".out/replay/render_digests.ts"
+    }
+  },
+  "round12_remediation": {
+    "authorization": "PM DISPOSITION -- UTV2-1745 ROUND 12 AUTHORIZED: one bounded proof-only remediation round and one tenth independent review.",
+    "scope": "PROOF-ONLY. scripts/ops/pick-truth-audit.ts, scripts/ops/pick-truth-audit.test.ts and package.json are byte-identical to their state at 3a99f504 (verified: git diff --stat 3a99f504 -- <path> is empty for all three). No shipped audit logic, package behaviour or production execution semantic was touched.",
+    "note": "All nine ninth-review findings are dispositioned, including the three P3s that were not in the summary returned to PM.",
+    "verification_before_review": {
+      "derived_outputs_regenerated": "derive_final.ts and replay11.ts re-executed from clean invocations; all 18 retained digests re-verified and matched",
+      "partitions_reconcile_to_200": true,
+      "commands_re_executed": "every command displayed in verification.md that can be re-run was re-run; five moving-ref receipts were found to have drifted and were pinned",
+      "lane_tests": "55 pass / 0 fail",
+      "test_ops": "2708 pass / 0 fail",
+      "type_check": "exit 0",
+      "anchor_still_mechanically_true": "git diff --stat 3a99f504 -- scripts/ops/pick-truth-audit.ts | pick-truth-audit.test.ts | package.json all empty",
+      "worktree_contains_only": [
+        "docs/06_status/proof/UTV2-1745/verification.md",
+        "docs/06_status/proof/UTV2-1745/evidence.json",
+        "docs/06_status/proof/UTV2-1745/diff-summary.md"
+      ]
+    },
+    "disclosed_gate_disagreement": {
+      "tool": "scripts/ci/proof-binding-validator.ts",
+      "result": "FAIL (4 violations)",
+      "violations": [
+        "verification.md MERGE_SHA must be \"pending merge\" before merge",
+        "verification.md must contain exactly one \"## Merge SHA Binding\" section (found 0)",
+        "model-routing.json: top-level merge_sha is forbidden before merge",
+        "Non-proof files changed between verified_source_sha and HEAD: docs/06_status/readiness/readiness-score.json"
+      ],
+      "gates_this_pr": false,
+      "why_not": "Invoked from exactly one workflow, migration-reversibility-gate.yml, path-filtered to supabase/migrations/**, db/migrations-rollback/** and three migration CI scripts plus its own workflow file. This lane touches none of them, so the workflow does not trigger and the check will not appear on the PR.",
+      "disposition_of_each": {
+        "violations_1_to_3": "A live disagreement between two validators, not a defect introduced here. This validator wants MERGE_SHA 'pending merge'; required Executor Result Validation rejects a non-SHA in that field. The '## Merge SHA Binding' section and the model-routing.json merge_sha key belong to the same older contract that schema-v2's sha_binding block replaced (CEP-E7). The bundle satisfies the gate that actually runs.",
+        "violation_4": "Inherited from main, not lane-authored. readiness-score.json entered the branch through the synchronization merge as main's own content; last author github-actions[bot], 'ops(readiness): refresh ledger [skip ci]', commit 249da64b. The rule compares every path rather than lane-authored paths, so any lane that synchronizes with main trips it. Same class as the defect already routed to UTV2-1790; not remediated here."
+      },
+      "disclosed_because": "A reviewer should not have to discover a failing validator by running it themselves, even one that does not gate."
+    },
+    "matrix_superseded_by": "remediation_matrix (combined 9 + 5); the round-12-only matrix is removed to avoid two disagreeing tables",
+    "round13_corrections": {
+      "authorization": "PM DISPOSITION -- UTV2-1745 FINAL PROOF CLOSURE AUTHORIZED",
+      "scope": "PROOF-ONLY plus retained (gitignored) replay-script portability fixes. No shipped audit logic touched.",
+      "corrections": [
+        "Q7 row count 1,221 -> 111, generated from q7_receipt.json rows_returned, never restated by hand",
+        "batch structure -> 24/24/24/22 (counted from b0..b3.sql), corrected in prose AND in evidence.json Q7.statement",
+        "removed the self-invalidating worktree claim; the round-12 commit's file scope is now stated with immutable endpoints and a retained receipt",
+        "removed every absolute path from derive_final.ts, replay11.ts, parity.ts, attribute.ts; proved execution from a different checkout path yields an identical digest",
+        "captured proof-binding-validator output verbatim in a retained receipt and referenced it instead of paraphrasing",
+        "removed the vacuous equality claim; the comparison now covers only fields present on both artifacts and names the two that are not comparable"
+      ]
+    }
+  },
+  "remediation_matrix": {
+    "note": "Combined disposition matrix: all 9 findings from the ninth adversarial review and all 5 from the tenth. Every row's `result` is EXECUTED by .out/replay/matrix_check.ts and read from matrix_results.json -- no row's result is hand-asserted. Regenerate with: pnpm exec tsx .out/replay/matrix_check.ts",
+    "generated_by": ".out/replay/matrix_check.ts",
+    "results_file": ".out/replay/matrix_results.json",
+    "total": 14,
+    "passing": 14,
+    "failing": [],
+    "rows": [
+      {
+        "id": "9.1",
+        "review": "ninth",
+        "severity": "P1",
+        "finding": "systemic_defect flipped true->false undisclosed",
+        "authoritative_source": ".out/replay/report.json + report11.json",
+        "corrected_artifact": "verification.md detector section",
+        "verification_command": "compare report.json/report11.json systemic_defect against the disclosed text",
+        "result": "round10 detected=true, round11 detected=false, disclosed=true",
+        "pass": true,
+        "immutable_binding": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b"
+      },
+      {
+        "id": "9.2",
+        "review": "ninth",
+        "severity": "P1",
+        "finding": "withdrawn \"=82\" had an unreported successor",
+        "authoritative_source": "report11.json clv.persisted_status_mismatches",
+        "corrected_artifact": "verification.md Finding 7",
+        "verification_command": "count mismatches and their reason split",
+        "result": "n=16",
+        "pass": true,
+        "immutable_binding": "8cc3adf1d431a638f8c5e8b359efd422cbf7602000af19ebd6453acfe30c410b"
+      },
+      {
+        "id": "9.3",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "git receipt asserted a result publishing it falsified",
+        "authoritative_source": "git",
+        "corrected_artifact": "verification.md git receipt block",
+        "verification_command": "git diff --name-status 3a99f504 c4715923",
+        "result": "M docs/06_status/readiness/readiness-score.json",
+        "pass": true,
+        "immutable_binding": "c4715923"
+      },
+      {
+        "id": "9.4",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "emptied picks.metadata count stated as one",
+        "authoritative_source": "dataset.json vs fresh_tables.json",
+        "corrected_artifact": "verification.md CLV supersession block",
+        "verification_command": "count picks emptied in dataset.json but populated upstream",
+        "result": "3: 01a77b3f-462d-4daa-b0ef-0b96ca120c15 9c8833ff-6738-4bf7-8874-257c5ef6cdfd aec0db94-7ff9-42f4-8951-e39343f3f58c",
+        "pass": true,
+        "immutable_binding": "389f5afd9cbe946cd16aa4a6ae0fd65354300aa181e38ea1f172dca19ac26ad4"
+      },
+      {
+        "id": "9.5",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "102,155 denominator had no executed receipt",
+        "authoritative_source": "evidence.json runtime_proof.queries Q9",
+        "corrected_artifact": "verification.md Q9 block",
+        "verification_command": "check Q9 fields and internal reconciliation",
+        "result": "102155 = 88213 + 13942 @ 2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)",
+        "pass": true,
+        "immutable_binding": "Q9 executed_at 2026-08-30 23:49:36.002252+00 (server clock, returned by the statement itself)"
+      },
+      {
+        "id": "9.6",
+        "review": "ninth",
+        "severity": "P2",
+        "finding": "no retained script produced per_row11_final.json",
+        "authoritative_source": ".out/replay/derive_final.ts",
+        "corrected_artifact": "per_row11_final.json",
+        "verification_command": "pnpm exec tsx .out/replay/derive_final.ts",
+        "result": "rows=200 resolvable=194 cutoff_enforced=150",
+        "pass": true,
+        "immutable_binding": "d306a84ea0bbbb8c60f106a0030adb9609c2b05722633e9afcb3386653cfd49a"
+      },
+      {
+        "id": "9.7",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "rung-4 cutoff proxy unnamed",
+        "authoritative_source": "market_universe schema",
+        "corrected_artifact": "verification.md April-half section",
+        "verification_command": "grep last_offer_snapshot_at verification.md",
+        "result": "named=true",
+        "pass": true,
+        "immutable_binding": "n/a"
+      },
+      {
+        "id": "9.8",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "Q7 probe accounting inconsistent",
+        "authoritative_source": ".out/replay/q7_receipt.json",
+        "corrected_artifact": "verification.md Q7 block",
+        "verification_command": "pnpm exec tsx .out/replay/q7_receipt.ts",
+        "result": "alive=94 probes=188 batches=24/24/24/22 rows=111",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "9.9",
+        "review": "ninth",
+        "severity": "P3",
+        "finding": "diff-summary mixed mutation counts 34 and 42",
+        "authoritative_source": "diff-summary.md",
+        "corrected_artifact": "diff-summary.md mutation bullet",
+        "verification_command": "check round attribution present",
+        "result": "attributed=true",
+        "pass": true,
+        "immutable_binding": "n/a"
+      },
+      {
+        "id": "10.A",
+        "review": "tenth",
+        "severity": "P2",
+        "finding": "\"1,221 offer rows\" does not reconcile; contradicts evidence.json rows_returned:111",
+        "authoritative_source": ".out/replay/q7_receipt.json rows_returned",
+        "corrected_artifact": "verification.md / diff-summary.md / evidence.json",
+        "verification_command": "pnpm exec tsx .out/replay/q7_receipt.ts; bundle-wide scan for the retired figure asserted as live",
+        "result": "rows_returned=111; retired figure asserted as live=false",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "10.B",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "evidence.json Q7 retained \"4 batches of 24 LATERAL probes\"",
+        "authoritative_source": ".out/replay/b0..b3.sql",
+        "corrected_artifact": "evidence.json Q7.statement",
+        "verification_command": "count tuples per retained batch file",
+        "result": "batches=24/24/24/22 total=94; stale wording present=false",
+        "pass": true,
+        "immutable_binding": "a661606393364fccf926995a90c777f2470974aaad86014f25e384c98281e8ba"
+      },
+      {
+        "id": "10.C",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "self-invalidating \"worktree contains changes to exactly three files\"",
+        "authoritative_source": "git",
+        "corrected_artifact": "diff-summary.md closing paragraph",
+        "verification_command": "git diff --name-only b10d8aa8 3f2f4ba8",
+        "result": "3 paths, all under the proof dir",
+        "pass": true,
+        "immutable_binding": "3f2f4ba8"
+      },
+      {
+        "id": "10.D",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "derive_final.ts hardcoded absolute worktree paths",
+        "authoritative_source": ".out/replay/*.ts",
+        "corrected_artifact": "the retained replay scripts",
+        "verification_command": "grep /home/griff843 in every retained script; execute derive_final.ts from a different path",
+        "result": "scripts with absolute paths: none",
+        "pass": true,
+        "immutable_binding": "8491fbeebdfd262c3156487d61d756dd63d17501c99a26af5ac41e9738767dcd"
+      },
+      {
+        "id": "10.E",
+        "review": "tenth",
+        "severity": "P3",
+        "finding": "validator output paraphrased; vacuous equality claim",
+        "authoritative_source": ".out/receipts/proof-binding-validator.txt",
+        "corrected_artifact": "verification.md validator + re-derivation sections",
+        "verification_command": "capture validator output verbatim; compare only fields present on both artifacts",
+        "result": "verbatim [FAIL] lines=4; NOT COMPARABLE stated=true",
+        "pass": true,
+        "immutable_binding": "be1c8c146eef6431e6b2d501b5ff2bb78670780cc7cc9c917f341bc036b2e42a"
+      }
+    ]
+  }
+}

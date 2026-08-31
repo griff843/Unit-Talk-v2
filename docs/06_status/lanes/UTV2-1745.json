@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1745",
+  "lane_type": "verification",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1745-pick-truth-audit",
+  "branch": "codex/utv2-1745-pick-truth-audit",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1453",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1745.yml",
+    "docs/06_status/lanes/UTV2-1745.json",
+    "docs/06_status/proof/UTV2-1745/.gitkeep",
+    "docs/06_status/proof/UTV2-1745/diff-summary.md",
+    "docs/06_status/proof/UTV2-1745/evidence.json",
+    "docs/06_status/proof/UTV2-1745/model-routing.json",
+    "docs/06_status/proof/UTV2-1745/verification.md",
+    "package.json",
+    "scripts/ops/pick-truth-audit.test.ts",
+    "scripts/ops/pick-truth-audit.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1745/evidence.json",
+    "docs/06_status/proof/UTV2-1745/model-routing.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-08-26T20:09:23.857Z",
+  "heartbeat_at": "2026-08-27T02:25:39.152Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1745-pick-truth-audit.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "model_routing": {
+    "profile": "codex-sol-high",
+    "model": "gpt-5.6-sol",
+    "reasoning_effort": "high",
+    "selected_by": "three-brain",
+    "policy_version": "1.0.0"
+  },
+  "verification_target": "UTV2-1745",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1745-pick-truth-audit",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  },
+  "scope_override": {
+    "authorized_by": "PM",
+    "authorized_at": "2026-08-27",
+    "paths": [
+      "package.json"
+    ],
+    "reason": "test:ops is a hardcoded file list, not a glob, so scripts/ops/pick-truth-audit.test.ts was unreachable from any executable command and pnpm verify failed with WIRING_TEST_UNWIRED_NEW. PM authorized extending file scope to package.json to wire the lane's own tests into test:ops rather than suppressing the guard via the wiring baseline."
+  }
+}
