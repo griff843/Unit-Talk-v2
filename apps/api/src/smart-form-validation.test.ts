@@ -826,3 +826,32 @@ test('Latin letters NFKD does not decompose are admitted rather than refused as 
     );
   }
 });
+
+test('mutation control: removing CANONICAL_SPORT_ID_GUARD makes the whole coverage proof vacuous', async () => {
+  // Every reference-data lookup is case-sensitive, so a sportId the catalog
+  // does not carry finds nothing in any sport. Without this guard that is
+  // silent: "nba" searches an empty universe and every canonical name is
+  // reported as an uncovered gap.
+  const lowercased = manualPayload(
+    [
+      { role: 'away', displayName: 'Knicks', canonicalParticipantId: null },
+      { role: 'home', displayName: 'Nobody United', canonicalParticipantId: null },
+    ],
+    'NBA',
+  );
+  const resolution = lowercased.metadata?.['participantResolution'] as Record<string, unknown>;
+  resolution['sportId'] = 'nba';
+
+  // Baseline: the unknown sport is refused before any lookup is attempted.
+  await assert.rejects(
+    () => validateSmartFormRelationships(lowercased, seededReferenceData()),
+    /is not a canonical sport/u,
+  );
+
+  // Mutant: the same payload is admitted, and the coverage proof it carries is
+  // worthless -- "Knicks" is canonical, and the guard below cannot see it.
+  await withGuardRemoved('CANONICAL_SPORT_ID_GUARD', async (mutant) => {
+    const validate = mutant['validateSmartFormRelationships'] as typeof validateSmartFormRelationships;
+    await validate(lowercased, seededReferenceData());
+  });
+});
