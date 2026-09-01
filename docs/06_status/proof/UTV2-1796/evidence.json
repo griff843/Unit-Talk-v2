@@ -62,5 +62,92 @@
       "verdict": "FAIL",
       "detail": "package.json is outside this lane's first-commit file_scope_lock, which the guard locks to commit a87857f8 and which a later commit cannot widen. Not a required branch-protection context. Clearing it needs a scope-override/v1 comment authored by griff843 at the exact head; it is reported to PM rather than worked around by rewriting branch history."
     }
-  ]
+  ],
+  "runtime_proof": {
+    "status": "pass",
+    "measurement_basis": "Read-only SQL against the production Supabase project (zfzdnfwdarxucxtaojxm) via MCP execute_sql, plus offline execution of the changed code paths and seven mutations. No production write, no DDL, no provider call.",
+    "queries": [
+      {
+        "name": "the source table this change moves TO is populated",
+        "method": "SELECT count(*), min(snapshot_at), max(snapshot_at), count(DISTINCT provider_key) FROM provider_offer_history",
+        "result": "14,456,685 rows spanning 2026-05-11 to 2026-06-30; exactly one distinct provider_key, 'sgo'.",
+        "significance": "Establishes that the new source carries the live data the marking pass needs."
+      },
+      {
+        "name": "the source table this change moves FROM is vacuous for the live window",
+        "method": "SELECT count(*), min(snapshot_at), max(snapshot_at), count(DISTINCT provider_event_id) FROM provider_offer_history_compact",
+        "result": "3,139 rows spanning 2026-04-24 to 2026-04-26, one distinct event. No overlap with the history range at all.",
+        "significance": "The defect is not a performance nuance. The old source could not have marked a single live closing line."
+      },
+      {
+        "name": "a concrete recent event has eligible rows in history and none in compact",
+        "method": "Eligible-row count for one recent provider_event_id in each table, using the same snapshot_at < commence_time predicate the code applies",
+        "result": "165,414 eligible unmarked rows in provider_offer_history; 0 in provider_offer_history_compact.",
+        "significance": "Names the vacuity concretely on real production data rather than in the abstract."
+      },
+      {
+        "name": "the bounded query is partition-pruned rather than a full scan",
+        "method": "EXPLAIN (ANALYZE, BUFFERS) on the exact bounded query the code issues, limit 5000",
+        "result": "Append over 3 pruned child partitions, Index Scan Backward on (provider_event_id, snapshot_at), 81.943 ms.",
+        "significance": "Refutes the seq-scan premise that motivated the compact table, and shows the new source is safe to point at."
+      },
+      {
+        "name": "every partition carries the index the plan depends on",
+        "method": "Index inventory across all child partitions of provider_offer_history",
+        "result": "All 60 child partitions carry the (provider_event_id, snapshot_at) index.",
+        "significance": "The pruned plan is not an artifact of the one partition sampled; it holds across the table."
+      },
+      {
+        "name": "the ordered selection is reproducible",
+        "method": "SHA-256 over the ordered result of the bounded selection",
+        "result": "0cce235f8cdc45b8991542e0345ec611324015bf90ac9884b8e243f5f8d59bfc",
+        "significance": "Gives the measurement an identity a later reviewer can re-derive."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "provider_offer_history rows (production, read-only)",
+        "value": 14456685
+      },
+      {
+        "probe": "provider_offer_history_compact rows (production, read-only)",
+        "value": 3139
+      },
+      {
+        "probe": "eligible unmarked rows for the sampled recent event, in history",
+        "value": 165414
+      },
+      {
+        "probe": "eligible unmarked rows for the same event, in compact",
+        "value": 0
+      },
+      {
+        "probe": "child partitions carrying the (provider_event_id, snapshot_at) index",
+        "value": 60
+      },
+      {
+        "probe": "provider-offer repository tests passing at this head",
+        "value": 15
+      },
+      {
+        "probe": "ingest caller-path tests passing at this head",
+        "value": 3
+      },
+      {
+        "probe": "mutations applied, each failing exactly the test naming its condition",
+        "value": 7
+      },
+      {
+        "probe": "production rows written by this lane",
+        "value": 0
+      }
+    ],
+    "known_limitations": [
+      "The writable staging leg did not execute. The live-proof test that carried it was removed from this PR together with docs/05_operations/db-writer-classification.json, per PM direction; re-admitting either needs a governance-scope request. The eight staging-write controls are therefore proven offline against production-shaped fixtures and by the read-only production measurement above, not by a staging write.",
+      "CI's Require live-DB proof gate (advisory, not a required branch-protection context) fails for the same reason: it matches on the presence of an apps/*/src/t1-proof-*.test.ts diff, and that file was removed."
+    ]
+  },
+  "verifier": {
+    "identity": "claude-opus-5 (orchestrator), UTV2-1796 lane"
+  }
 }
