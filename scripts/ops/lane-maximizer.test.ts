@@ -7,9 +7,12 @@ import { fileURLToPath } from 'node:url';
 import {
   type CandidateLane,
   type LaneManifest,
+  type LinearCandidateFetchDeps,
+  type MaximizationReport,
   evaluateCandidates,
   isBlockingLinearRelationType,
   parseQueueCandidates,
+  runMaximizerCli,
 } from './lane-maximizer.js';
 import { buildPnpmStateEnv } from './lane-start.js';
 import { checkConcurrencyLimits, type ConcurrencyManifestLike } from './concurrency-rules.js';
@@ -19,7 +22,7 @@ import {
   type ConcurrencyConfig,
   type EffectiveConcurrencyConfig,
 } from './concurrency-config.js';
-import type { CanonicalLaneType } from './shared.js';
+import type { CanonicalLaneType, LaneManifest as SharedLaneManifest } from './shared.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LANE_DIR = path.join(ROOT, 'docs', '06_status', 'lanes');
@@ -1291,4 +1294,390 @@ test('21. synthesized policy clamps total to the configured total, not maxClaude
       assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['TOTAL_CAP_EXCEEDED']);
     },
   );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1699 — discovery repair regressions.
+//
+// Every test below names the exact control it proves and the mutation that must
+// break it. See docs/06_status/proof/UTV2-1699/verification.md for the executed
+// mutation matrix.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function candidateIssueNode(
+  identifier: string,
+  overrides: Partial<{ title: string; labels: string[]; fileScope: string }> = {},
+): Record<string, unknown> {
+  const fileScope = overrides.fileScope ?? `scripts/ops/${identifier.toLowerCase()}-fixture.ts`;
+  return {
+    identifier,
+    title: overrides.title ?? `${identifier} discovery fixture`,
+    url: `https://linear.app/unit-talk-v2/issue/${identifier}`,
+    description: [
+      'Acceptance criteria',
+      '',
+      '- the fixture is discovered',
+      '',
+      'File scope',
+      '',
+      `- \`${fileScope}\``,
+      '',
+    ].join('\n'),
+    branchName: null,
+    labels: { nodes: (overrides.labels ?? ['T2', 'lane:hygiene']).map((name) => ({ name })) },
+    state: { name: 'Ready', type: 'unstarted' },
+    relations: { nodes: [] },
+  };
+}
+
+/**
+ * Fake Linear transport. `pages` is the candidate-issue population split into
+ * pages exactly as Linear would return them; `failOnPage` injects a transport
+ * failure on that 1-based candidate page.
+ */
+function fakeLinearDeps(
+  pages: Array<Array<Record<string, unknown>>>,
+  options: { failOnPage?: number; failTeamResolve?: boolean } = {},
+): LinearCandidateFetchDeps {
+  let candidatePage = 0;
+  const cursors: string[] = [];
+  const query = async (
+    graphql: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
+    if (graphql.includes('ResolveTeam')) {
+      if (options.failTeamResolve) {
+        return { ok: false, error: 'Linear HTTP 401 Unauthorized' };
+      }
+      return { ok: true, data: { teams: { nodes: [{ id: 'team-fixture', key: 'UTV2' }] } } };
+    }
+    candidatePage += 1;
+    cursors.push(String(variables.cursor ?? ''));
+    if (options.failOnPage === candidatePage) {
+      return { ok: false, error: 'Linear HTTP 503 Service Unavailable' };
+    }
+    const nodes = pages[candidatePage - 1] ?? [];
+    return {
+      ok: true,
+      data: {
+        team: {
+          issues: {
+            pageInfo: {
+              hasNextPage: candidatePage < pages.length,
+              endCursor: `cursor-${candidatePage}`,
+            },
+            nodes,
+          },
+        },
+      },
+    };
+  };
+  return { token: 'fixture-token', query: query as LinearCandidateFetchDeps['query'] };
+}
+
+/** An authoritatively-known, genuinely empty active board. */
+const EMPTY_ACTIVE_BOARD = {
+  listOpenPullRequests: () => [],
+  readLocalManifests: () => [],
+};
+
+function allResults(report: MaximizationReport) {
+  return [...report.recommended, ...report.blocked, ...report.risky, ...report.deferred];
+}
+
+// AC1 / Defect 0. Mutation: restore `else -> parseCandidatesArg(argv)`.
+test('UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate source', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  assert.equal(
+    outcome.candidate_source,
+    'linear',
+    'a bare argv must resolve to the canonical Linear candidate source, not an argv/stdin parse',
+  );
+  const report = outcome.report;
+  assert.ok(report, 'a successful bare invocation must produce a report');
+  assert.deepStrictEqual(
+    allResults(report).map((entry) => entry.issue_id),
+    ['UTV2-9001'],
+    'with eligible candidates present, a bare invocation must NOT return an empty board',
+  );
+  assert.notDeepStrictEqual(
+    { recommended: report.recommended, blocked: report.blocked, risky: report.risky, deferred: report.deferred },
+    { recommended: [], blocked: [], risky: [], deferred: [] },
+  );
+});
+
+// AC2 / Defect 3. Mutation: restore the single-page `first: 10` query.
+test('UTV2-1699 AC2: candidate discovery paginates past the first page', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([
+      [candidateIssueNode('UTV2-9101')],
+      [candidateIssueNode('UTV2-9102')],
+      [candidateIssueNode('UTV2-9103')],
+    ]),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  const discovered = allResults(outcome.report!).map((entry) => entry.issue_id).sort();
+  assert.deepStrictEqual(
+    discovered,
+    ['UTV2-9101', 'UTV2-9102', 'UTV2-9103'],
+    'candidates on pages 2 and 3 must be discovered; the population is not capped at the first page',
+  );
+});
+
+// AC2 supporting control: a page boundary that cannot be walked is a failure,
+// never a smaller candidate population.
+test('UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: {
+      token: 'fixture-token',
+      query: (async (graphql: string) => {
+        if (graphql.includes('ResolveTeam')) {
+          return { ok: true, data: { teams: { nodes: [{ id: 'team-fixture', key: 'UTV2' }] } } };
+        }
+        return {
+          ok: true,
+          data: {
+            team: {
+              issues: {
+                pageInfo: { hasNextPage: true, endCursor: null },
+                nodes: [candidateIssueNode('UTV2-9111')],
+              },
+            },
+          },
+        };
+      }) as LinearCandidateFetchDeps['query'],
+    },
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.error?.code, 'candidate_discovery_failed');
+});
+
+// AC3 / Defect 1. Mutation: restore the catch that empties both populations.
+test('UTV2-1699 AC3: candidate-source failure exits non-zero with a candidate-discovery code', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[candidateIssueNode('UTV2-9201')]], { failOnPage: 1 }),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 1, 'a candidate-source failure must never exit 0');
+  assert.equal(outcome.error?.code, 'candidate_discovery_failed');
+  assert.match(outcome.error!.message, /candidate source/i);
+
+  // Requirement 7: stdout must be unambiguously an error to a machine consumer,
+  // not a report with empty arrays.
+  const parsed = JSON.parse(outcome.stdout) as Record<string, unknown>;
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error, true);
+  assert.equal(parsed.code, 'candidate_discovery_failed');
+  assert.equal(parsed.recommended, undefined, 'a failure payload must not carry report-shaped empty arrays');
+  assert.equal(parsed.blocked, undefined);
+  assert.equal(parsed.dispatch_limits, undefined);
+  assert.equal(outcome.report, undefined);
+});
+
+// AC3 supporting control: an auth failure on the team resolve is the same class.
+test('UTV2-1699 AC3: a Linear auth failure fails closed as candidate discovery', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[]], { failTeamResolve: true }),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.error?.code, 'candidate_discovery_failed');
+});
+
+// AC4 / Defect 1. Mutation: restore the catch that empties both populations.
+test('UTV2-1699 AC4: active-lane discovery failure exits non-zero with a DISTINCT code', async () => {
+  const candidateFailure = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[]], { failOnPage: 1 }),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  const activeFailure = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[candidateIssueNode('UTV2-9301')]]),
+    activeLaneDiscovery: {
+      listOpenPullRequests: () => {
+        throw new Error('gh: could not authenticate to github.com');
+      },
+      readLocalManifests: () => [],
+    },
+  });
+
+  assert.equal(activeFailure.exitCode, 1, 'an unknown active board must never exit 0');
+  assert.equal(activeFailure.error?.code, 'active_lane_discovery_failed');
+  assert.notEqual(
+    activeFailure.error!.code,
+    candidateFailure.error!.code,
+    'active-lane discovery failure must not collapse into the candidate-discovery code',
+  );
+  assert.notEqual(
+    activeFailure.error!.remediation,
+    candidateFailure.error!.remediation,
+    'the two fail-closed conditions must carry different remediations',
+  );
+  assert.match(activeFailure.error!.remediation, /gh/);
+
+  const parsed = JSON.parse(activeFailure.stdout) as Record<string, unknown>;
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.dispatch_limits, undefined);
+  assert.equal(parsed.recommended, undefined);
+});
+
+// AC4 supporting control / requirement 8: a partial manifest read is a failure.
+test('UTV2-1699 AC4: an unreadable lane manifest is a failure, not a smaller board', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[]]),
+    activeLaneDiscovery: {
+      listOpenPullRequests: () => [],
+      readLocalManifests: () => {
+        throw new Error('Unexpected token } in JSON at position 12');
+      },
+    },
+  });
+
+  assert.equal(outcome.exitCode, 1);
+  assert.equal(outcome.error?.code, 'active_lane_discovery_failed');
+});
+
+// AC5. This is what stops the repair becoming "always fail".
+test('UTV2-1699 AC5: a genuinely empty candidate population still exits 0', async () => {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[]]),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  assert.equal(outcome.error, undefined);
+  const report = outcome.report;
+  assert.ok(report, 'an honestly empty board is still a report');
+  assert.deepStrictEqual(report.recommended, []);
+  assert.deepStrictEqual(report.blocked, []);
+  assert.deepStrictEqual(report.risky, []);
+  assert.deepStrictEqual(report.deferred, []);
+  const parsed = JSON.parse(outcome.stdout) as Record<string, unknown>;
+  assert.ok(parsed.dispatch_limits, 'a real report carries dispatch_limits; an error envelope does not');
+  assert.equal(parsed.ok, undefined);
+});
+
+// AC6 / Defect 2. Mutation: revert to the local-manifest-only readActiveLanes.
+test('UTV2-1699 AC6: a PR-head-only lane manifest is counted as active', async () => {
+  const prHeadOnly = makeManifest('UTV2-9601', {
+    status: 'in_progress',
+    executor: 'codex-cli',
+    lane_type: 'hygiene',
+    branch: 'codex/utv2-9601-pr-head-only',
+    file_scope_lock: ['scripts/ops/utv2-9601-pr-head-only.ts'],
+  });
+
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[
+      candidateIssueNode('UTV2-9602', { fileScope: 'scripts/ops/utv2-9601-pr-head-only.ts' }),
+    ]]),
+    activeLaneDiscovery: {
+      // Deliberately empty: the manifest does NOT exist in the local tree, which
+      // is the measured production condition (zero active manifests on `main`).
+      readLocalManifests: () => [],
+      listOpenPullRequests: () => [
+        { number: 9601, headRefName: 'codex/utv2-9601-pr-head-only' },
+      ],
+      readManifestAtRef: (issueId: string) =>
+        (issueId === 'UTV2-9601' ? (prHeadOnly as unknown as SharedLaneManifest) : null),
+    },
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  const report = outcome.report!;
+  assert.equal(
+    report.dispatch_limits.active_codex,
+    1,
+    'a lane whose manifest exists only on its open PR head must count against capacity',
+  );
+  assert.deepStrictEqual(
+    report.blocked.map((entry) => ({ id: entry.issue_id, codes: entry.reason_codes })),
+    [{ id: 'UTV2-9602', codes: ['OVERLAP'] }],
+    'a candidate overlapping a PR-head-only active lane must be blocked on OVERLAP',
+  );
+  assert.deepStrictEqual(report.recommended, []);
+});
+
+// AC8. Business ranking policy is OUT OF SCOPE for this lane. These are the
+// literal ranking_score / ranking_reasons values produced by the unmodified
+// scoreCandidate/rankCandidates for a fixed candidate set.
+test('UTV2-1699 AC8: ranking output is unchanged for a fixed candidate set', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-RANK-A', {
+        tier: 'T2',
+        lane_type: 'hygiene',
+        file_scope: ['scripts/ops/rank-a.ts'],
+        has_acceptance_criteria: true,
+      }),
+      makeCandidate('UTV2-RANK-B', {
+        tier: 'T3',
+        lane_type: 'hygiene',
+        file_scope: [],
+        has_acceptance_criteria: false,
+      }),
+      makeCandidate('UTV2-RANK-C', {
+        tier: 'T1',
+        file_scope: ['packages/domain/src/rank-c.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 2, maxCodex: 4 },
+    { doneIssueIds: new Set<string>(), singletonLaneTypes: [], forbiddenCombinations: [] },
+  );
+
+  const ranking = allResults(report)
+    .map((entry) => ({
+      issue_id: entry.issue_id,
+      rank: entry.rank,
+      ranking_score: entry.ranking_score,
+      ranking_reasons: entry.ranking_reasons,
+    }))
+    .sort((left, right) => left.issue_id.localeCompare(right.issue_id));
+
+  assert.deepStrictEqual(ranking, [
+    {
+      issue_id: 'UTV2-RANK-A',
+      rank: 1,
+      ranking_score: 80,
+      ranking_reasons: [
+        'tier:T2 dispatchable default',
+        'file scope declared',
+        'acceptance criteria present',
+        'safe work class',
+      ],
+    },
+    {
+      issue_id: 'UTV2-RANK-B',
+      rank: 3,
+      ranking_score: -25,
+      ranking_reasons: [
+        'tier:T3 lower urgency',
+        'file scope missing',
+        'acceptance criteria missing',
+        'safe work class',
+      ],
+    },
+    {
+      issue_id: 'UTV2-RANK-C',
+      rank: 2,
+      ranking_score: 45,
+      ranking_reasons: [
+        'tier:T1 requires PM authorization',
+        'file scope declared',
+        'safe work class',
+      ],
+    },
+  ]);
 });
