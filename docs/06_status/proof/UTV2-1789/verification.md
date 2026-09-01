@@ -1,18 +1,18 @@
 # PROOF: UTV2-1789
 
-MERGE_SHA: feeef8e9d26068d94da9c5e986a5b94638ea121b
+MERGE_SHA: 8afcba5233441b4e45bed40f4677ee544ade8288
 
 > Pre-merge the merge anchor carries the verified implementation identity.
 > `post-merge-lane-close.yml` rebinds merge authority only after GitHub supplies
 > the merged-PR attestation.
 
-Generated at: 2026-09-01T02:52:24Z
+Generated at: 2026-09-01T14:22:27Z
 Issue: UTV2-1789
 Tier: T1
 Lane type: delivery-ui
 Branch: claude/utv2-1789-cc-auth-fail-closed
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1474
-Head SHA: feeef8e9d26068d94da9c5e986a5b94638ea121b
+Head SHA: 8afcba5233441b4e45bed40f4677ee544ade8288
 result: pass
 
 ## ASSERTIONS:
@@ -44,7 +44,7 @@ $ pnpm exec tsx --test apps/command-center/src/lib/server-api.test.ts
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 10
+Changed files: 9
 Rules matched: operator-ui
 ```
 
@@ -84,4 +84,4 @@ including the correctly-configured production paths.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1474
 Approved PR head: pending merge
-Execution SHA: feeef8e9d26068d94da9c5e986a5b94638ea121b
+Execution SHA: 8afcba5233441b4e45bed40f4677ee544ade8288

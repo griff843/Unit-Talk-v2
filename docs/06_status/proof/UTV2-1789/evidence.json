@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "pre_merge",
   "sha_binding": {
-    "verified_source_sha": "feeef8e9d26068d94da9c5e986a5b94638ea121b",
+    "verified_source_sha": "8afcba5233441b4e45bed40f4677ee544ade8288",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null,
@@ -14,16 +14,16 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "note": "feeef8e9 is the last non-proof commit on this branch. Every receipt below was executed against that exact tree."
+    "note": "8afcba52 is the last non-proof commit on this branch (the sanctioned git-merge-main sync of origin/main). Every receipt below was executed against that exact tree."
   },
   "static_proof": {
     "status": "pass",
-    "note": "pnpm verify:static EXIT=0 on feeef8e9d26068d94da9c5e986a5b94638ea121b; 99 node:test blocks, 0 failures; r-level-check PASS (rules matched: operator-ui). test:live-db needs the staging-ci credential held only by the CI staging-db-proof job and is proven there, not claimed here."
+    "note": "pnpm verify:static EXIT=0 on 8afcba5233441b4e45bed40f4677ee544ade8288; 99 node:test blocks, 0 failures; r-level-check PASS (rules matched: operator-ui). test:live-db needs the staging-ci credential held only by the CI staging-db-proof job and is proven there, not claimed here."
   },
   "pr_number": 1474,
-  "source_sha": "feeef8e9d26068d94da9c5e986a5b94638ea121b",
-  "reviewed_head_sha": "feeef8e9d26068d94da9c5e986a5b94638ea121b",
-  "generated_at": "2026-09-01T02:52:24Z",
+  "source_sha": "8afcba5233441b4e45bed40f4677ee544ade8288",
+  "reviewed_head_sha": "8afcba5233441b4e45bed40f4677ee544ade8288",
+  "generated_at": "2026-09-01T14:22:27Z",
   "gate_results": [
     {
       "gate": "pnpm verify:static",
