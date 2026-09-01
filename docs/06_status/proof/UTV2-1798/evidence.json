@@ -8,12 +8,14 @@
     "verified_source_sha": "890d08e3fc372100121c858692121979172d3197",
     "evidence_commit_sha": "890d08e3fc372100121c858692121979172d3197",
     "current_pr_head_sha": "890d08e3fc372100121c858692121979172d3197",
-    "merge_sha": null,
+    "merge_sha": "f69d86f94bf18badccd4639d9db168f2d28c42a5",
     "ci_sentinels": {
       "evidence_commit_sha": "890d08e3fc372100121c858692121979172d3197",
       "current_pr_head_sha": "890d08e3fc372100121c858692121979172d3197"
     },
-    "note": "890d08e3fc372100121c858692121979172d3197 is the last non-proof commit on this branch. It differs from the implementation commit 2a414110aa66d6aab20360d33379b5c022787175 only in the lane manifest pr_url/status/heartbeat fields, written by the lane-binding automation; no source file differs. Every receipt in verification.md was re-executed against this exact tree."
+    "note": "890d08e3fc372100121c858692121979172d3197 is the last non-proof commit on this branch. It differs from the implementation commit 2a414110aa66d6aab20360d33379b5c022787175 only in the lane manifest pr_url/status/heartbeat fields, written by the lane-binding automation; no source file differs. Every receipt in verification.md was re-executed against this exact tree.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-01T12:36:00.001Z"
   },
   "static_proof": {
     "lint": {
@@ -37,7 +39,7 @@
       "exit_code": 1,
       "status": "REFUSED_AT_LIVE_DB",
       "failing_stage": "test:live-db",
-      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx \u2014 writable DB verification is only obtainable inside the staging-ci GitHub environment.",
+      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx — writable DB verification is only obtainable inside the staging-ci GitHub environment.",
       "note": "Every static stage before it is exit 0. The writable receipt is produced inside required CI verify, not claimed here."
     },
     "wiring_test": {
@@ -198,7 +200,7 @@
   "open_items": [
     "The fix is not in production until a governed Deploy dispatch writes it; that dispatch follows PM merge approval at the exact head and is not performed here.",
     "Google sign-in end-to-end is not yet proven against the owner's real OAuth client; whether https://picks.unit-talk.com/api/auth/callback/google is registered is the most likely remaining blocker.",
-    "www.unit-talk.com has no certificate \u2014 the Caddyfile declares exactly three site blocks. Follow-up observation, deferred by PM.",
+    "www.unit-talk.com has no certificate — the Caddyfile declares exactly three site blocks. Follow-up observation, deferred by PM.",
     "api.unit-talk.com/health responds in roughly 14 s. Follow-up observation, deferred by PM."
   ]
 }
