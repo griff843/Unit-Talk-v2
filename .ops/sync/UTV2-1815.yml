@@ -1,0 +1,196 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1815
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1815
+  objective: "Null stake computation truth: settlement, grading and attribution
+    must never fabricate a stake of 1"
+  acceptance_criteria:
+    - "**One agreed contract** for NULL `stake_units` across settlement, grading
+      and attribution. Settlement's fail-closed behaviour is the model; the
+      other two must not silently substitute."
+    - Where a computation genuinely cannot proceed without a stake, it must
+      either **refuse** or **carry a provenance tag** — never emit a number
+      indistinguishable from an observed one.
+    - "`validateAttributionInput` must validate `stake_units`, including `NaN`
+      and `<= 0`."
+    - "**Prove each control by making it fail on the condition it names.** A
+      NULL fixture and a NaN fixture through each of the three paths. A test
+      asserting only that valid stakes still work proves nothing about the
+      fabrication. Presence of a guard and a green run are not proof — see the
+      standing rule that a control is only proven by making it fail."
+  guardrails: []
+  non_goals:
+    - "**No backfill and no repair of the stored NULL population.** That is
+      [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-un\
+      its-backfill-and-constraint-validation-repair-2902-legacy) (2,902 rows,
+      closed set, no new rows since 2026-05-08) and requires separate PM
+      authorization."
+    - No change to the `picks_stake_units_canonical_check` constraint state.
+    - No production mutation, unpark, deploy or database maintenance.
+    - "**No Discord rendering change.** That is child B. Touching
+      `apps/discord-bot/**` here will fail Lane Authority with
+      `outside_allowed_paths` — that admission boundary is exactly why this
+      split exists."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Child A of [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) — PM split ratified 2026-09-01
+      [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) is not dispatchable as one issue: no single lane type admits its file set (`apps/discord-bot/**` appears only in `delivery-ui`, which admits none of the other three files). This child carries the **computation** half. Rendering is child B, which is `blockedBy` this issue.
+
+      [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) remains the acceptance parent. It is not itself dispatchable.
+    - >-
+      Defect
+
+      Four live code paths disagree about what a NULL `stake_units` means, and
+      three of them fabricate a value. This issue owns three of the four:
+
+
+      | Path | Behaviour on NULL |
+
+      | -- | -- |
+
+      | `apps/api/src/settlement-service.ts:1051` | **fails closed**, tags
+      `stakeUnitsHistoricalUnknown` — the correct model |
+
+      | `apps/api/src/grading-service.ts:988` | `stakeUnits ?? 1` — silently
+      substitutes |
+
+      | `packages/domain/src/attribution/attribution-engine.ts` | silently
+      substitutes 1 |
+
+
+      `validateAttributionInput` never validates `stake_units` at all, so a
+      `NaN` bypasses the `??` guard entirely and propagates into attribution
+      output.
+
+
+      Note the corrected path: an earlier revision of the parent named
+      `apps/api/src/attribution-engine.ts:98`, **which does not exist**. The
+      real file is `packages/domain/src/attribution/attribution-engine.ts`,
+      which is also where `validateAttributionInput` lives. Verify paths before
+      trusting them.
+    - >-
+      Evidence that fabrication already reached persisted data
+
+      11 `settlement_records` carry concrete `profitLossUnits` values (−1, 1.0,
+      0.64, 2.35 …) while their pick's `stake_units` is NULL and no integrity
+      tag is attached — produced by `COALESCE(p.stake_units, 1.0)` in archived
+      migration `202604250005`. All 11 are fixture rows and that pattern is not
+      in the active migrations path, but it demonstrates the exact failure mode
+      reaching storage.
+
+
+      The read-only audit could not determine whether those 11 came from the
+      archived migration or the live grading path, because both coalesce to the
+      same constant and are observationally identical. **That ambiguity is
+      itself the argument for tagging assumptions**: an output that does not
+      distinguish an observed value from an assumed one destroys the evidence
+      needed to diagnose it later.
+    - >-
+      File scope
+
+      * `apps/api/src/settlement-service.ts`
+
+      * `apps/api/src/grading-service.ts`
+
+      * `packages/domain/src/attribution/attribution-engine.ts`
+
+
+      These are the three declared files already established as this issue's
+      mutation scope above; `lane_type: modeling` admits all three. Nothing else
+      may be touched — see Non-goals.
+    - |-
+      Mechanical classification (re-derived 2026-09-01, verify before lane-start)
+      * **Lane type: **`modeling`**.** Verified against `.lane/lanes/*.yml`: it admits all three files. `runtime` forbids `packages/domain/src/attribution/attribution-engine.ts`, so runtime is not an option.
+      * **Tier: T1.** Derived, not declared: `settlement-service.ts` is a `TIER_C_EXACT_PATHS` match, `grading-service.ts` matches by pattern, `packages/domain/src/` by prefix. Tier C ⇒ T1. Merge authority is the PM's: `t1-approved` label plus an exact-head `pm-verdict/v1` APPROVED comment.
+      * **Executor: Claude.** This is Tier C T1 work with a cross-file contract to agree; it is not mechanically routed to Codex. (PM standing instruction: do not force Codex routing onto Tier-C work.)
+      * Concurrency: `modeling` is a **singleton** — mutually exclusive with [UTV2-1398](https://linear.app/unit-talk-v2/issue/UTV2-1398/map-nba-spread-to-game-line-in-the-market-family-classifier). **Tier C: YES**, so it cannot execute concurrently with any other Tier C lane.
+      * **File conflict:** shares `apps/api/src/grading-service.ts` with [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success) — permanently mutually exclusive with it. Only one of the two may hold a lane at a time.
+      * Dependencies: `blockedBy: []`. Blocks [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy) and child B. The [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy) audit is input, already delivered — not a gate.
+    - >-
+      Stop conditions
+
+      Return to PM if the agreed contract would require a schema or constraint
+      change; if fixing attribution validation requires touching a caller
+      outside the three declared files; or if the fail-closed behaviour would
+      break an existing green path in a way that cannot be resolved inside this
+      scope.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must
+    title: "Null stake computation truth: settlement, grading and attribution must
+      never fabricate a stake of 1"
+    description: |-
+      ## Child A of [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) — PM split ratified 2026-09-01
+
+      [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) is not dispatchable as one issue: no single lane type admits its file set (`apps/discord-bot/**` appears only in `delivery-ui`, which admits none of the other three files). This child carries the **computation** half. Rendering is child B, which is `blockedBy` this issue.
+
+      [UTV2-1727](https://linear.app/unit-talk-v2/issue/UTV2-1727/null-stake-units-is-fail-closed-in-settlement-but-silently-coerced-to) remains the acceptance parent. It is not itself dispatchable.
+
+      ## Defect
+
+      Four live code paths disagree about what a NULL `stake_units` means, and three of them fabricate a value. This issue owns three of the four:
+
+      | Path | Behaviour on NULL |
+      | -- | -- |
+      | `apps/api/src/settlement-service.ts:1051` | **fails closed**, tags `stakeUnitsHistoricalUnknown` — the correct model |
+      | `apps/api/src/grading-service.ts:988` | `stakeUnits ?? 1` — silently substitutes |
+      | `packages/domain/src/attribution/attribution-engine.ts` | silently substitutes 1 |
+
+      `validateAttributionInput` never validates `stake_units` at all, so a `NaN` bypasses the `??` guard entirely and propagates into attribution output.
+
+      Note the corrected path: an earlier revision of the parent named `apps/api/src/attribution-engine.ts:98`, **which does not exist**. The real file is `packages/domain/src/attribution/attribution-engine.ts`, which is also where `validateAttributionInput` lives. Verify paths before trusting them.
+
+      ## Evidence that fabrication already reached persisted data
+
+      11 `settlement_records` carry concrete `profitLossUnits` values (−1, 1.0, 0.64, 2.35 …) while their pick's `stake_units` is NULL and no integrity tag is attached — produced by `COALESCE(p.stake_units, 1.0)` in archived migration `202604250005`. All 11 are fixture rows and that pattern is not in the active migrations path, but it demonstrates the exact failure mode reaching storage.
+
+      The read-only audit could not determine whether those 11 came from the archived migration or the live grading path, because both coalesce to the same constant and are observationally identical. **That ambiguity is itself the argument for tagging assumptions**: an output that does not distinguish an observed value from an assumed one destroys the evidence needed to diagnose it later.
+
+      ## Acceptance Criteria
+
+      1. **One agreed contract** for NULL `stake_units` across settlement, grading and attribution. Settlement's fail-closed behaviour is the model; the other two must not silently substitute.
+      2. Where a computation genuinely cannot proceed without a stake, it must either **refuse** or **carry a provenance tag** — never emit a number indistinguishable from an observed one.
+      3. `validateAttributionInput` must validate `stake_units`, including `NaN` and `<= 0`.
+      4. **Prove each control by making it fail on the condition it names.** A NULL fixture and a NaN fixture through each of the three paths. A test asserting only that valid stakes still work proves nothing about the fabrication. Presence of a guard and a green run are not proof — see the standing rule that a control is only proven by making it fail.
+
+      ## File scope
+
+      * `apps/api/src/settlement-service.ts`
+      * `apps/api/src/grading-service.ts`
+      * `packages/domain/src/attribution/attribution-engine.ts`
+
+      These are the three declared files already established as this issue's mutation scope above; `lane_type: modeling` admits all three. Nothing else may be touched — see Non-goals.
+
+      ## Non-goals — do not widen
+
+      * **No backfill and no repair of the stored NULL population.** That is [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy) (2,902 rows, closed set, no new rows since 2026-05-08) and requires separate PM authorization.
+      * No change to the `picks_stake_units_canonical_check` constraint state.
+      * No production mutation, unpark, deploy or database maintenance.
+      * **No Discord rendering change.** That is child B. Touching `apps/discord-bot/**` here will fail Lane Authority with `outside_allowed_paths` — that admission boundary is exactly why this split exists.
+
+      ## Mechanical classification (re-derived 2026-09-01, verify before lane-start)
+
+      * **Lane type: **`modeling`**.** Verified against `.lane/lanes/*.yml`: it admits all three files. `runtime` forbids `packages/domain/src/attribution/attribution-engine.ts`, so runtime is not an option.
+      * **Tier: T1.** Derived, not declared: `settlement-service.ts` is a `TIER_C_EXACT_PATHS` match, `grading-service.ts` matches by pattern, `packages/domain/src/` by prefix. Tier C ⇒ T1. Merge authority is the PM's: `t1-approved` label plus an exact-head `pm-verdict/v1` APPROVED comment.
+      * **Executor: Claude.** This is Tier C T1 work with a cross-file contract to agree; it is not mechanically routed to Codex. (PM standing instruction: do not force Codex routing onto Tier-C work.)
+      * Concurrency: `modeling` is a **singleton** — mutually exclusive with [UTV2-1398](https://linear.app/unit-talk-v2/issue/UTV2-1398/map-nba-spread-to-game-line-in-the-market-family-classifier). **Tier C: YES**, so it cannot execute concurrently with any other Tier C lane.
+      * **File conflict:** shares `apps/api/src/grading-service.ts` with [UTV2-1605](https://linear.app/unit-talk-v2/issue/UTV2-1605/grading-observability-must-report-no-opstale-input-instead-of-success) — permanently mutually exclusive with it. Only one of the two may hold a lane at a time.
+      * Dependencies: `blockedBy: []`. Blocks [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy) and child B. The [UTV2-1383](https://linear.app/unit-talk-v2/issue/UTV2-1383/null-stake-units-backfill-and-constraint-validation-repair-2902-legacy) audit is input, already delivered — not a gate.
+
+      ## Stop conditions
+
+      Return to PM if the agreed contract would require a schema or constraint change; if fixing attribution validation requires touching a caller outside the three declared files; or if the fail-closed behaviour would break an existing green path in a way that cannot be resolved inside this scope.
+    captured_at: 2026-09-01T22:30:27.699Z
+    description_sha256: 4d112a8f10e69830802d2bc2f6c73057912249429d58a571d04c43d915e04561
+  contract_hash: de48aacafc34314195836f02c676b70843d05068cde9b095d459351f56ee94af
