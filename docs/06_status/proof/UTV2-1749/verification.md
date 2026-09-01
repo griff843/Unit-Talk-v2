@@ -2,12 +2,12 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: 497a36f805220e7d71a6c01d252d6e237628824a
+MERGE_SHA: 4ac025ee211d17720b18e764d006325cd919b228
 
-Merge SHA: pending merge
+Merge SHA: 4ac025ee211d17720b18e764d006325cd919b228
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1468
 Execution SHA: `497a36f805220e7d71a6c01d252d6e237628824a`
-Approved PR head: pending PM verdict at the final unchanged head
+Approved PR head: 64a47197f2327171c46be35f26c23db939bcb91d
 
 `497a36f805220e7d71a6c01d252d6e237628824a` is the last non-proof commit on this branch: the second `origin/main` sync merge,
 taken after PR #1469 merged as `63d76eb6`. The implementation it carries is unchanged from
@@ -154,3 +154,48 @@ against the required `xskgrzbteyqdufktjrjx`. The writable receipt is produced in
 committed to its own branch can never satisfy that before merge: committing the proof moves the
 head past the SHA the proof names. The binding above is to the last non-proof commit, which is
 the anchor the shared schema and the Close Eligibility Preflight actually read.
+
+---
+
+## Merge-SHA binding correction (PR #1470)
+
+The automatic post-merge binding did not happen. Run 33453183560 of Post-Merge
+Lane Close failed, so this bundle was left declaring `MERGE_SHA:` as the branch
+anchor `497a36f8…` with `Merge SHA: pending merge`, and the binding section
+carried `Approved PR head: pending PM verdict at the final unchanged head` — prose
+where a SHA token belongs, which `ops:proof-rebind` refuses outright rather than
+guessing at.
+
+Corrected through the sanctioned path, not by hand-editing the fields:
+
+```text
+pnpm ops:proof-rebind --issue UTV2-1749 \
+  --merge-sha 4ac025ee211d17720b18e764d006325cd919b228 \
+  --approved-head 64a47197f2327171c46be35f26c23db939bcb91d \
+  --pr 1468 --apply
+=> proof_rebind_applied
+   verification.md line 5  MERGE_SHA:  497a36f8… -> 4ac025ee…
+   verification.md line 7  Merge SHA:  pending merge -> 4ac025ee…
+```
+
+`4ac025ee211d17720b18e764d006325cd919b228` is not an assertion made here: it is
+the value GitHub returned when PR #1468 was merged, and it is reachable on `main`.
+
+Two validators disagree about this bundle and both are now satisfied honestly:
+
+* `ops:proof-check` validates the canonical proof record v2 shape and was failing
+  on four absent fields (`pr_number`, `source_sha`, `reviewed_head_sha`,
+  `gate_results`). Those failures pre-date this correction — the same four appear
+  against the copy already on `main`. They are now populated with values already
+  established elsewhere in this bundle.
+* `CEP-E7` reads schema-v2 evidence, forbids a legacy top-level `merge_sha`, and
+  requires `sha_binding.merge_sha` to be **null** while the carrying PR is itself
+  unmerged. So the verification document is bound to the attested merge SHA, and
+  `sha_binding.merge_sha` stays null: that slot is written by the post-merge
+  closeout, which is its authority. Binding it here would be this lane asserting
+  its own merge, which is exactly what the gate exists to prevent.
+
+`ops:proof-check` still reports `STALE: yes` because it compares `source_sha` to
+the PR head by strict equality, and committing a proof to its own branch always
+moves the head past the SHA the proof names. That is by construction, not a
+defect in this bundle.

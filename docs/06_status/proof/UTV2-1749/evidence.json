@@ -9,9 +9,9 @@
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "497a36f805220e7d71a6c01d252d6e237628824a",
-    "verified_source_note": "The last non-proof commit on this branch: the second origin/main sync merge, taken after PR #1469 merged as 63d76eb6. Receipts were executed at b8795cb58665b66b2e04840159c589f4f9e31b5e, the first sync merge; the second sync changed no file this lane owns (workflow, test and proof tree blobs are byte-identical across both), so they remain valid at this SHA. Authoritative merge SHA binding remains pending until GitHub attests the merged PR.",
+    "verified_source_note": "The last non-proof commit on this branch: the second origin/main sync merge, taken after PR #1469 merged as 63d76eb6. Receipts were executed at b8795cb58665b66b2e04840159c589f4f9e31b5e, the first sync merge; the second sync changed no file this lane owns (workflow, test and proof tree blobs are byte-identical across both), so they remain valid at this SHA. GitHub has attested the merge of PR #1468 as 4ac025ee211d17720b18e764d006325cd919b228 and the verification document is bound to it; sha_binding.merge_sha stays null here because this repair PR is itself unmerged and that slot is written only by the post-merge closeout, which is the authority for it.",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "current_pr_head_sha": "64a47197f2327171c46be35f26c23db939bcb91d",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
@@ -204,5 +204,49 @@
   "open_items": [
     "No post-merge scheduled run of Ingestor and Alert-System Monitor has been observed; alert delivery is proven wired, not proven delivered.",
     "pnpm test:db is not runnable from a local worktree (assert-staging resolves host=127.0.0.1); the writable receipt is produced inside CI by the staging-ci environment and verified within the required verify job."
-  ]
+  ],
+  "pr_number": 1468,
+  "source_sha": "497a36f805220e7d71a6c01d252d6e237628824a",
+  "reviewed_head_sha": "64a47197f2327171c46be35f26c23db939bcb91d",
+  "evidence_commit_sha": null,
+  "current_head_sha": "64a47197f2327171c46be35f26c23db939bcb91d",
+  "gate_results": [
+    {
+      "gate": "verify",
+      "verdict": "PASS",
+      "detail": "SUCCESS at 64a47197"
+    },
+    {
+      "gate": "Executor Result Validation",
+      "verdict": "PASS",
+      "detail": "VALID at 64a47197"
+    },
+    {
+      "gate": "P0 Protocol",
+      "verdict": "PASS",
+      "detail": "SUCCESS at 64a47197"
+    },
+    {
+      "gate": "Merge Gate",
+      "verdict": "PASS",
+      "detail": "SUCCESS at 64a47197 after t1-approved and pm-verdict/v1 APPROVED"
+    },
+    {
+      "gate": "Close eligibility preflight",
+      "verdict": "PASS",
+      "detail": "SUCCESS at 64a47197"
+    },
+    {
+      "gate": "T1 Proof Gate",
+      "verdict": "PASS",
+      "detail": "SUCCESS at 64a47197"
+    }
+  ],
+  "reviewer_verdict": null,
+  "pm_verdict": {
+    "actor": "griff843",
+    "verdict": "APPROVED",
+    "recorded_at": "2026-09-01T00:00:00Z",
+    "notes": "Exact-head approval at 64a47197; scoped to wiring, not delivery."
+  }
 }
