@@ -13,7 +13,6 @@
   "file_scope_lock": [
     ".ops/sync/UTV2-1796.yml",
     "apps/ingestor/src/ingest-odds-api.ts",
-    "apps/ingestor/src/t1-proof-utv2-1796-closing-lines.test.ts",
     "apps/ingestor/src/utv2-1796-closing-line-staging-proof.test.ts",
     "docs/06_status/lanes/UTV2-1796.json",
     "docs/06_status/proof/UTV2-1796/diff-summary.md",

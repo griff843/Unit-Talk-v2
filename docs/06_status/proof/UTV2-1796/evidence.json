@@ -7,12 +7,60 @@
   "status": "pre_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "c2cb0978d11dea87ecb8016e73a99aa48e8a700f",
+    "verified_source_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf",
     "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "note": "c3834a6d is the last non-proof commit on this branch. Every receipt in verification.md was executed against that exact tree."
   },
   "static_proof": {
-    "status": "not_run",
-    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
-  }
+    "status": "pass",
+    "note": "pnpm verify:static EXIT=0 on c3834a6d80e746ffe39bbde52018373eba1dfadf; 100 node:test blocks, 0 failures; r-level-check PASS (rules matched: ingestor-provider). test:live-db requires the staging-ci credential held only by the CI staging-db-proof job and is proven there, not claimed here."
+  },
+  "pr_number": 1472,
+  "source_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf",
+  "reviewed_head_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf",
+  "evidence_commit_sha": null,
+  "merge_sha": null,
+  "generated_at": "2026-09-01T02:42:27Z",
+  "gate_results": [
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "EXIT=0 on c3834a6d80e746ffe39bbde52018373eba1dfadf; 100 node:test blocks executed, every one reporting '# fail 0'."
+    },
+    {
+      "gate": "pnpm type-check",
+      "verdict": "PASS",
+      "detail": "Executed as a stage of verify:static."
+    },
+    {
+      "gate": "pnpm test",
+      "verdict": "PASS",
+      "detail": "Executed as a stage of verify:static; 0 failures across 100 blocks."
+    },
+    {
+      "gate": "r-level-check",
+      "verdict": "PASS",
+      "detail": "Verdict: PASS. Changed files: 12. Rules matched: ingestor-provider."
+    },
+    {
+      "gate": "pnpm test:live-db",
+      "verdict": "SKIP",
+      "detail": "Not runnable from this containment checkout: requires the staging-ci environment credential held only by the CI staging-db-proof job. CI's required verify job asserts that job's result as its first step, so the live half is proven in CI and is not claimed here."
+    },
+    {
+      "gate": "mutation testing",
+      "verdict": "PASS",
+      "detail": "Seven mutations applied to the merged source; each failed exactly the test naming its condition (not ok 8, 9, 11, 12, caller-path not ok 1, 8, 15). Restored source: pass 15 / fail 0."
+    },
+    {
+      "gate": "File scope lock",
+      "verdict": "FAIL",
+      "detail": "package.json is outside this lane's first-commit file_scope_lock, which the guard locks to commit a87857f8 and which a later commit cannot widen. Not a required branch-protection context. Clearing it needs a scope-override/v1 comment authored by griff843 at the exact head; it is reported to PM rather than worked around by rewriting branch history."
+    }
+  ]
 }
