@@ -1,6 +1,6 @@
 # PROOF: UTV2-1699
 
-MERGE_SHA: 6c67131294141c4f4be1acd6f16f94b8c6614a76
+MERGE_SHA: ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79
 
 Lane: claude / `claude/utv2-1699-lane-maximizer-discovery-repair`
 Tier: T1 (Tier C path — `scripts/ops/lane-maximizer.ts`)
@@ -17,6 +17,10 @@ ASSERTIONS:
 - [x] AC5 — a genuinely zero-candidate run still exits 0 with a real report.
 - [x] AC6 — active lanes resolve through the canonical resolver; a PR-head-only manifest fixture is counted against capacity and enforces OVERLAP.
 - [x] AC7 — every one of the four controls is proven by executed mutation: the mutation was applied, the named regression FAILED, the mutation was reverted and the regression PASSED. Literal output below.
+- [x] F1 (PM blocker) — capacity is classified by the canonical `classifyLaneCapacity` from `shared.ts`, not by counting the raw `ACTIVE_LOCK_STATUSES` lock population: an `in_progress` lane consumes an executor slot; a `parked` lane stays visible (and still enforces `OVERLAP`) while consuming none; `in_review` lanes create no phantom executor saturation; a parked `migration` lane fabricates neither a `migration` singleton nor a `migration`+`runtime` forbidden pair; and lane-maximizer agrees with `ops:execution-state` on the same fixture population.
+- [x] PM defect 2 — the pagination proof is no longer vacuous: the fake transport is cursor-driven and refuses any cursor it did not hand back, and AC2 asserts the literal cursor sequence and the query text.
+- [x] PM defect 3 — malformed DISCOVERED state emits the machine-readable error envelope instead of exiting 1 with empty stdout, on both the discovery-boundary path and the evaluation path.
+- [x] PM defect 5 — the candidate walk orders by the immutable `createdAt`, so an issue edited mid-walk cannot move behind an already-consumed cursor and be silently skipped.
 - [x] AC8 — `ranking_score` / `ranking_reasons` for a fixed candidate set are byte-identical before and after this change, measured against the pre-change implementation at base `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
 
 Commands executed for this proof (all in the lane worktree):
@@ -37,24 +41,32 @@ EVIDENCE:
 ```text
 ok 58 - UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate source
 ok 59 - UTV2-1699 AC2: candidate discovery paginates past the first page
-ok 60 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
-ok 61 - UTV2-1699 AC3: candidate-source failure exits non-zero with a candidate-discovery code
-ok 62 - UTV2-1699 AC3: a Linear auth failure fails closed as candidate discovery
-ok 63 - UTV2-1699 AC4: active-lane discovery failure exits non-zero with a DISTINCT code
-ok 64 - UTV2-1699 AC4: an unreadable lane manifest is a failure, not a smaller board
-ok 65 - UTV2-1699 AC5: a genuinely empty candidate population still exits 0
-ok 66 - UTV2-1699 AC6: a PR-head-only lane manifest is counted as active
-ok 67 - UTV2-1699 AC8: ranking output is unchanged for a fixed candidate set
-# tests 67
+ok 60 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 61 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+ok 62 - UTV2-1699 AC3: candidate-source failure exits non-zero with a candidate-discovery code
+ok 63 - UTV2-1699 AC3: a Linear auth failure fails closed as candidate discovery
+ok 64 - UTV2-1699 AC4: active-lane discovery failure exits non-zero with a DISTINCT code
+ok 65 - UTV2-1699 AC4: an unreadable lane manifest is a failure, not a smaller board
+ok 66 - UTV2-1699 AC5: a genuinely empty candidate population still exits 0
+ok 67 - UTV2-1699 AC6: a PR-head-only lane manifest is counted as active
+ok 68 - UTV2-1699 AC8: ranking output is unchanged for a fixed candidate set
+ok 69 - UTV2-1699 F1: an in_progress lane consumes executor capacity
+ok 70 - UTV2-1699 F1: a parked lane stays visible but consumes no capacity
+ok 71 - UTV2-1699 F1: in_review lanes do not create phantom executor saturation
+ok 72 - UTV2-1699 F1: a parked migration lane fabricates no singleton and no forbidden pair
+ok 73 - UTV2-1699 F1: lane-maximizer and ops:execution-state agree on capacity for one population
+ok 74 - UTV2-1699 defect 3: a PR-head manifest with no file_scope_lock fails closed with an envelope
+ok 75 - UTV2-1699 defect 3: a throw during evaluation emits an envelope, never empty stdout
+# tests 75
 # suites 0
-# pass 67
+# pass 75
 # fail 0
 # cancelled 0
 # skipped 0
 # todo 0
 ```
 
-56 pre-existing tests plus 11 new UTV2-1699 regressions. `# fail 0`.
+57 pre-existing tests plus 18 new UTV2-1699 regressions (57 + 18 = 75). `# fail 0`.
 
 ## Mutation matrix (AC7)
 
@@ -69,6 +81,10 @@ during the matrix.
 | M2 | Restore the `else -> parseCandidatesArg(argv)` fallthrough | AC1 | `# fail 1` | `# fail 0` |
 | M3 | Restore the hard limit of 10 (single un-paginated page) | AC2 | `# fail 2` | `# fail 0` |
 | M4 | Revert to the local-manifest-only `readActiveLanes` | AC6 | `# fail 1` | `# fail 0` |
+| M5 | Restore raw `ACTIVE_LOCK_STATUSES` counting (drop `classifyLaneCapacity`) | the five F1 regressions | `# fail 4` (4/5; the in_progress positive control still passes by construction) | `# fail 0` (5/5 passed) |
+| M6 | Delete `cursor = connection.pageInfo.endCursor` | AC2 | `# fail 1` | `# fail 0` |
+| M7 | Drop `assertUsableActiveLanes` and the `evaluateCandidates` try/catch | the two PM-defect-3 regressions | `# fail 2` (2/2 failed) | `# fail 0` (2/2 passed) |
+| M8 | Revert `orderBy: createdAt` to `orderBy: updatedAt` | AC2 | `# fail 1` | `# fail 0` |
 
 ### M1 — restore the fail-open catch that empties both populations
 
@@ -536,6 +552,576 @@ ok 1 - UTV2-1699 AC6: a PR-head-only lane manifest is counted as active
 # fail 0
 ```
 
+
+### M5 — restore raw `ACTIVE_LOCK_STATUSES` counting (F1 blocker)
+
+Command: `pnpm exec tsx --test --test-name-pattern "F1" scripts/ops/lane-maximizer.test.ts`.
+Four of the five regressions fail. The fifth (`an in_progress lane consumes executor
+capacity`) passes under the mutation *by design*: it is the positive control, and an
+`in_progress` lane counts against the executor under both the correct and the mutated
+rule. Its job is to prove the repair did not simply stop counting everything.
+
+Mutation applied:
+
+```diff
+--- a/scripts/ops/lane-maximizer.ts
++++ b/scripts/ops/lane-maximizer.ts
+@@ -1120,7 +1120,7 @@
+       });
+   // UTV2-1699 F1: executor occupancy counts ONLY lanes an executor is actually
+   // working, never the whole lock population.
+-  const executorLanes = executorCapacityLanes(activeLanes);
++  const executorLanes = activeLanes;
+   const activeClaude = executorLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
+   const activeCodex = executorLanes.filter((lane) => {
+     const executor = resolveLaneExecutor(lane);
+@@ -1130,7 +1130,7 @@
+   // the same population checkConcurrencyLimits() evaluates those two rules
+   // against (its `active`, i.e. TOTAL_CAPACITY_STATUSES), or the forecast
+   // predicts conflicts the real admission check would never raise.
+-  const initialActiveTypes = activeLaneTypes(totalCapacityLanes(activeLanes));
++  const initialActiveTypes = activeLaneTypes(activeLanes);
+   const visibleUncounted = visibleUncountedLanes(activeLanes);
+   const fullVerifyThrottle = readFullVerifyThrottleState();
+```
+
+Executed under the mutation:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 F1: an in_progress lane consumes executor capacity
+ok 1 - UTV2-1699 F1: an in_progress lane consumes executor capacity
+  ---
+  duration_ms: 57.993878
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 F1: a parked lane stays visible but consumes no capacity
+not ok 2 - UTV2-1699 F1: a parked lane stays visible but consumes no capacity
+  ---
+  duration_ms: 50.505026
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:16172'
+  failureType: 'testCodeFailure'
+  error: |-
+    a parked lane must NOT consume an executor slot
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1885:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: UTV2-1699 F1: in_review lanes do not create phantom executor saturation
+not ok 3 - UTV2-1699 F1: in_review lanes do not create phantom executor saturation
+  ---
+  duration_ms: 49.030717
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:17510'
+  failureType: 'testCodeFailure'
+  error: |-
+    lanes awaiting review hold no executor; they must not saturate the codex cap
+    
+    6 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 6
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1924:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: UTV2-1699 F1: a parked migration lane fabricates no singleton and no forbidden pair
+not ok 4 - UTV2-1699 F1: a parked migration lane fabricates no singleton and no forbidden pair
+  ---
+  duration_ms: 36.682528
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:18588'
+  failureType: 'testCodeFailure'
+  error: |-
+    only the genuinely active runtime singleton exists; the parked migration lane holds no singleton
+    + actual - expected
+    
+      [
+    +   'migration',
+        'runtime'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'runtime'
+  actual:
+    0: 'migration'
+    1: 'runtime'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1960:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: UTV2-1699 F1: lane-maximizer and ops:execution-state agree on capacity for one population
+not ok 5 - UTV2-1699 F1: lane-maximizer and ops:execution-state agree on capacity for one population
+  ---
+  duration_ms: 33.840278
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:19710'
+  failureType: 'testCodeFailure'
+  error: |-
+    lane-maximizer and ops:execution-state must report the same codex occupancy for one population
+    
+    4 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 4
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:2003:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 1
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1180.453358
+```
+
+Mutation reverted, same command re-executed:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 F1: an in_progress lane consumes executor capacity
+ok 1 - UTV2-1699 F1: an in_progress lane consumes executor capacity
+  ---
+  duration_ms: 47.599366
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 F1: a parked lane stays visible but consumes no capacity
+ok 2 - UTV2-1699 F1: a parked lane stays visible but consumes no capacity
+  ---
+  duration_ms: 31.589665
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 F1: in_review lanes do not create phantom executor saturation
+ok 3 - UTV2-1699 F1: in_review lanes do not create phantom executor saturation
+  ---
+  duration_ms: 42.091209
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 F1: a parked migration lane fabricates no singleton and no forbidden pair
+ok 4 - UTV2-1699 F1: a parked migration lane fabricates no singleton and no forbidden pair
+  ---
+  duration_ms: 36.413967
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 F1: lane-maximizer and ops:execution-state agree on capacity for one population
+ok 5 - UTV2-1699 F1: lane-maximizer and ops:execution-state agree on capacity for one population
+  ---
+  duration_ms: 53.180977
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2036.016906
+```
+
+### M6 — delete the cursor advancement (PM defect 2)
+
+Command: `pnpm exec tsx --test --test-name-pattern "AC2" scripts/ops/lane-maximizer.test.ts`.
+Under the round-1 counter-driven fake this mutation was invisible. With the cursor-driven
+fake the walk re-requests page 1 forever and dies at the page cap, so the failure is a
+`candidate_discovery_failed` envelope rather than a silently truncated board.
+
+Mutation applied:
+
+```diff
+--- a/scripts/ops/lane-maximizer.ts
++++ b/scripts/ops/lane-maximizer.ts
+@@ -1014,7 +1014,7 @@
+           'refusing to report a truncated candidate population as the whole board.',
+       );
+     }
+-    cursor = connection.pageInfo.endCursor;
++    // MUTATION: cursor advancement removed
+   }
+ 
+   return nodes.flatMap((issue): CandidateLane[] => {
+```
+
+Executed under the mutation:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 AC2: candidate discovery paginates past the first page
+not ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
+  ---
+  duration_ms: 16.46168
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:5200'
+  failureType: 'testCodeFailure'
+  error: |-
+    {
+      "ok": false,
+      "error": true,
+      "code": "candidate_discovery_failed",
+      "message": "Could not read the linear candidate source, so the dispatchable population is unknown. Refusing to report an unknown candidate population as an empty board. Cause: Linear candidate pagination exceeded 100 pages; refusing to report a candidate population that cannot be proven complete.",
+      "remediation": "Restore LINEAR_API_TOKEN/LINEAR_API_KEY and network access to api.linear.app, then retry. An unknown board is never treated as an empty one.",
+      "candidate_source": "linear"
+    }
+    
+    
+    1 !== 0
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1488:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+  ---
+  duration_ms: 3.253131
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+  ---
+  duration_ms: 0.711298
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1353.374183
+```
+
+Mutation reverted, same command re-executed:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 AC2: candidate discovery paginates past the first page
+ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
+  ---
+  duration_ms: 32.194052
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+  ---
+  duration_ms: 2.593426
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+  ---
+  duration_ms: 0.769171
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1159.428802
+```
+
+### M7 — remove the fail-closed envelopes around discovered state (PM defect 3)
+
+Command: `pnpm exec tsx --test --test-name-pattern "defect 3" scripts/ops/lane-maximizer.test.ts`.
+Both regressions fail with the raw `TypeError` the PM predicted — `Cannot read properties
+of undefined (reading 'some')` and `Cannot read properties of null (reading 'replace')` —
+i.e. a non-zero exit with no machine-readable stdout.
+
+Mutation applied:
+
+```diff
+--- a/scripts/ops/lane-maximizer.ts
++++ b/scripts/ops/lane-maximizer.ts
+@@ -715,7 +715,7 @@
+ function resolveActiveLanesCanonically(
+   discoveryDeps?: ActiveLaneDiscoveryDeps,
+ ): LaneManifest[] {
+-  return assertUsableActiveLanes(resolveActiveLaneManifests(discoveryDeps).manifests);
++  return resolveActiveLaneManifests(discoveryDeps).manifests;
+ }
+ 
+ function readDoneIssueIds(dir: string = LANE_DIR): Set<string> {
+@@ -1524,7 +1524,7 @@
+   let activeLanes: LaneManifest[];
+   try {
+     activeLanes = deps.resolveActiveLanes
+-      ? assertUsableActiveLanes(deps.resolveActiveLanes(deps.activeLaneDiscovery))
++      ? deps.resolveActiveLanes(deps.activeLaneDiscovery)
+       : resolveActiveLanesCanonically(deps.activeLaneDiscovery);
+   } catch (error) {
+     return errorOutcome(
+@@ -1546,19 +1546,7 @@
+    * cause. Every exit path now emits an envelope or a report; none emits
+    * nothing.
+    */
+-  let report: MaximizationReport;
+-  try {
+-    report = evaluateCandidates(candidates, activeLanes, parseLimits(argv));
+-  } catch (error) {
+-    return errorOutcome(
+-      'evaluation_failed',
+-      source,
+-      'Could not evaluate the discovered board, so no dispatch recommendation can be trusted. ' +
+-        'Refusing to report an unevaluated board as an empty or safe one. ' +
+-        `Cause: ${error instanceof Error ? error.message : String(error)}`,
+-      'Repair the malformed lane manifest or local lane directory named in the cause, then retry. Capacity, singleton and file-scope conflict checks are unsafe against a board that could not be evaluated.',
+-    );
+-  }
++  const report = evaluateCandidates(candidates, activeLanes, parseLimits(argv));
+ 
+   return {
+     exitCode: 0,
+```
+
+Executed under the mutation:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 defect 3: a PR-head manifest with no file_scope_lock fails closed with an envelope
+not ok 1 - UTV2-1699 defect 3: a PR-head manifest with no file_scope_lock fails closed with an envelope
+  ---
+  duration_ms: 54.435936
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:21453'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of undefined (reading 'some')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1355:59)
+    Array.some (<anonymous>)
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1355:23)
+    Array.some (<anonymous>)
+    evaluateCandidates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1354:32)
+    runMaximizerCli (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1549:18)
+    async TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:2027:19)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: UTV2-1699 defect 3: a throw during evaluation emits an envelope, never empty stdout
+not ok 2 - UTV2-1699 defect 3: a throw during evaluation emits an envelope, never empty stdout
+  ---
+  duration_ms: 33.570351
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:22743'
+  failureType: 'testCodeFailure'
+  error: "Cannot read properties of null (reading 'replace')"
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    normalizePath (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:287:16)
+    overlapsPath (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:393:15)
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1355:80)
+    Array.some (<anonymous>)
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1355:59)
+    Array.some (<anonymous>)
+    <anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1355:23)
+    Array.some (<anonymous>)
+    evaluateCandidates (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1354:32)
+    runMaximizerCli (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.ts:1549:18)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1873.362909
+```
+
+Mutation reverted, same command re-executed:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 defect 3: a PR-head manifest with no file_scope_lock fails closed with an envelope
+ok 1 - UTV2-1699 defect 3: a PR-head manifest with no file_scope_lock fails closed with an envelope
+  ---
+  duration_ms: 7.675632
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 defect 3: a throw during evaluation emits an envelope, never empty stdout
+ok 2 - UTV2-1699 defect 3: a throw during evaluation emits an envelope, never empty stdout
+  ---
+  duration_ms: 24.454824
+  type: 'test'
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 928.208475
+```
+
+### M8 — revert to mutable `updatedAt` ordering (PM defect 5)
+
+Command: `pnpm exec tsx --test --test-name-pattern "AC2" scripts/ops/lane-maximizer.test.ts`.
+
+Mutation applied:
+
+```diff
+--- a/scripts/ops/lane-maximizer.ts
++++ b/scripts/ops/lane-maximizer.ts
+@@ -969,7 +969,7 @@
+            first: $limit
+            after: $cursor
+            filter: { state: { type: { in: ["backlog", "unstarted"] } } }
+-           orderBy: createdAt
++           orderBy: updatedAt
+          ) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+```
+
+Executed under the mutation:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 AC2: candidate discovery paginates past the first page
+not ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
+  ---
+  duration_ms: 33.619531
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:5200'
+  failureType: 'testCodeFailure'
+  error: 'the walk must order by the immutable createdAt: an issue whose updatedAt changes mid-walk can move behind an already-consumed cursor and be silently skipped'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
+           team(id: $teamId) {
+             issues(
+               first: $limit
+               after: $cursor
+               filter: { state: { type: { in: ["backlog", "unstarted"] } } }
+               orderBy: updatedAt
+             ) {
+               pageInfo { hasNextPage endCursor }
+               nodes {
+                 identifier
+                 title
+                 url
+                 description
+                 branchName
+                 labels { nodes { name } }
+                 state { name type }
+                 relations {
+                   nodes {
+                     type
+                     relatedIssue { identifier }
+                   }
+                 }
+               }
+             }
+           }
+         }
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1520:12)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
+  ...
+# Subtest: UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+  ---
+  duration_ms: 4.498382
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+  ---
+  duration_ms: 0.468046
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 2
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 867.285839
+```
+
+Mutation reverted, same command re-executed:
+
+```text
+TAP version 13
+# Subtest: UTV2-1699 AC2: candidate discovery paginates past the first page
+ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
+  ---
+  duration_ms: 41.130342
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+  ---
+  duration_ms: 2.143295
+  type: 'test'
+  ...
+# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+  ---
+  duration_ms: 0.603108
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 799.143649
+```
+
 ## AC8 — ranking output unchanged
 
 `scoreCandidate` / `rankCandidates` / `evaluateCandidates` were not modified. Proven
@@ -603,21 +1189,21 @@ The same golden is asserted inside the test suite as
 ## `pnpm verify`
 
 ```text
-2:> @unit-talk/v2@0.1.0 verify 
-6:> @unit-talk/v2@0.1.0 verify:static 
-36:> @unit-talk/v2@0.1.0 env:check 
-41:> @unit-talk/v2@0.1.0 lint 
-45:> @unit-talk/v2@0.1.0 type-check 
-49:> @unit-talk/v2@0.1.0 build 
-53:> @unit-talk/v2@0.1.0 test 
-35829:> @unit-talk/v2@0.1.0 verify:commands 
-35841:> @unit-talk/v2@0.1.0 test:live-db 
-35845:> @unit-talk/v2@0.1.0 test:db 
-35849:> @unit-talk/v2@0.1.0 ci:assert-staging 
+2:> @unit-talk/v2@0.1.0 verify
+6:> @unit-talk/v2@0.1.0 verify:static
+36:> @unit-talk/v2@0.1.0 env:check
+41:> @unit-talk/v2@0.1.0 lint
+45:> @unit-talk/v2@0.1.0 type-check
+49:> @unit-talk/v2@0.1.0 build
+53:> @unit-talk/v2@0.1.0 test
+35877:> @unit-talk/v2@0.1.0 verify:commands
+35889:> @unit-talk/v2@0.1.0 test:live-db
+35893:> @unit-talk/v2@0.1.0 test:db
+35897:> @unit-talk/v2@0.1.0 ci:assert-staging
 
 aggregate node:test totals across every suite run by `pnpm test`:
-# tests 5524
-# pass 5524
+# tests 5532
+# pass 5532
 # fail 0
 # cancelled 0
 # skipped 0
@@ -640,7 +1226,7 @@ VERIFY_EXIT=1
 
 `pnpm verify` exits 1, and it does so at exactly one stage: `test:live-db`.
 `env:check`, `lint`, `type-check`, `build`, the whole `pnpm test` tree
-(5524 tests, 0 failures, 0 `not ok` lines), `verify:static` and `verify:commands`
+(5532 tests, 0 failures, 0 `not ok` lines), `verify:static` and `verify:commands`
 are all exit 0.
 
 `test:live-db` is REFUSED, not failed, and the refusal is a containment control
@@ -662,10 +1248,13 @@ schema, no migration, no DB client and no query — the changed files are
 ## Scope
 
 ```text
- .ops/sync/UTV2-1699.yml                 | 400 +++++++++++++++++++++++++++++++
- docs/06_status/lanes/UTV2-1699.json     |  41 ++++
- docs/06_status/proof/UTV2-1699/.gitkeep |   0
- scripts/ops/lane-maximizer.test.ts      | 405 +++++++++++++++++++++++++++++++-
- scripts/ops/lane-maximizer.ts           | 370 ++++++++++++++++++++++++-----
- 5 files changed, 1150 insertions(+), 66 deletions(-)
+ .ops/sync/UTV2-1699.yml                           |  400 +++++++
+ docs/06_status/lanes/UTV2-1699.json               |   41 +
+ docs/06_status/proof/UTV2-1699/diff-summary.md    |  247 ++++
+ docs/06_status/proof/UTV2-1699/evidence.json      |  300 +++++
+ docs/06_status/proof/UTV2-1699/model-routing.json |   13 +
+ docs/06_status/proof/UTV2-1699/verification.md    | 1257 +++++++++++++++++++++
+ scripts/ops/lane-maximizer.test.ts                |  775 ++++++++++++-
+ scripts/ops/lane-maximizer.ts                     |  571 ++++++++--
+ 8 files changed, 3533 insertions(+), 71 deletions(-)
 ```
