@@ -1,10 +1,11 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: 16c15506f4a2132a885073226461b6f0517161af
+MERGE_SHA: e0288a2aadab38ae61be1a4f2a9157282f487554
 
-The value above is the implementation commit — the last non-proof commit on this branch —
-not this file's own commit, which cannot exist before the file does. It is an ancestor of
-PR HEAD. The post-merge merge-SHA binding is carried in `verification.md`.
+The value above is the last non-proof commit on this branch — the merge commit from the
+sanctioned Update-branch on PR #1477, which carries implementation commit `4c3a71cf` — not
+this file's own commit, which cannot exist before the file does. It is an ancestor of PR
+HEAD. The post-merge merge-SHA binding is carried in `verification.md`.
 
 ## Changed files
 
@@ -69,20 +70,59 @@ anon EXECUTE: true    anon SELECT: true
 Apply / down / reapply fingerprints, including ACLs:
 
 ```
-applied         dd6588d1831a7eba09921beb8854aeee
-after down      f77268e36e040e76d2d7e2c466a7c62c
-after reapply   dd6588d1831a7eba09921beb8854aeee
+applied         206a7c91d518f0262e6da2dfd9dd69e8
+after down      ABSENT
+after reapply   206a7c91d518f0262e6da2dfd9dd69e8
 reapply_converged: true    down_actually_changed_schema: true
 ```
 
-CEP-E7 receipts, bound to `16c15506` — the last non-proof commit:
+Measured against the byte-exact committed file: staging `pg_proc.prosrc` hashes to
+`7011920a0b001401c505f640bb582481`, equal to the md5 of the function body in the migration
+computed independently from disk. Pre-existing-object refusals, on the same byte-exact file:
 
 ```
-precondition_drill          PASS  run 33530973221  job 99933738656
-schema_roundtrip_drill      PASS  run 33530973221  job 99933739000
-writable_db_proof_staging   PASS  run 33530970352  job 99934207264
+CASE A  table decoy present, function absent   REFUSED 42P07   decoy columns unchanged, 0 DDL
+CASE B  exact function decoy present, no table REFUSED 42723   decoy prosrc dcc284fd… unchanged
+CASE C  both absent                            APPLIED         fingerprint 206a7c91…
+
+MUTATION C  reviewed shape (table-only guard + CREATE OR REPLACE), CASE B setup
+            APPLIED — decoy prosrc dcc284fd… -> dd954ffe…  (silent destruction)
+MUTATION D  down script, owned table + decoy function
+            REFUSED 42501 on the function marker; decoy survived
+```
+
+Comment-stripping parity control, and the mutations that break it:
+
+```
+pnpm exec tsx --test apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts
+# tests 8   # pass 8   # fail 0
+
+MUTATION A  stripSqlComments() returns input unchanged
+            not ok 4, not ok 6   -> 8 tests, 6 pass, 2 fail
+MUTATION B  delete the migration file
+            not ok 1, not ok 8   -> 8 tests, 6 pass, 2 fail
+```
+
+Production migration ledger, read-only from `supabase_migrations.schema_migrations`:
+
+```
+local versions   8      remote versions  127      intersection  0
+would `supabase db push --linked` execute ONLY UTV2-1811?   NO
+also pending: baseline_live_schema, add_delivery_kill_switch,
+              bootstrap_delivery_kill_switch_posture, utv2_1399_fixture…,
+              utv2_1633_reporting_reader_role, utv2_1640_system_runs_autovacuum_tuning,
+              utv2_1540_command_center_ledger_repair
+STOPPED — no repair, no push, no production DDL.
+```
+
+CEP-E7 receipts, bound to `e0288a2a` — the last non-proof commit:
+
+```
+precondition_drill          PASS  run 33558730956  job 100025828660
+schema_roundtrip_drill      PASS  run 33558730956  job 100025828834
+writable_db_proof_staging   PASS  run 33558730726  job 100025972146  (inside required verify)
 live_schema_parity          BLOCKED_ON_PRODUCTION_DDL
-                                  run 33530972753  job 99933777688
+                                  run 33558730886  job 100025888197
 ```
 
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.
@@ -98,6 +138,12 @@ ASSERTIONS:
 - [x] A control object created without the REVOKE block shows `anon` and `authenticated` would otherwise both hold EXECUTE, so the revokes are load-bearing.
 - [x] Apply, down and reapply converge on a byte-identical fingerprint that includes ACLs, and the down script demonstrably changes the schema.
 - [x] The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when the relation is absent.
+- [x] The migration also refuses with `42723`, before any DDL, when the exact callable `public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer)` already exists, and creates with plain `CREATE` rather than `CREATE OR REPLACE`.
+- [x] A pre-existing unrelated implementation survives that refusal byte-identically, and the reviewed shape is shown by mutation to have destroyed it silently.
+- [x] The down script refuses to drop either object unless it carries the `UTV2-1811` ownership marker, proven with the function guard exercised in isolation.
+- [x] SQL comments can no longer satisfy the RPC parity check; a commented-out `CREATE FUNCTION` is treated as missing, and the control fails under mutation when the stripping is removed.
+- [x] The staging replay executed the byte-exact committed migration, closing the earlier normalised-copy fidelity gap.
+- [x] `supabase db push --linked` would apply seven additional migrations besides UTV2-1811; this was reported as a blocker and no repair, push or production DDL was performed.
 - [x] Every control in this lane was observed failing under mutation before being trusted.
 - [x] Both new suites are wired into `test:t1-proof:local` and run under required verify.
 - [x] Staging carries the applied contract; production does not, and no production DDL was performed or is authorized.
