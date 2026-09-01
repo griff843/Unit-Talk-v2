@@ -79,7 +79,7 @@ during the matrix.
 |---|---|---|---|---|
 | M1 | Restore the `catch` that empties both populations | AC3 and AC4 | `# fail 4` (4/4 failed) | `# fail 0` (4/4 passed) |
 | M2 | Restore the `else -> parseCandidatesArg(argv)` fallthrough | AC1 | `# fail 1` | `# fail 0` |
-| M3 | Restore the hard limit of 10 (single un-paginated page) | AC2 | `# fail 2` | `# fail 0` |
+| M3 | Restore the hard limit of 10 (single un-paginated page) | AC2 | `# fail 3` (3/3 failed) | `# fail 0` (3/3 passed) |
 | M4 | Revert to the local-manifest-only `readActiveLanes` | AC6 | `# fail 1` | `# fail 0` |
 | M5 | Restore raw `ACTIVE_LOCK_STATUSES` counting (drop `classifyLaneCapacity`) | the five F1 regressions | `# fail 4` (4/5; the in_progress positive control still passes by construction) | `# fail 0` (5/5 passed) |
 | M6 | Delete `cursor = connection.pageInfo.endCursor` | AC2 | `# fail 1` | `# fail 0` |
@@ -394,16 +394,24 @@ Command:
 pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC2' scripts/ops/lane-maximizer.test.ts
 ```
 
-Literal output UNDER THE MUTATION — the regression FAILS:
+Literal output UNDER THE MUTATION -- the regression FAILS.
+
+> RE-EXECUTED 2026-09-01 against the proof anchor `ceaa715e`. An earlier revision of this
+> bundle carried an M3 receipt captured at an earlier head, when AC2 had two specs. AC2 now
+> has three -- `a walk that does not advance the cursor fails closed` was added in the anchor
+> commit itself -- so the recorded `# fail 2` was wrong for the tree this bundle binds to.
+> The receipt below is the real one. Source at PR head `d8fae01e` is byte-identical to
+> `ceaa715e` under `scripts/` (`git diff --stat ceaa715e d8fae01e -- scripts/` is empty),
+> so it was captured in the lane worktree and the mutation was reverted immediately after.
 
 ```text
 TAP version 13
 # Subtest: UTV2-1699 AC2: candidate discovery paginates past the first page
 not ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
   ---
-  duration_ms: 35.78935
+  duration_ms: 36.234771
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:4729'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:5200'
   failureType: 'testCodeFailure'
   error: |-
     candidates on pages 2 and 3 must be discovered; the population is not capped at the first page
@@ -425,16 +433,38 @@ not ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
     0: 'UTV2-9101'
   operator: 'deepStrictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1441:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1490:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async startSubtestAfterBootstrap (node:internal/test_runner/harness:296:3)
   ...
-# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
-not ok 2 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+# Subtest: UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+not ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
   ---
-  duration_ms: 18.554497
+  duration_ms: 15.997711
   type: 'test'
-  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:5396'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:6709'
+  failureType: 'testCodeFailure'
+  error: |-
+    a walk pinned to the first cursor must fail, never silently re-serve page 1 forever
+    
+    0 !== 1
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 0
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1551:10)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+not ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+  ---
+  duration_ms: 14.676796
+  type: 'test'
+  location: '/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:4:7443'
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
@@ -447,28 +477,29 @@ not ok 2 - UTV2-1699 AC2: a truncated page walk fails closed instead of returnin
   actual: 0
   operator: 'strictEqual'
   stack: |-
-    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1474:10)
+    TestContext.<anonymous> (/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair/scripts/ops/lane-maximizer.test.ts:1585:10)
     async Test.run (node:internal/test_runner/test:1054:7)
     async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
   ...
-1..2
-# tests 2
+1..3
+# tests 3
 # suites 0
 # pass 0
-# fail 2
+# fail 3
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 991.233742
+# duration_ms 666.203804
 ```
 
 Mutation reverted; the same command PASSES:
 
 ```text
 ok 1 - UTV2-1699 AC2: candidate discovery paginates past the first page
-ok 2 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
-# tests 2
-# pass 2
+ok 2 - UTV2-1699 AC2: a walk that does not advance the cursor fails closed
+ok 3 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population
+# tests 3
+# pass 3
 # fail 0
 ```
 

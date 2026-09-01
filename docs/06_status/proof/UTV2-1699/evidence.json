@@ -13,9 +13,10 @@
       "evidence_commit_sha": "ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79",
       "current_pr_head_sha": "ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79"
     },
-    "note": "ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79 is the last non-proof commit on this branch \u2014 the implementation plus its regressions. Every receipt in verification.md was executed against this exact tree. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM's. The later commits on this branch are the proof bundle itself and the lane-binding manifest update (pr_url/status/heartbeat); no source file differs between them and this SHA.",
+    "note": "ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79 is the last non-proof commit on this branch -- the implementation plus its regressions. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM. The later commits on this branch are the proof bundle itself and the lane-binding manifest update (pr_url/status/heartbeat); no source file differs between them and this SHA. RECEIPT PROVENANCE, corrected 2026-09-01: an earlier revision of this file claimed every receipt in verification.md was executed against this exact tree. That was FALSE for M1-M4, which were captured at the intermediate heads 3d95bf26 and 6c671312 before the anchor commit added a third AC2 spec. M3 is the one whose numbers were actually wrong for this tree (it recorded 2 AC2 specs; the anchor has 3) and its receipt has been RE-EXECUTED against the anchor and replaced. M1, M2 and M4 report numbers that remain correct at the anchor, and were independently re-executed at the anchor by an adversarial reviewer who was not the author of this lane, with results matching (4 / 1 / 1 failures respectively). M5-M8 were captured at the anchor. Rather than restate the original claim in weaker words, the provenance of every receipt is named here.",
     "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-01T15:15:18Z"
+    "bound_at": "2026-09-01T15:15:18Z",
+    "current_pr_head_note": "Held equal to verified_source_sha deliberately: the commits above it are proof-only, and git diff --stat ceaa715e <head> -- scripts/ is empty, so every source receipt binds to the anchor unchanged. Naming a literal proof-commit SHA here would go stale on the next proof edit."
   },
   "static_proof": {
     "verify": {
@@ -23,7 +24,7 @@
       "exit_code": 1,
       "status": "REFUSED_AT_LIVE_DB",
       "failing_stage": "test:live-db",
-      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx \u2014 writable DB verification is only obtainable inside the staging-ci GitHub environment.",
+      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx — writable DB verification is only obtainable inside the staging-ci GitHub environment.",
       "note": "Every stage before it is exit 0. This lane touches no schema, migration, DB client or query; the writable receipt is produced inside required CI verify, not claimed here."
     },
     "env_check": {
@@ -97,7 +98,7 @@
     }
   },
   "mutation_proof": {
-    "method": "One control broken at a time in scripts/ops/lane-maximizer.ts; the named regression executed under the mutation and observed to FAIL, then the file restored from the committed blob and the same regression observed to PASS. The test file was never modified during the matrix. Literal output for all eight is embedded in verification.md. M1-M4 cover the four original defects; M5-M8 cover the PM verdict repairs (F1 capacity classification, cursor advancement, fail-closed envelopes on malformed discovered state, immutable pagination ordering).",
+    "method": "One control broken at a time in scripts/ops/lane-maximizer.ts; the named regression executed under the mutation and observed to FAIL, then the file restored from the committed blob and the same regression observed to PASS. The test file was never modified during the matrix. Literal output for all eight is embedded in verification.md. M1-M4 cover the four original defects; M5-M8 cover the PM verdict repairs (F1 capacity classification, cursor advancement, fail-closed envelopes on malformed discovered state, immutable pagination ordering). RECEIPT PROVENANCE: see sha_binding.note -- M1, M2 and M4 were captured at intermediate heads, M3 was re-executed at the anchor after its counts were found stale, and M5-M8 were captured at the anchor.",
     "results": [
       {
         "id": "M1",
@@ -115,7 +116,7 @@
           "pass": 4,
           "fail": 0
         },
-        "caught_by": "not ok 1..4 \u2014 'a candidate-source failure must never exit 0' and 'an unknown active board must never exit 0', both 0 !== 1"
+        "caught_by": "not ok 1..4 — 'a candidate-source failure must never exit 0' and 'an unknown active board must never exit 0', both 0 !== 1"
       },
       {
         "id": "M2",
@@ -133,7 +134,7 @@
           "pass": 1,
           "fail": 0
         },
-        "caught_by": "not ok 1 \u2014 expected 'linear', actual 'explicit'"
+        "caught_by": "not ok 1 — expected 'linear', actual 'explicit'"
       },
       {
         "id": "M3",
@@ -141,17 +142,18 @@
         "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC2' scripts/ops/lane-maximizer.test.ts",
         "under_mutation": {
           "exit_code": 1,
-          "tests": 2,
+          "tests": 3,
           "pass": 0,
-          "fail": 2
+          "fail": 3
         },
         "after_revert": {
           "exit_code": 0,
-          "tests": 2,
-          "pass": 2,
+          "tests": 3,
+          "pass": 3,
           "fail": 0
         },
-        "caught_by": "not ok 1 \u2014 actual ['UTV2-9101'], expected ['UTV2-9101','UTV2-9102','UTV2-9103']"
+        "caught_by": "not ok 1 - actual ['UTV2-9101'], expected ['UTV2-9101','UTV2-9102','UTV2-9103']; not ok 2 - 'a walk that does not advance the cursor fails closed'; not ok 3 - 'a truncated page walk fails closed instead of returning a partial population'",
+        "note": "RE-EXECUTED at the anchor 2026-09-01. The prior receipt recorded 2 AC2 specs, captured before the anchor commit added the third. Literal TAP for the corrected run is embedded in verification.md."
       },
       {
         "id": "M4",
@@ -169,7 +171,7 @@
           "pass": 1,
           "fail": 0
         },
-        "caught_by": "not ok 1 \u2014 'a lane whose manifest exists only on its open PR head must count against capacity', 0 !== 1"
+        "caught_by": "not ok 1 — 'a lane whose manifest exists only on its open PR head must count against capacity', 0 !== 1"
       },
       {
         "id": "M5",
@@ -295,7 +297,7 @@
     "paid_ingestion": "unchanged (parked)",
     "member_delivery": "unchanged (disabled)",
     "system_picks": "unchanged (disabled)",
-    "linear_api_calls": "none from the test suite \u2014 every Linear interaction in the new regressions runs against an injected in-process fake transport",
+    "linear_api_calls": "none from the test suite — every Linear interaction in the new regressions runs against an injected in-process fake transport",
     "note": "No lane was started, no dispatch was performed, and ops:lane-maximizer was not run against the live board as part of this proof."
   },
   "open_items": [
