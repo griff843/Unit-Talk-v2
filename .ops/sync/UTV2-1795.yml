@@ -1,0 +1,219 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1795
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1795
+  objective: One shared deployment foundation that ships **both **`apps/web` and
+    `apps/smart-form` through the existing Hetzner / Docker / GHCR / Caddy
+    production path. No new hosting vendor, no new subscription, no separate
+    deployment system, no second lane editing `deploy.yml`.
+  acceptance_criteria:
+    - Both apps build reproducibly in CI.
+    - Production images are created and deployed through the governed path.
+    - Caddy routes each approved hostname correctly; HTTPS and health checks
+      pass.
+    - Each app can be rolled back independently.
+    - Smart Form reaches the authoritative API.
+    - Public website routes render.
+    - Deployment **fails closed** when required server-side configuration is
+      absent — proven by an executed inversion, not by inspection.
+    - Existing `api` / `worker` / `ingestor` / `discord-bot` services remain
+      healthy.
+    - Production containment unchanged; no paid ingestion, no member delivery,
+      no system picks.
+  guardrails: []
+  non_goals:
+    - Website visual design
+      ([UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass)),
+      Command Center deployment, Stripe/checkout, DNS record creation, and any
+      `apps/**` source change.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      Three Next.js applications exist on `main` — `apps/web` (9 public routes), `apps/smart-form`, `apps/command-center` — and **none of them is deployed**. Measured on main 2026-08-31:
+
+      * `apps/web` appears in **no** workflow at all.
+      * `apps/smart-form` appears only in `qa-fast.yml` and `qa-experience-regression.yml`, never in a deploy path.
+      * `deploy/production/docker-compose.yml` defines `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy`. No Next.js service.
+      * `deploy/production/Caddyfile` serves exactly one site, `{$CADDY_DOMAIN}` → `api:4000`.
+
+      This single gap blocks the Smart Form internal pilot, Command Center integrated acceptance (which needs real pilot picks), and the public website launch slice under [UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass).
+    - |-
+      Lane-authority constraint — why no file under `apps/**` is touched
+      No lane type admits both `apps/**` and the deployment paths. Measured against `.lane/lanes/*.yml`:
+
+      | Lane type | `.github/workflows/deploy.yml` | `deploy/production/**` | `apps/web/**`, `apps/smart-form/**` |
+      | -- | -- | -- | -- |
+      | `runtime` | yes | yes | **no** |
+      | `governance` | yes | yes | **no** |
+      | `delivery-ui` | **no** | **no** | yes |
+
+      This is the same class of gap as [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work). It is resolved here **without** a taxonomy change and **without** a second lane: every new file lands under `deploy/production/`, and zero files under `apps/` are modified.
+
+      The one thing that would have forced an `apps/` edit is `output: 'standalone'` in `apps/smart-form/next.config.js` (`apps/web` already has it; smart-form does not). Avoided by running `next start` against a normal build rather than the standalone server. Lane type is therefore `runtime`.
+    - >-
+      Deliverables
+
+      1. `deploy/production/Dockerfile.nextjs` — one multi-stage image
+      parameterised by build arg for app name and port, modelled on the existing
+      `apps/command-center/Dockerfile`.
+
+      2. Two services in `deploy/production/docker-compose.yml`: `web` and
+      `smart-form`, each with its own healthcheck, memory limit and restart
+      policy, on the existing `unit-talk` network.
+
+      3. Caddy site blocks for both, hostnames injected as env vars exactly as
+      `{$CADDY_DOMAIN}` is today, so **no hostname is hard-coded in the
+      repository**.
+
+      4. Image build + push for both apps in `.github/workflows/deploy.yml`,
+      through the existing GHCR/Buildx path.
+
+      5. Independent rollback per service.
+
+      6. Secret-inventory validation extended so deployment **fails closed**
+      when required Smart Form server configuration is absent.
+    - >-
+      Port allocation
+
+      Measured in use: `4000` api, `3100` loki (localhost-bound), `3200→3000`
+      grafana (localhost-bound), `80`/`443` caddy. `4300` is claimed by the
+      command-center Dockerfile. Allocating `4200` **web**, `4400`
+      **smart-form**, both bound to the Docker network only and reached through
+      Caddy.
+    - >-
+      Smart Form configuration contract
+
+      Consumed by the container, never exposed:
+
+
+      | Variable | Exposure |
+
+      | -- | -- |
+
+      | `GOOGLE_CLIENT_ID` | server |
+
+      | `GOOGLE_CLIENT_SECRET` | **server only** |
+
+      | `NEXTAUTH_SECRET` | **server only** |
+
+      | `NEXTAUTH_URL` | server |
+
+      | `ALLOWED_CAPPER_EMAILS` | **server-authoritative** |
+
+      | `NEXT_PUBLIC_API_BASE_URL` | browser bundle (non-secret) |
+
+
+      * Empty `ALLOWED_CAPPER_EMAILS` admits nobody — already the application's
+      behaviour; the deployment must not paper over it.
+
+      * The QA auth bypass is never enabled in production.
+      `NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS` must not be set in the production
+      env, and this must be asserted, not assumed.
+
+      * No secret is copied into an image layer, a repository file, a browser
+      bundle, or a log line.
+    - >-
+      Stop conditions
+
+      Return to PM for: the final production hostnames; Google OAuth owner
+      actions; approved capper email addresses; any required new vendor or
+      expense; production DNS mutation; or evidence that the existing server
+      cannot safely host both applications.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1795/shared-nextjs-production-deployment-appsweb-and-appssmart-form-on
+    title: Shared Next.js production deployment — apps/web and apps/smart-form on
+      existing Hetzner/Docker/Caddy
+    description: |-
+      ## Why
+
+      Three Next.js applications exist on `main` — `apps/web` (9 public routes), `apps/smart-form`, `apps/command-center` — and **none of them is deployed**. Measured on main 2026-08-31:
+
+      * `apps/web` appears in **no** workflow at all.
+      * `apps/smart-form` appears only in `qa-fast.yml` and `qa-experience-regression.yml`, never in a deploy path.
+      * `deploy/production/docker-compose.yml` defines `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy`. No Next.js service.
+      * `deploy/production/Caddyfile` serves exactly one site, `{$CADDY_DOMAIN}` → `api:4000`.
+
+      This single gap blocks the Smart Form internal pilot, Command Center integrated acceptance (which needs real pilot picks), and the public website launch slice under [UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass).
+
+      ## Objective
+
+      One shared deployment foundation that ships **both **`apps/web` and `apps/smart-form` through the existing Hetzner / Docker / GHCR / Caddy production path. No new hosting vendor, no new subscription, no separate deployment system, no second lane editing `deploy.yml`.
+
+      ## Lane-authority constraint — why no file under `apps/**` is touched
+
+      No lane type admits both `apps/**` and the deployment paths. Measured against `.lane/lanes/*.yml`:
+
+      | Lane type | `.github/workflows/deploy.yml` | `deploy/production/**` | `apps/web/**`, `apps/smart-form/**` |
+      | -- | -- | -- | -- |
+      | `runtime` | yes | yes | **no** |
+      | `governance` | yes | yes | **no** |
+      | `delivery-ui` | **no** | **no** | yes |
+
+      This is the same class of gap as [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work). It is resolved here **without** a taxonomy change and **without** a second lane: every new file lands under `deploy/production/`, and zero files under `apps/` are modified.
+
+      The one thing that would have forced an `apps/` edit is `output: 'standalone'` in `apps/smart-form/next.config.js` (`apps/web` already has it; smart-form does not). Avoided by running `next start` against a normal build rather than the standalone server. Lane type is therefore `runtime`.
+
+      ## Deliverables
+
+      1. `deploy/production/Dockerfile.nextjs` — one multi-stage image parameterised by build arg for app name and port, modelled on the existing `apps/command-center/Dockerfile`.
+      2. Two services in `deploy/production/docker-compose.yml`: `web` and `smart-form`, each with its own healthcheck, memory limit and restart policy, on the existing `unit-talk` network.
+      3. Caddy site blocks for both, hostnames injected as env vars exactly as `{$CADDY_DOMAIN}` is today, so **no hostname is hard-coded in the repository**.
+      4. Image build + push for both apps in `.github/workflows/deploy.yml`, through the existing GHCR/Buildx path.
+      5. Independent rollback per service.
+      6. Secret-inventory validation extended so deployment **fails closed** when required Smart Form server configuration is absent.
+
+      ## Port allocation
+
+      Measured in use: `4000` api, `3100` loki (localhost-bound), `3200→3000` grafana (localhost-bound), `80`/`443` caddy. `4300` is claimed by the command-center Dockerfile. Allocating `4200` **web**, `4400` **smart-form**, both bound to the Docker network only and reached through Caddy.
+
+      ## Smart Form configuration contract
+
+      Consumed by the container, never exposed:
+
+      | Variable | Exposure |
+      | -- | -- |
+      | `GOOGLE_CLIENT_ID` | server |
+      | `GOOGLE_CLIENT_SECRET` | **server only** |
+      | `NEXTAUTH_SECRET` | **server only** |
+      | `NEXTAUTH_URL` | server |
+      | `ALLOWED_CAPPER_EMAILS` | **server-authoritative** |
+      | `NEXT_PUBLIC_API_BASE_URL` | browser bundle (non-secret) |
+
+      * Empty `ALLOWED_CAPPER_EMAILS` admits nobody — already the application's behaviour; the deployment must not paper over it.
+      * The QA auth bypass is never enabled in production. `NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS` must not be set in the production env, and this must be asserted, not assumed.
+      * No secret is copied into an image layer, a repository file, a browser bundle, or a log line.
+
+      ## Acceptance criteria
+
+      1. Both apps build reproducibly in CI.
+      2. Production images are created and deployed through the governed path.
+      3. Caddy routes each approved hostname correctly; HTTPS and health checks pass.
+      4. Each app can be rolled back independently.
+      5. Smart Form reaches the authoritative API.
+      6. Public website routes render.
+      7. Deployment **fails closed** when required server-side configuration is absent — proven by an executed inversion, not by inspection.
+      8. Existing `api` / `worker` / `ingestor` / `discord-bot` services remain healthy.
+      9. Production containment unchanged; no paid ingestion, no member delivery, no system picks.
+
+      ## Stop conditions
+
+      Return to PM for: the final production hostnames; Google OAuth owner actions; approved capper email addresses; any required new vendor or expense; production DNS mutation; or evidence that the existing server cannot safely host both applications.
+
+      ## Out of scope
+
+      Website visual design ([UTV2-1481](https://linear.app/unit-talk-v2/issue/UTV2-1481/public-website-premium-design-pass)), Command Center deployment, Stripe/checkout, DNS record creation, and any `apps/**` source change.
+    captured_at: 2026-08-31T23:40:30.797Z
+    description_sha256: 8e413f30c5593b5ca69fb7e38c021e892c255f8336351ec92733720b36b5b43d
+  contract_hash: bb3bbbb06d279bbd596a20070d8eba73a16836c99c65ad9c1812637b18fca2cf

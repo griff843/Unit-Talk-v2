@@ -178,15 +178,74 @@ services:
           memory: 128m
           cpus: '0.1'
 
+  web:
+    # Public marketing/website surface (apps/web). Built from
+    # deploy/production/Dockerfile.nextjs; see that file for why one image serves
+    # both Next.js applications.
+    image: ghcr.io/griff843/unit-talk-v2/web:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    # Deliberately NOT .env.production: the public website has no reason to hold
+    # the Supabase service-role key, Discord bot token or SGO keys, and a
+    # browser-facing Next.js process is the worst place to keep them.
+    env_file:
+      - .env.web
+    expose:
+      - "4200"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4200/"]
+      interval: 15s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+
+  smart-form:
+    # Authenticated capper intake surface (apps/smart-form).
+    image: ghcr.io/griff843/unit-talk-v2/smart-form:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    # Narrow env file: Auth.js/Google credentials and the capper allow-list, and
+    # nothing else. GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET and
+    # ALLOWED_CAPPER_EMAILS stay server-side in this container only.
+    env_file:
+      - .env.smart-form
+    expose:
+      - "4400"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4400/login"]
+      interval: 15s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+
   caddy:
     image: caddy:2-alpine
     container_name: caddy
-    # CADDY_DOMAIN must reach the container for the {$CADDY_DOMAIN} site
-    # address in the Caddyfile; without it Caddy fails to parse the config
-    # and crash-loops. env_file matches the other services (future
-    # hardening: narrow to just CADDY_DOMAIN — caddy is the public edge).
+    # CADDY_DOMAIN, UNIT_TALK_WEB_DOMAIN and UNIT_TALK_SMART_FORM_DOMAIN must
+    # reach the container for the {$...} site addresses in the Caddyfile;
+    # without them Caddy fails to parse the config and crash-loops.
+    #
+    # UTV2-1795: this was `.env.production`, which handed the public edge every
+    # production secret in the file. It now reads a narrow edge env holding only
+    # the three hostnames — the hardening the previous comment deferred, taken
+    # now because .env.production gained Google OAuth credentials.
     env_file:
-      - .env.production
+      - .env.edge
     ports:
       - "80:80"
       - "443:443"
@@ -197,6 +256,10 @@ services:
     restart: unless-stopped
     depends_on:
       api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+      smart-form:
         condition: service_healthy
     networks:
       - unit-talk
