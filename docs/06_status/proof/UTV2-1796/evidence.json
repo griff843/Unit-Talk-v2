@@ -1,0 +1,18 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1796",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c2cb0978d11dea87ecb8016e73a99aa48e8a700f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "status": "not_run",
+    "note": "Populate with measured gate results before review; proof-generate does not execute verification."
+  }
+}
