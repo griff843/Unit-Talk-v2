@@ -11,12 +11,13 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".github/workflows/migration-reversibility-gate.yml",
     "docs/06_status/proof/UTV2-1822/diff-summary.md",
     "docs/06_status/proof/UTV2-1822/evidence.json",
     "docs/06_status/proof/UTV2-1822/verification.md",
     "scripts/ci/**",
-    "supabase/migrations_archive/**",
-    "supabase/migrations/**"
+    "supabase/migrations/**",
+    "supabase/migrations_archive/**"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1822/evidence.json"
