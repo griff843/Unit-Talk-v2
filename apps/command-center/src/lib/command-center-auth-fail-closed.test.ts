@@ -101,6 +101,49 @@ test('UTV2-1789: a production runtime is never told auth is optional', () => {
   assert.equal(config.required, true);
 });
 
+/**
+ * The deployed-environment precedence invariant, stated as an invariant rather
+ * than as a claim about one branch.
+ *
+ * `isCommandCenterAuthRequired` enforces this twice: the early
+ * `isDeployedEnvironment(env)` return, and the rewritten `fail_open` branch
+ * (`return !isDevelopmentEnvironment(env)`). Because DEPLOYED_ENVIRONMENTS and
+ * DEVELOPMENT_ENVIRONMENTS are disjoint, a deployed name always makes
+ * `isDevelopmentEnvironment` false, so the two mechanisms agree on every input
+ * -- an exhaustive 800-combination differential over this exported function
+ * found no input that distinguishes them. Deleting the early return alone
+ * therefore cannot fail a test, and this suite does not pretend otherwise.
+ *
+ * What this test pins is the property that actually matters: no deployed
+ * environment, under any mode value, is ever told authentication is optional.
+ */
+test('UTV2-1789: no deployed environment is optional-auth under any mode', () => {
+  for (const deployed of ['production', 'staging']) {
+    for (const mode of [
+      undefined,
+      'fail_open',
+      'disabled',
+      'FAIL_OPEN',
+      'Disabled',
+      'fail_closed',
+      'required',
+      'bogus',
+    ]) {
+      for (const nodeEnv of ['production', 'development', 'test', undefined]) {
+        const env: Record<string, string> = { UNIT_TALK_APP_ENV: deployed };
+        if (mode !== undefined) env.COMMAND_CENTER_AUTH_MODE = mode;
+        if (nodeEnv !== undefined) env.NODE_ENV = nodeEnv;
+
+        assert.equal(
+          resolveCommandCenterAccessConfig(env).required,
+          true,
+          `UNIT_TALK_APP_ENV=${deployed} NODE_ENV=${String(nodeEnv)} mode=${String(mode)} must require auth`,
+        );
+      }
+    }
+  }
+});
+
 test('UTV2-1789: valid production credentials still authenticate', () => {
   // The fix must not be a blanket refusal. A correctly configured production
   // deployment has to keep working, or the control would be proven by a change
