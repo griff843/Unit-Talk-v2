@@ -5,22 +5,22 @@
   "lane_type": "runtime",
   "status": "verified",
   "sha_binding": {
-    "verified_source_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
-    "evidence_commit_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
-    "current_pr_head_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
+    "verified_source_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359",
+    "evidence_commit_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359",
+    "current_pr_head_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359",
     "merge_sha": null,
     "ci_sentinels": {
-      "evidence_commit_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
-      "current_pr_head_sha": "dc311970c5b50486ef4636a53ed58245dee09518"
+      "evidence_commit_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359",
+      "current_pr_head_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359"
     },
-    "note": "dc311970 is the last non-proof commit on this branch. Every receipt in verification.md was executed against that exact tree."
+    "note": "822d975d is the last non-proof commit on this branch. Every receipt in verification.md was executed against that exact tree."
   },
   "static_proof": {
     "verify": {
       "command": "pnpm verify",
       "exit_code": 0,
       "status": "PASS",
-      "executed_at_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
+      "executed_at_sha": "822d975d936419f6e75d1a68f4e4010a5fc8f359",
       "included_stages": [
         "pnpm lint",
         "pnpm type-check",

@@ -2,12 +2,12 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: dc311970c5b50486ef4636a53ed58245dee09518
+MERGE_SHA: 822d975d936419f6e75d1a68f4e4010a5fc8f359
 Merge SHA: pending merge
-Execution SHA: dc311970c5b50486ef4636a53ed58245dee09518
+Execution SHA: 822d975d936419f6e75d1a68f4e4010a5fc8f359
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1471
 
-`dc311970c5b50486ef4636a53ed58245dee09518` is the last non-proof commit on this
+`822d975d936419f6e75d1a68f4e4010a5fc8f359` is the last non-proof commit on this
 branch. Every receipt below was executed against that exact tree.
 
 ---
@@ -278,21 +278,58 @@ everything.
 
 17 mutations across both rounds, 17 caught.
 
+### Second correction: CI found four audit failures I did not
+
+`verify` was red at `e10b31c0`. Re-running only lint, type-check and this lane's
+own suite was the wrong reading of "only affected tests": the `deploy.yml` edits
+reached assertions owned by `scripts/ci/deploy-parked-mode.test.ts` and
+`scripts/ops/workflow-hardening.test.ts`. Recorded here rather than quietly fixed.
+
+| Failure | Cause | Fix |
+| --- | --- | --- |
+| `deploy workflow has one fail-closed parked-mode contract across every gate` | the preflight step was renamed to "all **6** image tags"; the audit resolves it by exact literal name, so it concluded there was no registry preflight at all | the audit matches the stable name prefix and asserts the six-service list directly |
+| `static deploy audit detects a registry preflight that does not fail closed` | same root cause — the audit short-circuited before reaching its fail-closed check | same fix |
+| `canonical deploy validator accepts parked and active modes` | the fixture runs the inventory script under `set -euo pipefail`; the seven new `$SECRET_*` reads were unguarded (`unbound variable`), and once guarded were correctly reported missing | `${SECRET_X:-}` for the new reads; the fixture now supplies the seven values the deploy genuinely requires |
+| `no workflow invokes a workspace binary by bare name` | the guard scans run-script text and matched the token `next build` inside a **comment** | comment reworded; no behavioural change |
+
+The first two are the load-bearing ones and share one shape: a step rename made a
+required fail-closed audit stop auditing **while still reporting no violations**.
+It reported "nothing wrong" when it meant "I could not find the thing I check" —
+the same evidence-conflation class this repository has hit before. The audit now
+fails, rather than goes quiet, when the deployment gains another image.
+
+This forced a fifth scope path, `scripts/ci/deploy-parked-mode.test.ts`. It is not
+new work: the audit is stale the moment the deployment has six images instead of
+four, and correcting it is the honest alternative to leaving the step name lying
+about its own count.
+
 ### Re-verification scope
 
-Only the affected surfaces were re-executed, per the correction instruction:
-`pnpm lint` exit 0, `pnpm type-check` exit 0, and
-`pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts` 11/11 pass at
-`dc311970`. Full `pnpm verify` runs in required CI at this head.
+After the second correction the full local `pnpm verify` was run rather than a
+subset. Every static leg passes — **zero `not ok` lines across the whole run** —
+and `deploy-parked-mode`, `workflow-hardening` and this lane's wiring suite are
+102 pass / 0 fail together. The run exits 1 only at `test:db`, which refuses by
+design from a local worktree:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL.
+```
+
+The writable receipt is produced inside CI by the `staging-ci` environment and
+verified within the required `verify` job, which is the only place it is
+obtainable. `pnpm lint` and `pnpm type-check` are exit 0 at `822d975d`.
 
 ### Scope reconciliation
 
-`File scope lock` named exactly four paths the lane legitimately needed and its
-base-side manifest read could not see: `deploy/production/ENV_FILES.md`,
+`File scope lock` named four paths the lane legitimately needed and its base-side
+manifest read could not see: `deploy/production/ENV_FILES.md`,
 `deploy/production/nextjs-entrypoint.sh`, `docs/05_operations/REQUIRED_SECRETS.md`
-and `package.json`. They are reconciled by one authorized `scope-override/v1`
-comment pinned to the final head, not by editing the manifest — the guard reads
-the manifest from base precisely so a PR cannot widen its own scope.
+and `package.json`. The second correction added a fifth,
+`scripts/ci/deploy-parked-mode.test.ts`. All five are reconciled by one authorized
+`scope-override/v1` comment pinned to the final head — re-issued once at the new
+head rather than stacked as a second override — not by editing the manifest: the
+guard reads the manifest from base precisely so a PR cannot widen its own scope.
 
 ---
 
@@ -302,7 +339,7 @@ ASSERTIONS:
 
 - [x] `pnpm verify` — exit 0 at the pre-correction tree, including `pnpm lint`,
       `pnpm type-check`, `pnpm build`, `pnpm test` and `r-level-check`. At the
-      correction head `dc311970` the affected surfaces were re-executed directly
+      correction head `822d975d` the affected surfaces were re-executed directly
       (`pnpm lint` exit 0, `pnpm type-check` exit 0, wiring suite 11/11); the
       full `pnpm verify` at this head is produced by required CI, not claimed
       here.
