@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1798-smart-form-auth-trust-host",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1475",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
@@ -22,9 +22,9 @@
     "docs/06_status/proof/UTV2-1798/evidence.json",
     "docs/06_status/proof/UTV2-1798/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-01T11:53:39.796Z",
-  "heartbeat_at": "2026-09-01T11:53:39.796Z",
+  "heartbeat_at": "2026-09-01T12:01:25.137Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1798-smart-form-auth-trust-host.json",
