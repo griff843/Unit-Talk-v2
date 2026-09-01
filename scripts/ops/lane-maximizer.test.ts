@@ -9,6 +9,11 @@ import {
   type LaneManifest,
   type LinearCandidateFetchDeps,
   type MaximizationReport,
+  LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+  LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE,
+  LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+  LINEAR_CANDIDATE_PAGE_SIZE,
+  LINEAR_CANDIDATE_QUERY,
   evaluateCandidates,
   isBlockingLinearRelationType,
   parseQueueCandidates,
@@ -1343,6 +1348,8 @@ interface FakeLinearDeps extends LinearCandidateFetchDeps {
   cursorsSent: Array<string | null>;
   /** Every candidate-query document the implementation actually sent. */
   candidateQueries: string[];
+  /** Every `first` variable the implementation actually sent, in order. */
+  limitsSent: Array<unknown>;
 }
 
 /**
@@ -1365,6 +1372,9 @@ function fakeLinearDeps(
 ): FakeLinearDeps {
   const cursorsSent: Array<string | null> = [];
   const candidateQueries: string[] = [];
+  // UTV2-1819: the `first:` actually put on the wire, so a page size over
+  // Linear's complexity budget is caught here instead of in production.
+  const limitsSent: Array<unknown> = [];
   // cursor value -> zero-based index of the page it unlocks.
   const pageForCursor = new Map<string, number>([['', 0]]);
   for (let index = 1; index < pages.length; index += 1) {
@@ -1383,6 +1393,7 @@ function fakeLinearDeps(
     }
 
     candidateQueries.push(graphql);
+    limitsSent.push(variables.limit);
     const rawCursor = variables.cursor;
     const cursor = typeof rawCursor === 'string' ? rawCursor : null;
     cursorsSent.push(cursor);
@@ -1421,6 +1432,7 @@ function fakeLinearDeps(
     query: query as LinearCandidateFetchDeps['query'],
     cursorsSent,
     candidateQueries,
+    limitsSent,
   };
 }
 
@@ -2064,4 +2076,71 @@ test('UTV2-1699 defect 3: a throw during evaluation emits an envelope, never emp
   const parsed = JSON.parse(outcome.stdout) as Record<string, unknown>;
   assert.equal(parsed.ok, false);
   assert.equal(parsed.recommended, undefined, 'a failure envelope must carry no report-shaped keys');
+});
+
+// UTV2-1819: the candidate page size is bounded by Linear's query-complexity
+// budget, not by its row limit. `first: 100` was rejected with HTTP 400 at a
+// reported complexity of 11601/10000, which took candidate discovery -- and so
+// the entire dispatch family -- down on main. These regressions make a repeat
+// a test failure instead of a production outage.
+
+test('UTV2-1819 AC2: the candidate page size stays inside Linear query-complexity budget', () => {
+  const projected = LINEAR_CANDIDATE_PAGE_SIZE * LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE;
+  assert.ok(
+    projected < LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to complexity ${projected}, ` +
+      `which is not under Linear's budget of ${LINEAR_CANDIDATE_COMPLEXITY_BUDGET}. ` +
+      'Linear rejects an over-budget query with HTTP 400, so this is a hard outage, not a slowdown.',
+  );
+  // Headroom, so Linear re-pricing the selection slightly does not break discovery.
+  assert.ok(
+    projected <= LINEAR_CANDIDATE_COMPLEXITY_BUDGET * 0.75,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to ${projected}, over 75% of the ` +
+      `${LINEAR_CANDIDATE_COMPLEXITY_BUDGET} budget. Leave margin for re-pricing.`,
+  );
+});
+
+test('UTV2-1819 AC4: the measured per-node cost still matches the query it was measured against', () => {
+  // The per-node complexity figure is only valid for the selection it was measured
+  // on. Linear charges for nested connections, so adding one invalidates it. Count
+  // the nested `{ nodes {` connections in the REAL exported query text.
+  const nested = [...LINEAR_CANDIDATE_QUERY.matchAll(/\w+\s*\{\s*nodes\s*\{/g)].length;
+  assert.equal(
+    nested,
+    LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+    `LaneCandidates now has ${nested} nested connections, but the per-node complexity ` +
+      `figure ${LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE} was measured against ` +
+      `${LINEAR_CANDIDATE_NESTED_CONNECTIONS}. Re-measure against the live API and update ` +
+      'both constants before shipping the wider selection.',
+  );
+});
+
+test('UTV2-1819 AC3: the bounded page size reaches the wire and never caps discovery', async () => {
+  const linear = fakeLinearDeps([
+    [candidateIssueNode('UTV2-9201')],
+    [candidateIssueNode('UTV2-9202')],
+    [candidateIssueNode('UTV2-9203')],
+  ]);
+  const outcome = await runMaximizerCli([], {
+    linear,
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+
+  // The `first:` actually sent must be the bounded constant. Restoring 100 fails
+  // here, which is the whole point: Linear rejects it with HTTP 400 in production.
+  assert.deepStrictEqual(
+    linear.limitsSent,
+    [LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE],
+    'every page must request exactly the complexity-bounded page size',
+  );
+
+  // ...and the smaller page size must cost only round trips, never candidates.
+  const discovered = allResults(outcome.report!).map((entry) => entry.issue_id).sort();
+  assert.deepStrictEqual(
+    discovered,
+    ['UTV2-9201', 'UTV2-9202', 'UTV2-9203'],
+    'a bounded page size is a transport detail; it must not cap the candidate population',
+  );
 });
