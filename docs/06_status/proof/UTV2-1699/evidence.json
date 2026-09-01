@@ -13,7 +13,7 @@
       "evidence_commit_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76",
       "current_pr_head_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76"
     },
-    "note": "6c67131294141c4f4be1acd6f16f94b8c6614a76 is the last non-proof commit on this branch — the implementation plus its regressions. Every receipt in verification.md was executed against this exact tree. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM's.",
+    "note": "6c67131294141c4f4be1acd6f16f94b8c6614a76 is the last non-proof commit on this branch \u2014 the implementation plus its regressions. Every receipt in verification.md was executed against this exact tree. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM's. The later commits on this branch are the proof bundle itself and the lane-binding manifest update (pr_url/status/heartbeat); no source file differs between them and this SHA.",
     "sha_type": "branch_head_sha",
     "bound_at": "2026-09-01T15:05:00.000Z"
   },
@@ -23,13 +23,25 @@
       "exit_code": 1,
       "status": "REFUSED_AT_LIVE_DB",
       "failing_stage": "test:live-db",
-      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx — writable DB verification is only obtainable inside the staging-ci GitHub environment.",
+      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx \u2014 writable DB verification is only obtainable inside the staging-ci GitHub environment.",
       "note": "Every stage before it is exit 0. This lane touches no schema, migration, DB client or query; the writable receipt is produced inside required CI verify, not claimed here."
     },
-    "env_check": { "command": "pnpm env:check", "exit_code": 0 },
-    "lint": { "command": "pnpm lint", "exit_code": 0 },
-    "type_check": { "command": "pnpm type-check", "exit_code": 0 },
-    "build": { "command": "pnpm build", "exit_code": 0 },
+    "env_check": {
+      "command": "pnpm env:check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "build": {
+      "command": "pnpm build",
+      "exit_code": 0
+    },
     "test": {
       "command": "pnpm test",
       "exit_code": 0,
@@ -40,8 +52,14 @@
       "skipped": 0,
       "not_ok_lines_in_log": 0
     },
-    "verify_static": { "command": "pnpm verify:static", "exit_code": 0 },
-    "verify_commands": { "command": "pnpm verify:commands", "exit_code": 0 },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "verify_commands": {
+      "command": "pnpm verify:commands",
+      "exit_code": 0
+    },
     "lane_regression_file": {
       "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
       "exit_code": 0,
@@ -77,33 +95,73 @@
         "id": "M1",
         "mutation": "restore the catch that empties both candidates and activeLanes and exits 0",
         "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC3|UTV2-1699 AC4' scripts/ops/lane-maximizer.test.ts",
-        "under_mutation": { "exit_code": 1, "tests": 4, "pass": 0, "fail": 4 },
-        "after_revert": { "exit_code": 0, "tests": 4, "pass": 4, "fail": 0 },
-        "caught_by": "not ok 1..4 — 'a candidate-source failure must never exit 0' and 'an unknown active board must never exit 0', both 0 !== 1"
+        "under_mutation": {
+          "exit_code": 1,
+          "tests": 4,
+          "pass": 0,
+          "fail": 4
+        },
+        "after_revert": {
+          "exit_code": 0,
+          "tests": 4,
+          "pass": 4,
+          "fail": 0
+        },
+        "caught_by": "not ok 1..4 \u2014 'a candidate-source failure must never exit 0' and 'an unknown active board must never exit 0', both 0 !== 1"
       },
       {
         "id": "M2",
         "mutation": "restore the else -> parseCandidatesArg(argv) fallthrough for a bare argv",
         "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC1' scripts/ops/lane-maximizer.test.ts",
-        "under_mutation": { "exit_code": 1, "tests": 1, "pass": 0, "fail": 1 },
-        "after_revert": { "exit_code": 0, "tests": 1, "pass": 1, "fail": 0 },
-        "caught_by": "not ok 1 — expected 'linear', actual 'explicit'"
+        "under_mutation": {
+          "exit_code": 1,
+          "tests": 1,
+          "pass": 0,
+          "fail": 1
+        },
+        "after_revert": {
+          "exit_code": 0,
+          "tests": 1,
+          "pass": 1,
+          "fail": 0
+        },
+        "caught_by": "not ok 1 \u2014 expected 'linear', actual 'explicit'"
       },
       {
         "id": "M3",
         "mutation": "restore the hard limit of 10 (clamped to 50) and drop the cursor walk",
         "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC2' scripts/ops/lane-maximizer.test.ts",
-        "under_mutation": { "exit_code": 1, "tests": 2, "pass": 0, "fail": 2 },
-        "after_revert": { "exit_code": 0, "tests": 2, "pass": 2, "fail": 0 },
-        "caught_by": "not ok 1 — actual ['UTV2-9101'], expected ['UTV2-9101','UTV2-9102','UTV2-9103']"
+        "under_mutation": {
+          "exit_code": 1,
+          "tests": 2,
+          "pass": 0,
+          "fail": 2
+        },
+        "after_revert": {
+          "exit_code": 0,
+          "tests": 2,
+          "pass": 2,
+          "fail": 0
+        },
+        "caught_by": "not ok 1 \u2014 actual ['UTV2-9101'], expected ['UTV2-9101','UTV2-9102','UTV2-9103']"
       },
       {
         "id": "M4",
         "mutation": "revert resolveActiveLanesCanonically to the local-manifest-only readActiveLanes",
         "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC6' scripts/ops/lane-maximizer.test.ts",
-        "under_mutation": { "exit_code": 1, "tests": 1, "pass": 0, "fail": 1 },
-        "after_revert": { "exit_code": 0, "tests": 1, "pass": 1, "fail": 0 },
-        "caught_by": "not ok 1 — 'a lane whose manifest exists only on its open PR head must count against capacity', 0 !== 1"
+        "under_mutation": {
+          "exit_code": 1,
+          "tests": 1,
+          "pass": 0,
+          "fail": 1
+        },
+        "after_revert": {
+          "exit_code": 0,
+          "tests": 1,
+          "pass": 1,
+          "fail": 0
+        },
+        "caught_by": "not ok 1 \u2014 'a lane whose manifest exists only on its open PR head must count against capacity', 0 !== 1"
       }
     ],
     "caught": 4,
@@ -114,9 +172,21 @@
     "baseline_ref": "e48106fc9a5eb5904b322833d0968da5ae0b0665",
     "result": "IDENTICAL",
     "values": [
-      { "issue_id": "UTV2-RANK-A", "rank": 1, "ranking_score": 80 },
-      { "issue_id": "UTV2-RANK-B", "rank": 3, "ranking_score": -25 },
-      { "issue_id": "UTV2-RANK-C", "rank": 2, "ranking_score": 45 }
+      {
+        "issue_id": "UTV2-RANK-A",
+        "rank": 1,
+        "ranking_score": 80
+      },
+      {
+        "issue_id": "UTV2-RANK-B",
+        "rank": 3,
+        "ranking_score": -25
+      },
+      {
+        "issue_id": "UTV2-RANK-C",
+        "rank": 2,
+        "ranking_score": 45
+      }
     ],
     "note": "scoreCandidate, rankCandidates and evaluateCandidates are byte-identical to base. Ranking policy belongs to UTV2-1769."
   },
@@ -144,12 +214,13 @@
     "paid_ingestion": "unchanged (parked)",
     "member_delivery": "unchanged (disabled)",
     "system_picks": "unchanged (disabled)",
-    "linear_api_calls": "none from the test suite — every Linear interaction in the new regressions runs against an injected in-process fake transport",
+    "linear_api_calls": "none from the test suite \u2014 every Linear interaction in the new regressions runs against an injected in-process fake transport",
     "note": "No lane was started, no dispatch was performed, and ops:lane-maximizer was not run against the live board as part of this proof."
   },
   "open_items": [
     "pnpm verify cannot reach exit 0 on a workstation: test:live-db refuses any non-staging target by design. The writable receipt is produced inside required CI verify.",
     "This lane makes the board visible; it deliberately does not change which candidate is picked from it. Production-first ranking is UTV2-1769.",
-    "The dispatch skills' prose (.claude/commands/dispatch*.md, loop-dispatch.md) still describes lane-maximizer's output as always report-shaped and does not mention the two new fail-closed exit codes. Out of this lane's file scope; flagged for a follow-up."
+    "The dispatch skills' prose (.claude/commands/dispatch*.md, loop-dispatch.md) still describes lane-maximizer's output as always report-shaped and does not mention the two new fail-closed exit codes. Out of this lane's file scope; flagged for a follow-up.",
+    "ops:proof-check reports FAIL on this bundle (it expects the legacy ProofSchemaV2 shape: pr_number/source_sha/reviewed_head_sha/gate_results, plus a top-level merge_sha). That shape is FORBIDDEN by CEP-E7's schema-v2 evidence contract, which is the gate ops:lane-close actually depends on, and which this bundle PASSES. The same ops:proof-check failure reproduces verbatim on the merged, PM-approved UTV2-1798 bundle, so it is a pre-existing contradiction between two validators rather than a defect in this bundle."
   ]
 }
