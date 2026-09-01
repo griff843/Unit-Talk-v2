@@ -2,12 +2,12 @@
 
 ## Merge SHA Binding
 
-MERGE_SHA: 8603aca02d5c2c06ad2507fcb7cae28825262b37
+MERGE_SHA: dc311970c5b50486ef4636a53ed58245dee09518
 Merge SHA: pending merge
-Execution SHA: 8603aca02d5c2c06ad2507fcb7cae28825262b37
+Execution SHA: dc311970c5b50486ef4636a53ed58245dee09518
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1471
 
-`8603aca02d5c2c06ad2507fcb7cae28825262b37` is the last non-proof commit on this
+`dc311970c5b50486ef4636a53ed58245dee09518` is the last non-proof commit on this
 branch. Every receipt below was executed against that exact tree.
 
 ---
@@ -183,12 +183,129 @@ build context rather than the builder stage, because the builder never copies
 
 ---
 
+## Correction round (PM CHANGES REQUIRED, two P1 findings)
+
+Both findings were real. Neither was reachable by reading the deployment files
+alone: the first only shows up in the compiled bundle, the second only when a
+signed token meets the verifier.
+
+### P1-1 — the browser bundle was compiled with its localhost fallback
+
+`apps/smart-form/lib/api-client.ts:4` and `participant-search.ts:6` read
+`process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000'`. Next.js
+substitutes `NEXT_PUBLIC_*` during `next build`, so writing the value into
+`.env.smart-form` at container start was too late — every production browser
+would have called the capper's own machine.
+
+Fix: `NEXT_PUBLIC_API_BASE_URL=https://${CADDY_DOMAIN}` is now a build argument
+of the `build-nextjs` job, declared as `ARG` + `ENV` in the builder stage before
+`pnpm --filter ... build`, with a hard failure on an empty value in both the
+workflow and the Dockerfile. It is a public URL; no secret is passed as a build
+argument.
+
+**Executed inversion control** — the same production build run twice, and the
+compiled client chunks grepped:
+
+```text
+# WITH the origin supplied at build time
+$ NODE_ENV=production NEXT_PUBLIC_API_BASE_URL=https://api.example-unittalk.test \
+    pnpm exec next build
+exit=0
+files under .next/static containing 127.0.0.1:4000        -> 0
+files under .next/static containing the configured origin  -> 1
+  .next/static/chunks/app/submit/page-4f81684485cdc85d.js
+
+# WITHOUT it (the state this PR was in when the finding was raised)
+$ NODE_ENV=production pnpm exec next build
+exit=0
+files under .next/static containing 127.0.0.1:4000        -> 1
+  .next/static/chunks/app/submit/page-54ad3271f1ba27b0.js
+```
+
+The fallback is present in the production bundle without the build argument and
+absent with it. The control fails on the defect it names.
+
+### P1-2 — the API could not verify what Smart Form signs
+
+`apps/smart-form/auth.ts:38` signs the capper session bearer with
+`NEXTAUTH_SECRET` via `createCapperSessionToken` (HS256).
+`apps/api/src/auth.ts:198` reads its capper verifier from `UNIT_TALK_JWT_SECRET`
+only, and `authenticateRequest` rejects a JWT outright rather than falling
+through to the key map. Provisioning the first without the second means every
+authenticated Smart Form submission returns 401 while every health check stays
+green.
+
+Fix, bounded to this deployment lane: the single configured `NEXTAUTH_SECRET` is
+written to `.env.smart-form` as `NEXTAUTH_SECRET` (signer) and to
+`.env.production` as `UNIT_TALK_JWT_SECRET` (verifier). One owner-supplied value,
+two names, so the two cannot drift. Both `canary` and `promote` refuse to write
+the environment when it is absent. No new secret, no auth redesign, and the value
+is exposed to neither a build argument nor a `NEXT_PUBLIC_` name.
+
+**Executed integration control** (`scripts/ci/nextjs-deploy-wiring.test.ts`,
+test 11) — a token produced by Smart Form's own signer is handed to the API's own
+verifier:
+
+```text
+createCapperSessionToken({sub:'capper-1795',...}, sharedKey)
+  -> validateCapperToken(token, sharedKey)  => accepted, role === 'capper'
+  -> validateCapperToken(token, otherKey)   => null (refused)
+ok 11 - the API verifies exactly the capper token Smart Form signs
+```
+
+Positive and negative in the same control: the same token is accepted under the
+shared key and refused under any other, so the test cannot pass by accepting
+everything.
+
+### Mutation evidence for the correction
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 14 | drop the `NEXT_PUBLIC_API_BASE_URL` build arg from `build-nextjs` | `not ok 10` |
+| 15 | drop `UNIT_TALK_JWT_SECRET` from the canary `.env.production` write | `not ok 11` |
+| 16 | neuter the `NEXTAUTH_SECRET` fail-closed guard (`if false`) | `not ok 11` |
+| 17 | remove the `ENV` export so the origin is not set before `next build` | `not ok 10` |
+
+```text
+=== BASELINE RESTORED (after mutations 14-17)
+306ad644188449396ec6dba338ec3ea74b502aead809a771ecccbc0c8ca1e308  .github/workflows/deploy.yml
+149ef5eaa42dbebfe3e62c3008d0dc9b1c38bcf77fa88c2f98124ce560ba8851  deploy/production/Dockerfile.nextjs
+861f5a617012eb7209f060b96609110d826b5d9e330da2cd97a417530a43d9b7  deploy/production/docker-compose.yml
+5d0f83ed531a19a6ab0834c3edc6034e9148b9057cd7c29debf7f5508d333bce  deploy/production/Caddyfile
+859e305c227845b768b3fb668026de1d222c22cfe2ee1ce0243b0858f5c0be09  deploy/production/nextjs-entrypoint.sh
+# pass 11 # fail 0
+```
+
+17 mutations across both rounds, 17 caught.
+
+### Re-verification scope
+
+Only the affected surfaces were re-executed, per the correction instruction:
+`pnpm lint` exit 0, `pnpm type-check` exit 0, and
+`pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts` 11/11 pass at
+`dc311970`. Full `pnpm verify` runs in required CI at this head.
+
+### Scope reconciliation
+
+`File scope lock` named exactly four paths the lane legitimately needed and its
+base-side manifest read could not see: `deploy/production/ENV_FILES.md`,
+`deploy/production/nextjs-entrypoint.sh`, `docs/05_operations/REQUIRED_SECRETS.md`
+and `package.json`. They are reconciled by one authorized `scope-override/v1`
+comment pinned to the final head, not by editing the manifest — the guard reads
+the manifest from base precisely so a PR cannot widen its own scope.
+
+---
+
 ## Verification
 
 ASSERTIONS:
 
-- [x] `pnpm verify` — exit 0 at `8603aca0`, including `pnpm lint`,
-      `pnpm type-check`, `pnpm build`, `pnpm test` and `r-level-check`.
+- [x] `pnpm verify` — exit 0 at the pre-correction tree, including `pnpm lint`,
+      `pnpm type-check`, `pnpm build`, `pnpm test` and `r-level-check`. At the
+      correction head `dc311970` the affected surfaces were re-executed directly
+      (`pnpm lint` exit 0, `pnpm type-check` exit 0, wiring suite 11/11); the
+      full `pnpm verify` at this head is produced by required CI, not claimed
+      here.
 - [x] Both applications build reproducibly; the Smart Form build blocker was
       found by executing it, not by reading it.
 - [x] `web` and `smart-form` health-check paths each answer 200, proven

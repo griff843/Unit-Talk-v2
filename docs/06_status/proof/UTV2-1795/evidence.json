@@ -5,22 +5,22 @@
   "lane_type": "runtime",
   "status": "verified",
   "sha_binding": {
-    "verified_source_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37",
-    "evidence_commit_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37",
-    "current_pr_head_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37",
+    "verified_source_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
+    "evidence_commit_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
+    "current_pr_head_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
     "merge_sha": null,
     "ci_sentinels": {
-      "evidence_commit_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37",
-      "current_pr_head_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37"
+      "evidence_commit_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
+      "current_pr_head_sha": "dc311970c5b50486ef4636a53ed58245dee09518"
     },
-    "note": "8603aca0 is the last non-proof commit on this branch. Every receipt in verification.md was executed against that exact tree."
+    "note": "dc311970 is the last non-proof commit on this branch. Every receipt in verification.md was executed against that exact tree."
   },
   "static_proof": {
     "verify": {
       "command": "pnpm verify",
       "exit_code": 0,
       "status": "PASS",
-      "executed_at_sha": "8603aca02d5c2c06ad2507fcb7cae28825262b37",
+      "executed_at_sha": "dc311970c5b50486ef4636a53ed58245dee09518",
       "included_stages": [
         "pnpm lint",
         "pnpm type-check",
@@ -130,7 +130,29 @@
         "reached": "exec line 43",
         "fatal_lines": 0
       }
-    ]
+    ],
+    "browser_bundle_inversion": {
+      "app": "apps/smart-form",
+      "with_build_arg": {
+        "exit": 0,
+        "files_with_localhost_fallback": 0,
+        "files_with_configured_origin": 1,
+        "chunk": ".next/static/chunks/app/submit/page-4f81684485cdc85d.js"
+      },
+      "without_build_arg": {
+        "exit": 0,
+        "files_with_localhost_fallback": 1,
+        "chunk": ".next/static/chunks/app/submit/page-54ad3271f1ba27b0.js"
+      },
+      "conclusion": "NEXT_PUBLIC_API_BASE_URL must be a build argument; a runtime-only value leaves http://127.0.0.1:4000 compiled into the production bundle"
+    },
+    "capper_token_integration": {
+      "signer": "apps/smart-form/lib/auth-session-token.ts createCapperSessionToken",
+      "verifier": "apps/api/src/auth.ts validateCapperToken",
+      "same_key": "accepted, role=capper",
+      "different_key": "null (refused)",
+      "test": "scripts/ci/nextjs-deploy-wiring.test.ts test 11"
+    }
   },
   "mutation_proof": {
     "method": "One defect introduced at a time; artifact restored and SHA-256 re-confirmed between each.",
@@ -194,8 +216,21 @@
         "caught_by": "not ok 9"
       }
     ],
-    "caught": 13,
-    "total": 13
+    "caught": 17,
+    "total": 17,
+    "rounds": [
+      {
+        "round": 1,
+        "mutations": 13,
+        "caught": 13
+      },
+      {
+        "round": 2,
+        "mutations": 4,
+        "caught": 4,
+        "scope": "correction round for the two P1 findings"
+      }
+    ]
   },
   "containment": {
     "production_writes": "none",

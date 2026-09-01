@@ -5,10 +5,10 @@
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1471
 **Tier:** T1
 **Lane type:** runtime
-**Implementation SHA:** `8603aca02d5c2c06ad2507fcb7cae28825262b37`
-MERGE_SHA: 8603aca02d5c2c06ad2507fcb7cae28825262b37
+**Implementation SHA:** `dc311970c5b50486ef4636a53ed58245dee09518`
+MERGE_SHA: dc311970c5b50486ef4636a53ed58245dee09518
 
-**Merge SHA:** pending merge (anchor `8603aca02d5c2c06ad2507fcb7cae28825262b37`)
+**Merge SHA:** pending merge (anchor `dc311970c5b50486ef4636a53ed58245dee09518`)
 
 ## Files Changed
 
@@ -38,4 +38,4 @@ MERGE_SHA: 8603aca02d5c2c06ad2507fcb7cae28825262b37
 
 ## Verification
 
-`pnpm verify` exit 0 at `8603aca0`. Both application builds executed. Both health-check paths executed. Seven startup refusals and two positive controls executed. 13 mutations, 13 caught. Full receipts in `verification.md`.
+`pnpm verify` exit 0 at the pre-correction tree; `pnpm lint`, `pnpm type-check` and the wiring suite re-executed at `dc311970`, with full `pnpm verify` produced by required CI at this head. Both application builds executed. Both health-check paths executed. Seven startup refusals and two positive controls executed. The production browser bundle was built twice to prove the localhost fallback is present without the build argument and absent with it. A Smart Form-signed capper token was validated through the API's own verifier and refused under a different key. 17 mutations, 17 caught. Full receipts in `verification.md`.
