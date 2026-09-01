@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { NextRequest } from 'next/server';
 import {
   authenticateCommandCenterRequest,
   resolveCommandCenterAccessConfig,
@@ -198,4 +199,109 @@ test('UTV2-1789: .env.example does not ship a value that disables auth', () => {
       `.env.example must not default to an auth-disabling mode: ${line}`,
     );
   }
+});
+
+// ── Middleware-level probes ────────────────────────────────────────────────
+//
+// The tests above drive the exported function the middleware calls. These drive
+// `middleware()` itself with a real NextRequest, so the whole request path is
+// exercised: the public-path skip, the auth call, the response construction and
+// the audit-log branch. `middleware()` reads process.env directly, so each probe
+// installs and restores the environment around itself.
+
+async function runMiddleware(
+  env: Record<string, string | undefined>,
+  path: string,
+  headers: Record<string, string> = {},
+) {
+  const { middleware } = await import('../middleware');
+  const saved = { ...process.env };
+  const logs: Array<{ level: string; event: string }> = [];
+  const info = console.info;
+  const warn = console.warn;
+  console.info = (event: unknown) => {
+    logs.push({ level: 'info', event: String(event) });
+  };
+  console.warn = (event: unknown) => {
+    logs.push({ level: 'warn', event: String(event) });
+  };
+  try {
+    for (const key of Object.keys(process.env)) {
+      if (/^(NODE_ENV|UNIT_TALK_|COMMAND_CENTER_)/.test(key)) {
+        delete (process.env as Record<string, string | undefined>)[key];
+      }
+    }
+    Object.assign(process.env, env);
+    const response = await middleware(
+      new NextRequest(`http://cc.local${path}`, { method: 'GET', headers }),
+    );
+    return { response, logs };
+  } finally {
+    console.info = info;
+    console.warn = warn;
+    for (const key of Object.keys(process.env)) {
+      delete (process.env as Record<string, string | undefined>)[key];
+    }
+    Object.assign(process.env, saved);
+  }
+}
+
+test('UTV2-1789 middleware: an anonymous production request under fail_open is refused', async () => {
+  const { response } = await runMiddleware(
+    {
+      NODE_ENV: 'production',
+      UNIT_TALK_APP_ENV: 'production',
+      COMMAND_CENTER_AUTH_MODE: 'fail_open',
+    },
+    '/picks',
+  );
+
+  assert.notEqual(response.status, 200, 'the request must not be served');
+  assert.ok(
+    response.status === 401 || response.status === 503,
+    `expected a refusal status, got ${response.status}`,
+  );
+  const body = (await response.json()) as { ok: boolean };
+  assert.equal(body.ok, false);
+  assert.equal(
+    response.headers.get('x-command-center-actor'),
+    null,
+    'no operator actor may be attached to a refused request',
+  );
+});
+
+test('UTV2-1789 middleware: a bypassed request is not recorded as a privileged action', async () => {
+  const { response, logs } = await runMiddleware(
+    { NODE_ENV: 'development', COMMAND_CENTER_AUTH_MODE: 'fail_open' },
+    '/picks',
+  );
+
+  assert.equal(response.status, 200, 'local development is still served');
+  assert.ok(
+    logs.some((entry) => entry.event === 'command_center.dev_bypass'),
+    'the bypass must be recorded as a bypass',
+  );
+  assert.ok(
+    !logs.some((entry) => entry.event === 'command_center.privileged_action'),
+    'the bypass must NOT enter the privileged-action audit stream',
+  );
+});
+
+test('UTV2-1789 middleware: an authenticated production request is served and audited', async () => {
+  const { response, logs } = await runMiddleware(
+    {
+      NODE_ENV: 'production',
+      UNIT_TALK_APP_ENV: 'production',
+      COMMAND_CENTER_AUTH_TOKEN: 'prod-token',
+      COMMAND_CENTER_OPERATOR_IDENTITY: 'command-center',
+    },
+    '/picks',
+    { authorization: 'Bearer prod-token' },
+  );
+
+  assert.equal(response.status, 200);
+  assert.ok(
+    logs.some((entry) => entry.event === 'command_center.privileged_action'),
+    'a real operator action is still audited as one',
+  );
 });
