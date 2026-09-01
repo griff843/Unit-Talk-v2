@@ -5466,18 +5466,30 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     let totalUpdated = 0;
 
     for (const { providerEventId, commenceTime } of recentEvents) {
-      // Use provider_offer_history_compact instead of provider_offer_history.
-      // provider_offer_history has idx_provider_offer_history_event_snapshot ON ONLY (the
-      // parent partitioned table), so the index is NOT inherited by the ~60 child partitions
-      // and every provider_event_id filter causes a full sequential scan across 1M+ rows.
-      // provider_offer_history_compact is non-partitioned with a leading provider_event_id
-      // index that actually fires, bringing query time from timeout to milliseconds.
+      // Source of truth is provider_offer_history, not provider_offer_history_compact.
+      //
+      // UTV2-1366 moved this read to the compact table because the event index on
+      // provider_offer_history was believed to be ON ONLY the parent and therefore not
+      // inherited by the child partitions, forcing a sequential scan. That is no longer
+      // true, and measured evidence on the live database (UTV2-1772) shows the opposite:
+      //
+      //   * all 60 child partitions carry a (provider_event_id, snapshot_at) index;
+      //   * this exact bounded query plans as Append over three pruned partitions with an
+      //     Index Scan Backward and runs in 81.9 ms for 5000 rows;
+      //   * provider_offer_history_compact holds 3,139 rows spanning 2026-04-24..26 for a
+      //     single provider_event_id, while provider_offer_history holds 14,456,685 rows
+      //     spanning 2026-05-11..2026-06-30.
+      //
+      // Reading the compact table was therefore not a fast path, it was an empty one: the
+      // same query returns 0 rows there in 1.1 ms for every event in the operating window,
+      // so every call marked nothing and reported success. See the UTV2-1772 proof bundle
+      // for the EXPLAIN receipts and population counts.
       const { data, error } = await (fromUntyped(
         this.client,
-        'provider_offer_history_compact',
+        'provider_offer_history',
       )
         .select(
-          'snapshot_id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing, identity_key, idempotency_key',
+          'id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing, idempotency_key',
         )
         .eq('provider_event_id', providerEventId)
         .gte('snapshot_at', windowStart)
@@ -5486,14 +5498,13 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .order('snapshot_at', { ascending: false })
         .limit(5000) as unknown as Promise<{
         data: Array<{
-          snapshot_id: string;
+          id: string;
           provider_key: string;
           provider_market_key: string;
           provider_participant_id: string | null;
           bookmaker_key: string | null;
           snapshot_at: string;
           is_closing: boolean;
-          identity_key: string;
           idempotency_key: string;
         }> | null;
         error: { message: string } | null;
@@ -5512,7 +5523,6 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const latestByKey = new Map<
         string,
         {
-          snapshotId: string;
           idempotencyKey: string;
           identityKey: string;
           snapshotAt: string;
@@ -5527,11 +5537,17 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
           ? `${row.provider_key}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
           : `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
         if (!latestByKey.has(key)) {
-          // rows are ordered descending — first seen is latest
+          // rows are ordered descending — first seen is latest.
+          // provider_offer_history has no identity_key column, so the key that addresses
+          // provider_offer_current is reconstructed from the same five components the
+          // database concatenates:
+          //   provider_key:provider_event_id:provider_market_key:participant:bookmaker
+          // with the empty string standing in for a null participant or bookmaker. It
+          // always includes the bookmaker, independently of `includeBookmakerKey`, which
+          // governs the de-duplication key only.
           latestByKey.set(key, {
-            snapshotId: row.snapshot_id,
             idempotencyKey: row.idempotency_key,
-            identityKey: row.identity_key,
+            identityKey: `${row.provider_key}:${providerEventId}:${row.provider_market_key}:${participantKey}:${row.bookmaker_key ?? ''}`,
             snapshotAt: row.snapshot_at,
           });
         }
@@ -5539,35 +5555,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
       if (latestByKey.size === 0) continue;
 
-      // Update provider_offer_history_compact via snapshot_id (PK) — fast indexed lookup.
-      // This must happen so subsequent markClosingLines calls skip already-processed rows
-      // (the SELECT filters is_closing=false, so unmarked compact rows get re-scanned every cycle).
-      const allSnapshotIds = [...latestByKey.values()].map((v) => v.snapshotId);
-      for (let i = 0; i < allSnapshotIds.length; i += 100) {
-        const chunk = allSnapshotIds.slice(i, i + 100);
-        const { error: compactUpdateError, count } = await (fromUntyped(
-          this.client,
-          'provider_offer_history_compact',
-        )
-          .update({ is_closing: true })
-          .in('snapshot_id', chunk) as unknown as Promise<{
-          data: unknown;
-          error: { message: string } | null;
-          count?: number | null;
-        }>);
-
-        if (compactUpdateError) {
-          throw new Error(
-            `Failed to mark closing lines in compact: ${compactUpdateError.message}`,
-          );
-        }
-
-        totalUpdated += count ?? chunk.length;
-      }
-
-      // Group by snapshot_at to enable partition pruning on provider_offer_history UPDATE.
-      // Filtering by snapshot_at (the partition key) before idempotency_key directs each
-      // batch to a single child partition instead of scanning all ~60.
+      // Group by snapshot_at to enable partition pruning on the provider_offer_history
+      // UPDATE. Filtering by snapshot_at (the partition key) before idempotency_key directs
+      // each batch to a single child partition instead of scanning all 60.
       const bySnapshot = new Map<string, string[]>();
       for (const {
         idempotencyKey,
@@ -5577,23 +5567,20 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         bySnapshot.get(snapAt)!.push(idempotencyKey);
       }
 
-      // Update provider_offer_history — partition-pruned via snapshot_at + idempotency_key.
-      // Note: the idempotency_key unique index on history is also ON ONLY (not inherited by
-      // child partitions), so within a partition this is still a seq scan. However the scan
-      // is scoped to one partition and is bounded by that partition's size, which for current
-      // operations is a single day of data — well within the 30s statement_timeout.
+      let eventUpdated = 0;
       for (const [snapAt, idempotencyKeys] of bySnapshot) {
         for (let i = 0; i < idempotencyKeys.length; i += 100) {
           const chunk = idempotencyKeys.slice(i, i + 100);
-          const { error: updateError } = await (fromUntyped(
+          const { error: updateError, count } = await (fromUntyped(
             this.client,
             'provider_offer_history',
           )
-            .update({ is_closing: true })
+            .update({ is_closing: true }, { count: 'exact' })
             .eq('snapshot_at', snapAt)
             .in('idempotency_key', chunk) as unknown as Promise<{
             data: unknown;
             error: { message: string } | null;
+            count?: number | null;
           }>);
 
           if (updateError) {
@@ -5601,13 +5588,36 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
               `Failed to mark closing lines: ${updateError.message}`,
             );
           }
+
+          // The previous implementation added `count ?? chunk.length` without ever asking
+          // PostgREST for a count, so the fallback fired on every batch and the returned
+          // figure was the batch size rather than the number of rows affected. A caller
+          // could not tell a fully applied batch from one that matched nothing. The count
+          // is now requested explicitly and a missing count is an error, not a guess.
+          if (typeof count !== 'number') {
+            throw new Error(
+              `Closing line marking did not return a row count for ${providerEventId} at ${snapAt}; refusing to report an unverified update`,
+            );
+          }
+          eventUpdated += count;
         }
       }
 
-      // Update provider_offer_current — use identity_key (the PK of that table).
-      // The previous implementation used .in('id', historyIds) which always produced
-      // 0 matches because provider_offer_current.id is a different UUID namespace from
-      // provider_offer_history.id. identity_key is the shared namespace between the two.
+      // Fail closed: eligible unmarked history existed for this event, so a zero-row result
+      // means the UPDATE predicate no longer addresses the rows the SELECT returned. That
+      // is a silent no-op in a CLV input, which is exactly the failure this operation spent
+      // months in — reporting success while marking nothing. Refuse instead.
+      if (eventUpdated === 0) {
+        throw new Error(
+          `Closing line marking selected ${rows.length} eligible row(s) and ${latestByKey.size} latest-per-key candidate(s) for ${providerEventId} but marked 0; refusing to report a vacuous closing line`,
+        );
+      }
+
+      totalUpdated += eventUpdated;
+
+      // Update provider_offer_current — identity_key is its primary key.
+      // The pre-UTV2-1366 implementation used .in('id', historyIds), where the ids are
+      // provider_offer_history UUIDs from a different namespace, so it always matched 0.
       const allIdentityKeys = [...latestByKey.values()].map(
         (v) => v.identityKey,
       );
@@ -9274,7 +9284,13 @@ type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
     values: Record<string, unknown> | readonly Record<string, unknown>[],
     options?: Record<string, unknown>,
   ): UntypedQueryBuilder;
-  update(values: Record<string, unknown>): UntypedQueryBuilder;
+  // PostgREST's update takes the same second options argument as upsert; it is what
+  // carries `{ count: 'exact' }`, without which the result has no `count` and a caller
+  // can only guess at how many rows were affected (UTV2-1772).
+  update(
+    values: Record<string, unknown>,
+    options?: Record<string, unknown>,
+  ): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
   gte(column: string, value: unknown): UntypedQueryBuilder;
   lte(column: string, value: unknown): UntypedQueryBuilder;

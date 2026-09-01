@@ -680,3 +680,304 @@ test('DatabaseProviderOfferRepository.upsertCycleStatus persists freshness and p
   assert.equal(result.run_id, 'run-status-1');
   assert.equal(result.stage_status, 'merge_blocked');
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1772 — closing line marking must be non-vacuous
+//
+// markClosingLines read from provider_offer_history_compact and returned
+// `count ?? chunk.length` without ever asking PostgREST for a count. Measured on the live
+// database: compact holds 3,139 rows over 2026-04-24..26 for one provider_event_id, while
+// provider_offer_history holds 14,456,685 rows over 2026-05-11..2026-06-30. Every call in
+// the operating window therefore selected nothing, marked nothing, and reported success.
+// These tests pin the source table, the real row count, and the fail-closed outcome.
+// ---------------------------------------------------------------------------
+
+type MarkClosingLinesHarness = {
+  client: unknown;
+  markClosingLines(
+    events: Array<{ providerEventId: string; commenceTime: string }>,
+    snapshotAt: string,
+    options?: { includeBookmakerKey?: boolean },
+  ): Promise<number>;
+};
+
+type MarkClosingLinesCalls = {
+  selectedTables: string[];
+  selectPredicates: Array<Record<string, unknown>>;
+  historyUpdates: Array<{ snapshotAt: string; keys: string[]; options: unknown }>;
+  currentUpdates: string[][];
+};
+
+/**
+ * Fake PostgREST client for markClosingLines.
+ *
+ * `historyRows` is what the SELECT returns. `updateCount` overrides what the history
+ * UPDATE reports back: omit it for the realistic case where every addressed row matched,
+ * pass 0 for the vacuous case, and pass null to reproduce the "no count requested" shape
+ * the old implementation silently papered over with the batch size.
+ */
+function createMarkClosingLinesClient(options: {
+  historyRows: Array<Record<string, unknown>>;
+  updateCount?: number | null;
+}): { client: unknown; calls: MarkClosingLinesCalls } {
+  const calls: MarkClosingLinesCalls = {
+    selectedTables: [],
+    selectPredicates: [],
+    historyUpdates: [],
+    currentUpdates: [],
+  };
+
+  const client = {
+    from(table: string) {
+      return {
+        select(columns: string) {
+          calls.selectedTables.push(table);
+          const predicate: Record<string, unknown> = { table, columns };
+          calls.selectPredicates.push(predicate);
+          const builder = {
+            eq(column: string, value: unknown) {
+              predicate[`eq:${column}`] = value;
+              return builder;
+            },
+            gte(column: string, value: unknown) {
+              predicate[`gte:${column}`] = value;
+              return builder;
+            },
+            lt(column: string, value: unknown) {
+              predicate[`lt:${column}`] = value;
+              return builder;
+            },
+            order(column: string, opts: unknown) {
+              predicate['order'] = { column, opts };
+              return builder;
+            },
+            limit(value: number) {
+              predicate['limit'] = value;
+              return Promise.resolve({
+                data: options.historyRows,
+                error: null,
+              });
+            },
+          };
+          return builder;
+        },
+        update(values: Record<string, unknown>, updateOptions?: unknown) {
+          assert.deepEqual(values, { is_closing: true });
+          if (table === 'provider_offer_history') {
+            let snapshotAt = '';
+            const builder = {
+              eq(column: string, value: string) {
+                assert.equal(column, 'snapshot_at');
+                snapshotAt = value;
+                return builder;
+              },
+              in(column: string, keys: string[]) {
+                assert.equal(column, 'idempotency_key');
+                calls.historyUpdates.push({
+                  snapshotAt,
+                  keys,
+                  options: updateOptions,
+                });
+                const reported =
+                  options.updateCount === undefined
+                    ? keys.length
+                    : options.updateCount;
+                return Promise.resolve({
+                  data: null,
+                  error: null,
+                  ...(reported === null ? {} : { count: reported }),
+                });
+              },
+            };
+            return builder;
+          }
+
+          assert.equal(table, 'provider_offer_current');
+          return {
+            in(column: string, keys: string[]) {
+              assert.equal(column, 'identity_key');
+              calls.currentUpdates.push(keys);
+              return Promise.resolve({ data: null, error: null });
+            },
+          };
+        },
+      };
+    },
+  };
+
+  return { client, calls };
+}
+
+function markClosingLinesRepository(client: unknown): MarkClosingLinesHarness {
+  const repository = Object.create(
+    DatabaseProviderOfferRepository.prototype,
+  ) as unknown as MarkClosingLinesHarness;
+  repository.client = client;
+  return repository;
+}
+
+// A production-shaped slice: one event, one provider, two bookmakers, descending
+// snapshot_at, taken from the shape of provider_event_id usHLeS7NsELL6HCdrzA0 (sgo, MLB).
+const PRODUCTION_SHAPED_ROWS = [
+  {
+    id: '00000000-0000-4000-8000-000000000001',
+    provider_key: 'sgo',
+    provider_market_key: 'batting_hits+runs+rbi-all-game-ou',
+    provider_participant_id: 'ALEC_BOHM_1_MLB',
+    bookmaker_key: 'fanduel',
+    snapshot_at: '2026-06-30T01:30:00.000Z',
+    is_closing: false,
+    idempotency_key: 'idem-fanduel-latest',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000002',
+    provider_key: 'sgo',
+    provider_market_key: 'batting_hits+runs+rbi-all-game-ou',
+    provider_participant_id: 'ALEC_BOHM_1_MLB',
+    bookmaker_key: 'draftkings',
+    snapshot_at: '2026-06-30T01:29:00.000Z',
+    is_closing: false,
+    idempotency_key: 'idem-draftkings-latest',
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000003',
+    provider_key: 'sgo',
+    provider_market_key: 'batting_hits+runs+rbi-all-game-ou',
+    provider_participant_id: 'ALEC_BOHM_1_MLB',
+    bookmaker_key: 'fanduel',
+    snapshot_at: '2026-06-30T01:00:00.000Z',
+    is_closing: false,
+    idempotency_key: 'idem-fanduel-earlier',
+  },
+];
+
+const EVENT = {
+  providerEventId: 'usHLeS7NsELL6HCdrzA0',
+  commenceTime: '2026-06-30T02:00:00.000Z',
+};
+const SNAPSHOT_AT = '2026-06-30T03:00:00.000Z';
+
+test('UTV2-1772: markClosingLines reads provider_offer_history, not the unpopulated compact table', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  assert.deepEqual(calls.selectedTables, ['provider_offer_history']);
+  assert.ok(
+    !calls.selectedTables.includes('provider_offer_history_compact'),
+    'provider_offer_history_compact holds no rows in the operating window; reading it makes the operation vacuous',
+  );
+
+  const predicate = calls.selectPredicates[0] as Record<string, unknown>;
+  assert.equal(predicate['eq:provider_event_id'], EVENT.providerEventId);
+  assert.equal(predicate['eq:is_closing'], false);
+  assert.equal(predicate['lt:snapshot_at'], EVENT.commenceTime);
+  // 48h lower bound before snapshotAt — the partition-pruning window.
+  assert.equal(predicate['gte:snapshot_at'], '2026-06-28T03:00:00.000Z');
+  assert.deepEqual(predicate['order'], {
+    column: 'snapshot_at',
+    opts: { ascending: false },
+  });
+  assert.equal(predicate['limit'], 5000);
+});
+
+test('UTV2-1772: markClosingLines returns the row count the database reported, not the batch size', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  const updated = await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  // Two distinct latest-per-key candidates (fanduel, draftkings); the earlier fanduel row
+  // is superseded. The old implementation would have returned the chunk length either way.
+  assert.equal(updated, 2);
+  assert.equal(calls.historyUpdates.length, 2);
+  assert.deepEqual(
+    calls.historyUpdates.map((call) => call.options),
+    [{ count: 'exact' }, { count: 'exact' }],
+    'the count must be requested from PostgREST, otherwise the returned figure is a guess',
+  );
+  assert.deepEqual(
+    calls.historyUpdates.map((call) => call.keys).flat().sort(),
+    ['idem-draftkings-latest', 'idem-fanduel-latest'],
+  );
+});
+
+test('UTV2-1772: markClosingLines marks provider_offer_current by a reconstructed identity_key', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  // provider_offer_history has no identity_key column, so the five-part key that addresses
+  // provider_offer_current is rebuilt here. It must match the database's own concatenation.
+  assert.deepEqual(calls.currentUpdates.flat().sort(), [
+    'sgo:usHLeS7NsELL6HCdrzA0:batting_hits+runs+rbi-all-game-ou:ALEC_BOHM_1_MLB:draftkings',
+    'sgo:usHLeS7NsELL6HCdrzA0:batting_hits+runs+rbi-all-game-ou:ALEC_BOHM_1_MLB:fanduel',
+  ]);
+});
+
+test('UTV2-1772 inversion: eligible rows selected but zero marked fails closed', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+    updateCount: 0,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  await assert.rejects(
+    () =>
+      repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+        includeBookmakerKey: true,
+      }),
+    /marked 0; refusing to report a vacuous closing line/,
+  );
+
+  assert.deepEqual(
+    calls.currentUpdates,
+    [],
+    'provider_offer_current must not be marked when history marked nothing',
+  );
+});
+
+test('UTV2-1772 inversion: an update that reports no count is refused, not guessed at', async () => {
+  const { client } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+    updateCount: null,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  await assert.rejects(
+    () =>
+      repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+        includeBookmakerKey: true,
+      }),
+    /did not return a row count .* refusing to report an unverified update/s,
+  );
+});
+
+test('UTV2-1772: no eligible rows is a no-op, not a failure (idempotent re-run)', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: [],
+  });
+  const repository = markClosingLinesRepository(client);
+
+  const updated = await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  assert.equal(updated, 0);
+  assert.deepEqual(calls.historyUpdates, []);
+  assert.deepEqual(calls.currentUpdates, []);
+});
