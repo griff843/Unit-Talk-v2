@@ -1,0 +1,296 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1749
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1749
+  objective: >-
+    Restore the already-authorized scheduled canary-only alert workflow by
+    wiring the configuration its runtime actually requires. This is a narrow
+    production-safety lane, not a reopening of alerting architecture.
+
+    **Claude orchestrates; Codex implements. Start from current main.**
+  acceptance_criteria:
+    - >-
+      ## Objective
+
+
+      Restore the already-authorized scheduled canary-only alert workflow by
+      wiring the configuration its runtime actually requires. This is a narrow
+      production-safety lane, not a reopening of alerting architecture.
+
+
+      **Claude orchestrates; Codex implements. Start from current main.**
+
+
+      ## Live evidence on current main (2026-08-25)
+
+
+      Workflow: `.github/workflows/ingestor-staleness-alert.yml` (`Ingestor and
+      Alert-System Monitor`).
+
+
+      * The workflow has no successful run in the inspected history.
+
+      * Both `alerting-pass` and `monitor` provide `SUPABASE_URL` and
+      `SUPABASE_SERVICE_ROLE_KEY` but omit `SUPABASE_ANON_KEY`, while the
+      application configuration requires all three.
+
+      * The repository has a `SUPABASE_ANON_KEY` Actions secret.
+
+      * `alerting-pass` omits `UNIT_TALK_OPS_ALERT_WEBHOOK_URL`, so that job
+      cannot report its own failure through the operations sink.
+
+      * The `monitor` job already receives the operations webhook.
+
+
+      ## Allowed scope
+
+
+      * `.github/workflows/ingestor-staleness-alert.yml`
+
+      * Focused workflow/config tests required to prove the two jobs receive the
+      required variables
+
+      * This lane's manifest, sync, and proof paths
+
+
+      ## Required implementation
+
+
+      1. Add `SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}` to both jobs.
+
+      2. Add `UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{
+      secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}` to `alerting-pass`.
+
+      3. Do not change cadence, alert thresholds, member-channel controls,
+      system-pick controls, or workflow permissions.
+
+      4. Add a non-vacuous regression test that fails when any required wiring
+      is removed from either job.
+
+
+      ## Definition of done
+
+
+      * Exact workflow diff and exact expected runtime effect documented.
+
+      * Focused tests and repository static verification pass.
+
+      * Mutation/inversion proof: remove each new env binding one at a time and
+      show the named test fails; restore byte-identically.
+
+      * Independent exact-head review.
+
+      * T1 approval at the stationary reviewed head.
+
+      * After merge, observe a scheduled run (do not claim success from YAML
+      alone) and return its run URL, run attempt, job conclusions, and evidence
+      that the alerting pass can reach the canary-only operations path.
+
+      * If the scheduled run still fails, report the next concrete failure
+      without expanding scope silently.
+
+
+      ## Guardrails
+
+
+      * Production remains parked.
+
+      * Scheduled canary-only alerting remains the only authorized delivery
+      posture.
+
+      * `ALERT_MEMBER_CHANNELS_ENABLED=false`.
+
+      * `SYSTEM_PICKS_ENABLED=false`.
+
+      * No SGO, ingestion restart, worker unpark, member delivery, secret
+      mutation, production DDL, or broader runtime change.
+
+      * Do not expose secret values; prove only presence and consumption.
+  guardrails:
+    - Production remains parked.
+    - Scheduled canary-only alerting remains the only authorized delivery
+      posture.
+    - "`ALERT_MEMBER_CHANNELS_ENABLED=false`."
+    - "`SYSTEM_PICKS_ENABLED=false`."
+    - No SGO, ingestion restart, worker unpark, member delivery, secret
+      mutation, production DDL, or broader runtime change.
+    - Do not expose secret values; prove only presence and consumption.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Live evidence on current main (2026-08-25)
+
+      Workflow: `.github/workflows/ingestor-staleness-alert.yml` (`Ingestor and
+      Alert-System Monitor`).
+
+
+      * The workflow has no successful run in the inspected history.
+
+      * Both `alerting-pass` and `monitor` provide `SUPABASE_URL` and
+      `SUPABASE_SERVICE_ROLE_KEY` but omit `SUPABASE_ANON_KEY`, while the
+      application configuration requires all three.
+
+      * The repository has a `SUPABASE_ANON_KEY` Actions secret.
+
+      * `alerting-pass` omits `UNIT_TALK_OPS_ALERT_WEBHOOK_URL`, so that job
+      cannot report its own failure through the operations sink.
+
+      * The `monitor` job already receives the operations webhook.
+    - >-
+      Allowed scope
+
+      * `.github/workflows/ingestor-staleness-alert.yml`
+
+      * Focused workflow/config tests required to prove the two jobs receive the
+      required variables
+
+      * This lane's manifest, sync, and proof paths
+    - >-
+      Required implementation
+
+      1. Add `SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}` to both jobs.
+
+      2. Add `UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{
+      secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}` to `alerting-pass`.
+
+      3. Do not change cadence, alert thresholds, member-channel controls,
+      system-pick controls, or workflow permissions.
+
+      4. Add a non-vacuous regression test that fails when any required wiring
+      is removed from either job.
+    - >-
+      Definition of done
+
+      * Exact workflow diff and exact expected runtime effect documented.
+
+      * Focused tests and repository static verification pass.
+
+      * Mutation/inversion proof: remove each new env binding one at a time and
+      show the named test fails; restore byte-identically.
+
+      * Independent exact-head review.
+
+      * T1 approval at the stationary reviewed head.
+
+      * After merge, observe a scheduled run (do not claim success from YAML
+      alone) and return its run URL, run attempt, job conclusions, and evidence
+      that the alerting pass can reach the canary-only operations path.
+
+      * If the scheduled run still fails, report the next concrete failure
+      without expanding scope silently.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1749/scheduled-alert-workflow-cannot-boot-or-self-report-wire-required
+    title: "Scheduled alert workflow cannot boot or self-report: wire required
+      config into both jobs"
+    description: >-
+      ## Objective
+
+
+      Restore the already-authorized scheduled canary-only alert workflow by
+      wiring the configuration its runtime actually requires. This is a narrow
+      production-safety lane, not a reopening of alerting architecture.
+
+
+      **Claude orchestrates; Codex implements. Start from current main.**
+
+
+      ## Live evidence on current main (2026-08-25)
+
+
+      Workflow: `.github/workflows/ingestor-staleness-alert.yml` (`Ingestor and
+      Alert-System Monitor`).
+
+
+      * The workflow has no successful run in the inspected history.
+
+      * Both `alerting-pass` and `monitor` provide `SUPABASE_URL` and
+      `SUPABASE_SERVICE_ROLE_KEY` but omit `SUPABASE_ANON_KEY`, while the
+      application configuration requires all three.
+
+      * The repository has a `SUPABASE_ANON_KEY` Actions secret.
+
+      * `alerting-pass` omits `UNIT_TALK_OPS_ALERT_WEBHOOK_URL`, so that job
+      cannot report its own failure through the operations sink.
+
+      * The `monitor` job already receives the operations webhook.
+
+
+      ## Allowed scope
+
+
+      * `.github/workflows/ingestor-staleness-alert.yml`
+
+      * Focused workflow/config tests required to prove the two jobs receive the
+      required variables
+
+      * This lane's manifest, sync, and proof paths
+
+
+      ## Required implementation
+
+
+      1. Add `SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}` to both jobs.
+
+      2. Add `UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{
+      secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}` to `alerting-pass`.
+
+      3. Do not change cadence, alert thresholds, member-channel controls,
+      system-pick controls, or workflow permissions.
+
+      4. Add a non-vacuous regression test that fails when any required wiring
+      is removed from either job.
+
+
+      ## Definition of done
+
+
+      * Exact workflow diff and exact expected runtime effect documented.
+
+      * Focused tests and repository static verification pass.
+
+      * Mutation/inversion proof: remove each new env binding one at a time and
+      show the named test fails; restore byte-identically.
+
+      * Independent exact-head review.
+
+      * T1 approval at the stationary reviewed head.
+
+      * After merge, observe a scheduled run (do not claim success from YAML
+      alone) and return its run URL, run attempt, job conclusions, and evidence
+      that the alerting pass can reach the canary-only operations path.
+
+      * If the scheduled run still fails, report the next concrete failure
+      without expanding scope silently.
+
+
+      ## Guardrails
+
+
+      * Production remains parked.
+
+      * Scheduled canary-only alerting remains the only authorized delivery
+      posture.
+
+      * `ALERT_MEMBER_CHANNELS_ENABLED=false`.
+
+      * `SYSTEM_PICKS_ENABLED=false`.
+
+      * No SGO, ingestion restart, worker unpark, member delivery, secret
+      mutation, production DDL, or broader runtime change.
+
+      * Do not expose secret values; prove only presence and consumption.
+    captured_at: 2026-08-31T20:08:37.354Z
+    description_sha256: c62128b25676578fb848ab8426739775afde931c2517d0b1f20cd7c66d943641
+  contract_hash: 2d805fad7fc13b491f8d1ea1d4ef0ae3d53b5934cd56e8736c997fbc88ac86ec
