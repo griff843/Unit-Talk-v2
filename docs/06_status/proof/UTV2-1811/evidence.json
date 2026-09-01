@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1811",
+  "tier": "T1",
+  "lane_type": "migration",
+  "proof_profile": "migration",
+  "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
+  "status": "READY_FOR_REVIEW",
+  "generated_at": "2026-09-01T16:20:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "16c15506f4a2132a885073226461b6f0517161af",
+    "verified_source_note": "The last non-proof commit on this branch, and the head every receipt in this bundle was captured against. It supersedes 97e2d9eb, the first implementation commit, after required verify's executable-wiring check correctly refused a test file reachable from no package script; the two regression suites now live at the lane's own apps/api/src/t1-proof-utv2-1811-*.test.ts paths and are wired into the root test:t1-proof:local script. The branch's remaining commits, ac47388c and 330e47d6, are lane manifest, sync metadata and PR binding written by ops:lane-start and by the lane-binding workflow. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-01T16:20:00Z"
+  },
+  "verdict": {
+    "statement": "The submission outage was caused by a database contract that existed only in a code comment. consume_rate_limit_bucket is now defined by a governed migration, proven on real PostgreSQL 17 to reproduce InMemoryApiRateLimitStore semantics exactly, and proven to be unreachable by anon, authenticated and PUBLIC.",
+    "production_ddl_applied": false,
+    "production_submission_attempted": false
+  },
+  "runtime_proof": {
+    "head": "16c15506f4a2132a885073226461b6f0517161af",
+    "precondition_drill": {
+      "result": "PASS",
+      "run": 33530973221,
+      "job": 99933738656,
+      "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
+      "cases": [
+        "refuses when public.rate_limit_buckets pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.rate_limit_buckets pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.rate_limit_buckets case \u2014 back to baseline",
+        "applies on an empty scratch schema \u2014 created all declared relations: public.rate_limit_buckets"
+      ]
+    },
+    "schema_roundtrip_drill": {
+      "result": "PASS",
+      "run": 33530973221,
+      "job": 99933739000,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
+      "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
+    },
+    "writable_db_proof_staging": {
+      "result": "PASS",
+      "run": 33530970352,
+      "job": 99934207264,
+      "workflow": "Staging DB Proof / Writable DB proof (staging only)",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, and independently re-verified by the Proof Auditor job 99934877886 in the same run. No production credential is reachable from this job."
+    },
+    "live_schema_parity": {
+      "result": "BLOCKED_ON_PRODUCTION_DDL",
+      "run": 33530972753,
+      "job": 99933777688,
+      "workflow": "Live Schema Parity / Live Schema Parity",
+      "verdict": "FAIL \u2014 10 unauthorized findings, every one of them \"missing_in_actual\" for public.rate_limit_buckets and its columns, constraints and indexes.",
+      "why_not_pass": "This gate diffs the repo migration set (expected) against the LIVE PRODUCTION database (actual). It reports objects that the repo declares and production does not yet have. UTV2-1811 creates a new relation and production DDL is not authorized, so the gate is correctly reporting a true difference. It cannot return PASS until the migration is applied to production.",
+      "not_a_merge_blocker": "The required status job \"Enforce parity (fail-closed)\" (job 99933779832) SKIPPED on this feature-branch ref. This receipt blocks the CEP-E7 migration proof profile, not the merge gate. The four required status checks on main are Executor Result Validation, Merge Gate, P0 Protocol and verify.",
+      "precedent_measured": "Every prior table-creating migration in this repo already exists in production: public.delivery_kill_switch (20260714120000), public.command_center_game_threads and public.command_center_delivery_mappings (20260803230000) all return non-null from to_regclass in zfzdnfwdarxucxtaojxm, while supabase_migrations.schema_migrations holds 127 rows stopping at version 20260801222906. Production DDL has therefore always preceded parity going green; this lane is not deviating from the established order, it is stopped at it awaiting authorization."
+    },
+    "staging_target": {
+      "project_ref": "xskgrzbteyqdufktjrjx",
+      "postgres_version": "PostgreSQL 17.6",
+      "access": "ddl_and_read",
+      "note": "Applied via the Supabase migration path as `utv2_1811_rate_limit_buckets`. All scratch objects created during proof were dropped; the only residue is the contract itself, which staging is expected to carry."
+    },
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_select",
+      "writes_performed": 0,
+      "ddl_performed": 0,
+      "note": "Read only, to confirm the function is absent. No production DDL is authorized by this lane."
+    },
+    "function_identity": {
+      "name": "public.consume_rate_limit_bucket",
+      "identity_args": "p_key text, p_window_start timestamp with time zone, p_window_expires_at timestamp with time zone, p_limit integer",
+      "result_type": "TABLE(exceeded boolean, \"limit\" integer, remaining integer, reset_at timestamp with time zone)",
+      "security_definer": false
+    },
+    "limiter_semantics": [
+      {
+        "step": "window-1 call 1",
+        "exceeded": false,
+        "limit": 3,
+        "remaining": 2
+      },
+      {
+        "step": "window-1 call 2",
+        "exceeded": false,
+        "limit": 3,
+        "remaining": 1
+      },
+      {
+        "step": "window-1 call 3",
+        "exceeded": false,
+        "limit": 3,
+        "remaining": 0
+      },
+      {
+        "step": "window-1 call 4",
+        "exceeded": true,
+        "limit": 3,
+        "remaining": 0
+      },
+      {
+        "step": "window-2 call 1 (rolled)",
+        "exceeded": false,
+        "limit": 3,
+        "remaining": 2
+      }
+    ],
+    "rows_for_key_after_sweep": 1,
+    "acl_proof": {
+      "function_proacl": "{postgres=X/postgres,service_role=X/postgres}",
+      "table_relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+      "anon_can_execute_function": false,
+      "authenticated_can_execute_function": false,
+      "service_role_can_execute_function": true,
+      "anon_table_select": false,
+      "authenticated_table_insert": false,
+      "rls_enabled": true,
+      "policy_count": 0,
+      "control_without_revoke": {
+        "table_relacl": "{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
+        "function_proacl": "{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}",
+        "anon_can_execute_function": true,
+        "note": "Identical objects created in public without the REVOKE block. Proves the revokes are load-bearing, and that a PUBLIC-only revoke would have left the explicit anon and authenticated ACL entries intact."
+      }
+    },
+    "reversibility": {
+      "fingerprint_applied": "dd6588d1831a7eba09921beb8854aeee",
+      "fingerprint_after_down": "f77268e36e040e76d2d7e2c466a7c62c",
+      "fingerprint_after_reapply": "dd6588d1831a7eba09921beb8854aeee",
+      "reapply_converged": true,
+      "down_actually_changed_schema": true,
+      "note": "Fingerprint includes relacl and proacl, which the CI round-trip drill cannot see because schema-roundtrip-hash.ts runs pg_dump --no-acl."
+    },
+    "precondition_guard": {
+      "sqlstate_on_reapply_over_existing_table": "42P07",
+      "applies_when_absent": true
+    }
+  },
+  "static_proof": {
+    "commands": [
+      {
+        "command": "pnpm exec tsx --test apps/api/src/rpc-contract-parity.test.ts",
+        "tests": 3,
+        "pass": 3,
+        "fail": 0
+      },
+      {
+        "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+        "tests": 52,
+        "pass": 52,
+        "fail": 0
+      },
+      {
+        "command": "node scripts/lint-migrations.mjs",
+        "findings": 0
+      },
+      {
+        "command": "pnpm exec tsc -b tsconfig.json",
+        "exit": 0
+      }
+    ],
+    "inversion_results": [
+      {
+        "control": "RPC contract parity",
+        "mutation": "remove supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql",
+        "observed": "not ok 1 \u2014 consume_rate_limit_bucket (called from apps/api/src/server.ts)",
+        "verdict": "non-vacuous"
+      },
+      {
+        "control": "submission fails and persists nothing when the function is absent",
+        "mutation": "swap in a working rate limit store",
+        "observed": "not ok 51",
+        "verdict": "non-vacuous"
+      },
+      {
+        "control": "over-limit request is 429 rather than 500",
+        "mutation": "swap in the missing-function store",
+        "observed": "not ok 52",
+        "verdict": "non-vacuous"
+      }
+    ]
+  },
+  "containment": {
+    "track_only_enforcement": "untouched",
+    "member_delivery": "parked, untouched",
+    "worker_autorun": "parked, untouched",
+    "ingestor_autorun": "parked, untouched",
+    "syndicate_machine_enabled": "false, untouched",
+    "files_touched_outside_scope": 0
+  },
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1811/evidence.json",
+    "docs/06_status/proof/UTV2-1811/verification.md",
+    "docs/06_status/proof/UTV2-1811/diff-summary.md"
+  ]
+}
