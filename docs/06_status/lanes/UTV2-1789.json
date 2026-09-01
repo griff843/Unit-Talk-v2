@@ -17,7 +17,9 @@
     "apps/command-center/src/middleware.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1789/evidence.json"
+    "docs/06_status/proof/UTV2-1789/diff-summary.md",
+    "docs/06_status/proof/UTV2-1789/evidence.json",
+    "docs/06_status/proof/UTV2-1789/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-09-01T02:27:21.936Z",
