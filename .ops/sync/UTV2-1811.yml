@@ -1,0 +1,194 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1811
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1811
+  objective: >-
+    Create the missing DB contract so the shared fail-closed rate limiter can
+    function:
+
+    table `public.rate_limit_buckets`
+
+    function `public.consume_rate_limit_bucket(p_key, p_window_start,
+    p_window_expires_at, p_limit)`
+
+    The limiter itself is not being changed. **Do not weaken, bypass, or replace
+    the shared fail-closed rate limiter.** No memory-store fallback, no
+    fail-open behaviour.
+  acceptance_criteria:
+    - |-
+      ## Product truth being fixed
+
+      Every authenticated Smart Form submission to production currently fails before any pick logic runs. The production API is configured with `UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc` (required — `assertProductionRateLimitConfig` refuses the memory store in a production-like runtime). `SupabaseRpcApiRateLimitStore.consume()` calls `client.rpc('consume_rate_limit_bucket', ...)`, and that function **does not exist** in any governed migration, in staging, or in production. The store fails closed and throws, `handleSubmissions` never reaches `handleSubmitPick`, and the capper sees a failure with no row written.
+
+      This is the STOP-and-return condition [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) named: "If implementation discovers a schema migration is genuinely necessary, STOP and return the exact schema gap and migration plan before adding one." PM authorized the migration on 2026-09-01.
+
+      ## Objective
+
+      Create the missing DB contract so the shared fail-closed rate limiter can function:
+
+      * table `public.rate_limit_buckets`
+      * function `public.consume_rate_limit_bucket(p_key, p_window_start, p_window_expires_at, p_limit)`
+
+      The limiter itself is not being changed. **Do not weaken, bypass, or replace the shared fail-closed rate limiter.** No memory-store fallback, no fail-open behaviour.
+
+      ## Tier / lane
+
+      * Tier **T1**
+      * `lane_type: migration` (migration singleton rules apply)
+
+      ## In scope
+
+      * one forward migration under `supabase/migrations/`
+      * the matching down script under `db/migrations-rollback/`
+      * regenerated `packages/db/src/database.types.ts` if mechanically required
+      * a regression proving the failure before the fix and the control after
+      * a static RPC-contract-parity test (see below)
+      * this issue's lane/sync/proof artifacts
+
+      ## RPC contract parity (folded in — bounded)
+
+      The runtime has exactly six `client.rpc()` dependencies: `claim_next_outbox`, `confirm_delivery_atomic`, `consume_rate_limit_bucket`, `process_submission_atomic`, `settle_pick_atomic`, `transition_pick_lifecycle`. Five are defined in governed migrations; `consume_rate_limit_bucket` is the only one that is not. A static test that enumerates every `.rpc('name')` call site and requires a `CREATE [OR REPLACE] FUNCTION` for it in `supabase/migrations/**` fits inside this lane's existing test authority, needs no DB, and fails today for exactly one name. It is included here rather than deferred. No unrelated RPC is audited or modified.
+
+      ## Required proof
+
+      1. Before the migration, a valid authenticated POST reaches the shared limiter and deterministically fails because the function is absent.
+      2. After apply, `pg_proc` contains the function with the exact callable signature.
+      3. The same request proceeds beyond the rate-limit layer.
+      4. Allowed requests succeed; the over-limit request returns 429, not 500; a missing store remains fail-closed.
+      5. The migration applies to an empty/scratch governed schema; rollback and reapply converge on identical schema fingerprints; generated types agree if changed.
+      6. No containment change — Track Only, member-delivery parking, worker parking and ingestion parking are untouched.
+
+      ## Not authorized by this issue
+
+      Production DDL / applying the migration to production; another human production submission; memory-store fallback; fail-open rate limiting; provider activation; ingestion unpark; system picks; member delivery.
+
+      At the completed proof packet, STOP for PM production-DDL authorization.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Product truth being fixed
+      Every authenticated Smart Form submission to production currently fails before any pick logic runs. The production API is configured with `UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc` (required — `assertProductionRateLimitConfig` refuses the memory store in a production-like runtime). `SupabaseRpcApiRateLimitStore.consume()` calls `client.rpc('consume_rate_limit_bucket', ...)`, and that function **does not exist** in any governed migration, in staging, or in production. The store fails closed and throws, `handleSubmissions` never reaches `handleSubmitPick`, and the capper sees a failure with no row written.
+
+      This is the STOP-and-return condition [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) named: "If implementation discovers a schema migration is genuinely necessary, STOP and return the exact schema gap and migration plan before adding one." PM authorized the migration on 2026-09-01.
+    - |-
+      Tier / lane
+      * Tier **T1**
+      * `lane_type: migration` (migration singleton rules apply)
+    - |-
+      In scope
+      * one forward migration under `supabase/migrations/`
+      * the matching down script under `db/migrations-rollback/`
+      * regenerated `packages/db/src/database.types.ts` if mechanically required
+      * a regression proving the failure before the fix and the control after
+      * a static RPC-contract-parity test (see below)
+      * this issue's lane/sync/proof artifacts
+    - >-
+      RPC contract parity (folded in — bounded)
+
+      The runtime has exactly six `client.rpc()` dependencies:
+      `claim_next_outbox`, `confirm_delivery_atomic`,
+      `consume_rate_limit_bucket`, `process_submission_atomic`,
+      `settle_pick_atomic`, `transition_pick_lifecycle`. Five are defined in
+      governed migrations; `consume_rate_limit_bucket` is the only one that is
+      not. A static test that enumerates every `.rpc('name')` call site and
+      requires a `CREATE [OR REPLACE] FUNCTION` for it in
+      `supabase/migrations/**` fits inside this lane's existing test authority,
+      needs no DB, and fails today for exactly one name. It is included here
+      rather than deferred. No unrelated RPC is audited or modified.
+    - >-
+      Required proof
+
+      1. Before the migration, a valid authenticated POST reaches the shared
+      limiter and deterministically fails because the function is absent.
+
+      2. After apply, `pg_proc` contains the function with the exact callable
+      signature.
+
+      3. The same request proceeds beyond the rate-limit layer.
+
+      4. Allowed requests succeed; the over-limit request returns 429, not 500;
+      a missing store remains fail-closed.
+
+      5. The migration applies to an empty/scratch governed schema; rollback and
+      reapply converge on identical schema fingerprints; generated types agree
+      if changed.
+
+      6. No containment change — Track Only, member-delivery parking, worker
+      parking and ingestion parking are untouched.
+    - >-
+      Not authorized by this issue
+
+      Production DDL / applying the migration to production; another human
+      production submission; memory-store fallback; fail-open rate limiting;
+      provider activation; ingestion unpark; system picks; member delivery.
+
+
+      At the completed proof packet, STOP for PM production-DDL authorization.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume
+    title: "Smart Form L0 — shared rate-limit DB contract: rate_limit_buckets +
+      consume_rate_limit_bucket"
+    description: |-
+      ## Product truth being fixed
+
+      Every authenticated Smart Form submission to production currently fails before any pick logic runs. The production API is configured with `UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc` (required — `assertProductionRateLimitConfig` refuses the memory store in a production-like runtime). `SupabaseRpcApiRateLimitStore.consume()` calls `client.rpc('consume_rate_limit_bucket', ...)`, and that function **does not exist** in any governed migration, in staging, or in production. The store fails closed and throws, `handleSubmissions` never reaches `handleSubmitPick`, and the capper sees a failure with no row written.
+
+      This is the STOP-and-return condition [UTV2-1787](https://linear.app/unit-talk-v2/issue/UTV2-1787/smart-form-phase-1-capper-auth-canonical-participant-constraints-and) named: "If implementation discovers a schema migration is genuinely necessary, STOP and return the exact schema gap and migration plan before adding one." PM authorized the migration on 2026-09-01.
+
+      ## Objective
+
+      Create the missing DB contract so the shared fail-closed rate limiter can function:
+
+      * table `public.rate_limit_buckets`
+      * function `public.consume_rate_limit_bucket(p_key, p_window_start, p_window_expires_at, p_limit)`
+
+      The limiter itself is not being changed. **Do not weaken, bypass, or replace the shared fail-closed rate limiter.** No memory-store fallback, no fail-open behaviour.
+
+      ## Tier / lane
+
+      * Tier **T1**
+      * `lane_type: migration` (migration singleton rules apply)
+
+      ## In scope
+
+      * one forward migration under `supabase/migrations/`
+      * the matching down script under `db/migrations-rollback/`
+      * regenerated `packages/db/src/database.types.ts` if mechanically required
+      * a regression proving the failure before the fix and the control after
+      * a static RPC-contract-parity test (see below)
+      * this issue's lane/sync/proof artifacts
+
+      ## RPC contract parity (folded in — bounded)
+
+      The runtime has exactly six `client.rpc()` dependencies: `claim_next_outbox`, `confirm_delivery_atomic`, `consume_rate_limit_bucket`, `process_submission_atomic`, `settle_pick_atomic`, `transition_pick_lifecycle`. Five are defined in governed migrations; `consume_rate_limit_bucket` is the only one that is not. A static test that enumerates every `.rpc('name')` call site and requires a `CREATE [OR REPLACE] FUNCTION` for it in `supabase/migrations/**` fits inside this lane's existing test authority, needs no DB, and fails today for exactly one name. It is included here rather than deferred. No unrelated RPC is audited or modified.
+
+      ## Required proof
+
+      1. Before the migration, a valid authenticated POST reaches the shared limiter and deterministically fails because the function is absent.
+      2. After apply, `pg_proc` contains the function with the exact callable signature.
+      3. The same request proceeds beyond the rate-limit layer.
+      4. Allowed requests succeed; the over-limit request returns 429, not 500; a missing store remains fail-closed.
+      5. The migration applies to an empty/scratch governed schema; rollback and reapply converge on identical schema fingerprints; generated types agree if changed.
+      6. No containment change — Track Only, member-delivery parking, worker parking and ingestion parking are untouched.
+
+      ## Not authorized by this issue
+
+      Production DDL / applying the migration to production; another human production submission; memory-store fallback; fail-open rate limiting; provider activation; ingestion unpark; system picks; member delivery.
+
+      At the completed proof packet, STOP for PM production-DDL authorization.
+    captured_at: 2026-09-01T15:46:31.100Z
+    description_sha256: 9b83d122a6842ca28b7235befcfae78c46deaff3cd5990ab30b2e46905fb2429
+  contract_hash: 8c21a8196bd1b60fbb7e4faee3a757af9a3dcd9a4b96f890f000ce7da4c37ab0
