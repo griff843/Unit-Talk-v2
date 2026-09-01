@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1795-shared-nextjs-deployment",
   "branch": "claude/utv2-1795-shared-nextjs-deployment",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "62ecf8daf8ae52520ac057e114662956269040a8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1471",
   "files_changed": [],
   "file_scope_lock": [
@@ -29,14 +29,38 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1795/evidence.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-08-31T23:40:40.248Z",
-  "heartbeat_at": "2026-09-01T00:14:58.298Z",
+  "heartbeat_at": "2026-09-01T02:23:25.083Z",
   "closed_at": null,
-  "blocked_by": [],
+  "blocked_by": [
+    "deployment-proof-outstanding: owner-supplied secrets (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, NEXTAUTH_SECRET, ALLOWED_CAPPER_EMAILS, UNIT_TALK_WEB_DOMAIN, UNIT_TALK_SMART_FORM_DOMAIN) not yet provided",
+    "dns-outstanding: unittalk.com, www.unittalk.com and form.unittalk.com not yet resolving to the host",
+    "live-verification-outstanding: no governed deployment has run; neither site verified live; existing api/worker/ingestor/discord-bot health not re-verified post-deploy"
+  ],
   "preflight_token": ".out/ops/preflight/claude/utv2-1795-shared-nextjs-deployment.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-01T02:23:25.083Z",
+      "verdict": "fail",
+      "merge_sha": "62ecf8daf8ae52520ac057e114662956269040a8",
+      "failures": [
+        "P3",
+        "P4",
+        "C4",
+        "C5",
+        "C6",
+        "P6",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
