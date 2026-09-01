@@ -1,0 +1,14 @@
+{
+  "status": "healthy",
+  "pnpm_verify": "static pass; live-db leg not runnable from a containment checkout (staging-ci credential is held only by the CI staging-db-proof job)",
+  "pnpm_verify_static": "pass",
+  "pnpm_test_db": "not_run_locally",
+  "r_level": "pass",
+  "live_db_proof": "read-only production measurement only; no staging write (see evidence.json runtime_proof.known_limitations)",
+  "unit_tests": "provider-offer repository 15/15; ingest caller-path 3/3",
+  "mutations": "7/7 each failed exactly the test naming its condition",
+  "production_rows_written": 0,
+  "timestamp": "2026-09-01T02:55:00.000Z",
+  "branch_head_sha": "f259f03d2eceaa1bbfd34ae613d3dfe6bc72b3c9",
+  "verified_source_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf"
+}
