@@ -1,0 +1,257 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1822
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1822
+  objective: |-
+    Create a truthful, mechanically protected representation of the 127 historical remote versions in the active local migration namespace that:
+    satisfies Supabase's remote→local version correspondence requirement;
+    does not execute historical DDL already subsumed by the baseline snapshot;
+    preserves the exact SQL that actually ran as auditable historical evidence;
+    keeps fresh database replay valid from the baseline + forward migrations;
+    makes [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) the sole migration selected by `supabase db push --dry-run`.
+  acceptance_criteria:
+    - "**Prototype before bulk write.** Using a disposable local/scratch copy,
+      prove a representative history-receipt file is accepted by `supabase
+      migration list`/migration tooling as a versioned local migration while
+      executing no SQL during replay."
+    - "**Replay safety.** A clean scratch database built from the proposed
+      active `supabase/migrations/` chain completes successfully. Historical
+      receipt files perform zero schema/data mutation. The baseline remains the
+      replay root."
+    - "**127/127 correspondence.** Every remote-only version has exactly one
+      local active receipt file with the exact remote version prefix. No
+      fabricated or ambiguous identity."
+    - "**Historical SQL preserved.** For all 127 versions, the receipt resolves
+      to an exact authoritative SQL artifact:"
+    - ledger payload where present;
+    - archive source only where ledger payload is NULL;
+    - ledger payload wins for the three known divergent pairs.
+    - "**Mechanical receipt validation.** Add or extend a CI control so a
+      historical receipt cannot silently gain executable SQL, lose its source
+      artifact, or carry a stale/mismatched hash/version. Mutation-prove this
+      control."
+    - "**No duplicate replay.** The six double-applied historical migrations and
+      five regenerated-version aliases are represented without re-executing
+      their DDL on scratch reset."
+    - "**Canonical CLI proof.** After the repair lands, `supabase migration list
+      --linked` no longer reports the 127 historical rows as remote-only. With
+      [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0\
+      -shared-rate-limit-db-contract-rate-limit-buckets-consume) present but
+      unapplied, `supabase db push --linked --dry-run` must propose exactly
+      `20260901150000_utv2_1811_rate_limit_buckets.sql` and nothing else."
+    - "**No production mutation in this lane.** Do not run `db push`, migration
+      repair, db pull, raw DDL, Smart Form submission, provider activation,
+      ingestion/system-pick unpark, or member delivery."
+    - "**Do not widen into full**
+      [UTV2-1447](https://linear.app/unit-talk-v2/issue/UTV2-1447/migration-led\
+      ger-repair-documented-rtorpo-g-24)**.** The 8 archived migrations whose
+      effects exist but have no ledger row remain parent-program debt unless
+      they mechanically block this acceptance path."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Purpose
+      Restore bidirectional Supabase migration-history correspondence so the canonical `supabase db push` path can apply [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume), without replaying five months of historical DDL on top of the active baseline snapshot and without falsifying production history.
+
+      Parent: [UTV2-1447](https://linear.app/unit-talk-v2/issue/UTV2-1447/migration-ledger-repair-documented-rtorpo-g-24) (migration-ledger repair / RTO-RPO). This is a bounded production-unlocking child, not the full DR program.
+    - |-
+      Current truth
+      [UTV2-1821](https://linear.app/unit-talk-v2/issue/UTV2-1821/production-migration-ledger-alignment-make-utv2-1811-the-only-pending) proved all 127 remote-only ledger versions are reconstructable:
+
+      * 104 have complete non-empty ordered SQL statement payloads in `supabase_migrations.schema_migrations`;
+      * 23 have NULL ledger payloads but have authoritative files in `supabase/migrations_archive/`;
+      * 0 are irrecoverable;
+      * 78 have both sources; where they diverge, the ledger payload is the record of what actually executed;
+      * 26 are ledger-payload-only historical applies;
+      * 23 are archive-only repair-inserted versions;
+      * 6 historical migrations were applied twice under different version IDs;
+      * 5 remote versions are aliases of already-active local migrations;
+      * two remote-only changes were never committed in any migration-file form but have complete ledger payloads.
+
+      The active `supabase/migrations/00000000000000_baseline_live_schema.sql` is a full `pg_dump` snapshot and is explicitly treated by repo tooling as the snapshot replay root. Therefore copying 127 historical executable DDL payloads directly after it risks duplicate-object replay and is not acceptable without proof.
+    - >-
+      Required design
+
+      Use a **baseline + historical receipt** model unless execution proves it
+      invalid:
+
+
+      * active files matching the 127 remote version IDs must be non-executable
+      history receipts, not copied executable historical DDL;
+
+      * each receipt must bind to the authoritative historical SQL source with
+      version, name, source kind, deterministic content hash, and provenance;
+
+      * exact executed SQL must remain preserved outside the active replay path
+      (existing archive where authoritative; ledger-derived historical artifact
+      where the archive is absent or differs);
+
+      * for the 3 ledger/archive divergences, preserve both facts but designate
+      the ledger payload as executed-history truth;
+
+      * for alias/re-apply versions, do not duplicate executable DDL in the
+      active replay chain.
+
+
+      Do not assume comments-only files are accepted by Supabase tooling: prove
+      the representation mechanically before bulk generation.
+    - >-
+      File scope
+
+      Expected scope is limited to:
+
+
+      * `supabase/migrations/**` for the version-matching non-executable
+      receipts
+
+      * `supabase/migrations_archive/**` or a clearly named historical-execution
+      subdirectory for exact executed SQL preservation/provenance
+
+      * the smallest required migration-lint/CI validation source and focused
+      tests
+
+      * this issue's `.ops/sync/**`, lane manifest, proof artifacts, and a
+      narrowly scoped update to canonical DB migration documentation if needed
+      to define the receipt model
+
+
+      No application/runtime code.
+    - |-
+      Sequencing / lane ownership
+      This work touches `supabase/migrations/**` and must use the canonical migration-lane classification if mechanically derived. [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) currently holds the migration singleton while blocked. Before this lane starts, use the sanctioned park/suspension path for [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) if required by lane-start; do not bypass singleton protection. It is acceptable that parking changes PR #1477's head and invalidates its current head-bound override because #1477 must be re-synced/re-anchored after this repair anyway.
+
+      After this child merges and truth-closes:
+
+      1. resume [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) through sanctioned tooling;
+      2. sync/re-anchor #1477 to current main;
+      3. rerun exact-head proof;
+      4. confirm dry-run selects only L0;
+      5. return to PM for fresh production-DDL authorization.
+    - >-
+      Stop conditions
+
+      Return to PM if:
+
+
+      * Supabase tooling does not accept a non-executable version receipt;
+
+      * scratch replay cannot be made valid without editing the baseline or
+      historical SQL semantics;
+
+      * any of the 127 source mappings becomes ambiguous under implementation;
+
+      * the required representation would need raw production mutation;
+
+      * scope must widen materially beyond migration history/validation/docs.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1822/reconcile-127-remote-migration-versions-into-baseline-safe-local
+    title: Reconcile 127 remote migration versions into baseline-safe local history
+      receipts
+    description: |-
+      ## Purpose
+
+      Restore bidirectional Supabase migration-history correspondence so the canonical `supabase db push` path can apply [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume), without replaying five months of historical DDL on top of the active baseline snapshot and without falsifying production history.
+
+      Parent: [UTV2-1447](https://linear.app/unit-talk-v2/issue/UTV2-1447/migration-ledger-repair-documented-rtorpo-g-24) (migration-ledger repair / RTO-RPO). This is a bounded production-unlocking child, not the full DR program.
+
+      ## Current truth
+
+      [UTV2-1821](https://linear.app/unit-talk-v2/issue/UTV2-1821/production-migration-ledger-alignment-make-utv2-1811-the-only-pending) proved all 127 remote-only ledger versions are reconstructable:
+
+      * 104 have complete non-empty ordered SQL statement payloads in `supabase_migrations.schema_migrations`;
+      * 23 have NULL ledger payloads but have authoritative files in `supabase/migrations_archive/`;
+      * 0 are irrecoverable;
+      * 78 have both sources; where they diverge, the ledger payload is the record of what actually executed;
+      * 26 are ledger-payload-only historical applies;
+      * 23 are archive-only repair-inserted versions;
+      * 6 historical migrations were applied twice under different version IDs;
+      * 5 remote versions are aliases of already-active local migrations;
+      * two remote-only changes were never committed in any migration-file form but have complete ledger payloads.
+
+      The active `supabase/migrations/00000000000000_baseline_live_schema.sql` is a full `pg_dump` snapshot and is explicitly treated by repo tooling as the snapshot replay root. Therefore copying 127 historical executable DDL payloads directly after it risks duplicate-object replay and is not acceptable without proof.
+
+      ## Objective
+
+      Create a truthful, mechanically protected representation of the 127 historical remote versions in the active local migration namespace that:
+
+      1. satisfies Supabase's remote→local version correspondence requirement;
+      2. does not execute historical DDL already subsumed by the baseline snapshot;
+      3. preserves the exact SQL that actually ran as auditable historical evidence;
+      4. keeps fresh database replay valid from the baseline + forward migrations;
+      5. makes [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) the sole migration selected by `supabase db push --dry-run`.
+
+      ## Required design
+
+      Use a **baseline + historical receipt** model unless execution proves it invalid:
+
+      * active files matching the 127 remote version IDs must be non-executable history receipts, not copied executable historical DDL;
+      * each receipt must bind to the authoritative historical SQL source with version, name, source kind, deterministic content hash, and provenance;
+      * exact executed SQL must remain preserved outside the active replay path (existing archive where authoritative; ledger-derived historical artifact where the archive is absent or differs);
+      * for the 3 ledger/archive divergences, preserve both facts but designate the ledger payload as executed-history truth;
+      * for alias/re-apply versions, do not duplicate executable DDL in the active replay chain.
+
+      Do not assume comments-only files are accepted by Supabase tooling: prove the representation mechanically before bulk generation.
+
+      ## Acceptance Criteria
+
+      1. **Prototype before bulk write.** Using a disposable local/scratch copy, prove a representative history-receipt file is accepted by `supabase migration list`/migration tooling as a versioned local migration while executing no SQL during replay.
+      2. **Replay safety.** A clean scratch database built from the proposed active `supabase/migrations/` chain completes successfully. Historical receipt files perform zero schema/data mutation. The baseline remains the replay root.
+      3. **127/127 correspondence.** Every remote-only version has exactly one local active receipt file with the exact remote version prefix. No fabricated or ambiguous identity.
+      4. **Historical SQL preserved.** For all 127 versions, the receipt resolves to an exact authoritative SQL artifact:
+         * ledger payload where present;
+         * archive source only where ledger payload is NULL;
+         * ledger payload wins for the three known divergent pairs.
+      5. **Mechanical receipt validation.** Add or extend a CI control so a historical receipt cannot silently gain executable SQL, lose its source artifact, or carry a stale/mismatched hash/version. Mutation-prove this control.
+      6. **No duplicate replay.** The six double-applied historical migrations and five regenerated-version aliases are represented without re-executing their DDL on scratch reset.
+      7. **Canonical CLI proof.** After the repair lands, `supabase migration list --linked` no longer reports the 127 historical rows as remote-only. With [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) present but unapplied, `supabase db push --linked --dry-run` must propose exactly `20260901150000_utv2_1811_rate_limit_buckets.sql` and nothing else.
+      8. **No production mutation in this lane.** Do not run `db push`, migration repair, db pull, raw DDL, Smart Form submission, provider activation, ingestion/system-pick unpark, or member delivery.
+      9. **Do not widen into full** [UTV2-1447](https://linear.app/unit-talk-v2/issue/UTV2-1447/migration-ledger-repair-documented-rtorpo-g-24)**.** The 8 archived migrations whose effects exist but have no ledger row remain parent-program debt unless they mechanically block this acceptance path.
+
+      ## File scope
+
+      Expected scope is limited to:
+
+      * `supabase/migrations/**` for the version-matching non-executable receipts
+      * `supabase/migrations_archive/**` or a clearly named historical-execution subdirectory for exact executed SQL preservation/provenance
+      * the smallest required migration-lint/CI validation source and focused tests
+      * this issue's `.ops/sync/**`, lane manifest, proof artifacts, and a narrowly scoped update to canonical DB migration documentation if needed to define the receipt model
+
+      No application/runtime code.
+
+      ## Sequencing / lane ownership
+
+      This work touches `supabase/migrations/**` and must use the canonical migration-lane classification if mechanically derived. [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) currently holds the migration singleton while blocked. Before this lane starts, use the sanctioned park/suspension path for [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) if required by lane-start; do not bypass singleton protection. It is acceptable that parking changes PR #1477's head and invalidates its current head-bound override because #1477 must be re-synced/re-anchored after this repair anyway.
+
+      After this child merges and truth-closes:
+
+      1. resume [UTV2-1811](https://linear.app/unit-talk-v2/issue/UTV2-1811/smart-form-l0-shared-rate-limit-db-contract-rate-limit-buckets-consume) through sanctioned tooling;
+      2. sync/re-anchor #1477 to current main;
+      3. rerun exact-head proof;
+      4. confirm dry-run selects only L0;
+      5. return to PM for fresh production-DDL authorization.
+
+      ## Stop conditions
+
+      Return to PM if:
+
+      * Supabase tooling does not accept a non-executable version receipt;
+      * scratch replay cannot be made valid without editing the baseline or historical SQL semantics;
+      * any of the 127 source mappings becomes ambiguous under implementation;
+      * the required representation would need raw production mutation;
+      * scope must widen materially beyond migration history/validation/docs.
+    captured_at: 2026-09-01T23:25:39.522Z
+    description_sha256: 753149d26fc4031a6a0ee26435bdbf3befea51597ab9e3f4ea1d73ebdebbc806
+  contract_hash: b29eef6ad44cf80539d0eeac7f4abbaa728eacd0d6b6fe545a362f5f2ef52c4f
