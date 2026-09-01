@@ -38,6 +38,53 @@ Production still does not have the function. Nothing about the live failure chan
 the migration is applied there, which is not authorized in this lane.
 
 EVIDENCE:
+
+Real-PostgreSQL execution against staging `xskgrzbteyqdufktjrjx` (17.6), `p_limit = 3`:
+
+```
+step                       exceeded  limit  remaining
+window-1 call 1            false     3      2
+window-1 call 2            false     3      1
+window-1 call 3            false     3      0
+window-1 call 4            true      3      0
+window-2 call 1 (rolled)   false     3      2
+rows held for the key after the sweep: 1
+p_limit = 0 -> SQLSTATE 22023   null p_key -> 22023   count = -1 -> 23514
+re-run of the precondition guard over the applied schema -> SQLSTATE 42P07
+```
+
+Privileges read from the catalog, not from a `pg_dump --no-acl` round trip:
+
+```
+proacl (function): {postgres=X/postgres,service_role=X/postgres}
+relacl (table):    {postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+anon EXECUTE: false   authenticated EXECUTE: false   service_role EXECUTE: true
+relrowsecurity: true  policies: 0
+
+control object created in the same schema WITHOUT the REVOKE block:
+proacl: {=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+anon EXECUTE: true    anon SELECT: true
+```
+
+Apply / down / reapply fingerprints, including ACLs:
+
+```
+applied         dd6588d1831a7eba09921beb8854aeee
+after down      f77268e36e040e76d2d7e2c466a7c62c
+after reapply   dd6588d1831a7eba09921beb8854aeee
+reapply_converged: true    down_actually_changed_schema: true
+```
+
+CEP-E7 receipts, bound to `16c15506` — the last non-proof commit:
+
+```
+precondition_drill          PASS  run 33530973221  job 99933738656
+schema_roundtrip_drill      PASS  run 33530973221  job 99933739000
+writable_db_proof_staging   PASS  run 33530970352  job 99934207264
+live_schema_parity          BLOCKED_ON_PRODUCTION_DDL
+                                  run 33530972753  job 99933777688
+```
+
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.
 - `docs/06_status/proof/UTV2-1811/evidence.json` — CEP-E7 receipts with exact run and job ids.
 - Staging `xskgrzbteyqdufktjrjx` (PostgreSQL 17.6) — where the migration was applied, exercised, rolled back and reapplied.
