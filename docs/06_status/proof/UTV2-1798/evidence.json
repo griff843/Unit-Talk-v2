@@ -1,0 +1,204 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1798",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "verified",
+  "sha_binding": {
+    "verified_source_sha": "890d08e3fc372100121c858692121979172d3197",
+    "evidence_commit_sha": "890d08e3fc372100121c858692121979172d3197",
+    "current_pr_head_sha": "890d08e3fc372100121c858692121979172d3197",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "890d08e3fc372100121c858692121979172d3197",
+      "current_pr_head_sha": "890d08e3fc372100121c858692121979172d3197"
+    },
+    "note": "890d08e3fc372100121c858692121979172d3197 is the last non-proof commit on this branch. It differs from the implementation commit 2a414110aa66d6aab20360d33379b5c022787175 only in the lane manifest pr_url/status/heartbeat fields, written by the lane-binding automation; no source file differs. Every receipt in verification.md was re-executed against this exact tree."
+  },
+  "static_proof": {
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0
+    },
+    "verify_commands": {
+      "command": "pnpm verify:commands",
+      "exit_code": 0
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "failing_stage": "test:live-db",
+      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx \u2014 writable DB verification is only obtainable inside the staging-ci GitHub environment.",
+      "note": "Every static stage before it is exit 0. The writable receipt is produced inside required CI verify, not claimed here."
+    },
+    "wiring_test": {
+      "command": "pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts",
+      "exit_code": 0,
+      "tests": 13,
+      "pass": 13,
+      "fail": 0,
+      "skipped": 0,
+      "new_tests": [
+        "ok 12 - Auth.js trusts the proxied host only where the deployment provisions it",
+        "ok 13 - the host-trust correction leaves parked containment untouched"
+      ],
+      "note": "Assertions parse the real printf/ssh env-file writers out of deploy.yml and model each written env file as its KEY=VALUE list. A marker in a comment cannot satisfy them."
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts",
+      "exit_code": 0,
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": "none",
+      "note": "The R-level rules key on schema, migration, delivery and domain paths; this lane touches none of them, so no R-level artifact is required."
+    }
+  },
+  "runtime_proof": {
+    "production_failure_reproduced": {
+      "host": "https://picks.unit-talk.com",
+      "routes": [
+        {
+          "path": "/api/auth/providers",
+          "http_status": 500,
+          "ssl_verify_result": 0
+        },
+        {
+          "path": "/api/auth/csrf",
+          "http_status": 500,
+          "ssl_verify_result": 0
+        },
+        {
+          "path": "/api/auth/session",
+          "http_status": 500,
+          "ssl_verify_result": 0
+        },
+        {
+          "path": "/login",
+          "http_status": 200,
+          "ssl_verify_result": 0
+        }
+      ],
+      "container_log": "[auth][error] UntrustedHost: Host must be trusted. URL was: https://picks.unit-talk.com/api/auth/session",
+      "deployed_env_smart_form_keys": [
+        "NODE_ENV",
+        "PORT",
+        "NEXTAUTH_URL",
+        "NEXTAUTH_SECRET",
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET",
+        "ALLOWED_CAPPER_EMAILS",
+        "UNIT_TALK_API_URL",
+        "NEXT_PUBLIC_API_BASE_URL"
+      ],
+      "note": "Key names only; no values were read or printed. AUTH_TRUST_HOST is absent, and NEXTAUTH_URL (a v4 name) does not confer trust in v5."
+    },
+    "application_build": {
+      "command": "NODE_ENV=production NEXTAUTH_SECRET=<local control placeholder> NEXT_PUBLIC_API_BASE_URL=https://api.example-unittalk.test pnpm --filter \"@unit-talk/smart-form...\" build",
+      "exit_code": 0
+    },
+    "host_trust_inversion": {
+      "method": "Same production build started twice, differing only in AUTH_TRUST_HOST, requested through a forwarded host exactly as Caddy forwards one.",
+      "request": "curl -H 'X-Forwarded-Host: picks.example-unittalk.test' -H 'X-Forwarded-Proto: https' http://127.0.0.1:4411/api/auth/providers",
+      "without_trust": {
+        "http_status": 500,
+        "untrusted_host_log_lines": 1,
+        "body": "{\"message\":\"There was a problem with the server configuration. Check the server logs for more information.\"}",
+        "log": "UntrustedHost: Host must be trusted. URL was: https://picks.example-unittalk.test/api/auth/providers"
+      },
+      "with_trust": {
+        "http_status": 200,
+        "untrusted_host_log_lines": 0,
+        "body": "{\"google\":{\"id\":\"google\",\"name\":\"Google\",\"type\":\"oidc\",\"signinUrl\":\"https://picks.example-unittalk.test/api/auth/signin/google\",\"callbackUrl\":\"https://picks.example-unittalk.test/api/auth/callback/google\"}}"
+      },
+      "conclusion": "The deployed failure reproduces without the variable and disappears with it. The 200 also shows the Google callback URI derived from the forwarded origin.",
+      "credentials": "No production credential used; picks.example-unittalk.test is a reserved test hostname and nothing left the machine."
+    }
+  },
+  "mutation_proof": {
+    "method": "One defect introduced at a time in .github/workflows/deploy.yml; file restored and SHA-256 re-confirmed between each.",
+    "baseline_sha256": {
+      ".github/workflows/deploy.yml": "b6513e6d40c2e679e6a4fe53644d4d7cd62f7e4a9fcd2019dbe01f7ea8b1cbdf",
+      "scripts/ci/nextjs-deploy-wiring.test.ts": "86b8a4962870820f37940502def176c729fea90646e8475bfe84a40c9faed789"
+    },
+    "results": [
+      {
+        "mutation": "drop AUTH_TRUST_HOST from the canary path only",
+        "caught_by": "not ok 12"
+      },
+      {
+        "mutation": "leak AUTH_TRUST_HOST into .env.web",
+        "caught_by": "not ok 12"
+      },
+      {
+        "mutation": "hard-code NEXT_PUBLIC_API_BASE_URL=https://api.unit-talk.com",
+        "caught_by": "not ok 12"
+      },
+      {
+        "mutation": "parked mode forces _enabled_targets=\"best-bets\"",
+        "caught_by": "not ok 13"
+      },
+      {
+        "mutation": "add AUTH_TRUST_HOST to .env.production",
+        "caught_by": "not ok 13"
+      },
+      {
+        "mutation": "leak NEXTAUTH_SECRET into .env.web",
+        "caught_by": "not ok 4 and not ok 12"
+      },
+      {
+        "mutation": "parked mode sets _ingestor_autorun=true",
+        "caught_by": "not ok 13"
+      }
+    ],
+    "caught": 7,
+    "total": 7
+  },
+  "scope_proof": {
+    "files_changed": 5,
+    "insertions": 376,
+    "deletions": 0,
+    "paths": [
+      ".github/workflows/deploy.yml",
+      ".ops/sync/UTV2-1798.yml",
+      "deploy/production/ENV_FILES.md",
+      "docs/06_status/lanes/UTV2-1798.json",
+      "scripts/ci/nextjs-deploy-wiring.test.ts"
+    ],
+    "apps_files_changed": 0,
+    "not_modified": [
+      "apps/smart-form/auth.ts",
+      "Google OAuth provider logic",
+      "allow-list behavior",
+      "API authentication",
+      "Caddy routing",
+      "Supabase / schema",
+      "provider ingestion",
+      "member delivery behavior",
+      "Command Center"
+    ]
+  },
+  "containment": {
+    "production_writes": "none",
+    "production_deployment_triggered": false,
+    "paid_ingestion": "unchanged (parked)",
+    "member_delivery": "unchanged (disabled)",
+    "system_picks": "unchanged (disabled)",
+    "pick_submitted": false,
+    "note": "Only non-mutating GET requests and read-only container/env-key inspection were performed against production."
+  },
+  "open_items": [
+    "The fix is not in production until a governed Deploy dispatch writes it; that dispatch follows PM merge approval at the exact head and is not performed here.",
+    "Google sign-in end-to-end is not yet proven against the owner's real OAuth client; whether https://picks.unit-talk.com/api/auth/callback/google is registered is the most likely remaining blocker.",
+    "www.unit-talk.com has no certificate \u2014 the Caddyfile declares exactly three site blocks. Follow-up observation, deferred by PM.",
+    "api.unit-talk.com/health responds in roughly 14 s. Follow-up observation, deferred by PM."
+  ]
+}
