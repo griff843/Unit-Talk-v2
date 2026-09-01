@@ -23,8 +23,6 @@
   "pr_number": 1472,
   "source_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf",
   "reviewed_head_sha": "c3834a6d80e746ffe39bbde52018373eba1dfadf",
-  "evidence_commit_sha": null,
-  "merge_sha": null,
   "generated_at": "2026-09-01T02:42:27Z",
   "gate_results": [
     {
@@ -146,8 +144,5 @@
       "The writable staging leg did not execute. The live-proof test that carried it was removed from this PR together with docs/05_operations/db-writer-classification.json, per PM direction; re-admitting either needs a governance-scope request. The eight staging-write controls are therefore proven offline against production-shaped fixtures and by the read-only production measurement above, not by a staging write.",
       "CI's Require live-DB proof gate (advisory, not a required branch-protection context) fails for the same reason: it matches on the presence of an apps/*/src/t1-proof-*.test.ts diff, and that file was removed."
     ]
-  },
-  "verifier": {
-    "identity": "claude-opus-5 (orchestrator), UTV2-1796 lane"
   }
 }
