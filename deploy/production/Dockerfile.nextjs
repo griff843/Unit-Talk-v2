@@ -1,0 +1,67 @@
+# Shared production image for the repository's Next.js applications.
+#
+# One Dockerfile serves both `apps/web` and `apps/smart-form`. The app is chosen
+# entirely by build argument so that neither application's own source tree has to
+# carry deployment configuration.
+#
+#   docker build -f deploy/production/Dockerfile.nextjs \
+#     --build-arg APP_DIR=apps/smart-form \
+#     --build-arg APP_PACKAGE=@unit-talk/smart-form \
+#     --build-arg APP_PORT=4400 .
+#
+# The runtime stage starts the app with `next start` rather than the standalone
+# server. `apps/web` sets `output: 'standalone'` and `apps/smart-form` does not;
+# `next start` serves a normal build from either, so this image does not depend on
+# that difference and no file under `apps/` needs to change.
+#
+# No secret is baked in. Every value the applications read at runtime arrives from
+# the per-service env file mounted by docker compose.
+
+ARG NODE_VERSION=22-alpine
+
+FROM node:${NODE_VERSION} AS builder
+ARG APP_PACKAGE
+WORKDIR /repo
+RUN apk add --no-cache libc6-compat \
+  && corepack enable \
+  && corepack prepare pnpm@10.29.3 --activate
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.json tsconfig.base.json ./
+COPY packages ./packages
+COPY apps ./apps
+RUN pnpm install --frozen-lockfile
+RUN test -n "${APP_PACKAGE}" || (echo "APP_PACKAGE build arg is required" >&2; exit 1)
+# apps/smart-form's Auth.js route is evaluated during `next build` page-data
+# collection, and apps/smart-form/lib/auth-config.ts throws when NODE_ENV is
+# production and no auth secret is set. The build therefore needs *a* value.
+#
+# This is a public constant, not a credential: it is written here in plain text
+# on purpose so it can never be mistaken for the real secret, it exists only in
+# the discarded builder stage, and the runtime stage below refuses to start if it
+# ever reaches production. The real NEXTAUTH_SECRET arrives at run time from
+# .env.smart-form and never appears in a build arg or an image layer.
+ENV NEXTAUTH_BUILD_PLACEHOLDER=nextauth-build-only-placeholder-not-a-secret
+RUN NEXTAUTH_SECRET="$NEXTAUTH_BUILD_PLACEHOLDER" pnpm --filter "${APP_PACKAGE}..." build
+
+FROM node:${NODE_VERSION}
+ARG APP_DIR
+ARG APP_PORT
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV APP_DIR=${APP_DIR}
+ENV PORT=${APP_PORT}
+WORKDIR /repo
+RUN apk add --no-cache curl \
+  && corepack enable \
+  && corepack prepare pnpm@10.29.3 --activate
+COPY --from=builder /repo/package.json /repo/pnpm-workspace.yaml /repo/pnpm-lock.yaml ./
+COPY --from=builder /repo/node_modules ./node_modules
+COPY --from=builder /repo/packages ./packages
+COPY --from=builder /repo/${APP_DIR} ./${APP_DIR}
+EXPOSE ${APP_PORT}
+# The runtime stage deliberately sets no NEXTAUTH_SECRET: it must come from
+# .env.smart-form. Starting with the build placeholder would sign every session
+# with a value published in this file, so the container refuses to start on it.
+# APP_DIR and PORT are baked as ENV above so the shell form resolves them at run time.
+COPY deploy/production/nextjs-entrypoint.sh /usr/local/bin/nextjs-entrypoint.sh
+RUN chmod +x /usr/local/bin/nextjs-entrypoint.sh
+CMD ["/usr/local/bin/nextjs-entrypoint.sh"]

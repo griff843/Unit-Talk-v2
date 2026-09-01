@@ -1,18 +1,37 @@
-# Reverse proxy for Unit Talk V2 API
-# Domain is injected via CADDY_DOMAIN env var at deploy time.
-# Caddy handles TLS issuance and renewal automatically via Let's Encrypt.
-# Port 4000 remains bound inside the Docker network only; not exposed publicly.
+# Reverse proxy for Unit Talk V2.
+#
+# Every hostname is injected via an env var at deploy time and is never written
+# into this repository. Caddy handles TLS issuance and renewal automatically via
+# Let's Encrypt. All upstream ports stay bound inside the Docker network only.
+#
+#   {$CADDY_DOMAIN}                  -> api:4000         (existing API)
+#   {$UNIT_TALK_WEB_DOMAIN}          -> web:4200         (public website)
+#   {$UNIT_TALK_SMART_FORM_DOMAIN}   -> smart-form:4400  (capper intake)
+#
+# Caddy fails to parse a site address that expands to an empty string, so an
+# unconfigured hostname stops the edge rather than silently serving the wrong
+# application on the wrong name.
 
-{$CADDY_DOMAIN} {
-    reverse_proxy api:4000
-
-    # Security headers
+(security_headers) {
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         -Server
     }
+}
+
+(json_log) {
+    log {
+        output stdout
+        format json
+    }
+}
+
+{$CADDY_DOMAIN} {
+    reverse_proxy api:4000
+
+    import security_headers
 
     # Health check passthrough (no auth required)
     @health path /health
@@ -20,10 +39,28 @@
         reverse_proxy api:4000
     }
 
-    log {
-        output stdout
-        format json
+    import json_log
+}
+
+{$UNIT_TALK_WEB_DOMAIN} {
+    reverse_proxy web:4200
+
+    import security_headers
+    import json_log
+}
+
+{$UNIT_TALK_SMART_FORM_DOMAIN} {
+    reverse_proxy smart-form:4400
+
+    # The intake surface is authenticated and must never be cached by an
+    # intermediary or framed by a third party.
+    import security_headers
+    header {
+        Cache-Control "no-store"
+        Referrer-Policy "same-origin"
     }
+
+    import json_log
 }
 
 # HTTP → HTTPS redirect handled automatically by Caddy

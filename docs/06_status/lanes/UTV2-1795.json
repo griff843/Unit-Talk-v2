@@ -1,7 +1,7 @@
 {
   "schema_version": 2,
   "issue_id": "UTV2-1795",
-  "lane_type": "runtime",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1795-shared-nextjs-deployment",
@@ -13,13 +13,17 @@
   "file_scope_lock": [
     ".github/workflows/deploy.yml",
     ".ops/sync/UTV2-1795.yml",
-    "deploy/production/.env.production.example",
     "deploy/production/Caddyfile",
-    "deploy/production/docker-compose.yml",
     "deploy/production/Dockerfile.nextjs",
+    "deploy/production/ENV_FILES.md",
+    "deploy/production/docker-compose.yml",
+    "deploy/production/nextjs-entrypoint.sh",
+    "docs/05_operations/REQUIRED_SECRETS.md",
+    "docs/06_status/lanes/UTV2-1795.json",
     "docs/06_status/proof/UTV2-1795/diff-summary.md",
     "docs/06_status/proof/UTV2-1795/evidence.json",
     "docs/06_status/proof/UTV2-1795/verification.md",
+    "package.json",
     "scripts/ci/nextjs-deploy-wiring.test.ts"
   ],
   "expected_proof_paths": [
