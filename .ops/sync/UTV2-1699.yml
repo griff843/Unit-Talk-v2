@@ -1,0 +1,400 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1699
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1699
+  objective: Repair `ops:lane-maximizer` candidate and active-lane discovery so
+    the dispatch family (`/dispatch`, `/dispatch-board`, `/loop-dispatch`) can
+    truthfully discover work. **Ranking policy is explicitly out of scope** —
+    see Guardrails.
+  acceptance_criteria:
+    - "A no-argument invocation queries the canonical Linear candidate source.
+      Regression: with eligible candidates present, bare `ops:lane-maximizer`
+      must not return an empty board."
+    - The eligible population is not capped at 10; pagination retrieves the full
+      candidate set. Regression asserts a candidate beyond the first page is
+      discovered.
+    - Injecting a candidate-source failure produces a non-zero exit and an error
+      code naming candidate discovery. Empty arrays with exit 0 must be
+      impossible on that path.
+    - Injecting an active-lane read failure produces a non-zero exit and a
+      **distinct** error code naming state availability.
+    - A successful run with genuinely zero candidates still exits 0 — an
+      honestly empty board stays distinguishable from an unknown one. This
+      assertion is what stops the fix becoming "always fail".
+    - Active lanes resolve through the canonical resolver; a lane whose manifest
+      exists only on an open PR head is counted. Regression uses a PR-head-only
+      manifest fixture.
+    - "**Each control is proven by mutation.** Restore the `catch` that empties
+      the populations and regressions 3 and 4 must fail. Restore the `else ->
+      parseCandidatesArg` fallthrough and regression 1 must fail. Restore the
+      hard limit of 10 and regression 2 must fail. Revert the canonical resolver
+      and regression 6 must fail. A test that passes alongside an unproven
+      control is not accepted as evidence."
+    - Business ranking output is unchanged by this lane — `ranking_score` /
+      `ranking_reasons` values for a fixed candidate set must be identical
+      before and after.
+  guardrails:
+    - "**Do not change business ranking policy in this lane.** Tier/priority
+      weighting, support-lane caps and production-first ordering belong to
+      [UTV2-1769](https://linear.app/unit-talk-v2/issue/UTV2-1769/production-fi\
+      rst-dispatch-ranking-tier-is-risk-not-urgency-cap-support) and must land
+      separately. This lane makes the board *visible*; 1769 decides what to pick
+      from it."
+    - Do not raise total concurrency.
+    - No production mutation, deploy, DB change, branch-protection change, or
+      merge-authority weakening.
+    - Preserve every existing safety, singleton, file-scope,
+      forbidden-combination, capacity and merge-mutex gate as fail-closed.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      **PM PLAN APPROVAL GRANTED 2026-09-01** for the bounded objective below.
+      Scope corrected from the original 2026-08-12 filing, which described the
+      fail-open defects but missed the two largest ones (Defect 0 and Defect 3).
+      Tier is **T1 / Tier C**, measured — not T2.
+    - >-
+      Why this is the factory's binding constraint
+
+      `ops:lane-maximizer` is the "dispatch recommendation authority" named by
+      all three dispatch skills. Measured on main 2026-09-01: a bare `pnpm
+      ops:lane-maximizer` returns `recommended: []`, `blocked: []`, `risky: []`,
+      `deferred: []` and **exit 0**, while `ops:digest` — reading the same board
+      — returns 5 eligible candidates. Every gate-3 check in the dispatch family
+      therefore reads "no safe dispatch wave" and halts. Autonomous dispatch has
+      never been exercised; every lane to date was human-seeded.
+    - >-
+      Defect 0 — a bare invocation never queries any candidate source (NEW,
+      primary)
+
+      `scripts/ops/lane-maximizer.ts` `runCli()`:
+
+
+      ```ts
+
+      if (hasFlag(argv, '--from-linear'))      candidates = await
+      fetchLinearCandidates(argv);
+
+      else if (hasFlag(argv, '--from-queue'))  candidates =
+      parseQueueCandidates(...);
+
+      else                                      candidates =
+      parseCandidatesArg(argv);  // no flag => []
+
+      ```
+
+
+      `/dispatch`, `/dispatch-board` and `/loop-dispatch` all invoke it
+      **bare**: `pnpm ops:lane-maximizer`. With no source flag, control falls to
+      `parseCandidatesArg(argv)`, which parses an empty argv into zero
+      candidates. The tool then emits a well-formed report asserting an empty
+      board, with exit 0. It is not that discovery fails — **discovery is never
+      attempted.**
+    - >-
+      Defect 1 — any discovery failure is reported as an empty board, with exit
+      0
+
+      ```ts
+
+      } catch (error) {
+          candidates = [];
+          activeLanes = [];
+          limits = defaultLimits;
+          process.stderr.write(`[lane-maximizer] ${error}\n`);
+      }
+
+      const report = evaluateCandidates(candidates, activeLanes, limits);
+
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+
+      process.exitCode = 0;
+
+      ```
+
+
+      A Linear timeout, an unreadable manifest, an auth failure or a malformed
+      config all land in that catch and produce a valid-looking JSON report on
+      **stdout** saying the board is empty and nothing is active, with **exit
+      0**. The error goes to stderr, where a caller parsing the JSON never sees
+      it.
+
+
+      Two consequences, and the second is the dangerous one:
+
+
+      1. `candidates = []` reports "no work available" when work exists.
+
+      2. `activeLanes = []` means every capacity and conflict check downstream
+      sees **zero active lanes** — so the tool would clear a dispatch into a
+      completely full board, and would not detect a file-scope conflict with any
+      lane in flight.
+    - |-
+      Defect 2 — active lanes are read from local manifest files only
+      `readActiveLanes()` reads `LANE_DIR` and filters by `ACTIVE_LOCK_STATUSES`. It never consults open-PR-head manifests.
+
+      Confirmed on main 2026-09-01: **zero** active-status manifests exist on `main`, while `ops:execution-state` — using the canonical resolver — correctly reports [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry), [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) and [UTV2-1796](https://linear.app/unit-talk-v2/issue/UTV2-1796/restore-non-vacuous-multi-bookmaker-closing-line-marking-and-truthful) active, each with its manifest on its own PR head. A local-manifest-only read sees an empty board and reports full capacity.
+    - >-
+      Defect 3 — the eligible population is truncated to 10 by recency (NEW)
+
+      `fetchLinearCandidates()`:
+
+
+      ```ts
+
+      const limitRaw = Number.parseInt(getFlagValue(argv, '--linear-limit') ??
+      '10', 10);
+
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(limitRaw,
+      50)) : 10;
+
+      ```
+
+
+      Even on the `--from-linear` path, the GraphQL query requests `first:
+      $limit` ordered by `updatedAt` with **no pagination**, defaulting to 10
+      and hard-capped at 50. The board currently holds ~115 issues in candidate
+      states. The authoritative eligible population is silently truncated to the
+      10 most recently touched issues — so a genuinely eligible candidate is
+      invisible purely because something else was edited more recently.
+    - >-
+      The correct behaviour already exists in this repo
+
+      `ops:lane-start` refuses the identical condition, and its message is the
+      specification:
+
+
+      ```
+
+      "code": "active_lane_discovery_failed",
+
+      "message": "Could not read the lane manifest for UTV2-#### ... and the
+      failure is
+                  not a confirmed 404. Refusing to treat an unreadable manifest as an
+                  absent one."
+      "remediation": "Restore `gh` authentication and network access, then
+      retry.
+                      An unknown board is never treated as an empty one."
+      ```
+
+
+      Same repository, same failure mode, opposite handling. `lane-start` fails
+      closed; `lane-maximizer` fails open and reports success.
+    - >-
+      Bug class
+
+      The evidence-conflation pattern in its purest form: **an error, or an
+      unattempted query, conflated with an empty result**, then dressed as a
+      successful answer. Same shape as `codex-exec` returning SUCCESS with
+      `skipped_phases: [implement]`, and `ops:lease report` returning
+      `stale_count` while an orphan sits undetected.
+    - >-
+      Required behaviour
+
+      1. A bare canonical invocation — the form used by `/dispatch`,
+      `/dispatch-board` and `/loop-dispatch` — must use the canonical Linear
+      candidate source rather than silently parsing an empty argv into zero
+      candidates.
+
+      2. Candidate discovery must not truncate the authoritative eligible
+      population to the first 10 updated issues. Implement correct pagination /
+      full candidate retrieval appropriate to the candidate contract.
+
+      3. Candidate-source failure must fail closed: a distinct machine-readable
+      error code and a **non-zero exit**.
+
+      4. Active-lane discovery failure must be a **distinct** fail-closed error
+      — different condition, different remediation; do not collapse the two
+      codes.
+
+      5. Resolve active lanes through the canonical active-lane resolver,
+      including manifests that exist only on open PR heads.
+
+      6. A genuine zero-candidate state must remain distinguishable from
+      unknown/error state.
+
+      7. Never emit a normal-shaped report on a failure path. The JSON on stdout
+      must be unambiguously an error to a machine consumer, not a report with
+      empty arrays.
+
+      8. A partial manifest read is a failure, not a smaller board.
+    - >-
+      Scope
+
+      `scripts/ops/lane-maximizer.ts`, `scripts/ops/lane-maximizer.test.ts`, and
+      the lane's own proof/manifest/sync paths. No runtime, domain, DB, delivery
+      or workflow-authority code.
+    - >-
+      Tier — T1 / Tier C, measured
+
+      ```
+
+      npx tsx scripts/ops/tier-classifier.ts --declared-tier T1 --files
+      scripts/ops/lane-maximizer.ts
+        derived=T1  escalated=False
+        matches=[{"path":"scripts/ops/lane-maximizer.ts","minimum_tier":"T1",
+                  "rule_id":"tier-c-pattern",
+                  "reason":"Path matches the shared Tier C / tier-sensitive path authority from merge-risk.ts"}]
+      ```
+
+
+      `lane-maximizer.ts` is a Tier C path. Requires `t1-approved` plus a
+      `pm-verdict/v1` from CODEOWNERS before merge. **It cannot be taken to
+      merge autonomously.**
+    - >-
+      Dispatch bootstrap exception
+
+      Because `/dispatch` is itself the broken control being repaired, this lane
+      is authorized to bootstrap through the canonical primitives directly —
+      main sync, T1 Outcome Contract, `ops:lane-start`, dedicated worktree,
+      manifest + file-scope lock, Linear In Claude, PR, exact-head
+      CI/proof/review. The exception permits bypassing **only** the broken
+      high-level dispatch command. It does **not** bypass `ops:lane-start`,
+      branch protection, PR, T1 proof, independent review, or merge authority.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board
+    title: "lane-maximizer discovery repair: bare invocation returns an empty board;
+      discovery failure fails open"
+    description: |-
+      **PM PLAN APPROVAL GRANTED 2026-09-01** for the bounded objective below. Scope corrected from the original 2026-08-12 filing, which described the fail-open defects but missed the two largest ones (Defect 0 and Defect 3). Tier is **T1 / Tier C**, measured — not T2.
+
+      ## Objective
+
+      Repair `ops:lane-maximizer` candidate and active-lane discovery so the dispatch family (`/dispatch`, `/dispatch-board`, `/loop-dispatch`) can truthfully discover work. **Ranking policy is explicitly out of scope** — see Guardrails.
+
+      ## Why this is the factory's binding constraint
+
+      `ops:lane-maximizer` is the "dispatch recommendation authority" named by all three dispatch skills. Measured on main 2026-09-01: a bare `pnpm ops:lane-maximizer` returns `recommended: []`, `blocked: []`, `risky: []`, `deferred: []` and **exit 0**, while `ops:digest` — reading the same board — returns 5 eligible candidates. Every gate-3 check in the dispatch family therefore reads "no safe dispatch wave" and halts. Autonomous dispatch has never been exercised; every lane to date was human-seeded.
+
+      ## Defect 0 — a bare invocation never queries any candidate source (NEW, primary)
+
+      `scripts/ops/lane-maximizer.ts` `runCli()`:
+
+      ```ts
+      if (hasFlag(argv, '--from-linear'))      candidates = await fetchLinearCandidates(argv);
+      else if (hasFlag(argv, '--from-queue'))  candidates = parseQueueCandidates(...);
+      else                                      candidates = parseCandidatesArg(argv);  // no flag => []
+      ```
+
+      `/dispatch`, `/dispatch-board` and `/loop-dispatch` all invoke it **bare**: `pnpm ops:lane-maximizer`. With no source flag, control falls to `parseCandidatesArg(argv)`, which parses an empty argv into zero candidates. The tool then emits a well-formed report asserting an empty board, with exit 0. It is not that discovery fails — **discovery is never attempted.**
+
+      ## Defect 1 — any discovery failure is reported as an empty board, with exit 0
+
+      ```ts
+      } catch (error) {
+          candidates = [];
+          activeLanes = [];
+          limits = defaultLimits;
+          process.stderr.write(`[lane-maximizer] ${error}\n`);
+      }
+      const report = evaluateCandidates(candidates, activeLanes, limits);
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+      process.exitCode = 0;
+      ```
+
+      A Linear timeout, an unreadable manifest, an auth failure or a malformed config all land in that catch and produce a valid-looking JSON report on **stdout** saying the board is empty and nothing is active, with **exit 0**. The error goes to stderr, where a caller parsing the JSON never sees it.
+
+      Two consequences, and the second is the dangerous one:
+
+      1. `candidates = []` reports "no work available" when work exists.
+      2. `activeLanes = []` means every capacity and conflict check downstream sees **zero active lanes** — so the tool would clear a dispatch into a completely full board, and would not detect a file-scope conflict with any lane in flight.
+
+      ## Defect 2 — active lanes are read from local manifest files only
+
+      `readActiveLanes()` reads `LANE_DIR` and filters by `ACTIVE_LOCK_STATUSES`. It never consults open-PR-head manifests.
+
+      Confirmed on main 2026-09-01: **zero** active-status manifests exist on `main`, while `ops:execution-state` — using the canonical resolver — correctly reports [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry), [UTV2-1789](https://linear.app/unit-talk-v2/issue/UTV2-1789/command-center-production-auth-fail-open-override-explicit-fail-open) and [UTV2-1796](https://linear.app/unit-talk-v2/issue/UTV2-1796/restore-non-vacuous-multi-bookmaker-closing-line-marking-and-truthful) active, each with its manifest on its own PR head. A local-manifest-only read sees an empty board and reports full capacity.
+
+      ## Defect 3 — the eligible population is truncated to 10 by recency (NEW)
+
+      `fetchLinearCandidates()`:
+
+      ```ts
+      const limitRaw = Number.parseInt(getFlagValue(argv, '--linear-limit') ?? '10', 10);
+      const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(limitRaw, 50)) : 10;
+      ```
+
+      Even on the `--from-linear` path, the GraphQL query requests `first: $limit` ordered by `updatedAt` with **no pagination**, defaulting to 10 and hard-capped at 50. The board currently holds ~115 issues in candidate states. The authoritative eligible population is silently truncated to the 10 most recently touched issues — so a genuinely eligible candidate is invisible purely because something else was edited more recently.
+
+      ## The correct behaviour already exists in this repo
+
+      `ops:lane-start` refuses the identical condition, and its message is the specification:
+
+      ```
+      "code": "active_lane_discovery_failed",
+      "message": "Could not read the lane manifest for UTV2-#### ... and the failure is
+                  not a confirmed 404. Refusing to treat an unreadable manifest as an
+                  absent one."
+      "remediation": "Restore `gh` authentication and network access, then retry.
+                      An unknown board is never treated as an empty one."
+      ```
+
+      Same repository, same failure mode, opposite handling. `lane-start` fails closed; `lane-maximizer` fails open and reports success.
+
+      ## Bug class
+
+      The evidence-conflation pattern in its purest form: **an error, or an unattempted query, conflated with an empty result**, then dressed as a successful answer. Same shape as `codex-exec` returning SUCCESS with `skipped_phases: [implement]`, and `ops:lease report` returning `stale_count` while an orphan sits undetected.
+
+      ## Required behaviour
+
+      1. A bare canonical invocation — the form used by `/dispatch`, `/dispatch-board` and `/loop-dispatch` — must use the canonical Linear candidate source rather than silently parsing an empty argv into zero candidates.
+      2. Candidate discovery must not truncate the authoritative eligible population to the first 10 updated issues. Implement correct pagination / full candidate retrieval appropriate to the candidate contract.
+      3. Candidate-source failure must fail closed: a distinct machine-readable error code and a **non-zero exit**.
+      4. Active-lane discovery failure must be a **distinct** fail-closed error — different condition, different remediation; do not collapse the two codes.
+      5. Resolve active lanes through the canonical active-lane resolver, including manifests that exist only on open PR heads.
+      6. A genuine zero-candidate state must remain distinguishable from unknown/error state.
+      7. Never emit a normal-shaped report on a failure path. The JSON on stdout must be unambiguously an error to a machine consumer, not a report with empty arrays.
+      8. A partial manifest read is a failure, not a smaller board.
+
+      ## Acceptance criteria
+
+      1. A no-argument invocation queries the canonical Linear candidate source. Regression: with eligible candidates present, bare `ops:lane-maximizer` must not return an empty board.
+      2. The eligible population is not capped at 10; pagination retrieves the full candidate set. Regression asserts a candidate beyond the first page is discovered.
+      3. Injecting a candidate-source failure produces a non-zero exit and an error code naming candidate discovery. Empty arrays with exit 0 must be impossible on that path.
+      4. Injecting an active-lane read failure produces a non-zero exit and a **distinct** error code naming state availability.
+      5. A successful run with genuinely zero candidates still exits 0 — an honestly empty board stays distinguishable from an unknown one. This assertion is what stops the fix becoming "always fail".
+      6. Active lanes resolve through the canonical resolver; a lane whose manifest exists only on an open PR head is counted. Regression uses a PR-head-only manifest fixture.
+      7. **Each control is proven by mutation.** Restore the `catch` that empties the populations and regressions 3 and 4 must fail. Restore the `else -> parseCandidatesArg` fallthrough and regression 1 must fail. Restore the hard limit of 10 and regression 2 must fail. Revert the canonical resolver and regression 6 must fail. A test that passes alongside an unproven control is not accepted as evidence.
+      8. Business ranking output is unchanged by this lane — `ranking_score` / `ranking_reasons` values for a fixed candidate set must be identical before and after.
+
+      ## Scope
+
+      `scripts/ops/lane-maximizer.ts`, `scripts/ops/lane-maximizer.test.ts`, and the lane's own proof/manifest/sync paths. No runtime, domain, DB, delivery or workflow-authority code.
+
+      ## Guardrails
+
+      * **Do not change business ranking policy in this lane.** Tier/priority weighting, support-lane caps and production-first ordering belong to [UTV2-1769](https://linear.app/unit-talk-v2/issue/UTV2-1769/production-first-dispatch-ranking-tier-is-risk-not-urgency-cap-support) and must land separately. This lane makes the board *visible*; 1769 decides what to pick from it.
+      * Do not raise total concurrency.
+      * No production mutation, deploy, DB change, branch-protection change, or merge-authority weakening.
+      * Preserve every existing safety, singleton, file-scope, forbidden-combination, capacity and merge-mutex gate as fail-closed.
+
+      ## Tier — T1 / Tier C, measured
+
+      ```
+      npx tsx scripts/ops/tier-classifier.ts --declared-tier T1 --files scripts/ops/lane-maximizer.ts
+        derived=T1  escalated=False
+        matches=[{"path":"scripts/ops/lane-maximizer.ts","minimum_tier":"T1",
+                  "rule_id":"tier-c-pattern",
+                  "reason":"Path matches the shared Tier C / tier-sensitive path authority from merge-risk.ts"}]
+      ```
+
+      `lane-maximizer.ts` is a Tier C path. Requires `t1-approved` plus a `pm-verdict/v1` from CODEOWNERS before merge. **It cannot be taken to merge autonomously.**
+
+      ## Dispatch bootstrap exception
+
+      Because `/dispatch` is itself the broken control being repaired, this lane is authorized to bootstrap through the canonical primitives directly — main sync, T1 Outcome Contract, `ops:lane-start`, dedicated worktree, manifest + file-scope lock, Linear In Claude, PR, exact-head CI/proof/review. The exception permits bypassing **only** the broken high-level dispatch command. It does **not** bypass `ops:lane-start`, branch protection, PR, T1 proof, independent review, or merge authority.
+    captured_at: 2026-09-01T13:38:24.211Z
+    description_sha256: 09effb9092fa66d35568e31b38f3f48680b9cc44d847485bb8a0567e0273de43
+  contract_hash: 51a24b52f5e539fbd2f0c14831a0d7007814d9053b1a9214d6176b879e0445d9
