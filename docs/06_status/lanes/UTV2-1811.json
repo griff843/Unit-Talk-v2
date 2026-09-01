@@ -24,9 +24,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1811/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-01T15:46:45.557Z",
-  "heartbeat_at": "2026-09-01T15:59:54.288Z",
+  "heartbeat_at": "2026-09-01T23:24:03.300Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1811-rate-limit-bucket-contract.json",
