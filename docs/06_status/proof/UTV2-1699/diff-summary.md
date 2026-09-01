@@ -1,6 +1,6 @@
 # PROOF: UTV2-1699 — diff summary
 
-MERGE_SHA: ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79
+MERGE_SHA: f0d21d23d6839195d2b3c03f914f51cd12339d61
 
 `lane-maximizer discovery repair: bare invocation returns an empty board; discovery failure fails open`
 

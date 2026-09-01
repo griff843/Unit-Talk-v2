@@ -1,10 +1,21 @@
 # PROOF: UTV2-1699
 
-MERGE_SHA: ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79
+MERGE_SHA: f0d21d23d6839195d2b3c03f914f51cd12339d61
 
 Lane: claude / `claude/utv2-1699-lane-maximizer-discovery-repair`
 Tier: T1 (Tier C path — `scripts/ops/lane-maximizer.ts`)
 Proof Artifact: docs/06_status/proof/UTV2-1699/verification.md
+
+> **Proof anchor moved by a main sync, 2026-09-01.** This bundle was originally anchored to
+> `ceaa715e`. After PM approval at head `eb907283`, an automated `ops(readiness): refresh ledger
+> [skip ci]` commit (`19a143a2`) landed on `main`, and strict branch freshness required the PR to
+> be synchronized. The sanctioned `pr-update-branch` path produced merge commit
+> `f0d21d23d6839195d2b3c03f914f51cd12339d61`, which is now the last non-proof commit and therefore
+> the anchor. The sync changed exactly one file, `docs/06_status/readiness/readiness-score.json`.
+> `git diff --name-only ceaa715e f0d21d23 -- scripts/ apps/ packages/` is EMPTY: every source file
+> in this lane is byte-identical to the originally reviewed and approved tree, so every receipt
+> below binds unchanged. The full-suite receipt was re-executed at `f0d21d23` (75 tests / 75 pass /
+> 0 fail).
 
 ## Verification
 
@@ -396,7 +407,8 @@ pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC2' scripts/ops/lane-maximi
 
 Literal output UNDER THE MUTATION -- the regression FAILS.
 
-> RE-EXECUTED 2026-09-01 against the proof anchor `ceaa715e`. An earlier revision of this
+> RE-EXECUTED 2026-09-01 against the then-current proof anchor `ceaa715e`, whose `scripts/`
+> tree is byte-identical to the current anchor `f0d21d23` (see the sync note at the top). An earlier revision of this
 > bundle carried an M3 receipt captured at an earlier head, when AC2 had two specs. AC2 now
 > has three -- `a walk that does not advance the cursor fails closed` was added in the anchor
 > commit itself -- so the recorded `# fail 2` was wrong for the tree this bundle binds to.
