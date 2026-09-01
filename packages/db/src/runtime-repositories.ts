@@ -5494,7 +5494,6 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .eq('provider_event_id', providerEventId)
         .gte('snapshot_at', windowStart)
         .lt('snapshot_at', commenceTime)
-        .eq('is_closing', false)
         .order('snapshot_at', { ascending: false })
         .limit(5000) as unknown as Promise<{
         data: Array<{
@@ -5519,6 +5518,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const rows = data ?? [];
       if (rows.length === 0) continue;
 
+      // Deliberately NOT filtered by is_closing. Filtering unmarked rows makes the
+      // selection relative to what is left rather than to the market: once the true
+      // latest pre-commence row is marked, the next cycle sees it excluded, promotes the
+      // next-oldest snapshot to "latest", and marks that too. Repeated ingest and recovery
+      // cycles would walk the closing line backwards through history, and
+      // market-universe-materializer.ts keeps the EARLIEST marked snapshot, so the stored
+      // closing line drifts further from commencement on every pass. The anchor must be
+      // the latest pre-commence row unconditionally, which makes a second call a genuine
+      // no-op instead of a slow corruption.
+
       // Find the latest snapshot per combination key
       const latestByKey = new Map<
         string,
@@ -5526,6 +5535,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
           idempotencyKey: string;
           identityKey: string;
           snapshotAt: string;
+          isClosing: boolean;
         }
       >();
       for (const row of rows) {
@@ -5549,6 +5559,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
             idempotencyKey: row.idempotency_key,
             identityKey: `${row.provider_key}:${providerEventId}:${row.provider_market_key}:${participantKey}:${row.bookmaker_key ?? ''}`,
             snapshotAt: row.snapshot_at,
+            isClosing: row.is_closing,
           });
         }
       }
@@ -5559,13 +5570,24 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // UPDATE. Filtering by snapshot_at (the partition key) before idempotency_key directs
       // each batch to a single child partition instead of scanning all 60.
       const bySnapshot = new Map<string, string[]>();
+      let alreadyMarked = 0;
       for (const {
         idempotencyKey,
         snapshotAt: snapAt,
+        isClosing,
       } of latestByKey.values()) {
+        if (isClosing) {
+          // The anchor for this key is already the closing line. Nothing to do, and
+          // nothing to fail on.
+          alreadyMarked += 1;
+          continue;
+        }
         if (!bySnapshot.has(snapAt)) bySnapshot.set(snapAt, []);
         bySnapshot.get(snapAt)!.push(idempotencyKey);
       }
+
+      const pendingKeys = latestByKey.size - alreadyMarked;
+      if (pendingKeys === 0) continue;
 
       let eventUpdated = 0;
       for (const [snapAt, idempotencyKeys] of bySnapshot) {
@@ -5609,7 +5631,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // months in — reporting success while marking nothing. Refuse instead.
       if (eventUpdated === 0) {
         throw new Error(
-          `Closing line marking selected ${rows.length} eligible row(s) and ${latestByKey.size} latest-per-key candidate(s) for ${providerEventId} but marked 0; refusing to report a vacuous closing line`,
+          `Closing line marking selected ${rows.length} eligible row(s) and ${pendingKeys} unmarked latest-per-key anchor(s) for ${providerEventId} but marked 0; refusing to report a vacuous closing line`,
         );
       }
 
@@ -5618,24 +5640,46 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Update provider_offer_current — identity_key is its primary key.
       // The pre-UTV2-1366 implementation used .in('id', historyIds), where the ids are
       // provider_offer_history UUIDs from a different namespace, so it always matched 0.
-      const allIdentityKeys = [...latestByKey.values()].map(
-        (v) => v.identityKey,
-      );
-      for (let i = 0; i < allIdentityKeys.length; i += 100) {
-        const chunk = allIdentityKeys.slice(i, i + 100);
-        const { error: currentUpdateError } = await (fromUntyped(
-          this.client,
-          'provider_offer_current',
-        )
-          .update({ is_closing: true })
-          .in('identity_key', chunk) as unknown as Promise<{
-          data: unknown;
-          error: { message: string } | null;
-        }>);
-        if (currentUpdateError) {
-          throw new Error(
-            `Failed to mark closing current offers: ${currentUpdateError.message}`,
-          );
+      //
+      // The snapshot_at predicate is load-bearing, not a partition optimisation. A
+      // provider that keeps quoting an event after commencement has ingestion upsert that
+      // newer post-commence quote into provider_offer_current before this runs. Keyed on
+      // identity_key alone, the update would stamp is_closing on that live post-commence
+      // row, and every consumer of the projection would read a still-moving line and its
+      // odds as the closing quote. Requiring the row to still BE the snapshot that was
+      // selected makes the update a no-op in exactly that case, leaving the closing state
+      // on the history row where it is true.
+      const identityKeysBySnapshot = new Map<string, string[]>();
+      for (const {
+        identityKey,
+        snapshotAt: snapAt,
+        isClosing,
+      } of latestByKey.values()) {
+        if (isClosing) continue;
+        if (!identityKeysBySnapshot.has(snapAt)) {
+          identityKeysBySnapshot.set(snapAt, []);
+        }
+        identityKeysBySnapshot.get(snapAt)!.push(identityKey);
+      }
+
+      for (const [snapAt, identityKeys] of identityKeysBySnapshot) {
+        for (let i = 0; i < identityKeys.length; i += 100) {
+          const chunk = identityKeys.slice(i, i + 100);
+          const { error: currentUpdateError } = await (fromUntyped(
+            this.client,
+            'provider_offer_current',
+          )
+            .update({ is_closing: true })
+            .eq('snapshot_at', snapAt)
+            .in('identity_key', chunk) as unknown as Promise<{
+            data: unknown;
+            error: { message: string } | null;
+          }>);
+          if (currentUpdateError) {
+            throw new Error(
+              `Failed to mark closing current offers: ${currentUpdateError.message}`,
+            );
+          }
         }
       }
     }

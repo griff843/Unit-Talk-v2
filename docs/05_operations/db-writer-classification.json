@@ -305,14 +305,6 @@
       ]
     },
     {
-      "path": "apps/ingestor/src/t1-proof-utv2-1796-closing-lines.test.ts",
-      "owner": "ingestor",
-      "execution": [
-        "ci: .github/workflows/ci.yml job staging-db-proof via pnpm test:t1-proof:live",
-        "manual: pnpm ci:assert-staging && pnpm exec tsx --test apps/ingestor/src/t1-proof-utv2-1796-closing-lines.test.ts"
-      ]
-    },
-    {
       "path": "apps/worker/src/worker-runtime.test.ts",
       "owner": "worker",
       "execution": [

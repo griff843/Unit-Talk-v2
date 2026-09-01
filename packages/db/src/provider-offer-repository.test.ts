@@ -706,6 +706,7 @@ type MarkClosingLinesCalls = {
   selectPredicates: Array<Record<string, unknown>>;
   historyUpdates: Array<{ snapshotAt: string; keys: string[]; options: unknown }>;
   currentUpdates: string[][];
+  currentUpdatePredicates: Array<{ snapshotAt: string; keys: string[] }>;
 };
 
 /**
@@ -725,6 +726,7 @@ function createMarkClosingLinesClient(options: {
     selectPredicates: [],
     historyUpdates: [],
     currentUpdates: [],
+    currentUpdatePredicates: [],
   };
 
   const client = {
@@ -793,13 +795,24 @@ function createMarkClosingLinesClient(options: {
           }
 
           assert.equal(table, 'provider_offer_current');
-          return {
+          let currentSnapshotAt = '';
+          const currentBuilder = {
+            eq(column: string, value: string) {
+              assert.equal(column, 'snapshot_at');
+              currentSnapshotAt = value;
+              return currentBuilder;
+            },
             in(column: string, keys: string[]) {
               assert.equal(column, 'identity_key');
               calls.currentUpdates.push(keys);
+              calls.currentUpdatePredicates.push({
+                snapshotAt: currentSnapshotAt,
+                keys,
+              });
               return Promise.resolve({ data: null, error: null });
             },
           };
+          return currentBuilder;
         },
       };
     },
@@ -875,7 +888,14 @@ test('UTV2-1772: markClosingLines reads provider_offer_history, not the unpopula
 
   const predicate = calls.selectPredicates[0] as Record<string, unknown>;
   assert.equal(predicate['eq:provider_event_id'], EVENT.providerEventId);
-  assert.equal(predicate['eq:is_closing'], false);
+  // Deliberately absent: filtering the SELECT on is_closing=false makes the anchor
+  // relative to what is still unmarked, so each cycle walks the closing line one snapshot
+  // further back. See the "does not walk the closing line backwards" test below.
+  assert.equal(
+    'eq:is_closing' in predicate,
+    false,
+    'the selection must not be filtered by is_closing',
+  );
   assert.equal(predicate['lt:snapshot_at'], EVENT.commenceTime);
   // 48h lower bound before snapshotAt — the partition-pruning window.
   assert.equal(predicate['gte:snapshot_at'], '2026-06-28T03:00:00.000Z');
@@ -980,4 +1000,71 @@ test('UTV2-1772: no eligible rows is a no-op, not a failure (idempotent re-run)'
   assert.equal(updated, 0);
   assert.deepEqual(calls.historyUpdates, []);
   assert.deepEqual(calls.currentUpdates, []);
+});
+
+test('UTV2-1796: a second cycle does not walk the closing line backwards', async () => {
+  // Cycle 1 marked the true latest row for each book. The table now holds a mix of marked
+  // and unmarked pre-commence rows, which is the exact state every recovery or repeat
+  // ingest cycle sees.
+  const afterFirstCycle = PRODUCTION_SHAPED_ROWS.map((row) =>
+    row['idempotency_key'] === 'idem-fanduel-latest' ||
+    row['idempotency_key'] === 'idem-draftkings-latest'
+      ? { ...row, is_closing: true }
+      : row,
+  );
+
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: afterFirstCycle,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  const updated = await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  assert.equal(updated, 0, 'a repeat cycle over an already-marked event must be a no-op');
+  assert.deepEqual(
+    calls.historyUpdates,
+    [],
+    'idem-fanduel-earlier must not be promoted to closing just because the true latest row is already marked',
+  );
+  assert.deepEqual(calls.currentUpdates, [], 'and the projection must not be touched');
+});
+
+test('UTV2-1796: the current projection is only updated where it still holds the selected snapshot', async () => {
+  const { client, calls } = createMarkClosingLinesClient({
+    historyRows: PRODUCTION_SHAPED_ROWS,
+  });
+  const repository = markClosingLinesRepository(client);
+
+  await repository.markClosingLines([EVENT], SNAPSHOT_AT, {
+    includeBookmakerKey: true,
+  });
+
+  // Each projection update carries the snapshot of the row it came from. Without this,
+  // a post-commence quote already upserted into provider_offer_current under the same
+  // identity_key would be stamped is_closing, publishing a live line as the closing one.
+  assert.deepEqual(
+    calls.currentUpdatePredicates
+      .map((entry) => ({ snapshotAt: entry.snapshotAt, keys: [...entry.keys].sort() }))
+      .sort((left, right) => (left.snapshotAt < right.snapshotAt ? -1 : 1)),
+    [
+      {
+        snapshotAt: '2026-06-30T01:29:00.000Z',
+        keys: [
+          'sgo:usHLeS7NsELL6HCdrzA0:batting_hits+runs+rbi-all-game-ou:ALEC_BOHM_1_MLB:draftkings',
+        ],
+      },
+      {
+        snapshotAt: '2026-06-30T01:30:00.000Z',
+        keys: [
+          'sgo:usHLeS7NsELL6HCdrzA0:batting_hits+runs+rbi-all-game-ou:ALEC_BOHM_1_MLB:fanduel',
+        ],
+      },
+    ],
+  );
+  assert.ok(
+    calls.currentUpdatePredicates.every((entry) => entry.snapshotAt !== ''),
+    'every projection update must be constrained to the snapshot it was selected from',
+  );
 });
