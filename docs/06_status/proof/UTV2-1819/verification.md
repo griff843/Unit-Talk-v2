@@ -10,16 +10,17 @@ Proof Artifact: docs/06_status/proof/UTV2-1819/verification.md
 
 ASSERTIONS:
 
-1. **AC1 — bare invocation works against the live Linear API.** `pnpm ops:lane-maximizer` with no
-   flags exits 0 and returns a candidate report. Before this change it exited 1 with
-   `candidate_discovery_failed`.
-2. **AC2 — the page size is provably under Linear's complexity budget**, with margin below the
-   measured 75 boundary.
-3. **AC3 — pagination still walks the entire population.** The page size is a transport detail and
-   never caps discovery; the UTV2-1699 regressions pass unchanged.
-4. **AC4 — a regression fails if the constant is raised or the node selection widens**, instead of
-   the production factory failing.
-5. **AC5 — no ranking, admission or business-policy change.** That remains UTV2-1769.
+- [x] **AC1 — bare invocation works against the live Linear API.** `pnpm ops:lane-maximizer` with no
+      flags exits 0 and returns a candidate report (114 candidates). Before this change it exited 1
+      with `candidate_discovery_failed`.
+- [x] **AC2 — the page size is provably under Linear's complexity budget**, with margin below the
+      measured 75 boundary. Proven by mutation M1.
+- [x] **AC3 — pagination still walks the entire population.** The page size is a transport detail and
+      never caps discovery; the pre-existing pagination regressions pass unchanged.
+- [x] **AC4 — a regression fails if the constant is raised or the node selection widens**, instead of
+      the production factory failing. Proven by mutation M2.
+- [x] **AC5 — no ranking, admission or business-policy change.** The diff is confined to
+      `scripts/ops/lane-maximizer.ts` and `scripts/ops/lane-maximizer.test.ts`.
 
 ## Root cause
 
