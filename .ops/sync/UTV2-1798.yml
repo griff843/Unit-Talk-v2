@@ -1,0 +1,158 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1798
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1798
+  objective: >-
+    Declare the trust at the deployment layer, where the reverse-proxy topology
+    is actually known.
+
+    PM decision: use `AUTH_TRUST_HOST=true` in the deployment env. Do **not**
+    hard-code `trustHost: true` in `apps/smart-form/auth.ts` — host trust is
+    specific to the production Caddy topology, and the application should not
+    globally trust arbitrary forwarded host information in every runtime.
+  acceptance_criteria:
+    - "Proven by executing against the canonical workflow text, not by a
+      marker-only assertion:"
+    - "`.env.smart-form` receives `AUTH_TRUST_HOST=true`."
+    - Both canary and promote paths carry it.
+    - The setting is Smart Form-only and does not leak into `.env.web`.
+    - Google credentials and `NEXTAUTH_SECRET` remain Smart Form-only.
+    - The QA auth bypass remains absent from the production env.
+    - "`NEXT_PUBLIC_API_BASE_URL` remains `https://api.unit-talk.com` by
+      deployment derivation."
+    - Parked-mode behaviour is unchanged.
+    - "Post-deploy, on the live host: the four Auth.js routes stop returning
+      500, Google sign-in initiates against the configured Smart Form client,
+      the callback returns to `https://picks.unit-talk.com`, an allow-listed
+      account establishes a session, and authenticated `/submit` renders."
+  guardrails: []
+  non_goals:
+    - "`apps/smart-form/auth.ts`, Google provider logic, allow-list behaviour,
+      API authentication, Caddy routing, Supabase/schema, provider ingestion,
+      member delivery, Command Center. If a reproduced failure after this
+      correction shows one of these is necessary, stop and return to PM."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      The shared Next.js deployment shipped under [UTV2-1795](https://linear.app/unit-talk-v2/issue/UTV2-1795/shared-nextjs-production-deployment-appsweb-and-appssmart-form-on) and is live: `https://picks.unit-talk.com` serves the Smart Form over trusted TLS at deployed SHA `d201fd934d69f5a717857ac9c3123fc914fb54d6` (Deploy run 33469047650). But **nobody can sign in**. Every Auth.js route returns HTTP 500:
+
+      ```
+      [auth][error] UntrustedHost: Host must be trusted.
+      URL was: https://picks.unit-talk.com/api/auth/signin
+      ```
+
+      Measured against the live production container:
+
+      * `/api/auth/providers` — 500
+      * `/api/auth/csrf` — 500
+      * `/api/auth/session` — 500
+      * `/api/auth/signin` — 500
+
+      `apps/smart-form` runs `next-auth@5.0.0-beta.31` (Auth.js v5). Behind a reverse proxy, Auth.js v5 refuses a forwarded host unless trust is declared. The deployment writes only the v4-era `NEXTAUTH_URL` / `NEXTAUTH_SECRET` names; `AUTH_TRUST_HOST` is absent from the running container (verified: `printenv | grep -cE '^AUTH_(TRUST_HOST|URL)=' ` returns 0). Auth.js v5 does not honour `NEXTAUTH_URL` for host trust.
+
+      This was invisible until now because this is the first time the Smart Form has been served behind a proxy on a real hostname.
+    - >-
+      Deliverable
+
+      In every production deployment path that writes `.env.smart-form`, add
+      `AUTH_TRUST_HOST=true`. Both the canary and promote paths construct this
+      file independently, so both must carry it.
+
+
+      `NEXTAUTH_URL=https://$SMART_FORM_DOMAIN` stays unchanged. No `AUTH_URL`
+      and no further Auth.js env-name migration unless execution after this
+      correction demonstrates it is required. No new GitHub secret — this is a
+      deployment constant derived from the known trusted Caddy topology, not
+      owner-supplied information.
+    - >-
+      Deferred follow-up observations (do not block this fix)
+
+      * `www.unit-talk.com` has no Caddy site block and therefore no
+      certificate. The deployed Caddyfile declares exactly three hostnames.
+
+      * `https://api.unit-talk.com/health` responds in ~14 s. Escalate only if
+      it demonstrably prevents Smart Form operation once auth works.
+    - >-
+      Containment
+
+      Production stays parked throughout: `SYNDICATE_MACHINE_ENABLED=false`,
+      ingestor autorun and scheduling false, worker autorun false, enabled
+      delivery targets `none`. No pick is submitted under this issue.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1798/smart-form-production-auth-declare-auth-trust-hosttrue-in-the
+    title: "Smart Form production auth: declare AUTH_TRUST_HOST=true in the
+      deployment so Auth.js accepts the Caddy-proxied host"
+    description: |-
+      ## Why
+
+      The shared Next.js deployment shipped under [UTV2-1795](https://linear.app/unit-talk-v2/issue/UTV2-1795/shared-nextjs-production-deployment-appsweb-and-appssmart-form-on) and is live: `https://picks.unit-talk.com` serves the Smart Form over trusted TLS at deployed SHA `d201fd934d69f5a717857ac9c3123fc914fb54d6` (Deploy run 33469047650). But **nobody can sign in**. Every Auth.js route returns HTTP 500:
+
+      ```
+      [auth][error] UntrustedHost: Host must be trusted.
+      URL was: https://picks.unit-talk.com/api/auth/signin
+      ```
+
+      Measured against the live production container:
+
+      * `/api/auth/providers` — 500
+      * `/api/auth/csrf` — 500
+      * `/api/auth/session` — 500
+      * `/api/auth/signin` — 500
+
+      `apps/smart-form` runs `next-auth@5.0.0-beta.31` (Auth.js v5). Behind a reverse proxy, Auth.js v5 refuses a forwarded host unless trust is declared. The deployment writes only the v4-era `NEXTAUTH_URL` / `NEXTAUTH_SECRET` names; `AUTH_TRUST_HOST` is absent from the running container (verified: `printenv | grep -cE '^AUTH_(TRUST_HOST|URL)=' ` returns 0). Auth.js v5 does not honour `NEXTAUTH_URL` for host trust.
+
+      This was invisible until now because this is the first time the Smart Form has been served behind a proxy on a real hostname.
+
+      ## Objective
+
+      Declare the trust at the deployment layer, where the reverse-proxy topology is actually known.
+
+      PM decision: use `AUTH_TRUST_HOST=true` in the deployment env. Do **not** hard-code `trustHost: true` in `apps/smart-form/auth.ts` — host trust is specific to the production Caddy topology, and the application should not globally trust arbitrary forwarded host information in every runtime.
+
+      ## Deliverable
+
+      In every production deployment path that writes `.env.smart-form`, add `AUTH_TRUST_HOST=true`. Both the canary and promote paths construct this file independently, so both must carry it.
+
+      `NEXTAUTH_URL=https://$SMART_FORM_DOMAIN` stays unchanged. No `AUTH_URL` and no further Auth.js env-name migration unless execution after this correction demonstrates it is required. No new GitHub secret — this is a deployment constant derived from the known trusted Caddy topology, not owner-supplied information.
+
+      ## Acceptance criteria
+
+      Proven by executing against the canonical workflow text, not by a marker-only assertion:
+
+      1. `.env.smart-form` receives `AUTH_TRUST_HOST=true`.
+      2. Both canary and promote paths carry it.
+      3. The setting is Smart Form-only and does not leak into `.env.web`.
+      4. Google credentials and `NEXTAUTH_SECRET` remain Smart Form-only.
+      5. The QA auth bypass remains absent from the production env.
+      6. `NEXT_PUBLIC_API_BASE_URL` remains `https://api.unit-talk.com` by deployment derivation.
+      7. Parked-mode behaviour is unchanged.
+
+      Post-deploy, on the live host: the four Auth.js routes stop returning 500, Google sign-in initiates against the configured Smart Form client, the callback returns to `https://picks.unit-talk.com`, an allow-listed account establishes a session, and authenticated `/submit` renders.
+
+      ## Out of scope
+
+      `apps/smart-form/auth.ts`, Google provider logic, allow-list behaviour, API authentication, Caddy routing, Supabase/schema, provider ingestion, member delivery, Command Center. If a reproduced failure after this correction shows one of these is necessary, stop and return to PM.
+
+      ## Deferred follow-up observations (do not block this fix)
+
+      * `www.unit-talk.com` has no Caddy site block and therefore no certificate. The deployed Caddyfile declares exactly three hostnames.
+      * `https://api.unit-talk.com/health` responds in ~14 s. Escalate only if it demonstrably prevents Smart Form operation once auth works.
+
+      ## Containment
+
+      Production stays parked throughout: `SYNDICATE_MACHINE_ENABLED=false`, ingestor autorun and scheduling false, worker autorun false, enabled delivery targets `none`. No pick is submitted under this issue.
+    captured_at: 2026-09-01T11:53:32.183Z
+    description_sha256: c43e871f0fb65bc2400630264306726df4d1f8351da31676a5d5b267385474a4
+  contract_hash: 1265d61cc943bb4f3000f3ba3d6527751cff2553a3fb745948e106b2c6bf624b
