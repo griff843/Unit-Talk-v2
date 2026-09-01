@@ -54,6 +54,7 @@ repository file or a log line.
 NODE_ENV=production
 PORT=4400
 NEXTAUTH_URL=            # exact public https:// origin; Auth.js derives the Google callback URI from it
+AUTH_TRUST_HOST=true     # deployment constant, not a secret; see below
 NEXTAUTH_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -61,6 +62,26 @@ ALLOWED_CAPPER_EMAILS=   # server-authoritative, comma-separated; empty admits n
 UNIT_TALK_API_URL=http://api:4000
 NEXT_PUBLIC_API_BASE_URL=
 ```
+
+### `AUTH_TRUST_HOST`
+
+`apps/smart-form` runs Auth.js v5 (`next-auth@5.0.0-beta`), which refuses any
+request whose `Host` it has not been told to trust and answers every
+`/api/auth/*` route with `500 UntrustedHost`. `NEXTAUTH_URL` is a v4 name and
+does not confer that trust — setting it is not enough, as the first production
+deployment demonstrated: the Smart Form served correctly over TLS while sign-in
+was impossible.
+
+The value is deliberately **not** a GitHub secret and deliberately **not**
+`trustHost: true` in `apps/smart-form/auth.ts`. Trusting a forwarded host is a
+statement about a topology, not about the application. Here the deployment
+provisions the hostname and puts Caddy in front of it, so the deployment is the
+only layer entitled to make that statement; hard-coding it in the app would make
+every other runtime — a developer's laptop included — trust whatever `Host` a
+caller sends.
+
+It is written to `.env.smart-form` only. The public website performs no
+authentication, and `.env.production` must not carry it either.
 
 `NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS` and `SMART_FORM_QA_AUTH_BYPASS` are
 deliberately absent. The QA authentication bypass is never enabled in production;

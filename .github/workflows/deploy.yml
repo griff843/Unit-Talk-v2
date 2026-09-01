@@ -508,10 +508,18 @@ jobs:
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.web' && chmod 600 '$DEPLOY_PATH/.env.web' && echo 'env.web written'"
 
+          # UTV2-1798: apps/smart-form runs Auth.js v5 (next-auth 5.0.0-beta), which
+          # refuses a request whose Host it has not been told to trust and answers every
+          # /api/auth/* route with 500 UntrustedHost. NEXTAUTH_URL is a v4 name and does
+          # not confer that trust. Behind Caddy the forwarded host is exactly the one we
+          # provision, so the deployment -- the only layer that knows the reverse-proxy
+          # topology -- states the trust here rather than the application trusting any
+          # forwarded host in every runtime, including a developer's laptop.
           printf '%s\n' \
             "NODE_ENV=production" \
             "PORT=4400" \
             "NEXTAUTH_URL=https://$SMART_FORM_DOMAIN" \
+            "AUTH_TRUST_HOST=true" \
             "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" \
             "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
             "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
@@ -988,10 +996,18 @@ jobs:
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.web' && chmod 600 '$DEPLOY_PATH/.env.web' && echo 'env.web written'"
 
+          # UTV2-1798: apps/smart-form runs Auth.js v5 (next-auth 5.0.0-beta), which
+          # refuses a request whose Host it has not been told to trust and answers every
+          # /api/auth/* route with 500 UntrustedHost. NEXTAUTH_URL is a v4 name and does
+          # not confer that trust. Behind Caddy the forwarded host is exactly the one we
+          # provision, so the deployment -- the only layer that knows the reverse-proxy
+          # topology -- states the trust here rather than the application trusting any
+          # forwarded host in every runtime, including a developer's laptop.
           printf '%s\n' \
             "NODE_ENV=production" \
             "PORT=4400" \
             "NEXTAUTH_URL=https://$SMART_FORM_DOMAIN" \
+            "AUTH_TRUST_HOST=true" \
             "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" \
             "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
             "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \

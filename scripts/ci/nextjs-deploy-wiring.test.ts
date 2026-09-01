@@ -423,3 +423,143 @@ test('the API verifies exactly the capper token Smart Form signs', async () => {
   const refused = await validateCapperToken(token, otherKey);
   assert.equal(refused, null, 'the API must refuse a token signed with any other key');
 });
+
+/**
+ * UTV2-1798.
+ *
+ * Parse the env files the deploy actually writes, rather than searching the
+ * whole step script for a string. Each file is produced by one
+ * `printf '%s\n' "KEY=VALUE" ... | ssh ... "cat > '$DEPLOY_PATH/<name>'"`
+ * pipeline, so the pipeline boundary is what decides which file a key lands in.
+ * A substring search over the step cannot tell `.env.smart-form` from
+ * `.env.web` — and telling them apart is the whole point of these assertions.
+ */
+function envFileWrites(jobId: string, stepName: string): Map<string, string[]> {
+  const script = String(step(jobId, stepName)['run']);
+  const pipeline = /printf '%s\\n' \\\n([\s\S]*?)\| ssh[\s\S]*?cat > '\$DEPLOY_PATH\/(\.env\.[a-z.-]+)'/g;
+  const files = new Map<string, string[]>();
+
+  for (const match of script.matchAll(pipeline)) {
+    const [, body, fileName] = match;
+    const entries = [...body.matchAll(/^\s*"([^"]*)"\s*\\?$/gm)].map((entry) => entry[1]);
+    files.set(fileName, entries);
+  }
+
+  assert.ok(files.size > 0, `${jobId}/${stepName} must write at least one env file`);
+  return files;
+}
+
+const keyOf = (entry: string): string => entry.slice(0, entry.indexOf('='));
+
+test('Auth.js trusts the proxied host only where the deployment provisions it', () => {
+  // The Smart Form runs Auth.js v5, which answers every /api/auth/* route with
+  // 500 UntrustedHost unless the host is declared trusted. Measured on the live
+  // deployment at d201fd93: providers, csrf, session and signin all returned 500.
+  // NEXTAUTH_URL is a v4 name and does not confer trust, so its presence proves
+  // nothing here.
+  for (const jobId of ['canary', 'promote']) {
+    const files = envFileWrites(jobId, 'Write Next.js service env files to server');
+
+    const smartForm = files.get('.env.smart-form');
+    assert.ok(smartForm, `${jobId} must write .env.smart-form`);
+    assert.ok(
+      smartForm.includes('AUTH_TRUST_HOST=true'),
+      `${jobId} must declare AUTH_TRUST_HOST=true in .env.smart-form, or Auth.js refuses every request behind Caddy`,
+    );
+
+    // The trust is a statement about one reverse-proxied surface. The public
+    // website performs no authentication and must not carry it.
+    const web = files.get('.env.web');
+    assert.ok(web, `${jobId} must write .env.web`);
+    assert.ok(
+      !web.some((entry) => keyOf(entry) === 'AUTH_TRUST_HOST'),
+      `${jobId} must not write AUTH_TRUST_HOST into the public website env file`,
+    );
+
+    // Host trust is not a substitute for the origin: NEXTAUTH_URL still pins the
+    // exact public origin Auth.js derives the Google callback URI from.
+    assert.ok(
+      smartForm.some((entry) => entry === 'NEXTAUTH_URL=https://$SMART_FORM_DOMAIN'),
+      `${jobId} must keep NEXTAUTH_URL pinned to the provisioned Smart Form hostname`,
+    );
+
+    // Server-only credentials stay in the one container that needs them.
+    for (const secret of SERVER_ONLY_SECRETS) {
+      assert.ok(
+        smartForm.some((entry) => keyOf(entry) === secret),
+        `${jobId} must write ${secret} into .env.smart-form`,
+      );
+      for (const [fileName, entries] of files) {
+        if (fileName === '.env.smart-form') continue;
+        assert.ok(
+          !entries.some((entry) => keyOf(entry) === secret),
+          `${jobId} must not write ${secret} into ${fileName}`,
+        );
+      }
+    }
+
+    // The QA bypass is absent from every file this step writes, not merely absent
+    // from .env.smart-form.
+    for (const [fileName, entries] of files) {
+      assert.ok(
+        !entries.some((entry) => /^(NEXT_PUBLIC_)?SMART_FORM_QA_AUTH_BYPASS$/.test(keyOf(entry))),
+        `${jobId} must never write a QA auth bypass into ${fileName}`,
+      );
+    }
+
+    // The browser origin stays derived from the deployment's own API hostname.
+    // A literal here would survive a hostname change and silently point the
+    // browser at a dead origin.
+    for (const fileName of ['.env.smart-form', '.env.web']) {
+      const entries = files.get(fileName);
+      assert.ok(entries, `${jobId} must write ${fileName}`);
+      assert.ok(
+        entries.includes('NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN'),
+        `${jobId} must derive ${fileName}'s browser API origin from CADDY_DOMAIN`,
+      );
+    }
+  }
+});
+
+test('the host-trust correction leaves parked containment untouched', () => {
+  // AUTH_TRUST_HOST governs which Host header Auth.js will answer. It must not
+  // reach, and must not perturb, the producers that parked mode shuts off.
+  const parked = {
+    SYNDICATE_MACHINE_ENABLED: '$SYNDICATE_MACHINE_ENABLED',
+    UNIT_TALK_INGESTOR_AUTORUN: '$_ingestor_autorun',
+    UNIT_TALK_INGESTOR_SCHEDULING_ENABLED: '$_ingestor_scheduling_enabled',
+    UNIT_TALK_WORKER_AUTORUN: '$_worker_autorun',
+    UNIT_TALK_ENABLED_TARGETS: '$_enabled_targets',
+  };
+
+  for (const jobId of ['canary', 'promote']) {
+    const production = envFileWrites(jobId, 'Write .env.production to server').get('.env.production');
+    assert.ok(production, `${jobId} must write .env.production`);
+
+    for (const [name, expected] of Object.entries(parked)) {
+      assert.ok(
+        production.includes(`${name}=${expected}`),
+        `${jobId} must keep ${name} resolved from the validated syndicate-machine mode`,
+      );
+    }
+
+    // Parked mode is what forces every one of those to its safe value.
+    const script = String(step(jobId, 'Write .env.production to server')['run']);
+    assert.match(
+      script,
+      /parked\)\s*\n\s*SYNDICATE_MACHINE_ENABLED=false\s*\n\s*_ingestor_autorun=false\s*\n\s*_ingestor_scheduling_enabled=false\s*\n\s*_worker_autorun=false/,
+      `${jobId} parked mode must still stop the API scheduler, the ingestor and the worker`,
+    );
+    assert.match(
+      script,
+      /if \[ "\$SYNDICATE_MACHINE_MODE" = "parked" \]; then\s*\n\s*_enabled_targets="none"/,
+      `${jobId} parked mode must still force delivery targets to none`,
+    );
+
+    // Host trust belongs to the Smart Form alone; it is not a production-wide switch.
+    assert.ok(
+      !production.some((entry) => keyOf(entry) === 'AUTH_TRUST_HOST'),
+      `${jobId} must not write AUTH_TRUST_HOST into .env.production`,
+    );
+  }
+});
