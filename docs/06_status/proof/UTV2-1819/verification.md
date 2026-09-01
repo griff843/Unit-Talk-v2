@@ -1,6 +1,6 @@
 # PROOF: UTV2-1819
 
-MERGE_SHA: 07e0bcf0457d2134c5135f5b1987eada9a2de71d
+MERGE_SHA: 5a7e6f85d37ac09a4b7d9c40940000490ce52ce9
 
 Lane: claude / `claude/utv2-1819-lane-maximizer-page-size`
 Tier: T1 (Tier C path — `scripts/ops/lane-maximizer.ts`)

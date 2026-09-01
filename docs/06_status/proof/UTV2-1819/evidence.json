@@ -8,14 +8,14 @@
     "verified_source_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
     "evidence_commit_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
     "current_pr_head_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
-    "merge_sha": null,
+    "merge_sha": "5a7e6f85d37ac09a4b7d9c40940000490ce52ce9",
     "ci_sentinels": {
       "evidence_commit_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
       "current_pr_head_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d"
     },
     "note": "07e0bcf0457d2134c5135f5b1987eada9a2de71d is the last non-proof commit on this branch: the implementation, its regressions, and the merge commit that brought main's readiness-ledger refresh in through the sanctioned PR update-branch path (no rebase, no force push). merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM. Every local receipt in this bundle was executed against this exact tree, and every hosted receipt is bound to it by run and job id below.",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-01T21:10:00Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-01T22:24:43.083Z"
   },
   "static_proof": {
     "unit_tests": {

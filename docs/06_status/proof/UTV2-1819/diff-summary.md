@@ -1,6 +1,6 @@
 # PROOF: UTV2-1819 — diff summary
 
-MERGE_SHA: 194df996f09cc90d0600100939c619eba2990a5a
+MERGE_SHA: 5a7e6f85d37ac09a4b7d9c40940000490ce52ce9
 
 `lane-maximizer: bound the candidate page size to Linear's query-complexity budget`
 
