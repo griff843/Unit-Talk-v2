@@ -157,6 +157,54 @@ authorized to be. Regenerating now would emit types that omit these objects and 
 in unrelated production drift. Type-check passes without it, so regeneration is not
 mechanically required at this head; it belongs after production application.
 
+### What has a CI receipt and what does not
+
+An independent audit at exact head correctly flagged that this bundle mixes two grades of
+evidence in the same schema position. Stated plainly:
+
+**Receipted — verifiable from GitHub Actions, bound to `16c15506`:**
+
+```
+precondition_drill          PASS  run 33530973221  job 99933738656
+schema_roundtrip_drill      PASS  run 33530973221  job 99933739000
+writable_db_proof_staging   PASS  run 33530970352  job 99934207264
+live_schema_parity          FAIL  run 33530972753  job 99933777688  (honestly recorded, not waived)
+```
+
+**Not receipted — read by the orchestrator against staging, no run or job id:** the ACL
+catalog reads, the control-object comparison, the ACL-inclusive round-trip fingerprints,
+and the limiter semantics table. No CI job in this repo can produce them:
+`schema-roundtrip-hash.ts` runs `pg_dump --no-acl`, and the CI scratch Postgres has no
+`anon`, `authenticated` or `service_role` role to grant to in the first place. That is the
+whole reason the ACL condition had to be proven directly. These are re-derivable by
+re-running the same catalog queries against staging, but they rest on this capture, not on
+an Actions artifact, and should be weighed accordingly.
+
+### The closeout consequence of the parity failure
+
+`live_schema_parity` not passing is not merely cosmetic. Close Eligibility Preflight fails
+CEP-E7 on that field and therefore CEP-C1, whose message is that `ops:lane-close` would
+fail after merge. Merging before the migration is applied to production would strand this
+lane merged-but-unclosable. The order that avoids it: apply to production, let parity go
+green, then merge and close.
+
+### A gate reddened by main, not by this branch
+
+`proof-binding-validator` also reports `docs/06_status/readiness/readiness-score.json` as a
+non-proof file changed after the substantive commit. This branch never touches that file.
+The validator diffs from the PR *merge ref*, so a bot commit on `main` (`19a143a2`,
+`ops(readiness): refresh ledger`) is attributed to this branch. It is a measurement
+artifact, but it is a fail-closed gate and `main` takes bot commits continuously, so this
+bundle degrades on its own the longer the lane stays open.
+
+### What this migration does not own
+
+`p_window_start` and `p_window_expires_at` are caller-supplied, not computed in the
+function. Correct windowing depends on the API server flooring `now` to the window boundary
+before calling. The function rejects null boundaries and `p_limit < 1` with `22023` and the
+table CHECK requires `expires_at > window_start`, but consistent windowing is an API-side
+contract, out of scope here and named rather than left implicit.
+
 ### Containment
 
 Track Only enforcement, member-delivery parking, worker parking, ingestor parking and

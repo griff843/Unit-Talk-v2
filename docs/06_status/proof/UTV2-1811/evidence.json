@@ -60,7 +60,7 @@
       "workflow": "Live Schema Parity / Live Schema Parity",
       "verdict": "FAIL \u2014 10 unauthorized findings, every one of them \"missing_in_actual\" for public.rate_limit_buckets and its columns, constraints and indexes.",
       "why_not_pass": "This gate diffs the repo migration set (expected) against the LIVE PRODUCTION database (actual). It reports objects that the repo declares and production does not yet have. UTV2-1811 creates a new relation and production DDL is not authorized, so the gate is correctly reporting a true difference. It cannot return PASS until the migration is applied to production.",
-      "not_a_merge_blocker": "The required status job \"Enforce parity (fail-closed)\" (job 99933779832) SKIPPED on this feature-branch ref. This receipt blocks the CEP-E7 migration proof profile, not the merge gate. The four required status checks on main are Executor Result Validation, Merge Gate, P0 Protocol and verify.",
+      "not_a_merge_blocker": "Precise scope of this failure, stated so it cannot be read as harmless. It does NOT block GitHub's merge button: the four required contexts on main are verify, Executor Result Validation, Merge Gate and P0 Protocol, and Live Schema Parity's own required job \"Enforce parity (fail-closed)\" (job 99933779832) SKIPPED on this feature-branch ref. It DOES block the sanctioned closeout path: Close Eligibility Preflight fails CEP-E7 on this field and therefore CEP-C1, whose own message is that ops:lane-close would fail after merge. Merging this PR before the migration is applied to production would produce a merged-but-unclosable lane, the ghost-lane failure class this repo has hit before. Apply to production first, let parity go green, then merge and close.",
       "precedent_measured": "Every prior table-creating migration in this repo already exists in production: public.delivery_kill_switch (20260714120000), public.command_center_game_threads and public.command_center_delivery_mappings (20260803230000) all return non-null from to_regclass in zfzdnfwdarxucxtaojxm, while supabase_migrations.schema_migrations holds 127 rows stopping at version 20260801222906. Production DDL has therefore always preceded parity going green; this lane is not deviating from the established order, it is stopped at it awaiting authorization."
     },
     "staging_target": {
@@ -116,6 +116,8 @@
     ],
     "rows_for_key_after_sweep": 1,
     "acl_proof": {
+      "evidence_class": "manual_catalog_read_no_ci_receipt",
+      "capture_method": "CAPTURE METHOD \u2014 read directly by the orchestrator from the staging catalog (pg_proc.proacl, pg_class.relacl, has_function_privilege, has_table_privilege) over the applied objects, plus a control object built in the same schema without the REVOKE block and then dropped. This block carries NO CI run or job id and is NOT reproducible from any GitHub Actions artifact: no CI job in this repo can produce it, because schema-roundtrip-hash.ts runs pg_dump --no-acl and the CI scratch Postgres has no anon/authenticated/service_role role to grant to. It is therefore weaker evidence than the four receipted fields and must not be read as a CI receipt. It is included because the ACL condition was required to be proven directly, and a pg_dump-based gate structurally cannot prove it. Re-derivable by re-running the same catalog queries against staging.",
       "function_proacl": "{postgres=X/postgres,service_role=X/postgres}",
       "table_relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
       "anon_can_execute_function": false,
@@ -133,6 +135,8 @@
       }
     },
     "reversibility": {
+      "evidence_class": "manual_catalog_read_no_ci_receipt",
+      "capture_method": "CAPTURE METHOD \u2014 fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
       "fingerprint_applied": "dd6588d1831a7eba09921beb8854aeee",
       "fingerprint_after_down": "f77268e36e040e76d2d7e2c466a7c62c",
       "fingerprint_after_reapply": "dd6588d1831a7eba09921beb8854aeee",
@@ -143,7 +147,8 @@
     "precondition_guard": {
       "sqlstate_on_reapply_over_existing_table": "42P07",
       "applies_when_absent": true
-    }
+    },
+    "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can \u2014 it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start \u2014 but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit."
   },
   "static_proof": {
     "commands": [
