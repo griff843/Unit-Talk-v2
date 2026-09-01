@@ -80,18 +80,33 @@
     },
     "r_level": {
       "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "status": "PASS_BEFORE_PROOF_COMMIT_PENDING_FINAL_RERUN",
+      "status": "PASS",
       "changed_files": 5,
       "rules_matched": "none",
-      "artifacts_required": []
+      "artifacts_required": [],
+      "ci_check": "R-Level Compliance Check",
+      "ci_conclusion": "success",
+      "evaluated_at_sha": "64a47197f2327171c46be35f26c23db939bcb91d",
+      "completed_at": "2026-08-31T23:21:32Z",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33450314638/job/99678511628",
+      "note": "The previous PASS_BEFORE_PROOF_COMMIT_PENDING_FINAL_RERUN disposition was written before the proof commit and never updated. CI re-evaluated R-level at the approved implementation head and passed; no rerun is outstanding."
     }
   },
   "runtime_proof": {
-    "status": "BLOCKED_DEFERRED_PENDING_STAGING_CI_AND_POST_MERGE_SCHEDULE",
+    "status": "STAGING_CI_PASS_POST_MERGE_DELIVERY_OBSERVATION_OUTSTANDING",
     "test_db": {
       "required": true,
       "local_status": "BLOCKED_DEFERRED",
-      "literal_disposition": "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.",
+      "local_disposition": "Writable live-DB proof cannot run from a local worktree: assert-staging could not resolve the target identity from its URL (host=unparseable) and requires xskgrzbteyqdufktjrjx. This did not change; the receipt was obtained in CI instead, not locally.",
+      "staging_ci_status": "PASS",
+      "staging_ci_check": "Writable DB proof (staging only)",
+      "staging_ci_conclusion": "success",
+      "staging_ci_environment": "staging-ci",
+      "staging_ci_project_ref": "xskgrzbteyqdufktjrjx",
+      "staging_ci_evaluated_at_sha": "64a47197f2327171c46be35f26c23db939bcb91d",
+      "staging_ci_completed_at": "2026-08-31T23:26:12Z",
+      "staging_ci_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33450314775/job/99678512851",
+      "verify_run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33450314775/job/99679600651",
       "production_mutation_performed": false,
       "secret_values_exposed": false
     },
@@ -104,7 +119,8 @@
         "monitor conclusion",
         "evidence that alerting-pass can reach the canary-only operations path"
       ],
-      "success_claimed": false
+      "success_claimed": false,
+      "note": "This remains the one outstanding runtime item. A writable staging receipt proves the workflow can authenticate; it does not prove an alert was delivered."
     }
   },
   "mutation_testing": {
@@ -142,14 +158,32 @@
     "executor": "codex-cli",
     "self_certified_done": false,
     "pm_approval_self_applied": false,
-    "ready_for_pm_review": false,
+    "ready_for_pm_review": true,
+    "pm_review_outcome": "APPROVED at 64a47197 on 2026-09-01T00:01:06Z; PR #1468 merged as 4ac025ee211d17720b18e764d006325cd919b228",
     "pending": [
-      "authoritative scope decision permitting package.json test:ops wiring, or an orchestrator-provided in-scope wiring mechanism",
-      "pnpm verify:static and R-level rerun after the wiring gap is resolved",
-      "independent exact-head review",
-      "T1 approval at the stationary reviewed head",
-      "staging-ci writable DB proof",
-      "post-merge scheduled-run observation"
+      "post-merge scheduled-run observation of Ingestor and Alert-System Monitor: alert delivery is proven wired, not proven delivered"
+    ],
+    "resolved": [
+      {
+        "item": "authoritative scope decision permitting package.json test:ops wiring",
+        "resolution": "Not needed. 10fa8dd8 made scripts/ci/ingestor-alert-wiring.test.ts reachable by running it inside .github/workflows/ingestor-staleness-alert.yml, with no package.json change and no scope expansion."
+      },
+      {
+        "item": "pnpm verify:static and R-level rerun after the wiring gap is resolved",
+        "resolution": "Both ran green at the approved head: verify success 2026-08-31T23:30:21Z, R-Level Compliance Check success 2026-08-31T23:21:32Z."
+      },
+      {
+        "item": "independent exact-head review",
+        "resolution": "Recorded in the pm-verdict/v1 comment: the implementation blobs are byte-identical to the independently reviewed versions, all required contexts green at the head, no unresolved current review threads."
+      },
+      {
+        "item": "T1 approval at the stationary reviewed head",
+        "resolution": "pm-verdict/v1 APPROVED by griff843 at 2026-09-01T00:01:06Z and t1-approved applied at 2026-09-01T00:01:07Z, both at 64a47197."
+      },
+      {
+        "item": "staging-ci writable DB proof",
+        "resolution": "Writable DB proof (staging only) succeeded at 64a47197 on 2026-08-31T23:26:12Z against xskgrzbteyqdufktjrjx."
+      }
     ]
   },
   "mutation_proof": {
@@ -203,7 +237,7 @@
   },
   "open_items": [
     "No post-merge scheduled run of Ingestor and Alert-System Monitor has been observed; alert delivery is proven wired, not proven delivered.",
-    "pnpm test:db is not runnable from a local worktree (assert-staging resolves host=127.0.0.1); the writable receipt is produced inside CI by the staging-ci environment and verified within the required verify job."
+    "pnpm test:db remains unrunnable from a local worktree (assert-staging resolves host=unparseable); the writable receipt is produced inside CI by the staging-ci environment and verified within the required verify job. This is a local tooling limitation, not an unmet requirement."
   ],
   "pr_number": 1468,
   "source_sha": "497a36f805220e7d71a6c01d252d6e237628824a",
@@ -246,7 +280,9 @@
   "pm_verdict": {
     "actor": "griff843",
     "verdict": "APPROVED",
-    "recorded_at": "2026-09-01T00:00:00Z",
-    "notes": "Exact-head approval at 64a47197; scoped to wiring, not delivery."
+    "recorded_at": "2026-09-01T00:01:06Z",
+    "notes": "Exact-head approval at 64a47197; scoped to wiring, not delivery.",
+    "comment_url": "https://github.com/griff843/Unit-Talk-v2/pull/1468#issuecomment-5486496698",
+    "t1_approved_label_applied_at": "2026-09-01T00:01:07Z"
   }
 }

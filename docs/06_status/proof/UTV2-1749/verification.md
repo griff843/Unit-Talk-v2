@@ -199,3 +199,95 @@ Two validators disagree about this bundle and both are now satisfied honestly:
 the PR head by strict equality, and committing a proof to its own branch always
 moves the head past the SHA the proof names. That is by construction, not a
 defect in this bundle.
+
+## Evidence reconciliation (PR #1470, second correction round)
+
+PM found `evidence.json` materially stale in four places. All four described the
+state of this work *before* PR #1468 was reviewed, approved and merged, and none
+of them was corrected when that happened. The record now matches live history.
+No product, workflow or governance code changed; this round touches only
+UTV2-1749's own proof artifacts, and the manifest repair and merge binding from
+the first round are untouched.
+
+`ops:proof-rebind` was the right tool for the merge-SHA binding and was used for
+it. It writes SHA anchors only, and `ops:proof-repair apply` requires a merge SHA
+and a runtime-proof file for post-merge insertion, so neither can write these
+four semantic fields. They were edited directly, and every value below is a fact
+GitHub reports rather than a claim this lane makes about itself.
+
+### 1. PM verdict timestamp
+
+`pm_verdict.recorded_at` read `2026-09-01T00:00:00Z` — a rounded placeholder, not
+an observation. GitHub's actual times:
+
+| Artifact | Actor | Timestamp |
+| -- | -- | -- |
+| `pm-verdict/v1` APPROVED comment ([5486496698](https://github.com/griff843/Unit-Talk-v2/pull/1468#issuecomment-5486496698)) | griff843 | `2026-09-01T00:01:06Z` |
+| `t1-approved` label applied | griff843 | `2026-09-01T00:01:07Z` |
+
+Both are now recorded, at the approved head `64a47197f2327171c46be35f26c23db939bcb91d`.
+
+### 2. Sign-off reconciled with live history
+
+Five of the six `pending` entries had already been satisfied. Each is moved to a
+`resolved` list carrying what closed it, rather than deleted — the record of what
+was outstanding is part of the evidence.
+
+| Was pending | What actually closed it |
+| -- | -- |
+| authoritative scope decision permitting `package.json` `test:ops` wiring | Never needed. `10fa8dd8` made the wiring test reachable from inside `ingestor-staleness-alert.yml`, with no `package.json` change and no scope expansion. |
+| `verify:static` and R-level rerun after the wiring gap | Both green at the approved head: `verify` success `2026-08-31T23:30:21Z`, R-Level Compliance Check success `2026-08-31T23:21:32Z`. |
+| independent exact-head review | Recorded in the pm-verdict comment: the implementation blobs are byte-identical to the independently reviewed versions, all required contexts green at the head, no unresolved current threads. |
+| T1 approval at the stationary reviewed head | pm-verdict/v1 APPROVED `2026-09-01T00:01:06Z`; `t1-approved` `2026-09-01T00:01:07Z`. |
+| staging-ci writable DB proof | `Writable DB proof (staging only)` success at `64a47197`, `2026-08-31T23:26:12Z`. |
+
+One entry remains genuinely outstanding: **post-merge observation of a scheduled
+run**. Alert delivery is proven wired, not proven delivered.
+
+`ready_for_pm_review` read `false` while the PM had already approved and the PR
+had already merged. It now reads `true`, and `pm_review_outcome` records the
+approval and the merge SHA `4ac025ee211d17720b18e764d006325cd919b228`, so the
+status semantics are internally consistent.
+
+### 3. Runtime proof reconciled without collapsing the distinction
+
+`runtime_proof.status` read `BLOCKED_DEFERRED_PENDING_STAGING_CI_AND_POST_MERGE_SCHEDULE`.
+The staging half of that is no longer pending. Three separate facts are now
+recorded separately, because they mean different things:
+
+* **local `pnpm test:db` remained unavailable.** `assert-staging` could not
+  resolve the target identity from its URL (`host=unparseable`) and requires
+  `xskgrzbteyqdufktjrjx`. This did not change and is not claimed to have changed;
+  it is a local worktree limitation, not an unmet requirement.
+* **staging CI succeeded.** `Writable DB proof (staging only)` — conclusion
+  `success`, environment `staging-ci`, project ref `xskgrzbteyqdufktjrjx`,
+  evaluated at `64a47197`, completed `2026-08-31T23:26:12Z`,
+  [run 33450314775 job 99678512851](https://github.com/griff843/Unit-Talk-v2/actions/runs/33450314775/job/99678512851).
+* **post-merge alert-delivery observation is still outstanding.** A writable
+  staging receipt proves the workflow can authenticate. It does not prove an
+  alert was delivered. `success_claimed` stays `false`.
+
+The status now reads `STAGING_CI_PASS_POST_MERGE_DELIVERY_OBSERVATION_OUTSTANDING`.
+
+### 4. R-level disposition replaced with the passed evidence
+
+`static_proof.r_level.status` read `PASS_BEFORE_PROOF_COMMIT_PENDING_FINAL_RERUN`.
+That was written before the proof commit and never updated. CI evaluated R-level
+at the approved implementation head and it passed:
+
+```
+R-Level Compliance Check   success   64a47197f2327171c46be35f26c23db939bcb91d   2026-08-31T23:21:32Z
+https://github.com/griff843/Unit-Talk-v2/actions/runs/33450314638/job/99678511628
+```
+
+Status is now `PASS` with the check name, conclusion, evaluated SHA, completion
+time and run URL. No rerun is outstanding.
+
+### Re-validation after the correction
+
+* `pnpm exec tsx --test scripts/ops/proof-schema.test.ts` — 76 pass, 0 fail.
+* Close Eligibility Preflight, run locally with the workflow's exact evaluator —
+  **PASS**, 15 PASS / 2 N/A / 0 FAIL, including `CEP-E5` and `CEP-E7`.
+* `ops:proof-check UTV2-1749` — unchanged from the previous round: the same
+  `STALE: yes` by construction and the same `evidence_commit_sha is null` warning
+  that CI fills in. No new failure was introduced.
