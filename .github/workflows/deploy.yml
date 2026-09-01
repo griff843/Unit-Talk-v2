@@ -65,6 +65,13 @@ jobs:
           SECRET_UNIT_TALK_DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
           SECRET_UNIT_TALK_DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
           SECRET_SYNDICATE_MACHINE_ENABLED: ${{ secrets.SYNDICATE_MACHINE_ENABLED }}
+          SECRET_CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          SECRET_UNIT_TALK_WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
+          SECRET_UNIT_TALK_SMART_FORM_DOMAIN: ${{ secrets.UNIT_TALK_SMART_FORM_DOMAIN }}
+          SECRET_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          SECRET_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          SECRET_NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          SECRET_ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
         run: |
           missing=()
           test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
@@ -78,6 +85,19 @@ jobs:
           test -n "$SECRET_UNIT_TALK_DEPLOY_HOST"    || missing+=(UNIT_TALK_DEPLOY_HOST)
           test -n "$SECRET_UNIT_TALK_DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
           test -n "$SECRET_SYNDICATE_MACHINE_ENABLED" || missing+=(SYNDICATE_MACHINE_ENABLED)
+          # UTV2-1795: the Next.js surfaces fail closed on absent server-side
+          # configuration. A deploy that cannot name its own hostnames, cannot
+          # complete a Google sign-in, or has no capper allow-list must not
+          # reach the server at all -- shipping it would either crash-loop the
+          # edge or, worse, stand up an intake surface nobody can be admitted to
+          # while looking healthy.
+          test -n "${SECRET_CADDY_DOMAIN:-}"                  || missing+=(CADDY_DOMAIN)
+          test -n "${SECRET_UNIT_TALK_WEB_DOMAIN:-}"          || missing+=(UNIT_TALK_WEB_DOMAIN)
+          test -n "${SECRET_UNIT_TALK_SMART_FORM_DOMAIN:-}"   || missing+=(UNIT_TALK_SMART_FORM_DOMAIN)
+          test -n "${SECRET_GOOGLE_CLIENT_ID:-}"              || missing+=(GOOGLE_CLIENT_ID)
+          test -n "${SECRET_GOOGLE_CLIENT_SECRET:-}"          || missing+=(GOOGLE_CLIENT_SECRET)
+          test -n "${SECRET_NEXTAUTH_SECRET:-}"               || missing+=(NEXTAUTH_SECRET)
+          test -n "${SECRET_ALLOWED_CAPPER_EMAILS:-}"         || missing+=(ALLOWED_CAPPER_EMAILS)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
@@ -187,9 +207,76 @@ jobs:
             UNIT_TALK_GIT_SHA=${{ github.sha }}
             UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
 
+  # UTV2-1795: the Next.js surfaces build from their own shared Dockerfile
+  # rather than a target in the root Dockerfile. They are a separate job, not
+  # extra entries in the `build` matrix, because they use a different context
+  # file and a different build-arg shape -- folding them in would have meant
+  # branching inside the matrix step.
+  build-nextjs:
+    needs: [verify, rollback-dry-run]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: web
+            app_dir: apps/web
+            app_package: '@unit-talk/web'
+            app_port: '4200'
+          - service: smart-form
+            app_dir: apps/smart-form
+            app_package: '@unit-talk/smart-form'
+            app_port: '4400'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Require a public API origin at build time
+        env:
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+        run: |
+          set -euo pipefail
+          # Next.js substitutes NEXT_PUBLIC_* while the image is built, so an
+          # absent value here is not a runtime problem to fix later -- it is
+          # permanently compiled into the browser bundle as the 127.0.0.1 fallback.
+          if [ -z "${CADDY_DOMAIN:-}" ]; then
+            echo "::error title=Missing API origin::CADDY_DOMAIN is required to build the Next.js images; without it the browser bundle would ship its http://127.0.0.1:4000 fallback." >&2
+            exit 1
+          fi
+          echo "API origin resolved for build."
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/production/Dockerfile.nextjs
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:${{ inputs.image_tag || github.sha }}
+            ${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: |
+            APP_DIR=${{ matrix.app_dir }}
+            APP_PACKAGE=${{ matrix.app_package }}
+            APP_PORT=${{ matrix.app_port }}
+            NEXT_PUBLIC_API_BASE_URL=https://${{ secrets.CADDY_DOMAIN }}
+            UNIT_TALK_GIT_SHA=${{ github.sha }}
+            UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
+
   canary:
     name: Canary deploy
-    needs: [build, verify]
+    needs: [build, build-nextjs, verify]
     runs-on: ubuntu-latest
     environment: canary
     # UTV2-1648: this job only ever needs to pull images build already pushed
@@ -243,6 +330,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
@@ -297,6 +385,14 @@ jobs:
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          # apps/smart-form/auth.ts signs the capper bearer with NEXTAUTH_SECRET and
+          # apps/api/src/auth.ts verifies it with UNIT_TALK_JWT_SECRET. They are the
+          # same key by construction here; if it is absent the API would accept no
+          # capper token at all, so refuse to write a half-configured environment.
+          if [ -z "${NEXTAUTH_SECRET:-}" ]; then
+            echo "::error title=Missing capper signing key::NEXTAUTH_SECRET is required; it is also written as UNIT_TALK_JWT_SECRET so the API can verify Smart Form session bearers." >&2
+            exit 1
+          fi
           _guild_id="${DISCORD_GUILD_ID:-0}"
           _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
           _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
@@ -347,6 +443,7 @@ jobs:
             "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
             "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_JWT_SECRET=$NEXTAUTH_SECRET" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -358,6 +455,81 @@ jobs:
           scp deploy/production/docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.yml"
           scp deploy/production/loki-config.yaml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/loki-config.yaml"
           scp deploy/production/Caddyfile "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/Caddyfile"
+
+      # UTV2-1795: the Next.js surfaces get their own narrow env files instead of
+      # sharing .env.production. The public website holds no secret at all, the
+      # TLS edge holds only hostnames, and the Google/Auth.js credentials reach
+      # exactly one container. Before this, everything with `env_file:
+      # .env.production` -- including the public edge -- held the Supabase
+      # service-role key, the Discord bot token and the SGO keys.
+      #
+      # Every value is written from a secret to a 0600 file over ssh. Nothing is
+      # echoed, and no value appears in a build arg or an image layer.
+      - name: Write Next.js service env files to server
+        env:
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
+          SMART_FORM_DOMAIN: ${{ secrets.UNIT_TALK_SMART_FORM_DOMAIN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+        run: |
+          set -eu
+          # Fail closed a second time at the point of use. The verify job checked
+          # these, but verify and this job are separated by the whole build, and
+          # an env file that is silently short is worse than a refused deploy:
+          # an empty ALLOWED_CAPPER_EMAILS admits nobody while the container
+          # still reports healthy, and an empty hostname crash-loops Caddy.
+          for name in CADDY_DOMAIN WEB_DOMAIN SMART_FORM_DOMAIN \
+                      GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET NEXTAUTH_SECRET \
+                      ALLOWED_CAPPER_EMAILS; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              echo "::error::$name is empty at deploy time. Refusing to write a partial Next.js configuration."
+              exit 1
+            fi
+          done
+
+          # Hostnames are the single source of truth for the derived URLs, so the
+          # Google callback URI cannot drift from the hostname Caddy serves.
+          printf '%s\n' \
+            "CADDY_DOMAIN=$CADDY_DOMAIN" \
+            "UNIT_TALK_WEB_DOMAIN=$WEB_DOMAIN" \
+            "UNIT_TALK_SMART_FORM_DOMAIN=$SMART_FORM_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.edge' && chmod 600 '$DEPLOY_PATH/.env.edge' && echo 'env.edge written'"
+
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4200" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            "NEXT_PUBLIC_SITE_URL=https://$WEB_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.web' && chmod 600 '$DEPLOY_PATH/.env.web' && echo 'env.web written'"
+
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4400" \
+            "NEXTAUTH_URL=https://$SMART_FORM_DOMAIN" \
+            "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" \
+            "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
+            "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
+            "ALLOWED_CAPPER_EMAILS=$ALLOWED_CAPPER_EMAILS" \
+            "UNIT_TALK_API_URL=http://api:4000" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.smart-form' && chmod 600 '$DEPLOY_PATH/.env.smart-form' && echo 'env.smart-form written'"
+
+          # The QA authentication bypass is never enabled in production. Assert it
+          # rather than assume it: a bypass name reaching the server would make the
+          # allow-list decorative.
+          if ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+               "grep -qE '^(NEXT_PUBLIC_)?SMART_FORM_QA_AUTH_BYPASS=' '$DEPLOY_PATH/.env.smart-form'"; then
+            echo "::error::A QA auth bypass variable reached the production Smart Form env file."
+            exit 1
+          fi
+          echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret. github.token is the
       # same ephemeral, repository-scoped credential `build` already uses to
@@ -373,12 +545,12 @@ jobs:
       # this stage (and the later promote stage) will need, at the exact
       # requested tag, BEFORE touching any running container. A stale/invalid
       # token or a tag that never got pushed must fail here, not mid-mutation.
-      - name: Preflight — verify registry auth and resolve all 4 image tags
+      - name: Preflight — verify registry auth and resolve all 6 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot; do
+          for svc in api worker ingestor discord-bot web smart-form; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -387,7 +559,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 4 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
 
       - name: Release API canary
         env:
@@ -645,6 +817,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
@@ -699,6 +872,14 @@ jobs:
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          # apps/smart-form/auth.ts signs the capper bearer with NEXTAUTH_SECRET and
+          # apps/api/src/auth.ts verifies it with UNIT_TALK_JWT_SECRET. They are the
+          # same key by construction here; if it is absent the API would accept no
+          # capper token at all, so refuse to write a half-configured environment.
+          if [ -z "${NEXTAUTH_SECRET:-}" ]; then
+            echo "::error title=Missing capper signing key::NEXTAUTH_SECRET is required; it is also written as UNIT_TALK_JWT_SECRET so the API can verify Smart Form session bearers." >&2
+            exit 1
+          fi
           _guild_id="${DISCORD_GUILD_ID:-0}"
           _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
           _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
@@ -749,10 +930,86 @@ jobs:
             "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
             "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_JWT_SECRET=$NEXTAUTH_SECRET" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
+
+      # UTV2-1795: the Next.js surfaces get their own narrow env files instead of
+      # sharing .env.production. The public website holds no secret at all, the
+      # TLS edge holds only hostnames, and the Google/Auth.js credentials reach
+      # exactly one container. Before this, everything with `env_file:
+      # .env.production` -- including the public edge -- held the Supabase
+      # service-role key, the Discord bot token and the SGO keys.
+      #
+      # Every value is written from a secret to a 0600 file over ssh. Nothing is
+      # echoed, and no value appears in a build arg or an image layer.
+      - name: Write Next.js service env files to server
+        env:
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          WEB_DOMAIN: ${{ secrets.UNIT_TALK_WEB_DOMAIN }}
+          SMART_FORM_DOMAIN: ${{ secrets.UNIT_TALK_SMART_FORM_DOMAIN }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
+          ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+        run: |
+          set -eu
+          # Fail closed a second time at the point of use. The verify job checked
+          # these, but verify and this job are separated by the whole build, and
+          # an env file that is silently short is worse than a refused deploy:
+          # an empty ALLOWED_CAPPER_EMAILS admits nobody while the container
+          # still reports healthy, and an empty hostname crash-loops Caddy.
+          for name in CADDY_DOMAIN WEB_DOMAIN SMART_FORM_DOMAIN \
+                      GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET NEXTAUTH_SECRET \
+                      ALLOWED_CAPPER_EMAILS; do
+            eval "value=\${$name:-}"
+            if [ -z "$value" ]; then
+              echo "::error::$name is empty at deploy time. Refusing to write a partial Next.js configuration."
+              exit 1
+            fi
+          done
+
+          # Hostnames are the single source of truth for the derived URLs, so the
+          # Google callback URI cannot drift from the hostname Caddy serves.
+          printf '%s\n' \
+            "CADDY_DOMAIN=$CADDY_DOMAIN" \
+            "UNIT_TALK_WEB_DOMAIN=$WEB_DOMAIN" \
+            "UNIT_TALK_SMART_FORM_DOMAIN=$SMART_FORM_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.edge' && chmod 600 '$DEPLOY_PATH/.env.edge' && echo 'env.edge written'"
+
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4200" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            "NEXT_PUBLIC_SITE_URL=https://$WEB_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.web' && chmod 600 '$DEPLOY_PATH/.env.web' && echo 'env.web written'"
+
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4400" \
+            "NEXTAUTH_URL=https://$SMART_FORM_DOMAIN" \
+            "NEXTAUTH_SECRET=$NEXTAUTH_SECRET" \
+            "GOOGLE_CLIENT_ID=$GOOGLE_CLIENT_ID" \
+            "GOOGLE_CLIENT_SECRET=$GOOGLE_CLIENT_SECRET" \
+            "ALLOWED_CAPPER_EMAILS=$ALLOWED_CAPPER_EMAILS" \
+            "UNIT_TALK_API_URL=http://api:4000" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.smart-form' && chmod 600 '$DEPLOY_PATH/.env.smart-form' && echo 'env.smart-form written'"
+
+          # The QA authentication bypass is never enabled in production. Assert it
+          # rather than assume it: a bypass name reaching the server would make the
+          # allow-list decorative.
+          if ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+               "grep -qE '^(NEXT_PUBLIC_)?SMART_FORM_QA_AUTH_BYPASS=' '$DEPLOY_PATH/.env.smart-form'"; then
+            echo "::error::A QA auth bypass variable reached the production Smart Form env file."
+            exit 1
+          fi
+          echo "Next.js env files written; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret -- see the matching
       # canary-job comment for the full rationale.
@@ -764,12 +1021,12 @@ jobs:
       # UTV2-1648: same pre-mutation registry preflight as the canary job --
       # this job runs on a fresh runner with its own auth, so it needs its own
       # check even though canary already verified moments earlier.
-      - name: Preflight — verify registry auth and resolve all 4 image tags
+      - name: Preflight — verify registry auth and resolve all 6 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot; do
+          for svc in api worker ingestor discord-bot web smart-form; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -778,7 +1035,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 4 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
 
       - name: Promote all production containers
         env:
@@ -801,6 +1058,36 @@ jobs:
             bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
           fi
           exit 1
+
+      # UTV2-1795: the API health loop above says nothing about the two Next.js
+      # surfaces -- they listen on the Docker network only, so `curl localhost`
+      # on the host cannot see them. Read each container's own compose
+      # healthcheck verdict instead, and fail the deploy if either surface is
+      # not healthy. Rolling one back is independent of the other and of the
+      # API: `UNIT_TALK_IMAGE_TAG=<previous> docker compose up -d --no-deps web`
+      # (or `smart-form`) replaces exactly that container.
+      - name: Verify Next.js surfaces are healthy
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          set -eu
+          for svc in web smart-form; do
+            healthy=""
+            for attempt in $(seq 1 30); do
+              if status=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                    "cd '$DEPLOY_PATH' && UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose ps --format '{{.Service}} {{.Health}}' 2>/dev/null | awk -v s=$svc '\$1==s {print \$2}'"); then
+                case "$status" in
+                  healthy) healthy="yes"; break ;;
+                esac
+              fi
+              sleep 10
+            done
+            if [ -z "$healthy" ]; then
+              echo "::error::$svc did not report healthy after promotion (last status: ${status:-unknown})."
+              exit 1
+            fi
+            echo "$svc: healthy"
+          done
 
       # UTV2-1618: same root cause and fix as the canary confirm step -- see its
       # comment header for the full incident account. Every docker compose exec

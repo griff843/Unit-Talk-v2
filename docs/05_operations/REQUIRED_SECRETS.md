@@ -45,7 +45,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "github-auto",
       "scope": "repo",
-      "used_by": [".github/workflows/ci-doctor.yml"],
+      "used_by": [
+        ".github/workflows/ci-doctor.yml"
+      ],
       "purpose": "Read-only API access for ci-doctor to list secrets, inspect branch protection, and read workflow run history. Auto-provided by GitHub Actions; never manually configured."
     },
     {
@@ -53,7 +55,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/linear-auto-close.yml"],
+      "used_by": [
+        ".github/workflows/linear-auto-close.yml"
+      ],
       "purpose": "Linear API write token used by linear-auto-close to transition referenced UTV2 issues to Done and post merge-SHA comments on push to main."
     },
     {
@@ -61,8 +65,11 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/stale-lane-alerter.yml", ".github/workflows/ops-daily-digest.yml"],
-      "purpose": "Discord webhook URL for ops alert notifications. Optional — alerter and digest exit 0 and skip Discord post when absent."
+      "used_by": [
+        ".github/workflows/stale-lane-alerter.yml",
+        ".github/workflows/ops-daily-digest.yml"
+      ],
+      "purpose": "Discord webhook URL for ops alert notifications. Optional \u2014 alerter and digest exit 0 and skip Discord post when absent."
     },
     {
       "name": "SUPABASE_ACCESS_TOKEN",
@@ -70,38 +77,47 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "source": "manual",
       "scope": "repo",
       "used_by": [],
-      "purpose": "Supabase management API token. UNUSED BY CI since UTV2-1629 deleted supabase-pr-db-branch.yml — no workflow references it. Retained only for operator-run local scripts (scripts/generate-types.mjs, scripts/utv2-356-migration-audit.ts, scripts/disk-growth-alert.ts) which read it from local.env. Because it is org-wide management API (create/delete projects, read any project's credentials), it must not be reintroduced into any pull-request-reachable job."
+      "purpose": "Supabase management API token. UNUSED BY CI since UTV2-1629 deleted supabase-pr-db-branch.yml \u2014 no workflow references it. Retained only for operator-run local scripts (scripts/generate-types.mjs, scripts/utv2-356-migration-audit.ts, scripts/disk-growth-alert.ts) which read it from local.env. Because it is org-wide management API (create/delete projects, read any project's credentials), it must not be reintroduced into any pull-request-reachable job."
     },
     {
       "name": "SUPABASE_URL",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/proof-regression.yml"],
-      "purpose": "Supabase project URL used by proof-regression workflow to run live DB proof scripts. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+      "used_by": [
+        ".github/workflows/proof-regression.yml"
+      ],
+      "purpose": "Supabase project URL used by proof-regression workflow to run live DB proof scripts. Optional \u2014 workflow skips proof runs when absent (HAS_SUPABASE guard)."
     },
     {
       "name": "SUPABASE_SERVICE_ROLE_KEY",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/proof-regression.yml"],
-      "purpose": "Supabase service role key for proof-regression workflow. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+      "used_by": [
+        ".github/workflows/proof-regression.yml"
+      ],
+      "purpose": "Supabase service role key for proof-regression workflow. Optional \u2014 workflow skips proof runs when absent (HAS_SUPABASE guard)."
     },
     {
       "name": "SUPABASE_ANON_KEY",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/proof-regression.yml", ".github/workflows/deploy.yml"],
-      "purpose": "Supabase anon key for proof-regression workflow and deploy gate. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+      "used_by": [
+        ".github/workflows/proof-regression.yml",
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Supabase anon key for proof-regression workflow and deploy gate. Optional \u2014 workflow skips proof runs when absent (HAS_SUPABASE guard)."
     },
     {
       "name": "DISCORD_BOT_TOKEN",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord bot token written into the deploy gate local.env for production validation. Optional for the deploy check step; must be set when the Discord worker is included in the deployment."
     },
     {
@@ -109,15 +125,19 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
-      "purpose": "Hostname or IP of the production server. Used by the deploy workflow SSH and SCP steps. Optional — deploy workflow only runs on workflow_dispatch."
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Hostname or IP of the production server. Used by the deploy workflow SSH and SCP steps. Optional \u2014 deploy workflow only runs on workflow_dispatch."
     },
     {
       "name": "UNIT_TALK_DEPLOY_USER",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "SSH username on the production server. Used by the deploy workflow SSH and SCP steps."
     },
     {
@@ -125,7 +145,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Absolute path to the deployment directory on the production server."
     },
     {
@@ -133,7 +155,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "HTTP URL polled after container startup to confirm the deployment is healthy. Must return 2xx."
     },
     {
@@ -141,7 +165,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Ed25519 private key for SSH access to the production server. Must match an authorized key on UNIT_TALK_DEPLOY_USER@UNIT_TALK_DEPLOY_HOST."
     },
     {
@@ -149,7 +175,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord application client ID written into deployment runtime env."
     },
     {
@@ -157,7 +185,10 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml", ".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml",
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Internal bot API key written into production and staging runtime env."
     },
     {
@@ -165,7 +196,10 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml", ".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml",
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Internal ingestor API key written into production and staging runtime env."
     },
     {
@@ -173,7 +207,11 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml", ".github/workflows/ingestor-scheduled-run.yml", ".github/workflows/ops-fix-ingestor-api-key.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml",
+        ".github/workflows/ingestor-scheduled-run.yml",
+        ".github/workflows/ops-fix-ingestor-api-key.yml"
+      ],
       "purpose": "SportsGameOdds primary API key for ingestor runtime and scheduled operations."
     },
     {
@@ -181,7 +219,11 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml", ".github/workflows/ingestor-scheduled-run.yml", ".github/workflows/ops-fix-ingestor-api-key.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml",
+        ".github/workflows/ingestor-scheduled-run.yml",
+        ".github/workflows/ops-fix-ingestor-api-key.yml"
+      ],
       "purpose": "SportsGameOdds fallback API key for ingestor runtime and repair workflows."
     },
     {
@@ -189,15 +231,19 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
-      "purpose": "Production domain name for Caddy TLS reverse proxy (e.g. api.unit-talk.com). Written to .env.production as CADDY_DOMAIN. Caddy reads this via {$CADDY_DOMAIN} in Caddyfile. If empty, Caddy will not bind a valid hostname and TLS will not be provisioned — API remains accessible on port 4000 only."
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Production domain name for Caddy TLS reverse proxy (e.g. api.unit-talk.com). Written to .env.production as CADDY_DOMAIN. Caddy reads this via {$CADDY_DOMAIN} in Caddyfile. If empty, Caddy will not bind a valid hostname and TLS will not be provisioned \u2014 API remains accessible on port 4000 only."
     },
     {
       "name": "DISCORD_GUILD_ID",
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord guild ID written into deployment runtime env."
     },
     {
@@ -205,7 +251,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord capper role ID written into deployment runtime env."
     },
     {
@@ -213,7 +261,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord VIP role ID written into deployment runtime env."
     },
     {
@@ -221,7 +271,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord VIP Plus role ID written into deployment runtime env."
     },
     {
@@ -229,7 +281,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord capper onboarding channel ID written into deployment runtime env."
     },
     {
@@ -237,7 +291,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Discord operator role ID written into deployment runtime env."
     },
     {
@@ -245,7 +301,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Production distribution target allowlist written into deployment runtime env."
     },
     {
@@ -253,7 +311,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Production Discord target mapping written into deployment runtime env."
     },
     {
@@ -261,7 +321,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Production enabled delivery targets written into deployment runtime env."
     },
     {
@@ -269,7 +331,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "GitHub Container Registry token for remote docker login during deploy."
     },
     {
@@ -277,7 +341,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy-monitoring.yml"],
+      "used_by": [
+        ".github/workflows/deploy-monitoring.yml"
+      ],
       "purpose": "Discord ops webhook URL for the monitoring deployment stack."
     },
     {
@@ -285,7 +351,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy-monitoring.yml"],
+      "used_by": [
+        ".github/workflows/deploy-monitoring.yml"
+      ],
       "purpose": "Uptime Kuma admin password written into the monitoring deployment stack."
     },
     {
@@ -293,7 +361,10 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/live-schema-parity.yml", ".github/workflows/db-health-tripwire.yml"],
+      "used_by": [
+        ".github/workflows/live-schema-parity.yml",
+        ".github/workflows/db-health-tripwire.yml"
+      ],
       "purpose": "Direct Supabase database URL for live schema parity checks and as a fallback DB connection for db-health-tripwire when the pooler URL is not configured."
     },
     {
@@ -301,7 +372,11 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/live-schema-parity.yml", ".github/workflows/schema-baseline-dump.yml", ".github/workflows/db-health-tripwire.yml"],
+      "used_by": [
+        ".github/workflows/live-schema-parity.yml",
+        ".github/workflows/schema-baseline-dump.yml",
+        ".github/workflows/db-health-tripwire.yml"
+      ],
       "purpose": "Preferred pooled Supabase database connection URL for live schema parity checks, CI baseline schema dumps, and DB health checks. Falls back to SUPABASE_DB_URL via the shared ./.github/actions/supabase-pooler-url composite action when unset."
     },
     {
@@ -309,7 +384,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/deploy.yml"],
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
       "purpose": "Readiness flag gating canary and production deploys; deploy.yml fails closed if this is not exactly 'true'."
     },
     {
@@ -317,7 +394,10 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/post-merge-lane-close.yml", ".github/workflows/tier-label-apply.yml"],
+      "used_by": [
+        ".github/workflows/post-merge-lane-close.yml",
+        ".github/workflows/tier-label-apply.yml"
+      ],
       "purpose": "PAT (repo scope) from a repo admin/owner, used wherever a workflow action must produce a genuine user-authored GitHub event (push, label) that cascades to trigger other workflows -- the default GITHUB_TOKEN's actions do not trigger further workflow runs (documented GitHub Actions behavior). post-merge-lane-close.yml uses it to push past branch protection; tier-label-apply.yml (UTV2-1551, P1-corrected) uses it so the tier-label sync's `labeled` event can fire Merge Gate's own `pull_request: labeled` trigger. This secret is deliberately kept out of tier-label-check.yml, which runs on `pull_request` and would therefore execute a same-repo PR's own modified copy of that workflow file before any review -- tier-label-apply.yml runs on `workflow_run` instead (always the base branch's own workflow definition), checks out no PR-controlled ref, and only consumes a strictly re-validated label-plan artifact. Fails closed with no GITHUB_TOKEN fallback, since a silent fallback would silently reintroduce the exact non-cascading-event bug this secret exists to fix."
     },
     {
@@ -325,7 +405,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Hostname or IP of the staging deployment server."
     },
     {
@@ -333,7 +415,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "SSH username for the staging deployment server."
     },
     {
@@ -341,7 +425,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Absolute path to the staging deployment directory."
     },
     {
@@ -349,7 +435,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "HTTP URL polled after staging deployment startup."
     },
     {
@@ -357,7 +445,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Ed25519 private key for SSH access to the staging deployment server."
     },
     {
@@ -365,7 +455,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Supabase URL written into staging runtime env."
     },
     {
@@ -373,7 +465,9 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Supabase anon key written into staging runtime env."
     },
     {
@@ -381,8 +475,70 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/staging-deploy.yml"],
+      "used_by": [
+        ".github/workflows/staging-deploy.yml"
+      ],
       "purpose": "Supabase service role key written into staging runtime env."
+    },
+    {
+      "name": "UNIT_TALK_WEB_DOMAIN",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Public hostname served by the `web` container (apps/web). Written into `.env.edge` for the Caddy site address and into `.env.web` as `NEXT_PUBLIC_SITE_URL`. Caddy refuses an empty site address, so an unset value fails the deploy closed rather than serving the wrong application on the wrong name."
+    },
+    {
+      "name": "UNIT_TALK_SMART_FORM_DOMAIN",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Public hostname served by the `smart-form` container (apps/smart-form). Also the sole source of `NEXTAUTH_URL`, from which Auth.js derives the Google callback URI \u2014 so the callback can never drift from the hostname Caddy actually serves."
+    },
+    {
+      "name": "GOOGLE_CLIENT_ID",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Google OAuth client ID for Smart Form sign-in. Owner-supplied. Server-side only; written to `.env.smart-form`, never to a build arg or a browser bundle."
+    },
+    {
+      "name": "GOOGLE_CLIENT_SECRET",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Google OAuth client secret for Smart Form sign-in. Owner-supplied. Server-only: reaches exactly one container and never appears in an image layer, a build arg, a browser bundle or a log line."
+    },
+    {
+      "name": "NEXTAUTH_SECRET",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Auth.js session-signing secret for Smart Form. Server-only. The production image is built with a published non-secret placeholder (`next build` evaluates the auth route); `deploy/production/nextjs-entrypoint.sh` refuses to start the container if that placeholder ever reaches run time."
+    },
+    {
+      "name": "ALLOWED_CAPPER_EMAILS",
+      "required": true,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Server-authoritative comma-separated allow-list of capper email addresses. Empty admits nobody \u2014 which is the correct failure but a silent one, so both the deploy workflow and the container entrypoint refuse an empty value rather than standing up an intake surface nobody can enter."
     }
   ]
 }
@@ -431,6 +587,42 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
   - Commit `1212856` — quoted env parsing (fixed by `sed -E 's/^([A-Z][A-Z0-9_]*)="(.*)"$/\1=\2/'`). `ci-doctor` check `CV3` enforces.
   - Commit `36d9f75` — pooled DB URL for migration validation. `ci-doctor` check `CV4` enforces.
   - Commit `af8e403` — selective-use documentation. `ci-doctor` check `CV6` enforces.
+
+---
+
+### 3.4 Shared Next.js deployment secrets (UTV2-1795)
+
+Six secrets were added when `apps/web` and `apps/smart-form` gained a production
+deployment. They are consumed only by `.github/workflows/deploy.yml`, which
+validates all of them in the `verify` job — before any image is built — and again
+at the point of use in `canary` and `promote`, because those two jobs are
+separated from `verify` by the whole build.
+
+| Secret | Reaches | Never reaches |
+| --- | --- | --- |
+| `UNIT_TALK_WEB_DOMAIN` | `.env.edge`, `.env.web` | — (a hostname is not a secret; it is a secret here only so the production domain is not committed) |
+| `UNIT_TALK_SMART_FORM_DOMAIN` | `.env.edge`, `.env.smart-form` | — |
+| `GOOGLE_CLIENT_ID` | `.env.smart-form` | build args, browser bundles |
+| `GOOGLE_CLIENT_SECRET` | `.env.smart-form` | build args, browser bundles, `.env.web`, `.env.edge`, `.env.production` |
+| `NEXTAUTH_SECRET` | `.env.smart-form` as `NEXTAUTH_SECRET`; `.env.production` as `UNIT_TALK_JWT_SECRET` | build args, browser bundles, `.env.web`, `.env.edge` |
+| `ALLOWED_CAPPER_EMAILS` | `.env.smart-form` | build args, browser bundles |
+
+`NEXTAUTH_SECRET` deliberately reaches two files under two names. Smart Form
+signs the capper session bearer with it; the API verifies that bearer with
+`UNIT_TALK_JWT_SECRET`. A single owner-supplied value fills both roles, so no new
+secret is required and the two can never drift apart. `UNIT_TALK_JWT_SECRET` is
+therefore not itself a repository secret.
+
+`CADDY_DOMAIN` was already in this inventory and is unchanged: the API keeps the
+hostname it already has. It now additionally supplies the
+`NEXT_PUBLIC_API_BASE_URL` build argument for the Next.js images — a public URL
+compiled into the browser bundle, never a credential. UTV2-1795 only stopped `.env.production` — and therefore
+the Supabase service-role key, the Discord bot token and the SGO keys — from
+reaching the public Caddy edge.
+
+`scripts/ci/nextjs-deploy-wiring.test.ts` asserts the containment above against
+the actual workflow and compose file, and each assertion has been shown to fail
+on the mutation it names.
 
 ---
 

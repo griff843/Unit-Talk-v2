@@ -1,0 +1,417 @@
+# PROOF: UTV2-1795 — apps/web and apps/smart-form can be deployed, and refuse to run misconfigured
+
+## Merge SHA Binding
+
+MERGE_SHA: 822d975d936419f6e75d1a68f4e4010a5fc8f359
+Merge SHA: pending merge
+Execution SHA: 822d975d936419f6e75d1a68f4e4010a5fc8f359
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1471
+
+`822d975d936419f6e75d1a68f4e4010a5fc8f359` is the last non-proof commit on this
+branch. Every receipt below was executed against that exact tree.
+
+---
+
+## Summary
+
+Before this lane, no Next.js application in the repository was deployed anywhere.
+Measured on `main` at `4ac025ee`:
+
+- `apps/web` appeared in **no** workflow file.
+- `apps/smart-form` appeared only in `qa-fast.yml` and `qa-experience-regression.yml`.
+- `deploy/production/docker-compose.yml` defined `api`, `worker`, `ingestor`,
+  `discord-bot`, `grading-cron`, `loki`, `grafana`, `caddy` — no Next.js service.
+- `deploy/production/Caddyfile` served exactly one site, `{$CADDY_DOMAIN}` → `api:4000`.
+
+This lane adds both applications to the existing Hetzner / Docker / GHCR / Caddy
+path: one shared image, two compose services, two Caddy site blocks, one build
+job, per-service env files, and a runtime entrypoint that refuses to start on a
+configuration that would be silently wrong.
+
+It also **narrows** an existing exposure. Every service with
+`env_file: .env.production` — including the public Caddy edge — held the Supabase
+service-role key, the Discord bot token and the SGO keys. The compose file's own
+comment deferred that as future hardening. Adding Google OAuth credentials to
+that file would have widened it further, so the deploy now writes four files and
+each container reads only what it needs.
+
+No file under `apps/` is modified. This is not incidental: no lane type admits
+both `apps/**` and the deployment paths (`runtime` and `governance` admit the
+deploy paths but not `apps/**`; `delivery-ui` admits `apps/**` but neither
+`.github/workflows/**` nor `deploy/production/**`). Running `next start` instead
+of the standalone server is what removes the need for an `apps/` edit.
+
+---
+
+## Pre-merge
+
+### `pnpm verify`
+
+```text
+$ pnpm verify                                        -> exit 0
+$ pnpm lint                    (stage of verify)     -> exit 0
+$ pnpm type-check              (stage of verify)     -> exit 0
+$ pnpm build                   (stage of verify)     -> exit 0
+$ pnpm test                    (stage of verify)     -> exit 0
+$ r-level-check                (stage of verify)     -> exit 0
+```
+
+`scripts/ci/nextjs-deploy-wiring.test.ts` is reachable from required `verify`
+through `pnpm test -> pnpm test:ops -> tsx --test`. The executable-wiring gate
+confirms it introduced no new unwired test:
+
+```text
+[executable-wiring] verdict=PASS required_roots=verify
+[executable-wiring] tests total=479 required-reachable=321 optional-reachable=39
+                    fixture-helper=0 quarantined=0 unwired=119 (baselined=119 new=0)
+```
+
+---
+
+## Runtime Verification
+
+### Both applications build
+
+`pnpm --filter @unit-talk/smart-form... build` **failed** before this lane, and
+would have failed in CI: `next build` collects page data for
+`/api/auth/[...nextauth]`, and `apps/smart-form/lib/auth-config.ts` throws when
+`NODE_ENV=production` and no auth secret is set.
+
+```text
+$ pnpm --filter "@unit-talk/web..." build                          -> exit 0
+$ pnpm --filter "@unit-talk/smart-form..." build                   -> exit 1
+  Error: AUTH_SECRET or NEXTAUTH_SECRET is required in production.
+  > Build error occurred
+  [Error: Failed to collect page data for /api/auth/[...nextauth]]
+
+$ NEXTAUTH_SECRET=nextauth-build-only-placeholder-not-a-secret \
+    pnpm --filter "@unit-talk/smart-form..." build                 -> exit 0
+  Route (app)                                Size  First Load JS
+  ├ ƒ /api/auth/[...nextauth]                124 B         102 kB
+  ├ ○ /login                               2.93 kB         115 kB
+  └ ○ /submit                              70.6 kB         189 kB
+```
+
+The placeholder is a published constant, not a credential. It exists only in the
+discarded builder stage, and the runtime entrypoint refuses to start on it (see
+the refusal table below), so it can never become the value that signs a real
+session.
+
+### Each health check answers, independently
+
+Both applications were started from their production builds and their exact
+compose health-check paths were requested:
+
+```text
+$ NODE_ENV=production pnpm exec next start -p 4200   (apps/web)
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4200/          -> 200
+
+$ NODE_ENV=production pnpm exec next start -p 4400   (apps/smart-form)
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4400/login     -> 200
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:4400/          -> 307
+```
+
+`/` returning 307 is the auth gate redirecting to `/login`. That is why the
+Smart Form health check targets `/login` and not `/` — a health check on `/`
+would be asserting a redirect, not that the application renders.
+
+### The intake container refuses to start on a configuration that admits nobody
+
+Every refusal below was executed against `deploy/production/nextjs-entrypoint.sh`
+under `env -i`, one variable removed at a time:
+
+| Condition | Exit | First line |
+| --- | --- | --- |
+| no `NEXTAUTH_SECRET` | 1 | `FATAL: NEXTAUTH_SECRET is not set. Refusing to start the intake surface.` |
+| `NEXTAUTH_SECRET` is the build placeholder | 1 | `FATAL: NEXTAUTH_SECRET is still the build-time placeholder. Refusing to start.` |
+| empty `ALLOWED_CAPPER_EMAILS` | 1 | `FATAL: ALLOWED_CAPPER_EMAILS is empty. No account could sign in; refusing to start.` |
+| no `GOOGLE_CLIENT_SECRET` | 1 | `FATAL: Google OAuth credentials are not configured. Refusing to start.` |
+| no `NEXTAUTH_URL` | 1 | `FATAL: NEXTAUTH_URL is not set; the Google callback URI would be wrong. Refusing to start.` |
+| unset `APP_DIR` | 2 | `APP_DIR: APP_DIR is not set; the image was built without an app` |
+| unset `PORT` | 2 | `PORT: PORT is not set; the image was built without a port` |
+
+An empty allow-list is the case worth naming: the application already fails
+closed on it, but silently — nobody can sign in while the container reports
+healthy. The entrypoint converts that into a visible startup failure.
+
+**Positive controls** (the guards are not blanket refusals):
+
+```text
+APP_DIR=deploy PORT=4200                        -> reaches line 43, 0 FATAL lines
+APP_DIR=apps/smart-form + full configuration    -> reaches line 43, 0 FATAL lines
+```
+
+Line 43 is `exec pnpm exec next start`. Both controls fail only on `pnpm: not
+found`, which is an artifact of running under `env -i`, not a refusal.
+
+### Mutation evidence
+
+Each assertion in `scripts/ci/nextjs-deploy-wiring.test.ts` was shown to fail on
+the defect it names. Artifact SHA-256 was restored to baseline between every
+mutation and re-confirmed at the end.
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 1 | drop `ALLOWED_CAPPER_EMAILS` from the secret inventory | `not ok 2` |
+| 2 | give the public website `.env.production` | `not ok 4` |
+| 3 | hard-code a production hostname in the Caddyfile | `not ok 5` |
+| 4 | leak `NEXTAUTH_SECRET` as a build arg | `not ok 4` |
+| 5 | publish smart-form on a host port | `not ok 6` |
+| 6 | remove `build-nextjs` from canary's `needs` | `not ok 1` |
+| 7 | drop the QA-bypass assertion | `not ok 3` |
+| 8 | require the standalone server | `not ok 7` |
+| 9 | remove the promote health gate | `not ok 6` |
+| 10 | bake `NEXTAUTH_SECRET` into the runtime image | `not ok 8` |
+| 11 | drop the placeholder rejection from the entrypoint | `not ok 8` |
+| 12 | drop the empty-allow-list refusal | `not ok 9` |
+| 13 | move a refusal after the server start | `not ok 9` |
+
+```text
+=== BASELINE RESTORED
+67247ae0da8fae2e840cfb30c06d1368fcfe407c864496e8ccb4926c073ddd9c  .github/workflows/deploy.yml
+861f5a617012eb7209f060b96609110d826b5d9e330da2cd97a417530a43d9b7  deploy/production/docker-compose.yml
+5d0f83ed531a19a6ab0834c3edc6034e9148b9057cd7c29debf7f5508d333bce  deploy/production/Caddyfile
+5abfe34be42b4ec32273e14832a7288200b369b12b0b7f409046e4daf5ac378b  deploy/production/Dockerfile.nextjs
+859e305c227845b768b3fb668026de1d222c22cfe2ee1ce0243b0858f5c0be09  deploy/production/nextjs-entrypoint.sh
+# pass 9 # fail 0
+```
+
+(The Dockerfile hash above is the pre-entrypoint-path-fix baseline used during
+mutations 10–13; the committed file additionally takes the entrypoint from the
+build context rather than the builder stage, because the builder never copies
+`deploy/`.)
+
+---
+
+## Correction round (PM CHANGES REQUIRED, two P1 findings)
+
+Both findings were real. Neither was reachable by reading the deployment files
+alone: the first only shows up in the compiled bundle, the second only when a
+signed token meets the verifier.
+
+### P1-1 — the browser bundle was compiled with its localhost fallback
+
+`apps/smart-form/lib/api-client.ts:4` and `participant-search.ts:6` read
+`process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000'`. Next.js
+substitutes `NEXT_PUBLIC_*` during `next build`, so writing the value into
+`.env.smart-form` at container start was too late — every production browser
+would have called the capper's own machine.
+
+Fix: `NEXT_PUBLIC_API_BASE_URL=https://${CADDY_DOMAIN}` is now a build argument
+of the `build-nextjs` job, declared as `ARG` + `ENV` in the builder stage before
+`pnpm --filter ... build`, with a hard failure on an empty value in both the
+workflow and the Dockerfile. It is a public URL; no secret is passed as a build
+argument.
+
+**Executed inversion control** — the same production build run twice, and the
+compiled client chunks grepped:
+
+```text
+# WITH the origin supplied at build time
+$ NODE_ENV=production NEXT_PUBLIC_API_BASE_URL=https://api.example-unittalk.test \
+    pnpm exec next build
+exit=0
+files under .next/static containing 127.0.0.1:4000        -> 0
+files under .next/static containing the configured origin  -> 1
+  .next/static/chunks/app/submit/page-4f81684485cdc85d.js
+
+# WITHOUT it (the state this PR was in when the finding was raised)
+$ NODE_ENV=production pnpm exec next build
+exit=0
+files under .next/static containing 127.0.0.1:4000        -> 1
+  .next/static/chunks/app/submit/page-54ad3271f1ba27b0.js
+```
+
+The fallback is present in the production bundle without the build argument and
+absent with it. The control fails on the defect it names.
+
+### P1-2 — the API could not verify what Smart Form signs
+
+`apps/smart-form/auth.ts:38` signs the capper session bearer with
+`NEXTAUTH_SECRET` via `createCapperSessionToken` (HS256).
+`apps/api/src/auth.ts:198` reads its capper verifier from `UNIT_TALK_JWT_SECRET`
+only, and `authenticateRequest` rejects a JWT outright rather than falling
+through to the key map. Provisioning the first without the second means every
+authenticated Smart Form submission returns 401 while every health check stays
+green.
+
+Fix, bounded to this deployment lane: the single configured `NEXTAUTH_SECRET` is
+written to `.env.smart-form` as `NEXTAUTH_SECRET` (signer) and to
+`.env.production` as `UNIT_TALK_JWT_SECRET` (verifier). One owner-supplied value,
+two names, so the two cannot drift. Both `canary` and `promote` refuse to write
+the environment when it is absent. No new secret, no auth redesign, and the value
+is exposed to neither a build argument nor a `NEXT_PUBLIC_` name.
+
+**Executed integration control** (`scripts/ci/nextjs-deploy-wiring.test.ts`,
+test 11) — a token produced by Smart Form's own signer is handed to the API's own
+verifier:
+
+```text
+createCapperSessionToken({sub:'capper-1795',...}, sharedKey)
+  -> validateCapperToken(token, sharedKey)  => accepted, role === 'capper'
+  -> validateCapperToken(token, otherKey)   => null (refused)
+ok 11 - the API verifies exactly the capper token Smart Form signs
+```
+
+Positive and negative in the same control: the same token is accepted under the
+shared key and refused under any other, so the test cannot pass by accepting
+everything.
+
+### Mutation evidence for the correction
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 14 | drop the `NEXT_PUBLIC_API_BASE_URL` build arg from `build-nextjs` | `not ok 10` |
+| 15 | drop `UNIT_TALK_JWT_SECRET` from the canary `.env.production` write | `not ok 11` |
+| 16 | neuter the `NEXTAUTH_SECRET` fail-closed guard (`if false`) | `not ok 11` |
+| 17 | remove the `ENV` export so the origin is not set before `next build` | `not ok 10` |
+
+```text
+=== BASELINE RESTORED (after mutations 14-17)
+306ad644188449396ec6dba338ec3ea74b502aead809a771ecccbc0c8ca1e308  .github/workflows/deploy.yml
+149ef5eaa42dbebfe3e62c3008d0dc9b1c38bcf77fa88c2f98124ce560ba8851  deploy/production/Dockerfile.nextjs
+861f5a617012eb7209f060b96609110d826b5d9e330da2cd97a417530a43d9b7  deploy/production/docker-compose.yml
+5d0f83ed531a19a6ab0834c3edc6034e9148b9057cd7c29debf7f5508d333bce  deploy/production/Caddyfile
+859e305c227845b768b3fb668026de1d222c22cfe2ee1ce0243b0858f5c0be09  deploy/production/nextjs-entrypoint.sh
+# pass 11 # fail 0
+```
+
+17 mutations across both rounds, 17 caught.
+
+### Second correction: CI found four audit failures I did not
+
+`verify` was red at `e10b31c0`. Re-running only lint, type-check and this lane's
+own suite was the wrong reading of "only affected tests": the `deploy.yml` edits
+reached assertions owned by `scripts/ci/deploy-parked-mode.test.ts` and
+`scripts/ops/workflow-hardening.test.ts`. Recorded here rather than quietly fixed.
+
+| Failure | Cause | Fix |
+| --- | --- | --- |
+| `deploy workflow has one fail-closed parked-mode contract across every gate` | the preflight step was renamed to "all **6** image tags"; the audit resolves it by exact literal name, so it concluded there was no registry preflight at all | the audit matches the stable name prefix and asserts the six-service list directly |
+| `static deploy audit detects a registry preflight that does not fail closed` | same root cause — the audit short-circuited before reaching its fail-closed check | same fix |
+| `canonical deploy validator accepts parked and active modes` | the fixture runs the inventory script under `set -euo pipefail`; the seven new `$SECRET_*` reads were unguarded (`unbound variable`), and once guarded were correctly reported missing | `${SECRET_X:-}` for the new reads; the fixture now supplies the seven values the deploy genuinely requires |
+| `no workflow invokes a workspace binary by bare name` | the guard scans run-script text and matched the token `next build` inside a **comment** | comment reworded; no behavioural change |
+
+The first two are the load-bearing ones and share one shape: a step rename made a
+required fail-closed audit stop auditing **while still reporting no violations**.
+It reported "nothing wrong" when it meant "I could not find the thing I check" —
+the same evidence-conflation class this repository has hit before. The audit now
+fails, rather than goes quiet, when the deployment gains another image.
+
+This forced a fifth scope path, `scripts/ci/deploy-parked-mode.test.ts`. It is not
+new work: the audit is stale the moment the deployment has six images instead of
+four, and correcting it is the honest alternative to leaving the step name lying
+about its own count.
+
+### Re-verification scope
+
+After the second correction the full local `pnpm verify` was run rather than a
+subset. Every static leg passes — **zero `not ok` lines across the whole run** —
+and `deploy-parked-mode`, `workflow-hardening` and this lane's wiring suite are
+102 pass / 0 fail together. The run exits 1 only at `test:db`, which refuses by
+design from a local worktree:
+
+```text
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL.
+```
+
+The writable receipt is produced inside CI by the `staging-ci` environment and
+verified within the required `verify` job, which is the only place it is
+obtainable. `pnpm lint` and `pnpm type-check` are exit 0 at `822d975d`.
+
+### Scope reconciliation
+
+`File scope lock` named four paths the lane legitimately needed and its base-side
+manifest read could not see: `deploy/production/ENV_FILES.md`,
+`deploy/production/nextjs-entrypoint.sh`, `docs/05_operations/REQUIRED_SECRETS.md`
+and `package.json`. The second correction added a fifth,
+`scripts/ci/deploy-parked-mode.test.ts`. All five are reconciled by one authorized
+`scope-override/v1` comment pinned to the final head — re-issued once at the new
+head rather than stacked as a second override — not by editing the manifest: the
+guard reads the manifest from base precisely so a PR cannot widen its own scope.
+
+---
+
+## Verification
+
+ASSERTIONS:
+
+- [x] `pnpm verify` — exit 0 at the pre-correction tree, including `pnpm lint`,
+      `pnpm type-check`, `pnpm build`, `pnpm test` and `r-level-check`. At the
+      correction head `822d975d` the affected surfaces were re-executed directly
+      (`pnpm lint` exit 0, `pnpm type-check` exit 0, wiring suite 11/11); the
+      full `pnpm verify` at this head is produced by required CI, not claimed
+      here.
+- [x] Both applications build reproducibly; the Smart Form build blocker was
+      found by executing it, not by reading it.
+- [x] `web` and `smart-form` health-check paths each answer 200, proven
+      independently against their production builds.
+- [x] Deployment fails closed on absent server-side configuration at three
+      points: the `verify` secret inventory, the point of use in `canary` and
+      `promote`, and container startup.
+- [x] Empty `ALLOWED_CAPPER_EMAILS` refuses to start rather than admitting
+      nobody silently.
+- [x] `GOOGLE_CLIENT_SECRET`, `NEXTAUTH_SECRET` and `ALLOWED_CAPPER_EMAILS`
+      reach exactly one container, never a build arg, never a browser bundle,
+      never `.env.web`, `.env.edge` or `.env.production`.
+- [x] The QA authentication bypass cannot reach production: the deploy greps the
+      written env file and fails, and `isQaAuthBypassEnabled` returns `false`
+      unconditionally when `NODE_ENV=production`.
+- [x] No hostname is committed; all three are env vars, exactly as
+      `{$CADDY_DOMAIN}` already was. `CADDY_DOMAIN` is passed through unchanged —
+      the API keeps the hostname it has.
+- [x] Each Next.js surface has its own image tag, health check, memory limit and
+      no cross-dependency, so one can be rolled back without the other.
+- [x] Neither app publishes a host port; the Caddy edge is the sole ingress.
+- [x] All six newly referenced secrets are declared in
+      `docs/05_operations/REQUIRED_SECRETS.md`, which `ci-doctor` check `CW6`
+      enforces against the workflows.
+- [x] Zero files under `apps/` are modified.
+- [x] 13 mutations, 13 caught; artifacts byte-identical after each.
+
+EVIDENCE:
+
+```text
+$ pnpm exec tsx --test scripts/ci/nextjs-deploy-wiring.test.ts
+ok 1 - both Next.js apps are built and pushed by the deploy workflow
+ok 2 - deployment fails closed when required Next.js configuration is absent
+ok 3 - the QA authentication bypass never reaches production
+ok 4 - server-only credentials reach only the container that needs them
+ok 5 - Caddy routes every approved hostname from configuration, not from source
+ok 6 - each Next.js surface is independently deployable and rollable
+ok 7 - the shared image builds either app without an app-owned config change
+ok 8 - the build-time auth placeholder can never become the runtime secret
+ok 9 - the intake container refuses to start on a configuration that admits nobody
+1..9
+# tests 9
+# pass 9
+# fail 0
+```
+
+---
+
+## Residual risks and deferred work
+
+1. **The container images have not been built.** Docker is not installed in this
+   WSL distro. What is proven is the substance inside the Dockerfile — both
+   `pnpm --filter … build` invocations, executed here — and the workflow wiring
+   that invokes them. The image build itself is first exercised by the governed
+   `Deploy` dispatch, which cannot run until the owner installs the six secrets;
+   the deploy fails closed without them by design.
+
+2. **No production deployment is claimed.** Nothing in this lane deploys
+   anything. `Deploy` is `workflow_dispatch`-only and is not triggered here. The
+   lane is not "deployed" until a governed dispatch succeeds and both public URLs
+   are verified.
+
+3. **Independent rollback is structural, not executed.** Each service is pinned
+   to its own image tag with no cross-dependency, and the command is recorded in
+   `deploy/production/ENV_FILES.md`. Executing a rollback requires a deployed
+   server.
+
+4. **`cc.unittalk.com` is reserved, not served.** Command Center is out of scope;
+   no Caddy block claims that hostname, so it remains available.
+
+5. **Production containment is unchanged.** No paid ingestion, no member
+   delivery, no system picks; `SYNDICATE_MACHINE_ENABLED` handling is untouched.
