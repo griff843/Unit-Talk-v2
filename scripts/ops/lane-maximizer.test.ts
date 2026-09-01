@@ -12,6 +12,7 @@ import {
   evaluateCandidates,
   isBlockingLinearRelationType,
   parseQueueCandidates,
+  resolveCandidateSource,
   runMaximizerCli,
 } from './lane-maximizer.js';
 import { buildPnpmStateEnv } from './lane-start.js';
@@ -1387,6 +1388,19 @@ function allResults(report: MaximizationReport) {
 
 // AC1 / Defect 0. Mutation: restore `else -> parseCandidatesArg(argv)`.
 test('UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate source', async () => {
+  // Asserted FIRST and separately: under the pre-repair fallthrough,
+  // parseCandidatesArg() does a blocking read of fd 0, so a test that only
+  // observed the resulting empty board would hang rather than fail. The source
+  // selection is the control, so it is checked directly.
+  assert.equal(
+    resolveCandidateSource([]),
+    'linear',
+    'a bare argv must select the canonical Linear candidate source, never an argv/stdin parse',
+  );
+  assert.equal(resolveCandidateSource(['--from-queue']), 'queue');
+  assert.equal(resolveCandidateSource(['--candidates', '[]']), 'explicit');
+  assert.equal(resolveCandidateSource(['--from-linear']), 'linear');
+
   const outcome = await runMaximizerCli([], {
     linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]),
     activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
