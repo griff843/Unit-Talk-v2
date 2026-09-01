@@ -17,7 +17,10 @@ import {
   LINEAR_CANDIDATE_QUERY,
   evaluateCandidates,
   fetchLinearCandidates,
-  isBlockingLinearRelationType,
+  isPrerequisiteInverseRelation,
+  isPrerequisiteOutgoingRelation,
+  LINEAR_UNREADABLE_RELATIONS_SENTINEL,
+  LINEAR_CANDIDATE_QUERY,
   linearCandidateMaxPages,
   parseQueueCandidates,
   resolveCandidateSource,
@@ -314,9 +317,15 @@ test('candidate whose blocked_by is done is not blocked on BLOCKED_DEP', () => {
 });
 
 test('generic Linear related links are not treated as blocking dependencies', () => {
-  assert.equal(isBlockingLinearRelationType('related'), false);
-  assert.equal(isBlockingLinearRelationType('blocked_by'), true);
-  assert.equal(isBlockingLinearRelationType('blocks'), true);
+  // UTV2-1820: direction lives in the connection, not the type string. The
+  // same "blocks" edge appears on BOTH ends, so the outgoing copy must not be
+  // read as a prerequisite.
+  assert.equal(isPrerequisiteInverseRelation('related'), false);
+  assert.equal(isPrerequisiteInverseRelation('blocked_by'), true);
+  assert.equal(isPrerequisiteInverseRelation('blocks'), true);
+  assert.equal(isPrerequisiteOutgoingRelation('related'), false);
+  assert.equal(isPrerequisiteOutgoingRelation('blocks'), false);
+  assert.equal(isPrerequisiteOutgoingRelation('blocked_by'), true);
 });
 
 test('file scope overlap with active lane is blocked with OVERLAP', () => {
@@ -1338,6 +1347,10 @@ function candidateIssueNode(
     labels: { nodes: (overrides.labels ?? ['T2', 'lane:hygiene']).map((name) => ({ name })) },
     state: { name: 'Ready', type: 'unstarted' },
     relations: { nodes: [] },
+    // UTV2-1820: the real query now asks for `inverseRelations`, so a faithful
+    // fixture returns it. An ABSENT set is not "no prerequisites" -- it is an
+    // unreadable one, and is deliberately blocked; that path has its own test.
+    inverseRelations: { nodes: [] },
   };
 }
 
@@ -2261,4 +2274,157 @@ test('UTV2-1819 AC8: page size does not define the supported node ceiling', () =
       'the page bound must stay derived from the node ceiling, not float free of it',
     );
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1820 — dependency direction.
+//
+// Linear stores one row per relation and exposes it from BOTH ends with the
+// same `type: "blocks"`. Measured live on 2026-09-01 for the real edge
+// UTV2-1771 -> UTV2-1370:
+//
+//   UTV2-1771.relations        -> { type: "blocks", relatedIssue: UTV2-1370 }
+//   UTV2-1370.inverseRelations -> { type: "blocks", issue:        UTV2-1771 }
+//
+// So the type string carries no direction; the connection does. These tests
+// drive the REAL transport mapping, not a hand-built CandidateLane, because the
+// defect lived in the mapping and a candidate fixture would bypass it entirely.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function relationNode(
+  identifier: string,
+  relations: Array<{ type: string; relatedIssue: { identifier: string } | null }>,
+  inverseRelations:
+    | Array<{ type: string; issue: { identifier: string } | null }>
+    | undefined,
+): Record<string, unknown> {
+  const node = candidateIssueNode(identifier) as Record<string, unknown>;
+  node['relations'] = { nodes: relations };
+  if (inverseRelations === undefined) {
+    delete node['inverseRelations'];
+  } else {
+    node['inverseRelations'] = { nodes: inverseRelations };
+  }
+  return node;
+}
+
+/**
+ * Runs the REAL transport mapping and returns the resulting reason codes, which
+ * is what the dispatcher actually acts on. Asserting the decision rather than an
+ * intermediate field keeps these regressions honest: a mapper that produced the
+ * right `blocked_by` but never reached the dependency check would still pass a
+ * field-level assertion.
+ */
+async function reasonCodesFor(node: Record<string, unknown>): Promise<string[]> {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[node]]),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  const entry = allResults(outcome.report!)[0];
+  assert.ok(entry, 'the candidate must be discovered');
+  return entry.reason_codes ?? [];
+}
+
+// AC1 + AC3 (admit half). Mutation: read `blocks` off `relations` again.
+test('UTV2-1820 AC1: an outgoing "blocks" relation is not a prerequisite', async () => {
+  const codes = await reasonCodesFor(
+    relationNode(
+      'UTV2-9801',
+      [{ type: 'blocks', relatedIssue: { identifier: 'UTV2-9899' } }],
+      [],
+    ),
+  );
+
+  assert.ok(
+    !codes.includes('BLOCKED_DEP'),
+    `UTV2-9801 blocks UTV2-9899, so UTV2-9899 is downstream of it, not a prerequisite for it; got ${JSON.stringify(codes)}`,
+  );
+});
+
+// AC3 (refuse half). Mutation: stop reading `inverseRelations`.
+test('UTV2-1820 AC3: a real incoming prerequisite still blocks', async () => {
+  const codes = await reasonCodesFor(
+    relationNode('UTV2-9802', [], [
+      { type: 'blocks', issue: { identifier: 'UTV2-9898' } },
+    ]),
+  );
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'UTV2-9898 blocks UTV2-9802 on the inverse edge, so it IS a prerequisite',
+  );
+});
+
+// The exact shape the live board produced: the same issue is downstream of one
+// issue and genuinely blocked by another. Only the second may count.
+test('UTV2-1820: both edges at once — only the incoming one counts', async () => {
+  const codes = await reasonCodesFor(
+    relationNode(
+      'UTV2-9803',
+      [
+        { type: 'blocks', relatedIssue: { identifier: 'UTV2-9897' } },
+        { type: 'related', relatedIssue: { identifier: 'UTV2-9896' } },
+      ],
+      [
+        { type: 'blocks', issue: { identifier: 'UTV2-9895' } },
+        { type: 'related', issue: { identifier: 'UTV2-9894' } },
+      ],
+    ),
+  );
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'the incoming prerequisite UTV2-9895 must still block, and the outgoing edge must not',
+  );
+});
+
+// AC4. Mutation: treat a missing `inverseRelations` as an empty one.
+test('UTV2-1820 AC4: an absent relation set blocks rather than silently admitting', async () => {
+  const codes = await reasonCodesFor(relationNode('UTV2-9804', [], undefined));
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'a server that did not return the connection has told us nothing, not "unblocked"',
+  );
+});
+
+// AC4. A relation that IS returned but names no issue is equally unreadable.
+test('UTV2-1820 AC4: a prerequisite with no identifier blocks rather than vanishing', async () => {
+  const codes = await reasonCodesFor(
+    relationNode('UTV2-9805', [], [{ type: 'blocks', issue: null }]),
+  );
+
+  assert.deepStrictEqual(codes, ['BLOCKED_DEP']);
+});
+
+// The sentinel is only useful if it actually survives the completion check.
+test('UTV2-1820 AC4: the unreadable sentinel resolves to BLOCKED_DEP, not to done', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-9806', {
+        blocked_by: [LINEAR_UNREADABLE_RELATIONS_SENTINEL],
+        file_scope: ['scripts/ops/unreadable-relations.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'blocked'), ['UTV2-9806']);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['BLOCKED_DEP']);
+});
+
+// The query must actually ask for the edge the fix depends on. Without this,
+// deleting `inverseRelations` from the query would leave every candidate
+// carrying the sentinel and the failure would look like a board problem.
+test('UTV2-1820: the shipped query requests the inverse edge', () => {
+  assert.match(
+    LINEAR_CANDIDATE_QUERY,
+    /inverseRelations\s*\{\s*nodes\s*\{\s*type\s*issue\s*\{\s*identifier\s*\}/,
+    'the prerequisite edge must be in the real query text, not just in the mapper',
+  );
 });

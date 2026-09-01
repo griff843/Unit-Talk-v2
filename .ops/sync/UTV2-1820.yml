@@ -1,0 +1,155 @@
+version: 1
+approval:
+  status: approved
+  approved_by: pm
+  approved_at: 2026-09-01
+  note: 'PM FACTORY GO promoted UTV2-1820 to Ready for Claude as the single
+    production-unlocking factory-support lane. Objective only: correct the
+    dependency direction so outgoing "blocks" relations are not treated as
+    prerequisites, while genuine incoming blockers remain fail-closed.'
+entities:
+  issues:
+    - UTV2-1820
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1820
+  objective: lane-maximizer treats outgoing "blocks" relations as prerequisites,
+    so unblocking work is reported as blocked
+  acceptance_criteria:
+    - Outgoing `blocks` relations must not be counted as prerequisites. Only
+      relations that genuinely make this issue wait on another may produce
+      `BLOCKED_DEP`.
+    - Confirm against the live Linear schema which relation payload actually
+      expresses "this issue is blocked by X" for the `relations` connection as
+      queried, and cite the evidence. Do not infer the direction from the type
+      string alone.
+    - "A regression that FAILS on the current behaviour: a candidate whose only
+      relation is an outgoing `blocks` to an incomplete issue must be admitted;
+      a candidate with a real incoming prerequisite that is incomplete must
+      still be refused. Prove both by mutation."
+    - "Fail-closed behaviour is preserved: an unreadable or ambiguous relation
+      set must still block, never silently admit."
+  guardrails: []
+  non_goals:
+    - No change to ranking, tier policy, or any other admission criterion. This
+      issue fixes one inverted direction and nothing else.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Defect
+
+      `isBlockingLinearRelationType` in `scripts/ops/lane-maximizer.ts:790`
+      returns true for BOTH relation types:
+
+
+      ```ts
+
+      export function isBlockingLinearRelationType(type: string): boolean {
+        return type === 'blocks' || type === 'blocked_by';
+      }
+
+      ```
+
+
+      The `LaneCandidates` query reads `relations { nodes { type relatedIssue {
+      identifier } } }`, which returns relations where the candidate is the
+      SOURCE. On that edge, `type: "blocks"` means *this issue blocks the
+      related one* — the related issue is downstream, not a prerequisite. Only
+      `blocked_by` names a prerequisite.
+
+
+      The result is inverted: an issue that unblocks other work is reported as
+      blocked by that work, and is refused dispatch until its own dependents
+      complete — which they cannot, because they are waiting on it.
+    - |-
+      Evidence, measured against live Linear 2026-09-01
+      `pnpm ops:lane-maximizer` (with the [UTV2-1819](https://linear.app/unit-talk-v2/issue/UTV2-1819/lane-maximizer-candidate-discovery-fails-closed-on-every-bare) discovery fix applied) returns **10 candidates blocked solely on** `BLOCKED_DEP`:
+
+      `UTV2-1407, UTV2-1425, UTV2-1429, UTV2-1677, UTV2-1771, UTV2-1773, UTV2-1805, UTV2-1806, UTV2-1807, UTV2-1808`
+
+      Three of those are PM-ratified first-wave production issues, and all three have an empty `blockedBy` in Linear:
+
+      | Issue | Linear `blockedBy` | Linear `blocks` | Maximizer verdict |
+      | -- | -- | -- | -- |
+      | [UTV2-1425](https://linear.app/unit-talk-v2/issue/UTV2-1425/grading-heartbeat-proof-p3-data-gate-verdict-refresh) | `[]` | [UTV2-1508](https://linear.app/unit-talk-v2/issue/UTV2-1508/phase-1-product-truth-acceptance-gate-no-fixtures-null-truth-fields-or), [UTV2-1430](https://linear.app/unit-talk-v2/issue/UTV2-1430/shadow-stat-projection-live-scoring-plan) | `BLOCKED_DEP` |
+      | [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention) | `[]` | [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) | `BLOCKED_DEP` |
+      | [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) | `[]` | [UTV2-1774](https://linear.app/unit-talk-v2/issue/UTV2-1774/june-offline-replay-harness-prove-end-to-end-pipeline-before-provider), [UTV2-1775](https://linear.app/unit-talk-v2/issue/UTV2-1775/staging-canonical-reference-parity-seed-aliases-sportsbooks-leagues) | `BLOCKED_DEP` |
+
+      Each of the three also reports `file scope declared`, `acceptance criteria present`, `safe work class` — they clear every other admission check. `BLOCKED_DEP` is the only thing holding them.
+    - |-
+      Why this was invisible until now
+      Two masks had to come off first. Before [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) the candidate population was capped at 10 issues, and until the board was normalized these candidates failed earlier on `MISSING_FILE_SCOPE` / `MISSING_ACCEPTANCE_CRITERIA` and never reached the dependency check. The inversion has presumably been suppressing dispatch for as long as it has existed.
+    - |-
+      File scope
+      * `scripts/ops/lane-maximizer.ts`
+      * `scripts/ops/lane-maximizer.test.ts`
+      * `docs/06_status/lanes/UTV2-1820.json`
+      * `docs/06_status/proof/UTV2-1820/`
+    - |-
+      Provenance
+      Found while executing the PM factory ruling on [UTV2-1819](https://linear.app/unit-talk-v2/issue/UTV2-1819/lane-maximizer-candidate-discovery-fails-closed-on-every-bare), after normalizing the ratified first-wave issues. Filed, not dispatched, per standing policy on defects discovered mid-lane.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1820/lane-maximizer-treats-outgoing-blocks-relations-as-prerequisites-so
+    title: lane-maximizer treats outgoing "blocks" relations as prerequisites, so
+      unblocking work is reported as blocked
+    description: |-
+      ## Defect
+
+      `isBlockingLinearRelationType` in `scripts/ops/lane-maximizer.ts:790` returns true for BOTH relation types:
+
+      ```ts
+      export function isBlockingLinearRelationType(type: string): boolean {
+        return type === 'blocks' || type === 'blocked_by';
+      }
+      ```
+
+      The `LaneCandidates` query reads `relations { nodes { type relatedIssue { identifier } } }`, which returns relations where the candidate is the SOURCE. On that edge, `type: "blocks"` means *this issue blocks the related one* — the related issue is downstream, not a prerequisite. Only `blocked_by` names a prerequisite.
+
+      The result is inverted: an issue that unblocks other work is reported as blocked by that work, and is refused dispatch until its own dependents complete — which they cannot, because they are waiting on it.
+
+      ## Evidence, measured against live Linear 2026-09-01
+
+      `pnpm ops:lane-maximizer` (with the [UTV2-1819](https://linear.app/unit-talk-v2/issue/UTV2-1819/lane-maximizer-candidate-discovery-fails-closed-on-every-bare) discovery fix applied) returns **10 candidates blocked solely on** `BLOCKED_DEP`:
+
+      `UTV2-1407, UTV2-1425, UTV2-1429, UTV2-1677, UTV2-1771, UTV2-1773, UTV2-1805, UTV2-1806, UTV2-1807, UTV2-1808`
+
+      Three of those are PM-ratified first-wave production issues, and all three have an empty `blockedBy` in Linear:
+
+      | Issue | Linear `blockedBy` | Linear `blocks` | Maximizer verdict |
+      | -- | -- | -- | -- |
+      | [UTV2-1425](https://linear.app/unit-talk-v2/issue/UTV2-1425/grading-heartbeat-proof-p3-data-gate-verdict-refresh) | `[]` | [UTV2-1508](https://linear.app/unit-talk-v2/issue/UTV2-1508/phase-1-product-truth-acceptance-gate-no-fixtures-null-truth-fields-or), [UTV2-1430](https://linear.app/unit-talk-v2/issue/UTV2-1430/shadow-stat-projection-live-scoring-plan) | `BLOCKED_DEP` |
+      | [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention) | `[]` | [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) | `BLOCKED_DEP` |
+      | [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) | `[]` | [UTV2-1774](https://linear.app/unit-talk-v2/issue/UTV2-1774/june-offline-replay-harness-prove-end-to-end-pipeline-before-provider), [UTV2-1775](https://linear.app/unit-talk-v2/issue/UTV2-1775/staging-canonical-reference-parity-seed-aliases-sportsbooks-leagues) | `BLOCKED_DEP` |
+
+      Each of the three also reports `file scope declared`, `acceptance criteria present`, `safe work class` — they clear every other admission check. `BLOCKED_DEP` is the only thing holding them.
+
+      ## Why this was invisible until now
+
+      Two masks had to come off first. Before [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board) the candidate population was capped at 10 issues, and until the board was normalized these candidates failed earlier on `MISSING_FILE_SCOPE` / `MISSING_ACCEPTANCE_CRITERIA` and never reached the dependency check. The inversion has presumably been suppressing dispatch for as long as it has existed.
+
+      ## Acceptance Criteria
+
+      1. Outgoing `blocks` relations must not be counted as prerequisites. Only relations that genuinely make this issue wait on another may produce `BLOCKED_DEP`.
+      2. Confirm against the live Linear schema which relation payload actually expresses "this issue is blocked by X" for the `relations` connection as queried, and cite the evidence. Do not infer the direction from the type string alone.
+      3. A regression that FAILS on the current behaviour: a candidate whose only relation is an outgoing `blocks` to an incomplete issue must be admitted; a candidate with a real incoming prerequisite that is incomplete must still be refused. Prove both by mutation.
+      4. Fail-closed behaviour is preserved: an unreadable or ambiguous relation set must still block, never silently admit.
+
+      ## File scope
+
+      * `scripts/ops/lane-maximizer.ts`
+      * `scripts/ops/lane-maximizer.test.ts`
+      * `docs/06_status/lanes/UTV2-1820.json`
+      * `docs/06_status/proof/UTV2-1820/`
+
+      ## Non-goals
+
+      No change to ranking, tier policy, or any other admission criterion. This issue fixes one inverted direction and nothing else.
+
+      ## Provenance
+
+      Found while executing the PM factory ruling on [UTV2-1819](https://linear.app/unit-talk-v2/issue/UTV2-1819/lane-maximizer-candidate-discovery-fails-closed-on-every-bare), after normalizing the ratified first-wave issues. Filed, not dispatched, per standing policy on defects discovered mid-lane.
+    captured_at: 2026-09-01T22:59:04.185Z
+    description_sha256: f832bb862515ee255ec9db5116c90e6a0ad64b5409fa7fd415c41fba90311c44
+  contract_hash: 518680c27467fa43475c818985209cd2558d8811bd4d1d9bedf3c779082235a9

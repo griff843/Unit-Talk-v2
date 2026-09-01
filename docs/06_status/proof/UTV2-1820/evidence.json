@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1820",
+  "tier": "T2",
+  "lane_type": "governance",
+  "status": "verified",
+  "sha_binding": {
+    "verified_source_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
+    "evidence_commit_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
+    "current_pr_head_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
+      "current_pr_head_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670"
+    },
+    "note": "7044e59b2698190e8f7c225e14ed2b7a52b35670 is the last non-proof commit on this branch. This bundle is a proof-only commit on top of it. merge_sha is null because it is authored pre-merge.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-09-01T00:00:00Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
+      "exit_code": 0,
+      "row_counts": { "tests": 88, "pass": 88, "fail": 0, "pre_existing": 81, "new": 7 }
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "is_pass": false,
+      "row_counts": { "tests": 5545, "pass": 5545, "fail": 0, "skipped": 0, "not_ok_lines": 0 },
+      "note": "This command FAILED, exit 1, and is recorded as a refusal rather than a pass. Every stage through verify:commands was exit 0; the non-zero exit is test:live-db, where assert-staging-target refuses a workstation target by design."
+    },
+    "type_check": { "command": "pnpm type-check", "exit_code": 0 }
+  },
+  "runtime_proof": {
+    "profile": "static",
+    "live_api_probe": {
+      "command": "pnpm ops:lane-maximizer --json",
+      "target": "api.linear.app (live), team UTV2 (00075741-4bdd-49ac-942e-eee06cc56fb5)",
+      "exit_code": 0,
+      "candidates_total": 107,
+      "blocked_solely_on_blocked_dep_after": ["UTV2-1677", "UTV2-1806", "UTV2-1807", "UTV2-1808"],
+      "blocked_solely_on_blocked_dep_before": ["UTV2-1407", "UTV2-1425", "UTV2-1429", "UTV2-1677", "UTV2-1771", "UTV2-1773", "UTV2-1805", "UTV2-1806", "UTV2-1807", "UTV2-1808"],
+      "note": "10 -> 4. Each of the six freed candidates was independently confirmed against live Linear to have an EMPTY incoming blocker set, and each of the four still refused to have a real incomplete incoming blocker. The fix does not simply unblock everything."
+    },
+    "direction_evidence": {
+      "source": "api.linear.app GraphQL, 2026-09-01",
+      "edge": "UTV2-1771 -> UTV2-1370",
+      "observed": {
+        "UTV2-1771.relations": [{ "type": "blocks", "relatedIssue": "UTV2-1370" }],
+        "UTV2-1370.inverseRelations": [{ "type": "blocks", "issue": "UTV2-1771" }]
+      },
+      "conclusion": "The same edge carries type 'blocks' on BOTH ends, so the type string encodes no direction. The connection does: relations is outgoing (downstream), inverseRelations is incoming (prerequisite)."
+    },
+    "complexity_remeasurement": {
+      "method": "the real LINEAR_CANDIDATE_QUERY text, varying only first:",
+      "two_connections": { "100": "400 complexity 11601", "75": "OK", "60": "OK", "50": "OK", "40": "OK", "30": "OK" },
+      "three_connections": { "100": "400 complexity 22601", "75": "400 complexity 16951", "60": "400 complexity 13561", "50": "400 complexity 11301", "40": "OK", "30": "OK" },
+      "per_node_before": 116.01,
+      "per_node_after": 226.01,
+      "page_size_before": 50,
+      "page_size_after": 30,
+      "note": "The previously-correct page size of 50 would be rejected outright under the new selection, reproducing the UTV2-1819 outage. UTV2-1819's AC4 guard is what forced the re-measurement; mutation N4 shows it firing."
+    }
+  },
+  "mutation_proof": {
+    "results": [
+      {
+        "id": "N1",
+        "mutation": "restore the shipped inversion: outgoing 'blocks' counts as a prerequisite",
+        "under_mutation": { "tests": 88, "pass": 86, "fail": 2 },
+        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "caught_by": "UTV2-1820 AC1, plus the pre-existing related-links regression"
+      },
+      {
+        "id": "N2",
+        "mutation": "stop reading the inverse edge (fail open on real prerequisites)",
+        "under_mutation": { "tests": 88, "pass": 84, "fail": 4 },
+        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "caught_by": "UTV2-1820 AC3 and both AC4 cases",
+        "note": "AC1 correctly does NOT fire: dropping the inverse edge makes the tool block less, not more, so only the refusal tests can catch it."
+      },
+      {
+        "id": "N3",
+        "mutation": "treat an absent relation set as an empty one",
+        "under_mutation": { "tests": 88, "pass": 87, "fail": 1 },
+        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "caught_by": "UTV2-1820 AC4 (absent set)",
+        "note": "Exactly one test owns this property and it fires."
+      },
+      {
+        "id": "N4",
+        "mutation": "drop inverseRelations from the shipped query only",
+        "under_mutation": { "tests": 88, "pass": 86, "fail": 2 },
+        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "caught_by": "UTV2-1820 query assertion and UTV2-1819 AC4",
+        "note": "Cross-lane: UTV2-1819's complexity guard fires on the selection change, which is exactly what it was built for."
+      }
+    ]
+  },
+  "known_limitations": [
+    "The page size drop to 30 is a real throughput cost: a full board takes an extra round trip and the derived page bound rises to 334. Keeping 50 is not an option -- it is rejected outright.",
+    "226.01 per node is a single live measurement from 2026-09-01. A server-side re-pricing by Linear invalidates it and no offline test can detect that.",
+    "blocked_by is accepted on both edges but was never observed on either in this team; that branch is reasoned-about, not measured. It is deliberately the fail-closed direction, since accepting it can only add prerequisites.",
+    "The regressions use the in-process fake transport and prove the mapping and refusal, not Linear's real cursor semantics. The live probe is the only end-to-end evidence here.",
+    "LINEAR_UNREADABLE_RELATIONS_SENTINEL is a string identifier and would collide with an issue literally named UNREADABLE-RELATIONS. No such identifier exists in the UTV2-\\d+ scheme."
+  ],
+  "files_changed": [
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts"
+  ]
+}
