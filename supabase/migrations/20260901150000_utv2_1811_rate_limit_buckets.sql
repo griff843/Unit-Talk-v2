@@ -56,6 +56,32 @@ BEGIN
       MESSAGE = 'public.rate_limit_buckets already exists; UTV2-1811 refuses to apply over a relation it did not create.',
       HINT    = 'Inspect the existing relation. If it already matches this migration, register this version as applied (supabase migration repair --status applied) under explicit operator authorization instead of executing it.';
   END IF;
+
+  -- The function is a second, independent way this migration could collide, and the
+  -- table check does not cover it: a function can exist with no table, and the first
+  -- version of this migration used CREATE OR REPLACE, which would have silently
+  -- overwritten an unknown pre-existing implementation. Overwriting is the worst
+  -- available outcome here — it destroys whatever the previous body was, leaves no
+  -- record of it, and cannot be undone by this migration's own down script.
+  --
+  -- Matched on the exact callable identity, not the bare name, because that is what
+  -- PostgREST resolves and what SupabaseRpcApiRateLimitStore actually calls. A function
+  -- of the same name with a different argument list is a different object and is
+  -- reported as such rather than being quietly replaced or quietly ignored.
+  --
+  -- to_regprocedure resolves the exact callable identity and returns NULL when there is
+  -- no such function, which is precisely the question being asked. It is used in
+  -- preference to comparing pg_get_function_identity_arguments against a string: that
+  -- output includes PARAMETER NAMES ('p_key text, p_window_start timestamp with time
+  -- zone, ...'), so a type-only comparison silently never matches. That exact mistake was
+  -- made here first and was caught by executing the guard against a database that really
+  -- did hold the function, not by reading it.
+  IF to_regprocedure('public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer)') IS NOT NULL THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '42723',
+      MESSAGE = 'public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer) already exists; UTV2-1811 refuses to replace a function it did not create.',
+      HINT    = 'Inspect the existing function with \\df+ public.consume_rate_limit_bucket. If it already matches this migration, register this version as applied (supabase migration repair --status applied) under explicit operator authorization instead of executing it.';
+  END IF;
 END;
 $$;
 
@@ -83,7 +109,7 @@ CREATE INDEX rate_limit_buckets_key_expires_at_idx
 -- with zero policies is the deny-by-default posture, not an oversight.
 ALTER TABLE public.rate_limit_buckets ENABLE ROW LEVEL SECURITY;
 
-CREATE OR REPLACE FUNCTION public.consume_rate_limit_bucket(
+CREATE FUNCTION public.consume_rate_limit_bucket(
   p_key text,
   p_window_start timestamptz,
   p_window_expires_at timestamptz,

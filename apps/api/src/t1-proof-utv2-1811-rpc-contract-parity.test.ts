@@ -26,7 +26,8 @@
  * never defines.
  */
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -115,17 +116,128 @@ function collectRpcCallSites(): RpcCallSite[] {
   return sites;
 }
 
-function governedFunctionNames(): Set<string> {
+/**
+ * Removes SQL comments so a commented-out definition cannot satisfy the parity check.
+ *
+ * This was a real defect in the first version of this test: the scan matched raw file text,
+ * so a migration containing only
+ *
+ *   -- CREATE FUNCTION public.consume_rate_limit_bucket(...)
+ *
+ * would have registered the name as governed. That is the precise failure mode this whole
+ * test exists to catch — a function that is described somewhere but never actually created —
+ * so the check could have been satisfied by the very thing it is meant to detect.
+ *
+ * A regex cannot do this correctly, because `--` and the block-comment delimiters are
+ * ordinary characters inside string literals and dollar-quoted bodies. So this walks the
+ * text once, tracking which construct it is inside:
+ *
+ *   - single-quoted literals, where '' is an escaped quote rather than a terminator;
+ *   - dollar-quoted bodies ($$ ... $$ or $tag$ ... $tag$), which is how every function body
+ *     in this repository is written, and inside which -- is not a comment at all;
+ *   - double-quoted identifiers, where "" is likewise an escaped quote;
+ *   - line comments, ended by a newline;
+ *   - block comments, which nest in PostgreSQL.
+ *
+ * Comment characters are replaced with spaces rather than removed, so offsets are preserved
+ * and a stripped file stays line-for-line comparable with its source.
+ *
+ * Literal contents are deliberately KEPT. A `CREATE FUNCTION` inside a dollar-quoted body is
+ * usually real, executable dynamic DDL (`EXECUTE format('CREATE FUNCTION ...')`), and this
+ * check errs toward treating a name as governed rather than raising a false alarm on a call
+ * site that is in fact backed. The narrower, correct reading — that only top-level DDL counts —
+ * would need a real parser, which is out of proportion here. Comment stripping is the part
+ * that closes the demonstrated hole.
+ */
+export function stripSqlComments(sql: string): string {
+  const out = sql.split('');
+  const blank = (from: number, to: number): void => {
+    for (let k = from; k < to; k += 1) {
+      if (out[k] !== '\n') out[k] = ' ';
+    }
+  };
+
+  let i = 0;
+  while (i < sql.length) {
+    const two = sql.slice(i, i + 2);
+
+    if (two === '--') {
+      const end = sql.indexOf('\n', i);
+      const stop = end === -1 ? sql.length : end;
+      blank(i, stop);
+      i = stop;
+      continue;
+    }
+
+    if (two === '/*') {
+      // PostgreSQL block comments nest, so count depth rather than scanning for the first */.
+      let depth = 1;
+      let j = i + 2;
+      while (j < sql.length && depth > 0) {
+        if (sql.startsWith('/*', j)) {
+          depth += 1;
+          j += 2;
+        } else if (sql.startsWith('*/', j)) {
+          depth -= 1;
+          j += 2;
+        } else {
+          j += 1;
+        }
+      }
+      blank(i, j);
+      i = j;
+      continue;
+    }
+
+    if (sql[i] === "'" || sql[i] === '"') {
+      const quote = sql[i]!;
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === quote) {
+          if (sql[j + 1] === quote) {
+            j += 2; // doubled quote is an escape, not a terminator
+            continue;
+          }
+          j += 1;
+          break;
+        }
+        j += 1;
+      }
+      i = j;
+      continue;
+    }
+
+    const dollar = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(sql.slice(i));
+    if (dollar) {
+      const tag = dollar[0];
+      const close = sql.indexOf(tag, i + tag.length);
+      i = close === -1 ? sql.length : close + tag.length;
+      continue;
+    }
+
+    i += 1;
+  }
+
+  return out.join('');
+}
+
+const CREATE_FUNCTION_PATTERN =
+  /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?\s*\(/gi;
+
+export function governedFunctionNamesIn(migrationsDir: string): Set<string> {
   const names = new Set<string>();
-  const pattern = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?"?([A-Za-z_][A-Za-z0-9_]*)"?\s*\(/gi;
-  for (const entry of readdirSync(MIGRATIONS_DIR)) {
+  for (const entry of readdirSync(migrationsDir)) {
     if (extname(entry) !== '.sql') continue;
-    const contents = readFileSync(join(MIGRATIONS_DIR, entry), 'utf8');
-    for (const match of contents.matchAll(pattern)) {
+    const executable = stripSqlComments(readFileSync(join(migrationsDir, entry), 'utf8'));
+    for (const match of executable.matchAll(CREATE_FUNCTION_PATTERN)) {
       names.add(match[1]!);
     }
   }
   return names;
+}
+
+function governedFunctionNames(): Set<string> {
+  return governedFunctionNamesIn(MIGRATIONS_DIR);
 }
 
 test('every runtime client.rpc() dependency is defined by a governed migration', () => {
@@ -188,5 +300,156 @@ test('the known-gap allowlist is still describing real gaps', () => {
     unreferenced,
     [],
     'No runtime code calls these any more, so their allowlist entries must be deleted (see UTV2-1814).',
+  );
+});
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The scan's own correctness. A commented-out definition satisfying the parity check was a
+// real defect in this file's first version: the check could have been satisfied by exactly
+// the condition it exists to detect. These tests are the control for that, and they are
+// written against fixtures rather than the repository so they assert the rule itself and
+// not today's migration set.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const EXECUTABLE_DEFINITION = `
+CREATE TABLE public.rate_limit_buckets (key text PRIMARY KEY);
+
+CREATE FUNCTION public.consume_rate_limit_bucket(
+  p_key text, p_window_start timestamptz, p_window_expires_at timestamptz, p_limit integer)
+RETURNS boolean
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN false;
+END;
+$$;
+`;
+
+function withMigrationsFixture<T>(files: Record<string, string>, run: (dir: string) => T): T {
+  const dir = mkdtempSync(join(tmpdir(), 'utv2-1811-parity-'));
+  try {
+    for (const [name, contents] of Object.entries(files)) {
+      writeFileSync(join(dir, name), contents, 'utf8');
+    }
+    return run(dir);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test('a commented-out CREATE FUNCTION does not make a function governed', () => {
+  // Line comment — the exact shape the PM named.
+  const lineCommented = withMigrationsFixture(
+    { '20260101000000_line.sql': '-- CREATE FUNCTION public.consume_rate_limit_bucket(p_key text)\n' },
+    governedFunctionNamesIn,
+  );
+  assert.equal(
+    lineCommented.has('consume_rate_limit_bucket'),
+    false,
+    'a line-commented definition was treated as governed; the parity check can be satisfied by the defect it detects',
+  );
+
+  // Block comment, including the nested case PostgreSQL actually supports.
+  const blockCommented = withMigrationsFixture(
+    {
+      '20260101000000_block.sql': '/* CREATE FUNCTION public.consume_rate_limit_bucket(p_key text); */\n',
+      '20260101000001_nested.sql':
+        '/* outer /* inner */ CREATE FUNCTION public.nested_only_in_comment(p_key text); */\n',
+    },
+    governedFunctionNamesIn,
+  );
+  assert.equal(blockCommented.has('consume_rate_limit_bucket'), false, 'block-commented definition counted');
+  assert.equal(blockCommented.has('nested_only_in_comment'), false, 'nested block comment terminated early');
+
+  // A definition that is merely *described* in a comment above the real thing must not
+  // rescue a migration whose executable half defines something else.
+  const describedButNotCreated = withMigrationsFixture(
+    {
+      '20260101000000_described.sql':
+        '-- This migration will eventually add:\n' +
+        '--   CREATE FUNCTION public.not_yet_written(p_key text)\n' +
+        'CREATE FUNCTION public.actually_written(p_key text) RETURNS void LANGUAGE sql AS $$ SELECT 1 $$;\n',
+    },
+    governedFunctionNamesIn,
+  );
+  assert.equal(describedButNotCreated.has('not_yet_written'), false, 'commented plan counted as governed');
+  assert.equal(describedButNotCreated.has('actually_written'), true, 'real definition alongside a comment was lost');
+});
+
+test('a real executable CREATE FUNCTION is still governed', () => {
+  const governed = withMigrationsFixture(
+    { '20260101000000_real.sql': EXECUTABLE_DEFINITION },
+    governedFunctionNamesIn,
+  );
+  assert.equal(
+    governed.has('consume_rate_limit_bucket'),
+    true,
+    'the executable definition was not recognised; comment stripping is over-eager',
+  );
+});
+
+test('commenting out the real definition flips the same fixture from governed to missing', () => {
+  // The mutation, run as a test rather than described in prose: one fixture, one edit, and
+  // the result must invert. A stripper that silently did nothing would pass the "real
+  // definition is governed" test above and fail here.
+  const real = withMigrationsFixture(
+    { '20260101000000_real.sql': EXECUTABLE_DEFINITION },
+    governedFunctionNamesIn,
+  );
+  const commented = withMigrationsFixture(
+    {
+      '20260101000000_real.sql': EXECUTABLE_DEFINITION.split('\n')
+        .map((line) => `-- ${line}`)
+        .join('\n'),
+    },
+    governedFunctionNamesIn,
+  );
+
+  assert.equal(real.has('consume_rate_limit_bucket'), true);
+  assert.equal(
+    commented.has('consume_rate_limit_bucket'),
+    false,
+    'commenting out the definition left it governed; the parity check does not distinguish code from comment',
+  );
+});
+
+test('comment characters inside literals and function bodies are not treated as comments', () => {
+  // The reason this needs a walker rather than a regex. Each of these would break a naive
+  // strip: the body is dollar-quoted and contains --, and the literal contains /*.
+  const governed = withMigrationsFixture(
+    {
+      '20260101000000_literals.sql': `
+CREATE FUNCTION public.body_contains_dashes(p_key text)
+RETURNS text
+LANGUAGE plpgsql
+AS $body$
+BEGIN
+  -- this is a comment inside a dollar-quoted body, and the $body$ tag must survive it
+  RETURN 'a string with -- and /* inside it';
+END;
+$body$;
+
+CREATE FUNCTION public.after_the_body(p_key text) RETURNS void LANGUAGE sql AS $$ SELECT 1 $$;
+`,
+    },
+    governedFunctionNamesIn,
+  );
+
+  assert.equal(governed.has('body_contains_dashes'), true, 'the first definition was lost');
+  assert.equal(
+    governed.has('after_the_body'),
+    true,
+    'a definition after a dollar-quoted body was lost, so the scan mis-tracked where the body ended',
+  );
+});
+
+test('the repository migration set defines consume_rate_limit_bucket in executable SQL', () => {
+  // Ties the fixture-level rule back to the actual deliverable: after comment stripping, the
+  // real migration must still define the function this lane exists to add.
+  assert.equal(
+    governedFunctionNames().has('consume_rate_limit_bucket'),
+    true,
+    'consume_rate_limit_bucket is not defined in executable SQL under supabase/migrations/',
   );
 });
