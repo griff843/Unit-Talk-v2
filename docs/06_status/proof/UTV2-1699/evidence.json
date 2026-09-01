@@ -1,0 +1,155 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1699",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "verified",
+  "sha_binding": {
+    "verified_source_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76",
+    "evidence_commit_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76",
+    "current_pr_head_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76",
+      "current_pr_head_sha": "6c67131294141c4f4be1acd6f16f94b8c6614a76"
+    },
+    "note": "6c67131294141c4f4be1acd6f16f94b8c6614a76 is the last non-proof commit on this branch — the implementation plus its regressions. Every receipt in verification.md was executed against this exact tree. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM's.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-09-01T15:05:00.000Z"
+  },
+  "static_proof": {
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "failing_stage": "test:live-db",
+      "reason": "[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx — writable DB verification is only obtainable inside the staging-ci GitHub environment.",
+      "note": "Every stage before it is exit 0. This lane touches no schema, migration, DB client or query; the writable receipt is produced inside required CI verify, not claimed here."
+    },
+    "env_check": { "command": "pnpm env:check", "exit_code": 0 },
+    "lint": { "command": "pnpm lint", "exit_code": 0 },
+    "type_check": { "command": "pnpm type-check", "exit_code": 0 },
+    "build": { "command": "pnpm build", "exit_code": 0 },
+    "test": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "tests": 5524,
+      "pass": 5524,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "not_ok_lines_in_log": 0
+    },
+    "verify_static": { "command": "pnpm verify:static", "exit_code": 0 },
+    "verify_commands": { "command": "pnpm verify:commands", "exit_code": 0 },
+    "lane_regression_file": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
+      "exit_code": 0,
+      "tests": 67,
+      "pass": 67,
+      "fail": 0,
+      "skipped": 0,
+      "pre_existing": 56,
+      "new_tests": [
+        "ok 58 - UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate source",
+        "ok 59 - UTV2-1699 AC2: candidate discovery paginates past the first page",
+        "ok 60 - UTV2-1699 AC2: a truncated page walk fails closed instead of returning a partial population",
+        "ok 61 - UTV2-1699 AC3: candidate-source failure exits non-zero with a candidate-discovery code",
+        "ok 62 - UTV2-1699 AC3: a Linear auth failure fails closed as candidate discovery",
+        "ok 63 - UTV2-1699 AC4: active-lane discovery failure exits non-zero with a DISTINCT code",
+        "ok 64 - UTV2-1699 AC4: an unreadable lane manifest is a failure, not a smaller board",
+        "ok 65 - UTV2-1699 AC5: a genuinely empty candidate population still exits 0",
+        "ok 66 - UTV2-1699 AC6: a PR-head-only lane manifest is counted as active",
+        "ok 67 - UTV2-1699 AC8: ranking output is unchanged for a fixed candidate set"
+      ]
+    },
+    "r_level_check": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1699",
+      "exit_code": 0,
+      "verdict": "PASS",
+      "note": "The R-level rules key on schema, migration, delivery and domain paths; this lane touches none of them."
+    }
+  },
+  "mutation_proof": {
+    "method": "One control broken at a time in scripts/ops/lane-maximizer.ts; the named regression executed under the mutation and observed to FAIL, then the file restored from the committed blob and the same regression observed to PASS. The test file was never modified during the matrix. Literal output for all four is embedded in verification.md.",
+    "results": [
+      {
+        "id": "M1",
+        "mutation": "restore the catch that empties both candidates and activeLanes and exits 0",
+        "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC3|UTV2-1699 AC4' scripts/ops/lane-maximizer.test.ts",
+        "under_mutation": { "exit_code": 1, "tests": 4, "pass": 0, "fail": 4 },
+        "after_revert": { "exit_code": 0, "tests": 4, "pass": 4, "fail": 0 },
+        "caught_by": "not ok 1..4 — 'a candidate-source failure must never exit 0' and 'an unknown active board must never exit 0', both 0 !== 1"
+      },
+      {
+        "id": "M2",
+        "mutation": "restore the else -> parseCandidatesArg(argv) fallthrough for a bare argv",
+        "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC1' scripts/ops/lane-maximizer.test.ts",
+        "under_mutation": { "exit_code": 1, "tests": 1, "pass": 0, "fail": 1 },
+        "after_revert": { "exit_code": 0, "tests": 1, "pass": 1, "fail": 0 },
+        "caught_by": "not ok 1 — expected 'linear', actual 'explicit'"
+      },
+      {
+        "id": "M3",
+        "mutation": "restore the hard limit of 10 (clamped to 50) and drop the cursor walk",
+        "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC2' scripts/ops/lane-maximizer.test.ts",
+        "under_mutation": { "exit_code": 1, "tests": 2, "pass": 0, "fail": 2 },
+        "after_revert": { "exit_code": 0, "tests": 2, "pass": 2, "fail": 0 },
+        "caught_by": "not ok 1 — actual ['UTV2-9101'], expected ['UTV2-9101','UTV2-9102','UTV2-9103']"
+      },
+      {
+        "id": "M4",
+        "mutation": "revert resolveActiveLanesCanonically to the local-manifest-only readActiveLanes",
+        "regression": "pnpm exec tsx --test --test-name-pattern 'UTV2-1699 AC6' scripts/ops/lane-maximizer.test.ts",
+        "under_mutation": { "exit_code": 1, "tests": 1, "pass": 0, "fail": 1 },
+        "after_revert": { "exit_code": 0, "tests": 1, "pass": 1, "fail": 0 },
+        "caught_by": "not ok 1 — 'a lane whose manifest exists only on its open PR head must count against capacity', 0 !== 1"
+      }
+    ],
+    "caught": 4,
+    "total": 4
+  },
+  "ranking_invariance_proof": {
+    "method": "The same fixed three-candidate set run through evaluateCandidates on the pre-change implementation (restored from base e48106fc9a5eb5904b322833d0968da5ae0b0665) and on this lane's implementation, then diffed.",
+    "baseline_ref": "e48106fc9a5eb5904b322833d0968da5ae0b0665",
+    "result": "IDENTICAL",
+    "values": [
+      { "issue_id": "UTV2-RANK-A", "rank": 1, "ranking_score": 80 },
+      { "issue_id": "UTV2-RANK-B", "rank": 3, "ranking_score": -25 },
+      { "issue_id": "UTV2-RANK-C", "rank": 2, "ranking_score": 45 }
+    ],
+    "note": "scoreCandidate, rankCandidates and evaluateCandidates are byte-identical to base. Ranking policy belongs to UTV2-1769."
+  },
+  "scope_proof": {
+    "files_changed": 2,
+    "paths": [
+      "scripts/ops/lane-maximizer.ts",
+      "scripts/ops/lane-maximizer.test.ts"
+    ],
+    "not_modified": [
+      "scoreCandidate / rankCandidates / evaluateCandidates ranking policy",
+      "docs/governance/CONCURRENCY_CONFIG.json",
+      "scripts/ops/concurrency-rules.ts",
+      "scripts/ops/shared.ts",
+      "scripts/ops/lane-start.ts",
+      "branch protection and merge authority",
+      "any migration, schema, DB client or query",
+      "provider ingestion, system picks and member delivery (all parked)"
+    ]
+  },
+  "containment": {
+    "production_writes": "none",
+    "production_deployment_triggered": false,
+    "db_queries_executed": "none",
+    "paid_ingestion": "unchanged (parked)",
+    "member_delivery": "unchanged (disabled)",
+    "system_picks": "unchanged (disabled)",
+    "linear_api_calls": "none from the test suite — every Linear interaction in the new regressions runs against an injected in-process fake transport",
+    "note": "No lane was started, no dispatch was performed, and ops:lane-maximizer was not run against the live board as part of this proof."
+  },
+  "open_items": [
+    "pnpm verify cannot reach exit 0 on a workstation: test:live-db refuses any non-staging target by design. The writable receipt is produced inside required CI verify.",
+    "This lane makes the board visible; it deliberately does not change which candidate is picked from it. Production-first ranking is UTV2-1769.",
+    "The dispatch skills' prose (.claude/commands/dispatch*.md, loop-dispatch.md) still describes lane-maximizer's output as always report-shaped and does not mention the two new fail-closed exit codes. Out of this lane's file scope; flagged for a follow-up."
+  ]
+}
