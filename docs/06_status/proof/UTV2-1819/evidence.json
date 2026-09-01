@@ -21,7 +21,36 @@
     "unit_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
       "exit_code": 0,
-      "row_counts": { "tests": 78, "pass": 78, "fail": 0, "pre_existing": 75, "new": 3 }
+      "row_counts": {
+        "tests": 78,
+        "pass": 78,
+        "fail": 0,
+        "pre_existing": 75,
+        "new": 3
+      }
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "row_counts": {
+        "tests": 5535,
+        "pass": 5535,
+        "fail": 0,
+        "skipped": 0,
+        "not_ok_lines": 0
+      },
+      "note": "env:check, lint, type-check, build, the whole pnpm test tree, verify:static and verify:commands are all exit 0. The only non-zero step is test:live-db, where assert-staging-target refuses a workstation target (host=127.0.0.1, expected xskgrzbteyqdufktjrjx). This lane touches no schema, migration, DB client or query; the writable staging receipt is produced inside required CI verify."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1819",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": []
     }
   },
   "runtime_proof": {
@@ -40,16 +69,32 @@
       {
         "id": "M1",
         "mutation": "restore LINEAR_CANDIDATE_PAGE_SIZE = 100 (the shipped defect)",
-        "under_mutation": { "tests": 3, "pass": 2, "fail": 1 },
-        "after_revert": { "tests": 3, "pass": 3, "fail": 0 },
+        "under_mutation": {
+          "tests": 3,
+          "pass": 2,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0
+        },
         "caught_by": "UTV2-1819 AC2",
         "note": "AC3 passes under M1 and cannot catch it: AC3 compares the wire limit to the same constant, so the expectation moves with the mutation. AC2 is the sole guard on the constant's value. Recorded as a limit rather than claimed as coverage."
       },
       {
         "id": "M2",
         "mutation": "add a third nested connection (comments { nodes { body } }) to the node selection",
-        "under_mutation": { "tests": 3, "pass": 2, "fail": 1 },
-        "after_revert": { "tests": 3, "pass": 3, "fail": 0 },
+        "under_mutation": {
+          "tests": 3,
+          "pass": 2,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0
+        },
         "caught_by": "UTV2-1819 AC4",
         "note": "AC2 correctly does not fire here: the constant is still in budget, but the per-node measurement behind it has gone stale. This is the mutation that matters, because widening the selection silently re-prices every node."
       }

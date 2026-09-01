@@ -137,6 +137,73 @@ fire, because the constant itself is still fine — only the measurement behind 
 `git status --porcelain scripts/ops/lane-maximizer.ts` reported the file modified only while a
 mutation was applied, and clean against the committed anchor afterwards.
 
+## EVIDENCE:
+
+Commands executed against the proof anchor, in the lane worktree.
+
+### `pnpm verify`
+
+```text
+$ pnpm verify
+...
+# tests 5535
+# pass 5535
+# fail 0
+# skipped 0
+```
+
+Zero `not ok` lines across the whole run (`grep -cE '^not ok'` = 0). `pnpm verify` exits 1 at the
+final `test:live-db` step only:
+
+```text
+> tsx scripts/ci/assert-staging-target.ts
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub
+environment with CI_SUPABASE_* credentials.
+```
+
+`env:check`, `lint`, `pnpm type-check`, `build`, the entire `pnpm test` tree, `verify:static` and
+`verify:commands` are all exit 0. This lane touches no schema, migration, DB client or query; the
+writable staging receipt is produced inside required CI `verify`, which is the authority for it.
+
+### `pnpm type-check`
+
+```text
+$ pnpm type-check
+> pnpm exec tsc -b tsconfig.json
+```
+
+Exit 0, no diagnostics.
+
+### `pnpm test`
+
+The full `pnpm test` tree runs inside `pnpm verify` above: 5535 tests, 5535 pass, 0 fail, 0 skipped.
+The lane's own suite in isolation:
+
+```text
+$ pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts
+1..78
+# tests 78
+# pass 78
+# fail 0
+```
+
+### `scripts/ci/r-level-check.ts`
+
+```text
+$ pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1819
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+### `pnpm ops:sync-check`
+
+```text
+[sync-check] OK (per-issue): branch "claude/utv2-1819-lane-maximizer-page-size" <-> .ops/sync/UTV2-1819.yml
+```
+
 ## Scope boundary
 
 No ranking, admission, tier or business-policy logic is touched. `git diff` is confined to
