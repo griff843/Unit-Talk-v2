@@ -224,12 +224,29 @@ export async function ingestOddsApiLeague(
       upsertResult.totalProcessed += chunkResult.totalProcessed;
     }
 
-    // Mark closing lines for any events that have already started
+    // Mark closing lines for any events that have already started.
+    //
+    // includeBookmakerKey is passed for symmetry with ingest-league.ts, which already
+    // passes it. It changes nothing on this path today: this ingester encodes the book in
+    // provider_key ("odds-api:fanduel") and leaves bookmaker_key null, so the books are
+    // already distinct in the de-duplication key either way, and this path has never
+    // written a row to provider_offer_history in production -- every one of the 14.4M rows
+    // there carries provider_key 'sgo'.
+    //
+    // It is passed anyway because the collapsed key is a live hazard on the shape that IS
+    // in production. sgo rows share one provider_key and carry the book in bookmaker_key,
+    // so without this option a single observed event's 1,318 offers collapse to 264
+    // de-duplication keys across 7 books and six of them silently never receive a closing
+    // line. CLV is computed per book, so that is the wrong answer rather than a smaller
+    // one. Leaving one caller able to produce it is a defect waiting for the first sgo-
+    // shaped payload to arrive here (UTV2-1796).
     const eventsForClosing = result.events.map((e) => ({
       providerEventId: e.id,
       commenceTime: e.commence_time,
     }));
-    await repositories.providerOffers.markClosingLines(eventsForClosing, snapshotAt);
+    await repositories.providerOffers.markClosingLines(eventsForClosing, snapshotAt, {
+      includeBookmakerKey: true,
+    });
     const inserted = upsertResult.insertedCount;
     const skipped = upsertResult.totalProcessed - upsertResult.insertedCount - upsertResult.updatedCount;
     const partialFailure =
