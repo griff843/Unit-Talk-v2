@@ -1,6 +1,6 @@
 # PROOF: UTV2-1820
 
-MERGE_SHA: 7044e59b2698190e8f7c225e14ed2b7a52b35670
+MERGE_SHA: 565b578eaa8280e01ae164f3dc474fab2c629cd6
 
 Lane: claude / `claude/utv2-1820-blocks-relation-direction`
 Tier: T2 (Tier C path — `scripts/ops/lane-maximizer.ts`)
