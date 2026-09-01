@@ -370,6 +370,15 @@ writable_db_proof_staging   PASS  run 33558730726  job 100025972146  (inside req
 live_schema_parity          FAIL  run 33558730886  job 100025888197  (honestly recorded, not waived)
 ```
 
+A fifth job in the same reversibility-gate run, `proof-binding-validator` ("Down-script
+presence check (fail-closed)"), is not a CEP-E7 receipt slot but is worth naming so nobody
+has to rediscover it from the job list. At `e0288a2a` it failed, correctly: the bundle at
+that moment still carried the previous anchor `16c15506`, so every file the round-2 fixes
+and the main-sync touched read as "non-proof files changed after the substantive commit".
+The proof-only commit that re-anchored to `e0288a2a` exists to close exactly that, and the
+job now resolves `verified_source_sha: e0288a2a` with its only remaining violation being the
+`live_schema_parity` blocker recorded above.
+
 **Not receipted — read by the orchestrator against staging, no run or job id:** the ACL
 catalog reads, the control-object comparison, the ACL-inclusive round-trip fingerprints,
 and the limiter semantics table. No CI job in this repo can produce them:
