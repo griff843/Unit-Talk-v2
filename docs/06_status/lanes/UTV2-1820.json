@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1820-blocks-relation-direction",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1480",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1820.yml",
@@ -22,7 +22,7 @@
     "docs/06_status/proof/UTV2-1820/diff-summary.md",
     "docs/06_status/proof/UTV2-1820/verification.md"
   ],
-  "status": "started",
+  "status": "in_progress",
   "started_at": "2026-09-01T22:59:13.109Z",
   "heartbeat_at": "2026-09-01T22:59:13.109Z",
   "closed_at": null,
