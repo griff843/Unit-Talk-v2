@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1796-closing-line-marking",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1472",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1796.yml",
@@ -30,9 +30,9 @@
     "docs/06_status/proof/UTV2-1796/verification.md",
     "docs/06_status/proof/UTV2-1796/runtime-health.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-01T01:44:44.368Z",
-  "heartbeat_at": "2026-09-01T01:44:44.368Z",
+  "heartbeat_at": "2026-09-01T02:02:54.977Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1796-closing-line-marking.json",
