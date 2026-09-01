@@ -91,13 +91,13 @@ jobs:
           # reach the server at all -- shipping it would either crash-loop the
           # edge or, worse, stand up an intake surface nobody can be admitted to
           # while looking healthy.
-          test -n "$SECRET_CADDY_DOMAIN"                  || missing+=(CADDY_DOMAIN)
-          test -n "$SECRET_UNIT_TALK_WEB_DOMAIN"          || missing+=(UNIT_TALK_WEB_DOMAIN)
-          test -n "$SECRET_UNIT_TALK_SMART_FORM_DOMAIN"   || missing+=(UNIT_TALK_SMART_FORM_DOMAIN)
-          test -n "$SECRET_GOOGLE_CLIENT_ID"              || missing+=(GOOGLE_CLIENT_ID)
-          test -n "$SECRET_GOOGLE_CLIENT_SECRET"          || missing+=(GOOGLE_CLIENT_SECRET)
-          test -n "$SECRET_NEXTAUTH_SECRET"               || missing+=(NEXTAUTH_SECRET)
-          test -n "$SECRET_ALLOWED_CAPPER_EMAILS"         || missing+=(ALLOWED_CAPPER_EMAILS)
+          test -n "${SECRET_CADDY_DOMAIN:-}"                  || missing+=(CADDY_DOMAIN)
+          test -n "${SECRET_UNIT_TALK_WEB_DOMAIN:-}"          || missing+=(UNIT_TALK_WEB_DOMAIN)
+          test -n "${SECRET_UNIT_TALK_SMART_FORM_DOMAIN:-}"   || missing+=(UNIT_TALK_SMART_FORM_DOMAIN)
+          test -n "${SECRET_GOOGLE_CLIENT_ID:-}"              || missing+=(GOOGLE_CLIENT_ID)
+          test -n "${SECRET_GOOGLE_CLIENT_SECRET:-}"          || missing+=(GOOGLE_CLIENT_SECRET)
+          test -n "${SECRET_NEXTAUTH_SECRET:-}"               || missing+=(NEXTAUTH_SECRET)
+          test -n "${SECRET_ALLOWED_CAPPER_EMAILS:-}"         || missing+=(ALLOWED_CAPPER_EMAILS)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
@@ -246,9 +246,9 @@ jobs:
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
         run: |
           set -euo pipefail
-          # Next.js substitutes NEXT_PUBLIC_* during `next build`, so an absent
-          # value here is not a runtime problem to fix later -- it is permanently
-          # compiled into the browser bundle as the 127.0.0.1 fallback.
+          # Next.js substitutes NEXT_PUBLIC_* while the image is built, so an
+          # absent value here is not a runtime problem to fix later -- it is
+          # permanently compiled into the browser bundle as the 127.0.0.1 fallback.
           if [ -z "${CADDY_DOMAIN:-}" ]; then
             echo "::error title=Missing API origin::CADDY_DOMAIN is required to build the Next.js images; without it the browser bundle would ship its http://127.0.0.1:4000 fallback." >&2
             exit 1

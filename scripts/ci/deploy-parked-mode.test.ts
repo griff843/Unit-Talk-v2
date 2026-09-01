@@ -41,6 +41,18 @@ function runScript(step: WorkflowStep): string {
   return source;
 }
 
+function stepNames(job: WorkflowRecord): string[] {
+  const steps = job['steps'];
+  assert.ok(Array.isArray(steps), 'job steps must be an array');
+  return steps
+    .map((candidate) =>
+      candidate && typeof candidate === 'object'
+        ? (candidate as WorkflowStep)['name']
+        : undefined,
+    )
+    .filter((name): name is string => typeof name === 'string');
+}
+
 function stepIndex(job: WorkflowRecord, name: string): number {
   const steps = job['steps'];
   assert.ok(Array.isArray(steps), 'job steps must be an array');
@@ -311,7 +323,13 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
       violations.push(`${stage} job must declare contents: read explicitly`);
     }
 
-    const preflightName = 'Preflight — verify registry auth and resolve all 4 image tags';
+    // UTV2-1795 added `web` and `smart-form`, so the step names its own count.
+    // Match on the stable part of the name rather than the number, and assert the
+    // service list separately -- otherwise adding a sixth image silently removes
+    // the preflight from this audit's view instead of failing it.
+    const preflightName = stepNames(job).find((name) =>
+      name.startsWith('Preflight — verify registry auth and resolve all '),
+    ) ?? 'Preflight — verify registry auth and resolve all 6 image tags';
     const authIdx = stepIndex(job, 'Authenticate GHCR on remote');
     const preflightIdx = stepIndex(job, preflightName);
     const mutationIdx = stepIndex(
@@ -327,8 +345,10 @@ function auditParkedModeDeployWorkflow(source: string): string[] {
         );
       }
       const preflightScript = runScript(workflowStep(job, preflightName));
-      if (!/for svc in .*api.*worker.*ingestor.*discord-bot/.test(preflightScript)) {
-        violations.push(`${stage} registry preflight must check all four services (api, worker, ingestor, discord-bot)`);
+      if (!/for svc in .*api.*worker.*ingestor.*discord-bot.*web.*smart-form/.test(preflightScript)) {
+        violations.push(
+          `${stage} registry preflight must check every deployed image (api, worker, ingestor, discord-bot, web, smart-form)`,
+        );
       }
       if (!/exit 1/.test(preflightScript)) {
         violations.push(`${stage} registry preflight must fail closed (exit 1) if any image fails to resolve`);
@@ -358,6 +378,15 @@ function executeSecretValidation(rawValue: string) {
     SECRET_UNIT_TALK_DEPLOY_HOST: 'deploy.example.com',
     SECRET_UNIT_TALK_DEPLOY_SSH_KEY: 'ssh-key',
     SECRET_SYNDICATE_MACHINE_ENABLED: rawValue,
+    // UTV2-1795: the shared Next.js deployment made these required, so the
+    // validator now reports them missing unless the fixture supplies them.
+    SECRET_CADDY_DOMAIN: 'api.example.test',
+    SECRET_UNIT_TALK_WEB_DOMAIN: 'example.test',
+    SECRET_UNIT_TALK_SMART_FORM_DOMAIN: 'form.example.test',
+    SECRET_GOOGLE_CLIENT_ID: 'google-client-id',
+    SECRET_GOOGLE_CLIENT_SECRET: 'google-client-secret',
+    SECRET_NEXTAUTH_SECRET: 'nextauth-secret',
+    SECRET_ALLOWED_CAPPER_EMAILS: 'capper@example.test',
     GITHUB_OUTPUT: outputPath,
   };
 
@@ -533,7 +562,7 @@ test('static deploy audit detects canary/production still granted packages: writ
 
 test('static deploy audit detects a missing registry preflight step', () => {
   const mutatedSource = deployWorkflowSource.replace(
-    /\n\s+- name: Preflight — verify registry auth and resolve all 4 image tags\n(?:.*\n)*?(?=\n\s+- name: Release API canary)/,
+    /\n\s+- name: Preflight — verify registry auth and resolve all \d+ image tags\n(?:.*\n)*?(?=\n\s+- name: Release API canary)/,
     '\n',
   );
   assert.ok(
