@@ -1,6 +1,6 @@
 # PROOF: UTV2-1699
 
-MERGE_SHA: f0d21d23d6839195d2b3c03f914f51cd12339d61
+MERGE_SHA: e0c21c40e4173161f61e7f4aac10b288ce269bda
 
 Lane: claude / `claude/utv2-1699-lane-maximizer-discovery-repair`
 Tier: T1 (Tier C path — `scripts/ops/lane-maximizer.ts`)

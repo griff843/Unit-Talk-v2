@@ -8,14 +8,14 @@
     "verified_source_sha": "f0d21d23d6839195d2b3c03f914f51cd12339d61",
     "evidence_commit_sha": "f0d21d23d6839195d2b3c03f914f51cd12339d61",
     "current_pr_head_sha": "f0d21d23d6839195d2b3c03f914f51cd12339d61",
-    "merge_sha": null,
+    "merge_sha": "e0c21c40e4173161f61e7f4aac10b288ce269bda",
     "ci_sentinels": {
       "evidence_commit_sha": "f0d21d23d6839195d2b3c03f914f51cd12339d61",
       "current_pr_head_sha": "f0d21d23d6839195d2b3c03f914f51cd12339d61"
     },
     "note": "f0d21d23d6839195d2b3c03f914f51cd12339d61 is the last non-proof commit on this branch. It is the merge commit produced by the sanctioned pr-update-branch sync of PR #1476 onto main on 2026-09-01, and it carries the implementation plus its regressions unchanged. RE-ANCHORED from ceaa715ecfee12fff7c1c0eafa2d91a2d5cbbe79: after PM approval at head eb907283, the automated commit 19a143a2 (ops(readiness): refresh ledger [skip ci]) landed on main and strict branch freshness forced a sync. The sync changed exactly one file, docs/06_status/readiness/readiness-score.json; git diff --name-only ceaa715e f0d21d23 -- scripts/ apps/ packages/ is EMPTY, so no reviewed source changed and the receipts below still bind. The full lane-maximizer suite was re-executed at this anchor: 75 tests / 75 pass / 0 fail. The anchor moved only because docs/06_status/readiness/ is outside the validator's PROOF_ONLY_PREFIXES; holding the old anchor would have failed rule 4 of proof-binding-validator. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM. The later commits on this branch are the proof bundle itself and the lane-binding manifest update (pr_url/status/heartbeat); no source file differs between them and this SHA. RECEIPT PROVENANCE, corrected 2026-09-01: an earlier revision of this file claimed every receipt in verification.md was executed against this exact tree. That was FALSE for M1-M4, which were captured at the intermediate heads 3d95bf26 and 6c671312 before the anchor commit added a third AC2 spec. M3 is the one whose numbers were actually wrong for this tree (it recorded 2 AC2 specs; the anchor has 3) and its receipt has been RE-EXECUTED against the anchor and replaced. M1, M2 and M4 report numbers that remain correct at the anchor, and were independently re-executed at the anchor by an adversarial reviewer who was not the author of this lane, with results matching (4 / 1 / 1 failures respectively). M5-M8 were captured at the anchor. Rather than restate the original claim in weaker words, the provenance of every receipt is named here.",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-01T16:40:00Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-01T16:44:27.160Z",
     "current_pr_head_note": "Equal to verified_source_sha: the only commits above it are proof-only, so every source receipt binds to the anchor unchanged. Both fields are CI-resolved at runtime by proof-binding-validator; the stored values are the truthful local resolution at authoring time."
   },
   "static_proof": {

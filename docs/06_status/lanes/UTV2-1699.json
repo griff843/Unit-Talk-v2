@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair",
   "branch": "claude/utv2-1699-lane-maximizer-discovery-repair",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "e0c21c40e4173161f61e7f4aac10b288ce269bda",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1476",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1699/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-01T13:38:32.808Z",
-  "heartbeat_at": "2026-09-01T14:07:37.788Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-01T16:44:31.168Z",
+  "closed_at": "2026-09-01T16:44:31.168Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1699-lane-maximizer-discovery-repair.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-01T16:44:28.516Z",
+      "verdict": "pass",
+      "merge_sha": "e0c21c40e4173161f61e7f4aac10b288ce269bda",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
