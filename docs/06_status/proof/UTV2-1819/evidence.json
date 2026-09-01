@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1819",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "verified",
+  "sha_binding": {
+    "verified_source_sha": "194df996f09cc90d0600100939c619eba2990a5a",
+    "evidence_commit_sha": "194df996f09cc90d0600100939c619eba2990a5a",
+    "current_pr_head_sha": "194df996f09cc90d0600100939c619eba2990a5a",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "194df996f09cc90d0600100939c619eba2990a5a",
+      "current_pr_head_sha": "194df996f09cc90d0600100939c619eba2990a5a"
+    },
+    "note": "194df996f09cc90d0600100939c619eba2990a5a is the last non-proof commit on this branch -- the implementation and its regressions. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM. Every receipt in this bundle was executed against this exact tree: the live-API AC1 run, the 78/78 full suite, and both mutation receipts. The mutations were applied to the working tree at this anchor and reverted from a byte-exact backup, with the baseline reconfirmed after each.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-09-01T19:05:00Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
+      "exit_code": 0,
+      "row_counts": { "tests": 78, "pass": 78, "fail": 0, "pre_existing": 75, "new": 3 }
+    }
+  },
+  "runtime_proof": {
+    "profile": "static",
+    "live_api_probe": {
+      "command": "pnpm ops:lane-maximizer",
+      "target": "api.linear.app (live), team UTV2",
+      "exit_code": 0,
+      "candidates_discovered": 114,
+      "before_fix": "exit 1, candidate_discovery_failed, Linear HTTP 400 Query too complex (11601/10000)",
+      "note": "The --linear-limit 50 workaround returned only 43 of the 114 real candidates, because the flag caps the population as well as the page size. This bare run is the first complete read of the board."
+    }
+  },
+  "mutation_proof": {
+    "results": [
+      {
+        "id": "M1",
+        "mutation": "restore LINEAR_CANDIDATE_PAGE_SIZE = 100 (the shipped defect)",
+        "under_mutation": { "tests": 3, "pass": 2, "fail": 1 },
+        "after_revert": { "tests": 3, "pass": 3, "fail": 0 },
+        "caught_by": "UTV2-1819 AC2",
+        "note": "AC3 passes under M1 and cannot catch it: AC3 compares the wire limit to the same constant, so the expectation moves with the mutation. AC2 is the sole guard on the constant's value. Recorded as a limit rather than claimed as coverage."
+      },
+      {
+        "id": "M2",
+        "mutation": "add a third nested connection (comments { nodes { body } }) to the node selection",
+        "under_mutation": { "tests": 3, "pass": 2, "fail": 1 },
+        "after_revert": { "tests": 3, "pass": 3, "fail": 0 },
+        "caught_by": "UTV2-1819 AC4",
+        "note": "AC2 correctly does not fire here: the constant is still in budget, but the per-node measurement behind it has gone stale. This is the mutation that matters, because widening the selection silently re-prices every node."
+      }
+    ]
+  },
+  "known_limitations": [
+    "The per-node complexity figure 116.01 is a single live measurement from 2026-09-01. A server-side re-pricing by Linear would invalidate it and no offline test can detect that; only the live AC1 call can, and it is run manually, not in CI.",
+    "AC3 cannot catch M1 (see mutation_proof M1 note).",
+    "This lane fixes discovery transport only. The board currently returns 0 recommended candidates out of 114, for content reasons (missing acceptance criteria and file scope on the issues themselves), which this lane does not address and must not."
+  ],
+  "files_changed": [
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts"
+  ]
+}
