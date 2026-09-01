@@ -1,0 +1,172 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1815",
+  "tier": "T1",
+  "lane_type": "modeling",
+  "status": "pending_hosted_verification",
+  "sha_binding": {
+    "verified_source_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+    "evidence_commit_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+    "current_pr_head_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+      "current_pr_head_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1"
+    },
+    "note": "c96c9922cd411304488c6f63a6f7a5f26374ffa1 is the last non-proof commit on this branch: the implementation and its regressions, plus the automated chore(lanes) commit that bound the lane manifest to PR #1479. That chore commit touches docs/06_status/lanes/UTV2-1815.json only and no source file, so the tree under test is identical to the implementation commit's; every local receipt in this bundle was re-executed against this exact anchor after it landed, not carried over. This bundle is a proof-only commit on top of it. merge_sha is null because the bundle is authored pre-merge; T1 merge authority is the PM.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-09-01T00:00:00Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test packages/domain/src/attribution/attribution-engine.test.ts apps/api/src/grading-service.test.ts apps/api/src/settlement-service.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 120,
+        "pass": 120,
+        "fail": 0,
+        "pre_existing": 109,
+        "new": 11
+      }
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "is_pass": false,
+      "row_counts": {
+        "tests": 5549,
+        "pass": 5549,
+        "fail": 0,
+        "skipped": 0,
+        "not_ok_lines": 0
+      },
+      "note": "This command FAILED, exit 1. It is recorded as a refusal and is NOT counted as a pass. env:check, lint, type-check, build, the whole pnpm test tree, verify:static and verify:commands were exit 0 within it, but the run as a whole exited non-zero at test:live-db, where assert-staging-target refused a workstation target (host=127.0.0.1, expected xskgrzbteyqdufktjrjx). A workstation cannot produce the writable-staging receipt by design. The authoritative T1 verification is hosted_verification below."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1815",
+      "verdict": "PASS",
+      "changed_files": 9,
+      "rules_matched": [
+        "settlement-grading"
+      ],
+      "advisory_missing": [
+        "r4-fault-report"
+      ]
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "live_db": {
+      "note": "Provided by hosted_verification below, against staging xskgrzbteyqdufktjrjx. Not obtainable on a workstation; see static_proof.verify."
+    }
+  },
+  "mutation_proof": {
+    "results": [
+      {
+        "id": "M1",
+        "mutation": "resolveStakeUnits returns assumed_flat/1 for an unusable stake (the shipped '?? 1' defect, centralized)",
+        "under_mutation": {
+          "tests": 120,
+          "pass": 111,
+          "fail": 9
+        },
+        "after_revert": {
+          "tests": 120,
+          "pass": 120,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1815 AC1, AC2, AC3 across all three paths",
+        "note": "Nine failures spanning attribution, grading and settlement. This is the payoff of one shared contract: a single mutation is visible everywhere the rule is relied on."
+      },
+      {
+        "id": "M2",
+        "mutation": "delete the grading recap refusal and publish with an assumed stake",
+        "under_mutation": {
+          "tests": 120,
+          "pass": 118,
+          "fail": 2
+        },
+        "after_revert": {
+          "tests": 120,
+          "pass": 120,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1815 AC1 (grading NULL and NaN)",
+        "note": "The negative control 'still publishes for a real stake' correctly does NOT fire: the mutation makes the path publish more, not less, so only the refusals can catch it."
+      },
+      {
+        "id": "M3",
+        "mutation": "settlement stake integrity payload always reports canonical",
+        "under_mutation": {
+          "tests": 120,
+          "pass": 118,
+          "fail": 2
+        },
+        "after_revert": {
+          "tests": 120,
+          "pass": 120,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1815 AC2 (settlement NULL and NaN)",
+        "note": "Trips the stakeUnitsStatus assertion specifically, not the profitLossUnits omission."
+      },
+      {
+        "id": "M4",
+        "mutation": "drop the attribution stake validation, keep the resolver",
+        "under_mutation": {
+          "tests": 120,
+          "pass": 116,
+          "fail": 4
+        },
+        "after_revert": {
+          "tests": 120,
+          "pass": 120,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1815 AC1, AC3 (attribution NULL and NaN)",
+        "note": "resolveStakeUnits's own spec correctly still passes: having the contract is not the same as enforcing it, and the two are tested separately."
+      },
+      {
+        "id": "M5",
+        "mutation": "settlement computeProfitLossUnits falls back to a stake of 1",
+        "under_mutation": {
+          "tests": 120,
+          "pass": 118,
+          "fail": 2
+        },
+        "after_revert": {
+          "tests": 120,
+          "pass": 120,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1815 AC1 (settlement NULL and NaN)",
+        "note": "M3 and M5 mutate different halves of the settlement path and trip different assertions: M3 the status tag, M5 the 'profitLossUnits' in payload omission."
+      }
+    ]
+  },
+  "known_limitations": [
+    "The recap now silently does not appear for an unknown-stake pick. The refusal is logged, but a Discord channel reader sees an absence rather than an explanation. Rendering 'stake unknown' requires making RecapEmbedInput.profitLossUnits nullable, which is outside this lane's authorized scope. A known, bounded loss of surface coverage, chosen over publishing a fabricated number.",
+    "stake_units_status is optional rather than required on AttributionRecord, because declaring it required breaks a pre-existing record literal in packages/domain/src/edge-decay/edge-decay-detector.test.ts, a file outside this lane's scope. Reads are fail-closed by construction (undefined is not 'canonical'), but the type system does not force a literal's author to supply it.",
+    "Nothing here repairs existing rows. Settlement rows already written against a NULL stake keep what they were written with; backfill was explicitly excluded from scope.",
+    "The grading tests stub globalThis.fetch and hand-roll the repository bundle. They prove the refusal decision and that no HTTP post is issued; they do not exercise the real Discord transport or the real repositories, and no test in this bundle does.",
+    "resolveStakeUnits refuses a stake of exactly 0 as historical_unknown. A deliberate zero-unit 'paper' pick would be refused rather than computed at zero. No such concept exists in the codebase today."
+  ],
+  "files_changed": [
+    "packages/domain/src/attribution/attribution-engine.ts",
+    "packages/domain/src/attribution/attribution-engine.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/settlement-service.ts",
+    "apps/api/src/settlement-service.test.ts"
+  ],
+  "hosted_verification": {
+    "anchor_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+    "note": "To be bound once CI settles at this anchor. Conclusions are as reported by the GitHub checks API."
+  }
+}

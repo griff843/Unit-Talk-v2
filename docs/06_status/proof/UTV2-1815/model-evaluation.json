@@ -1,0 +1,48 @@
+{
+  "schema": "model-evaluation/v1",
+  "issue_id": "UTV2-1815",
+  "lane_type": "modeling",
+  "anchor_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+  "evaluation_kind": "computation_integrity",
+  "note": "This lane changes no model, weight, threshold or scoring formula. It changes the DOMAIN of the stake input those computations accept: an unusable stake is now refused rather than silently replaced with 1. The evaluation below is therefore about correctness of refusal, not about predictive performance. No accuracy, calibration or ROI metric moves as a result of this change, because every affected computation previously produced a value that was not derived from observed data at all.",
+  "inputs_affected": [
+    {
+      "input": "picks.stake_units",
+      "previous_domain": "any value; null and undefined silently became 1, NaN propagated",
+      "new_domain": "finite number > 0 == canonical; undefined == assumed_flat (documented flat-bet API only); null, NaN, +/-Infinity, <= 0 == historical_unknown and refused"
+    }
+  ],
+  "computations_affected": [
+    {
+      "computation": "attributePick model/execution/luck component bps",
+      "previous_behaviour": "computed at an assumed stake of 1, or emitted NaN components while reporting high confidence",
+      "new_behaviour": "refuses; no record is produced"
+    },
+    {
+      "computation": "grading settlement recap profitLossUnits",
+      "previous_behaviour": "published a Discord recap with a profit/loss computed at an assumed stake of 1",
+      "new_behaviour": "refuses to publish; the settlement row is still written and tagged historical_unknown"
+    },
+    {
+      "computation": "settlement profitLossUnits and stake integrity payload",
+      "previous_behaviour": "already refused, via a private duplicate of the rule",
+      "new_behaviour": "unchanged behaviour, now sharing the single definition"
+    }
+  ],
+  "evaluation_method": "mutation",
+  "mutations": [
+    { "id": "M1", "control": "the shared stake contract refuses an unusable stake", "tests_failed": 9, "tests_total": 120, "isolated_to": "all three paths" },
+    { "id": "M2", "control": "grading refuses to publish a recap on a non-canonical stake", "tests_failed": 2, "tests_total": 120, "isolated_to": "grading" },
+    { "id": "M3", "control": "settlement tags an unusable stake as historical_unknown", "tests_failed": 2, "tests_total": 120, "isolated_to": "settlement" },
+    { "id": "M4", "control": "attribution validation rejects an unusable stake", "tests_failed": 4, "tests_total": 120, "isolated_to": "attribution" },
+    { "id": "M5", "control": "settlement omits profitLossUnits on an unusable stake", "tests_failed": 2, "tests_total": 120, "isolated_to": "settlement" }
+  ],
+  "baseline_restored_after_each_mutation": true,
+  "metrics_moved": [],
+  "metrics_unmoved_reason": "No predictive or economic metric is affected. The values this lane removes were never derived from observed data, so removing them changes what the system is willing to claim, not how well it predicts.",
+  "known_limitations": [
+    "Existing settlement rows written against a NULL stake are not repaired; backfill was excluded from scope.",
+    "The recap now silently does not appear for an unknown-stake pick. That is a deliberate refusal, logged, but a channel reader sees an absence rather than an explanation. Making the renderer show 'stake unknown' requires a non-nullable field change outside this lane's scope.",
+    "A stake of exactly 0 is refused as historical_unknown. No zero-unit pick concept exists in the codebase today."
+  ]
+}
