@@ -7,6 +7,7 @@ import {
 import {
   classifyLoss,
   computeSettlementSummary,
+  resolveStakeUnits,
   resolveEffectiveSettlement,
   summarizeLossAttributions,
   type EffectiveSettlement,
@@ -1048,10 +1049,14 @@ function computeProfitLossUnits(
   stakeUnits: number | null | undefined,
 ): number | null {
   if (!result) return null;
-  if (stakeUnits == null || !Number.isFinite(stakeUnits)) {
+  // UTV2-1815: one shared definition of an unusable stake, in @unit-talk/domain.
+  // `undefined` is folded to null on purpose: a settled pick always HAS a
+  // stake_units column, so a missing value is an unknown stake, never an
+  // invitation to assume a flat 1.
+  const stake = resolveStakeUnits(stakeUnits ?? null).stake_units;
+  if (stake === null) {
     return null;
   }
-  const stake = stakeUnits;
 
   if (result === 'push') return 0;
   if (result === 'loss') return -stake;
@@ -1071,15 +1076,16 @@ function roundPL(value: number): number {
 }
 
 function buildStakeIntegrityPayload(stakeUnits: number | null | undefined): Record<string, unknown> {
-  if (stakeUnits == null || !Number.isFinite(stakeUnits)) {
+  const resolution = resolveStakeUnits(stakeUnits ?? null);
+  if (resolution.status !== 'canonical') {
     return {
-      stakeUnitsStatus: 'historical_unknown',
+      stakeUnitsStatus: resolution.status,
       stakeUnitsHistoricalUnknown: true,
     };
   }
 
   return {
-    stakeUnitsStatus: 'canonical',
+    stakeUnitsStatus: resolution.status,
   };
 }
 

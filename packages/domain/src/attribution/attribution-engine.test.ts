@@ -5,6 +5,9 @@ import {
   decomposePerformance,
   reconstructAttribution,
   validateAttributionInput,
+  resolveStakeUnits,
+  ATTRIBUTION_INVALID_STAKE_UNITS,
+  ASSUMED_FLAT_STAKE_UNITS,
   type AttributionInput,
   type AttributionRecord,
 } from './attribution-engine.js';
@@ -200,4 +203,77 @@ test('decomposePerformance — by_confidence counts match', () => {
   const d = decomposePerformance(records);
   assert.equal(d.by_confidence.high, 1);
   assert.equal(d.by_confidence.insufficient_data, 1);
+});
+
+// ── UTV2-1815: null-stake computation truth ─────────────────────────────────
+// `attributePick` used to do `input.stake_units ?? 1`. `??` fires only on
+// null/undefined, so a NULL stake became a silent flat 1 and a NaN stake was
+// not caught at all -- it flowed straight into the bps arithmetic. Every
+// component then carried NaN while the record still claimed `high` confidence.
+// Both fixtures must now be refused, and the refusal must be distinguishable
+// from the documented flat-bet default.
+
+test('UTV2-1815 resolveStakeUnits separates observed, assumed and unknown stakes', () => {
+  assert.deepEqual(resolveStakeUnits(2.5), { status: 'canonical', stake_units: 2.5 });
+  assert.deepEqual(resolveStakeUnits(undefined), {
+    status: 'assumed_flat',
+    stake_units: ASSUMED_FLAT_STAKE_UNITS,
+  });
+  for (const unusable of [null, Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+    assert.deepEqual(
+      resolveStakeUnits(unusable as number | null),
+      { status: 'historical_unknown', stake_units: null },
+      `expected ${String(unusable)} to be refused, not assumed`,
+    );
+  }
+});
+
+test('UTV2-1815 validateAttributionInput rejects a NULL stake', () => {
+  const errors = validateAttributionInput({
+    ...FULL_INPUT,
+    stake_units: null as unknown as number,
+  });
+  assert.ok(
+    errors.some((e) => e.startsWith(ATTRIBUTION_INVALID_STAKE_UNITS)),
+    `expected ${ATTRIBUTION_INVALID_STAKE_UNITS}, got ${JSON.stringify(errors)}`,
+  );
+});
+
+test('UTV2-1815 validateAttributionInput rejects a NaN stake', () => {
+  const errors = validateAttributionInput({ ...FULL_INPUT, stake_units: Number.NaN });
+  assert.ok(
+    errors.some((e) => e.startsWith(ATTRIBUTION_INVALID_STAKE_UNITS)),
+    `expected ${ATTRIBUTION_INVALID_STAKE_UNITS}, got ${JSON.stringify(errors)}`,
+  );
+});
+
+test('UTV2-1815 attributePick refuses a NULL stake instead of assuming 1', () => {
+  const result = attributePick({
+    ...FULL_INPUT,
+    stake_units: null as unknown as number,
+  });
+  assert.equal(result.ok, false, 'a NULL stake must not produce an attribution record');
+  const flat = attributePick({ ...FULL_INPUT, stake_units: 1 });
+  assert.equal(flat.ok, true);
+  assert.notDeepEqual(
+    result,
+    flat,
+    'refusing a NULL stake must not be indistinguishable from a real flat bet',
+  );
+});
+
+test('UTV2-1815 attributePick refuses a NaN stake and never emits NaN components', () => {
+  const result = attributePick({ ...FULL_INPUT, stake_units: Number.NaN });
+  assert.equal(result.ok, false, 'a NaN stake must not produce an attribution record');
+});
+
+test('UTV2-1815 a produced record tags where its stake came from', () => {
+  const observed = attributePick({ ...FULL_INPUT, stake_units: 3 });
+  assert.equal(observed.ok, true);
+  assert.equal(observed.ok && observed.record.stake_units_status, 'canonical');
+
+  const { stake_units: _omittedStake, ...withoutStake } = FULL_INPUT;
+  const omitted = attributePick(withoutStake);
+  assert.equal(omitted.ok, true);
+  assert.equal(omitted.ok && omitted.record.stake_units_status, 'assumed_flat');
 });

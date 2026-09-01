@@ -2,7 +2,9 @@ import {
   resolveOutcome,
   buildRecapEmbedData,
   normalizeMarketKey,
+  resolveStakeUnits,
 } from '@unit-talk/domain';
+import type { StakeUnitsResolution } from '@unit-talk/domain';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import type {
   EventRow,
@@ -601,6 +603,27 @@ export async function postSettlementRecapIfPossible(
     return;
   }
 
+  // UTV2-1815: fail closed on an unknown stake. The recap renders a
+  // profit/loss figure, and `RecapEmbedInput.profitLossUnits` is a bare
+  // non-nullable number -- so publishing here with an unknown stake is exactly
+  // the "emit a value indistinguishable from an observed one" failure. Refuse
+  // to publish and say why, rather than substituting a stake of 1. Changing how
+  // the embed RENDERS an unknown stake is deliberately not in this scope.
+  const stakeResolution = readStakeUnitsResolution(pick);
+  const profitLossUnits = computeProfitLossUnits(
+    normalizeSettlementResult(settlementRecord.result),
+    stakeResolution.stake_units,
+    pick.odds,
+  );
+  if (stakeResolution.status !== 'canonical' || profitLossUnits === null) {
+    options.logger?.warn?.(
+      `Skipping recap for pick ${pick.id}: stake_units is ` +
+        `${stakeResolution.status}; refusing to publish a profit/loss figure ` +
+        'computed against an assumed stake',
+    );
+    return;
+  }
+
   const response = await fetch(
     `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
     {
@@ -615,12 +638,8 @@ export async function postSettlementRecapIfPossible(
             market: pick.market,
             selection: pick.selection,
             result: normalizeSettlementResult(settlementRecord.result),
-            stakeUnits: readStakeUnits(pick),
-            profitLossUnits: computeProfitLossUnits(
-              normalizeSettlementResult(settlementRecord.result),
-              readStakeUnits(pick),
-              pick.odds,
-            ),
+            stakeUnits: stakeResolution.stake_units,
+            profitLossUnits,
             clvPercent: readClvPercent(settlementRecord.payload),
             submittedBy: readSubmittedBy(pick),
           }),
@@ -973,19 +992,35 @@ function readSubmittedBy(pick: PickRecord) {
   return capper?.trim() || 'Unit Talk';
 }
 
-function readStakeUnits(pick: PickRecord) {
-  return typeof pick.stake_units === 'number' &&
-    Number.isFinite(pick.stake_units)
-    ? pick.stake_units
-    : null;
+/**
+ * Apply the shared stake-units contract (UTV2-1815) to a pick.
+ *
+ * A pick row always carries the column, so a missing stake arrives here as
+ * `null`, never as `undefined` -- which means it resolves to
+ * `historical_unknown` and this path refuses. The flat-bet `assumed_flat` case
+ * belongs to callers that genuinely omit the field; grading is not one of them.
+ */
+function readStakeUnitsResolution(pick: PickRecord): StakeUnitsResolution {
+  return resolveStakeUnits(
+    typeof pick.stake_units === 'number' ? pick.stake_units : null,
+  );
 }
 
+/**
+ * UTV2-1815: this used to be `const stake = stakeUnits ?? 1`, which emitted a
+ * profit/loss figure indistinguishable from one computed against a real stake.
+ * It now returns null when the stake is unknown, and the caller refuses to
+ * publish rather than publishing a fabricated number.
+ */
 function computeProfitLossUnits(
   result: 'win' | 'loss' | 'push',
   stakeUnits: number | null,
   odds: number | null,
-) {
-  const stake = stakeUnits ?? 1;
+): number | null {
+  if (stakeUnits === null) {
+    return null;
+  }
+  const stake = stakeUnits;
 
   if (result === 'push') {
     return 0;

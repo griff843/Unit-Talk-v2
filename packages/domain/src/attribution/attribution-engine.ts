@@ -55,6 +55,18 @@ export interface AttributionRecord {
   readonly components_sum_bps: number;
   readonly confidence: AttributionConfidence;
   readonly is_reproducible: boolean;
+  /**
+   * Provenance of the stake this record was computed with (UTV2-1815). A reader
+   * can tell an observed stake from an assumed one without re-deriving it.
+   */
+  /**
+   * UTV2-1815: provenance of the stake this record's units were computed from.
+   * Optional only so that records constructed before this field existed still
+   * type-check; `attributePick` always populates it. Readers must treat a
+   * missing value as NOT canonical -- `status === 'canonical'` is the only
+   * assertion that a real stake was observed, and it is false for `undefined`.
+   */
+  readonly stake_units_status?: StakeUnitsStatus;
 }
 
 /** Aggregate decomposition across a set of attribution records. */
@@ -83,6 +95,69 @@ export type AttributeResult =
 const BPS_PER_WIN = 10000;
 const ATTRIBUTION_VERSION = '1.0.0';
 
+// ── Stake-units contract (UTV2-1815) ─────────────────────────────────────────
+//
+// One agreed contract for what a stake of unknown size means, shared by
+// settlement, grading and attribution. Before this existed the three paths
+// disagreed: settlement failed closed and tagged the record, while grading and
+// attribution each silently substituted 1 -- emitting a number that no later
+// reader could distinguish from an observed stake. Eleven settlement_records
+// carry concrete profitLossUnits values against a NULL stake with no tag, and
+// the read-only audit could not determine which path produced them, precisely
+// because an assumed value and an observed value looked identical.
+//
+// The rule: a computation that cannot see a real stake must either refuse, or
+// carry a status that names the assumption. It must never return a bare number.
+
+/**
+ * Provenance of the stake behind a computation.
+ *
+ * - `canonical`          the pick carried a real, usable stake.
+ * - `assumed_flat`       no stake was supplied at all and the caller's
+ *                        documented flat-bet default of 1 unit was applied.
+ *                        Legitimate, but it is an ASSUMPTION and says so.
+ * - `historical_unknown` a stake was supplied and is unusable (null, NaN,
+ *                        infinite, or non-positive). Fail closed.
+ */
+export type StakeUnitsStatus = 'canonical' | 'assumed_flat' | 'historical_unknown';
+
+/** The outcome of applying the stake-units contract to one raw value. */
+export interface StakeUnitsResolution {
+  readonly status: StakeUnitsStatus;
+  /**
+   * The stake to compute with, or null when the contract refuses.
+   * Null is the signal to refuse; it is never a licence to substitute.
+   */
+  readonly stake_units: number | null;
+}
+
+/** Error code emitted when a supplied stake cannot be used. */
+export const ATTRIBUTION_INVALID_STAKE_UNITS = 'ATTRIBUTION_INVALID_STAKE_UNITS';
+
+/** The flat-bet stake applied when no stake is supplied at all. */
+export const ASSUMED_FLAT_STAKE_UNITS = 1;
+
+/**
+ * Apply the stake-units contract to a raw value from a pick.
+ *
+ * `undefined` means the field was never supplied, which is the documented
+ * flat-bet case; it resolves to 1 and is tagged `assumed_flat` so the
+ * assumption travels with the result. Anything supplied but unusable -- null,
+ * NaN, Infinity, zero or negative -- resolves to `historical_unknown` with a
+ * null stake, and every caller must refuse rather than pick a number.
+ */
+export function resolveStakeUnits(
+  value: number | null | undefined,
+): StakeUnitsResolution {
+  if (value === undefined) {
+    return { status: 'assumed_flat', stake_units: ASSUMED_FLAT_STAKE_UNITS };
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return { status: 'historical_unknown', stake_units: null };
+  }
+  return { status: 'canonical', stake_units: value };
+}
+
 // ── Core attribution ──────────────────────────────────────────────────────────
 
 /**
@@ -95,7 +170,12 @@ export function attributePick(input: AttributionInput): AttributeResult {
     return { ok: false, reason: errors.join('; ') };
   }
 
-  const stake = input.stake_units ?? 1;
+  // UTV2-1815: never `?? 1`. Validation above has already refused an unusable
+  // stake, so this resolution is either canonical or the documented flat-bet
+  // assumption -- and which one it was travels out on the record.
+  const stakeResolution = resolveStakeUnits(input.stake_units);
+  const stake = stakeResolution.stake_units ?? ASSUMED_FLAT_STAKE_UNITS;
+  const stake_units_status = stakeResolution.status;
   const realized_pnl_bps =
     input.result === 'win'
       ? BPS_PER_WIN * stake
@@ -119,6 +199,7 @@ export function attributePick(input: AttributionInput): AttributeResult {
         components_sum_bps: realized_pnl_bps,
         confidence,
         is_reproducible: false,
+        stake_units_status,
       },
     };
   }
@@ -144,6 +225,7 @@ export function attributePick(input: AttributionInput): AttributeResult {
       ),
       confidence,
       is_reproducible: true,
+      stake_units_status,
     },
   };
 }
@@ -223,6 +305,15 @@ export function validateAttributionInput(input: AttributionInput): string[] {
   }
   if (!isFinite(input.clv_at_close_bps)) {
     errors.push('ATTRIBUTION_INVALID_CLV_AT_CLOSE_BPS: must be finite');
+  }
+  // UTV2-1815: stake_units was never validated at all, so a NaN slipped past
+  // the `??` guard -- which only catches null and undefined -- and propagated
+  // into every component of the output as NaN. Omission is still the documented
+  // flat-bet case; anything supplied must be usable.
+  if (resolveStakeUnits(input.stake_units).status === 'historical_unknown') {
+    errors.push(
+      `${ATTRIBUTION_INVALID_STAKE_UNITS}: must be a finite number greater than 0`,
+    );
   }
 
   return errors;
