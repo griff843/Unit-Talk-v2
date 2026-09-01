@@ -1,0 +1,152 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1772
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1772
+  objective: Find and remove the production write-path bottleneck that produced
+    repeated `db_statement_timeout` failures at the historical ingestion rate,
+    before any provider resubscription.
+  acceptance_criteria:
+    - |-
+      ## Objective
+
+      Find and remove the production write-path bottleneck that produced repeated `db_statement_timeout` failures at the historical ingestion rate, before any provider resubscription.
+
+      ## Context
+
+      The recovery plan records roughly 600–900 daily statement-timeout failures before the ingestion blackout. [UTV2-1374](https://linear.app/unit-talk-v2/issue/UTV2-1374/runtime-throughput-proof-across-active-sports-sustained-pick) owns throughput proof, not the underlying fix. [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) records relevant production DB facts including table growth, TOAST pressure, and stale/never-run analyze/vacuum observations.
+
+      ## Where to look
+
+      * `packages/db/src/runtime-repositories.ts` and the actual provider-offer write/upsert path
+      * `provider_cycle_status` failure details and historical timeout cadence
+      * [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) DB-health findings before proposing a fix
+      * indexes/query plans/batch sizes/transaction shape/TOAST and planner-statistics evidence
+      * June dataset as the offline load corpus
+
+      ## Required approach
+
+      1. Claude diagnoses the open-ended root cause from evidence; do not assume batch size, index, vacuum, TOAST, or one specific query.
+      2. Once the causal mechanism is named, Codex implements the smallest bounded correction under the mechanically derived tier/file scope.
+      3. Replay the June workload at the historical real rate in a non-production target and measure timeout count, latency, write throughput, row reconciliation, and resource pressure.
+      4. No provider call, production unpark, or live write-path mutation is required to merge.
+
+      ## Definition of done
+
+      * Root cause is evidence-backed and reproducible.
+      * The bounded fix eliminates the target `db_statement_timeout` signature under replay at the historical rate without losing/duplicating rows.
+      * Before/after performance receipt is tied to the exact implementation head.
+      * Regression/mutation proves the old failure shape returns when the corrective control is removed.
+
+      ## Stop conditions
+
+      Stop for PM if the required remedy is destructive DB maintenance, production-only tuning, material schema redesign, or multiple equally plausible root causes remain after diagnosis.
+
+      ## Guardrails
+
+      Production stays parked. No SGO/provider resubscription, member delivery, retention deletion, or unrelated DB cleanup.
+  guardrails:
+    - Production stays parked. No SGO/provider resubscription, member delivery,
+      retention deletion, or unrelated DB cleanup.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Context
+      The recovery plan records roughly 600–900 daily statement-timeout failures before the ingestion blackout. [UTV2-1374](https://linear.app/unit-talk-v2/issue/UTV2-1374/runtime-throughput-proof-across-active-sports-sustained-pick) owns throughput proof, not the underlying fix. [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) records relevant production DB facts including table growth, TOAST pressure, and stale/never-run analyze/vacuum observations.
+    - |-
+      Where to look
+      * `packages/db/src/runtime-repositories.ts` and the actual provider-offer write/upsert path
+      * `provider_cycle_status` failure details and historical timeout cadence
+      * [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) DB-health findings before proposing a fix
+      * indexes/query plans/batch sizes/transaction shape/TOAST and planner-statistics evidence
+      * June dataset as the offline load corpus
+    - >-
+      Required approach
+
+      1. Claude diagnoses the open-ended root cause from evidence; do not assume
+      batch size, index, vacuum, TOAST, or one specific query.
+
+      2. Once the causal mechanism is named, Codex implements the smallest
+      bounded correction under the mechanically derived tier/file scope.
+
+      3. Replay the June workload at the historical real rate in a
+      non-production target and measure timeout count, latency, write
+      throughput, row reconciliation, and resource pressure.
+
+      4. No provider call, production unpark, or live write-path mutation is
+      required to merge.
+    - >-
+      Definition of done
+
+      * Root cause is evidence-backed and reproducible.
+
+      * The bounded fix eliminates the target `db_statement_timeout` signature
+      under replay at the historical rate without losing/duplicating rows.
+
+      * Before/after performance receipt is tied to the exact implementation
+      head.
+
+      * Regression/mutation proves the old failure shape returns when the
+      corrective control is removed.
+    - >-
+      Stop conditions
+
+      Stop for PM if the required remedy is destructive DB maintenance,
+      production-only tuning, material schema redesign, or multiple equally
+      plausible root causes remain after diagnosis.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1772/ingest-write-throughput-eliminate-provider-offer-history-statement
+    title: "Ingest write throughput: eliminate provider_offer_history statement
+      timeouts before resubscription"
+    description: |-
+      ## Objective
+
+      Find and remove the production write-path bottleneck that produced repeated `db_statement_timeout` failures at the historical ingestion rate, before any provider resubscription.
+
+      ## Context
+
+      The recovery plan records roughly 600–900 daily statement-timeout failures before the ingestion blackout. [UTV2-1374](https://linear.app/unit-talk-v2/issue/UTV2-1374/runtime-throughput-proof-across-active-sports-sustained-pick) owns throughput proof, not the underlying fix. [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) records relevant production DB facts including table growth, TOAST pressure, and stale/never-run analyze/vacuum observations.
+
+      ## Where to look
+
+      * `packages/db/src/runtime-repositories.ts` and the actual provider-offer write/upsert path
+      * `provider_cycle_status` failure details and historical timeout cadence
+      * [UTV2-1679](https://linear.app/unit-talk-v2/issue/UTV2-1679/production-db-readiness-risk-table-growth-toast-pressure-and-never-run) DB-health findings before proposing a fix
+      * indexes/query plans/batch sizes/transaction shape/TOAST and planner-statistics evidence
+      * June dataset as the offline load corpus
+
+      ## Required approach
+
+      1. Claude diagnoses the open-ended root cause from evidence; do not assume batch size, index, vacuum, TOAST, or one specific query.
+      2. Once the causal mechanism is named, Codex implements the smallest bounded correction under the mechanically derived tier/file scope.
+      3. Replay the June workload at the historical real rate in a non-production target and measure timeout count, latency, write throughput, row reconciliation, and resource pressure.
+      4. No provider call, production unpark, or live write-path mutation is required to merge.
+
+      ## Definition of done
+
+      * Root cause is evidence-backed and reproducible.
+      * The bounded fix eliminates the target `db_statement_timeout` signature under replay at the historical rate without losing/duplicating rows.
+      * Before/after performance receipt is tied to the exact implementation head.
+      * Regression/mutation proves the old failure shape returns when the corrective control is removed.
+
+      ## Stop conditions
+
+      Stop for PM if the required remedy is destructive DB maintenance, production-only tuning, material schema redesign, or multiple equally plausible root causes remain after diagnosis.
+
+      ## Guardrails
+
+      Production stays parked. No SGO/provider resubscription, member delivery, retention deletion, or unrelated DB cleanup.
+    captured_at: 2026-09-01T00:36:12.367Z
+    description_sha256: b918f79449a3ea3f678e33b11dd9169062b5fce5d6948901804e31da79a6f528
+  contract_hash: 55cbaca43d635f1fa77aaa587f0565cf20e482debf6eb1fd4b5ad54d19f41799
