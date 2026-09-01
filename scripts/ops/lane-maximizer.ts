@@ -839,19 +839,107 @@ export function parseQueueCandidates(queuePath: string): CandidateLane[] {
 }
 
 /**
- * Page size for the candidate query. Linear's `issues` connection accepts up to
- * 250 per page; 100 keeps each response small while still needing only a couple
- * of round trips for a board of a few hundred issues.
+ * Linear's server-side GraphQL query-complexity ceiling. Exceeding it is a hard
+ * HTTP 400 (`"Query too complex"`), not a soft degradation.
  */
-export const LINEAR_CANDIDATE_PAGE_SIZE = 100;
+export const LINEAR_CANDIDATE_COMPLEXITY_BUDGET = 10_000;
 
 /**
- * Hard stop on the pagination loop. If the cursor walk ever exceeds this many
- * pages the result cannot be proven complete, so discovery FAILS rather than
- * returning the pages collected so far -- a truncated candidate population is
- * exactly the fail-open this lane exists to remove.
+ * Measured complexity cost of ONE `LaneCandidates` node, taken from a live API
+ * response on 2026-09-01: `first: 100` was rejected at a reported complexity of
+ * 11601, i.e. ~116.01 per node. Linear charges for the nested connections in the
+ * selection (`labels` and `relations`), which is why a node is this expensive.
+ *
+ * If the node selection gains another nested connection this figure is stale --
+ * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` exists to make that a test failure
+ * rather than a production outage.
  */
-export const LINEAR_CANDIDATE_MAX_PAGES = 100;
+export const LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE = 116.01;
+
+/**
+ * Number of nested connections in the `LaneCandidates` node selection that the
+ * per-node complexity figure above was measured against: `labels { nodes }` and
+ * `relations { nodes }`. Adding a third invalidates the measurement.
+ */
+export const LINEAR_CANDIDATE_NESTED_CONNECTIONS = 2;
+
+/**
+ * Page size for the candidate query. Linear's `issues` connection accepts up to
+ * 250 rows per page, but the ROW limit is not the binding constraint -- the
+ * query-complexity budget is. At the measured ~116 complexity per node, 100 rows
+ * costs ~11601 against a ceiling of 10000 and is rejected outright with HTTP 400,
+ * which took the whole dispatch family down (UTV2-1819). 50 costs ~5801, roughly
+ * 58% of budget, leaving headroom for Linear to re-price the selection without
+ * breaking discovery again.
+ *
+ * This is a TRANSPORT detail only. It never caps the candidate population: the
+ * cursor walk in `fetchLinearCandidates` pages until `hasNextPage` is false, so
+ * a smaller page size costs an extra round trip and changes nothing else.
+ */
+export const LINEAR_CANDIDATE_PAGE_SIZE = 50;
+
+/**
+ * Hard stop on whole-board discovery, expressed in CANDIDATE NODES.
+ *
+ * This is the supported population ceiling: a board at or under this size is
+ * fully discoverable, and a board above it FAILS CLOSED rather than returning
+ * the pages collected so far -- a truncated candidate population is exactly the
+ * fail-open this lane exists to remove.
+ *
+ * It is deliberately stated in nodes, not pages. The pre-UTV2-1819 guard was
+ * `page > 100` with a page size of 100, so the real ceiling was an ACCIDENT of
+ * the transport: halving the page size to stay inside Linear's complexity
+ * budget would have silently halved supported board capacity from 10000 to
+ * 5000. Transport page size must never define whole-board population capacity,
+ * so the ceiling is named here and the page bound is derived from it below.
+ */
+export const LINEAR_CANDIDATE_MAX_NODES = 10_000;
+
+/**
+ * Loop bound for the cursor walk, DERIVED from the node ceiling so that
+ * changing `LINEAR_CANDIDATE_PAGE_SIZE` cannot change supported capacity.
+ *
+ * The node ceiling alone cannot bound the loop: a server that returns empty
+ * pages while still reporting `hasNextPage` would never reach it. This bound
+ * exists only to make that pathological case terminate, so it is one page
+ * looser than the node ceiling strictly requires and is never the guard that
+ * fires on a merely-large board.
+ */
+export function linearCandidateMaxPages(pageSize: number = LINEAR_CANDIDATE_PAGE_SIZE): number {
+  return Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1;
+}
+
+/**
+ * The candidate query, exported so the complexity regression inspects the REAL
+ * query text rather than a copy that could drift away from it.
+ */
+export const LINEAR_CANDIDATE_QUERY = `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
+       team(id: $teamId) {
+         issues(
+           first: $limit
+           after: $cursor
+           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
+           orderBy: createdAt
+         ) {
+           pageInfo { hasNextPage endCursor }
+           nodes {
+             identifier
+             title
+             url
+             description
+             branchName
+             labels { nodes { name } }
+             state { name type }
+             relations {
+               nodes {
+                 type
+                 relatedIssue { identifier }
+               }
+             }
+           }
+         }
+       }
+     }`;
 
 /** Injection seam for the Linear transport, so pagination is testable offline. */
 export interface LinearCandidateFetchDeps {
@@ -931,6 +1019,7 @@ export async function fetchLinearCandidates(
   const nodes: LinearCandidateIssueNode[] = [];
   let cursor: string | null = null;
   let page = 0;
+  const maxPages = linearCandidateMaxPages(LINEAR_CANDIDATE_PAGE_SIZE);
 
   // Cursor pagination over the FULL eligible population. Every page must
   // succeed: a mid-walk failure throws, because half a board dressed as a whole
@@ -951,9 +1040,9 @@ export async function fetchLinearCandidates(
   // one cycle -- it can never displace an existing candidate.
   for (;;) {
     page += 1;
-    if (page > LINEAR_CANDIDATE_MAX_PAGES) {
+    if (page > maxPages) {
       throw new Error(
-        `Linear candidate pagination exceeded ${LINEAR_CANDIDATE_MAX_PAGES} pages; ` +
+        `Linear candidate pagination exceeded ${maxPages} pages; ` +
           'refusing to report a candidate population that cannot be proven complete.',
       );
     }
@@ -963,33 +1052,7 @@ export async function fetchLinearCandidates(
       : Math.min(LINEAR_CANDIDATE_PAGE_SIZE, maxCandidateIssues - nodes.length);
 
     const result: LinearQueryResult<LinearCandidatePage> = await query<LinearCandidatePage>(
-      `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
-       team(id: $teamId) {
-         issues(
-           first: $limit
-           after: $cursor
-           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
-           orderBy: createdAt
-         ) {
-           pageInfo { hasNextPage endCursor }
-           nodes {
-             identifier
-             title
-             url
-             description
-             branchName
-             labels { nodes { name } }
-             state { name type }
-             relations {
-               nodes {
-                 type
-                 relatedIssue { identifier }
-               }
-             }
-           }
-         }
-       }
-     }`,
+      LINEAR_CANDIDATE_QUERY,
       { teamId, limit: pageSize, cursor },
       linearOpts,
     );
@@ -1000,6 +1063,18 @@ export async function fetchLinearCandidates(
 
     const connection = result.data.team.issues;
     nodes.push(...connection.nodes);
+
+    // Node ceiling, checked AFTER the page lands so a board of exactly
+    // LINEAR_CANDIDATE_MAX_NODES is fully discoverable and only the first node
+    // beyond it fails closed. An explicit operator sample (`--linear-limit`) is
+    // a deliberate smaller read and is handled below; this guard is about the
+    // whole board being larger than we can prove we read completely.
+    if (maxCandidateIssues === null && nodes.length > LINEAR_CANDIDATE_MAX_NODES) {
+      throw new Error(
+        `Linear candidate population exceeded ${LINEAR_CANDIDATE_MAX_NODES} nodes; ` +
+          'refusing to report a candidate population that cannot be proven complete.',
+      );
+    }
 
     if (maxCandidateIssues !== null && nodes.length >= maxCandidateIssues) {
       nodes.length = maxCandidateIssues;

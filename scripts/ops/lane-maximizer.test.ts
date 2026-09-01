@@ -9,8 +9,16 @@ import {
   type LaneManifest,
   type LinearCandidateFetchDeps,
   type MaximizationReport,
+  LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+  LINEAR_CANDIDATE_MAX_NODES,
+  LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE,
+  LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+  LINEAR_CANDIDATE_PAGE_SIZE,
+  LINEAR_CANDIDATE_QUERY,
   evaluateCandidates,
+  fetchLinearCandidates,
   isBlockingLinearRelationType,
+  linearCandidateMaxPages,
   parseQueueCandidates,
   resolveCandidateSource,
   runMaximizerCli,
@@ -1343,6 +1351,8 @@ interface FakeLinearDeps extends LinearCandidateFetchDeps {
   cursorsSent: Array<string | null>;
   /** Every candidate-query document the implementation actually sent. */
   candidateQueries: string[];
+  /** Every `first` variable the implementation actually sent, in order. */
+  limitsSent: Array<unknown>;
 }
 
 /**
@@ -1365,6 +1375,9 @@ function fakeLinearDeps(
 ): FakeLinearDeps {
   const cursorsSent: Array<string | null> = [];
   const candidateQueries: string[] = [];
+  // UTV2-1819: the `first:` actually put on the wire, so a page size over
+  // Linear's complexity budget is caught here instead of in production.
+  const limitsSent: Array<unknown> = [];
   // cursor value -> zero-based index of the page it unlocks.
   const pageForCursor = new Map<string, number>([['', 0]]);
   for (let index = 1; index < pages.length; index += 1) {
@@ -1383,6 +1396,7 @@ function fakeLinearDeps(
     }
 
     candidateQueries.push(graphql);
+    limitsSent.push(variables.limit);
     const rawCursor = variables.cursor;
     const cursor = typeof rawCursor === 'string' ? rawCursor : null;
     cursorsSent.push(cursor);
@@ -1421,6 +1435,7 @@ function fakeLinearDeps(
     query: query as LinearCandidateFetchDeps['query'],
     cursorsSent,
     candidateQueries,
+    limitsSent,
   };
 }
 
@@ -2064,4 +2079,186 @@ test('UTV2-1699 defect 3: a throw during evaluation emits an envelope, never emp
   const parsed = JSON.parse(outcome.stdout) as Record<string, unknown>;
   assert.equal(parsed.ok, false);
   assert.equal(parsed.recommended, undefined, 'a failure envelope must carry no report-shaped keys');
+});
+
+// UTV2-1819: the candidate page size is bounded by Linear's query-complexity
+// budget, not by its row limit. `first: 100` was rejected with HTTP 400 at a
+// reported complexity of 11601/10000, which took candidate discovery -- and so
+// the entire dispatch family -- down on main. These regressions make a repeat
+// a test failure instead of a production outage.
+
+test('UTV2-1819 AC2: the candidate page size stays inside Linear query-complexity budget', () => {
+  const projected = LINEAR_CANDIDATE_PAGE_SIZE * LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE;
+  assert.ok(
+    projected < LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to complexity ${projected}, ` +
+      `which is not under Linear's budget of ${LINEAR_CANDIDATE_COMPLEXITY_BUDGET}. ` +
+      'Linear rejects an over-budget query with HTTP 400, so this is a hard outage, not a slowdown.',
+  );
+  // Headroom, so Linear re-pricing the selection slightly does not break discovery.
+  assert.ok(
+    projected <= LINEAR_CANDIDATE_COMPLEXITY_BUDGET * 0.75,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to ${projected}, over 75% of the ` +
+      `${LINEAR_CANDIDATE_COMPLEXITY_BUDGET} budget. Leave margin for re-pricing.`,
+  );
+});
+
+test('UTV2-1819 AC4: the measured per-node cost still matches the query it was measured against', () => {
+  // The per-node complexity figure is only valid for the selection it was measured
+  // on. Linear charges for nested connections, so adding one invalidates it. Count
+  // the nested `{ nodes {` connections in the REAL exported query text.
+  const nested = [...LINEAR_CANDIDATE_QUERY.matchAll(/\w+\s*\{\s*nodes\s*\{/g)].length;
+  assert.equal(
+    nested,
+    LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+    `LaneCandidates now has ${nested} nested connections, but the per-node complexity ` +
+      `figure ${LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE} was measured against ` +
+      `${LINEAR_CANDIDATE_NESTED_CONNECTIONS}. Re-measure against the live API and update ` +
+      'both constants before shipping the wider selection.',
+  );
+});
+
+test('UTV2-1819 AC3: the bounded page size reaches the wire and never caps discovery', async () => {
+  const linear = fakeLinearDeps([
+    [candidateIssueNode('UTV2-9201')],
+    [candidateIssueNode('UTV2-9202')],
+    [candidateIssueNode('UTV2-9203')],
+  ]);
+  const outcome = await runMaximizerCli([], {
+    linear,
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+
+  // The `first:` actually sent must be the bounded constant. Restoring 100 fails
+  // here, which is the whole point: Linear rejects it with HTTP 400 in production.
+  assert.deepStrictEqual(
+    linear.limitsSent,
+    [LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE],
+    'every page must request exactly the complexity-bounded page size',
+  );
+
+  // ...and the smaller page size must cost only round trips, never candidates.
+  const discovered = allResults(outcome.report!).map((entry) => entry.issue_id).sort();
+  assert.deepStrictEqual(
+    discovered,
+    ['UTV2-9201', 'UTV2-9202', 'UTV2-9203'],
+    'a bounded page size is a transport detail; it must not cap the candidate population',
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1819 (PM repair): whole-board capacity must not be a side effect of the
+// transport page size.
+//
+// The pre-repair guard was `page > 100` while the page size was 100, so the
+// supported population ceiling -- 10000 nodes -- existed only as the PRODUCT of
+// two unrelated constants. Halving the page size to satisfy Linear's complexity
+// budget would silently have halved capacity to 5000, turning a real board of
+// 6000 issues into a fail-closed discovery error with no constant anywhere
+// stating that limit. The ceiling is now named in nodes and the page bound is
+// derived from it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Minimal cursor-driven transport over a synthetic population of `total`
+ * candidate issues. Deliberately separate from `fakeLinearDeps`: these
+ * regressions run at the ten-thousand-node ceiling, so the fixture serves pages
+ * lazily from an index rather than materializing every page up front.
+ *
+ * The page size is whatever the implementation actually asks for, so a walk
+ * that sends the wrong `first:` is visible in `pagesServed`.
+ */
+function syntheticBoardDeps(total: number): LinearCandidateFetchDeps & { pagesServed: number } {
+  const state = { pagesServed: 0 };
+  const query = async (
+    graphql: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
+    if (graphql.includes('ResolveTeam')) {
+      return { ok: true, data: { teams: { nodes: [{ id: 'team-fixture', key: 'UTV2' }] } } };
+    }
+    state.pagesServed += 1;
+    const offset = typeof variables.cursor === 'string' ? Number.parseInt(variables.cursor, 10) : 0;
+    const first = Number(variables.limit);
+    const end = Math.min(offset + first, total);
+    const nodes: Array<Record<string, unknown>> = [];
+    for (let index = offset; index < end; index += 1) {
+      nodes.push(candidateIssueNode(`UTV2-${100000 + index}`));
+    }
+    return {
+      ok: true,
+      data: {
+        team: {
+          issues: {
+            pageInfo: { hasNextPage: end < total, endCursor: String(end) },
+            nodes,
+          },
+        },
+      },
+    };
+  };
+  return {
+    token: 'fixture-token',
+    query: query as LinearCandidateFetchDeps['query'],
+    get pagesServed() {
+      return state.pagesServed;
+    },
+  } as LinearCandidateFetchDeps & { pagesServed: number };
+}
+
+test('UTV2-1819 AC6: a board at the supported maximum is fully discoverable', async () => {
+  const deps = syntheticBoardDeps(LINEAR_CANDIDATE_MAX_NODES);
+  const candidates = await fetchLinearCandidates([], deps);
+
+  assert.equal(
+    candidates.length,
+    LINEAR_CANDIDATE_MAX_NODES,
+    `a board of exactly ${LINEAR_CANDIDATE_MAX_NODES} candidates must be returned whole. ` +
+      'Reverting the node ceiling to a page-count guard fails here as soon as the page ' +
+      'size changes, which is the defect this repair removes.',
+  );
+});
+
+test('UTV2-1819 AC7: a board one node over the supported maximum fails closed', async () => {
+  const deps = syntheticBoardDeps(LINEAR_CANDIDATE_MAX_NODES + 1);
+  await assert.rejects(
+    () => fetchLinearCandidates([], deps),
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(
+        message,
+        /exceeded 10000 nodes/,
+        `expected the node-ceiling refusal, got: ${message}`,
+      );
+      assert.match(message, /cannot be proven complete/, message);
+      return true;
+    },
+    'a population above the supported ceiling must fail closed, never return a truncated board',
+  );
+});
+
+test('UTV2-1819 AC8: page size does not define the supported node ceiling', () => {
+  // The invariant the pre-repair code violated: the derived page bound must
+  // always be able to carry the full node ceiling, at ANY page size. Under the
+  // old `page > 100` guard, page size 50 carried only 5000 and this fails.
+  for (const pageSize of [10, 25, 50, 75, 100, 250]) {
+    const reachable = linearCandidateMaxPages(pageSize) * pageSize;
+    assert.ok(
+      reachable >= LINEAR_CANDIDATE_MAX_NODES,
+      `page size ${pageSize} reaches only ${reachable} nodes, below the supported ceiling of ` +
+        `${LINEAR_CANDIDATE_MAX_NODES}. Transport page size must not define board capacity.`,
+    );
+  }
+
+  // ...and the loop stays bounded: the page bound is finite and never more than
+  // one page looser than the ceiling strictly needs.
+  for (const pageSize of [10, 50, 250]) {
+    assert.equal(
+      linearCandidateMaxPages(pageSize),
+      Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1,
+      'the page bound must stay derived from the node ceiling, not float free of it',
+    );
+  }
 });

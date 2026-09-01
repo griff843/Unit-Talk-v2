@@ -1,0 +1,40 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1819
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1819
+  objective: >-
+    Bound the lane-maximizer candidate page size to Linear's GraphQL
+    query-complexity budget, so a bare `pnpm ops:lane-maximizer` can read the
+    board instead of failing closed on HTTP 400.
+  acceptance_criteria:
+    - "A bare `pnpm ops:lane-maximizer` with no flags completes successfully
+      against the live Linear API and returns a candidate report."
+    - "`LINEAR_CANDIDATE_PAGE_SIZE` is provably under Linear's complexity budget
+      for the full `LaneCandidates` node selection, with margin below the
+      measured 75 boundary."
+    - "Pagination still walks the entire candidate population — the page size is
+      a transport detail, never a cap on discovery. The pre-existing pagination
+      regressions continue to pass unchanged."
+    - "A regression asserts the constant stays within budget, so raising it, or
+      adding another nested connection to the node selection, fails a test
+      rather than the production factory."
+    - "No change to ranking, admission, or business policy."
+  guardrails:
+    - Do not change ranking, admission, tier or business policy in this lane.
+    - Do not raise total concurrency.
+    - No production mutation, deploy, DB change, branch-protection change, or
+      merge-authority weakening.
+    - Preserve every existing safety, singleton, file-scope,
+      forbidden-combination, capacity and merge-mutex gate as fail-closed.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
