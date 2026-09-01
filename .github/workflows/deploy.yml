@@ -241,6 +241,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Require a public API origin at build time
+        env:
+          CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+        run: |
+          set -euo pipefail
+          # Next.js substitutes NEXT_PUBLIC_* during `next build`, so an absent
+          # value here is not a runtime problem to fix later -- it is permanently
+          # compiled into the browser bundle as the 127.0.0.1 fallback.
+          if [ -z "${CADDY_DOMAIN:-}" ]; then
+            echo "::error title=Missing API origin::CADDY_DOMAIN is required to build the Next.js images; without it the browser bundle would ship its http://127.0.0.1:4000 fallback." >&2
+            exit 1
+          fi
+          echo "API origin resolved for build."
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -256,6 +270,7 @@ jobs:
             APP_DIR=${{ matrix.app_dir }}
             APP_PACKAGE=${{ matrix.app_package }}
             APP_PORT=${{ matrix.app_port }}
+            NEXT_PUBLIC_API_BASE_URL=https://${{ secrets.CADDY_DOMAIN }}
             UNIT_TALK_GIT_SHA=${{ github.sha }}
             UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
 
@@ -315,6 +330,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
@@ -369,6 +385,14 @@ jobs:
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          # apps/smart-form/auth.ts signs the capper bearer with NEXTAUTH_SECRET and
+          # apps/api/src/auth.ts verifies it with UNIT_TALK_JWT_SECRET. They are the
+          # same key by construction here; if it is absent the API would accept no
+          # capper token at all, so refuse to write a half-configured environment.
+          if [ -z "${NEXTAUTH_SECRET:-}" ]; then
+            echo "::error title=Missing capper signing key::NEXTAUTH_SECRET is required; it is also written as UNIT_TALK_JWT_SECRET so the API can verify Smart Form session bearers." >&2
+            exit 1
+          fi
           _guild_id="${DISCORD_GUILD_ID:-0}"
           _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
           _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
@@ -419,6 +443,7 @@ jobs:
             "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
             "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_JWT_SECRET=$NEXTAUTH_SECRET" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -792,6 +817,7 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
           CADDY_DOMAIN: ${{ secrets.CADDY_DOMAIN }}
+          NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
           BUILD_TIMESTAMP: ${{ github.event.head_commit.timestamp }}
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
@@ -846,6 +872,14 @@ jobs:
           # Discord bot requires non-empty strings for guild/role/channel IDs.
           # Use "0" as a placeholder when secrets aren't configured so the bot starts
           # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          # apps/smart-form/auth.ts signs the capper bearer with NEXTAUTH_SECRET and
+          # apps/api/src/auth.ts verifies it with UNIT_TALK_JWT_SECRET. They are the
+          # same key by construction here; if it is absent the API would accept no
+          # capper token at all, so refuse to write a half-configured environment.
+          if [ -z "${NEXTAUTH_SECRET:-}" ]; then
+            echo "::error title=Missing capper signing key::NEXTAUTH_SECRET is required; it is also written as UNIT_TALK_JWT_SECRET so the API can verify Smart Form session bearers." >&2
+            exit 1
+          fi
           _guild_id="${DISCORD_GUILD_ID:-0}"
           _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
           _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
@@ -896,6 +930,7 @@ jobs:
             "UNIT_TALK_GRADING_CRON_AUTORUN=true" \
             "UNIT_TALK_OPS_ALERT_WEBHOOK_URL=${UNIT_TALK_OPS_ALERT_WEBHOOK_URL:-}" \
             "CADDY_DOMAIN=${CADDY_DOMAIN:-}" \
+            "UNIT_TALK_JWT_SECRET=$NEXTAUTH_SECRET" \
             "UNIT_TALK_BUILD_TIMESTAMP=${BUILD_TIMESTAMP:-}" \
             "UNIT_TALK_DEPLOYMENT_ID=${IMAGE_TAG:-}" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \

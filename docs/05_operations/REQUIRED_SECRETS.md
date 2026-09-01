@@ -604,11 +604,19 @@ separated from `verify` by the whole build.
 | `UNIT_TALK_SMART_FORM_DOMAIN` | `.env.edge`, `.env.smart-form` | — |
 | `GOOGLE_CLIENT_ID` | `.env.smart-form` | build args, browser bundles |
 | `GOOGLE_CLIENT_SECRET` | `.env.smart-form` | build args, browser bundles, `.env.web`, `.env.edge`, `.env.production` |
-| `NEXTAUTH_SECRET` | `.env.smart-form` | build args, browser bundles, `.env.web`, `.env.edge`, `.env.production` |
+| `NEXTAUTH_SECRET` | `.env.smart-form` as `NEXTAUTH_SECRET`; `.env.production` as `UNIT_TALK_JWT_SECRET` | build args, browser bundles, `.env.web`, `.env.edge` |
 | `ALLOWED_CAPPER_EMAILS` | `.env.smart-form` | build args, browser bundles |
 
+`NEXTAUTH_SECRET` deliberately reaches two files under two names. Smart Form
+signs the capper session bearer with it; the API verifies that bearer with
+`UNIT_TALK_JWT_SECRET`. A single owner-supplied value fills both roles, so no new
+secret is required and the two can never drift apart. `UNIT_TALK_JWT_SECRET` is
+therefore not itself a repository secret.
+
 `CADDY_DOMAIN` was already in this inventory and is unchanged: the API keeps the
-hostname it already has. UTV2-1795 only stopped `.env.production` — and therefore
+hostname it already has. It now additionally supplies the
+`NEXT_PUBLIC_API_BASE_URL` build argument for the Next.js images — a public URL
+compiled into the browser bundle, never a credential. UTV2-1795 only stopped `.env.production` — and therefore
 the Supabase service-role key, the Discord bot token and the SGO keys — from
 reaching the public Caddy edge.
 

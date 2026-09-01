@@ -345,3 +345,81 @@ test('the intake container refuses to start on a configuration that admits nobod
     'the auth refusals must be scoped to the intake surface',
   );
 });
+
+test('the public API origin is compiled into the browser bundle, not supplied at runtime', () => {
+  // Next.js substitutes NEXT_PUBLIC_* during `next build`. apps/smart-form/lib/
+  // api-client.ts and participant-search.ts both fall back to
+  // http://127.0.0.1:4000, so an origin supplied only through the container
+  // environment leaves production browsers calling the capper's own machine.
+  const build = step('build-nextjs', 'Build and push image');
+  const buildArgs = String(field(build, 'with', 'build-args') ?? '');
+  assert.match(
+    buildArgs,
+    /NEXT_PUBLIC_API_BASE_URL=https:\/\/\$\{\{\s*secrets\.CADDY_DOMAIN\s*\}\}/,
+    'the build must receive the public API origin derived from the configured API hostname',
+  );
+  assert.doesNotMatch(
+    buildArgs,
+    /127\.0\.0\.1|localhost/,
+    'no local address may be compiled into a production bundle',
+  );
+
+  // The value must exist as a build stage variable before the app is compiled,
+  // and an empty one must stop the build rather than silently ship the fallback.
+  const argIndex = dockerfile.indexOf('ARG NEXT_PUBLIC_API_BASE_URL');
+  const envIndex = dockerfile.indexOf('ENV NEXT_PUBLIC_API_BASE_URL=');
+  const buildIndex = dockerfile.indexOf('pnpm --filter');
+  assert.ok(argIndex >= 0 && envIndex > argIndex, 'the builder stage must declare and export the origin');
+  assert.ok(envIndex < buildIndex, 'the origin must be exported before `next build` runs');
+  assert.match(
+    dockerfile,
+    /test -n "\$\{NEXT_PUBLIC_API_BASE_URL\}"/,
+    'an empty origin must fail the build',
+  );
+
+  // The workflow must refuse before it reaches the builder at all.
+  const guard = String(step('build-nextjs', 'Require a public API origin at build time')['run']);
+  assert.match(guard, /CADDY_DOMAIN/);
+  assert.match(guard, /exit 1/, 'a missing API hostname must fail the build job');
+});
+
+test('the API verifies exactly the capper token Smart Form signs', async () => {
+  // apps/smart-form/auth.ts signs the session bearer with NEXTAUTH_SECRET;
+  // apps/api/src/auth.ts verifies capper JWTs with UNIT_TALK_JWT_SECRET. If the
+  // deploy provisions the first without the second, every authenticated
+  // submission is a 401 while every health check still passes.
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write .env.production to server')['run']);
+    assert.match(
+      script,
+      /"UNIT_TALK_JWT_SECRET=\$NEXTAUTH_SECRET"/,
+      `${jobId} must give the API the same key Smart Form signs with`,
+    );
+    assert.match(
+      script,
+      /if \[ -z "\$\{NEXTAUTH_SECRET:-\}" \]/,
+      `${jobId} must refuse to write a half-configured environment`,
+    );
+    const env = asRecord(field(job(jobId), 'steps') ? step(jobId, 'Write .env.production to server')['env'] : {});
+    assert.ok('NEXTAUTH_SECRET' in env, `${jobId} must bind NEXTAUTH_SECRET for the API env file`);
+  }
+
+  // Executed control: a token this signer produces validates through the API's
+  // verifier under the same key, and is refused under any other key.
+  const { createCapperSessionToken } = await import('../../apps/smart-form/lib/auth-session-token.ts');
+  const { validateCapperToken } = await import('../../apps/api/src/auth.ts');
+
+  const sharedKey = 'utv2-1795-shared-capper-signing-key-not-a-real-secret';
+  const otherKey = 'utv2-1795-a-different-key-entirely';
+  const token = createCapperSessionToken(
+    { sub: 'capper-1795', capperId: 'capper-1795', displayName: 'Pilot Capper', email: 'pilot@example.com' },
+    sharedKey,
+  );
+
+  const accepted = await validateCapperToken(token, sharedKey);
+  assert.ok(accepted, 'the API must accept a token signed with the shared key');
+  assert.equal(accepted?.role, 'capper');
+
+  const refused = await validateCapperToken(token, otherKey);
+  assert.equal(refused, null, 'the API must refuse a token signed with any other key');
+});

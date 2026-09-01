@@ -68,6 +68,29 @@ deliberately absent. The QA authentication bypass is never enabled in production
 writes either name, and the workflow itself greps the written file and fails the
 deploy if one appears.
 
+## The capper signing key is shared, deliberately
+
+`apps/smart-form/auth.ts` signs the capper session bearer with `NEXTAUTH_SECRET`.
+`apps/api/src/auth.ts` verifies capper JWTs with `UNIT_TALK_JWT_SECRET`. They must
+be the same value or the API rejects every authenticated Smart Form submission
+with a 401 while every health check still reports green.
+
+The deploy therefore writes the single configured `NEXTAUTH_SECRET` into two
+places: `.env.smart-form` as `NEXTAUTH_SECRET` (the signer) and `.env.production`
+as `UNIT_TALK_JWT_SECRET` (the verifier). One owner-supplied secret, two names,
+neither exposed to a browser bundle or a build argument. The deploy refuses to
+write either file when the value is absent.
+
+## The public API origin is a build input, not a runtime one
+
+`NEXT_PUBLIC_*` values are substituted by `next build`, so writing
+`NEXT_PUBLIC_API_BASE_URL` into `.env.smart-form` only affects server-side reads.
+The browser bundle takes its origin from the `NEXT_PUBLIC_API_BASE_URL` build
+argument, derived from `CADDY_DOMAIN`. Without it the bundle would permanently
+carry the `http://127.0.0.1:4000` development fallback from
+`apps/smart-form/lib/api-client.ts`. It is a public URL and no secret is ever
+passed as a build argument.
+
 ## Rolling back one surface
 
 Each Next.js app is its own compose service pinned to its own tagged image, so
