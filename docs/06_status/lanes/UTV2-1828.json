@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1828-rebind-diff-summary",
   "branch": "claude/utv2-1828-rebind-diff-summary",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2466dd56bfe8c440b268ddfb338d98351791cb6b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1490",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,9 +20,9 @@
     "docs/06_status/proof/UTV2-1828/diff-summary.md",
     "docs/06_status/proof/UTV2-1828/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-02T20:28:11.132Z",
-  "heartbeat_at": "2026-09-02T20:43:47.060Z",
+  "heartbeat_at": "2026-09-02T21:09:45.128Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1828-rebind-diff-summary.json",
