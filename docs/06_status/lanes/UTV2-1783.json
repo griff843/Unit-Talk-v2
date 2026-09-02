@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1783-merge-sha-identity-contract",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1483",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/executor-result-validator.yml",
@@ -24,9 +24,9 @@
     "scripts/ops/proof-schema.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-02T02:59:43.857Z",
-  "heartbeat_at": "2026-09-02T02:59:54.251Z",
+  "heartbeat_at": "2026-09-02T03:59:54.800Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1783-merge-sha-identity-contract.json",
