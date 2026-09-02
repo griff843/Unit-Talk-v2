@@ -27,8 +27,7 @@ admit — there is a plan, a set of branches, and live runtime truth.
 4. **Classify the risk** before you start, with the same policy the merge gate uses:
 
    ```bash
-   node scripts/ops/merge-authority.cjs --base origin/main --head HEAD   # once you have a diff
-   # or read: docs/05_operations/RESERVED_RISK_SURFACES.json
+   pnpm ops:classify-diff   # once you have a diff; reads the same policy the gate reads
    ```
 
    `auto` → green CI is the whole gate. `human` → write it and open the PR anyway; it waits for

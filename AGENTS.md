@@ -158,7 +158,8 @@ Codex receives a **work packet** (`docs/mission/packets/TEMPLATE.md`), not a Lin
 is the whole contract: goal, scope, acceptance, and what not to touch. Everything Codex needs must be
 in it — Codex does not read Linear, chat history, or a lane manifest.
 
-The packet is delivered by `pnpm ops:codex-packet --packet <path>`, which runs Codex in the repo with
+The packet is delivered by `pnpm ops:codex-packet --packet <path> --cwd <isolated worktree>`, which
+runs Codex in that worktree with
 the packet as its task contract. There is no lane admission step.
 
 Codex owns:
@@ -292,9 +293,9 @@ Before opening any PR, complete these in order:
 1. **pnpm verify** — must be green. No exceptions.
 2. **Scope check** — every file you changed must be within the packet's declared scope. Revert any
    scope bleed. If the work genuinely requires a file outside scope, say so in the PR body.
-3. **Reserved-surface check** — run
-   `node scripts/ops/merge-authority.cjs --base origin/main --head HEAD` (or read
-   `docs/05_operations/RESERVED_RISK_SURFACES.json`). If the diff classifies `human`, the PR still
+3. **Reserved-surface check** — run `pnpm ops:classify-diff`. It prints `authority: auto` or
+   `authority: human` and names the surfaces; the policy behind it is
+   `docs/05_operations/RESERVED_RISK_SURFACES.json`. If the diff classifies `human`, the PR still
    opens normally — it simply cannot merge until Griff approves it. Say which surface it touched in
    the PR body.
 4. **No new `any` casts** — unless the existing code already uses them and the packet does not

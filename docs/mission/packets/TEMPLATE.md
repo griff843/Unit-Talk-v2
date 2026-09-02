@@ -5,7 +5,8 @@
   It replaces the Linear issue + lane manifest + acceptance-criteria comment
   chain of the prior operating model.
 
-  Run it:  pnpm ops:codex-packet --packet docs/mission/packets/<this-file>.md
+  Run it:  git worktree add ../wt-<name> -b <branch> origin/main
+           pnpm ops:codex-packet --packet docs/mission/packets/<this-file>.md --cwd ../wt-<name>
            (add --dry-run to print the exact prompt without invoking Codex)
 
   The runner REFUSES a packet missing any of Goal / Scope / Acceptance /

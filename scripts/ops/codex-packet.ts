@@ -11,6 +11,7 @@
  *   1. reads a work packet (docs/mission/packets/TEMPLATE.md shape)
  *   2. refuses to run an incomplete packet — an underspecified delegation is
  *      the expensive failure, not a missing ticket
+ *   2b. refuses to run outside an isolated non-main worktree
  *   3. reports whether the packet's declared scope touches a reserved surface,
  *      using the same policy the merge gate uses
  *   4. resolves a model profile from the canonical routing policy
@@ -21,8 +22,13 @@
  * anything out. Codex opens a PR; CI and the merge gate judge it.
  *
  * Usage:
- *   pnpm ops:codex-packet --packet docs/mission/packets/<name>.md
- *                         [--profile codex-terra-medium] [--cwd <dir>] [--dry-run]
+ *   git worktree add ../wt-<name> -b <branch> origin/main
+ *   pnpm ops:codex-packet --packet docs/mission/packets/<name>.md --cwd ../wt-<name>
+ *                         [--profile codex-terra-medium] [--dry-run]
+ *
+ * `--cwd` must be an isolated, non-main worktree. Codex runs with full write
+ * access; the runner refuses the primary checkout so a packet cannot commit
+ * into the control plane.
  *
  * Exit codes:
  *   0 = Codex ran and exited 0
@@ -36,10 +42,19 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
+import {
+  buildCodexModelArgs,
+  resolveModelProfile,
+  type ModelRoutingBlock,
+} from './model-routing.js';
+
 const require = createRequire(import.meta.url);
 
 export const MODEL_ROUTING_POLICY_PATH = 'docs/05_operations/policies/codex-model-routing.json';
 export const DEFAULT_PROFILE = 'codex-terra-medium';
+
+/** Branches a packet may never run on directly. Work lands through a PR. */
+export const PROTECTED_BRANCHES = new Set(['main', 'master']);
 
 /** Sections a packet must carry. Codex reads nothing else — not Linear, not a
  *  manifest, not this conversation — so anything absent here is absent for it. */
@@ -110,30 +125,96 @@ export function extractScopePaths(scope: string): string[] {
   return out;
 }
 
-export interface ModelProfile {
-  model: string;
-  reasoning_effort: string;
+/**
+ * Resolves a logical profile through the CANONICAL fail-closed resolver.
+ *
+ * This deliberately does not re-implement the checks. `resolveModelProfile`
+ * already enforces the policy shape and version, a required boolean `enabled`,
+ * the reasoning-effort catalog, and — the one that matters most — that no
+ * caller-supplied override can unlock a `requires_pm_authorization` profile. A
+ * local reimplementation drifts from those the moment policy changes, and the
+ * direction it drifts in is always permissive: a profile with no `enabled`
+ * field, or a protected profile later enabled in policy, would run here while
+ * every other entry point refused it.
+ *
+ * `permitted_tiers` is the one input the mission-native model has no direct
+ * value for. It is derived from risk rather than invented: a packet whose
+ * declared scope touches a reserved surface is the high-consequence class
+ * (`T1`), anything else is `T2`. That mapping is strictly tightening — it makes
+ * `codex-terra-medium`, which policy permits only for `T2`, unavailable for
+ * reserved work instead of quietly running it.
+ */
+export function resolveProfileForScope(profileName: string, reserved: boolean): ModelRoutingBlock {
+  const tier = reserved ? 'T1' : 'T2';
+  const resolution = resolveModelProfile({ profileName, tier });
+  if (!resolution.ok || !resolution.model_routing) {
+    const hint =
+      resolution.code === 'PROFILE_NOT_PERMITTED_FOR_TIER' && reserved
+        ? ' The declared scope is reserved, so this packet resolves as high-consequence work.' +
+          ' Pass --profile codex-sol-high.'
+        : '';
+    throw new Error(`${resolution.code}: ${resolution.message}.${hint}`);
+  }
+  return resolution.model_routing;
 }
 
-/** Resolves a logical profile against the canonical routing policy. Throws on
- *  an unknown or disabled profile — a silent CLI default is exactly the drift
- *  the routing policy exists to prevent. */
-export function resolveProfile(policy: unknown, name: string): ModelProfile {
-  const profiles = (policy as { profiles?: Record<string, Record<string, unknown>> } | null)?.profiles;
-  if (!profiles || typeof profiles !== 'object') {
-    throw new Error(`Model routing policy has no "profiles" map (${MODEL_ROUTING_POLICY_PATH}).`);
+/**
+ * Refuses to run anywhere but an isolated, non-main worktree.
+ *
+ * `codex exec` runs with `-s danger-full-access`: it edits and commits. The
+ * default `--cwd` is wherever the command was typed, which is normally the
+ * control checkout — the one the orchestrator serializes merges and main-syncs
+ * through. A packet running there can commit onto a shared checkout, and every
+ * documented example omitted `--cwd`, so that was the likely path rather than
+ * the unlucky one.
+ *
+ * Three independent conditions, because each fails differently: a non-repo cwd
+ * is a typo, a primary checkout is the control-plane collision, and `main` is
+ * the branch nothing may commit to directly.
+ */
+export function assertIsolatedWorktree(cwd: string): { toplevel: string; branch: string } {
+  const git = (args: string[]): string => {
+    const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+    if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git failed').trim());
+    return r.stdout.trim();
+  };
+
+  let toplevel: string;
+  try {
+    toplevel = git(['rev-parse', '--show-toplevel']);
+  } catch {
+    throw new Error(`--cwd is not inside a git repository: ${cwd}`);
   }
-  const p = profiles[name];
-  if (!p) {
-    throw new Error(`Unknown model profile "${name}". Available: ${Object.keys(profiles).join(', ')}`);
+
+  // A linked worktree has its own gitdir under the shared common dir; the
+  // primary checkout's two are the same directory. This is the check that
+  // actually distinguishes the control checkout from an isolated one — a
+  // branch-name test alone would happily run in the control checkout on a
+  // feature branch, which is exactly the shared-checkout collision this
+  // repository has hit before.
+  const gitDir = path.resolve(git(['rev-parse', '--absolute-git-dir']));
+  const commonDir = path.resolve(toplevel, git(['rev-parse', '--git-common-dir']));
+  if (gitDir === commonDir) {
+    throw new Error(
+      `refusing to run in the primary (control) checkout: ${toplevel}. ` +
+        'Create an isolated worktree and pass it: ' +
+        'git worktree add ../wt-<name> -b <branch> origin/main && ' +
+        'pnpm ops:codex-packet --packet <path> --cwd ../wt-<name>'
+    );
   }
-  if (p.enabled === false) {
-    throw new Error(`Model profile "${name}" is disabled in ${MODEL_ROUTING_POLICY_PATH}.`);
+
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (branch === 'HEAD') {
+    throw new Error(`refusing to run on a detached HEAD in ${toplevel}. Check out a work branch first.`);
   }
-  if (typeof p.model !== 'string' || typeof p.reasoning_effort !== 'string') {
-    throw new Error(`Model profile "${name}" is malformed: model/reasoning_effort must be strings.`);
+  if (PROTECTED_BRANCHES.has(branch)) {
+    throw new Error(
+      `refusing to run on "${branch}" in ${toplevel}. ` +
+        'Work lands through a PR, so the packet needs its own branch: git switch -c <branch>'
+    );
   }
-  return { model: p.model, reasoning_effort: p.reasoning_effort };
+
+  return { toplevel, branch };
 }
 
 /** The task contract handed to Codex. The packet is the whole brief; this
@@ -228,24 +309,31 @@ function main(argv: string[]): void {
     );
   }
 
+  const surfaces = classifyScope(repoRoot, parsed.scopePaths);
+
   const profileName = args.get('profile') || parsed.profile || DEFAULT_PROFILE;
-  let profile: ModelProfile;
+  let profile: ModelRoutingBlock;
   try {
-    const policy = JSON.parse(fs.readFileSync(path.join(repoRoot, MODEL_ROUTING_POLICY_PATH), 'utf8'));
-    profile = resolveProfile(policy, profileName);
+    profile = resolveProfileForScope(profileName, surfaces.length > 0);
   } catch (error) {
     fail(`model routing: ${(error as Error).message}`);
   }
 
-  const surfaces = classifyScope(repoRoot, parsed.scopePaths);
   const cwd = path.resolve(repoRoot, args.get('cwd') || '.');
+  let checkout: { toplevel: string; branch: string };
+  try {
+    checkout = assertIsolatedWorktree(cwd);
+  } catch (error) {
+    fail((error as Error).message);
+  }
+
   const prompt = buildPrompt(path.relative(repoRoot, packetPath).split(path.sep).join('/'), packetText);
 
   process.stdout.write(
     [
       `packet:  ${packetArg}${parsed.title ? ` — ${parsed.title}` : ''}`,
-      `profile: ${profileName} (${profile.model}, effort=${profile.reasoning_effort})`,
-      `cwd:     ${cwd}`,
+      `profile: ${profileName} (${profile.model}, effort=${profile.reasoning_effort}, policy ${profile.policy_version})`,
+      `cwd:     ${checkout.toplevel} [${checkout.branch}]`,
       `scope:   ${parsed.scopePaths.length} declared path(s)`,
       surfaces.length > 0
         ? `RESERVED: declared scope touches ${surfaces.join(', ')} — the resulting PR will require ` +
@@ -273,7 +361,7 @@ function main(argv: string[]): void {
 
   const child = spawnSync(
     'codex',
-    ['exec', '--model', profile.model, '-c', `model_reasoning_effort=${profile.reasoning_effort}`, '-s', 'danger-full-access', prompt],
+    ['exec', ...buildCodexModelArgs(profile), '-s', 'danger-full-access', prompt],
     { cwd, stdio: 'inherit', shell: process.platform === 'win32' }
   );
 

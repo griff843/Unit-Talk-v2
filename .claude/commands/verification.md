@@ -14,8 +14,13 @@ RMA/v1). If this skill and that workflow diverge, the workflow wins and this ski
 ## Step 0 — classify the diff
 
 ```bash
-node scripts/ops/merge-authority.cjs --base origin/main --head HEAD
+pnpm ops:classify-diff                      # defaults to origin/main...HEAD
+pnpm ops:classify-diff --base main --head my-branch --json
 ```
+
+It prints the verdict, the surfaces, and why. It is a PREVIEW: the blocking decision is made
+by `merge-gate.yml` from the PR's base checkout against GitHub's own file list. Exit code is 0
+for both verdicts — `human` is a fact about the diff, not a failure.
 
 | Classification | What it means | What is required |
 |---|---|---|

@@ -28,6 +28,7 @@ pnpm verify            # env:check + lint + type-check + build + test
 pnpm verify:parallel   # lint + type-check in parallel, then build + test (faster)
 pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
+pnpm ops:classify-diff # merge authority for the current diff (auto vs human) — preview of the gate
 pnpm ops:codex-packet  # run Codex against a mission work packet (see docs/mission/packets/)
 
 # Run a single test file
@@ -107,7 +108,8 @@ plan item -> worktree + branch -> commits -> PR -> green CI -> merge -> plan upd
 - **`docs/mission/plan.md` is updated as reality changes** — that update is part of finishing the
   work, not a separate report.
 - **Delegating to Codex:** write a packet from `docs/mission/packets/TEMPLATE.md` and run
-  `pnpm ops:codex-packet --packet <path>`. No lane manifest, no Linear issue.
+  `pnpm ops:codex-packet --packet <path> --cwd <isolated worktree>`. No lane manifest, no Linear
+  issue. The runner refuses the control checkout and refuses `main`.
 
 **Lane manifests, `ops:lane-start` / `lane-close` / `truth-check`, and proof-bundle closeout are
 legacy.** They still work and still govern lanes that are open today; use `/legacy:lane-recovery` to

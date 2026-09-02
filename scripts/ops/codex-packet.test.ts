@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
@@ -11,7 +13,8 @@ import {
   classifyScope,
   extractScopePaths,
   parsePacket,
-  resolveProfile,
+  resolveProfileForScope,
+  assertIsolatedWorktree,
 } from './codex-packet.js';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -75,28 +78,56 @@ test('extractScopePaths reads backticked and bare path bullets, ignoring prose',
   assert.deepEqual(paths, ['apps/api/src/a.ts', 'packages/db/src/b.ts']);
 });
 
-test('resolveProfile rejects unknown, disabled and malformed profiles', () => {
-  const policy = {
-    profiles: {
-      good: { model: 'm', reasoning_effort: 'high', enabled: true },
-      off: { model: 'm', reasoning_effort: 'high', enabled: false },
-      broken: { model: 42, reasoning_effort: 'high' },
-    },
-  };
-  assert.deepEqual(resolveProfile(policy, 'good'), { model: 'm', reasoning_effort: 'high' });
-  assert.throws(() => resolveProfile(policy, 'nope'), /Unknown model profile/);
-  assert.throws(() => resolveProfile(policy, 'off'), /disabled/);
-  assert.throws(() => resolveProfile(policy, 'broken'), /malformed/);
-  assert.throws(() => resolveProfile({}, 'good'), /no "profiles" map/);
+test('profile resolution goes through the canonical resolver, not a local fork', () => {
+  const resolved = resolveProfileForScope(DEFAULT_PROFILE, false);
+  assert.equal(resolved.profile, DEFAULT_PROFILE);
+  assert.ok(resolved.model.length > 0);
+  assert.ok(resolved.reasoning_effort.length > 0);
+  // policy_version only exists because the canonical resolver produced this.
+  assert.ok(resolved.policy_version.length > 0);
 });
 
-test('the default profile exists and is enabled in the canonical routing policy', () => {
+test('an unknown profile is refused with the canonical code', () => {
+  assert.throws(() => resolveProfileForScope('no-such-profile', false), /PROFILE_UNKNOWN/);
+});
+
+test('a profile requiring PM authorization is mechanically unavailable here too', () => {
+  // The check the local fork did not have: no caller-supplied anything unlocks
+  // codex-sol-max, and this entry point must not be the one that does.
+  assert.throws(
+    () => resolveProfileForScope('codex-sol-max', true),
+    /TRUSTED_AUTHORIZATION_UNAVAILABLE|PROFILE_DISABLED/,
+  );
+});
+
+test('a disabled profile is refused', () => {
+  assert.throws(() => resolveProfileForScope('codex-luna-low', false), /PROFILE_DISABLED/);
+});
+
+test('a reserved scope cannot run on a profile policy permits only for T2', () => {
+  // Risk is mapped to the policy's tier vocabulary rather than invented, and the
+  // mapping tightens: the default profile is unavailable for reserved work.
+  assert.throws(() => resolveProfileForScope(DEFAULT_PROFILE, true), /PROFILE_NOT_PERMITTED_FOR_TIER/);
+  assert.match(
+    (() => {
+      try {
+        resolveProfileForScope(DEFAULT_PROFILE, true);
+        return '';
+      } catch (e) {
+        return (e as Error).message;
+      }
+    })(),
+    /--profile codex-sol-high/,
+  );
+  assert.equal(resolveProfileForScope('codex-sol-high', true).profile, 'codex-sol-high');
+});
+
+test('the default profile is still resolvable against the shipped policy', () => {
   // Guards the drift that makes delegation fail at the moment it is needed:
   // the runner names a profile the policy no longer has.
   const policy = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, MODEL_ROUTING_POLICY_PATH), 'utf8'));
-  const resolved = resolveProfile(policy, DEFAULT_PROFILE);
-  assert.ok(resolved.model.length > 0);
-  assert.ok(resolved.reasoning_effort.length > 0);
+  assert.ok(policy.profiles[DEFAULT_PROFILE], `${DEFAULT_PROFILE} missing from policy`);
+  assert.ok(resolveProfileForScope(DEFAULT_PROFILE, false).model.length > 0);
 });
 
 test('classifyScope names a reserved surface and stays quiet on ordinary paths', () => {
@@ -123,4 +154,62 @@ test('the shipped template is a packet the runner would accept', () => {
   const parsed = parsePacket(template);
   assert.deepEqual(parsed.missingSections, []);
   assert.ok(parsed.scopePaths.length > 0);
+});
+
+// ── checkout isolation ────────────────────────────────────────────────────
+// `codex exec` runs with -s danger-full-access: it edits and commits. The
+// default --cwd is wherever the command was typed, which is normally the
+// control checkout the orchestrator serializes merges through.
+
+function scratchPrimary(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-packet-primary-'));
+  const run = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' });
+  run('init', '-q', '-b', 'main');
+  run('config', 'user.email', 'test@example.com');
+  run('config', 'user.name', 'test');
+  fs.writeFileSync(path.join(dir, 'README.md'), '# scratch\n');
+  run('add', '-A');
+  run('commit', '-qm', 'base');
+  return dir;
+}
+
+test('a non-repository directory is refused', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-packet-norepo-'));
+  assert.throws(() => assertIsolatedWorktree(dir), /not inside a git repository/);
+});
+
+test('the primary (control) checkout is refused even on a work branch', () => {
+  // A branch-name test alone would happily run in the control checkout. This
+  // is the shared-checkout collision, not the direct-to-main one.
+  const primary = scratchPrimary();
+  execFileSync('git', ['-C', primary, 'switch', '-q', '-c', 'feature/x']);
+  assert.throws(() => assertIsolatedWorktree(primary), /primary \(control\) checkout/);
+});
+
+test('a linked worktree on a work branch is accepted', () => {
+  const primary = scratchPrimary();
+  const wt = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-packet-wt-')), 'work');
+  execFileSync('git', ['-C', primary, 'worktree', 'add', '-q', wt, '-b', 'feature/y']);
+
+  const result = assertIsolatedWorktree(wt);
+  assert.equal(result.branch, 'feature/y');
+  assert.equal(fs.realpathSync(result.toplevel), fs.realpathSync(wt));
+});
+
+test('a linked worktree sitting on main is still refused', () => {
+  const primary = scratchPrimary();
+  const wt = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-packet-wt-main-')), 'work');
+  execFileSync('git', ['-C', primary, 'worktree', 'add', '-q', '--detach', wt]);
+  execFileSync('git', ['-C', wt, 'switch', '-q', '-c', 'main-copy']);
+  execFileSync('git', ['-C', wt, 'branch', '-q', '-m', 'main-copy', 'master']);
+
+  assert.throws(() => assertIsolatedWorktree(wt), /refusing to run on "master"/);
+});
+
+test('a detached HEAD is refused — there is nothing to open a PR from', () => {
+  const primary = scratchPrimary();
+  const wt = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'codex-packet-wt-det-')), 'work');
+  execFileSync('git', ['-C', primary, 'worktree', 'add', '-q', '--detach', wt]);
+
+  assert.throws(() => assertIsolatedWorktree(wt), /detached HEAD/);
 });
