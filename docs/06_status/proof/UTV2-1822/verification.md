@@ -6,9 +6,20 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1482
+Execution SHA: b5414f8c0679e8292df65dcbdc80d80e8f66dfc7
 
-Anchor: 634780300366dbee9ce24fde0fc73e37a6405cc5 — the last non-proof commit on this branch and the head every CI
+Anchor: b5414f8c0679e8292df65dcbdc80d80e8f66dfc7 — the last non-proof commit on this branch and the head every CI
 receipt below was captured against. Only proof-path commits follow it.
+
+Re-anchored 2026-09-02. This lane was parked behind UTV2-1783, which repaired the
+contradictory pre-merge MERGE_SHA contract that blocked it. After that lane merged, this
+branch was synced to main, and the sync introduced non-proof files after the previous
+anchor `b5414f8c0679e8292df65dcbdc80d80e8f66dfc7` — which `proof-binding-validator` correctly rejected
+("Non-proof files changed between verified_source_sha and HEAD"). The anchor therefore
+moves to the sync merge commit, and every CI receipt below was re-captured at that exact
+head rather than being carried over. Both drills reproduce the same measured numbers there
+(receipts=127, 1396 catalog entries, drilled 127), which is why the claims are unchanged
+while the run and job IDs are not.
 
 ## Verification
 
@@ -104,7 +115,7 @@ behaviour rather than inspecting files.
 
 ### Behaviour-level replay — scratch Postgres
 
-`scripts/ci/migration-history-replay-drill.ts`, run 33580370804, job 100093191911 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `634780300366dbee9ce24fde0fc73e37a6405cc5`
+`scripts/ci/migration-history-replay-drill.ts`, run 33628487127, job 100241832846 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`
 
 ```
 phase 0: receipt manifest structurally valid
@@ -295,7 +306,7 @@ ASSERTIONS:
 
 EVIDENCE: every numbered assertion below cites the CI run and job that produced it; the
 runs are enumerated in `evidence.json` under `runtime_proof`, all taken at the anchor
-`634780300366dbee9ce24fde0fc73e37a6405cc5`.
+`b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`.
 
 ## Assertions
 
