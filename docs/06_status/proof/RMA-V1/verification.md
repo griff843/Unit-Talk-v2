@@ -188,7 +188,7 @@ would catch a weakened authz check are the same tests such a change edits.
 - [x] `pnpm type-check`: pass (silent)
 - [x] `pnpm test:ops`: 2880 tests, 2880 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 48 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 76 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 77 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts`: 29 pass, 0 fail
 - [x] Both workflow files parse as YAML after editing (`yaml.safe_load`)
@@ -264,6 +264,19 @@ historical Tier C path. The goal is risk-scoped authority, not old tiers under n
 in both directions by test, with the rationale recorded in the policy's `scopeNote`. Every
 boundary the PM did name is reserved.
 
+### The bootstrap needed a re-trigger that does not restart CI
+
+Observed on this PR rather than reasoned about. A PHASE 1 run owns the required
+`Executor Result Validation` identity and fires on the same `pull_request` event as
+`ci.yml`, so it always evaluates while `verify` is still queued: *"CI check is queued, not
+completed."* Close/reopen does not resolve it — `reopened` restarts `verify` too, so the
+loop cannot converge. Two attempts produced two cancelled CI runs and the same message.
+
+`ci.yml` uses the DEFAULT `pull_request` types, which exclude `labeled`. Adding
+`labeled`/`unlabeled` to the ERV workflow gives the required check a re-evaluation trigger
+that does not restart CI. The test asserts both halves — ERV listens for it, `ci.yml` does
+not — because the escape holds only while `ci.yml` stays on the defaults.
+
 ### Mutation controls
 
 Each control was applied to the shipped source, the suite run, and the source restored.
@@ -282,4 +295,4 @@ coverage.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 5e17400028e7873f34f4e89777101fa1b31d3c91
+Execution SHA: 84c2c8005040a7a7badbfe9fb8cd14738bdf7c27
