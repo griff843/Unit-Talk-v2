@@ -15,7 +15,7 @@
 
 import assert from 'node:assert/strict';
 import { execSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -240,4 +240,82 @@ test('F7: zero new migrations — gate PASSES with exit 0', () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1822 — wiring assertions.
+//
+// The receipt validator refusing when invoked is only half the control. The
+// other half is that CI actually invokes it for the cases that matter, and that
+// half is expressed entirely in the workflow file, where nothing else would
+// catch a regression. These assertions are the mechanical enforcement: they fail
+// if someone re-narrows the triggers or re-gates the validation step.
+//
+// The specific fail-open being locked out: `has_migration` is computed with
+// `git diff --diff-filter=A`, so it is FALSE when an existing receipt is edited
+// or an archive source is changed. Gating structural validation on it would make
+// the gate pass for exactly the mutations it exists to catch.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const WORKFLOW = readFileSync('.github/workflows/migration-reversibility-gate.yml', 'utf8');
+
+test('W1: workflow triggers on every receipt-truth input path', () => {
+  for (const p of [
+    'supabase/migrations/**',
+    'supabase/migrations_archive/**',
+    'scripts/ci/migration-history-receipt.ts',
+    'scripts/ci/migration-history-receipt-check.ts',
+    'scripts/ci/migration-history-receipt-validator.ts',
+    'scripts/ci/migration-history-replay-drill.ts',
+  ]) {
+    assert.ok(
+      WORKFLOW.includes(`- '${p}'`),
+      `Workflow must trigger on '${p}'. A receipt binds a hash to a source under ` +
+        `migrations_archive, so a change there alters what the receipt asserts ` +
+        `without touching the receipt file; if it does not trigger, nothing validates it.`,
+    );
+  }
+});
+
+test('W2: structural receipt validation runs unconditionally — never gated on has_migration', () => {
+  const step = 'Receipt manifest structural validation (UTV2-1822)';
+  assert.ok(WORKFLOW.includes(step), `Workflow must contain the "${step}" step.`);
+
+  // Take the step body up to the next step, and require no `if:` in it.
+  const body = WORKFLOW.slice(WORKFLOW.indexOf(step)).split(/\n {6}- name:/)[0];
+  assert.ok(
+    body.includes('migration-history-receipt-validator.ts'),
+    'The step must invoke the receipt validator.',
+  );
+  assert.ok(
+    !/\n\s+if:/.test(body),
+    'Structural validation must carry NO `if:` condition. Gating it on has_migration ' +
+      '(computed with --diff-filter=A) makes it fail open for a modified receipt or a ' +
+      'changed archive source — the two cases it exists to reject.',
+  );
+});
+
+test('W3: the validation step lives in a job that has no has_migration gate available', () => {
+  // Structural belt-and-braces: the step sits in reversibility-check, which has no
+  // `detect` step at all, so `steps.detect.outputs.has_migration` cannot be
+  // referenced there even by accident.
+  const job = WORKFLOW.slice(
+    WORKFLOW.indexOf('  reversibility-check:'),
+    WORKFLOW.indexOf('  schema-roundtrip-drill:'),
+  );
+  assert.ok(
+    job.includes('Receipt manifest structural validation (UTV2-1822)'),
+    'Validation must be in the reversibility-check job, which always runs on trigger.',
+  );
+  // Comment lines are stripped first: prose explaining WHY the gate must not
+  // consult has_migration is not itself a use of it, and failing on the
+  // explanation would push authors to delete the explanation.
+  const jobCode = job
+    .split('\n')
+    .filter((l) => !l.trimStart().startsWith('#'))
+    .join('\n');
+  assert.ok(
+    !jobCode.includes('has_migration'),
+    'The job carrying unconditional validation must not compute or consult has_migration.',
+  );
 });

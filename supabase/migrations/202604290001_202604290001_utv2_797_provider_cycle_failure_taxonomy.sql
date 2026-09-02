@@ -1,0 +1,30 @@
+-- MIGRATION-HISTORY-RECEIPT v1
+-- UTV2-1822: non-executable historical version receipt.
+--
+-- receipt_version:     1
+-- remote_version:      202604290001
+-- remote_name:         202604290001_utv2_797_provider_cycle_failure_taxonomy
+-- source_kind:         archive_fallback
+-- source_path:         supabase/migrations_archive/202604290001_utv2_797_provider_cycle_failure_taxonomy.sql
+-- source_sha256:       2b4d37c76e918c2d74565b8ee0bf7415a8edf8e736b1a9ac27a8f61974380326
+-- subsumed_by:         supabase/migrations/00000000000000_baseline_live_schema.sql
+--
+-- WHY THIS FILE CONTAINS NO EXECUTABLE SQL
+--
+-- This version is recorded as applied in the remote migration ledger, so
+-- `supabase db push` refuses to run at all while it has no local counterpart
+-- (pkg/migration/apply.go: "Remote migration versions not found in local
+-- migrations directory"). That precondition is about CORRESPONDENCE, not about
+-- re-execution: the CLI requires a local file to exist for every remote row.
+--
+-- Its schema effects are already contained in the active baseline snapshot
+-- (supabase/migrations/00000000000000_baseline_live_schema.sql),
+-- which is the replay root. Re-executing this migration would therefore either
+-- duplicate objects the baseline already creates or replay data statements
+-- against a database that has already absorbed them. Neither is correct, so
+-- this file asserts identity and provenance only and executes nothing.
+--
+-- The exact SQL that actually executed is preserved verbatim, outside the
+-- active replay path, at source_path above, and is bound here by
+-- source_sha256. scripts/ci/migration-history-receipt-validator.ts enforces
+-- that binding and rejects any executable statement added to this file.
