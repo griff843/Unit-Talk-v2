@@ -27,9 +27,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1815/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-01T22:30:39.135Z",
-  "heartbeat_at": "2026-09-01T22:47:03.712Z",
+  "heartbeat_at": "2026-09-02T02:27:09.711Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1815-null-stake-computation-truth.json",
