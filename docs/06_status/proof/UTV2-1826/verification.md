@@ -2,9 +2,9 @@
 
 MERGE_SHA: ef27ab62c90d8fb9bd6ee6d7688c836411a0753b
 
-> Pre-merge the merge row is intentionally the ratified pre-merge value; the Execution SHA
-> row carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
-> merge authority only after GitHub supplies the merged-PR attestation.
+> Rebound post-merge. The merge row now carries GitHub's merged-PR attestation for PR #1486
+> (`ops:proof-rebind --pr 1486 --apply`); the Execution SHA row still carries the verified
+> implementation identity, which is a different object and always was.
 
 Issue: UTV2-1826
 Tier: T2
