@@ -1,10 +1,13 @@
 # PROOF: UTV2-1789
 
-MERGE_SHA: 974da2705296e8a0dd561a333e9cd23db3793396
+MERGE_SHA: pending merge
 
-> Pre-merge the merge anchor carries the verified implementation identity.
-> `post-merge-lane-close.yml` rebinds merge authority only after GitHub supplies
-> the merged-PR attestation.
+> UTV2-1783 split merge authority from execution identity. This row presents
+> merge authority only, which does not exist before merge, so it reads
+> `pending merge`; `post-merge-lane-close.yml` rebinds it once GitHub supplies
+> the merged-PR attestation. Execution identity — the anchor every receipt below
+> was executed against — is `sha_binding.verified_source_sha` in the sibling
+> `evidence.json`, and remains 974da2705296e8a0dd561a333e9cd23db3793396.
 
 Generated at: 2026-09-01T15:09:06Z
 Issue: UTV2-1789
