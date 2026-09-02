@@ -32,8 +32,8 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  markdownFencedLineIndexes,
   validateEvidenceBundleContract,
+  validateProofMergeShaIdentity,
   type EvidenceContractResult,
 } from '../ops/proof-schema.js';
 import { validatePreMergeModelRoutingEvidence, type ModelRoutingBlock } from '../ops/model-routing.js';
@@ -88,34 +88,23 @@ interface ManifestBindingContext {
   expectsModelRouting: boolean;
 }
 
-export function validatePreMergeVerificationBinding(content: string): string[] {
-  const violations: string[] = [];
-  const lines = content.split(/\r?\n/u);
-  const fenced = markdownFencedLineIndexes(content);
-  const activeLines = lines.map((line, index) => fenced.has(index) ? '' : line);
-  const top = activeLines.map((line) => line.match(/^MERGE_SHA:\s*(.*)$/u)).filter((match) => match !== null);
-  if (top.length !== 1) {
-    violations.push(`verification.md must contain exactly one top-level MERGE_SHA: row (found ${top.length})`);
-  } else if (top[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
-    violations.push('verification.md MERGE_SHA must be "pending merge" before merge; branch SHAs are execution identity only');
-  }
-  const headingIndexes = activeLines.flatMap((line, index) => /^## Merge SHA Binding\s*$/u.test(line) ? [index] : []);
-  if (headingIndexes.length !== 1) {
-    violations.push(`verification.md must contain exactly one "## Merge SHA Binding" section (found ${headingIndexes.length})`);
-    return violations;
-  }
-  const start = headingIndexes[0]! + 1;
-  const endOffset = activeLines.slice(start).findIndex((line) => /^##\s+/u.test(line));
-  const section = activeLines.slice(start, endOffset === -1 ? undefined : start + endOffset);
-  const mergeRows = section.map((line) => line.match(/^Merge SHA:\s*(.*)$/u)).filter((match) => match !== null);
-  const prRows = section.map((line) => line.match(/^PR:\s*(.*)$/u)).filter((match) => match !== null);
-  if (mergeRows.length !== 1 || mergeRows[0]?.[1]?.trim().toLowerCase() !== 'pending merge') {
-    violations.push('Merge SHA Binding section requires exactly one "Merge SHA: pending merge" row before merge');
-  }
-  if (prRows.length !== 1 || !prRows[0]?.[1]?.trim()) {
-    violations.push('Merge SHA Binding section requires exactly one non-empty PR: row');
-  }
-  return violations;
+/**
+ * UTV2-1783: the markdown half of the proof identity contract.
+ *
+ * This used to own its own copy of the rules and required the top-level
+ * `MERGE_SHA:` row to be the literal `pending merge`, while required Executor
+ * Result Validation required that same row to be a real hex SHA — a
+ * contradiction no bundle could satisfy. The rules now live once, in
+ * proof-schema's `validateProofMergeShaIdentity`, and both consumers call it,
+ * so the two can no longer drift apart.
+ *
+ * `evidence` is passed through because the phase (pre- vs post-merge) and the
+ * execution anchor are facts of the sha_binding block, not of the markdown.
+ */
+export function validatePreMergeVerificationBinding(content: string, evidence?: unknown): string[] {
+  return validateProofMergeShaIdentity({ verificationMarkdown: content, evidence }).failures.map(
+    (failure) => failure.message,
+  );
 }
 
 function git(cmd: string): string {
@@ -222,7 +211,7 @@ function main(): void {
   if (!existsSync(verificationPath)) {
     violations.push(`verification.md is missing: ${verificationPath}`);
   } else {
-    violations.push(...validatePreMergeVerificationBinding(readFileSync(verificationPath, 'utf8')));
+    violations.push(...validatePreMergeVerificationBinding(readFileSync(verificationPath, 'utf8'), evidence));
   }
 
   const modelRoutingPath = join(args.proofDir, 'model-routing.json');
