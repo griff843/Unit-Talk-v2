@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1825-rebind-pending-merge-placeholder",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1485",
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1825.yml",
@@ -21,9 +21,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1825/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-02T14:51:58.306Z",
-  "heartbeat_at": "2026-09-02T14:51:58.306Z",
+  "heartbeat_at": "2026-09-02T14:56:29.904Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1825-rebind-pending-merge-placeholder.json",
