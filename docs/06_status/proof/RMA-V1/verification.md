@@ -333,9 +333,21 @@ without touching a file the classifier reserves.
       a group is the ordinary case, and reserving it would make every harness PR a human
       relay. A second rule, `neutered-test-group`, reserves a group redefined to a value
       that invokes no runner at all (`true`, `echo skipped`, `exit 0`). The residual is
-      stated rather than hidden: a diff can still delete individual files from a group's
-      list and stay `auto`. That change is legible in the diff itself; an emptied
+      stated rather than hidden: a diff can still delete individual files from a runner's
+      argument list and stay `auto`. That change is legible in the diff itself; an emptied
       aggregator is not.
+
+      **Scoping correction.** The unit tests passed on the first draft of these two rules,
+      but replaying the last 40 merged PRs through the classifier did not: PR #1469 extends
+      `apps/smart-form`'s `test` key with new test files and adds
+      `"test:e2e": "playwright test ..."`, and the draft reserved it — freezing exactly the
+      ordinary wiring RMA exists to keep automatic. `ci-required-check-entrypoints` is now
+      scoped to the ROOT `package.json`, the file the required job actually reads, and the
+      complement rule (`neutered-workspace-script`) covers every workspace package with a
+      runner allowlist that recognises playwright, vitest, mocha, next and turbo rather than
+      `tsx` alone. After the correction #1469 classifies on `auth-and-authorization` alone,
+      and 20 of the 40 sampled PRs stay `auto` — the round-4 rules add no human load across
+      that sample while still reserving the attack.
 - [x] **JSON escapes evaded the entrypoint rule.** `"ops\u003amerge-wrapper"` decodes to
       the key pnpm actually runs, but a regex over the raw patch text sees no colon and
       matches nothing. Content rules now accept `decodeJsonEscapes`, and every added line
@@ -352,8 +364,10 @@ without touching a file the classifier reserves.
 |---|---|
 | `decodeJsonEscapes` handling disabled | CAUGHT — 1 fail |
 | `ci-required-check-entrypoints` rule removed | CAUGHT — 2 fail |
-| `neutered-test-group` rule removed | CAUGHT — 1 fail |
+| `neutered-workspace-script` rule removed | CAUGHT — 2 fail |
 | `scripts/ops/shared.ts` unreserved | CAUGHT — 1 fail |
+| root entrypoint rule widened past the root package.json | CAUGHT — 1 fail |
+| `playwright` dropped from the runner allowlist | CAUGHT — 1 fail |
 
 Each was applied to the shipped source, the suite run, the source restored. Each was
 caught, and each failed only its own assertions.
@@ -363,4 +377,4 @@ caught, and each failed only its own assertions.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 396092cbeda45113dbeaa4aa212cdc6343fe1421
+Execution SHA: 2f76b00c72fb23b4757ef9fe9f7e2209ccca6085
