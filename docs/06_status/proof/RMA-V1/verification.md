@@ -186,9 +186,11 @@ would catch a weakened authz check are the same tests such a change edits.
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2871 tests, 2871 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 43 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 74 pass, 0 fail
+- [x] `pnpm test:ops`: 2880 tests, 2880 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 48 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 76 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts`: 29 pass, 0 fail
 - [x] Both workflow files parse as YAML after editing (`yaml.safe_load`)
 - [ ] `pnpm verify` end-to-end: not obtainable off-CI — the final `test:live-db` step is
       refused by the fail-closed staging guard on a host with no staging identity. The
@@ -216,9 +218,68 @@ and the surface list grew. The one intentional relaxation is the ratified premis
 itself — that a diff touching no reserved surface is authorized on green CI — which is what
 this PR is for and what the human approval on it authorizes.
 
+## Independent review round 2
+
+Four defects closed at this head. Each is stated as what would happen without the fix,
+because a control that names no failure it prevents asserts nothing.
+
+- [x] **The ERV bootstrap deadlock (found while verifying, not in review).** The required
+      `Executor Result Validation` context is created only by `issue_comment` /
+      `workflow_dispatch` runs, and GitHub executes the workflow file for those events from
+      the DEFAULT BRANCH — not from the PR head. The PR that first lands RMA is therefore
+      judged by main's pre-RMA validator, which rejects any branch outside
+      `(claude|codex)/(utv2|uni)-NNN`. Observed live on this PR: *"Invalid Issue ID:
+      `<missing>`" / "Invalid branch: claude/rma-v1-risk-scoped-merge-authority"*. No label,
+      comment or verdict clears it, and the PR carrying the fix cannot install it before
+      being judged by it. `pull_request` is the one event whose workflow file comes from the
+      head, so while `scripts/ops/merge-authority.cjs` is absent from the trusted base
+      checkout, that run takes the required identity. Once the classifier is on main the
+      guard is false forever after and UTV2-1550's one-authoritative-identity rule is
+      restored in full.
+- [x] **P1 — the sanctioned merge wrapper double-gated the RMA decision.**
+      `pre-merge-authorization.ts` resolved a lane-manifest tier and required a pm-verdict
+      unless it read T2/T3. An `auto` diff that Merge Gate cleared was still refused at the
+      final step, and a mission branch — no tracker id, so no manifest to look up — was
+      refused permanently. Merge authority is now decided in exactly one place: a green
+      `Merge Gate` on the exact head IS the RMA decision, because the gate itself required
+      the CODEOWNERS label and the head-bound verdict before going green. The tier is still
+      resolved and recorded in the receipt; it no longer decides anything. This function
+      cannot be more permissive than the required check it defers to.
+- [x] **P1 — a truncated changed-file list classified as a clean diff.** GitHub's
+      List-pull-request-files endpoint stops at 3,000 files however far you paginate, so on
+      a larger PR a reserved file can simply be absent from the response and the visible
+      subset classify as `auto` in Merge Gate and waive proof in ERV. Both gates now pass
+      the PR's own `changed_files` total, and a short list reserves as `unclassifiable`.
+- [x] **P2 — a patchless rename skipped content inspection.** GitHub omits `patch` both for
+      a 100%-similarity rename (nothing to scan) and for a rename whose accompanying edit is
+      too large to return; only the change counts tell those apart. Added `DROP TABLE` in a
+      renamed file could therefore reach `auto` when neither path was otherwise reserved. A
+      rename is now skipped solely when it reports zero additions and zero deletions;
+      anything else, including missing counts, is unclassifiable.
+
+**Declined, on the record: "Keep human approval on every declared Tier C path."** The
+ratified instruction for this work is the opposite — *"Do not automatically preserve every
+historical Tier C path. The goal is risk-scoped authority, not old tiers under new names."*
+`packages/domain`, `packages/contracts` and the lifecycle repositories stay `auto`, asserted
+in both directions by test, with the rationale recorded in the policy's `scopeNote`. Every
+boundary the PM did name is reserved.
+
+### Mutation controls
+
+Each control was applied to the shipped source, the suite run, and the source restored.
+Each was caught, and each failed only its own assertions — so no fix carries another's
+coverage.
+
+| Mutation | Result |
+|---|---|
+| truncation guard disabled (`if (false && ...)`) | CAUGHT — 2 fail |
+| patchless rename skipped again (`status === 'renamed'` alone) | CAUGHT — 1 fail |
+| verdict never required (`return false`) | CAUGHT — 11 fail |
+| ERV bootstrap identity removed (event never matches) | CAUGHT — 1 fail |
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: fadd598e8c66495207c28e47bd0d70cd9b086853
+Execution SHA: 5e17400028e7873f34f4e89777101fa1b31d3c91

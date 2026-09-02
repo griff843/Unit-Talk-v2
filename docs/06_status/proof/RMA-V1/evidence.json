@@ -6,19 +6,25 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "fadd598e8c66495207c28e47bd0d70cd9b086853",
-    "evidence_commit_sha": "fadd598e8c66495207c28e47bd0d70cd9b086853",
+    "verified_source_sha": "5e17400028e7873f34f4e89777101fa1b31d3c91",
+    "evidence_commit_sha": "5e17400028e7873f34f4e89777101fa1b31d3c91",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_lint": "PASS",
       "pnpm_type_check": "PASS",
-      "pnpm_test": "PASS (test:ops 2871 tests, 0 failures)",
+      "pnpm_test": "PASS (test:ops 2880 tests, 0 failures)",
       "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
     }
   },
   "static_proof": {
-    "lint": { "status": "PASS", "command": "pnpm lint" },
-    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
     "test": {
       "status": "PASS",
       "command": "pnpm test:ops",
