@@ -10,10 +10,15 @@ import {
   type TypeCapsConfig,
 } from './concurrency-config.js';
 import {
-  ACTIVE_LOCK_STATUSES,
+  ActiveLaneDiscoveryError,
+  classifyLaneCapacity,
   readConfiguredEnvValue,
+  resolveActiveLaneManifests,
   resolveLaneExecutor,
+  type ActiveLaneDiscoveryDeps,
   type CanonicalLaneType,
+  type LaneManifestStatus,
+  type LaneTier,
 } from './shared.js';
 import {
   checkConcurrencyLimits,
@@ -21,22 +26,30 @@ import {
   type ConcurrencyManifestLike,
   type IncomingLaneScope,
 } from './concurrency-rules.js';
-import { linearQuery } from './linear-client.js';
+import { linearQuery, type LinearQueryResult } from './linear-client.js';
 import {
   FULL_VERIFY_THROTTLE_DIR,
   configuredFullVerifyConcurrency,
 } from './preflight.js';
 import { readSemaphoreStatus } from './verify-semaphore.js';
 
+/**
+ * Structural view of a lane manifest as this planner consumes it. Deliberately
+ * a superset-compatible subset of `shared.ts`'s canonical `LaneManifest`, so the
+ * canonical active-lane resolver's output can be handed to `evaluateCandidates`
+ * verbatim (UTV2-1699). `executor` is optional and `status` uses the canonical
+ * status union -- notably including `parked`, which is inside
+ * `ACTIVE_LOCK_STATUSES` and was previously unrepresentable here.
+ */
 export interface LaneManifest {
   schema_version: number;
   issue_id: string;
   lane_type: string;
-  executor: 'claude' | 'codex-cli' | 'codex-cloud';
-  tier: 'T1' | 'T2' | 'T3';
+  executor?: 'claude' | 'codex-cli' | 'codex-cloud';
+  tier: LaneTier;
   branch: string;
   base_branch: string;
-  status: 'started' | 'in_progress' | 'in_review' | 'merged' | 'done' | 'blocked' | 'reopened';
+  status: LaneManifestStatus;
   file_scope_lock: string[];
   blocked_by: string[];
   commit_sha: string | null;
@@ -117,6 +130,20 @@ export interface LaneSaturationForecast {
     active: number;
     available_slots: number;
     lock_dir: string;
+  };
+  /**
+   * UTV2-1699 F1: lanes that are visible and still hold their file-scope lock
+   * but count against NO cap (parked). Reported so a consumer can never read
+   * "absent from the capacity counts" as "absent from the board" -- these lanes
+   * still block an overlapping candidate with OVERLAP.
+   */
+  visible_uncounted_lanes: Array<{ issue_id: string; lane_type: string; status: string }>;
+  /** How each reported number was populated. Never inferred by a consumer. */
+  capacity_classification: {
+    source: 'classifyLaneCapacity';
+    executor_rule: string;
+    lane_slot_rule: string;
+    lock_population_rule: string;
   };
   safe_class_recommendations: string[];
 }
@@ -425,6 +452,61 @@ function inferWorkClass(laneType: string, singletonLaneTypes: string[]): string 
   return singletonLaneTypes.includes(laneType) ? 'singleton' : 'safe';
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1699 F1: capacity is a MATRIX, not one flat set.
+//
+// `activeLanes` here is the ACTIVE_LOCK_STATUSES population -- the LOCK
+// population. It is deliberately broader than every capacity set, because a
+// parked lane consumes no capacity but keeps its file-scope lock. Counting the
+// lock population straight into executor slots, singleton forecasts and
+// forbidden-combination forecasts manufactures phantom occupancy: a parked
+// `migration` lane would fabricate a migration singleton and a
+// migration+runtime forbidden pair, and an `in_review` lane would report an
+// executor busy that nobody is working.
+//
+// That mis-report was dormant while active lanes were read from the local
+// manifest directory only (on `main` there are none, so the tool reported 0/0).
+// Resolving the open-PR-head union makes it live, so the capacity
+// classification is applied here rather than deferred.
+//
+// `classifyLaneCapacity` (shared.ts) is the single canonical source for which
+// status counts against which cap -- the same function `ops:execution-state`
+// filters on, backed by the same EXECUTOR_/TOTAL_/TYPE_CAPACITY_STATUSES sets
+// that `checkConcurrencyLimits` (concurrency-rules.ts) enforces at real
+// admission time. No parallel policy is defined here.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Lanes occupying an executor's attention. Excludes in_review, blocked and
+ * parked: in all three the lane waits on something outside the executor.
+ * Mirrors checkConcurrencyLimits()'s `executorActive`.
+ */
+function executorCapacityLanes(activeLanes: LaneManifest[]): LaneManifest[] {
+  return activeLanes.filter((lane) => classifyLaneCapacity(lane.status).countsAgainst.executor);
+}
+
+/**
+ * Lanes occupying a lane slot. This is the population checkConcurrencyLimits()
+ * calls `active` and evaluates the singleton and forbidden-combination rules
+ * against, so the forecast must use the same one or it predicts conflicts the
+ * real admission check would not raise. Excludes parked.
+ */
+function totalCapacityLanes(activeLanes: LaneManifest[]): LaneManifest[] {
+  return activeLanes.filter((lane) => classifyLaneCapacity(lane.status).countsAgainst.total);
+}
+
+/**
+ * Lanes that are visible and hold locks but count against no capacity at all.
+ * Reported explicitly so "not counted" can never be confused with "not there" --
+ * these lanes still enforce file-scope OVERLAP.
+ */
+function visibleUncountedLanes(activeLanes: LaneManifest[]): LaneManifest[] {
+  return activeLanes.filter((lane) => {
+    const counts = classifyLaneCapacity(lane.status).countsAgainst;
+    return !counts.executor && !counts.total && !counts.laneType;
+  });
+}
+
 function activeLaneTypes(activeLanes: LaneManifest[]): string[] {
   return Array.from(new Set(activeLanes.map((lane) => lane.lane_type).filter(Boolean))).sort();
 }
@@ -571,8 +653,69 @@ function readLaneManifests(dir: string = LANE_DIR): LaneManifest[] {
     .filter((manifest): manifest is LaneManifest => manifest !== null);
 }
 
-function readActiveLanes(dir: string = LANE_DIR): LaneManifest[] {
-  return readLaneManifests(dir).filter((manifest) => ACTIVE_LOCK_STATUSES.has(manifest.status));
+/**
+ * UTV2-1699 Defect 2/8 repair. The active-lane set is resolved through the
+ * canonical resolver in `shared.ts` -- the same one `ops:lane-start` and
+ * `ops:execution-state` use -- which unions the local manifest population with
+ * every OPEN PR's manifest read at that PR's own head ref, and which throws
+ * `ActiveLaneDiscoveryError` rather than returning a smaller board when any
+ * part of that enumeration cannot be completed.
+ *
+ * The previous local-directory-only read was fail-open twice over: an active
+ * lane whose manifest exists only on its PR head was invisible (measured
+ * 2026-09-01: ZERO active manifests on `main` while three lanes were live), and
+ * an unparseable manifest was silently dropped, shrinking the board instead of
+ * failing it.
+ */
+/**
+ * UTV2-1699. A manifest read from an open PR head is FOREIGN input: it was
+ * authored on a branch this process has never verified, and it can be
+ * syntactically valid JSON while being structurally unusable -- most commonly a
+ * missing or non-array `file_scope_lock`, which makes the overlap scan
+ * dereference `undefined` deep inside `evaluateCandidates`.
+ *
+ * That throw is not merely a crash: it escapes AFTER the error-envelope branches
+ * have been passed, so the process exits non-zero having printed NOTHING to
+ * stdout. A consumer that parses stdout gets an empty string, which is exactly
+ * the unreadable-board-as-empty-board failure this lane exists to remove.
+ *
+ * So the structural contract is enforced HERE, at the discovery boundary, where
+ * the failure is still attributable to active-lane discovery and still lands in
+ * the `active_lane_discovery_failed` envelope with a real remediation.
+ */
+function assertUsableActiveLanes(manifests: LaneManifest[]): LaneManifest[] {
+  for (const manifest of manifests) {
+    const label =
+      typeof manifest?.issue_id === 'string' && manifest.issue_id.length > 0
+        ? manifest.issue_id
+        : '<unknown issue_id>';
+    if (typeof manifest?.issue_id !== 'string' || manifest.issue_id.length === 0) {
+      throw new ActiveLaneDiscoveryError(
+        'Discovered active lane manifest has no usable issue_id. Refusing to evaluate capacity, ' +
+          'singleton and file-scope conflicts against an unidentifiable lane.',
+      );
+    }
+    if (typeof manifest.status !== 'string' || manifest.status.length === 0) {
+      throw new ActiveLaneDiscoveryError(
+        `Discovered active lane manifest ${label} has no usable status. Refusing to classify ` +
+          'capacity against a lane whose lifecycle state is unknown.',
+      );
+    }
+    if (!Array.isArray(manifest.file_scope_lock)) {
+      throw new ActiveLaneDiscoveryError(
+        `Discovered active lane manifest ${label} has no array file_scope_lock. Refusing to run ` +
+          'the file-scope overlap scan against a lane whose declared scope is unreadable -- an ' +
+          'unknown scope is never treated as an empty scope.',
+      );
+    }
+  }
+  return manifests;
+}
+
+function resolveActiveLanesCanonically(
+  discoveryDeps?: ActiveLaneDiscoveryDeps,
+): LaneManifest[] {
+  return assertUsableActiveLanes(resolveActiveLaneManifests(discoveryDeps).manifests);
 }
 
 function readDoneIssueIds(dir: string = LANE_DIR): Set<string> {
@@ -644,8 +787,53 @@ function parseBlockedByFromText(text: string | null | undefined): string[] {
   return [...blockedLine[1].matchAll(/(?:UTV2|UNI)-\d+/g)].map((match) => match[0]);
 }
 
-export function isBlockingLinearRelationType(type: string): boolean {
+/**
+ * UTV2-1820: which relation types name a PREREQUISITE, and on which edge.
+ *
+ * Linear stores one row per relation and exposes it from both ends. Measured
+ * against the live API on 2026-09-01, for the real edge UTV2-1771 -> UTV2-1370:
+ *
+ *   UTV2-1771.relations        -> { type: "blocks", relatedIssue: UTV2-1370 }
+ *   UTV2-1370.inverseRelations -> { type: "blocks", issue:        UTV2-1771 }
+ *
+ * Both sides of the SAME edge carry `type: "blocks"`. The type string alone
+ * therefore carries no direction at all -- the direction is which connection
+ * the node came from. `relations` is the outgoing edge (this issue blocks the
+ * related one, so the related one is DOWNSTREAM), and `inverseRelations` is the
+ * incoming edge (the named issue blocks this one, so it is a PREREQUISITE).
+ *
+ * The shipped predicate treated `blocks` on the outgoing edge as a prerequisite,
+ * which inverted the dependency: an issue that unblocks other work was reported
+ * as blocked by that work and refused dispatch until its own dependents
+ * completed -- which they could not, because they were waiting on it.
+ *
+ * `blocked_by` is accepted here as well. It was never observed on the wire in
+ * the UTV2 team (the vocabulary seen is `blocks` and `related`), but if Linear
+ * ever emits it on the inverse edge it unambiguously names a prerequisite, and
+ * accepting it costs nothing while refusing it would fail open.
+ */
+/**
+ * Stand-in prerequisite used when a relation set cannot be read. It is not a
+ * real issue identifier and never resolves to a completed issue, so a candidate
+ * carrying it stays BLOCKED_DEP instead of being silently admitted.
+ */
+export const LINEAR_UNREADABLE_RELATIONS_SENTINEL = 'UNREADABLE-RELATIONS';
+
+export function isPrerequisiteInverseRelation(type: string): boolean {
   return type === 'blocks' || type === 'blocked_by';
+}
+
+/**
+ * The OUTGOING edge never names a prerequisite. This exists as a named function
+ * rather than an inlined `false` so the property is testable and so a future
+ * reader cannot "fix" the inversion back by editing a bare literal.
+ *
+ * `blocked_by` on the outgoing edge would mean "this issue is blocked by the
+ * related one", which IS a prerequisite -- so it is honoured. It has never been
+ * observed on this connection; `blocks` and `related` are what Linear returns.
+ */
+export function isPrerequisiteOutgoingRelation(type: string): boolean {
+  return type === 'blocked_by';
 }
 
 export function parseQueueCandidates(queuePath: string): CandidateLane[] {
@@ -695,17 +883,199 @@ export function parseQueueCandidates(queuePath: string): CandidateLane[] {
   return candidates;
 }
 
-async function fetchLinearCandidates(argv: string[]): Promise<CandidateLane[]> {
-  const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
+/**
+ * Linear's server-side GraphQL query-complexity ceiling. Exceeding it is a hard
+ * HTTP 400 (`"Query too complex"`), not a soft degradation.
+ */
+export const LINEAR_CANDIDATE_COMPLEXITY_BUDGET = 10_000;
+
+/**
+ * Measured complexity cost of ONE `LaneCandidates` node, taken from a live API
+ * response on 2026-09-01: `first: 100` was rejected at a reported complexity of
+ * 22601, i.e. ~226.01 per node. Linear charges for the nested connections in the
+ * selection (`labels`, `relations` and `inverseRelations`), which is why a node
+ * is this expensive.
+ *
+ * The figure was 116.01 with two connections. Adding `inverseRelations` -- which
+ * UTV2-1820 requires, because it is the only edge that names a genuine
+ * prerequisite -- very nearly doubled it, re-measured on the same day against
+ * the real query text: 100 -> 22601, 75 -> 16951, 60 -> 13561, 50 -> 11301,
+ * 40 -> OK. That is why the page size below had to move at the same time.
+ *
+ * If the node selection gains another nested connection this figure is stale --
+ * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` exists to make that a test failure
+ * rather than a production outage.
+ */
+export const LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE = 226.01;
+
+/**
+ * Number of nested connections in the `LaneCandidates` node selection that the
+ * per-node complexity figure above was measured against: `labels { nodes }`,
+ * `relations { nodes }` and `inverseRelations { nodes }`. Adding a fourth
+ * invalidates the measurement.
+ */
+export const LINEAR_CANDIDATE_NESTED_CONNECTIONS = 3;
+
+/**
+ * Page size for the candidate query. Linear's `issues` connection accepts up to
+ * 250 rows per page, but the ROW limit is not the binding constraint -- the
+ * query-complexity budget is. At the measured ~226 complexity per node, 100 rows
+ * costs ~22601 against a ceiling of 10000 and is rejected outright with HTTP 400,
+ * which took the whole dispatch family down (UTV2-1819). 30 costs ~6780, roughly
+ * 68% of budget, leaving headroom for Linear to re-price the selection without
+ * breaking discovery again.
+ *
+ * 50 was correct for the two-connection selection and is NOT correct for this
+ * one: it costs ~11301 and would be rejected outright. The page size and the
+ * measured per-node cost have to move together, which is what
+ * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` is there to force.
+ *
+ * This is a TRANSPORT detail only. It never caps the candidate population: the
+ * cursor walk in `fetchLinearCandidates` pages until `hasNextPage` is false, so
+ * a smaller page size costs an extra round trip and changes nothing else.
+ */
+export const LINEAR_CANDIDATE_PAGE_SIZE = 30;
+
+/**
+ * Hard stop on whole-board discovery, expressed in CANDIDATE NODES.
+ *
+ * This is the supported population ceiling: a board at or under this size is
+ * fully discoverable, and a board above it FAILS CLOSED rather than returning
+ * the pages collected so far -- a truncated candidate population is exactly the
+ * fail-open this lane exists to remove.
+ *
+ * It is deliberately stated in nodes, not pages. The pre-UTV2-1819 guard was
+ * `page > 100` with a page size of 100, so the real ceiling was an ACCIDENT of
+ * the transport: halving the page size to stay inside Linear's complexity
+ * budget would have silently halved supported board capacity from 10000 to
+ * 5000. Transport page size must never define whole-board population capacity,
+ * so the ceiling is named here and the page bound is derived from it below.
+ */
+export const LINEAR_CANDIDATE_MAX_NODES = 10_000;
+
+/**
+ * Loop bound for the cursor walk, DERIVED from the node ceiling so that
+ * changing `LINEAR_CANDIDATE_PAGE_SIZE` cannot change supported capacity.
+ *
+ * The node ceiling alone cannot bound the loop: a server that returns empty
+ * pages while still reporting `hasNextPage` would never reach it. This bound
+ * exists only to make that pathological case terminate, so it is one page
+ * looser than the node ceiling strictly requires and is never the guard that
+ * fires on a merely-large board.
+ */
+export function linearCandidateMaxPages(pageSize: number = LINEAR_CANDIDATE_PAGE_SIZE): number {
+  return Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1;
+}
+
+/**
+ * The candidate query, exported so the complexity regression inspects the REAL
+ * query text rather than a copy that could drift away from it.
+ */
+export const LINEAR_CANDIDATE_QUERY = `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
+       team(id: $teamId) {
+         issues(
+           first: $limit
+           after: $cursor
+           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
+           orderBy: createdAt
+         ) {
+           pageInfo { hasNextPage endCursor }
+           nodes {
+             identifier
+             title
+             url
+             description
+             branchName
+             labels { nodes { name } }
+             state { name type }
+             relations {
+               nodes {
+                 type
+                 relatedIssue { identifier }
+               }
+             }
+             inverseRelations {
+               nodes {
+                 type
+                 issue { identifier }
+               }
+             }
+           }
+         }
+       }
+     }`;
+
+/** Injection seam for the Linear transport, so pagination is testable offline. */
+export interface LinearCandidateFetchDeps {
+  query?: <T>(
+    query: string,
+    variables: Record<string, unknown>,
+    options: { token: string; userAgent?: string; timeoutMs?: number },
+  ) => Promise<LinearQueryResult<T>>;
+  token?: string | null;
+}
+
+interface LinearCandidateIssueNode {
+  identifier: string;
+  title: string;
+  url: string;
+  description: string | null;
+  branchName: string | null;
+  labels: { nodes: Array<{ name: string }> };
+  state: { name: string; type: string } | null;
+  relations: {
+    nodes: Array<{
+      type: string;
+      relatedIssue: { identifier: string } | null;
+    }>;
+  };
+  /**
+   * Relations where this issue is the TARGET. A prerequisite of this issue
+   * appears here, not in `relations` -- see `isPrerequisiteInverseRelation`.
+   * Optional in the type because a server that omits it must be treated as
+   * unreadable and blocked, never as "no prerequisites".
+   */
+  inverseRelations?: {
+    nodes: Array<{
+      type: string;
+      issue: { identifier: string } | null;
+    }>;
+  } | null;
+}
+
+interface LinearCandidatePage {
+  team: {
+    issues: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: LinearCandidateIssueNode[];
+    };
+  } | null;
+}
+
+export async function fetchLinearCandidates(
+  argv: string[],
+  deps: LinearCandidateFetchDeps = {},
+): Promise<CandidateLane[]> {
+  const query = deps.query ?? linearQuery;
+  const token =
+    deps.token !== undefined
+      ? deps.token
+      : readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
     throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY not set');
   }
 
   const teamKey = getFlagValue(argv, '--linear-team-key') ?? process.env.LINEAR_TEAM_KEY?.trim() ?? 'UTV2';
-  const limitRaw = Number.parseInt(getFlagValue(argv, '--linear-limit') ?? '10', 10);
-  const limit = Number.isFinite(limitRaw) ? Math.max(1, Math.min(limitRaw, 50)) : 10;
+  // UTV2-1699 Defect 3 repair. `--linear-limit` is now an OPTIONAL ceiling for
+  // an operator who deliberately wants a smaller sample. Unset (the canonical
+  // dispatch invocation) means "the whole eligible population", retrieved by
+  // cursor pagination -- not "the 10 most recently updated issues", and not
+  // clamped to 50.
+  const limitFlag = getFlagValue(argv, '--linear-limit');
+  const limitRaw = limitFlag === null ? Number.NaN : Number.parseInt(limitFlag, 10);
+  const maxCandidateIssues = Number.isFinite(limitRaw) ? Math.max(1, limitRaw) : null;
   const linearOpts = { token, userAgent: 'unit-talk-ops-lane-maximizer' };
-  const teamResult = await linearQuery<{
+  const teamResult = await query<{
     teams: { nodes: Array<{ id: string; key: string }> };
   }>(
     `query ResolveTeam($key: String!) {
@@ -722,70 +1092,116 @@ async function fetchLinearCandidates(argv: string[]): Promise<CandidateLane[]> {
   }
 
   const teamId = teamResult.data.teams.nodes[0].id;
-  const result = await linearQuery<{
-    team: {
-      issues: {
-        nodes: Array<{
-          identifier: string;
-          title: string;
-          url: string;
-          description: string | null;
-          branchName: string | null;
-          labels: { nodes: Array<{ name: string }> };
-          state: { name: string; type: string } | null;
-          relations: {
-            nodes: Array<{
-              type: string;
-              relatedIssue: { identifier: string } | null;
-            }>;
-          };
-        }>;
-      };
-    } | null;
-  }>(
-    `query LaneCandidates($teamId: String!, $limit: Int!) {
-       team(id: $teamId) {
-         issues(
-           first: $limit
-           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
-           orderBy: updatedAt
-         ) {
-           nodes {
-             identifier
-             title
-             url
-             description
-             branchName
-             labels { nodes { name } }
-             state { name type }
-             relations {
-               nodes {
-                 type
-                 relatedIssue { identifier }
-               }
-             }
-           }
-         }
-       }
-     }`,
-    { teamId, limit },
-    linearOpts,
-  );
+  const nodes: LinearCandidateIssueNode[] = [];
+  let cursor: string | null = null;
+  let page = 0;
+  const maxPages = linearCandidateMaxPages(LINEAR_CANDIDATE_PAGE_SIZE);
 
-  if (!result.ok || !result.data?.team) {
-    throw new Error(`Linear candidate query failed: ${result.error ?? 'unknown'}`);
+  // Cursor pagination over the FULL eligible population. Every page must
+  // succeed: a mid-walk failure throws, because half a board dressed as a whole
+  // board is the same fail-open as an empty board dressed as no work.
+  //
+  // UTV2-1699: the walk is ordered by `createdAt`, NOT `updatedAt`.
+  // Linear's cursors are keyset cursors over the order field, so an issue whose
+  // order key changes mid-walk can move relative to an already-consumed cursor
+  // and be skipped entirely. `updatedAt` is mutated by literally any edit --
+  // including the edits this very dispatch cycle provokes -- so a candidate
+  // could vanish from the board purely because someone touched it while the
+  // walk was in flight. That is the same "an unattempted/incomplete read
+  // presented as a complete answer" fail-open this lane exists to remove, one
+  // layer down. `createdAt` is immutable for the life of an issue, so no issue
+  // can change its position in the ordering and no already-passed cursor can
+  // move ahead of an unread issue. An issue created mid-walk sorts after every
+  // cursor already consumed, so it is either seen on a later page or missed by
+  // one cycle -- it can never displace an existing candidate.
+  for (;;) {
+    page += 1;
+    if (page > maxPages) {
+      throw new Error(
+        `Linear candidate pagination exceeded ${maxPages} pages; ` +
+          'refusing to report a candidate population that cannot be proven complete.',
+      );
+    }
+
+    const pageSize = maxCandidateIssues === null
+      ? LINEAR_CANDIDATE_PAGE_SIZE
+      : Math.min(LINEAR_CANDIDATE_PAGE_SIZE, maxCandidateIssues - nodes.length);
+
+    const result: LinearQueryResult<LinearCandidatePage> = await query<LinearCandidatePage>(
+      LINEAR_CANDIDATE_QUERY,
+      { teamId, limit: pageSize, cursor },
+      linearOpts,
+    );
+
+    if (!result.ok || !result.data?.team) {
+      throw new Error(`Linear candidate query failed: ${result.error ?? 'unknown'}`);
+    }
+
+    const connection = result.data.team.issues;
+    nodes.push(...connection.nodes);
+
+    // Node ceiling, checked AFTER the page lands so a board of exactly
+    // LINEAR_CANDIDATE_MAX_NODES is fully discoverable and only the first node
+    // beyond it fails closed. An explicit operator sample (`--linear-limit`) is
+    // a deliberate smaller read and is handled below; this guard is about the
+    // whole board being larger than we can prove we read completely.
+    if (maxCandidateIssues === null && nodes.length > LINEAR_CANDIDATE_MAX_NODES) {
+      throw new Error(
+        `Linear candidate population exceeded ${LINEAR_CANDIDATE_MAX_NODES} nodes; ` +
+          'refusing to report a candidate population that cannot be proven complete.',
+      );
+    }
+
+    if (maxCandidateIssues !== null && nodes.length >= maxCandidateIssues) {
+      nodes.length = maxCandidateIssues;
+      break;
+    }
+    if (!connection.pageInfo?.hasNextPage) {
+      break;
+    }
+    if (!connection.pageInfo.endCursor) {
+      throw new Error(
+        'Linear reported another candidate page but returned no cursor; ' +
+          'refusing to report a truncated candidate population as the whole board.',
+      );
+    }
+    cursor = connection.pageInfo.endCursor;
   }
 
-  return result.data.team.issues.nodes.flatMap((issue): CandidateLane[] => {
+  return nodes.flatMap((issue): CandidateLane[] => {
     const labels = issue.labels.nodes.map((label) => label.name);
     const tier = parseTierLabel(labels);
     if (!tier) {
       return [];
     }
-    const blockedBy = issue.relations.nodes
-      .filter((relation) => isBlockingLinearRelationType(relation.type))
+    // UTV2-1820: prerequisites come from the INVERSE edge. An outgoing
+    // `blocks` means this issue is the blocker, not the blocked.
+    const outgoingPrerequisites = issue.relations.nodes
+      .filter((relation) => isPrerequisiteOutgoingRelation(relation.type))
       .map((relation) => relation.relatedIssue?.identifier)
       .filter((identifier): identifier is string => Boolean(identifier));
+
+    // Fail closed on an unreadable relation set. A server that omits
+    // `inverseRelations`, or returns a relation whose issue identifier is
+    // missing, has not told us this issue is unblocked -- it has told us
+    // nothing. Admitting on silence is the fail-open this lane exists to
+    // prevent, so an unreadable set blocks under a synthetic sentinel that no
+    // completion check can ever satisfy.
+    const inverse = issue.inverseRelations;
+    let incomingPrerequisites: string[];
+    if (!inverse || !Array.isArray(inverse.nodes)) {
+      incomingPrerequisites = [LINEAR_UNREADABLE_RELATIONS_SENTINEL];
+    } else {
+      const prerequisiteNodes = inverse.nodes.filter((relation) =>
+        isPrerequisiteInverseRelation(relation.type),
+      );
+      incomingPrerequisites = prerequisiteNodes.map(
+        (relation) =>
+          relation.issue?.identifier ?? LINEAR_UNREADABLE_RELATIONS_SENTINEL,
+      );
+    }
+
+    const blockedBy = [...outgoingPrerequisites, ...incomingPrerequisites];
     const fileScope = extractFileScopeFromText(issue.description);
     return [{
       issue_id: issue.identifier,
@@ -877,12 +1293,20 @@ export function evaluateCandidates(
         forbidden_combinations: forbiddenCombinations,
         type_caps: typeCaps,
       });
-  const activeClaude = activeLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
-  const activeCodex = activeLanes.filter((lane) => {
+  // UTV2-1699 F1: executor occupancy counts ONLY lanes an executor is actually
+  // working, never the whole lock population.
+  const executorLanes = executorCapacityLanes(activeLanes);
+  const activeClaude = executorLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
+  const activeCodex = executorLanes.filter((lane) => {
     const executor = resolveLaneExecutor(lane);
     return executor === 'codex-cli' || executor === 'codex-cloud';
   }).length;
-  const initialActiveTypes = activeLaneTypes(activeLanes);
+  // UTV2-1699 F1: the singleton and forbidden-combination FORECASTS must read
+  // the same population checkConcurrencyLimits() evaluates those two rules
+  // against (its `active`, i.e. TOTAL_CAPACITY_STATUSES), or the forecast
+  // predicts conflicts the real admission check would never raise.
+  const initialActiveTypes = activeLaneTypes(totalCapacityLanes(activeLanes));
+  const visibleUncounted = visibleUncountedLanes(activeLanes);
   const fullVerifyThrottle = readFullVerifyThrottleState();
 
   const report: MaximizationReport = {
@@ -913,6 +1337,17 @@ export function evaluateCandidates(
         active_singletons: initialActiveTypes.filter((laneType) => singletonLaneTypes.includes(laneType)),
         forbidden_combinations_active: activeForbiddenCombinations(initialActiveTypes, forbiddenCombinations),
         full_verify_throttle: fullVerifyThrottle,
+        visible_uncounted_lanes: visibleUncounted.map((lane) => ({
+          issue_id: lane.issue_id,
+          lane_type: lane.lane_type,
+          status: lane.status,
+        })),
+        capacity_classification: {
+          source: 'classifyLaneCapacity',
+          executor_rule: 'countsAgainst.executor === true (EXECUTOR_CAPACITY_STATUSES)',
+          lane_slot_rule: 'countsAgainst.total === true (TOTAL_CAPACITY_STATUSES) -- also the singleton and forbidden-combination forecast population',
+          lock_population_rule: 'ACTIVE_LOCK_STATUSES -- file-scope OVERLAP only; never a capacity signal',
+        },
         safe_class_recommendations: [],
       },
     },
@@ -1130,41 +1565,212 @@ export function evaluateCandidates(
   return report;
 }
 
-async function runCli(): Promise<void> {
-  let candidates: CandidateLane[] = [];
-  let activeLanes: LaneManifest[] = [];
-  const cfg = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
-  const defaultLimits = { maxClaude: cfg?.executors.claude ?? 2, maxCodex: cfg?.executors.codex ?? 4 };
-  let limits = defaultLimits;
-  const argv = process.argv.slice(2);
+/**
+ * Machine-readable candidate source actually used for a given argv. `linear` is
+ * the canonical default -- the form `/dispatch`, `/dispatch-board` and
+ * `/loop-dispatch` invoke.
+ */
+export type CandidateSource = 'linear' | 'queue' | 'explicit';
 
-  try {
-    if (hasFlag(argv, '--from-linear')) {
-      candidates = await fetchLinearCandidates(argv);
-    } else if (hasFlag(argv, '--from-queue')) {
-      candidates = parseQueueCandidates(
+export type MaximizerErrorCode =
+  | 'candidate_discovery_failed'
+  | 'active_lane_discovery_failed'
+  | 'evaluation_failed';
+
+/**
+ * The ONLY thing this CLI writes to stdout on a failure path. Deliberately not
+ * report-shaped: no `recommended`/`blocked`/`risky`/`deferred` keys at all, so a
+ * machine consumer that reads `.recommended` gets `undefined` rather than an
+ * empty array it would misread as "no work available" (UTV2-1699 requirement 7).
+ */
+export interface MaximizerErrorEnvelope {
+  ok: false;
+  error: true;
+  code: MaximizerErrorCode;
+  message: string;
+  remediation: string;
+  candidate_source: CandidateSource;
+}
+
+export interface MaximizerCliDeps {
+  /** Overrides the whole candidate-source selection. Used by failure-injection tests. */
+  fetchCandidates?: (argv: string[]) => Promise<CandidateLane[]>;
+  /** Transport seam for the canonical Linear candidate source. */
+  linear?: LinearCandidateFetchDeps;
+  /** Overrides the canonical active-lane resolution wholesale. */
+  resolveActiveLanes?: (discoveryDeps?: ActiveLaneDiscoveryDeps) => LaneManifest[];
+  /** Injected dependencies for the canonical active-lane resolver itself. */
+  activeLaneDiscovery?: ActiveLaneDiscoveryDeps;
+}
+
+export interface MaximizerCliOutcome {
+  exitCode: number;
+  stdout: string;
+  candidate_source: CandidateSource;
+  report?: MaximizationReport;
+  error?: MaximizerErrorEnvelope;
+}
+
+/**
+ * UTV2-1699 Defect 0 repair. A BARE invocation now resolves to the canonical
+ * Linear candidate source. Previously the no-flag branch fell through to
+ * `parseCandidatesArg(argv)`, which parses an empty argv/stdin into zero
+ * candidates -- so the canonical dispatch invocation never attempted discovery
+ * at all and reported a well-formed empty board with exit 0.
+ *
+ * `--candidates` / `--from-stdin` remain available for a caller that genuinely
+ * wants to supply the population itself, but they must now say so explicitly.
+ */
+export function resolveCandidateSource(argv: string[]): CandidateSource {
+  if (hasFlag(argv, '--from-queue')) return 'queue';
+  if (hasFlag(argv, '--candidates') || hasFlag(argv, '--from-stdin')) return 'explicit';
+  return 'linear';
+}
+
+async function defaultFetchCandidates(
+  argv: string[],
+  linearDeps: LinearCandidateFetchDeps | undefined,
+): Promise<CandidateLane[]> {
+  switch (resolveCandidateSource(argv)) {
+    case 'queue':
+      return parseQueueCandidates(
         getFlagValue(argv, '--queue-file') ?? path.join(ROOT, 'docs', '06_status', 'ISSUE_QUEUE.md'),
       );
-    } else {
-      candidates = parseCandidatesArg(argv);
-    }
-    activeLanes = readActiveLanes();
-    limits = parseLimits(argv);
+    case 'explicit':
+      return parseCandidatesArg(argv);
+    default:
+      return fetchLinearCandidates(argv, linearDeps ?? {});
+  }
+}
+
+function errorOutcome(
+  code: MaximizerErrorCode,
+  source: CandidateSource,
+  message: string,
+  remediation: string,
+): MaximizerCliOutcome {
+  const envelope: MaximizerErrorEnvelope = {
+    ok: false,
+    error: true,
+    code,
+    message,
+    remediation,
+    candidate_source: source,
+  };
+  return {
+    exitCode: 1,
+    stdout: `${JSON.stringify(envelope, null, 2)}\n`,
+    candidate_source: source,
+    error: envelope,
+  };
+}
+
+/**
+ * UTV2-1699 Defect 1 repair. Candidate discovery and active-lane discovery are
+ * two DISTINCT fail-closed conditions with two distinct codes and two distinct
+ * remediations, and neither is ever collapsed into an empty board with exit 0.
+ * A genuinely empty candidate population still exits 0 with a real report, so
+ * "no work today" stays distinguishable from "the board is unknown".
+ */
+export async function runMaximizerCli(
+  argv: string[],
+  deps: MaximizerCliDeps = {},
+): Promise<MaximizerCliOutcome> {
+  const source = resolveCandidateSource(argv);
+
+  let candidates: CandidateLane[];
+  try {
+    candidates = deps.fetchCandidates
+      ? await deps.fetchCandidates(argv)
+      : await defaultFetchCandidates(argv, deps.linear);
   } catch (error) {
-    candidates = [];
-    activeLanes = [];
-    limits = defaultLimits;
-    process.stderr.write(
-      `[lane-maximizer] ${error instanceof Error ? error.message : String(error)}\n`,
+    return errorOutcome(
+      'candidate_discovery_failed',
+      source,
+      `Could not read the ${source} candidate source, so the dispatchable population is unknown. ` +
+        'Refusing to report an unknown candidate population as an empty board. ' +
+        `Cause: ${error instanceof Error ? error.message : String(error)}`,
+      source === 'linear'
+        ? 'Restore LINEAR_API_TOKEN/LINEAR_API_KEY and network access to api.linear.app, then retry. An unknown board is never treated as an empty one.'
+        : 'Repair the supplied candidate source (queue file or --candidates payload), then retry. An unknown board is never treated as an empty one.',
     );
   }
 
-  const report = evaluateCandidates(candidates, activeLanes, limits);
-  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-  process.exitCode = 0;
+  let activeLanes: LaneManifest[];
+  try {
+    activeLanes = deps.resolveActiveLanes
+      ? assertUsableActiveLanes(deps.resolveActiveLanes(deps.activeLaneDiscovery))
+      : resolveActiveLanesCanonically(deps.activeLaneDiscovery);
+  } catch (error) {
+    return errorOutcome(
+      'active_lane_discovery_failed',
+      source,
+      error instanceof ActiveLaneDiscoveryError || error instanceof Error
+        ? error.message
+        : 'Could not resolve the active-lane set from open pull requests.',
+      'Restore `gh` authentication and network access and repair any unreadable lane manifest, then retry. Capacity, singleton, and file-scope conflict checks are unsafe against an unknown active board.',
+    );
+  }
+
+  /**
+   * UTV2-1699. Evaluation is the LAST place a discovered-state defect can
+   * surface, and it used to run outside every try: anything thrown here
+   * (a malformed lane manifest that slipped the boundary check, an unreadable
+   * local done-manifest directory in `readDoneIssueIds`) escaped as an
+   * unhandled rejection -- non-zero exit, empty stdout, no machine-readable
+   * cause. Every exit path now emits an envelope or a report; none emits
+   * nothing.
+   */
+  let report: MaximizationReport;
+  try {
+    report = evaluateCandidates(candidates, activeLanes, parseLimits(argv));
+  } catch (error) {
+    return errorOutcome(
+      'evaluation_failed',
+      source,
+      'Could not evaluate the discovered board, so no dispatch recommendation can be trusted. ' +
+        'Refusing to report an unevaluated board as an empty or safe one. ' +
+        `Cause: ${error instanceof Error ? error.message : String(error)}`,
+      'Repair the malformed lane manifest or local lane directory named in the cause, then retry. Capacity, singleton and file-scope conflict checks are unsafe against a board that could not be evaluated.',
+    );
+  }
+
+  return {
+    exitCode: 0,
+    stdout: `${JSON.stringify(report, null, 2)}\n`,
+    candidate_source: source,
+    report,
+  };
+}
+
+async function runCli(): Promise<void> {
+  let outcome: MaximizerCliOutcome;
+  try {
+    outcome = await runMaximizerCli(process.argv.slice(2));
+  } catch (error) {
+    // Backstop. `runMaximizerCli` is envelope-complete by construction, but an
+    // unhandled rejection here would exit non-zero with EMPTY stdout, which a
+    // machine consumer cannot distinguish from a crash-free empty board.
+    outcome = errorOutcome(
+      'evaluation_failed',
+      'linear',
+      `lane-maximizer failed before it could produce a report. Cause: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      'Report this as a lane-maximizer defect: an unenveloped failure path reached the CLI boundary.',
+    );
+  }
+  if (outcome.error) {
+    process.stderr.write(`[lane-maximizer] ${outcome.error.code}: ${outcome.error.message}\n`);
+  }
+  process.stdout.write(outcome.stdout);
+  process.exitCode = outcome.exitCode;
 }
 
 const argv1 = process.argv[1] ?? '';
 if (argv1.endsWith('lane-maximizer.ts') || argv1.endsWith('lane-maximizer.js')) {
-  void runCli();
+  void runCli().catch((error: unknown) => {
+    process.stderr.write(`[lane-maximizer] fatal: ${String(error)}\n`);
+    process.exitCode = 1;
+  });
 }

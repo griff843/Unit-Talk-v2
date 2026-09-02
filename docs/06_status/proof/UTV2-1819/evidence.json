@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1819",
+  "tier": "T1",
+  "lane_type": "governance",
+  "status": "verified_by_hosted_ci",
+  "sha_binding": {
+    "verified_source_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
+    "evidence_commit_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
+    "current_pr_head_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
+    "merge_sha": "5a7e6f85d37ac09a4b7d9c40940000490ce52ce9",
+    "ci_sentinels": {
+      "evidence_commit_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
+      "current_pr_head_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d"
+    },
+    "note": "07e0bcf0457d2134c5135f5b1987eada9a2de71d is the last non-proof commit on this branch: the implementation, its regressions, and the merge commit that brought main's readiness-ledger refresh in through the sanctioned PR update-branch path (no rebase, no force push). merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM. Every local receipt in this bundle was executed against this exact tree, and every hosted receipt is bound to it by run and job id below.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-01T22:24:43.083Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 81,
+        "pass": 81,
+        "fail": 0,
+        "pre_existing": 75,
+        "new": 6
+      }
+    },
+    "verify": {
+      "command": "pnpm verify",
+      "environment": "workstation",
+      "exit_code": 1,
+      "status": "REFUSED_AT_LIVE_DB",
+      "is_pass": false,
+      "row_counts": {
+        "tests": 5538,
+        "pass": 5538,
+        "fail": 0,
+        "skipped": 0,
+        "not_ok_lines": 0
+      },
+      "note": "This command FAILED, exit 1. It is recorded as a refusal and is NOT counted as a pass. env:check, lint, type-check, build, the whole pnpm test tree, verify:static and verify:commands were exit 0 within it, but the run as a whole exited non-zero at test:live-db, where assert-staging-target refused a workstation target (host=127.0.0.1, expected xskgrzbteyqdufktjrjx). A workstation cannot produce the writable-staging receipt by design. The authoritative T1 verification is hosted_verification below."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1819",
+      "verdict": "PASS",
+      "changed_files": 8,
+      "rules_matched": []
+    }
+  },
+  "runtime_proof": {
+    "profile": "hosted_live_db",
+    "live_api_probe": {
+      "command": "pnpm ops:lane-maximizer",
+      "target": "api.linear.app (live), team UTV2",
+      "exit_code": 0,
+      "candidates_discovered": 114,
+      "before_fix": "exit 1, candidate_discovery_failed, Linear HTTP 400 Query too complex (11601/10000)",
+      "note": "The --linear-limit 50 workaround returned only 43 of the 114 real candidates, because the flag caps the population as well as the page size. This bare run is the first complete read of the board."
+    },
+    "live_db": {
+      "note": "Provided by hosted_verification.writable_db_proof step 11 against staging xskgrzbteyqdufktjrjx. Not obtainable on a workstation; see static_proof.verify."
+    }
+  },
+  "mutation_proof": {
+    "results": [
+      {
+        "id": "M1",
+        "mutation": "restore LINEAR_CANDIDATE_PAGE_SIZE = 100 (the shipped defect)",
+        "under_mutation": {
+          "tests": 3,
+          "pass": 2,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1819 AC2",
+        "note": "AC3 passes under M1 and cannot catch it: AC3 compares the wire limit to the same constant, so the expectation moves with the mutation. AC2 is the sole guard on the constant's value. Recorded as a limit rather than claimed as coverage."
+      },
+      {
+        "id": "M2",
+        "mutation": "add a third nested connection (comments { nodes { body } }) to the node selection",
+        "under_mutation": {
+          "tests": 3,
+          "pass": 2,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 3,
+          "pass": 3,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1819 AC4",
+        "note": "AC2 correctly does not fire here: the constant is still in budget, but the per-node measurement behind it has gone stale. This is the mutation that matters, because widening the selection silently re-prices every node."
+      },
+      {
+        "id": "M3",
+        "mutation": "restore the page-count guard: linearCandidateMaxPages returns a constant 100 (capacity = pages x page size, the defect PM review caught)",
+        "under_mutation": {
+          "tests": 81,
+          "pass": 78,
+          "fail": 3
+        },
+        "after_revert": {
+          "tests": 81,
+          "pass": 81,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1819 AC6, AC7 and AC8",
+        "note": "AC6 fails because a 10000-node board is truncated at 5000; AC7 fails because the refusal that fires names pages rather than the node ceiling; AC8 fails because capacity is again a function of the page size."
+      },
+      {
+        "id": "M4",
+        "mutation": "delete the node-ceiling refusal (fail open: return an over-capacity board truncated and silent)",
+        "under_mutation": {
+          "tests": 81,
+          "pass": 80,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 81,
+          "pass": 81,
+          "fail": 0
+        },
+        "caught_by": "UTV2-1819 AC7",
+        "note": "AC6 and AC8 correctly do not fire: neither the ceiling constant nor the derived page bound moved, only the enforcement was removed. Exactly one test names this fail-open."
+      }
+    ]
+  },
+  "known_limitations": [
+    "The per-node complexity figure 116.01 is a single live measurement from 2026-09-01. A server-side re-pricing by Linear would invalidate it and no offline test can detect that; only the live AC1 call can, and it is run manually, not in CI.",
+    "AC3 cannot catch M1, and AC6/AC8 cannot catch M4 (see the mutation notes). In each case exactly one assertion owns the property and it is named rather than implied.",
+    "LINEAR_CANDIDATE_MAX_NODES = 10000 is a POLICY ceiling that preserves pre-existing capacity. Nothing here establishes it as the largest board Linear would serve; it establishes that a larger board refuses instead of truncating silently.",
+    "The capacity regressions use a synthetic in-process transport. They prove the walk's arithmetic and refusal behaviour, not Linear's real cursor semantics at ten-thousand-node scale.",
+    "This lane fixes discovery transport and capacity only. Ranking and admission policy are untouched and remain UTV2-1769."
+  ],
+  "files_changed": [
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-maximizer.test.ts"
+  ],
+  "hosted_verification": {
+    "anchor_sha": "07e0bcf0457d2134c5135f5b1987eada9a2de71d",
+    "note": "Hosted CI at the exact anchor. These, not the workstation run, are the T1 verification receipts. Conclusions are as reported by the GitHub checks API on the anchor commit.",
+    "verify": {
+      "check": "verify",
+      "required": true,
+      "run_id": "33557203041",
+      "job_id": "100023164118",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33557203041/job/100023164118",
+      "conclusion": "success",
+      "started_at": "2026-09-01T20:53:14Z",
+      "completed_at": "2026-09-01T20:57:20Z"
+    },
+    "writable_db_proof": {
+      "check": "Writable DB proof (staging only)",
+      "run_id": "33557203041",
+      "job_id": "100020943245",
+      "conclusion": "success",
+      "url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33557203041/job/100020943245",
+      "target": "staging project xskgrzbteyqdufktjrjx",
+      "steps": [
+        "06 Assert staging credentials present: success",
+        "07 Materialize staging-only environment: success",
+        "08 Record repository migration head: success",
+        "09 Seed synthetic staging fixtures: success",
+        "10 Run writable DB proof against staging: success",
+        "11 Run the T1 live proof suites against staging: success",
+        "13 Upload proof receipt (same-run artifact): success"
+      ],
+      "note": "Step 11 is where the T1 live proof suites actually executed, against the staging target the workstation guard refused to substitute for."
+    },
+    "p0_protocol": {
+      "check": "P0 Protocol",
+      "required": true,
+      "run_id": "33557202924",
+      "job_id": "100020834546",
+      "conclusion": "success"
+    },
+    "t1_proof_gate": {
+      "check": "T1 Proof Gate",
+      "run_id": "33557203052",
+      "job_id": "100021090130",
+      "conclusion": "success"
+    }
+  }
+}

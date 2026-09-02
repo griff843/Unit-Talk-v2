@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1699",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair",
+  "branch": "claude/utv2-1699-lane-maximizer-discovery-repair",
+  "base_branch": "main",
+  "commit_sha": "e0c21c40e4173161f61e7f4aac10b288ce269bda",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1476",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1699.yml",
+    "docs/06_status/proof/UTV2-1699/diff-summary.md",
+    "docs/06_status/proof/UTV2-1699/evidence.json",
+    "docs/06_status/proof/UTV2-1699/model-routing.json",
+    "docs/06_status/proof/UTV2-1699/verification.md",
+    "scripts/ops/lane-maximizer.test.ts",
+    "scripts/ops/lane-maximizer.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1699/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-01T13:38:32.808Z",
+  "heartbeat_at": "2026-09-01T16:44:31.168Z",
+  "closed_at": "2026-09-01T16:44:31.168Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-01T16:44:28.516Z",
+      "verdict": "pass",
+      "merge_sha": "e0c21c40e4173161f61e7f4aac10b288ce269bda",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1699-lane-maximizer-discovery-repair",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
