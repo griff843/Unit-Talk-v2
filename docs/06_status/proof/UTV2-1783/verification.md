@@ -1,12 +1,12 @@
 # PROOF: UTV2-1783 — pre-merge merge authority and execution identity are separate facts
 
-MERGE_SHA: b3df08fa795190a710c0407f1c604399e61e2f63
+MERGE_SHA: 83e2c63af1b0ae975a1b7fc93a55dbe3534c29b4
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 83e2c63af1b0ae975a1b7fc93a55dbe3534c29b4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1483
-Approved PR head: pending merge
+Approved PR head: 5a69c9cec427fc585a4acd2bf39155dba2cc70ae
 Execution SHA: b3df08fa795190a710c0407f1c604399e61e2f63
 
 Anchor: `b3df08fa795190a710c0407f1c604399e61e2f63` — the last commit carrying implementation

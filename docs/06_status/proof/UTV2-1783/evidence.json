@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "83e2c63af1b0ae975a1b7fc93a55dbe3534c29b4",
     "verified_source_sha": "b3df08fa795190a710c0407f1c604399e61e2f63",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "b3df08fa795190a710c0407f1c604399e61e2f63",
+    "current_pr_head_sha": "5a69c9cec427fc585a4acd2bf39155dba2cc70ae",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
@@ -18,7 +18,9 @@
       "pnpm_verify": "PENDING-CI - local run green through every step except the staging-credentialed test:db step; authoritative result is the required verify check on the PR head",
       "r_level_check": "PASS (no R-level artifacts required for this diff)",
       "automation_coverage": "PASS (no new wiring orphans)"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-02T11:53:26.288Z"
   },
   "static_proof": {
     "type_check": {
