@@ -216,3 +216,103 @@ test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts',
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
+
+// ─── UTV2-1572 Phase A: executor identity carries no PM authority ───────────
+
+import {
+  EXECUTOR_APP_LOGIN,
+  isAcceptedExecutorAttestationAuthor,
+  isExecutorAppIdentity,
+  selectHumanApprovals,
+  validateT1ApprovedLabel,
+} from './merge-gate-verdict.cjs';
+
+const EXECUTOR_APP_USER = { login: EXECUTOR_APP_LOGIN, type: 'Bot' };
+const HUMAN_OWNER = { login: 'griff843', type: 'User' };
+const OTHER_BOT = { login: 'github-actions[bot]', type: 'Bot' };
+
+test('UTV2-1572: executor App login is exactly unit-talk-executor[bot]', () => {
+  assert.equal(EXECUTOR_APP_LOGIN, 'unit-talk-executor[bot]');
+  assert.equal(isExecutorAppIdentity(EXECUTOR_APP_USER), true);
+  assert.equal(isExecutorAppIdentity({ login: EXECUTOR_APP_LOGIN, type: 'User' }), false, 'a human impersonating the login is not the App');
+  assert.equal(isExecutorAppIdentity(OTHER_BOT), false);
+  assert.equal(isExecutorAppIdentity(null), false);
+});
+
+test('UTV2-1572: a pm-verdict/v1 APPROVED posted by the executor App is rejected for T1', () => {
+  const verdicts = [verdictRecord(approvedComment(), { user: EXECUTOR_APP_LOGIN, userType: 'Bot' })];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(errors.some((e) => e.includes(`bot account "${EXECUTOR_APP_LOGIN}"`)), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('T1 requires a valid pm-verdict/v1 comment')));
+});
+
+test('UTV2-1572: an executor-App verdict cannot supersede a human CHANGES_REQUIRED', () => {
+  const changes = approvedComment().replace('PM_VERDICT: APPROVED', 'PM_VERDICT: CHANGES_REQUIRED');
+  const verdicts = [
+    verdictRecord(changes, { createdAt: '2026-09-02T17:00:00Z' }),
+    verdictRecord(approvedComment(), { user: EXECUTOR_APP_LOGIN, userType: 'Bot', createdAt: '2026-09-02T17:05:00Z' }),
+  ];
+  const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
+  assert.ok(errors.some((e) => e.includes('"CHANGES_REQUIRED", not "APPROVED"')), errors.join('\n'));
+});
+
+test('UTV2-1572: t1-approved label applied by a human CODEOWNERS member carries authority', () => {
+  const events = [
+    { event: 'labeled', label: { name: 'tier:T1' }, actor: OTHER_BOT },
+    { event: 'labeled', label: { name: 't1-approved' }, actor: HUMAN_OWNER },
+  ];
+  assert.deepEqual(validateT1ApprovedLabel(events, { authorizedReviewers: REVIEWERS }), []);
+});
+
+test('UTV2-1572: t1-approved label applied by the executor App is rejected mechanically', () => {
+  const events = [{ event: 'labeled', label: { name: 't1-approved' }, actor: EXECUTOR_APP_USER }];
+  const errors = validateT1ApprovedLabel(events, { authorizedReviewers: REVIEWERS });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /applied by bot account "unit-talk-executor\[bot\]"/);
+});
+
+test('UTV2-1572: the MOST RECENT t1-approved application decides — a later App re-apply revokes a prior human grant', () => {
+  const events = [
+    { event: 'labeled', label: { name: 't1-approved' }, actor: HUMAN_OWNER },
+    { event: 'unlabeled', label: { name: 't1-approved' }, actor: HUMAN_OWNER },
+    { event: 'labeled', label: { name: 't1-approved' }, actor: EXECUTOR_APP_USER },
+  ];
+  const errors = validateT1ApprovedLabel(events, { authorizedReviewers: REVIEWERS });
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /bot account/);
+
+  const humanLast = [...events, { event: 'labeled', label: { name: 't1-approved' }, actor: HUMAN_OWNER }];
+  assert.deepEqual(validateT1ApprovedLabel(humanLast, { authorizedReviewers: REVIEWERS }), []);
+});
+
+test('UTV2-1572: t1-approved label with no labeled event, unknown actor, or non-CODEOWNERS human fails closed', () => {
+  assert.equal(validateT1ApprovedLabel([], { authorizedReviewers: REVIEWERS }).length, 1);
+  assert.match(
+    validateT1ApprovedLabel([{ event: 'labeled', label: { name: 't1-approved' }, actor: null }], { authorizedReviewers: REVIEWERS })[0],
+    /unknown actor/,
+  );
+  const stranger = [{ event: 'labeled', label: { name: 't1-approved' }, actor: { login: 'someone-else', type: 'User' } }];
+  assert.match(validateT1ApprovedLabel(stranger, { authorizedReviewers: REVIEWERS })[0], /not in CODEOWNERS/);
+});
+
+test('UTV2-1572: T2 review approvals from Bot accounts (including the executor App) are ignored', () => {
+  const reviews = [
+    { state: 'APPROVED', user: EXECUTOR_APP_USER },
+    { state: 'APPROVED', user: OTHER_BOT },
+    { state: 'COMMENTED', user: HUMAN_OWNER },
+  ];
+  assert.deepEqual(selectHumanApprovals(reviews), []);
+  const withHuman = [...reviews, { state: 'APPROVED', user: { login: 'reviewer', type: 'User' } }];
+  assert.equal(selectHumanApprovals(withHuman).length, 1);
+  assert.equal(selectHumanApprovals([{ state: 'APPROVED' }]).length, 1, 'only an explicit Bot user type is excluded');
+  assert.deepEqual(selectHumanApprovals(undefined), []);
+});
+
+test('UTV2-1572: executor-result self-attestation accepted from the executor App or a human CODEOWNERS member, never another bot', () => {
+  assert.equal(isAcceptedExecutorAttestationAuthor(EXECUTOR_APP_USER, REVIEWERS), true);
+  assert.equal(isAcceptedExecutorAttestationAuthor(HUMAN_OWNER, REVIEWERS), true);
+  assert.equal(isAcceptedExecutorAttestationAuthor(OTHER_BOT, REVIEWERS), false);
+  assert.equal(isAcceptedExecutorAttestationAuthor({ login: 'griff843', type: 'Bot' }, REVIEWERS), false);
+  assert.equal(isAcceptedExecutorAttestationAuthor({ login: 'stranger', type: 'User' }, REVIEWERS), false);
+  assert.equal(isAcceptedExecutorAttestationAuthor(undefined, REVIEWERS), false);
+});

@@ -56,10 +56,21 @@ export interface DeferredMergeRecord {
   note: string;
 }
 
+export type CommandRunnerOptions = {
+  cwd: string;
+  timeoutMs?: number;
+  /**
+   * UTV2-1572: optional environment overlay for the spawned command. Used to
+   * run a GitHub write under the executor App installation token (GH_TOKEN)
+   * without leaking that token into the wrapper's own process environment.
+   */
+  env?: NodeJS.ProcessEnv;
+};
+
 export type CommandRunner = (
   command: string,
   args: string[],
-  options: { cwd: string; timeoutMs?: number },
+  options: CommandRunnerOptions,
 ) => Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'>;
 
 export type MergeWrapperResult =
@@ -1095,12 +1106,13 @@ function requirePr(pr: string | null | undefined): string {
 function defaultRunner(
   command: string,
   args: string[],
-  options: { cwd: string; timeoutMs?: number },
+  options: CommandRunnerOptions,
 ): Pick<SpawnSyncReturns<Buffer>, 'status' | 'stdout' | 'stderr' | 'error'> {
   return spawnSync(command, args, {
     cwd: options.cwd,
     stdio: 'pipe',
     ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+    ...(options.env ? { env: { ...process.env, ...options.env } } : {}),
   });
 }
 

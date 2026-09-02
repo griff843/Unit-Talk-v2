@@ -109,7 +109,13 @@ jobs:
 
             // UTV2-1543: T1 pm-verdict/v1 parsing + PR/head-SHA freshness
             // validation lives in a tested pure module, not duplicated here.
-            const { parseVerdict, validateT1Verdicts } = require('./scripts/ops/merge-gate-verdict.cjs');
+            const {
+              parseVerdict,
+              validateT1Verdicts,
+              isAcceptedExecutorAttestationAuthor,
+              selectHumanApprovals,
+              validateT1ApprovedLabel,
+            } = require('./scripts/ops/merge-gate-verdict.cjs');
 
             // ── 1. Resolve PR ──────────────────────────────────────────
             let prNumber, headSha, headRef, baseSha, prTitle;
@@ -513,7 +519,8 @@ jobs:
                   const { data: reviews } = await github.rest.pulls.listReviews({
                     owner, repo, pull_number: prNumber, per_page: 100
                   });
-                  const approvals = reviews.filter(r => r.state === 'APPROVED');
+                  // UTV2-1572: only human (non-Bot) review approvals carry authority.
+                  const approvals = selectHumanApprovals(reviews);
                   if (approvals.length === 0) {
                     const { data: comments } = await github.rest.issues.listComments({
                       owner, repo, issue_number: prNumber, per_page: 100
@@ -525,9 +532,11 @@ jobs:
                       const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                       return lines[0] === 'PM_VERDICT: APPROVED' && lines[1] === 'schema: pm-verdict/v1';
                     });
-                    // Check for a valid executor-result/v1 self-attestation from an authorized member
+                    // Check for a valid executor-result/v1 self-attestation. UTV2-1572: accepted
+                    // from the executor App identity (unit-talk-executor[bot]) or, until Phase B,
+                    // from a human CODEOWNERS member. Never from any other bot.
                     const hasExecutorResultAttestation = comments.some(c => {
-                      if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
+                      if (!isAcceptedExecutorAttestationAuthor(c.user, AUTHORIZED_REVIEWERS)) return false;
                       const body = (c.body || '').replace(/\\n/g, '\n');
                       const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                       return lines[0] === 'EXECUTOR_RESULT: READY_FOR_REVIEW' && lines[1] === 'schema: executor-result/v1';
@@ -570,6 +579,21 @@ jobs:
                     errors.push(
                       'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
                     );
+                  } else {
+                    // UTV2-1572: the label carries authority only if its most recent
+                    // application was performed by a human CODEOWNERS member. An
+                    // executor/App/automation-applied label is rejected mechanically.
+                    const labelEvents = [];
+                    for (let page = 1; page <= 10; page += 1) {
+                      const { data: pageEvents } = await github.rest.issues.listEvents({
+                        owner, repo, issue_number: prNumber, per_page: 100, page
+                      });
+                      labelEvents.push(...pageEvents);
+                      if (pageEvents.length < 100) break;
+                    }
+                    errors.push(...validateT1ApprovedLabel(labelEvents, {
+                      authorizedReviewers: AUTHORIZED_REVIEWERS,
+                    }));
                   }
                 }
               }

@@ -42,6 +42,7 @@ import {
   type MergeWrapperOperation,
   type MergeMethod,
   type CommandRunner,
+  type CommandRunnerOptions,
   buildMergeCommand,
   bufferToText,
   runAuthorizedPrMerge,
@@ -61,6 +62,11 @@ import {
   parseArgs,
   requireIssueId,
 } from './shared.js';
+import {
+  resolveExecutorGhIdentitySync,
+  type ExecutorGhIdentity,
+  type ExecutorGhIdentityResolver,
+} from './executor-app-token.js';
 
 export type ExtendedMergeWrapperOperation =
   | MergeWrapperOperation
@@ -1167,8 +1173,25 @@ export function buildRepostedExecutorResultBody(originalBody: string, newHeadSha
 
 export type RepostExecutorResultFn = (
   input: { pr: string; cwd: string; newHeadSha: string },
-  options: { runner: CommandRunner },
-) => { ok: boolean; detail: string };
+  options: { runner: CommandRunner; resolveIdentity?: ExecutorGhIdentityResolver },
+) => { ok: boolean; detail: string; identity?: 'app' | 'ambient' };
+
+/**
+ * UTV2-1572 Phase A: the executor-result re-post is the first executor
+ * GitHub-write path migrated to the executor App identity. When the App is
+ * configured the comment is posted as `unit-talk-executor[bot]`; when it is
+ * not configured (or `EXECUTOR_APP_DISABLED=1`, the rollback switch) the
+ * pre-Phase-A ambient `gh` identity is used and the outcome says so. A
+ * configured App whose mint fails is an error — never a silent fallback.
+ */
+export function resolveRepostIdentity(
+  input: { cwd: string },
+  options: { runner: CommandRunner; resolveIdentity?: ExecutorGhIdentityResolver },
+): ExecutorGhIdentity {
+  const resolver: ExecutorGhIdentityResolver =
+    options.resolveIdentity ?? ((resolveInput) => resolveExecutorGhIdentitySync(resolveInput, { runner: options.runner }));
+  return resolver({ cwd: input.cwd });
+}
 
 /**
  * Default executor-result re-post: reads the PR's comments, finds the most
@@ -1206,26 +1229,49 @@ export const defaultRepostExecutorResult: RepostExecutorResultFn = (input, optio
   }
 
   const newBody = buildRepostedExecutorResultBody(latest.body, input.newHeadSha);
-  const postRun = options.runner('gh', ['pr', 'comment', input.pr, '--body', newBody], { cwd: input.cwd });
+
+  let identity: ExecutorGhIdentity;
+  try {
+    identity = resolveRepostIdentity(input, options);
+  } catch (error) {
+    return {
+      ok: false,
+      detail: `executor App identity resolution failed: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+
+  const postOptions: CommandRunnerOptions =
+    identity.mode === 'app' ? { cwd: input.cwd, env: identity.env } : { cwd: input.cwd };
+  const postRun = options.runner('gh', ['pr', 'comment', input.pr, '--body', newBody], postOptions);
   if (postRun.error || postRun.status !== 0) {
     return {
       ok: false,
+      identity: identity.mode,
       detail: `gh pr comment failed: ${bufferToText(postRun.stderr) || `exit ${postRun.status}`}`,
     };
   }
 
-  return { ok: true, detail: `re-posted executor-result comment with Head SHA ${input.newHeadSha}` };
+  const attribution =
+    identity.mode === 'app'
+      ? `as ${identity.login} (executor App, token ${identity.source}, expires ${identity.expires_at})`
+      : `as ambient gh identity (executor App not used: ${identity.reason})`;
+  return {
+    ok: true,
+    identity: identity.mode,
+    detail: `re-posted executor-result comment with Head SHA ${input.newHeadSha} ${attribution}`,
+  };
 };
 
 function defaultCommandRunner(
   command: string,
   args: string[],
-  options: { cwd: string; timeoutMs?: number },
+  options: CommandRunnerOptions,
 ): ReturnType<CommandRunner> {
   return spawnSync(command, args, {
     cwd: options.cwd,
     stdio: 'pipe',
     ...(options.timeoutMs ? { timeout: options.timeoutMs } : {}),
+    ...(options.env ? { env: { ...process.env, ...options.env } } : {}),
   });
 }
 

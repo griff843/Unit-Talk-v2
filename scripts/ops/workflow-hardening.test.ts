@@ -98,7 +98,11 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
   };
   const labels = [`tier:${tier}`];
   const comments: MockComment[] = [];
-  const reviews: Array<{ state: string }> = [];
+  const reviews: Array<{ state: string; user?: { login: string; type: string } }> = [];
+  // UTV2-1572: issue timeline events, so the evaluator can verify WHO applied
+  // `t1-approved`. Tier labels the evaluator itself applies are recorded as
+  // applied by the Actions bot, exactly as GitHub would record them.
+  const labelEvents: Array<{ event: string; label: { name: string }; actor: { login: string; type: string } | null }> = [];
   const postedGateComments: string[] = [];
   const checks = initialChecks.map((check) => ({ ...check, app: { ...check.app } }));
   let createCount = 0;
@@ -152,8 +156,13 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
         addLabels: async (params: Record<string, unknown>) => {
           for (const label of params.labels as string[]) {
             if (!labels.includes(label)) labels.push(label);
+            labelEvents.push({ event: 'labeled', label: { name: label }, actor: { login: 'github-actions[bot]', type: 'Bot' } });
           }
           return { data: labels.map((name) => ({ name })) };
+        },
+        listEvents: async (params: Record<string, unknown>) => {
+          assert.strictEqual(params.issue_number, prNumber);
+          return { data: Number(params.page ?? 1) === 1 ? labelEvents : [] };
         },
         listComments: async () => ({ data: comments }),
         createComment: async (params: Record<string, unknown>) => {
@@ -205,6 +214,7 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
     comments,
     reviews,
     labels,
+    labelEvents,
     postedGateComments,
     prNumber,
     headSha,
@@ -521,6 +531,7 @@ test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update on
   assert.strictEqual(harness.checks[0].conclusion, 'failure');
 
   harness.labels.push('t1-approved');
+  harness.labelEvents.push({ event: 'labeled', label: { name: 't1-approved' }, actor: { login: 'griff843', type: 'User' } });
   harness.comments.push({
     body: [
       'PM_VERDICT: APPROVED',
@@ -538,6 +549,92 @@ test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update on
   assert.strictEqual(harness.checks.length, 1);
   assert.strictEqual(harness.checks[0].id, canonicalId);
   assert.strictEqual(harness.checks[0].conclusion, 'success');
+});
+
+test('UTV2-1572: a t1-approved label applied by unit-talk-executor[bot] is rejected by the live evaluator script', async () => {
+  const harness = await createMergeGateHarness('T1');
+  await harness.run('pull_request');
+
+  // A valid human verdict exists; only the label provenance is wrong.
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-09-02T18:00:00Z',
+    user: { login: 'griff843', type: 'User' },
+  });
+  harness.labels.push('t1-approved');
+  harness.labelEvents.push({ event: 'labeled', label: { name: 't1-approved' }, actor: { login: 'unit-talk-executor[bot]', type: 'Bot' } });
+
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.match(
+    JSON.stringify(harness.checks[0].output ?? {}),
+    /applied by bot account \\"unit-talk-executor\[bot\]\\"/,
+    'the check output must name the executor App as the rejected label actor',
+  );
+
+  // The human re-applying the label (most recent grant) restores authority.
+  harness.labelEvents.push({ event: 'unlabeled', label: { name: 't1-approved' }, actor: { login: 'griff843', type: 'User' } });
+  harness.labelEvents.push({ event: 'labeled', label: { name: 't1-approved' }, actor: { login: 'griff843', type: 'User' } });
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+});
+
+test('UTV2-1572: a pm-verdict/v1 APPROVED posted by unit-talk-executor[bot] does not satisfy T1 in the live evaluator script', async () => {
+  const harness = await createMergeGateHarness('T1');
+  await harness.run('pull_request');
+  harness.labels.push('t1-approved');
+  harness.labelEvents.push({ event: 'labeled', label: { name: 't1-approved' }, actor: { login: 'griff843', type: 'User' } });
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-09-02T18:00:00Z',
+    user: { login: 'unit-talk-executor[bot]', type: 'Bot' },
+  });
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.match(JSON.stringify(harness.checks[0].output ?? {}), /bot account \\"unit-talk-executor\[bot\]\\" is not authorized/);
+});
+
+test('UTV2-1572: T2 ignores an App review approval but accepts an EXECUTOR_RESULT self-attestation posted by unit-talk-executor[bot]', async () => {
+  const harness = await createMergeGateHarness('T2');
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.reviews.push({ state: 'APPROVED', user: { login: 'unit-talk-executor[bot]', type: 'Bot' } });
+  await harness.run('pull_request_review');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure', 'a Bot review approval carries no authority');
+
+  harness.reviews.splice(0, harness.reviews.length);
+  harness.comments.push({
+    body: [
+      'EXECUTOR_RESULT: READY_FOR_REVIEW',
+      'schema: executor-result/v1',
+      'Issue: UTV2-1585',
+      'Lane: claude',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-09-02T18:00:00Z',
+    user: { login: 'unit-talk-executor[bot]', type: 'Bot' },
+  });
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.checks[0].conclusion, 'success', 'the migrated executor identity must keep T2 self-attestation working');
+
+  // Any OTHER bot posting the same attestation is rejected.
+  harness.comments.splice(0, harness.comments.length, { ...harness.comments[0], user: { login: 'github-actions[bot]', type: 'Bot' } });
+  await harness.run('issue_comment');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
 });
 
 test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {

@@ -32,6 +32,7 @@ import {
   evaluateStatusCheckRollup,
   isExecutorResultComment,
   buildRepostedExecutorResultBody,
+  defaultRepostExecutorResult,
   MERGE_TRAIN_REQUIRED_CONTEXTS,
   BLOCKED_RAW_COMMANDS,
   type CommandRunner,
@@ -4301,3 +4302,103 @@ test('UTV2-1790: a re-probe refusal whose autostash pop FAILS retains the merge 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// ─── UTV2-1572 Phase A: executor-result re-post runs under the executor App ──
+
+function buildRepostRunner(posted: Array<{ args: string[]; env?: NodeJS.ProcessEnv }>): CommandRunner {
+  return (command, args, options) => {
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+      return {
+        status: 0,
+        stdout: Buffer.from(
+          JSON.stringify({
+            comments: [{ body: sampleExecutorResultBody('UTV2-1572', 'claude/utv2-1572-x', '1572', 'oldheadsha') }],
+          }),
+        ),
+        stderr: Buffer.from(''),
+        error: undefined,
+      };
+    }
+    if (command === 'gh' && args[0] === 'pr' && args[1] === 'comment') {
+      posted.push({ args, env: options.env });
+      return { status: 0, stdout: Buffer.from(''), stderr: Buffer.from(''), error: undefined };
+    }
+    throw new Error(`unexpected command ${command} ${args.join(' ')}`);
+  };
+}
+
+test('UTV2-1572: re-post is attributed to unit-talk-executor[bot] when the App identity resolves', () => {
+  const posted: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
+  const result = defaultRepostExecutorResult(
+    { pr: '1572', cwd: '/tmp', newHeadSha: 'newhead1572' },
+    {
+      runner: buildRepostRunner(posted),
+      resolveIdentity: () => ({
+        mode: 'app',
+        login: 'unit-talk-executor[bot]',
+        env: { GH_TOKEN: 'ghs_test', GITHUB_TOKEN: 'ghs_test' },
+        expires_at: '2026-09-02T19:00:00.000Z',
+        source: 'minted',
+      }),
+    },
+  );
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.identity, 'app');
+  assert.match(result.detail, /as unit-talk-executor\[bot\] \(executor App, token minted/);
+  assert.strictEqual(posted.length, 1);
+  assert.strictEqual(posted[0].env?.GH_TOKEN, 'ghs_test');
+  assert.ok(posted[0].args.includes('--body'));
+  assert.match(posted[0].args[posted[0].args.indexOf('--body') + 1], /Head SHA: newhead1572/);
+});
+
+test('UTV2-1572: rollback — with the App not configured the re-post uses the ambient gh identity and says so', () => {
+  const posted: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
+  const result = defaultRepostExecutorResult(
+    { pr: '1572', cwd: '/tmp', newHeadSha: 'newhead1572' },
+    {
+      runner: buildRepostRunner(posted),
+      resolveIdentity: () => ({ mode: 'ambient', reason: 'EXECUTOR_APP_ID is not set' }),
+    },
+  );
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.identity, 'ambient');
+  assert.match(result.detail, /ambient gh identity \(executor App not used: EXECUTOR_APP_ID is not set\)/);
+  assert.strictEqual(posted.length, 1);
+  assert.strictEqual(posted[0].env, undefined, 'no token overlay may reach gh on the rollback path');
+});
+
+test('UTV2-1572: a configured App whose token cannot be minted fails the re-post instead of silently posting as the human', () => {
+  const posted: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
+  const result = defaultRepostExecutorResult(
+    { pr: '1572', cwd: '/tmp', newHeadSha: 'newhead1572' },
+    {
+      runner: buildRepostRunner(posted),
+      resolveIdentity: () => {
+        throw new Error('executor App is configured but token mint failed (exit 1)');
+      },
+    },
+  );
+  assert.strictEqual(result.ok, false);
+  assert.match(result.detail, /identity resolution failed: executor App is configured but token mint failed/);
+  assert.strictEqual(posted.length, 0);
+});
+
+test('UTV2-1572: the default identity resolver is used when none is injected (ambient in a bare env)', () => {
+  const posted: Array<{ args: string[]; env?: NodeJS.ProcessEnv }> = [];
+  const saved = { id: process.env.EXECUTOR_APP_ID, disabled: process.env.EXECUTOR_APP_DISABLED };
+  process.env.EXECUTOR_APP_DISABLED = '1';
+  try {
+    const result = defaultRepostExecutorResult(
+      { pr: '1572', cwd: '/tmp', newHeadSha: 'newhead1572' },
+      { runner: buildRepostRunner(posted) },
+    );
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.identity, 'ambient');
+    assert.match(result.detail, /EXECUTOR_APP_DISABLED=1/);
+  } finally {
+    if (saved.disabled === undefined) delete process.env.EXECUTOR_APP_DISABLED;
+    else process.env.EXECUTOR_APP_DISABLED = saved.disabled;
+    if (saved.id !== undefined) process.env.EXECUTOR_APP_ID = saved.id;
+  }
+});
+

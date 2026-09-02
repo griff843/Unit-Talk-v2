@@ -132,4 +132,99 @@ function validateT1Verdicts(verdicts, ctx) {
   return errors;
 }
 
-module.exports = { parseVerdict, validateT1Verdicts };
+// ─── UTV2-1572 Phase A: executor identity vs PM authority ────────────────────
+//
+// The executor GitHub App (`unit-talk-executor[bot]`) is a write identity for
+// executor artifacts (commits, PRs, EXECUTOR_RESULT comments). It is NEVER a
+// source of PM authority. These helpers make that mechanical:
+//   - a `t1-approved` label counts only if its most recent application was
+//     performed by a human CODEOWNERS member;
+//   - T2 review approvals from bot/App accounts are ignored;
+//   - executor-result self-attestation may come from the executor App (the
+//     migrated path) or, until Phase B retires it, from a human CODEOWNERS
+//     member — never from any other bot.
+
+const EXECUTOR_APP_LOGIN = 'unit-talk-executor[bot]';
+const T1_APPROVED_LABEL = 't1-approved';
+
+/** `{login, type}` for the executor App's installation identity. */
+function isExecutorAppIdentity(user) {
+  return Boolean(user) && user.login === EXECUTOR_APP_LOGIN && user.type === 'Bot';
+}
+
+/** Human CODEOWNERS member: login authorized AND not a Bot-typed account. */
+function isHumanAuthorizedReviewer(user, authorizedReviewers) {
+  return Boolean(user && user.login) && user.type !== 'Bot' && authorizedReviewers.has(user.login);
+}
+
+/**
+ * Authors whose EXECUTOR_RESULT/v1 comment satisfies T2 self-attestation:
+ * the executor App itself, or (legacy, pre-Phase-B) a human CODEOWNERS
+ * member. Any other bot is rejected.
+ */
+function isAcceptedExecutorAttestationAuthor(user, authorizedReviewers) {
+  return isExecutorAppIdentity(user) || isHumanAuthorizedReviewer(user, authorizedReviewers);
+}
+
+/**
+ * T2 GitHub review approvals that carry authority: state APPROVED from a
+ * non-Bot account. The executor App cannot approve its own PR, and no App
+ * approval may ever satisfy the gate regardless.
+ */
+function selectHumanApprovals(reviews) {
+  return (reviews || []).filter((r) => r && r.state === 'APPROVED' && !(r.user && r.user.type === 'Bot'));
+}
+
+/**
+ * Validates WHO applied the `t1-approved` label. `events` are issue timeline
+ * events in ascending order ({event, label: {name}, actor: {login, type}}).
+ * The most recent `labeled` event for the label is the operative grant; it
+ * must have been performed by a human CODEOWNERS member. Returns error
+ * strings; empty means the label carries authority.
+ *
+ * Callers should invoke this only when the label is currently present; if
+ * no labeled event is found at all the label's provenance is unknown and
+ * the gate fails closed.
+ */
+function validateT1ApprovedLabel(events, ctx) {
+  const errors = [];
+  const grants = (events || []).filter(
+    (e) => e && e.event === 'labeled' && e.label && e.label.name === T1_APPROVED_LABEL,
+  );
+  if (grants.length === 0) {
+    errors.push(
+      `"${T1_APPROVED_LABEL}" label has no recorded "labeled" event, so its provenance cannot be verified. A human CODEOWNERS member must apply it.`,
+    );
+    return errors;
+  }
+  const latest = grants[grants.length - 1];
+  const actor = latest.actor || null;
+  if (!actor || !actor.login) {
+    errors.push(`"${T1_APPROVED_LABEL}" label was applied by an unknown actor. A human CODEOWNERS member must apply it.`);
+    return errors;
+  }
+  if (actor.type === 'Bot') {
+    errors.push(
+      `"${T1_APPROVED_LABEL}" label was applied by bot account "${actor.login}". Executor and automation identities cannot grant T1 authority; a human CODEOWNERS member must apply it.`,
+    );
+    return errors;
+  }
+  if (!ctx.authorizedReviewers.has(actor.login)) {
+    errors.push(
+      `"${T1_APPROVED_LABEL}" label was applied by "${actor.login}", who is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
+    );
+  }
+  return errors;
+}
+
+module.exports = {
+  parseVerdict,
+  validateT1Verdicts,
+  EXECUTOR_APP_LOGIN,
+  T1_APPROVED_LABEL,
+  isExecutorAppIdentity,
+  isHumanAuthorizedReviewer,
+  isAcceptedExecutorAttestationAuthor,
+  selectHumanApprovals,
+  validateT1ApprovedLabel,
+};
