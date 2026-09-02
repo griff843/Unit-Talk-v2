@@ -2624,3 +2624,158 @@ test('a Track Only pick does not occupy live board capacity', async () => {
   assert.equal(withDeliverable.currentBoardCount, 1);
   assert.equal(withDeliverable.sameSportCount, 1);
 });
+
+// --- UTV2-1823: GET /api/picks/:id/trace is staff-only operational state ---
+//
+// The trace response is the full lifecycle aggregate for one pick — the
+// PickRecord with its metadata, submission events, promotion history, outbox
+// entries, distribution receipts, settlement records, audit log entries and
+// lifecycle events. Before this change any anonymous caller who knew or
+// guessed a pick UUID could read all of it over the public API hostname.
+//
+// These three tests are the lane's acceptance controls. They only mean
+// anything with auth ENABLED: with no API keys configured the runtime falls
+// back to BYPASS_CONTEXT (role operator), so an anonymous request would still
+// be authorized and a 401 assertion would be vacuous. Each test therefore sets
+// UNIT_TALK_API_KEY_OPERATOR and restores it afterwards.
+
+test('UTV2-1823: anonymous GET /api/picks/:id/trace is refused with 401 and leaks no pick data', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'op-trace-auth-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/trace`,
+    );
+    const raw = await response.text();
+
+    assert.equal(response.status, 401);
+
+    const body = JSON.parse(raw) as {
+      ok: boolean;
+      error: { code: string };
+      data?: unknown;
+    };
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'UNAUTHORIZED');
+    assert.equal(body.data, undefined);
+
+    // Zero pick data, asserted against the raw bytes rather than a parsed
+    // field list: a future response-shape change cannot quietly reintroduce a
+    // leak through a key this test does not happen to name.
+    assert.ok(
+      !raw.includes(created.pick.id),
+      'the 401 body must not contain the pick id',
+    );
+    for (const leaked of [
+      'submissionEvents',
+      'promotionHistory',
+      'outboxEntries',
+      'distributionReceipts',
+      'settlementRecords',
+      'auditLogEntries',
+      'lifecycleEvents',
+      'distributionMode',
+      'submittedBy',
+    ]) {
+      assert.ok(
+        !raw.includes(leaked),
+        `the 401 body must not contain "${leaked}"`,
+      );
+    }
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
+  }
+});
+
+test('UTV2-1823: authenticated operator GET /api/picks/:id/trace still returns the unchanged 200 aggregate', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'op-trace-auth-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/trace`,
+      { headers: { authorization: 'Bearer op-trace-auth-key' } },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: Record<string, unknown>;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.ok(body.data, 'authenticated trace must return a data payload');
+
+    // Shape is asserted key-by-key so that "authentication was added without
+    // changing the response" is a measured claim, not an assumption.
+    for (const key of [
+      'pick',
+      'submissionEvents',
+      'promotionHistory',
+      'outboxEntries',
+      'distributionReceipts',
+      'settlementRecords',
+      'auditLogEntries',
+      'lifecycleEvents',
+    ]) {
+      assert.ok(key in (body.data ?? {}), `trace payload must retain "${key}"`);
+    }
+    assert.equal(
+      (body.data?.['pick'] as { id: string } | undefined)?.id,
+      created.pick.id,
+    );
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
+  }
+});
+
+test('UTV2-1823: authenticated GET /api/picks/:id/trace for an unknown pick is 404, not 401', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'op-trace-auth-key';
+
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+  server.listen(0);
+  await once(server, 'listening');
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/missing-pick/trace`,
+      { headers: { authorization: 'Bearer op-trace-auth-key' } },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
+
+    // Authentication failure and not-found must stay distinguishable in both
+    // directions: 404 is never used to mask a 401, and a 401 is never returned
+    // for a credentialed caller asking about an id that does not exist.
+    assert.equal(response.status, 404);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'PICK_NOT_FOUND');
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
+  }
+});
