@@ -12,12 +12,13 @@
   "files_changed": [],
   "file_scope_lock": [
     ".ops/sync/UTV2-1811.yml",
-    "apps/api/src/rpc-contract-parity.test.ts",
-    "apps/api/src/server.test.ts",
+    "apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts",
+    "apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts",
     "db/migrations-rollback/20260901150000_utv2_1811_rate_limit_buckets.down.sql",
     "docs/06_status/proof/UTV2-1811/diff-summary.md",
     "docs/06_status/proof/UTV2-1811/evidence.json",
     "docs/06_status/proof/UTV2-1811/verification.md",
+    "package.json",
     "packages/db/src/database.types.ts",
     "supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql"
   ],
