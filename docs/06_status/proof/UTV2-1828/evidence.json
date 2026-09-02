@@ -78,7 +78,7 @@
   "known_follow_up": [
     "rebindMergeSha in scripts/ops/proof-generate.ts still carries the two-file list at its definition; that file is inside UTV2-1825's active file scope lock (PR #1485, open), so the list is extended from the lane-close.ts call site instead.",
     "CANONICAL_PROOF_ARTIFACTS in scripts/ops/proof-rebind.ts is unchanged: its strict planner requires a '## Merge SHA Binding' section that a canonically generated diff-summary.md does not have.",
-    "This fix alone does not close UTV2-1826: that bundle's diff-summary.md anchor reads 'MERGE_SHA: pending merge', which PLACEHOLDER_VALUE_PATTERN does not yet match. PR #1485 (UTV2-1825) fixes that; both are needed."
+    "This fix alone does not close UTV2-1826: that bundle's diff-summary.md anchor reads 'MERGE_SHA: pending merge', which the pre-merge anchor pattern in proof-generate.ts does not yet match. PR #1485 (UTV2-1825) fixes that; both are needed."
   ],
   "pr_number": 1490
 }

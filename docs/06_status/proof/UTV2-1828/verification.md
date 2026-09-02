@@ -196,7 +196,7 @@ effect on closeout is to bind more and to fail closed more often.
 - `CANONICAL_PROOF_ARTIFACTS` in `scripts/ops/proof-rebind.ts` is unchanged, for the
   structural reason recorded above rather than as an oversight.
 - This fix alone does not close UTV2-1826. That bundle's `diff-summary.md` anchor reads
-  `MERGE_SHA: pending merge`, and `PLACEHOLDER_VALUE_PATTERN` in `proof-generate.ts` matches
+  `MERGE_SHA: pending merge`, and the pre-merge anchor pattern in `proof-generate.ts` matches
   `pending`, not `pending merge` — so the anchor is not yet bindable. PR #1485 (UTV2-1825)
   fixes exactly that. With this lane in place the failure is now a named refusal from the
   closeout tool instead of a P3/C4 failure after the fact; with both, UTV2-1826 closes
