@@ -22,9 +22,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1822/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-01T23:25:47.047Z",
-  "heartbeat_at": "2026-09-02T00:00:28.423Z",
+  "heartbeat_at": "2026-09-02T03:01:23.401Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1822-migration-history-receipts.json",
