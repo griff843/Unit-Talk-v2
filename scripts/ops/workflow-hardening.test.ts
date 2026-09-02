@@ -27,8 +27,17 @@ function readWorkflowYaml(name: string): WorkflowDocument {
   return parsed as WorkflowDocument;
 }
 
+/**
+ * Reads a skill doc from `.claude/commands/`, falling back to the demoted
+ * `legacy/` subdirectory. The dispatch and lane skills moved there when the
+ * lane primitive was superseded; they are no longer the execution path, but the
+ * assertions below still guard their content — a legacy doc that quietly grew a
+ * hardcoded lane cap or a stale command is exactly as wrong as it was before.
+ */
 function readClaudeCommand(name: string): string {
-  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', name), 'utf8');
+  const primary = path.join(ROOT, '.claude', 'commands', name);
+  if (fs.existsSync(primary)) return fs.readFileSync(primary, 'utf8');
+  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', 'legacy', name), 'utf8');
 }
 
 function objectField(input: WorkflowDocument, key: string): WorkflowDocument {

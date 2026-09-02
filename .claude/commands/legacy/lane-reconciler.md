@@ -1,5 +1,11 @@
 # /lane-reconciler
 
+> **LEGACY — not the execution path.**
+> This skill belongs to the prior Linear/lane execution primitive, superseded by the
+> mission-native model in `docs/mission/intent.md`. It is retained to read historical
+> lanes and to finish lanes that are still open. **Do not admit new work through it.**
+> New work: `docs/mission/plan.md` → worktree/branch → PR → green CI. See `/mission`.
+
 Ghost lane detection and repair. Finds manifests where status is active but branch/PR/heartbeat state has drifted, then transitions them to their correct status.
 
 **Usage:**

@@ -3,12 +3,14 @@ name: three-brain
 description: |
   Executor-selection layer for Unit Talk V2. Returns which executor
   handles a given task: Claude, Codex CLI, Codex Cloud, or Griff.
-  Called by /dispatch during Phase 1. QA Agent invokes it to request
-  Codex review or Explore scans. Claude invokes it directly for failure
-  rescue and codebase scans.
+  Invoked when deciding who should do a piece of mission work. QA Agent
+  invokes it to request Codex review or Explore scans. Claude invokes it
+  directly for failure rescue and codebase scans.
 
-  This skill does NOT create lanes, open PRs, or update Linear.
-  /dispatch owns lane lifecycle. This skill owns the routing decision.
+  This skill does NOT open PRs, create branches, or update any tracker.
+  It owns the routing decision and nothing else. Tier language below is
+  legacy shorthand for how much verification work warrants — merge
+  authority is risk-scoped (docs/05_operations/RESERVED_RISK_SURFACES.json).
 ---
 
 # Three-Brain: Executor Selection Layer
@@ -17,12 +19,12 @@ description: |
 
 | Executor | Role |
 |---|---|
-| **Claude** | Orchestrator and driver. T1, T3, Tier C paths, fallback when Codex unavailable |
-| **Codex CLI** | T2 clear-scope implementation lanes, failure rescue |
+| **Claude** | Orchestrator and driver. Mission planning, high-consequence and reserved-surface work, integration, repair, fallback when Codex unavailable |
+| **Codex CLI** | Bounded clear-scope implementation from a work packet, failure rescue |
 | **Codex Cloud** | Reserved autonomous Codex executor when explicitly selected by the orchestrator |
-| **Explore** | Claude action for large-context scans; not a lane-start executor |
-| **QA Agent** | Claude action for Playwright surface verification; not a lane-start executor |
-| **Griff** | Scope authority, source-of-truth conflicts, product decisions, merge gates |
+| **Explore** | Claude action for large-context scans; not an independent executor |
+| **QA Agent** | Claude action for Playwright surface verification; not an independent executor |
+| **Griff** | Product intent, exit criteria, and the reserved decisions in docs/mission/intent.md |
 
 ## Model selection for Claude lanes
 

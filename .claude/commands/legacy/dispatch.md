@@ -1,5 +1,11 @@
 # /dispatch
 
+> **LEGACY — not the execution path.**
+> This skill belongs to the prior Linear/lane execution primitive, superseded by the
+> mission-native model in `docs/mission/intent.md`. It is retained to read historical
+> lanes and to finish lanes that are still open. **Do not admit new work through it.**
+> New work: `docs/mission/plan.md` → worktree/branch → PR → green CI. See `/mission`.
+
 One-command lane execution. Pulls from the dispatch queue, routes to the right executor, and runs the full lane end-to-end.
 
 ## Mandatory merge wrapper

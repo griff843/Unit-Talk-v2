@@ -1,5 +1,11 @@
 # /lane-recovery
 
+> **LEGACY — not the execution path.**
+> This skill belongs to the prior Linear/lane execution primitive, superseded by the
+> mission-native model in `docs/mission/intent.md`. It is retained to read historical
+> lanes and to finish lanes that are still open. **Do not admit new work through it.**
+> New work: `docs/mission/plan.md` → worktree/branch → PR → green CI. See `/mission`.
+
 Triage and repair a lane whose state has already broken. `/lane-management` is the forward path — start, progress, close. This skill is the reverse path: a lane is stuck, a gate is refusing, or manifest / Linear / GitHub disagree, and you need to know which repair to run.
 
 **Never invent a repair.** Every fix below is an existing governed script. If the symptom is not in this tree, stop and report it — do not hand-edit a manifest, delete a lease, or force a status.

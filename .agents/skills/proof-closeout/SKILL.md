@@ -1,6 +1,6 @@
 ---
 name: proof-closeout
-description: Run Unit Talk proof and closeout workflows efficiently. Use when verifying implementation, preparing closeout evidence, checking runtime health, or building a compact proof bundle for a task.
+description: LEGACY — proof bundles and lane closeout are no longer required for ordinary work (docs/mission/intent.md); evidence goes in the PR body. Use only when a proof bundle actually exists and must be correct. Use when verifying implementation, preparing closeout evidence, checking runtime health, or building a compact proof bundle for a task.
 category: verification
 owner: codex
 trigger: Verifying implementation, preparing closeout evidence, checking runtime health, or building proof bundles.

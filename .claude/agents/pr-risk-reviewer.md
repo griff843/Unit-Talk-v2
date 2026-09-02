@@ -1,6 +1,6 @@
 ---
 name: pr-risk-reviewer
-description: Advisory PR risk review aid. Checks Tier C path touches, new external dependencies, schema changes, test coverage delta, and scope bleed. Returns RISK: LOW/MEDIUM/HIGH with specific reasons for the orchestrator; GitHub checks, Merge Gate, and PM policy remain the blocking authority.
+description: Advisory PR risk review aid. Checks reserved-surface and high-consequence path touches, new external dependencies, schema changes, test coverage delta, and scope bleed. Returns RISK: LOW/MEDIUM/HIGH with specific reasons for the orchestrator; GitHub checks, Merge Gate, and PM policy remain the blocking authority.
 model: claude-sonnet-5
 tools:
   - Bash

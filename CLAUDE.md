@@ -8,7 +8,11 @@ If this file and a canonical doc disagree, **the canonical doc wins**. Update th
 
 ## Mission
 
-Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Claude Code is the execution orchestrator: work the Linear backlog, merge on green per tier policy, and keep execution truth mechanical rather than narrative.
+Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. The current mission is
+**Production Recovery** (`docs/mission/intent.md`): finish the product and get it trustworthy in
+production. Claude owns the engineering plan, decomposition, sequencing and continuation; Griff owns
+product intent and the reserved decisions. Execution state is the plan, the branches, the PRs and the
+live runtime — not a ticket system.
 
 ---
 
@@ -24,10 +28,7 @@ pnpm verify            # env:check + lint + type-check + build + test
 pnpm verify:parallel   # lint + type-check in parallel, then build + test (faster)
 pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
-pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
-pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
-pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
-pnpm ops:scope-suggest # auto-suggest file scope before ops:lane-start (pass --issue UTV2-###)
+pnpm ops:codex-packet  # run Codex against a mission work packet (see docs/mission/packets/)
 
 # Run a single test file
 tsx --test apps/api/src/submission-service.test.ts
@@ -46,23 +47,28 @@ Never `sleep`-then-poll for CI/merge status — the harness blocks bare sleep ch
 | Rank | Source | Authoritative For |
 |---|---|---|
 | 1 | **GitHub `main`** | shipped code, merge SHAs, CI on merge |
-| 2 | **Proof bundle** (tied to merge SHA) | completion evidence |
-| 3 | **Lane manifest** (`docs/06_status/lanes/*.json`) | active lane state |
-| 4 | **Linear** | workflow intent, tier label, ownership |
-| 5 | **Chat / memory / agent claims** | context only — never authoritative |
+| 2 | **Live runtime / database state** | what the system actually does right now |
+| 3 | **Open PRs + their check runs** | work in flight and whether it is actually green |
+| 4 | **Canonical contracts** (`docs/mission/spec.md` index) | required behavior |
+| 5 | **`docs/mission/plan.md`** | current engineering intent and sequencing |
+| 6 | **Linear** | portfolio and history only — never execution authority |
+| 7 | **Chat / memory / agent claims / prior terminals** | context only — never authoritative |
 
-Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH_MODEL.md`.
+Higher ranks win unconditionally. Historical handoffs and Linear issues are discovery material, not
+current state. Lane manifests are no longer a truth rank; where one still exists it describes a
+legacy lane, not the system.
 
 ---
 
 ## Core invariants (never violate)
 
 1. `main` is shipped truth. Agent claims are never authoritative.
-2. No lane without preflight. No Done without `ops:truth-check` pass.
-3. One issue → one lane → one branch → one PR.
-4. Proof must tie to the merge SHA. Stale proof is invalid.
-5. Tier label (T1/T2/T3) is required before Ready.
-6. Lane manifest is the sole authority for active lane state.
+2. Every change lands via PR on green CI. Direct-`main` bypass is prohibited.
+3. One work unit → one branch → one PR. Parallel work runs in its own worktree.
+4. Evidence must bind to the code it describes. Stale evidence is invalid.
+5. A diff that touches a reserved surface (`RESERVED_RISK_SURFACES.json`) merges only with Griff's
+   approval artifact. Nothing else requires a human relay.
+6. Production containment stays fail-closed until a mission milestone explicitly authorizes change.
 7. Domain (`@unit-talk/domain`) is pure. No I/O, no DB, no HTTP, no env.
 8. Apps own side effects. Packages never import from apps. Apps never import from apps.
 9. Postgres outbox is the only delivery queue. Exactly one `DeliveryOutcome` per attempt.
@@ -71,56 +77,71 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 
 ---
 
-## Build status — Phase 7A: Governance Brake (SHIPPED)
+## Current mission — Production Recovery
 
-**Ratification:** `docs/06_status/PHASE7R_RATIFICATION.md`
-**Execution plan:** `docs/06_status/PHASE7E_EXECUTION_PLAN.md`
+**Intent (human-owned):** `docs/mission/intent.md`
+**Live plan (Claude-owned, rewritten as reality changes):** `docs/mission/plan.md`
 
-Phase 7A shipped: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–7A closed; boundary rules are in production. Current focus: system hardening, live-proof gating, and infrastructure provisioning (Hetzner, SGO).
+Recover Unit Talk into a finished, trustworthy, production-ready product. Milestone 1 is a contained
+internal Smart Form "Track Only" pilot; done is the production-readiness contract actually passing on
+live evidence. Read the plan before acting — it, not this file, holds current state.
 
 ---
 
-## Lane execution expectations
+## Execution substrate
 
-Start a lane with `ops:lane-start <UTV2-###>`. Close with `ops:lane-close <UTV2-###>`. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
+Work unit = a plan item in `docs/mission/plan.md`. There is no admission ceremony: if the plan says
+it is executable and it touches no reserved surface, do it.
 
-Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
+```
+plan item -> worktree + branch -> commits -> PR -> green CI -> merge -> plan update
+```
 
-**Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
-1. `pnpm verify` green on the branch
-2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
-3. Proof SHA binding automated — `post-merge-lane-close.yml` runs `ops:proof-generate --merge-sha` after merge; no manual append needed
-4. CI green on merge SHA (not just branch CI)
-5. For T1: `pnpm test:db` green + evidence bundle generated and validated
-6. Tier label auto-applied by `ops:lane-finalize`; verify tier label is set in Linear
-7. `ops:truth-check` runs and exits 0
+- **One work unit -> one branch -> one PR.** Parallel work goes in its own git worktree; the main
+  checkout is the control and merge checkout. Do not branch-switch the main checkout to run parallel work.
+- **Every change lands via PR on green CI.** Direct-`main` bypass stays prohibited
+  (`docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md`).
+- **Merge, branch-refresh and post-merge `main` sync go through `pnpm ops:merge-wrapper`** — it owns
+  the merge mutex. Never call raw `gh pr merge`, `gh pr update-branch`, `git pull origin main`,
+  `git merge origin/main`, or `git rebase origin/main`.
+- **`docs/mission/plan.md` is updated as reality changes** — that update is part of finishing the
+  work, not a separate report.
+- **Delegating to Codex:** write a packet from `docs/mission/packets/TEMPLATE.md` and run
+  `pnpm ops:codex-packet --packet <path>`. No lane manifest, no Linear issue.
 
-`ops:lane-close <ID>` is already the one-command post-merge entry point: it runs `ops:truth-check` internally, and on success marks the manifest `done` and transitions the Linear issue to Done — no separate manual truth-check invocation is required first. If the manifest is missing its merge SHA or drifted from the merged PR, `ops:lane-close <ID> --repair-merged` repairs it directly from GitHub's authoritative merge state (`pr.mergeSha`) before running truth-check, instead of requiring a manual `ops:lane-manifest record-merge` step. `ops:lane-finalize <ID>` remains a required separate call for tier-label application (step 6); `ops:lane-close` does not apply tier labels.
-
-Procedural details: `/lane-management` and `/verification` skills.
-Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
+**Lane manifests, `ops:lane-start` / `lane-close` / `truth-check`, and proof-bundle closeout are
+legacy.** They still work and still govern lanes that are open today; use `/legacy:lane-recovery` to
+finish those. Do not admit new work through them.
 
 ---
 
 ## Verification expectations
 
-Tier now describes how much **verification** a change warrants. It no longer decides who may merge —
-see Merge Authority below.
+Verification depth follows **risk**, not lane admission. Classify with the same policy the merge gate
+uses — `docs/05_operations/RESERVED_RISK_SURFACES.json` via `scripts/ops/merge-authority.cjs` — and
+verify to that level.
 
-| Tier | Verification | Proof |
+| Diff classification | Verification | Evidence |
 |---|---|---|
-| T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied |
-| T2 | type-check + test + issue-specific | Diff summary + verification log |
-| T3 | type-check + test | Green CI on merge SHA |
+| `auto`, no runtime behavior change | `pnpm verify` green on the PR | green required checks |
+| `auto`, changes runtime behavior | `pnpm verify` + tests that fail without the change | green checks + the test itself |
+| `auto`, touches DB read/write paths | the above + `pnpm test:db` against real Supabase | pasted `test:db` output in the PR |
+| `human` (reserved surface) | the above + an explicit statement of the production effect and its reversal | PR body + Griff's approval artifact |
 
-**Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
+**Evidence is a claim someone can check, not a ceremony.** A pasted command output in the PR body is
+evidence. A generated bundle whose numbers nothing verifies is not. Proof bundles under
+`docs/06_status/proof/**` are no longer required for ordinary work; when one is written it must still
+be true, and the commit-time validator still enforces its shape.
+
+**Static proof alone is never sufficient for a runtime claim.** Runtime claims must run against real
+Supabase, not in-memory repos. Details: `/verification` skill.
 
 **Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** — now
 Risk-Scoped Merge Authority (RMA/v1), ratified 2026-09-02 under `docs/mission/intent.md`. It
 supersedes the lane-manifest tier model for merge authorization. If this section and the workflow
 diverge, the workflow wins and this section is stale.
 
-Authority follows what a diff **touches**, not how its lane was admitted:
+Authority follows what a diff **touches**, not how its work was admitted:
 
 | Classification | Condition | Requirement |
 |---|---|---|
@@ -136,63 +157,73 @@ Fail-closed throughout: an unreadable policy, an unavailable diff, or any unclas
 reserves the merge rather than releasing it. `governance:pause` is a hard block regardless.
 
 The GitHub-review approval path was removed: GitHub blocks self-approval and every executor opens
-PRs under the same `griff843` identity, so it was unusable in practice. The tier table above still
-describes what **verification** each tier of work warrants; it no longer describes who may merge.
+PRs under the same `griff843` identity, so it was unusable in practice.
+
+A reserved diff may be **written and opened as a PR** without Griff. The human gate is at merge, not
+at the keyboard: it blocks that change, not the mission.
 
 ---
 
 ## Authoritative documents
 
+**Mission (read first):**
+
 | Topic | Document |
 |---|---|
 | **Mission intent (human-owned)** | `docs/mission/intent.md` |
 | **Canonical contract index** | `docs/mission/spec.md` |
-| **Live engineering plan** | `docs/mission/plan.md` |
+| **Live engineering plan (Claude-owned)** | `docs/mission/plan.md` |
 | **Reserved surfaces requiring Griff** | `docs/05_operations/RESERVED_RISK_SURFACES.json` |
-| Master execution map (phases 1–8) | `docs/05_operations/EXECUTION_MAP.md` |
-| Master modeling sequence (elite-core / human-like-core) | `docs/05_operations/MODELING_SEQUENCE.md` |
-| Three-lane workflow spec | `docs/05_operations/WORKFLOW_SPEC.md` |
-| Execution truth model | `docs/05_operations/EXECUTION_TRUTH_MODEL.md` |
-| Done-gate (`ops:truth-check`) | `docs/05_operations/TRUTH_CHECK_SPEC.md` |
-| Lane manifest schema + lifecycle | `docs/05_operations/LANE_MANIFEST_SPEC.md` |
-| Delegation policy (tiers, reshaping) | `docs/05_operations/DELEGATION_POLICY.md` |
-| Sonnet-5-era operating model (Outcome Contracts, PM gates, runtime validation by tier, cutover) | `docs/05_operations/OPERATING_MODEL_SONNET5.md` |
-| Evidence bundle template | `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` |
-| Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Production readiness (the definition of done) | `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` |
+
+`docs/mission/spec.md` indexes every canonical contract — domain, delivery, DB, safety. Use it
+instead of enumerating contracts here.
+
+**Standing references:**
+
+| Topic | Document |
+|---|---|
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
-| Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
+| Standing guardrails | `docs/05_operations/STANDING_GUARDRAILS.md` |
+| Required CI checks | `docs/05_operations/REQUIRED_CI_CHECKS.md` |
+| Incident response | `docs/05_operations/INCIDENT_RUNBOOK.md` |
+| Advisory Gemini review (non-blocking) | `docs/05_operations/GEMINI_ADVISORY_REVIEW.md` |
+| Codex work packets | `docs/mission/packets/TEMPLATE.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
-| Executor result schema | `docs/05_operations/schemas/executor-result-v1.md` |
 | PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
-| Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
+
+**Legacy — history, not execution authority.** `LANE_MANIFEST_SPEC.md`, `TRUTH_CHECK_SPEC.md`,
+`WORKFLOW_SPEC.md`, `DELEGATION_POLICY.md`, `OPERATING_MODEL_SONNET5.md`,
+`EVIDENCE_BUNDLE_TEMPLATE.md`, `R1_R5_OPERATING_RULE.md`, `EXECUTION_MAP.md`. The truth *hierarchy*
+in `EXECUTION_TRUTH_MODEL.md` stands; its lane lifecycle does not gate work. See
+`docs/mission/spec.md` → "Deprecated as execution authority".
 
 ---
 
 ## Skills (invoke by name)
 
+**Mission-native (primary):**
+
 | Skill | When to use |
 |---|---|
-| `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
-| `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
-| `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
-| `/three-brain` | executor routing decision for any issue (Claude / Codex CLI / Codex Cloud / Explore / QA / Griff) |
-| `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
-| `/lane-management` | starting, progressing, blocking, closing any lane |
-| `/verification` | before any merge claim or `ops:truth-check` call |
-| `/lane-recovery` | a lane is stuck, a gate refuses, or manifest/Linear/GitHub disagree |
+| `/mission` | orient on the mission: current plan, executable work, what is reserved |
+| `/verification` | before any merge claim — what must actually be green |
+| `/three-brain` | executor routing for a work unit (Claude / Codex / Explore / Griff) |
 | `/pr-unblock` | a PR is red, BLOCKED, or stalled and the cause is not obvious |
-| `/proof-authoring` | writing or correcting a proof bundle so it is true and passes all three gates |
+| `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
+| `/db-verify` | live DB verification |
 | `/mutation-test` | proving a control, guard, or test actually fails on the condition it names |
 | `/code-structure` | touching package/app boundaries, imports, or generated files |
 | `/betting-domain` | touching CanonicalPick, scoring, promotion, lifecycle, CLV, grading |
 | `/outbox-worker` | touching outbox polling, delivery adapter, retry, circuit breaker |
-| `/system-state-loader` | forced state reload after `/clear` or when hook data is suspected stale |
-| `/t1-proof` | assembling a T1 evidence bundle |
-| `/db-verify` | live DB verification |
-| `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
 | `/verify-pick` | verify a specific pick end-to-end against live data |
+| `/operator-runbook` | health-check, rollback, replay |
+
+**Legacy (`/legacy:*`) — the prior Linear/lane primitive.** Retained for reading historical lanes and
+for repairing lanes that are still open. They are not the execution path and must not be used to
+admit new work: `legacy:dispatch`, `legacy:dispatch-board`, `legacy:loop-dispatch`,
+`legacy:lane-management`, `legacy:lane-recovery`, `legacy:lane-reconciler`.
 
 All skills live in `.claude/commands/`. Add new skills there; do not expand this file.
 
@@ -200,14 +231,12 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 
 ## Session discipline
 
-- Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
-- Run `/clear` at major task boundaries.
-- After `/clear`, re-read this file. The `UserPromptSubmit` hook auto-injects system state — invoke `/system-state-loader` only if the hook data appears stale or missing.
-- Standing guardrails (things no agent may do regardless of a directive) live in `docs/05_operations/STANDING_GUARDRAILS.md` and are auto-injected every prompt by the same hook. PM: edit that file instead of re-pasting guardrails in chat.
+- Before any work, run `git fetch origin && git pull --ff-only origin main`. Stale local state produces false premises.
+- Run `/clear` at major task boundaries. After `/clear`, re-read this file and `docs/mission/plan.md`.
+- Standing guardrails live in `docs/05_operations/STANDING_GUARDRAILS.md` and are auto-injected every prompt by the `UserPromptSubmit` hook. PM: edit that file instead of re-pasting guardrails in chat.
 - If context degrades, clear immediately.
-- Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
-- PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.
-- Prefer code over docs for truth. If uncertain, say "check actual implementation" and check.
+- Prefer code and runtime over docs for truth. If uncertain, say "check actual implementation" and check.
+- Do not stop for administrative state. Stop only for the conditions in `docs/mission/intent.md` → Stop conditions.
 
 ---
 

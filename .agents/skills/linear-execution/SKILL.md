@@ -1,6 +1,6 @@
 ---
 name: linear-execution
-description: Use Unit Talk's CLI-first queue flow when a task explicitly depends on Linear issue state. Use when asked to read, update, close, or reconcile Linear execution lanes from the repo.
+description: DEPRECATED — Linear is portfolio/history only and is not execution authority (docs/mission/intent.md). Do not use it to decide, admit, or close work. Retained only for a task that explicitly asks to read or reconcile historical Linear state. Use when asked to read, update, close, or reconcile Linear execution lanes from the repo.
 category: governance
 owner: codex
 trigger: Task explicitly depends on reading, updating, closing, or reconciling Linear issue state.

@@ -1,10 +1,10 @@
 # Unit Talk V2 — Agent Brief
 
-> **Prepend this file to every bounded agent dispatch.** It is the repo-specific gotcha list that every lane needs to know before touching code. Re-discovering these pitfalls each session is a waste of context and has caused real production incidents.
+> **Prepend this file to every bounded agent dispatch or work packet.** It is the repo-specific gotcha list every executor needs before touching code. Re-discovering these pitfalls each session is a waste of context and has caused real production incidents.
 >
 > Last updated: 2026-04-11. Update when a new drift class is discovered or a policy changes.
 
-This brief is **in addition to** `CLAUDE.md` (execution model, tier/lane rules, merge policy). Read CLAUDE.md for process; read this for the repo's actual traps.
+This brief is **in addition to** `CLAUDE.md` (execution model, risk-scoped merge authority) and `docs/mission/intent.md` (mission and reserved decisions). Read those for process; read this for the repo's actual traps.
 
 ---
 
