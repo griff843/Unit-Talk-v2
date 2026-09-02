@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1773-canonical-reference-bootstrap",
   "branch": "codex/utv2-1773-canonical-reference-bootstrap",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "aa10cf0f5b575301b7e73061aeefe4e204bb92e8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1484",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,7 +23,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-02T03:05:33.429Z",
-  "heartbeat_at": "2026-09-02T12:34:43.334Z",
+  "heartbeat_at": "2026-09-02T14:01:38.023Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1773-canonical-reference-bootstrap.json",
