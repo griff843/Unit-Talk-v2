@@ -52,7 +52,16 @@ on:
         required: true
         type: number
   pull_request:
-    types: [opened, synchronize, reopened]
+    # `labeled`/`unlabeled` are the RMA/v1 PHASE 1 re-trigger. On opened /
+    # synchronize / reopened this workflow starts at the same moment as ci.yml,
+    # so a bootstrap run (which owns the required identity -- see the check-name
+    # step) always evaluates while `verify` is still queued and reports "CI check
+    # is queued, not completed". ci.yml uses the DEFAULT pull_request types,
+    # which do not include `labeled`, so toggling a label re-evaluates this
+    # workflow alone -- without restarting CI, which is what made close/reopen a
+    # loop that could never converge. Outside bootstrap this only ever refreshes
+    # the non-required preflight.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read

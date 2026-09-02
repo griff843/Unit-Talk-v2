@@ -2124,6 +2124,27 @@ test('RMA bootstrap: a pull_request run owns the required ERV identity only whil
   assert.match(erv, /NAME=\$\(pnpm exec tsx scripts\/ops\/executor-result-validate\.ts resolve-check-name "\$EVENT_NAME"\)/);
 });
 
+test('RMA bootstrap: the ERV re-trigger must not also restart CI', () => {
+  // A bootstrap run owns the required identity and fires on the same event as
+  // ci.yml, so on opened/synchronize/reopened it always evaluates while
+  // `verify` is still queued and reports "CI check is queued, not completed".
+  // Close/reopen cannot fix that -- it restarts verify too, so the loop never
+  // converges. `labeled` is the way out precisely because ci.yml does NOT
+  // listen for it; if ci.yml ever declared explicit types including `labeled`,
+  // this re-trigger would silently become another restart.
+  const erv = parseYaml(readWorkflow('executor-result-validator.yml'));
+  const ervTypes: string[] = erv.on.pull_request.types;
+  assert.ok(ervTypes.includes('labeled'), 'ERV must re-evaluate on a label change');
+
+  const ci = parseYaml(readWorkflow('ci.yml'));
+  const ciTypes: string[] | undefined = ci.on.pull_request?.types;
+  // Undefined means GitHub's defaults (opened/synchronize/reopened), which
+  // exclude `labeled`. An explicit list must exclude it too.
+  if (ciTypes) {
+    assert.ok(!ciTypes.includes('labeled'), 'ci.yml must not re-run verify on a label change');
+  }
+});
+
 test('RMA: executor-result-validator requires a proof bundle when it cannot classify', () => {
   const erv = readWorkflow('executor-result-validator.yml');
   assert.match(erv, /proofRequired = true;/);
