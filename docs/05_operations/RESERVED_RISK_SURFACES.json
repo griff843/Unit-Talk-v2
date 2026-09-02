@@ -115,17 +115,22 @@
     },
     {
       "id": "merge-authority",
-      "reserved": "Merge authority itself \u2014 the gate, its policy, ownership, and this file",
-      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending.",
+      "reserved": "Merge authority itself \u2014 the gates, the machinery that produces required checks, the merge wrapper, ownership, and this file",
+      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending. Branch protection binds CONTEXT NAMES, not workflows, and a same-repo PR runs its own copy of any workflow it edits: with `checks: write` that copy can mint a newer, successful check run under a required name. So every workflow is reserved, not only the three that legitimately produce those contexts. The merge wrapper is reserved for the mirror-image reason: the trusted wrapper would happily merge a change that makes the next wrapper authorize unconditionally.",
       "paths": [
-        ".github/workflows/merge-gate.yml",
-        ".github/workflows/p0-protocol.yml",
-        ".github/workflows/executor-result-validator.yml",
+        ".github/workflows/**",
+        ".github/actions/**",
         ".github/CODEOWNERS",
         "docs/05_operations/RESERVED_RISK_SURFACES.json",
         "scripts/ops/merge-authority.cjs",
         "scripts/ops/merge-gate-verdict.cjs",
         "scripts/ops/apply-branch-protection.sh",
+        "scripts/ops/pre-merge-authorization.ts",
+        "scripts/ops/merge-wrapper.ts",
+        "scripts/ops/ops-merge-wrapper.ts",
+        "scripts/ops/merge-mutex.ts",
+        "scripts/ops/truth-check-lib.ts",
+        "scripts/ops/executor-result-validate.ts",
         "docs/mission/intent.md"
       ]
     }
@@ -142,6 +147,18 @@
         "**/*.js"
       ],
       "addedLinePattern": "\\b(DROP\\s+(TABLE|SCHEMA|DATABASE|COLUMN|VIEW|FUNCTION|TYPE|INDEX)|TRUNCATE\\s+(TABLE\\s+)?[A-Za-z_\"]|DELETE\\s+FROM)\\b",
+      "patternFlags": "i"
+    },
+    {
+      "id": "merge-wrapper-entrypoint",
+      "reserved": "Merge-wrapper entrypoint \u2014 repointing the sanctioned merge command is a merge-authority change",
+      "note": "package.json is edited by almost every PR (wiring a new test into test:ops), so reserving the whole file would make RMA meaningless. Only lines that define or repoint the merge commands are reserved.",
+      "pathGlobs": [
+        "package.json",
+        "*/package.json",
+        "*/*/package.json"
+      ],
+      "addedLinePattern": "\"(ops:merge-wrapper|ops:merge-lock|ops:pr-merge)\"|pre-merge-authorization|ops-merge-wrapper|merge-mutex",
       "patternFlags": "i"
     }
   ],

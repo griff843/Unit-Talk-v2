@@ -481,3 +481,64 @@ test('evaluateMergeAuthority forwards the declared file count to the classifier'
   assert.equal(decision.authorized, false);
   assert.ok(decision.surfaces.includes('unclassifiable'));
 });
+
+// ── the machinery that produces required checks ───────────────────────────
+// Branch protection binds CONTEXT NAMES, not workflows, and a same-repository
+// PR runs its own copy of any workflow it edits. With `checks: write` that copy
+// can create a newer, successful check run under a required name. So a workflow
+// this policy does not reserve is a way for a PR to satisfy the contexts that
+// judge it.
+
+test('every workflow is reserved, not only the ones that legitimately mint required checks', () => {
+  for (const wf of [
+    '.github/workflows/ci.yml',
+    '.github/workflows/merge-gate.yml',
+    '.github/workflows/executor-result-validator.yml',
+    '.github/workflows/p0-protocol.yml',
+    '.github/workflows/some-new-workflow.yml',
+    '.github/workflows/nested/thing.yml',
+    '.github/actions/setup/action.yml',
+  ]) {
+    const result = classifyDiff({ files: [file(wf, '+  run: echo hi')], policy });
+    assert.equal(result.authority, 'human', `${wf} must be reserved`);
+    assert.ok(result.surfaces.includes('merge-authority'), `${wf} must land on merge-authority`);
+  }
+});
+
+test('the whole sanctioned merge-wrapper chain is reserved', () => {
+  // The trusted wrapper would otherwise merge a change that makes the NEXT
+  // wrapper authorize unconditionally, or skip the merge mutex.
+  for (const f of [
+    'scripts/ops/pre-merge-authorization.ts',
+    'scripts/ops/merge-wrapper.ts',
+    'scripts/ops/ops-merge-wrapper.ts',
+    'scripts/ops/merge-mutex.ts',
+    'scripts/ops/truth-check-lib.ts',
+    'scripts/ops/executor-result-validate.ts',
+  ]) {
+    const result = classifyDiff({ files: [file(f, '+return true;')], policy });
+    assert.equal(result.authority, 'human', `${f} must be reserved`);
+    assert.ok(result.surfaces.includes('merge-authority'));
+  }
+});
+
+test('package.json is reserved by CONTENT, not wholesale', () => {
+  // Almost every PR edits package.json to wire a new test into test:ops.
+  // Reserving the whole file would make RMA meaningless, so only lines that
+  // define or repoint the merge commands reserve it.
+  const wiring = classifyDiff({
+    files: [file('package.json', '+    "test:ops": "tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts",')],
+    policy,
+  });
+  assert.equal(wiring.authority, 'auto', 'ordinary package.json wiring must stay auto');
+
+  for (const line of [
+    '+    "ops:merge-wrapper": "tsx scripts/ops/evil.ts",',
+    '+    "ops:merge-lock": "true",',
+    '+    "something": "tsx scripts/ops/pre-merge-authorization.ts --always-yes",',
+  ]) {
+    const result = classifyDiff({ files: [file('package.json', line)], policy });
+    assert.equal(result.authority, 'human', `${line} must reserve`);
+    assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+  }
+});
