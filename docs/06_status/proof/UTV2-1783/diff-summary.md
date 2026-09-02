@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1783
 
-MERGE_SHA: 4ba80a999fc654009f7e5082f1947b5926768e77
+MERGE_SHA: b3df08fa795190a710c0407f1c604399e61e2f63
 
 Issue: UTV2-1783
 Tier: T1
@@ -16,7 +16,7 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1483
 | `scripts/ci/proof-binding-validator.ts` | `validatePreMergeVerificationBinding` delegates to the contract; takes `evidence` |
 | `.github/workflows/executor-result-validator.yml` | Inline merge-row SHA rule replaced by a call to the contract module |
 | `scripts/ops/proof-generate.ts` | Pre-merge writes the placeholder in the merge row and the execution SHA in `Execution SHA:` |
-| `scripts/ops/proof-schema.test.ts` | Integration regression (both consumers, one fixture), controls A–D, wiring locks W1–W3 |
+| `scripts/ops/proof-schema.test.ts` | Integration regression (both consumers, one fixture), controls A–D, wiring locks W1–W4, the real-bundle schema-v1 regression, and the whole-corpus census |
 | `scripts/ops/proof-generate.test.ts` | Assertions that encoded the old rule rewritten against the moved carrier |
 | `docs/06_status/lanes/UTV2-1783.json`, `.ops/sync/UTV2-1783.yml` | Lane apparatus |
 

@@ -1,21 +1,23 @@
 # PROOF: UTV2-1783 — pre-merge merge authority and execution identity are separate facts
 
-MERGE_SHA: 4ba80a999fc654009f7e5082f1947b5926768e77
+MERGE_SHA: b3df08fa795190a710c0407f1c604399e61e2f63
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1483
 Approved PR head: pending merge
-Execution SHA: 4ba80a999fc654009f7e5082f1947b5926768e77
+Execution SHA: b3df08fa795190a710c0407f1c604399e61e2f63
 
-Anchor: `4ba80a999fc654009f7e5082f1947b5926768e77` — the last commit carrying implementation
+Anchor: `b3df08fa795190a710c0407f1c604399e61e2f63` — the last commit carrying implementation
 changes on this branch, and the head every measurement below was taken against.
 
-What follows it: the proof bundle itself, a bot commit binding the manifest to PR #1483,
-and one manifest commit declaring `expected_proof_paths` and correcting `created_by` to
-`claude` after Close Eligibility Preflight blocked on CEP-E1/CEP-M2. All three touch only
-proof and lane-apparatus paths; none touch `scripts/` or `.github/`, so every measurement
+What follows it: the proof bundle itself. Everything before it — the earlier proof commit,
+a bot commit binding the manifest to PR #1483, and a manifest commit declaring
+`expected_proof_paths` and correcting `created_by` to `claude` after Close Eligibility
+Preflight blocked on CEP-E1/CEP-M2 — is behind the anchor, and this re-anchor moves it to
+the review-round-2 implementation commit. The commits after it touch only proof and
+lane-apparatus paths; none touch `scripts/` or `.github/`, so every measurement
 below still describes the code under review. Stated rather than implied, because
 `proof-binding-validator` — the gate that would enforce a proof-paths-only rule — does not
 run on this PR (see below), so the property is asserted here instead of being checked.
@@ -51,8 +53,15 @@ authored under the old rule.
       provenance and yields no anchor — the caller cannot mistake it for "nothing to check".
 - [x] Post-merge rebinding still populates merge authority, and execution identity stays
       the source commit rather than being overwritten by the merge commit.
-- [x] Four mutation controls each restore one half of the old contradiction and each fails
-      the regression it names; the unmutated control passes 90/90.
+- [x] Seven mutation controls each restore one half of the old contradiction and each fails
+      the regression it names; the unmutated control passes 94/94.
+- [x] The validation phase is stated by the caller, never inferred, wherever the artifact
+      under validation is untrusted: the CLI exits 2 when `--phase` is absent or invalid,
+      so a consumer cannot regress to inference by forgetting a flag.
+- [x] The schema-v2 contract is selected by the bundle's *declared* `schema_version`, not
+      by the presence of a `sha_binding` object. Proven against the real
+      `docs/06_status/proof/UTV2-1554` bundle and against every schema-v1 bundle in the
+      repository, none of which is read under the v2 rules.
 - [x] Historical bundles with no `sha_binding` keep the legacy rule unchanged, and a
       present-but-unreadable `evidence.json` is an error rather than a downgrade to it.
 
@@ -99,9 +108,22 @@ The rules live once, in `scripts/ops/proof-schema.ts::validateProofMergeShaIdent
 drifted apart, and a test written against a restatement of a validator proves only that
 the copy agrees with itself.
 
-Historical compatibility is deliberately narrow: a bundle with no `sha_binding` block
-keeps the legacy rule unchanged (the row itself must be a real SHA, and is the anchor).
-Absent evidence selects the older contract; it never relaxes one. A present-but-corrupt
+Historical compatibility is deliberately narrow, and keyed on what the bundle *declares*:
+a bundle that does not declare `schema_version: 2` keeps the legacy rule unchanged (the row
+itself must be a real SHA, and is the anchor), even when it carries a `sha_binding` block —
+157 shipped bundles do, and reading those as v2 would have failed them retroactively on
+placeholder and binding-section rules that did not exist when they were written. The
+regression for this is a real bundle from this repository (UTV2-1554) plus a census over
+the whole proof corpus, because a fabricated fixture would only have been written to match
+whatever the new code expected. Absent evidence selects the older contract; it never
+relaxes one.
+
+The phase is likewise stated rather than inferred. Executor Result Validation runs only on
+open pull requests, so `pre-merge` is a fact about the caller; inferring it from the
+bundle's own `sha_binding.merge_sha` let an unmerged PR assert merge authority and be
+believed. `--phase` is now required — the CLI exits 2 rather than defaulting — so the
+guarantee cannot lapse by omission. Inference survives only for post-merge readers of
+historical artifacts, where there is no untrusted claimant. A present-but-corrupt
 `evidence.json` exits 2, so a lane cannot escape the schema-v2 contract by corrupting its
 own evidence.
 
@@ -113,7 +135,7 @@ one migration-lane bundle in a real git repository:
 
 ```
 $ pnpm exec tsx --test scripts/ops/proof-schema.test.ts
-# pass 90
+# pass 94
 # fail 0
 ```
 
@@ -124,18 +146,35 @@ restored. Measured, not asserted:
 
 | # | Mutation (the old behaviour, put back) | Result |
 |---|---|---|
-| M1 | merge row may hold a branch SHA pre-merge | **fail 3** — control A, the #1434/#1435 shape test, and control C |
-| M2 | ancestry anchor read from the markdown row (the overloaded field) | **fail 4** — including the both-consumers regression itself |
-| M3 | merge authority may be claimed before merge | **fail 1** — `premature_merge_authority` |
-| M4 | unreadable `evidence.json` downgrades to the legacy path | **fail 1** — control D |
-| — | unmutated control | **pass 90 / fail 0** |
+| M1 | merge row may hold a branch SHA pre-merge | **fail 3** — `proof-binding-validator`, control A, control C |
+| M2 | ancestry anchor read from the markdown row (the overloaded field) | **fail 1** — the post-merge authority test |
+| M3 | merge authority may be claimed before merge | **fail 2** — `premature_merge_authority`, and the self-consistent open-PR bundle |
+| M4 | invalid `verified_source_sha` silently tolerated | **fail 1** — execution-provenance control |
+| M5 | discriminator keys on `sha_binding` presence, not the declared schema version | **fail 3** — control C, the real UTV2-1554 bundle, and the whole-corpus census |
+| M6 | CLI silently defaults `--phase` when the flag is absent | **fail 1** — the CLI phase-required test |
+| M7 | ERV workflow stops passing `--phase pre-merge` | **fail 1** — W4 |
+| — | unmutated control | **pass 94 / fail 0** |
 
-M2 is the one that matters most: pointing the anchor back at the overloaded row breaks
-the integration regression directly, which is the contradiction reproducing itself.
+Each mutation was applied to the shipped source, the suite re-run, and the source restored
+before the next one. One mutation I first wrote was inert rather than surviving: `arg()`
+returns `null` for an absent flag, never `undefined`, so a mutation testing for `undefined`
+never fired. It is recorded here because an inert mutation reads exactly like a surviving
+one and would otherwise have been reported as a coverage gap that did not exist. Re-run in
+its accurate form, M6 is caught.
+
+M7 is the mutation that found a real gap: nothing asserted that the workflow *states* the
+phase, so a future edit could have dropped `--phase pre-merge` and silently restored the
+inference this round removed. W4 now pins it, and the CLI's exit-2 guard means the two
+fail together rather than one covering for the other.
+
+M5 is the one that matters most this round: keying the discriminator on the presence of a
+`sha_binding` object rather than the declared version is exactly the fail-open the P2
+review named, and it is caught by a real shipped bundle and by a census of the whole
+corpus — not by a fixture written to match the new code.
 
 ### Wiring locks
 
-W1–W3 pin the workflow mechanically, because a fix that lives only in a module a workflow
+W1–W4 pin the workflow mechanically, because a fix that lives only in a module a workflow
 stopped calling is not a fix:
 
 - **W1** — the workflow must invoke `scripts/ops/proof-schema.ts proof-identity`.
@@ -144,6 +183,9 @@ stopped calling is not a fix:
   block explaining the removed rule necessarily quotes it, and failing on the explanation
   would push the next author to delete the explanation rather than the duplication.
 - **W3** — ancestry must run against `identity.provenanceAnchorSha`, never `base: fileSha`.
+- **W4** — the workflow must pass an explicit `--phase pre-merge`. Added in review round 2:
+  the phase is a fact about the caller (this job only ever validates an open PR), so
+  leaving it unstated is what let an untrusted bundle's own merge slot decide it.
 
 ### Commands
 
@@ -155,13 +197,13 @@ $ pnpm lint
 (clean)
 
 $ pnpm test
-0 failures across 5559 tests (2803 in the root suite)
+0 failures across 5563 tests (2803 in the root suite)
 
 $ pnpm verify
 exit 1 — and NOT green locally. Every step passed (ops:sync-check,
 ops:system-alignment-check, ops:automation-coverage-check, env:check, lint,
 type-check, build, test, smart-form verify, verify:commands) with zero `not ok`
-lines in 5559 tests. It then reached the final step and refused:
+lines in 5563 tests. It then reached the final step and refused:
 
   [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
   [assert-staging] REFUSED: target identity could not be resolved from its URL

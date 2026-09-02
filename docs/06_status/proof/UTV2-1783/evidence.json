@@ -7,7 +7,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "4ba80a999fc654009f7e5082f1947b5926768e77",
+    "verified_source_sha": "b3df08fa795190a710c0407f1c604399e61e2f63",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
