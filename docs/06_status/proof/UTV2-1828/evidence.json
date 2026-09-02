@@ -1,0 +1,84 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1828",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "066d65ed4699b71e5018d8a828c3ac755522cf7f",
+    "evidence_commit_sha": "066d65ed4699b71e5018d8a828c3ac755522cf7f",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5574 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every verify:static and verify:commands step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)",
+      "automation_coverage": "PASS (fail=0, no new unwired tests or orphan capabilities)"
+    }
+  },
+  "static_proof": {
+    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "lint": { "status": "PASS", "command": "pnpm lint" },
+    "build": { "status": "PASS", "command": "pnpm build" },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5574,
+      "failures": 0
+    },
+    "targeted_suite": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/lane-close.test.ts",
+      "tests": 178,
+      "failures": 0
+    },
+    "mutation_controls": [
+      {
+        "mutation": "revert the GitHub-attested static branch to the two-file list (diffSummaryPath: null), as the shipped code did",
+        "expected": "the two new attested regressions fail; diff-summary.md is left untouched by the rebind",
+        "observed": "not ok 176 - the attested recovery rebinds diff-summary.md; not ok 177 - a diff-summary.md with no bindable anchor refuses; 176 pass, 2 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "revert the tolerant ordinary branch to the two-file list (delete the rebindVerificationMdSha call)",
+        "expected": "the new tolerant regression fails, along with the five existing outcome-shape assertions",
+        "observed": "not ok 24, 27, 28, 29, 40, 178; 172 pass, 6 fail",
+        "status": "CAUGHT"
+      }
+    ],
+    "r_level_check": {
+      "status": "PASS",
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "rules_matched": 0
+    },
+    "automation_coverage": {
+      "status": "PASS",
+      "command": "pnpm ops:automation-coverage-check",
+      "detail": "verdict=PASS fail=0 warn=1 classified=15; the single warning is the pre-existing baselined WIRING_GLOB_SHADOWED finding under apps/qa-agent, untouched by this lane"
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "every verify:static and verify:commands step passed locally; test:live-db refused on a host with no staging identity ([assert-staging] REFUSED: target identity could not be resolved from its URL, host=127.0.0.1). The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "containment": {
+    "production_ddl": "none",
+    "database_mutation": "none",
+    "deployment": "none",
+    "ingestion": "unchanged (parked)",
+    "delivery": "unchanged (parked)",
+    "branch_protection": "unchanged",
+    "gates_loosened": "none - the change adds a file to a rebinder's coverage and adds a refusal"
+  },
+  "known_follow_up": [
+    "rebindMergeSha in scripts/ops/proof-generate.ts still carries the two-file list at its definition; that file is inside UTV2-1825's active file scope lock (PR #1485, open), so the list is extended from the lane-close.ts call site instead.",
+    "CANONICAL_PROOF_ARTIFACTS in scripts/ops/proof-rebind.ts is unchanged: its strict planner requires a '## Merge SHA Binding' section that a canonically generated diff-summary.md does not have.",
+    "This fix alone does not close UTV2-1826: that bundle's diff-summary.md anchor reads 'MERGE_SHA: pending merge', which the pre-merge anchor pattern in proof-generate.ts does not yet match. PR #1485 (UTV2-1825) fixes that; both are needed."
+  ],
+  "pr_number": 1490
+}
