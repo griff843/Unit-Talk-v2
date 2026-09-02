@@ -1,0 +1,179 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1773",
+  "tier": "T1",
+  "lane_type": "data-canonical",
+  "proof_profile": "runtime",
+  "status": "blocked_pending_governed_identity_resolution_and_staging_execution",
+  "title": "Canonical reference bootstrap fails closed before production mutation",
+  "generated_at": "2026-09-02T12:16:00Z",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "73937e1c844419bab3a873149669f168954158a3",
+    "verified_source_note": "Implementation commit containing the hardened bootstrap plus the production refusal packet. Post-merge proof generation must bind merge_sha.",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": null
+  },
+  "verdict": {
+    "production_bootstrap_authorized": false,
+    "production_writes_performed": 0,
+    "statement": "Fresh read-only production evidence confirms an empty canonical resolution surface, but the NHL team identity, sportsbook target, and unavailable alias-level inventory prevent an exact nonzero mutation packet. The governed packet authorizes zero writes."
+  },
+  "static_proof": {
+    "verify_static": {
+      "command": "pnpm verify:static",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "full_test_suite": {
+      "command": "pnpm test",
+      "exit_code": 0,
+      "status": "PASS"
+    },
+    "focused_issue_test": {
+      "command": "pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts self-test",
+      "exit_code": 0,
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "assertions": [
+        "candidate derivation",
+        "second-pass no-op",
+        "ambiguous alias refusal"
+      ]
+    },
+    "r_level": {
+      "command": "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "verdict": "PASS",
+      "rules_matched": "none"
+    }
+  },
+  "runtime_proof": {
+    "production_target": {
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "access": "read_only_https_get",
+      "deployment_sha": "e48106fc9a5eb5904b322833d0968da5ae0b0665",
+      "writes_performed": 0
+    },
+    "queries": [
+      {
+        "table": "runtime health",
+        "description": "GET https://api.unit-talk.com/health returned HTTP 200, persistenceMode=database, dbReachable=true"
+      },
+      {
+        "table": "sports,sportsbooks,participants",
+        "description": "GET https://api.unit-talk.com/api/reference-data/catalog returned the live source catalog"
+      },
+      {
+        "table": "leagues",
+        "description": "GET /api/reference-data/leagues?sport=<sport> returned the exact mapping for each of 9 governed sports"
+      },
+      {
+        "table": "teams,players,player_team_assignments",
+        "description": "GET /api/reference-data/availability?sport=<sport> returned teamsAvailable=false and playersAvailable=false for all 9 governed sports"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "canonical leagues exposed",
+        "count": 9,
+        "status": "complete"
+      },
+      {
+        "table": "source team observations exposed",
+        "count": 124,
+        "status": "NBA 30 + NFL 32 + MLB 30 + NHL 32"
+      },
+      {
+        "table": "active sportsbooks exposed",
+        "count": 11,
+        "status": "conflicts with checked-in/runtime policy targets"
+      },
+      {
+        "table": "sports with any canonical team availability",
+        "count": 0,
+        "status": "empty resolution surface"
+      },
+      {
+        "table": "sports with any assigned canonical player availability",
+        "count": 0,
+        "status": "empty resolution surface"
+      }
+    ],
+    "response_hashes": {
+      "health_body_sha256": "3c2cd0868737923273eb077fb01ba3f98654d62232b808ee1261d37123d3853e",
+      "catalog_body_sha256": "d84407fb4ecfb1e3e2a0a6123b678d143a62ae22d0d91efcff0256ba99540f5c"
+    },
+    "local_db_gate": {
+      "command": "pnpm test:db",
+      "exit_code": 1,
+      "status": "BLOCKED_DEFERRED",
+      "refusal": "target identity could not be resolved from its URL (host=127.0.0.1); writable verification requires xskgrzbteyqdufktjrjx through staging-ci"
+    },
+    "non_production_bootstrap": {
+      "command": "pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts prove-staging --target staging",
+      "status": "BLOCKED_DEFERRED",
+      "refusal": "writable target is unidentified (host=127.0.0.1), expected staging xskgrzbteyqdufktjrjx",
+      "required_result": "first execution converges to zero logical mutations; second execution reports rpc_invoked=false and identical before/after hashes"
+    }
+  },
+  "controls": [
+    "inspect requires an explicit production or staging declaration that exactly matches the resolved project ref",
+    "prove-staging refuses every target except xskgrzbteyqdufktjrjx before a client is created",
+    "all source and canonical reads use exact-count pagination and fail if a table changes while paging",
+    "ambiguous team/player aliases, duplicate canonical team IDs, conflicting existing identities, and conflicting current assignments abort before RPC invocation",
+    "the second execution does not call the timestamp-mutating RPC when the logical diff is empty",
+    "the production packet contains no write command and always reports authorized=false"
+  ],
+  "production_conflicts": [
+    {
+      "code": "CANONICAL_NHL_IDENTITY_CONFLICT",
+      "live_production_source": "Utah Hockey Club",
+      "checked_in_v1_reference": "Coyotes"
+    },
+    {
+      "code": "SPORTSBOOK_TARGET_CONFLICT",
+      "live_active": 11,
+      "checked_in_catalog": 10,
+      "ratified_policy": 15
+    },
+    {
+      "code": "DIRECT_ALIAS_INVENTORY_UNAVAILABLE",
+      "detail": "The read-only public API does not expose participant UUIDs, provider alias keys, alias targets, or assignment natural keys."
+    }
+  ],
+  "rollback": {
+    "current_packet": "No rollback required: zero production writes were authorized or performed.",
+    "future_packet_requirements": [
+      "bind the full preimage and stable snapshot hash",
+      "delete only exact packet-listed inserts by canonical/natural identity",
+      "restore every exact RPC-touched preimage",
+      "require the post-rollback hash to equal the pre-bootstrap hash",
+      "remeasure resolution coverage against the same source fingerprint"
+    ]
+  },
+  "known_gaps": [
+    "The production source and the checked-in governed fallback disagree on the current NHL identity. PM must re-ratify one identity before any write.",
+    "The sportsbook completeness target has three conflicting values (11 live, 10 checked in, 15 in ratified prose). This bootstrap does not mutate sportsbooks.",
+    "A fresh direct production read is still required to enumerate alias keys, source participant UUIDs, and exact preimages. Public API evidence proves the resolution gap but cannot produce those private identifiers.",
+    "The approved staging project is unavailable from this host. Both pnpm test:db and prove-staging fail closed locally and must run through the staging-ci GitHub environment.",
+    "The lane manifest requires docs/06_status/proof/UTV2-1773/model-routing.json but the ratified file_scope_lock and execution packet do not authorize that path. This implementation did not widen its own scope."
+  ],
+  "sign_off": {
+    "executor": "codex-cli",
+    "self_certified_done": false,
+    "pm_approval_self_applied": false,
+    "note": "This bundle returns a governed refusal and a zero-write packet, not authorization to mutate production."
+  }
+}

@@ -1,0 +1,153 @@
+# PROOF: UTV2-1773 — canonical reference bootstrap
+
+MERGE_SHA: null
+
+Execution SHA: `73937e1c844419bab3a873149669f168954158a3`
+
+The governed outcome is a refusal, not a live bootstrap. Fresh production
+evidence confirms the canonical resolution gap, while conflicting canonical
+sources and the unavailable alias-level direct read prevent an exact nonzero
+mutation packet. Production writes performed: **0**.
+
+## ASSERTIONS:
+
+- [x] The measurable completeness criterion was recorded before any bootstrap
+      execution: 9/9 leagues, 124/124 governed major-league teams, and 100% of
+      observed team aliases linked one-to-one with zero ambiguity.
+- [x] Read-only production API evidence confirms all 9 leagues exist and all 9
+      sports report no canonical team or assigned-player availability.
+- [x] The bootstrap refuses an unidentified or mismatched target before client
+      construction; write mode accepts only staging `xskgrzbteyqdufktjrjx`.
+- [x] Duplicate canonical identities, ambiguous aliases, conflicting source or
+      target identity, and conflicting current assignments fail closed.
+- [x] The second execution is a logical no-op and skips the RPC, preventing its
+      unconditional `updated_at`/`bootstrapped_at` updates from creating a second-run
+      mutation.
+- [x] The exact current production packet authorizes zero writes and includes a
+      rollback/verification plan for a future separately approved nonzero packet.
+- [ ] Actual two-pass staging execution is deferred to the `staging-ci` GitHub
+      environment because this host resolves only loopback/unidentified DB identity.
+- [ ] A nonzero production mutation packet remains blocked pending PM resolution
+      of the NHL and sportsbook source conflicts plus a fresh direct alias inventory.
+
+## EVIDENCE:
+
+```text
+$ pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts self-test
+{"ok":true,"tests":3,"assertions":["candidate derivation","second-pass no-op","ambiguous alias refusal"]}
+
+$ pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts inspect --target production
+REFUSED: inspect requires an exact --target production|staging match;
+declared=production, observed=unidentified (host=127.0.0.1)
+
+$ pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts prove-staging --target staging
+REFUSED: writable target is unidentified (host=127.0.0.1),
+expected staging xskgrzbteyqdufktjrjx
+```
+
+## Verification
+
+### Fresh read-only production evidence
+
+All requests below were HTTP GETs against the deployed API. The health response
+reported `persistenceMode=database`, `runtimeMode=fail_closed`,
+`dbReachable=true`, and deployment
+`e48106fc9a5eb5904b322833d0968da5ae0b0665`.
+
+```text
+GET /api/reference-data/leagues?sport=<each governed sport>
+nba→NBA, nfl→NFL, mlb→MLB, nhl→NHL, ncaab→NCAAB,
+ncaaf→NCAAF, soccer→Soccer, mma→MMA, tennis→Tennis
+
+GET /api/reference-data/availability?sport=<each governed sport>
+NBA,NFL,MLB,NHL,NCAAB,NCAAF,Soccer,MMA,Tennis:
+teamsAvailable=false, playersAvailable=false
+
+GET /api/reference-data/catalog
+source teams: NBA=30 NFL=32 MLB=30 NHL=32 total=124
+active sportsbooks=11
+catalog body sha256=d84407fb4ecfb1e3e2a0a6123b678d143a62ae22d0d91efcff0256ba99540f5c
+```
+
+The live catalog and checked-in fallback differ exactly as follows:
+
+```text
+{"sport":"NHL","localOnly":["Coyotes"],"productionOnly":["Utah Hockey Club"]}
+{"sportsbooks":{"localOnly":[],"productionOnly":["williamhill"]}}
+```
+
+The public read proves the empty resolution surface but does not expose source
+participant UUIDs, provider alias keys, or existing alias preimages. Those
+private identifiers are deliberately not invented. The machine-readable
+refusal and governed zero-write packet are in `canonical-diff.json`.
+
+### Static verification
+
+```text
+$ pnpm verify:static
+[db-client-boundary] OK
+[sync-check] OK
+[system-alignment] verdict=PASS fail=0 warn=0
+[automation-coverage] verdict=PASS fail=0 warn=1 classified=15
+[executable-wiring] verdict=PASS required_roots=verify
+Environment files passed validation.
+exit=0
+
+$ pnpm type-check
+exit=0
+
+$ pnpm test
+exit=0
+
+$ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Verdict: PASS
+Changed files: 18
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+### Required writable DB leg
+
+```text
+$ pnpm test:db
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL
+(host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.
+Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.
+exit=1
+```
+
+This is recorded as blocked/deferred, not as a passing runtime proof. No local
+credential was copied and no environment file was modified.
+
+## Production mutation and rollback packet
+
+Current production authorization is exactly zero writes. A future nonzero packet
+must be regenerated by the read-only `inspect --target production` command after
+the identity conflicts are resolved, then execution-proven by
+`prove-staging --target staging`. The production write itself is intentionally
+absent from this lane.
+
+Rollback for the current packet is unnecessary because it performed no writes.
+For a later approved packet, the script emits exact inserted identities and all
+RPC-touched preimages. Rollback deletes only those insert identities, restores
+the preimages, requires the stable snapshot hash to return to the pre-bootstrap
+hash, and remeasures event/team resolution against the same source fingerprint.
+
+## Known gaps
+
+- Production says `Utah Hockey Club`; the checked-in governed fallback says
+  `Coyotes`. No mapping was guessed.
+- Sportsbook completeness conflicts at 11 live, 10 checked in, and 15 in the
+  ratified policy. This bootstrap does not mutate that table.
+- Direct production alias inventory and actual staging two-pass execution need
+  externally provided, already-governed read/staging access.
+- The manifest requires `model-routing.json`, but that path is absent from the
+  ratified `file_scope_lock` and allowed execution scope. The lane did not widen
+  its own scope.
+
+## Merge SHA Binding
+
+Merge SHA: null (pre-merge)
+
+Post-merge proof generation must replace the null merge binding with GitHub's
+authoritative merge SHA.
