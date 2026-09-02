@@ -332,9 +332,11 @@ jobs:
               conclusion: passed ? 'success' : 'failure',
               completed_at: new Date().toISOString(),
               output: {
-                title: passed
-                  ? (notes.length > 0 ? 'Merge Gate: APPROVED (bootstrap identity)' : 'Merge Gate: APPROVED')
-                  : 'Merge Gate: BLOCKED',
+                // Under RMA every verdict carries notes (the classification and
+                // the surfaces it matched), so the old "notes means bootstrap
+                // identity" inference no longer holds -- it would have labelled
+                // every ordinary approval as a bootstrap admission.
+                title: passed ? 'Merge Gate: APPROVED' : 'Merge Gate: BLOCKED',
                 summary: [
                   passed
                     ? 'RMA/v1: all merge-authority requirements satisfied.'
