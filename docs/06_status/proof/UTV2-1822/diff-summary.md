@@ -42,8 +42,8 @@ later-edited intent, and both survive.
 |---|---|
 | `migration-history-receipt.ts` | The single definition of "this file executes nothing". |
 | `migration-history-receipt-check.ts` | CLI wrapper so shell gates get the same answer from the same code. |
-| `migration-history-receipt-validator.ts` | Enforces count, version correspondence, source existence, hash binding, divergence policy, and that no receipt gains executable SQL. |
-| `migration-history-replay-drill.ts` | Behaviour-level proof: replays the model against scratch Postgres and compares catalog fingerprints. |
+| `migration-history-receipt-validator.ts` | Enforces count, version correspondence, source existence, hash binding, divergence policy, and that no receipt gains executable SQL. Exported as `validateReceipts()` and invoked by the replay drill as phase 0, so it runs on every migration PR rather than sitting unreferenced. |
+| `migration-history-replay-drill.ts` | Behaviour-level proof: validates the manifest, then replays the model against scratch Postgres and compares catalog fingerprints. Refuses to replay a set that failed validation. |
 
 `migration-reversibility-gate.ts` gains a receipt exemption. It is granted on verified
 file contents, never on the header claim — a file asserting the receipt header while
