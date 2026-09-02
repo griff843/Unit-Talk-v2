@@ -186,8 +186,8 @@ would catch a weakened authz check are the same tests such a change edits.
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2880 tests, 2880 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 48 pass, 0 fail
+- [x] `pnpm test:ops`: 2884 tests, 2884 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 51 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 77 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts`: 29 pass, 0 fail
@@ -277,6 +277,29 @@ loop cannot converge. Two attempts produced two cancelled CI runs and the same m
 that does not restart CI. The test asserts both halves — ERV listens for it, `ci.yml` does
 not — because the escape holds only while `ci.yml` stays on the defaults.
 
+## Independent review round 3
+
+Two P1s, both accepted. Both sit squarely inside the boundary the PM named
+("merge authority"); neither is a restoration of historical tiers.
+
+- [x] **Any workflow could mint a required check.** Branch protection binds CONTEXT NAMES,
+      not workflows, and a same-repository PR runs its own copy of any workflow it edits.
+      With `checks: write` that copy can create a newer, successful check run named `verify`,
+      `Executor Result Validation`, `Merge Gate` or `P0 Protocol` — satisfying the very
+      contexts that judge it. Reserving only the three workflows that legitimately produce
+      those contexts left every other workflow, `ci.yml` included, as a way in.
+      `.github/workflows/**` and `.github/actions/**` are now reserved.
+- [x] **The sanctioned merge wrapper was `auto`.** The trusted wrapper would therefore merge
+      a change that makes the NEXT wrapper return an unconditional authorization, or skip the
+      merge mutex, for every subsequent PR. `pre-merge-authorization.ts`, `merge-wrapper.ts`,
+      `ops-merge-wrapper.ts`, `merge-mutex.ts`, `truth-check-lib.ts` and
+      `executor-result-validate.ts` are now reserved.
+
+`package.json` is deliberately NOT reserved wholesale. Almost every PR edits it to wire a
+new test into `test:ops`; reserving the file would make RMA meaningless. A content rule
+reserves only lines that define or repoint the merge commands, and a test asserts ordinary
+`test:ops` wiring stays `auto`.
+
 ### Mutation controls
 
 Each control was applied to the shipped source, the suite run, and the source restored.
@@ -289,10 +312,12 @@ coverage.
 | patchless rename skipped again (`status === 'renamed'` alone) | CAUGHT — 1 fail |
 | verdict never required (`return false`) | CAUGHT — 11 fail |
 | ERV bootstrap identity removed (event never matches) | CAUGHT — 1 fail |
+| only the 3 gate workflows reserved | CAUGHT — 1 fail |
+| merge-wrapper-entrypoint content rule removed | CAUGHT — 1 fail |
 
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 84c2c8005040a7a7badbfe9fb8cd14738bdf7c27
+Execution SHA: 0f13702050b6d4c6ca662a6a491ffe2daec3c7f1
