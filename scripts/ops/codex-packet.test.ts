@@ -14,6 +14,7 @@ import {
   sanitizedGitEnv,
   GIT_REPO_SELECTION_VARS,
   extractScopePaths,
+  splitScopePaths,
   normalizeScopePath,
   parsePacket,
   resolveProfileForScope,
@@ -372,5 +373,90 @@ test('assertIsolatedWorktree refuses a SUBDIRECTORY of the primary checkout', ()
     fs.rmSync(linked, { recursive: true, force: true });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+// ── a scope bullet the runner drops is still an instruction to Codex ───────
+
+test('splitScopePaths keeps the bullets it cannot normalize', () => {
+  const scope = [
+    '- `apps/api/src/a.ts`',
+    '- `../outside/a.ts`',
+    '- `/etc/passwd`',
+    '- prose that is not a path at all',
+    '- see https://example.com/docs',
+  ].join('\n');
+  const result = splitScopePaths(scope);
+  assert.deepEqual(result.scopePaths, ['apps/api/src/a.ts']);
+  // Prose and URLs were never scope declarations, so they are not errors.
+  assert.deepEqual(result.invalidScopePaths, ['../outside/a.ts', '/etc/passwd']);
+});
+
+test('the runner refuses a MIXED scope rather than silently dropping the bad path', () => {
+  // One good path made the non-empty check pass while the raw packet still told
+  // a danger-full-access run that ../outside/a.ts was in scope.
+  const mixed = COMPLETE_PACKET.replace(
+    /## Scope\n[\s\S]*?\n\n/,
+    '## Scope\n- `apps/api/src/submission-service.ts`\n- `../outside/a.ts`\n\n'
+  );
+  const parsed = parsePacket(mixed);
+  assert.deepEqual(parsed.scopePaths, ['apps/api/src/submission-service.ts']);
+  assert.deepEqual(parsed.invalidScopePaths, ['../outside/a.ts']);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-mixed-'));
+  const packetPath = path.join(dir, 'packet.md');
+  fs.writeFileSync(packetPath, mixed);
+  try {
+    const result = spawnSync(
+      'pnpm',
+      ['exec', 'tsx', 'scripts/ops/codex-packet.ts', '--packet', packetPath, '--dry-run'],
+      { cwd: REPO_ROOT, encoding: 'utf8', shell: process.platform === 'win32' }
+    );
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.match(result.stderr, /not inside this repository: \.\.\/outside\/a\.ts/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('assertIsolatedWorktree refuses a linked worktree of a DIFFERENT repository', () => {
+  // It is linked, it is not the primary checkout, and it is on a feature
+  // branch -- so every other check passes. Launching there would point this
+  // packet at an unrelated project.
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-otherrepo-'));
+  const git = (cwd: string, ...args: string[]): void => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+    assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`);
+  };
+  try {
+    for (const name of ['repo-a', 'repo-b']) {
+      const dir = path.join(base, name);
+      fs.mkdirSync(dir);
+      git(dir, 'init', '-b', 'main');
+      git(dir, 'config', 'user.email', 'test@example.com');
+      git(dir, 'config', 'user.name', 'test');
+      fs.writeFileSync(path.join(dir, 'a.txt'), name);
+      git(dir, 'add', '-A');
+      git(dir, 'commit', '-m', 'init');
+    }
+    const repoA = path.join(base, 'repo-a');
+    const repoB = path.join(base, 'repo-b');
+    const wtB = path.join(base, 'wt-b');
+    git(repoB, 'worktree', 'add', '-b', 'feature/other', wtB);
+
+    // Without the invoking repo, the foreign worktree looks perfectly isolated.
+    assert.equal(assertIsolatedWorktree(wtB).branch, 'feature/other');
+    // Bound to repo-a, it is refused.
+    assert.throws(
+      () => assertIsolatedWorktree(wtB, repoA),
+      /belongs to a different repository/,
+      'a worktree of another repository must not be accepted',
+    );
+    // A worktree of the invoking repo still passes.
+    const wtA = path.join(base, 'wt-a');
+    git(repoA, 'worktree', 'add', '-b', 'feature/mine', wtA);
+    assert.equal(assertIsolatedWorktree(wtA, repoA).branch, 'feature/mine');
+  } finally {
+    fs.rmSync(base, { recursive: true, force: true });
   }
 });

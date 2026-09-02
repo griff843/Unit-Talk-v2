@@ -66,6 +66,17 @@ export interface ParsedPacket {
   sections: Record<string, string>;
   missingSections: string[];
   scopePaths: string[];
+  /**
+   * Path-shaped scope bullets that could not be normalized to a repo-relative
+   * path -- absolute, drive-lettered, or escaping the repo root.
+   *
+   * Kept rather than dropped. Codex reads the RAW packet, so a bullet silently
+   * discarded here is still an instruction to a `danger-full-access` run; a
+   * mixed scope (one good path, one `../outside/a.ts`) would otherwise pass the
+   * non-empty check while the runner and the model disagreed about the
+   * boundary. Any entry here fails the packet.
+   */
+  invalidScopePaths: string[];
 }
 
 /** Splits a packet into `## `-delimited sections, case-insensitively keyed. */
@@ -109,7 +120,7 @@ export function parsePacket(text: string): ParsedPacket {
     profile: profileMatch ? profileMatch[1] : null,
     sections,
     missingSections,
-    scopePaths: extractScopePaths(sections['scope'] || ''),
+    ...splitScopePaths(sections['scope'] || ''),
   };
 }
 
@@ -141,18 +152,34 @@ export function normalizeScopePath(token: string): string | null {
   return segments.length > 0 ? segments.join('/') : null;
 }
 
-/** Pulls path-shaped tokens out of the Scope section's bullets. */
-export function extractScopePaths(scope: string): string[] {
-  const out: string[] = [];
+/**
+ * Splits the Scope section's path-shaped bullets into the ones that normalize
+ * and the ones that do not. Both halves matter: see `invalidScopePaths`.
+ */
+export function splitScopePaths(scope: string): {
+  scopePaths: string[];
+  invalidScopePaths: string[];
+} {
+  const scopePaths: string[] = [];
+  const invalidScopePaths: string[] = [];
   for (const line of scope.split(/\r?\n/)) {
     const bullet = line.match(/^\s*[-*]\s+(.*)$/);
     if (!bullet) continue;
     const raw = bullet[1].match(/`([^`]+)`/)?.[1] ?? bullet[1].trim().split(/\s+/)[0];
+    // Not path-shaped at all: ordinary prose in a bullet, or a URL. Those were
+    // never scope declarations, so they are not errors either.
     if (!raw || !/[/.]/.test(raw) || raw.startsWith('http')) continue;
-    const normalized = normalizeScopePath(raw.replace(/[,;]$/, ''));
-    if (normalized) out.push(normalized);
+    const token = raw.replace(/[,;]$/, '');
+    const normalized = normalizeScopePath(token);
+    if (normalized) scopePaths.push(normalized);
+    else invalidScopePaths.push(token);
   }
-  return out;
+  return { scopePaths, invalidScopePaths };
+}
+
+/** Pulls the usable path-shaped tokens out of the Scope section's bullets. */
+export function extractScopePaths(scope: string): string[] {
+  return splitScopePaths(scope).scopePaths;
 }
 
 /**
@@ -230,7 +257,10 @@ export function sanitizedGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.Pr
   return clean;
 }
 
-export function assertIsolatedWorktree(cwd: string): { toplevel: string; branch: string } {
+export function assertIsolatedWorktree(
+  cwd: string,
+  repoRoot?: string
+): { toplevel: string; branch: string } {
   const env = sanitizedGitEnv();
   const git = (args: string[]): string => {
     const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env });
@@ -274,6 +304,31 @@ export function assertIsolatedWorktree(cwd: string): { toplevel: string; branch:
         'git worktree add ../wt-<name> -b <branch> origin/main && ' +
         'pnpm ops:codex-packet --packet <path> --cwd ../wt-<name>'
     );
+  }
+
+  // A linked worktree of a DIFFERENT repository satisfies every check above:
+  // it is linked, it is not the primary checkout, and it is on a feature
+  // branch. Launching a `danger-full-access` run there would point this
+  // packet at an unrelated project. Bind the candidate to the repository the
+  // command was invoked from.
+  if (repoRoot) {
+    const invokedCommonDir = (() => {
+      const r = spawnSync('git', ['-C', repoRoot, 'rev-parse', '--git-common-dir'], {
+        encoding: 'utf8',
+        env,
+      });
+      if (r.status !== 0) return null;
+      return real(path.resolve(repoRoot, r.stdout.trim()));
+    })();
+    if (invokedCommonDir === null) {
+      throw new Error(`cannot resolve the invoking repository at ${repoRoot}; refusing to launch.`);
+    }
+    if (invokedCommonDir !== commonDir) {
+      throw new Error(
+        `--cwd belongs to a different repository: ${toplevel} shares no git directory with ` +
+          `${repoRoot}. A packet must run in a worktree of the repository it was written for.`
+      );
+    }
   }
 
   const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']);
@@ -404,6 +459,16 @@ function main(argv: string[]): void {
   // written without bullets, satisfy the section check while yielding nothing
   // to classify. Codex would then run with no mechanically checkable file
   // boundary at all, which is the thing the section exists to establish.
+  if (parsed.invalidScopePaths.length > 0) {
+    // Dropping these silently would leave the runner and the model disagreeing
+    // about the boundary: Codex reads the raw packet, so the offending bullet
+    // is still an instruction to a danger-full-access run.
+    fail(
+      `packet \`## Scope\` declares path(s) that are not inside this repository: ` +
+        `${parsed.invalidScopePaths.join(', ')}. Scope must be repo-relative.`
+    );
+  }
+
   if (parsed.scopePaths.length === 0) {
     fail(
       'packet `## Scope` declares no usable path. List each path as its own bullet, ' +
@@ -426,7 +491,7 @@ function main(argv: string[]): void {
   const cwd = path.resolve(repoRoot, args.get('cwd') || '.');
   let checkout: { toplevel: string; branch: string };
   try {
-    checkout = assertIsolatedWorktree(cwd);
+    checkout = assertIsolatedWorktree(cwd, repoRoot);
   } catch (error) {
     fail((error as Error).message);
   }
