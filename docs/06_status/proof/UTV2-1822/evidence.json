@@ -9,7 +9,7 @@
   "generated_at": "2026-09-02T00:15:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "bb8b9cac2983ba3e477b14237e27843960e69693",
+    "verified_source_sha": "34d967384ea3e66574e0ddc33b18520a2c6ecadf",
     "verified_source_note": "The last non-proof commit on this branch and the head every CI receipt in this bundle was captured against. Only proof-path commits follow it. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -28,11 +28,11 @@
     "production_submission_attempted": false
   },
   "runtime_proof": {
-    "head": "bb8b9cac2983ba3e477b14237e27843960e69693",
+    "head": "34d967384ea3e66574e0ddc33b18520a2c6ecadf",
     "receipt_replay_drill": {
       "result": "PASS",
-      "run": "33575558404",
-      "job": "100078640448",
+      "run": "33577393522",
+      "job": "100084256518",
       "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
       "step": "Migration history receipt replay drill (UTV2-1822)",
       "baseline_catalog_entries": 1396,
@@ -44,8 +44,8 @@
     },
     "precondition_drill": {
       "result": "PASS",
-      "run": "33575558404",
-      "job": "100078640748",
+      "run": "33577393522",
+      "job": "100084256369",
       "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
       "drilled": 127,
       "detail": "All 127 receipts returned a named pass: a receipt executes no statement, so it has no fail-closed precondition to drill. Reported as a result rather than skipped, so the job's own 'a run that drilled nothing is not a pass' backstop still sees one result per counted file.",
@@ -88,8 +88,8 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": "33575558404",
-      "job": "100078640448",
+      "run": "33577393522",
+      "job": "100084256518",
       "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
       "detail": "Job passed. Stated precisely so it is not over-read: all 127 new migrations are non-executable receipts and were exempted from the apply/rollback/reapply cycle, because a receipt executes nothing and its only possible down script is a no-op the reversibility gate itself rejects as comment-only. No convergence cycle was therefore exercised by this lane's files. The substantive behavioural evidence in this same job is runtime_proof.receipt_replay_drill, which applies the baseline and all 127 receipts to a clean database and compares catalog fingerprints.",
       "convergence_cycles_exercised": 0,
@@ -97,15 +97,15 @@
     },
     "live_schema_parity": {
       "result": "PASS",
-      "run": "33575558381",
-      "job": "100078661906",
+      "run": "33577393346",
+      "job": "100084268752",
       "workflow": "Live Schema Parity / Live Schema Parity",
       "detail": "Repo migration set diffed against the live production database: no unauthorized findings. Expected \u2014 this lane adds no schema object. Every receipt is comments-only, so the expected schema is unchanged from main, which is itself corroboration that the 127 receipts introduce no DDL."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": "33575558347",
-      "job": "100078640344",
+      "run": "33577393434",
+      "job": "100084256069",
       "workflow": "ci / Writable DB proof (staging only)",
       "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head, so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from this job."
     }

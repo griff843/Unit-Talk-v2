@@ -7,7 +7,7 @@ MERGE_SHA: pending merge
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1482
 
-Anchor: bb8b9cac2983ba3e477b14237e27843960e69693 — the last non-proof commit on this branch and the head every CI
+Anchor: 34d967384ea3e66574e0ddc33b18520a2c6ecadf — the last non-proof commit on this branch and the head every CI
 receipt below was captured against. Only proof-path commits follow it.
 
 ## Verification
@@ -104,7 +104,7 @@ behaviour rather than inspecting files.
 
 ### Behaviour-level replay — scratch Postgres
 
-`scripts/ci/migration-history-replay-drill.ts`, run 33575558404, job 100078640448 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `bb8b9cac2983ba3e477b14237e27843960e69693`
+`scripts/ci/migration-history-replay-drill.ts`, run 33577393522, job 100084256518 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `34d967384ea3e66574e0ddc33b18520a2c6ecadf`
 
 ```
 phase 0: receipt manifest structurally valid
@@ -219,9 +219,9 @@ Required checks are cited from CI at the anchor, not from a local run, because t
 authoritative execution is the one GitHub performed on this head:
 
 ```
-pnpm verify   (job `verify`)  → SUCCESS  run 33575558347, job 100080123460
+pnpm verify   (job `verify`)  → SUCCESS  run 33577393434, job 100085506615
               covers env:check, lint, pnpm type-check, build and pnpm test
-scripts/ci/r-level-check.ts   → SUCCESS  run 33576476049 (R-Level Compliance Check)
+scripts/ci/r-level-check.ts   → SUCCESS  run 33577393440 (R-Level Compliance Check)
 ```
 
 Stated precisely: `pnpm verify` was NOT green in this local worktree — `env:check` fails
@@ -260,7 +260,7 @@ ASSERTIONS:
 
 EVIDENCE: every numbered assertion below cites the CI run and job that produced it; the
 runs are enumerated in `evidence.json` under `runtime_proof`, all taken at the anchor
-`bb8b9cac2983ba3e477b14237e27843960e69693`.
+`34d967384ea3e66574e0ddc33b18520a2c6ecadf`.
 
 ## Assertions
 
