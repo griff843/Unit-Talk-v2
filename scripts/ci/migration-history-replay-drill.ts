@@ -16,10 +16,11 @@
  * database whose contents matter: it replays the entire migration history into it.
  */
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { isNonExecutableReceipt } from './migration-history-receipt.ts';
+import { validateReceipts } from './migration-history-receipt-validator.ts';
 
 const URL_ = process.env.POSTGRES_URL;
 if (!URL_) {
@@ -80,6 +81,19 @@ const MIN_BASELINE_ENTRIES = 200;
 
 const fingerprint = (): string[] =>
   psql(['-tA', '-c', FINGERPRINT_SQL]).split('\n').map((l) => l.trim()).filter((l) => l !== '');
+
+// Phase 0 — structural validation gates the behavioural proof. Replaying a receipt set
+// that has already failed validation would report a green catalog comparison for a set
+// nobody should trust: a receipt whose recorded source hash no longer matches, or an
+// impostor absent from the manifest, is exactly the case where an inert-looking replay
+// is most misleading.
+const structural = validateReceipts();
+if (structural.length > 0) {
+  console.error(`FAIL: receipt manifest is invalid (${structural.length}); refusing to replay.`);
+  for (const f of structural) console.error(`  - ${f}`);
+  process.exit(1);
+}
+console.log('phase 0: receipt manifest structurally valid');
 
 const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort();
 const receipts = files.filter((f) => isNonExecutableReceipt(join(MIGRATIONS, f)));
