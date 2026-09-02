@@ -203,19 +203,26 @@ jobs:
                 const r = parsed[parsed.length - 1];
 
                 // ── 5. Validate schema fields ──────────────────────────
-                if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
-                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+                // RMA/v1: a Linear issue is no longer the execution primitive,
+                // so mission branches carry none. `Issue:` is optional now, but
+                // a malformed one is still an error -- an unparseable id is a
+                // mistake, whereas an absent one is the new normal.
+                if (r.issueId && !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+                  errors.push(`Invalid Issue ID: "${r.issueId}". Must match UTV2-NNN or UNI-NNN when present.`);
                 }
 
                 if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
                   errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
                 }
 
-                const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
-                if (!r.branch || !branchRe.test(r.branch)) {
-                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`);
-                }
-                if (r.branch && r.branch !== headRef) {
+                // The real assertion is that the executor is attesting to THIS
+                // branch. The old `(claude|codex)/(utv2|uni)-NNN` shape encoded
+                // the Linear coupling on top of that and rejected mission
+                // branches outright; equality with the head ref is the part that
+                // actually prevents a misattributed attestation.
+                if (!r.branch) {
+                  errors.push('Branch missing from executor result.');
+                } else if (r.branch !== headRef) {
                   errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${headRef}".`);
                 }
 
@@ -231,21 +238,40 @@ jobs:
                   errors.push(`HEAD SHA mismatch: comment has "${r.headSha}", current PR head is "${headSha}". Re-post executor result after pushing.`);
                 }
 
-                // ── 6. Determine tier from PR labels ───────────────────
-                const tierLabel = prLabels.find(l => /^tier:T[123]$/i.test(l));
-                const tier = tierLabel
-                  ? tierLabel.split(':')[1].toUpperCase()
-                  : null;
+                // ── 6. Decide whether a proof artifact is required ─────
+                // Previously keyed off a `tier:T3` label, so a missing or wrong
+                // label silently changed the evidence bar. RMA/v1 keys it off
+                // the same reserved-surface classifier that drives Merge Gate:
+                // a diff that touches production DDL/data, delivery activation,
+                // secrets, pricing, containment, or merge authority must carry a
+                // proof bundle, and no label can talk it out of that.
+                //
+                // Loaded from the base checkout pinned above, so a PR cannot
+                // supply the classifier that decides its own evidence bar.
+                const { loadPolicy, classifyDiff } = require('./scripts/ops/merge-authority.cjs');
+                const changedFiles = await github.paginate(
+                  github.rest.pulls.listFiles,
+                  { owner, repo, pull_number: prNumber, per_page: 100 }
+                );
+                const risk = classifyDiff({
+                  files: changedFiles.map(f => ({
+                    filename: f.filename, patch: f.patch, status: f.status,
+                  })),
+                  policy: loadPolicy(),
+                });
+                const proofRequired = risk.authority === 'human';
 
                 // ── 7. Validate proof file ─────────────────────────────
                 const proofPath = r.proofPath;
-                const isT3 = tier === 'T3';
                 const proofSkipped = !proofPath ||
                   proofPath.toLowerCase() === 'ci only' ||
                   proofPath.toLowerCase() === 'n/a';
 
-                if (proofSkipped && !isT3) {
-                  errors.push('Proof Artifact path is required for T1/T2 issues.');
+                if (proofSkipped && proofRequired) {
+                  errors.push(
+                    `Proof Artifact path is required: this diff touches reserved surface(s) ` +
+                    `${risk.surfaces.join(', ')}.`
+                  );
                 } else if (!proofSkipped) {
                   try {
                     const { data: file } = await github.rest.repos.getContent({

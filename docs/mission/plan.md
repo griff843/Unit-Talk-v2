@@ -45,9 +45,31 @@ Replaces lane-manifest tier with classification over what a diff *touches*.
   Verdict parsing is untouched and still delegates to `merge-gate-verdict.cjs`, so
   latest-verdict-wins, CODEOWNERS authorization and exact-head binding are not re-derived.
 
+It also carries the other half of the same coupling. `Executor Result Validation` is the *other*
+required check, and it rejected any branch not named `(claude|codex)/utv2-NNN-*` and demanded a proof
+bundle unless a `tier:T3` label said otherwise. Left alone, every PR opened under the new primitive
+would have been permanently blocked by it. ERV now asserts what is real — the executor attests to
+this exact branch and head SHA — and takes its evidence bar from the same risk classifier: a diff
+touching a reserved surface must carry proof, and no label can excuse it. That is strictly stricter
+than the label lookup it replaces, under which a missing `tier:` label silently moved the bar.
+
 **This PR reserves itself.** `merge-authority` is a reserved surface, so the gate blocks its own
 amendment. That is deliberate and it is the property that makes RMA safe to grant: it cannot widen
 its own authority. It is also why this one change needs Griff and cannot be self-authorized.
+
+**Landing it needs a one-time repo-owner merge, not a label.** Both required gates load their logic
+from the *base* checkout (deliberately — so a PR cannot supply its own rules), and on this PR base is
+`main`, which does not yet have `merge-authority.cjs`. So both gates fail closed with a module-not-
+found error and no label or verdict can clear them. This is the same one-time self-referential
+bootstrap gap UTV2-1550 hit and documented in its own proof bundle — *"a one-time self-referential
+bootstrap gap specific to the PR that introduces the file — future PRs will not hit it, since main
+will already contain the file at their base SHA"* — resolved there by a repo-owner merge. Every PR
+after this one evaluates normally.
+
+Before merging, the gate was proven to work by executing the real inline workflow script against
+live GitHub data for this PR. It returned BLOCKED, correctly naming `merge-authority` and the
+`destructive-sql` rule (the latter firing on a test fixture string — an over-reservation left in
+place deliberately, since excluding test files would let a real deletion hide in one).
 
 Classification of the currently open PRs under the new rules:
 

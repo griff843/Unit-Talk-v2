@@ -89,6 +89,7 @@
       "paths": [
         ".github/workflows/merge-gate.yml",
         ".github/workflows/p0-protocol.yml",
+        ".github/workflows/executor-result-validator.yml",
         ".github/CODEOWNERS",
         "docs/05_operations/RESERVED_RISK_SURFACES.json",
         "scripts/ops/merge-authority.cjs",

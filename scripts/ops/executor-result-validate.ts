@@ -106,21 +106,22 @@ export interface ValidationContext {
 export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: ValidationContext): string[] {
   const errors: string[] = [];
 
-  if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
-    errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+  // RMA/v1: a Linear issue is no longer the execution primitive, so mission
+  // branches carry none. Absent is fine; malformed is still a mistake.
+  if (r.issueId && !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+    errors.push(`Invalid Issue ID: "${r.issueId}". Must match UTV2-NNN or UNI-NNN when present.`);
   }
 
   if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
     errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
   }
 
-  const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
-  if (!r.branch || !branchRe.test(r.branch)) {
-    errors.push(
-      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`,
-    );
-  }
-  if (r.branch && r.branch !== ctx.headRef) {
+  // The load-bearing assertion is that the executor attests to THIS branch.
+  // The old `(claude|codex)/(utv2|uni)-NNN` shape encoded the Linear coupling on
+  // top of that and rejected mission branches outright.
+  if (!r.branch) {
+    errors.push('Branch missing from executor result.');
+  } else if (r.branch !== ctx.headRef) {
     errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${ctx.headRef}".`);
   }
 
@@ -140,18 +141,30 @@ export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: Valid
   return errors;
 }
 
-/** Resolves the T1/T2/T3 tier from a PR's label list, or null if absent. */
-export function resolveTier(prLabels: string[]): 'T1' | 'T2' | 'T3' | null {
-  const tierLabel = prLabels.find((l) => /^tier:T[123]$/i.test(l));
-  return tierLabel ? (tierLabel.split(':')[1].toUpperCase() as 'T1' | 'T2' | 'T3') : null;
+/**
+ * True when this result declares no usable proof artifact.
+ *
+ * Split deliberately from the question of whether one is *required*: what the
+ * comment says is a property of the comment, while what the diff demands is a
+ * property of the diff.
+ */
+export function proofArtifactMissing(r: ParsedExecutorResult): boolean {
+  return (
+    !r.proofPath || r.proofPath.toLowerCase() === 'ci only' || r.proofPath.toLowerCase() === 'n/a'
+  );
 }
 
-/** True when a proof artifact path is required for this result's tier. */
-export function proofArtifactRequired(r: ParsedExecutorResult, prLabels: string[]): boolean {
-  const tier = resolveTier(prLabels);
-  const proofSkipped =
-    !r.proofPath || r.proofPath.toLowerCase() === 'ci only' || r.proofPath.toLowerCase() === 'n/a';
-  return proofSkipped && tier !== 'T3';
+/**
+ * True when a proof artifact is required and absent.
+ *
+ * `reservedSurface` comes from scripts/ops/merge-authority.cjs — the same
+ * classifier that drives Merge Gate. It replaces the previous `tier:T3` label
+ * lookup, under which a missing or wrong label silently moved the evidence bar.
+ * Risk is read off the diff, and no label can talk a reserved diff out of
+ * carrying proof.
+ */
+export function proofArtifactRequired(r: ParsedExecutorResult, reservedSurface: boolean): boolean {
+  return proofArtifactMissing(r) && reservedSurface;
 }
 
 // ── CLI entrypoint ───────────────────────────────────────────────────────

@@ -137,36 +137,84 @@ test('validateExecutorResultFields: this head-mismatch error must never surface 
 
 // ── proof artifact requirement ───────────────────────────────────────────
 
-test('proofArtifactRequired: required for T1/T2 when path is missing', () => {
+test('proofArtifactRequired: required when the diff touches a reserved surface', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const noProof = { ...r, proofPath: null };
-  assert.equal(proofArtifactRequired(noProof, ['tier:T2']), true);
-  assert.equal(proofArtifactRequired(noProof, ['tier:T1']), true);
+  assert.equal(proofArtifactRequired(noProof, true), true);
 });
 
-test('proofArtifactRequired: not required for T3', () => {
+test('proofArtifactRequired: not required when the diff touches no reserved surface', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const noProof = { ...r, proofPath: null };
-  assert.equal(proofArtifactRequired(noProof, ['tier:T3']), false);
+  assert.equal(proofArtifactRequired(noProof, false), false);
 });
 
-test('proofArtifactRequired: "CI only" and "N/A" count as skipped', () => {
+test('proofArtifactRequired: a declared proof path satisfies a reserved diff', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
-  assert.equal(proofArtifactRequired({ ...r, proofPath: 'CI only' }, ['tier:T2']), true);
-  assert.equal(proofArtifactRequired({ ...r, proofPath: 'N/A' }, ['tier:T2']), true);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'docs/06_status/proof/X.md' }, true), false);
+});
+
+test('proofArtifactRequired: "CI only" and "N/A" count as no proof', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'CI only' }, true), true);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'N/A' }, true), true);
+});
+
+// No label can move this bar. Under the previous tier lookup a missing or wrong
+// `tier:T3` label silently excused a production-schema diff from carrying proof.
+test('proofArtifactRequired: labels cannot excuse a reserved diff', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: null }, true), true);
 });
 
 // ── field-level validation coverage ──────────────────────────────────────
 
-test('validateExecutorResultFields: invalid issue ID format is rejected', () => {
+test('validateExecutorResultFields: a malformed issue ID is still rejected', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const bad = { ...r, issueId: 'not-an-issue' };
   const errors = validateExecutorResultFields(bad, CTX);
   assert.ok(errors.some((e) => e.includes('Invalid Issue ID')));
+});
+
+// RMA/v1: mission branches carry no Linear issue. Absent must be accepted, or
+// every PR opened under the new execution primitive is permanently blocked by a
+// required check.
+test('validateExecutorResultFields: an absent issue ID is accepted', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, issueId: null }, CTX);
+  assert.deepEqual(errors, []);
+});
+
+test('validateExecutorResultFields: a branch with no issue number is accepted when it matches the head ref', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const branch = 'claude/rma-v1-risk-scoped-merge-authority';
+  const errors = validateExecutorResultFields(
+    { ...r, issueId: null, branch },
+    { ...CTX, headRef: branch },
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('validateExecutorResultFields: a branch that is not the PR head is still rejected', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, branch: 'claude/some-other-branch' }, CTX);
+  assert.ok(errors.some((e) => e.includes('Branch mismatch')));
+});
+
+test('validateExecutorResultFields: a missing branch is rejected', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, branch: null }, CTX);
+  assert.ok(errors.some((e) => e.includes('Branch missing')));
 });
 
 test('validateExecutorResultFields: invalid lane is rejected', () => {
