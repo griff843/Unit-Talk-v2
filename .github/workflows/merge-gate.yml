@@ -1,22 +1,33 @@
 # Merge Gate
 #
-# THE tier-aware policy engine for merge authorization on main.
-# Branch protection defers review policy to this check — no universal
-# PR review is required at the branch level.
+# THE merge-authorization policy engine for main.
 #
-# Reads tier from the lane manifest mirrored from Linear. GitHub tier labels
-# remain required evidence, but automation applies/syncs them; labels are not
-# authoritative. Verifies PM verdict is from an authorized CODEOWNERS member.
+# Risk-Scoped Merge Authority (RMA/v1), ratified 2026-09-02 under
+# docs/mission/intent.md. Authority follows what a diff TOUCHES, not how its
+# lane was admitted:
 #
-# T1: requires t1-approved label + PM_VERDICT: APPROVED from CODEOWNERS
-# T2: pm-verdict/v1 APPROVED comment from CODEOWNERS is the canonical approval path
-#   (ratified 2026-05-18, UTV2-979). GitHub PR review approval is also accepted.
-#   Auto-merge via `gh pr merge --auto --squash` triggers once verdict + all checks pass.
-# T3: passes automatically (CI + executor-result-validator are separate gates)
+#   auto  -- the diff touches no reserved surface. Authorized on green CI.
+#            `verify`, `P0 Protocol` and `Executor Result Validation` remain
+#            independently required by branch protection.
+#   human -- the diff touches a surface Griff reserves. Requires the
+#            `griff-approved` label AND a head-SHA-bound pm-verdict/v1 APPROVED
+#            comment from a CODEOWNERS member. Both; neither alone.
 #
-# governance:pause label on PR = hard block regardless of tier.
+# Reserved surfaces are enumerated in
+# docs/05_operations/RESERVED_RISK_SURFACES.json and classified by
+# scripts/ops/merge-authority.cjs (tested: scripts/ops/merge-authority.test.ts).
+# That policy reserves its own files, so RMA cannot widen its own authority --
+# every change to the gate itself still requires a human.
 #
-# Spec: docs/05_operations/GOVERNED_LOOP_SPEC.md (sections 2C, 3B, 4B)
+# Fail-closed throughout: an unreadable policy, an unavailable diff, or any
+# unclassifiable condition reserves the merge rather than releasing it.
+#
+# governance:pause label on PR = hard block regardless of classification.
+#
+# Supersedes the lane-manifest tier model (T1/T2/T3), under which every PR
+# resolved to T1 and a typo fix demanded the same human relay as a production
+# migration. Verdict parsing/validation is unchanged and still lives in
+# scripts/ops/merge-gate-verdict.cjs.
 
 name: Merge Gate
 
@@ -239,340 +250,72 @@ jobs:
                 typeof l === 'string' ? l : l.name
               ).filter(Boolean);
 
-              // ── 4. Resolve authoritative tier from lane manifest ───
-              const issueMatch = (headRef || '').match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
-                (prTitle || '').match(/((?:UTV2|UNI)-\d+)/i);
-              const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
-
-              async function readManifest(ref) {
-                if (!issueId || !ref) return null;
-                try {
-                  const { data } = await github.rest.repos.getContent({
-                    owner, repo,
-                    path: `docs/06_status/lanes/${issueId}.json`,
-                    ref,
-                  });
-                  if (Array.isArray(data) || !data.content) return null;
-                  return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
-                } catch (error) {
-                  if (error.status === 404) return null;
-                  throw error;
-                }
-              }
-
-              if (!issueId) {
-                errors.push('No issue ID found in PR branch or title. Cannot resolve authoritative tier.');
-              }
-
-              const manifest = await readManifest(headSha) || await readManifest(baseSha);
-              let authoritativeTier = manifest && /^(T1|T2|T3)$/.test(String(manifest.tier))
-                ? String(manifest.tier).toUpperCase()
-                : null;
-
-              // ── 4b. Bootstrap governance identity (UTV2-1619 capability 19) ──
-              // The lane system cannot bootstrap itself: Merge Gate errors
-              // unconditionally on a missing authoritative tier, the only producer
-              // of a lane manifest is `ops:lane-start`, and `lane-start` refuses
-              // when the caps are exhausted. So the change that repairs admission
-              // can never be merged. A bootstrap governance identity resolves that
-              // WITHOUT fabricating a lane manifest -- it records that governance
-              // self-repair was authorized rather than pretending normal lane
-              // admission occurred.
+              // ── 4. Risk-Scoped Merge Authority (RMA/v1) ────────────
+              // Replaces lane-manifest tier resolution. Authority follows what
+              // the diff TOUCHES, not how the lane was admitted. See
+              // docs/05_operations/RESERVED_RISK_SURFACES.json and
+              // docs/mission/intent.md.
               //
-              // Deliberately narrow: consulted ONLY when no real manifest resolved
-              // a tier, so it can never override, weaken, or shadow a genuine lane.
+              // Under the tier model every PR resolved to T1, so a typo fix and
+              // a production migration demanded identical human relay. Pricing
+              // everything as reserved prices the real decisions at zero
+              // attention. RMA reserves the six surfaces Griff owns and
+              // authorizes the rest on green CI -- `verify`, `P0 Protocol` and
+              // `Executor Result Validation` remain independently required by
+              // branch protection, so "authorized" here never means "unchecked".
               //
-              // TWO-PHASE AUTHORITY RESOLUTION (PM, 2026-08-05).
-              //   Phase 1 -- bootstrap introduction: the artifact does not exist on
-              //     base yet, because the PR introducing it is the one that needs it.
-              //     Reading it from the PR head is a self-declared authority, so it is
-              //     permitted ONLY under the hard constraints below, and it is
-              //     announced in the verdict rather than applied silently.
-              //   Phase 2 -- bootstrap operation: the artifact is on base. Base is
-              //     canonical and the head copy is never consulted.
-              //   Phase 3 -- retirement: no active grants remain.
-              // A PR must never be able to introduce its own authority artifact and
-              // use it to authorize itself. Phase 1 is the single, narrowly-bounded
-              // exception that exists only so the bridge can be built; it is scoped to
-              // one issue and one diff shape, and is removed once base carries it.
-              const BOOTSTRAP_INTRODUCTION_ISSUE = 'UTV2-1619';
-              // Strict changed-file allowlist for the phase-1 transition. Anything
-              // outside this set refuses head-read entirely -- no application or
-              // runtime file may ride in on a self-declared authority.
-              const BOOTSTRAP_ALLOWED_FILES = new Set([
-                'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
-                '.github/workflows/merge-gate.yml',
-                'scripts/ops/bootstrap-authorization.ts',
-                'scripts/ops/bootstrap-authorization.test.ts',
-                'scripts/ops/bootstrap-head-fallback-guard.test.ts',
-                'scripts/ops/lane-start.ts',
-                'scripts/ops/pre-merge-authorization.ts',
-                'scripts/ops/pre-merge-authorization.test.ts',
-                'package.json',
-              ]);
-              const BOOTSTRAP_ALLOWED_PREFIXES = ['docs/06_status/proof/UTV2-1619/'];
+              // Both this module and the policy it reads come from the base
+              // checkout pinned above, so a PR cannot supply its own rules. The
+              // policy additionally reserves its own files, which is what makes
+              // RMA non-self-amending: widening authority always requires a
+              // human.
+              const { loadPolicy, evaluateMergeAuthority } =
+                require('./scripts/ops/merge-authority.cjs');
+              const riskPolicy = loadPolicy();
 
-              let bootstrapIdentity = null;
-              let bootstrapSource = null;
-              if (!authoritativeTier && issueId) {
-                async function readBootstrapAuthorizations(ref) {
-                  if (!ref) return null;
-                  try {
-                    const { data } = await github.rest.repos.getContent({
-                      owner, repo,
-                      path: 'docs/governance/BOOTSTRAP_AUTHORIZATIONS.json',
-                      ref,
-                    });
-                    if (Array.isArray(data) || !data.content) return null;
-                    return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
-                  } catch (error) {
-                    if (error.status === 404) return null;
-                    throw error;
-                  }
-                }
+              // Changed files come from the API rather than a local diff so the
+              // job never has to materialize PR head content.
+              const changedFiles = await github.paginate(
+                github.rest.pulls.listFiles,
+                { owner, repo, pull_number: prNumber, per_page: 100 }
+              );
 
-                // Base first, always. Head is consulted only when base has nothing.
-                let doc = await readBootstrapAuthorizations(baseSha);
-                let candidateSource = doc ? 'base' : null;
-
-                if (!doc) {
-                  const headDoc = await readBootstrapAuthorizations(headSha);
-                  if (headDoc) {
-                    // Phase 1 gate. Every condition must hold or head-read is refused.
-                    const introductionIssueOk = issueId === BOOTSTRAP_INTRODUCTION_ISSUE;
-                    let diffScopeOk = true;
-                    const offendingFiles = [];
-                    try {
-                      const changed = await github.paginate(github.rest.pulls.listFiles, {
-                        owner, repo, pull_number: prNumber, per_page: 100,
-                      });
-                      for (const file of changed) {
-                        const name = file.filename;
-                        const allowed = BOOTSTRAP_ALLOWED_FILES.has(name)
-                          || BOOTSTRAP_ALLOWED_PREFIXES.some(prefix => name.startsWith(prefix));
-                        if (!allowed) { diffScopeOk = false; offendingFiles.push(name); }
-                      }
-                    } catch (error) {
-                      // Cannot enumerate the diff -> cannot prove scope -> refuse.
-                      diffScopeOk = false;
-                      offendingFiles.push(`<diff enumeration failed: ${error.message}>`);
-                    }
-
-                    if (!introductionIssueOk) {
-                      errors.push(
-                        `A bootstrap identity was found on the PR head but not on base. Head-read is ` +
-                        `permitted only for the initial governance bootstrap of ` +
-                        `${BOOTSTRAP_INTRODUCTION_ISSUE}; this PR is for ${issueId}. A PR may not ` +
-                        `introduce its own authority artifact and use it to authorize itself.`
-                      );
-                    } else if (!diffScopeOk) {
-                      errors.push(
-                        `A bootstrap identity was found on the PR head but not on base, and the PR ` +
-                        `changes files outside the bootstrap allowlist: ${offendingFiles.join(', ')}. ` +
-                        `The initial bootstrap transition may only touch the authorization artifact, ` +
-                        `the Merge Gate resolution logic, the bootstrap mechanism, its tests, and its ` +
-                        `proof artifacts.`
-                      );
-                    } else {
-                      doc = headDoc;
-                      candidateSource = 'head';
-                    }
-                  }
-                }
-                bootstrapSource = candidateSource;
-                const entries = doc && Array.isArray(doc.authorizations) ? doc.authorizations : [];
-                const now = Date.now();
-                const active = entries.filter(entry => {
-                  const expiry = Date.parse(String(entry && entry.expires_at));
-                  return Number.isFinite(expiry) && expiry > now;
-                });
-                // Accumulation is refused, not resolved: more than one live
-                // identity means "which one applied" has more than one answer.
-                if (active.length > 1) {
-                  errors.push(
-                    `${active.length} unexpired bootstrap governance identities exist. ` +
-                    'At most one may be active; expire or remove the others.'
-                  );
-                } else {
-                  const candidate = active.find(
-                    entry => String(entry.issue_id || '').toUpperCase() === issueId
-                  );
-                  if (candidate) {
-                    const candidateTier = String(candidate.tier || '').toUpperCase();
-                    if (candidate.lane_type !== 'governance') {
-                      errors.push(
-                        `Bootstrap governance identity for ${issueId} declares lane_type ` +
-                        `"${candidate.lane_type}"; only "governance" may be bootstrapped.`
-                      );
-                    } else if (!/^(T1|T2|T3)$/.test(candidateTier)) {
-                      errors.push(
-                        `Bootstrap governance identity for ${issueId} declares an invalid tier ` +
-                        `"${candidate.tier}".`
-                      );
-                    } else {
-                      authoritativeTier = candidateTier;
-                      bootstrapIdentity = candidate;
-                    }
-                  }
-                }
-              }
-
-              if (!authoritativeTier) {
-                errors.push(
-                  `No authoritative lane manifest tier found${issueId ? ` for ${issueId}` : ''}. ` +
-                  'GitHub tier labels are evidence only and cannot authorize merge by themselves.'
-                );
-              } else if (manifest && manifest.issue_id && String(manifest.issue_id).toUpperCase() !== issueId) {
-                errors.push(`Lane manifest issue_id ${manifest.issue_id} does not match PR issue ${issueId}.`);
-              }
-
-              // A bootstrap admission must never be silently indistinguishable
-              // from an ordinary one. Surface it in the gate's own output.
-              if (bootstrapIdentity) {
-                notes.push(
-                  `Tier ${authoritativeTier} resolved from a BOOTSTRAP GOVERNANCE IDENTITY, not a lane ` +
-                  `manifest. ${issueId} has no lane manifest because the concurrency governor refuses ` +
-                  `its admission, and the change that repairs admission cannot merge without a tier. ` +
-                  `Authorized by ${bootstrapIdentity.authorized_by} on ${bootstrapIdentity.authorized_at}, ` +
-                  `expires ${bootstrapIdentity.expires_at}. Milestone: ${bootstrapIdentity.milestone}. ` +
-                  `This is not normal lane admission and does not assert that a lane exists.`
-                );
-                // The source is the trust-relevant fact and must never be implicit.
-                if (bootstrapSource === 'head') {
-                  notes.push(
-                    `Source: PR HEAD bootstrap artifact (not base). Reason: initial governance ` +
-                    `bootstrap transition -- the artifact cannot exist on base until this PR merges. ` +
-                    `This is a self-declared authority, permitted here ONLY because the issue is ` +
-                    `${BOOTSTRAP_INTRODUCTION_ISSUE} and every changed file falls inside the bootstrap ` +
-                    `allowlist. Once this PR merges, base carries the artifact and head is never ` +
-                    `consulted again; the head fallback is scheduled for removal.`
-                  );
-                } else {
-                  notes.push(
-                    `Source: base bootstrap artifact (canonical). The PR head copy was not consulted.`
-                  );
-                }
-              }
-
-              // ── 5. Verify GitHub tier evidence mirrors manifest ─────
-              const tierLabels = labels.filter(l =>
-                /^tier:T[123]$/i.test(l)
-              ).map(l => {
-                const match = l.match(/^tier:(T[123])$/i);
-                return `tier:${match[1].toUpperCase()}`;
+              // Verdict validation stays in merge-gate-verdict.cjs, unchanged.
+              // It already implements latest-verdict-wins, CODEOWNERS
+              // authorization, and exact-head binding -- so a later
+              // CHANGES_REQUIRED still blocks, and an approval of an earlier
+              // head still does not carry forward onto new commits.
+              const { data: gateComments } = await github.rest.issues.listComments({
+                owner, repo, issue_number: prNumber, per_page: 100
               });
-              const uniqueTierLabels = [...new Set(tierLabels)];
-              const expectedTierLabel = authoritativeTier ? `tier:${authoritativeTier}` : null;
+              const verdicts = gateComments
+                .map(c => ({
+                  user: c.user?.login,
+                  userType: c.user?.type,
+                  parsed: parseVerdict(c.body),
+                  createdAt: c.created_at,
+                }))
+                .filter(v => v.parsed !== null);
+              const verdictErrors = validateT1Verdicts(verdicts, {
+                prNumber,
+                headSha,
+                authorizedReviewers: AUTHORIZED_REVIEWERS,
+              });
 
-              if (expectedTierLabel && uniqueTierLabels.length === 0) {
-                await github.rest.issues.addLabels({
-                  owner, repo, issue_number: prNumber, labels: [expectedTierLabel]
-                });
-                labels.push(expectedTierLabel);
-                uniqueTierLabels.push(expectedTierLabel);
-              }
+              const decision = evaluateMergeAuthority({
+                files: changedFiles.map(f => ({
+                  filename: f.filename,
+                  patch: f.patch,
+                  status: f.status,
+                })),
+                policy: riskPolicy,
+                labels,
+                verdictApproved: verdictErrors.length === 0,
+                verdictErrors,
+              });
 
-              if (expectedTierLabel && uniqueTierLabels.length > 0 && !uniqueTierLabels.includes(expectedTierLabel)) {
-                errors.push(
-                  `Tier drift: authoritative ${expectedTierLabel}, PR has ${uniqueTierLabels.join(', ')}. ` +
-                  'Automation will mirror the authoritative tier; stale/manual labels cannot authorize merge.'
-                );
-              }
-
-              if (expectedTierLabel && uniqueTierLabels.length > 1) {
-                errors.push(
-                  `Multiple tier labels found: ${uniqueTierLabels.join(', ')}. Must mirror exactly ${expectedTierLabel}.`
-                );
-              }
-
-              // ── 4b. Kill switch ──────────────────────────────────
-              if (labels.includes('governance:pause')) {
-                errors.push(
-                  'governance:pause label is active. All merges blocked until removed by PM.'
-                );
-              }
-
-              if (errors.length === 0) {
-                const tier = authoritativeTier;
-
-                // ── 5. T3: auto-pass ──────────────────────────────────
-                // T3 has no tier-specific policy errors. CI and executor
-                // result validation remain separate required checks.
-
-                // ── 6. T2: pm-verdict/v1 is the canonical approval path (UTV2-979, 2026-05-18) ──
-                // GitHub PR review approval is also accepted. Either satisfies the gate.
-                //
-                // A third path (UTV2-1523) recognizes a valid EXECUTOR_RESULT/v1 comment from an
-                // AUTHORIZED_REVIEWERS member as sufficient self-attestation. This exists because
-                // GitHub blocks `gh pr review --approve` when the reviewing account is also the PR
-                // author -- true for every executor in this repo, since Claude and Codex both open
-                // PRs under the same griff843 identity. CLAUDE.md already documents self-approval as
-                // intended to satisfy T2 with no PM presence required; this makes that mechanically
-                // possible instead of requiring an --admin merge for every T2 PR.
-                if (tier === 'T2') {
-                  const { data: reviews } = await github.rest.pulls.listReviews({
-                    owner, repo, pull_number: prNumber, per_page: 100
-                  });
-                  const approvals = reviews.filter(r => r.state === 'APPROVED');
-                  if (approvals.length === 0) {
-                    const { data: comments } = await github.rest.issues.listComments({
-                      owner, repo, issue_number: prNumber, per_page: 100
-                    });
-                    // Check for pm-verdict/v1 APPROVED from an authorized CODEOWNERS member
-                    const hasPmVerdictApproval = comments.some(c => {
-                      if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
-                      const body = (c.body || '').replace(/\\n/g, '\n');
-                      const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                      return lines[0] === 'PM_VERDICT: APPROVED' && lines[1] === 'schema: pm-verdict/v1';
-                    });
-                    // Check for a valid executor-result/v1 self-attestation from an authorized member
-                    const hasExecutorResultAttestation = comments.some(c => {
-                      if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
-                      const body = (c.body || '').replace(/\\n/g, '\n');
-                      const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                      return lines[0] === 'EXECUTOR_RESULT: READY_FOR_REVIEW' && lines[1] === 'schema: executor-result/v1';
-                    });
-                    if (!hasPmVerdictApproval && !hasExecutorResultAttestation) {
-                      errors.push(
-                        'T2 requires a pm-verdict/v1 APPROVED comment from a CODEOWNERS member, ' +
-                        'a GitHub PR review approval, or an executor-result/v1 self-attestation comment ' +
-                        'from a CODEOWNERS member.'
-                      );
-                    }
-                  }
-                }
-
-                // ── 7. T1: PM verdict + t1-approved label ────────────
-                if (tier === 'T1') {
-                  const { data: comments } = await github.rest.issues.listComments({
-                    owner, repo, issue_number: prNumber, per_page: 100
-                  });
-
-                  const verdicts = comments
-                    .map(c => ({
-                      user: c.user?.login,
-                      userType: c.user?.type,
-                      parsed: parseVerdict(c.body),
-                      createdAt: c.created_at,
-                    }))
-                    .filter(v => v.parsed !== null);
-
-                  // UTV2-1543: also requires PR: and Head SHA: to match this
-                  // exact PR/head, fail-closed on stale/mismatched verdicts —
-                  // see scripts/ops/merge-gate-verdict.cjs and its test suite.
-                  errors.push(...validateT1Verdicts(verdicts, {
-                    prNumber,
-                    headSha,
-                    authorizedReviewers: AUTHORIZED_REVIEWERS,
-                  }));
-
-                  if (!labels.includes('t1-approved')) {
-                    errors.push(
-                      'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
-                    );
-                  }
-                }
-              }
+              errors.push(...decision.errors);
+              notes.push(...decision.notes);
 
             } catch (e) {
               evaluatorError = e;
@@ -594,7 +337,7 @@ jobs:
                   : 'Merge Gate: BLOCKED',
                 summary: [
                   passed
-                    ? 'All tier-appropriate merge requirements satisfied.'
+                    ? 'RMA/v1: all merge-authority requirements satisfied.'
                     : `**Merge blocked:**\n\n${errors.map(e => '- ' + e).join('\n')}`,
                   notes.length > 0
                     ? `\n\n**Governance notes:**\n\n${notes.map(n => '- ' + n).join('\n')}`

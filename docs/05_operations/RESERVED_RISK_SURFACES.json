@@ -1,0 +1,116 @@
+{
+  "schema": "reserved-risk-surfaces/v1",
+  "ratified": "2026-09-02",
+  "authority": "docs/mission/intent.md",
+  "enforcedBy": [
+    ".github/workflows/merge-gate.yml",
+    "scripts/ops/merge-authority.cjs"
+  ],
+  "summary": "Risk-Scoped Merge Authority (RMA/v1). Merge authorization is determined by what a diff TOUCHES, not by a lane manifest tier. A diff that touches no reserved surface is authorized on green CI. A diff that touches a reserved surface requires an explicit human approval artifact from a CODEOWNERS member. Fail-closed: anything unclassifiable is treated as reserved.",
+  "approval": {
+    "label": "griff-approved",
+    "legacyLabels": [
+      "t1-approved"
+    ],
+    "verdictSchema": "pm-verdict/v1",
+    "verdictMustBindHeadSha": true,
+    "note": "Both a label and a head-SHA-bound pm-verdict/v1 APPROVED comment from a CODEOWNERS member are required for a reserved diff. Either alone is insufficient."
+  },
+  "surfaces": [
+    {
+      "id": "production-ddl-and-data",
+      "reserved": "Production DDL and production data deletion",
+      "paths": [
+        "supabase/migrations/**",
+        "supabase/**/*.sql",
+        "scripts/db/**",
+        "packages/db/src/target-identity.ts",
+        "packages/db/src/privileged-client-boundary.ts"
+      ]
+    },
+    {
+      "id": "member-delivery-activation",
+      "reserved": "Activating member delivery, or weakening the delivery kill switch",
+      "paths": [
+        "apps/api/src/routes/kill-switch.ts",
+        "apps/worker/src/runner.ts",
+        "apps/discord-bot/src/delivery/**",
+        "docs/05_operations/DELIVERY_KILL_SWITCH.md",
+        "docs/05_operations/delivery_operating_model.md"
+      ]
+    },
+    {
+      "id": "secrets",
+      "reserved": "Secrets and credential material",
+      "paths": [
+        "**/.env",
+        "**/.env.*",
+        "local.env",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/staging-deploy.yml",
+        "docs/05_operations/REQUIRED_SECRETS.md",
+        "docs/05_operations/SECRETS_INVENTORY.md",
+        "docs/05_operations/credential-purpose-inventory.md"
+      ],
+      "excludePaths": [
+        "**/.env.example",
+        "**/.env.template",
+        "**/.env.sample"
+      ],
+      "excludeNote": "Committed templates carry variable NAMES, not values. Reserving them would price a documentation edit at the same attention as a credential rotation, which is how a control loses its meaning."
+    },
+    {
+      "id": "pricing-and-tier-authority",
+      "reserved": "Pricing, member tier authority, and paid provider/subscription commitments",
+      "paths": [
+        "docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md",
+        "docs/05_operations/PS_M1_COMMERCIAL_FOUNDATION_CONTRACT.md",
+        "docs/05_operations/T1_CAPPER_TIER_SYSTEM_CONTRACT.md",
+        "docs/05_operations/SUPABASE_BRANCH_COST_POLICY.md",
+        "scripts/ops/monetization-proof.ts"
+      ]
+    },
+    {
+      "id": "production-containment",
+      "reserved": "Production containment posture while containment is mandated",
+      "paths": [
+        ".github/workflows/ops-p0-containment.yml",
+        "docs/05_operations/RUNTIME_MODE_CONTRACT.md",
+        "docs/05_operations/SIMULATION_MODE_CONTRACT.md",
+        "docs/05_operations/BREAK_GLASS_PROTOCOL.md",
+        "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md",
+        "docs/05_operations/STANDING_GUARDRAILS.md"
+      ]
+    },
+    {
+      "id": "merge-authority",
+      "reserved": "Merge authority itself \u2014 the gate, its policy, ownership, and this file",
+      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending.",
+      "paths": [
+        ".github/workflows/merge-gate.yml",
+        ".github/workflows/p0-protocol.yml",
+        ".github/CODEOWNERS",
+        "docs/05_operations/RESERVED_RISK_SURFACES.json",
+        "scripts/ops/merge-authority.cjs",
+        "scripts/ops/merge-gate-verdict.cjs",
+        "scripts/ops/apply-branch-protection.sh",
+        "docs/mission/intent.md"
+      ]
+    }
+  ],
+  "contentRules": [
+    {
+      "id": "destructive-sql",
+      "reserved": "Destructive SQL anywhere in the diff, regardless of file location",
+      "pathGlobs": [
+        "**/*.sql",
+        "**/*.ts",
+        "**/*.cjs",
+        "**/*.mjs",
+        "**/*.js"
+      ],
+      "addedLinePattern": "\\b(DROP\\s+(TABLE|SCHEMA|DATABASE|COLUMN|VIEW|FUNCTION|TYPE|INDEX)|TRUNCATE\\s+(TABLE\\s+)?[A-Za-z_\"]|DELETE\\s+FROM)\\b",
+      "patternFlags": "i"
+    }
+  ]
+}

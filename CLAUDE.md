@@ -104,15 +104,40 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 ## Verification expectations
 
-| Tier | Verification | Proof | Merge Authority |
-|---|---|---|---|
-| T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied | `t1-approved` label **and** `pm-verdict/v1` APPROVED comment from CODEOWNERS |
-| T2 | type-check + test + issue-specific | Diff summary + verification log | GitHub PR review approval **or** `pm-verdict/v1` APPROVED comment |
-| T3 | type-check + test | Green CI on merge SHA | Green CI + valid executor result — no PM verdict |
+Tier now describes how much **verification** a change warrants. It no longer decides who may merge —
+see Merge Authority below.
+
+| Tier | Verification | Proof |
+|---|---|---|
+| T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied |
+| T2 | type-check + test + issue-specific | Diff summary + verification log |
+| T3 | type-check + test | Green CI on merge SHA |
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
 
-**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** (ratified 2026-05-18 under UTV2-979 for T2; this table must always match that workflow — if they diverge, the workflow wins and this table is stale). For T2, the orchestrator's own `gh pr review --approve` after diff review satisfies the "GitHub PR review approval" branch — no PM presence or PM_VERDICT comment is mechanically required, for any executor (Claude or Codex). PM approval is never satisfied by a chat message; only the `t1-approved` label, a GitHub PR review approval, or a `pm-verdict/v1` comment (schema: `docs/05_operations/schemas/pm-verdict-v1.md`) count as approval artifacts.
+**Merge Authority is defined once, mechanically, by `.github/workflows/merge-gate.yml`** — now
+Risk-Scoped Merge Authority (RMA/v1), ratified 2026-09-02 under `docs/mission/intent.md`. It
+supersedes the lane-manifest tier model for merge authorization. If this section and the workflow
+diverge, the workflow wins and this section is stale.
+
+Authority follows what a diff **touches**, not how its lane was admitted:
+
+| Classification | Condition | Requirement |
+|---|---|---|
+| `auto` | diff touches no reserved surface | green CI only — `verify`, `P0 Protocol`, `Executor Result Validation` remain independently required |
+| `human` | diff touches a reserved surface | `griff-approved` label **and** a head-SHA-bound `pm-verdict/v1` APPROVED comment from CODEOWNERS — both, neither alone |
+
+Reserved surfaces are enumerated in `docs/05_operations/RESERVED_RISK_SURFACES.json` and classified
+by `scripts/ops/merge-authority.cjs`: production DDL/data, member-delivery activation, secrets,
+pricing/tier authority, production containment, and merge authority itself. That last one is what
+makes RMA non-self-amending — widening authority always requires a human.
+
+Fail-closed throughout: an unreadable policy, an unavailable diff, or any unclassifiable condition
+reserves the merge rather than releasing it. `governance:pause` is a hard block regardless.
+
+The GitHub-review approval path was removed: GitHub blocks self-approval and every executor opens
+PRs under the same `griff843` identity, so it was unusable in practice. The tier table above still
+describes what **verification** each tier of work warrants; it no longer describes who may merge.
 
 ---
 
@@ -120,6 +145,10 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 | Topic | Document |
 |---|---|
+| **Mission intent (human-owned)** | `docs/mission/intent.md` |
+| **Canonical contract index** | `docs/mission/spec.md` |
+| **Live engineering plan** | `docs/mission/plan.md` |
+| **Reserved surfaces requiring Griff** | `docs/05_operations/RESERVED_RISK_SURFACES.json` |
 | Master execution map (phases 1–8) | `docs/05_operations/EXECUTION_MAP.md` |
 | Master modeling sequence (elite-core / human-like-core) | `docs/05_operations/MODELING_SEQUENCE.md` |
 | Three-lane workflow spec | `docs/05_operations/WORKFLOW_SPEC.md` |

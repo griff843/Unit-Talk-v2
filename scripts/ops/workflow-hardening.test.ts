@@ -70,7 +70,18 @@ interface MockComment {
   user: { login: string; type: string };
 }
 
-async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: MockCheckRun[] = []) {
+// RMA/v1 replaced the lane-manifest tier with risk classification over the
+// diff, so the harness parameterizes on what the PR TOUCHES rather than on how
+// its lane was admitted. 'reserved' stands in for any file under a reserved
+// surface; 'auto' for ordinary product code.
+type MergeGateRisk = 'reserved' | 'auto';
+
+const RISK_FILES: Record<MergeGateRisk, Array<{ filename: string; patch: string; status: string }>> = {
+  reserved: [{ filename: 'supabase/migrations/20260902_x.sql', patch: '+SELECT 1;', status: 'added' }],
+  auto: [{ filename: 'apps/smart-form/lib/form-utils.ts', patch: '+const x = 1;', status: 'modified' }],
+};
+
+async function createMergeGateHarness(risk: MergeGateRisk, initialChecks: MockCheckRun[] = []) {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const gate = objectField(objectField(workflow, 'jobs'), 'gate');
   const steps = gate.steps as Array<Record<string, unknown>>;
@@ -86,6 +97,8 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
   const AsyncFunction = Object.getPrototypeOf(async () => undefined).constructor as AsyncFunctionConstructor;
   const evaluate = new AsyncFunction('github', 'context', 'core', 'require', script);
   const verdictModule = await import('./merge-gate-verdict.cjs');
+  const authorityModule = await import('./merge-authority.cjs');
+  const changedFiles = RISK_FILES[risk];
 
   const prNumber = 1585;
   const headSha = '1585158515851585158515851585158515851585';
@@ -96,7 +109,8 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
     base: { sha: baseSha },
     title: 'feat(ops): UTV2-1585 canonical check identity',
   };
-  const labels = [`tier:${tier}`];
+  // RMA/v1 carries no tier label; authority comes from the diff.
+  const labels: string[] = [];
   const comments: MockComment[] = [];
   const reviews: Array<{ state: string }> = [];
   const postedGateComments: string[] = [];
@@ -114,9 +128,14 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
 
   const github = {
     paginate: async (
-      endpoint: (params: Record<string, unknown>) => Promise<{ data: { check_runs: MockCheckRun[] } }>,
+      endpoint: (params: Record<string, unknown>) => Promise<{ data: unknown }>,
       params: Record<string, unknown>,
-    ) => (await endpoint(params)).data.check_runs,
+    ) => {
+      const { data } = await endpoint(params);
+      // checks.listForRef pages on `.check_runs`; pulls.listFiles pages on the
+      // array itself. The real Octokit paginate handles both.
+      return Array.isArray(data) ? data : (data as { check_runs: MockCheckRun[] }).check_runs;
+    },
     rest: {
       checks: {
         listForRef,
@@ -164,14 +183,17 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
       pulls: {
         get: async () => ({ data: pr }),
         listReviews: async () => ({ data: reviews }),
+        listFiles: async () => ({ data: changedFiles }),
       },
       repos: {
-        getContent: async () => ({
-          data: {
-            content: Buffer.from(JSON.stringify({ issue_id: 'UTV2-1585', tier })).toString('base64'),
-            encoding: 'base64',
-          },
-        }),
+        // RMA/v1 derives authority from the diff, never from a lane manifest.
+        // Throwing here is the assertion that the manifest read is really gone
+        // rather than merely unused on the paths these tests happen to take.
+        getContent: async () => {
+          throw new assert.AssertionError({
+            message: 'merge-gate.yml must not read repository content to resolve merge authority',
+          });
+        },
       },
     },
   };
@@ -188,8 +210,11 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
       },
     };
     const requireModule = (specifier: unknown) => {
-      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
-      return verdictModule;
+      if (specifier === './scripts/ops/merge-gate-verdict.cjs') return verdictModule;
+      if (specifier === './scripts/ops/merge-authority.cjs') return authorityModule;
+      throw new assert.AssertionError({
+        message: `merge-gate.yml required an unexpected module: ${String(specifier)}`,
+      });
     };
 
     await evaluate(github, { eventName, payload, repo: { owner: 'unit-talk', repo: 'v2' } }, core, requireModule);
@@ -504,8 +529,8 @@ test('UTV2-1585: only the custom exact-head check owns the required Merge Gate i
   );
 });
 
-test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
-  const harness = await createMergeGateHarness('T1');
+test('UTV2-1585 (RMA): reserved-surface pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
+  const harness = await createMergeGateHarness('reserved');
 
   await harness.run('pull_request');
   assert.strictEqual(harness.createCount(), 1);
@@ -540,27 +565,50 @@ test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update on
   assert.strictEqual(harness.checks[0].conclusion, 'success');
 });
 
-test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {
-  const harness = await createMergeGateHarness('T2');
+// RMA/v1 removed the GitHub-review approval path. It was unusable in practice
+// -- GitHub blocks self-approval and every executor here opens PRs under the
+// same griff843 identity -- and keeping it would have meant two different human
+// artifacts authorizing the same reserved change. The label + head-bound verdict
+// pair is now the single path, and reviews carry no authority in either
+// direction.
+test('UTV2-1585 (RMA): a review approval does not authorize a reserved diff', async () => {
+  const harness = await createMergeGateHarness('reserved');
 
   await harness.run('pull_request');
   assert.strictEqual(harness.checks[0].conclusion, 'failure');
 
   harness.reviews.push({ state: 'APPROVED' });
   await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'success');
-
-  harness.reviews.splice(0, harness.reviews.length, { state: 'DISMISSED' });
-  await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'failure',
+    'a GitHub review approval must not substitute for the label + head-bound verdict',
+  );
   assert.strictEqual(harness.createCount(), 1);
   assert.strictEqual(harness.checks.length, 1);
+});
+
+test('UTV2-1585 (RMA): an unreserved diff is authorized with no human artifact at all', async () => {
+  const harness = await createMergeGateHarness('auto');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+  assert.strictEqual(harness.labels.length, 0, 'no approval label should be required');
+  assert.strictEqual(harness.comments.length, 0, 'no verdict comment should be required');
+});
+
+test('UTV2-1585 (RMA): governance:pause blocks even an unreserved diff', async () => {
+  const harness = await createMergeGateHarness('auto');
+  harness.labels.push('governance:pause');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
 });
 
 test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
   const headSha = '1585158515851585158515851585158515851585';
   const harnessPrNumber = 1585;
-  const harness = await createMergeGateHarness('T3', [
+  const harness = await createMergeGateHarness('auto', [
     {
       id: 4,
       name: 'Merge Gate',
@@ -604,7 +652,7 @@ test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are a
   // Mirrors the real state observed on PR #1304's head after the former
   // create-on-every-event behavior: six same-head "Merge Gate" checks, none
   // carrying the canonical external_id format, four of them failure.
-  const harness = await createMergeGateHarness('T3', [
+  const harness = await createMergeGateHarness('auto', [
     { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
     { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
     { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
