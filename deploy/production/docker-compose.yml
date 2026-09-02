@@ -233,11 +233,45 @@ services:
           memory: 512m
           cpus: '0.5'
 
+  command-center:
+    # Operator console (apps/command-center). Reads Supabase directly and posts
+    # privileged mutations to the API, so it is authenticated at the edge of its
+    # own middleware and holds credentials no browser-facing surface should.
+    image: ghcr.io/griff843/unit-talk-v2/command-center:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    # Narrow env file, like web and smart-form. Notably absent:
+    # SUPABASE_ACCESS_TOKEN. That is an account-scoped management PAT, not the
+    # service-role key -- it can run DDL and ignores RLS -- and a web server is
+    # the wrong place to keep one. Without it the storage-health panel degrades;
+    # nothing else in the console depends on it.
+    env_file:
+      - .env.command-center
+    expose:
+      - "4300"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      # /api/health is the one route the console leaves unauthenticated.
+      test: ["CMD", "curl", "-fsS", "http://localhost:4300/api/health"]
+      interval: 15s
+      timeout: 10s
+      start_period: 40s
+      retries: 5
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+
   caddy:
     image: caddy:2-alpine
     container_name: caddy
-    # CADDY_DOMAIN, UNIT_TALK_WEB_DOMAIN and UNIT_TALK_SMART_FORM_DOMAIN must
-    # reach the container for the {$...} site addresses in the Caddyfile;
+    # CADDY_DOMAIN, UNIT_TALK_WEB_DOMAIN, UNIT_TALK_SMART_FORM_DOMAIN and
+    # UNIT_TALK_COMMAND_CENTER_DOMAIN must all reach the container for the
+    # {$...} site addresses in the Caddyfile;
     # without them Caddy fails to parse the config and crash-loops.
     #
     # UTV2-1795: this was `.env.production`, which handed the public edge every

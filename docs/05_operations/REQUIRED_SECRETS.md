@@ -539,6 +539,36 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
         ".github/workflows/deploy.yml"
       ],
       "purpose": "Server-authoritative comma-separated allow-list of capper email addresses. Empty admits nobody \u2014 which is the correct failure but a silent one, so both the deploy workflow and the container entrypoint refuse an empty value rather than standing up an intake surface nobody can enter."
+    },
+    {
+      "name": "COMMAND_CENTER_DOMAIN",
+      "required": false,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Public hostname for the operator console (apps/command-center). Optional by design: the console container is deployed on every release, but until this is set the edge is given `http://command-center.invalid` \u2014 parseable by Caddy, never certificated, never resolvable \u2014 so the console runs on the internal network and is simply not routable. Leaving the variable empty instead would produce an empty Caddy site address, which crash-loops the whole edge."
+    },
+    {
+      "name": "COMMAND_CENTER_AUTH_TOKEN",
+      "required": false,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "Bearer token that admits an operator to the console. Required the moment COMMAND_CENTER_DOMAIN is set: a reachable console with no token answers 401 to everyone, which reads as an outage rather than the misconfiguration it is, so the deploy refuses that combination. Server-only; written to `.env.command-center`."
+    },
+    {
+      "name": "UNIT_TALK_CC_API_KEY",
+      "required": false,
+      "source": "operator",
+      "scope": "repo",
+      "used_by": [
+        ".github/workflows/deploy.yml"
+      ],
+      "purpose": "API key the console presents to `apps/api` for privileged operator mutations (settle, review, retry, requeue, override). Required alongside COMMAND_CENTER_AUTH_TOKEN once the console is published. Server-only; written to `.env.command-center`."
     }
   ]
 }
@@ -606,6 +636,32 @@ separated from `verify` by the whole build.
 | `GOOGLE_CLIENT_SECRET` | `.env.smart-form` | build args, browser bundles, `.env.web`, `.env.edge`, `.env.production` |
 | `NEXTAUTH_SECRET` | `.env.smart-form` as `NEXTAUTH_SECRET`; `.env.production` as `UNIT_TALK_JWT_SECRET` | build args, browser bundles, `.env.web`, `.env.edge` |
 | `ALLOWED_CAPPER_EMAILS` | `.env.smart-form` | build args, browser bundles |
+
+### 3.5 Operator console secrets
+
+Three further secrets arrived with the operator console (`apps/command-center`).
+All three are **optional**, and that is a deliberate sequencing property rather
+than laxity: the console container is built and started on every release so the
+operator observation path exists, but it is only *published* once a hostname is
+provisioned.
+
+| Secret | Reaches | Never reaches |
+| --- | --- | --- |
+| `COMMAND_CENTER_DOMAIN` | `.env.edge` as `UNIT_TALK_COMMAND_CENTER_DOMAIN` | — |
+| `COMMAND_CENTER_AUTH_TOKEN` | `.env.command-center` | build args, browser bundles, `.env.edge`, `.env.web` |
+| `UNIT_TALK_CC_API_KEY` | `.env.command-center` | build args, browser bundles, `.env.edge`, `.env.web` |
+
+The three are optional individually but not independently. Setting
+`COMMAND_CENTER_DOMAIN` without the other two fails the deploy: a published
+console that can authenticate nobody answers 401 to its operator and 401 to an
+attacker alike, and the first is far more likely to be reported as an outage
+than diagnosed as a missing secret.
+
+`SUPABASE_ACCESS_TOKEN` is deliberately **not** among them. It is an
+account-scoped management PAT — it runs DDL and ignores RLS — and the console
+wants it only for a storage-growth panel, which degrades without it. A
+browser-facing server is the wrong place to hold one, and the deploy is tested
+to prove it never writes one there.
 
 `NEXTAUTH_SECRET` deliberately reaches two files under two names. Smart Form
 signs the capper session bearer with it; the API verifies that bearer with

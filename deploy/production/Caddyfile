@@ -7,6 +7,7 @@
 #   {$CADDY_DOMAIN}                  -> api:4000         (existing API)
 #   {$UNIT_TALK_WEB_DOMAIN}          -> web:4200         (public website)
 #   {$UNIT_TALK_SMART_FORM_DOMAIN}   -> smart-form:4400  (capper intake)
+#   {$UNIT_TALK_COMMAND_CENTER_DOMAIN} -> command-center:4300 (operator console)
 #
 # Caddy fails to parse a site address that expands to an empty string, so an
 # unconfigured hostname stops the edge rather than silently serving the wrong
@@ -54,6 +55,31 @@
 
     # The intake surface is authenticated and must never be cached by an
     # intermediary or framed by a third party.
+    import security_headers
+    header {
+        Cache-Control "no-store"
+        Referrer-Policy "same-origin"
+    }
+
+    import json_log
+}
+
+# Operator console (apps/command-center).
+#
+# Routed only once a hostname is provisioned. Until then the deployment sets
+# this to `http://command-center.invalid`: Caddy parses it, the `http://`
+# scheme suppresses automatic HTTPS so no certificate is ever requested, and
+# `.invalid` is reserved by RFC 2606 so no resolver can answer it. The
+# container still runs on the internal network, so the console is deployed but
+# unreachable rather than absent — and an empty site address, which is what an
+# unset variable would produce, crash-loops the whole edge.
+#
+# Deliberately NOT in caddy's `depends_on`: a console that fails to start must
+# not be able to take the API, the website and the intake form offline with it.
+{$UNIT_TALK_COMMAND_CENTER_DOMAIN} {
+    reverse_proxy command-center:4300
+
+    # Operator data is never cacheable and the console must never be framed.
     import security_headers
     header {
         Cache-Control "no-store"

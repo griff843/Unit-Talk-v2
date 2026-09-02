@@ -39,7 +39,7 @@ const compose = asRecord(parseYaml(readFileSync(COMPOSE_PATH, 'utf8')));
 const caddyfile = readFileSync(CADDYFILE_PATH, 'utf8');
 const dockerfile = readFileSync(DOCKERFILE_PATH, 'utf8');
 
-const NEXTJS_SERVICES = ['web', 'smart-form'] as const;
+const NEXTJS_SERVICES = ['web', 'smart-form', 'command-center'] as const;
 
 /** Server-only values that must never reach a browser bundle or an extra container. */
 const SERVER_ONLY_SECRETS = [
@@ -68,18 +68,22 @@ function step(jobId: string, name: string): Record<string, unknown> {
   return asRecord(found);
 }
 
-test('both Next.js apps are built and pushed by the deploy workflow', () => {
+test('every Next.js app is built and pushed by the deploy workflow', () => {
   const buildJob = job('build-nextjs');
   const included = field(buildJob, 'strategy', 'matrix', 'include') as Record<string, string>[];
   assert.ok(Array.isArray(included), 'build-nextjs must build from a matrix include list');
   assert.deepEqual(
     included.map((entry) => entry.service).sort(),
     [...NEXTJS_SERVICES].sort(),
-    'build-nextjs must cover exactly the two Next.js services',
+    'build-nextjs must cover exactly the repository\'s Next.js services',
   );
 
   for (const entry of included) {
-    assert.match(entry.app_dir, /^apps\/(web|smart-form)$/, 'app_dir must name a Next.js app');
+    assert.match(
+      entry.app_dir,
+      /^apps\/(web|smart-form|command-center)$/,
+      'app_dir must name a Next.js app',
+    );
     assert.match(entry.app_package, /^@unit-talk\//, 'app_package must be a workspace package');
     assert.match(entry.app_port, /^\d+$/, 'app_port must be a port number');
   }
@@ -220,6 +224,7 @@ test('Caddy routes every approved hostname from configuration, not from source',
     '{$CADDY_DOMAIN}': 'api:4000',
     '{$UNIT_TALK_WEB_DOMAIN}': 'web:4200',
     '{$UNIT_TALK_SMART_FORM_DOMAIN}': 'smart-form:4400',
+    '{$UNIT_TALK_COMMAND_CENTER_DOMAIN}': 'command-center:4300',
   };
   for (const [site, upstream] of Object.entries(expected)) {
     const block = caddyfile.slice(caddyfile.indexOf(`${site} {`));
@@ -274,6 +279,114 @@ test('each Next.js surface is independently deployable and rollable', () => {
     assert.ok(script.includes(name), `the promote health gate must cover ${name}`);
   }
   assert.match(script, /did not report healthy after promotion/, 'promote must fail on an unhealthy surface');
+});
+
+test('the operator console ships on every release but is routable only once it has a hostname', () => {
+  // The console is the operator observation path, so it has to be deployed
+  // before anyone can be asked to look at anything. But publishing it needs a
+  // hostname that only Griff can provision, and the two must not be the same
+  // decision: an unset hostname expands to an empty Caddy site address, which
+  // does not degrade the console -- it crash-loops the whole edge and takes the
+  // API, the website and the intake form down with it.
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write Next.js service env files to server')['run']);
+
+    assert.match(
+      script,
+      /UNIT_TALK_COMMAND_CENTER_DOMAIN=\$_command_center_site/,
+      `${jobId} must always write a non-empty site address for the console`,
+    );
+    assert.match(
+      script,
+      /_command_center_site="http:\/\/command-center\.invalid"/,
+      `${jobId} must fall back to a scheme-qualified, non-resolvable placeholder`,
+    );
+    // `http://` is what suppresses Caddy's automatic HTTPS. Without it Caddy
+    // would request a certificate for a name Let's Encrypt can never validate,
+    // on every deploy, forever.
+    assert.ok(
+      !/_command_center_site="command-center\.invalid"/.test(script),
+      `${jobId} must not use a bare placeholder hostname; Caddy would try to certificate it`,
+    );
+  }
+
+  // A console that cannot be reached must still not be able to break the edge.
+  const caddyDependsOn = Object.keys(
+    (service('caddy')['depends_on'] as Record<string, unknown>) ?? {},
+  );
+  assert.ok(
+    !caddyDependsOn.includes('command-center'),
+    'caddy must not depend on command-center; a broken console would take the API offline',
+  );
+});
+
+test('publishing the operator console requires the credentials that make it usable', () => {
+  // A reachable console with no auth token answers 401 to Griff and 401 to
+  // everyone else. That is indistinguishable from an outage, and it is the
+  // failure mode a half-configured secret set produces, so the deploy refuses
+  // the combination outright rather than shipping it.
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write Next.js service env files to server')['run']);
+    const guard = script.slice(
+      script.indexOf('if [ -n "${COMMAND_CENTER_DOMAIN:-}" ]'),
+      script.indexOf('_command_center_site="http'),
+    );
+    assert.ok(guard.length > 0, `${jobId} must gate console credentials on the hostname being set`);
+    for (const name of ['COMMAND_CENTER_AUTH_TOKEN', 'UNIT_TALK_CC_API_KEY']) {
+      assert.ok(guard.includes(name), `${jobId} must require ${name} once the console is published`);
+    }
+    assert.match(guard, /exit 1/, `${jobId} must fail the deploy rather than publish a console nobody can enter`);
+  }
+});
+
+test('the deployed operator console cannot be configured fail-open', () => {
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write Next.js service env files to server')['run']);
+    const block = script.slice(
+      script.indexOf('"PORT=4300"'),
+      script.indexOf(".env.command-center' && echo"),
+    );
+    assert.ok(block.length > 0, `${jobId} must write a console env file`);
+
+    // Stated, not inferred. `isCommandCenterAuthRequired` also honours
+    // UNIT_TALK_OPERATOR_RUNTIME_MODE and falls back to NODE_ENV, so leaving the
+    // mode implicit means a later env change can silently switch auth off.
+    assert.ok(
+      block.includes('"COMMAND_CENTER_AUTH_MODE=fail_closed"'),
+      `${jobId} must state fail_closed explicitly rather than rely on NODE_ENV`,
+    );
+
+    // And assert the written file, because a printf is not evidence.
+    const assertion = script.slice(script.indexOf(".env.command-center' && echo"));
+    assert.match(
+      assertion,
+      /fail_open\|disabled/,
+      `${jobId} must verify the written console env does not downgrade authentication`,
+    );
+  }
+});
+
+test('the operator console is not given a Supabase management token', () => {
+  // SUPABASE_ACCESS_TOKEN is an account-scoped PAT: it runs DDL and ignores
+  // RLS. The console only wants it for a storage-growth panel, which degrades
+  // without it. A browser-facing server is the wrong place to keep one.
+  for (const jobId of ['canary', 'promote']) {
+    const script = String(step(jobId, 'Write Next.js service env files to server')['run']);
+    const block = script.slice(
+      script.indexOf('"PORT=4300"'),
+      script.indexOf(".env.command-center' && echo"),
+    );
+    assert.ok(
+      !block.includes('SUPABASE_ACCESS_TOKEN'),
+      `${jobId} must not write a Supabase management token into the console env file`,
+    );
+  }
+
+  assert.deepEqual(
+    service('command-center')['env_file'],
+    ['.env.command-center'],
+    'the console reads its own narrow env file',
+  );
 });
 
 test('the shared image builds either app without an app-owned config change', () => {
