@@ -165,27 +165,25 @@
     },
     {
       "id": "ci-required-check-entrypoints",
-      "reserved": "Redefinition of a script key that the required `verify` check invokes \u2014 repointing one removes a control without touching a reserved file",
-      "note": "`.github/workflows/ci.yml` runs `pnpm verify:static`, `pnpm test:command-center` and `pnpm ci:db-client-boundary` inside the required `verify` job, and `verify:static` fans out to lint / type-check / build / test. Those aggregator keys are read out of the PR's OWN package.json, so a diff that repoints one to `true` would pass a green but empty required check. They are frozen; the leaf `test:<group>` keys are NOT, because wiring a new test file into a group is the ordinary case that RMA exists to keep automatic.",
+      "reserved": "Redefinition of a ROOT script key that the required `verify` check invokes \u2014 repointing one removes a control without touching a reserved file",
+      "note": "`.github/workflows/ci.yml` runs `pnpm verify:static`, `pnpm test:command-center` and `pnpm ci:db-client-boundary` inside the required `verify` job, and `verify:static` fans out to lint / type-check / build / test. Those keys are read out of the PR's OWN root package.json, so a diff repointing one to `true` would pass a green but empty required check. Root aggregators are frozen outright: they change rarely, so the cost is near zero. Scoped to the ROOT package.json only -- a workspace package's own `build`/`test` key is scaffolding that new packages legitimately add, and is covered instead by `neutered-workspace-script`.",
       "pathGlobs": [
-        "package.json",
-        "*/package.json",
-        "*/*/package.json"
+        "package.json"
       ],
       "addedLinePattern": "\"(verify|verify:static|verify:parallel|verify:quick|verify:commands|test|lint|type-check|build|test:command-center|test:db|test:t1-proof:live|test:t1-proof:local|ci:db-client-boundary|ci:assert-staging|ci:db-smoke|env:check|ops:sync-check|ops:system-alignment-check|ops:automation-coverage-check)\"\\s*:",
       "patternFlags": "",
       "decodeJsonEscapes": true
     },
     {
-      "id": "neutered-test-group",
-      "reserved": "A `test:*` group redefined to a command that runs no test runner",
-      "note": "The complement of ci-required-check-entrypoints. Adding or removing files in a group's `tsx --test` list stays `auto` \u2014 that is ordinary wiring and the change is legible in the diff. Replacing the whole value with something that invokes no runner (`true`, `echo skipped`, `exit 0`) empties a group while the required check stays green, so it is reserved. Residual, accepted deliberately: a diff can still delete individual files from a group's list and remain `auto`.",
+      "id": "neutered-workspace-script",
+      "reserved": "Any package.json script redefined to a command that invokes no known runner",
+      "note": "The complement of ci-required-check-entrypoints, and the rule that covers workspace packages. Adding or removing files in a `tsx --test` list -- or scaffolding a new package's `build`/`test` -- stays `auto`: that is ordinary wiring, legible in the diff, and the case RMA exists to keep out of a human's inbox. Replacing a value with something that runs nothing (`true`, `echo skipped`, `exit 0`) empties a step while the required check stays green, so it is reserved. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and remain `auto`.",
       "pathGlobs": [
         "package.json",
         "*/package.json",
         "*/*/package.json"
       ],
-      "addedLinePattern": "\"test:[A-Za-z0-9:_-]+\"\\s*:\\s*\"(?![^\"]*(tsx|eslint|tsc|vitest|jest|node|pnpm|turbo))[^\"]*\"",
+      "addedLinePattern": "\"(test|test:[A-Za-z0-9:_-]+|build|lint|type-check|verify|verify:[A-Za-z0-9:_-]+)\"\\s*:\\s*\"(?![^\"]*(tsx|eslint|tsc|vitest|jest|mocha|ava|tap|playwright|cypress|jasmine|karma|vite|next|turbo|c8|nyc|node|bun|deno|pnpm|npm|yarn|supabase|prisma|make|bash|sh ))[^\"]*\"",
       "patternFlags": "",
       "decodeJsonEscapes": true
     }

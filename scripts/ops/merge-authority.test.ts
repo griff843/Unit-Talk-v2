@@ -609,13 +609,13 @@ test('wiring a new test file into a group stays automatic', () => {
   assert.equal(result.authority, 'auto');
 });
 
-test('emptying a test group so it runs no runner is reserved', () => {
+test('emptying a script so it runs no runner is reserved', () => {
   const result = classifyDiff({
     files: [file('package.json', '+    "test:ops": "echo skipped",')],
     policy,
   });
   assert.equal(result.authority, 'human');
-  assert.ok(result.surfaces.includes('neutered-test-group'));
+  assert.ok(result.surfaces.includes('neutered-workspace-script'));
 });
 
 test("the reserved chain's shared output helper is reserved", () => {
@@ -627,4 +627,31 @@ test("the reserved chain's shared output helper is reserved", () => {
   });
   assert.equal(result.authority, 'human');
   assert.ok(result.surfaces.includes('merge-authority'));
+});
+
+test("a workspace package's own test/build wiring stays automatic", () => {
+  // Regression probe: replaying the last 40 merged PRs through the classifier
+  // caught #1469 here. It extends apps/smart-form's `test` key with new test
+  // files, and an earlier draft of these rules reserved it -- freezing exactly
+  // the ordinary case RMA exists to keep automatic.
+  for (const patch of [
+    '+    "test": "tsx --test test/a.test.ts test/b.test.ts",',
+    '+    "test:e2e": "playwright test -c playwright.config.ts",',
+    '+    "build": "tsc -b",',
+  ]) {
+    const result = classifyDiff({
+      files: [file('apps/smart-form/package.json', patch)],
+      policy,
+    });
+    assert.equal(result.authority, 'auto', patch);
+  }
+});
+
+test('a neutered script is reserved in a workspace package too', () => {
+  const result = classifyDiff({
+    files: [file('apps/smart-form/package.json', '+    "test": "true",')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('neutered-workspace-script'));
 });
