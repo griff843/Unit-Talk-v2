@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "tier": "reserved",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fadd598e8c66495207c28e47bd0d70cd9b086853",
+    "evidence_commit_sha": "fadd598e8c66495207c28e47bd0d70cd9b086853",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_lint": "PASS",
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS (test:ops 2871 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
+    }
+  },
+  "static_proof": {
+    "lint": { "status": "PASS", "command": "pnpm lint" },
+    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test:ops",
+      "tests": 2871,
+      "failures": 0
+    },
+    "targeted_suites": [
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/merge-authority.test.ts",
+        "tests": 43,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+        "tests": 74,
+        "failures": 0
+      }
+    ],
+    "mutation_controls": [
+      {
+        "mutation": "filePaths returns only file.filename, restoring destination-only rename classification",
+        "expected": "the three rename assertions fail; a reserved file renamed out of its surface classifies as auto",
+        "observed": "not ok 32, 34, 36; 40 pass, 3 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "merge-gate.yml rethrows instead of entering PHASE 1 on MODULE_NOT_FOUND",
+        "expected": "the four bootstrap assertions fail; the gate returns an unclearable internal error",
+        "observed": "not ok 69, 70, 71, 72; 70 pass, 4 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "remove the auth-and-authorization surface from RESERVED_RISK_SURFACES.json",
+        "expected": "the auth assertion fails; auth.ts and the writer-authority boundary classify as auto",
+        "observed": "not ok 37; 42 pass, 1 fail",
+        "status": "CAUGHT"
+      }
+    ],
+    "classification_dry_run": {
+      "status": "PASS",
+      "command": "classifyDiff over every open PR against real pulls.listFiles payloads",
+      "detail": "8 auto / 7 human across the open board. #1488 and #1474 move from auto to human under the new auth surface."
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "lint, type-check and test:ops green locally; test:live-db is refused off-CI by the fail-closed staging guard. The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "containment": {
+    "production_ddl": "none",
+    "database_mutation": "none",
+    "deployment": "none",
+    "ingestion": "unchanged (parked)",
+    "delivery": "unchanged (parked)",
+    "branch_protection": "unchanged",
+    "gates_loosened": "none - every change is in the restrictive direction; the one intentional relaxation is RMA's ratified premise itself, which is what the human approval on this PR authorizes"
+  },
+  "pr_number": 1491
+}
