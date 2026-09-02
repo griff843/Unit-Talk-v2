@@ -5,6 +5,16 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'db/migrations-rollback/**'
+      # UTV2-1822: receipt truth is not confined to supabase/migrations. A receipt
+      # binds a hash to an authoritative source under migrations_archive, so changing
+      # or deleting that source, or editing RECEIPTS.json, changes what the receipt
+      # asserts without touching the receipt file. Those paths must trigger this
+      # workflow or the structural validator below never runs for them.
+      - 'supabase/migrations_archive/**'
+      - 'scripts/ci/migration-history-receipt.ts'
+      - 'scripts/ci/migration-history-receipt-check.ts'
+      - 'scripts/ci/migration-history-receipt-validator.ts'
+      - 'scripts/ci/migration-history-replay-drill.ts'
       - 'scripts/ci/migration-reversibility-gate.ts'
       - 'scripts/ci/schema-roundtrip-hash.ts'
       - 'scripts/ci/migration-precondition-drill.ts'
@@ -33,6 +43,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # UTV2-1822: UNCONDITIONAL by design -- deliberately not gated on
+      # steps.detect.outputs.has_migration, which is computed with --diff-filter=A
+      # and is therefore false for exactly the cases this must catch: an existing
+      # receipt edited to contain executable SQL, or an archive source changed or
+      # deleted while the receipt's recorded hash goes stale. Gating structural
+      # validation on "a migration was added" makes it fail open for every
+      # modification. It needs no database, so it runs on every triggered run.
+      - name: Receipt manifest structural validation (UTV2-1822)
+        run: npx tsx scripts/ci/migration-history-receipt-validator.ts
 
       - name: Check down-script presence (fail-closed)
         run: |
@@ -133,6 +153,23 @@ jobs:
             echo "has_migration=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Migration history receipt replay drill (UTV2-1822)
+        if: steps.detect.outputs.has_migration == 'true'
+        run: |
+          # Proves the receipt model by executing it, not by inspecting the files:
+          # the baseline applies, all receipts replay under ON_ERROR_STOP=1, and the
+          # catalog fingerprint is byte-identical before and after the receipt set.
+          # That last assertion is what rules out the double-applied and aliased
+          # versions colliding -- if any receipt still carried its historical DDL it
+          # would either error or move the fingerprint.
+          #
+          # Runs in its own database so the surrounding drill's fixtures and baseline
+          # application cannot contaminate the before/after comparison.
+          psql "postgresql://postgres:postgres@localhost:5432/postgres" \
+            -v ON_ERROR_STOP=1 -c "CREATE DATABASE receipt_replay_drill;"
+          POSTGRES_URL="postgresql://postgres:postgres@localhost:5432/receipt_replay_drill" \
+            npx tsx scripts/ci/migration-history-replay-drill.ts
+
       - name: Adversarial round-trip fixture — invalid SQL down script caught by psql
         env:
           POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
@@ -187,6 +224,18 @@ jobs:
             DOWN="db/migrations-rollback/${BASE}.down.sql"
 
             echo "=== Drilling: $BASE ==="
+
+            # UTV2-1822: a non-executable historical version receipt executes nothing,
+            # so there is no state to roll back and its only possible down script is a
+            # no-op -- which migration-reversibility-gate.ts itself rejects as
+            # comment-only. The exemption is decided by the in-scope predicate reading
+            # the file's actual contents, never by its header claim: a receipt that
+            # gains an executable statement fails the check below, falls through, and is
+            # held to the ordinary down-script requirement like any other migration.
+            if npx tsx scripts/ci/migration-history-receipt-check.ts "$MIGRATION"; then
+              echo "EXEMPT: verified non-executable historical version receipt (UTV2-1822)."
+              continue
+            fi
 
             if [[ ! -f "$DOWN" ]]; then
               echo "FAIL: Down script missing: $DOWN"
