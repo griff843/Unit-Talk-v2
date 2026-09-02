@@ -75,14 +75,26 @@ than the label lookup it replaces, under which a missing `tier:` label silently 
 amendment. That is deliberate and it is the property that makes RMA safe to grant: it cannot widen
 its own authority. It is also why this one change needs Griff and cannot be self-authorized.
 
-**Landing it needs a one-time repo-owner merge, not a label.** Both required gates load their logic
-from the *base* checkout (deliberately — so a PR cannot supply its own rules), and on this PR base is
-`main`, which does not yet have `merge-authority.cjs`. So both gates fail closed with a module-not-
-found error and no label or verdict can clear them. This is the same one-time self-referential
-bootstrap gap UTV2-1550 hit and documented in its own proof bundle — *"a one-time self-referential
-bootstrap gap specific to the PR that introduces the file — future PRs will not hit it, since main
-will already contain the file at their base SHA"* — resolved there by a repo-owner merge. Every PR
-after this one evaluates normally.
+**Landing it needs a one-time repo-owner merge.** Both required gates load their logic from the
+*base* checkout (deliberately — so a PR cannot supply its own rules), and on this PR base is `main`,
+which does not yet have `merge-authority.cjs`. This is the same one-time self-referential bootstrap
+gap UTV2-1550 hit and documented in its own proof bundle — *"a one-time self-referential bootstrap
+gap specific to the PR that introduces the file — future PRs will not hit it, since main will
+already contain the file at their base SHA"*. Every PR after this one evaluates normally.
+
+Read as of 2026-09-02, the two required checks say (verbatim from their check-run outputs):
+
+- **Merge Gate: BLOCKED** — it does *not* crash. It takes the documented PHASE 1 path, reserves the
+  merge as `human`, and asks for two specific artifacts: the `griff-approved` label from a CODEOWNERS
+  member, and a head-bound `pm-verdict/v1` APPROVED comment. Both are Griff's by design. Applying
+  either from this session would be self-authorizing a change to merge authority using the repo
+  owner's identity, which is the exact thing the reserved surface exists to prevent.
+- **Executor Result Validation: INVALID** — on branch naming only: `claude/rma-v1-risk-scoped-merge-
+  authority` does not match `claude/utv2-NNN-*`. That one is mechanical and mine, but clearing it
+  means opening a replacement PR (renaming an open PR's head branch closes it and it will not
+  reopen), and it would still leave the Merge Gate needing Griff. Since `enforce_admins` is `false`,
+  the repo owner can merge past both today. Not worth trading the PR's history for one fewer red
+  check.
 
 `verify` is green on head `132ad95f`. Its one earlier red was a genuine flake, now fixed under #1495.
 
@@ -102,6 +114,9 @@ live GitHub data for every open PR. Classification:
 | #1491 RMA itself | `human` | reserves its own amendment |
 | #1496 operator console deployment | `human` | `deploy.yml` — secrets surface |
 
+(#1498 was opened after that classification run; it touches `scripts/ops/` and one workflow that is
+not on a reserved surface, so it classifies `auto`.)
+
 The changes that stay reserved are exactly the ones that write production schema, change how secrets
 reach production, or change merge authority itself. That distribution is the point.
 
@@ -113,6 +128,7 @@ reach production, or change merge authority itself. That distribution is the poi
 | #1494 | Command Center: the management token can no longer be handed arbitrary SQL |
 | #1495 | verify-semaphore: claim the slot and register its release in one step |
 | #1496 | Deploy the operator console (reserved: `deploy.yml`) |
+| #1498 | Measure the T1 production readiness contract instead of asserting it |
 
 ---
 
@@ -160,7 +176,28 @@ after it.
 ## Executable now (no human gate)
 
 Nothing on the Milestone-1 path is left that does not require either RMA to land or a Griff decision.
-Work continues on hardening and on the readiness contract's other dimensions.
+Work continues on hardening and on making the exit criterion itself measurable.
+
+**The exit criterion is now measured, not argued (#1498).** The mission's definition of done is that
+`T1_PRODUCTION_READINESS_CONTRACT.md` *actually passes using its required live evidence*. Until now
+each of its six dimensions carried a hand-written "Current status" paragraph dated 2026-04-30 — one
+of which still says the worker is DOWN, which the 2026-09-01 deploy disproves. `scripts/ops/
+readiness-contract.ts` measures the metrics the document names, excludes CI and proof fixtures from
+every population, and records a metric nothing can measure as `unknown` with a named reason rather
+than as a pass. Six metrics land there today and each names what would be needed to close it:
+
+| Metric | What is missing |
+|---|---|
+| API p99 (submission), API p99 (operator detail) | any persisted request-latency series |
+| Pipeline submit → grade latency | a *graded* timestamp distinct from *settled* |
+| Manual grading backlog | a joinable game-end timestamp |
+| Calibration gap | entry odds per settled pick |
+| Operator surface audit | the console deployed (#1496) plus a rendered-surface audit |
+
+So the gate cannot be declared passing on evidence nobody can produce, and the remaining engineering
+work to make it *passable* is now a list rather than a judgment. It runs on the existing 6-hourly
+readiness workflow, which already holds the sanctioned read-only production credential; the first
+real artifact lands with that merge.
 
 ## Requires Griff
 
