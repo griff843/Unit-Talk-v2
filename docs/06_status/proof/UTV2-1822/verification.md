@@ -215,6 +215,21 @@ pnpm exec tsx scripts/ci/migration-reversibility-gate.ts --base origin/main
 migration-reversibility-gate: PASS
 ```
 
+Required checks are cited from CI at the anchor, not from a local run, because the
+authoritative execution is the one GitHub performed on this head:
+
+```
+pnpm verify   (job `verify`)  → SUCCESS  run 33575558347, job 100080123460
+              covers env:check, lint, pnpm type-check, build and pnpm test
+scripts/ci/r-level-check.ts   → SUCCESS  run 33576476049 (R-Level Compliance Check)
+```
+
+Stated precisely: `pnpm verify` was NOT green in this local worktree — `env:check` fails
+here because `local.env` was deliberately removed from it, and a local `pnpm test` run was
+killed part-way by the host rather than failing (0 `not ok`, 0 non-zero fail counts across
+18,461 lines before the kill). The green that this proof relies on is the CI `verify` job
+above, which runs the same script with credentials present.
+
 ### What is deliberately not claimed
 
 - **No production DDL was applied.** The rate-limit migration remains unapplied; this lane
@@ -240,6 +255,12 @@ migration-reversibility-gate: PASS
 | Smart Form submission | none |
 | Baseline / existing migrations modified | none |
 | Other workflow files modified | none |
+
+ASSERTIONS:
+
+EVIDENCE: every numbered assertion below cites the CI run and job that produced it; the
+runs are enumerated in `evidence.json` under `runtime_proof`, all taken at the anchor
+`bb8b9cac2983ba3e477b14237e27843960e69693`.
 
 ## Assertions
 

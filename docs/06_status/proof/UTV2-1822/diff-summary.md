@@ -1,5 +1,7 @@
 # DIFF SUMMARY: UTV2-1822 — migration-history correspondence via non-executable receipts
 
+MERGE_SHA: pending merge
+
 ## Why anything changed
 
 `supabase db push` aborts before doing anything when the remote migration ledger
