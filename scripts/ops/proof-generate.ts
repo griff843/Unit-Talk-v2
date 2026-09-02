@@ -331,23 +331,26 @@ export function normalizePreMergeVerificationMarkdown(
       `${relPath} must contain exactly one top-level MERGE_SHA: row before merge`,
     );
   }
-  // Pre-merge normalization re-anchors this row to the execution SHA. It must
-  // never write a placeholder: executor-result-validator.yml requires a real
-  // 7-40 hex token that is an ancestor of the PR head, so `pending merge` here
-  // made every normalized bundle fail required Executor Result Validation.
-  if (!executionSha || !/^[0-9a-f]{7,40}$/iu.test(executionSha)) {
+  // UTV2-1783: the top-level row presents *merge authority*, which does not
+  // exist before merge, so pre-merge it is the placeholder word. Execution
+  // identity is a separate fact and is written to the `Execution SHA:` row of
+  // the binding section, where every consumer now reads it from. A real
+  // execution SHA is still required: it is what Executor Result Validation
+  // ancestry-checks and what runtime-verifier-gate needs a 40-hex token for.
+  if (!executionSha || !/^[0-9a-f]{40}$/iu.test(executionSha)) {
     throw new ProofPreservationError(
       'unbindable_proof_artifact',
       relPath,
       'Cannot normalize pre-merge verification.md: no valid execution SHA is available for the '
-      + `required top-level MERGE_SHA: anchor (got ${JSON.stringify(executionSha)}). `
+      + `required Execution SHA: row (got ${JSON.stringify(executionSha)}). `
       + 'Refusing to emit a placeholder.',
     );
   }
-  lines[matches[0]!] = `MERGE_SHA: ${executionSha}`;
+  lines[matches[0]!] = 'MERGE_SHA: pending merge';
   let next = lines.join(eol);
   const nextFenced = markdownFencedLineIndexes(next);
-  const headings = next.split(/\r?\n/u).flatMap(
+  const nextLines = next.split(/\r?\n/u);
+  const headings = nextLines.flatMap(
     (line, index) => !nextFenced.has(index) && /^## Merge SHA Binding\s*$/u.test(line) ? [index] : [],
   );
   if (headings.length > 1) {
@@ -360,11 +363,33 @@ export function normalizePreMergeVerificationMarkdown(
       'Merge SHA: pending merge',
       `PR: ${prUrl ?? 'pending'}`,
       'Approved PR head: pending merge',
-      `Execution SHA: ${executionSha ?? 'pending'}`,
+      `Execution SHA: ${executionSha}`,
       '',
     ].join(eol);
     next = `${next.replace(/\r?\n?$/, '')}${eol}${eol}${suffix}`;
+    return next;
   }
+  // An existing section is re-anchored in place rather than left alone: before
+  // this change the execution SHA lived in the top-level row, so a file whose
+  // section predates the split can carry no execution identity at all.
+  const sectionStart = headings[0]! + 1;
+  const sectionEndOffset = nextLines.slice(sectionStart).findIndex(
+    (line, offset) => !nextFenced.has(sectionStart + offset) && /^##\s+/u.test(line),
+  );
+  const sectionEnd = sectionEndOffset === -1 ? nextLines.length : sectionStart + sectionEndOffset;
+  const executionRow = nextLines.slice(sectionStart, sectionEnd).findIndex(
+    (line, offset) => !nextFenced.has(sectionStart + offset) && /^Execution SHA:\s*/u.test(line),
+  );
+  if (executionRow === -1) {
+    const prRow = nextLines.slice(sectionStart, sectionEnd).findIndex(
+      (line, offset) => !nextFenced.has(sectionStart + offset) && /^PR:\s*/u.test(line),
+    );
+    const insertAt = prRow === -1 ? sectionStart : sectionStart + prRow + 1;
+    nextLines.splice(insertAt, 0, `Execution SHA: ${executionSha}`);
+  } else {
+    nextLines[sectionStart + executionRow] = `Execution SHA: ${executionSha}`;
+  }
+  next = nextLines.join(eol);
   return next;
 }
 
@@ -562,29 +587,32 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
   // already come from DEFAULT_VERIFICATION_COMMANDS, so the union is smaller
   // than the four requirement lists suggest.
   //
-  // The top-level `MERGE_SHA:` row is a legacy-named *anchor*, not authoritative
-  // merge identity. Authoritative merge identity lives only at
+  // UTV2-1783: the top-level `MERGE_SHA:` row presents merge authority and
+  // nothing else. Authoritative merge identity lives at
   // `sha_binding.merge_sha`, which stays null until the GitHub-attested
   // post-merge rebind supplies it — this function never writes it.
   //
-  // The anchor takes the merge SHA when it exists and the execution SHA before
-  // merge. It must never be a placeholder word. Two required gates read it:
-  // runtime-verifier-gate hard-fails when the file contains no 40-hex token at
-  // all, and executor-result-validator.yml:274 requires this row to match
-  // /^[0-9a-f]{7,40}$/ and to be an ancestor of the PR head. Both `N/A` and
-  // `pending merge` fail that rule, so every freshly generated bundle was
-  // structurally incapable of passing required Executor Result Validation until
-  // the execution-SHA fallback below existed. When neither SHA is resolvable we
-  // fail closed rather than emit any placeholder.
-  const mergeAnchor = gitTruth.merge_sha ?? gitTruth.head_sha;
-  if (!mergeAnchor) {
+  // It previously fell back to the execution SHA before merge, because
+  // executor-result-validator.yml parsed this row as a git identity and
+  // rejected any placeholder. That made the row mean "merge SHA" to one
+  // consumer and "execution SHA" to another, and proof-binding-validator —
+  // which required the placeholder here — could never agree with it. Both
+  // consumers now read execution identity from its own field, so the row can
+  // finally say the true thing before merge.
+  //
+  // Execution identity is still required, and still fails closed: it is what
+  // Executor Result Validation ancestry-checks, and runtime-verifier-gate
+  // hard-fails on a file containing no 40-hex token at all. The
+  // `Execution SHA:` row below is where both now find it.
+  if (!gitTruth.merge_sha && !gitTruth.head_sha) {
     throw new ProofPreservationError(
       'unbindable_proof_artifact',
       `docs/06_status/proof/${manifest.issue_id}/verification.md`,
       'Cannot generate verification.md: neither a merge SHA nor an execution SHA is resolvable, '
-      + 'so the required top-level MERGE_SHA: anchor cannot be written. Refusing to emit a placeholder.',
+      + 'so no truthful identity can be written. Refusing to emit a placeholder.',
     );
   }
+  const mergeAnchor = gitTruth.merge_sha ?? 'pending merge';
   const executionAnchor = gitTruth.head_sha ?? 'pending';
 
   return [
@@ -592,7 +620,7 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     '',
     `MERGE_SHA: ${mergeAnchor}`,
     '',
-    '> Pre-merge the merge anchor is intentionally empty; the Execution SHA row carries',
+    '> Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries',
     '> the verified implementation identity. `post-merge-lane-close.yml` rebinds merge',
     '> authority only after GitHub supplies the merged-PR attestation.',
     '',

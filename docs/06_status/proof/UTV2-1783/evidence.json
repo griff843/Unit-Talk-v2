@@ -1,0 +1,54 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1783",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b3df08fa795190a710c0407f1c604399e61e2f63",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5559 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every step except the staging-credentialed test:db step; authoritative result is the required verify check on the PR head",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)",
+      "automation_coverage": "PASS (no new wiring orphans)"
+    }
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5559,
+      "failures": 0
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "command": "r-level-check",
+      "rules_matched": 0
+    },
+    "automation_coverage": {
+      "status": "PASS",
+      "command": "pnpm ops:automation-coverage-check"
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "every local step passed; the final test:db step refused on a host with no staging identity (assert-staging fail-closed guard). The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "pr_number": 1483
+}
