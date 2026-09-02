@@ -483,36 +483,31 @@ export function resolveTierFromManifest(manifest: { tier?: unknown } | null): Me
 }
 
 /**
- * Decides whether a schema-valid pm-verdict/v1 comment is REQUIRED.
+ * Decides whether a schema-valid pm-verdict/v1 comment is REQUIRED here.
  *
- * Per CLAUDE.md, only T1 requires a pm-verdict/v1 APPROVED comment; T2 is
- * satisfied by a GitHub review approval OR a verdict, and T3 by green CI plus a
- * valid executor result. "Merge Gate" is the ratified encoder of that per-tier
- * OR-logic, so re-requiring a verdict here double-gates T2/T3.
+ * RMA/v1: merge authority is decided in exactly one place --
+ * `.github/workflows/merge-gate.yml`, from what the diff touches. A green
+ * `Merge Gate` on the CURRENT head therefore already means the RMA decision was
+ * satisfied: `auto`, or `human` with both the CODEOWNERS label and an approved,
+ * head-bound pm-verdict/v1 present. Re-deriving that here from a lane manifest
+ * would (a) double-gate work the ratified gate already cleared and (b) fail
+ * closed forever on any branch that carries no tracker id to look a manifest up
+ * by -- which is every mission-native branch. The tier is still resolved and
+ * recorded in the receipt, but it no longer decides anything.
  *
- * Three independent conditions must ALL hold before the requirement relaxes:
- *
- *  1. the AUTHORITATIVE tier (lane manifest at the PR head) is T2 or T3;
- *  2. the mirrored label tier does not DISAGREE with it -- a disagreement means
- *     one of the two is stale and the classification is unproven;
- *  3. the exact `Merge Gate` context is present and green ON THE CURRENT HEAD.
- *
- * Condition 3 closes the relabel/check race: without it, a PR could be
- * downgraded to T2 after a green run and skip the verdict on evidence that
- * never evaluated the current tier. If required-check discovery omits
- * `Merge Gate`, returns an empty set, or cannot bind the check to this head,
- * the requirement stays in force. Every unknown fails CLOSED.
+ * The relaxation has exactly one condition, and it is the strong one: the exact
+ * `Merge Gate` context is present and green ON THE CURRENT HEAD. If
+ * required-check discovery omits `Merge Gate`, returns an empty set, or cannot
+ * bind the check to this head, the verdict requirement stays in force. Every
+ * unknown fails CLOSED, and this function can never be more permissive than the
+ * required check it defers to.
  */
 export function pmVerdictRequiredForTier(input: {
   manifestTier: MergeAuthorityTier | null;
   labelTier: MergeAuthorityTier | null;
   mergeGateGreenOnHead: boolean;
 }): boolean {
-  const { manifestTier, labelTier, mergeGateGreenOnHead } = input;
-  if (manifestTier !== 'T2' && manifestTier !== 'T3') return true;
-  if (labelTier !== null && labelTier !== manifestTier) return true;
-  if (!mergeGateGreenOnHead) return true;
-  return false;
+  return !input.mergeGateGreenOnHead;
 }
 
 export interface TierReceipt {

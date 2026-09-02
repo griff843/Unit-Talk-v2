@@ -13,6 +13,7 @@ import {
   normalizeProofOutputForIssueBinding,
 } from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
+import { REQUIRED_CHECK_NAME } from './executor-result-validate.js';
 
 type WorkflowDocument = Record<string, unknown>;
 
@@ -2088,6 +2089,39 @@ test('RMA: both required gates classify previous_filename, so a rename cannot le
       `${name} must pass previous_filename to the classifier`,
     );
   }
+});
+
+test('RMA: both required gates tell the classifier the PR\'s own changed-file total', () => {
+  // listFiles stops at 3,000 files however far you paginate, so a reserved file
+  // can simply be absent from the response. The count comparison is the only
+  // way to notice from the API alone; without it both gates would classify the
+  // visible subset of an oversized PR as a complete, clean diff.
+  for (const name of ['merge-gate.yml', 'executor-result-validator.yml']) {
+    const wf = readWorkflow(name);
+    assert.match(wf, /declaredFileCount = pr\.changed_files;/, `${name} must capture the PR total`);
+    assert.match(wf, /^\s+declaredFileCount,$/m, `${name} must pass it to the classifier`);
+    assert.match(wf, /additions: f\.additions/, `${name} must pass rename change counts`);
+  }
+});
+
+test('RMA bootstrap: a pull_request run owns the required ERV identity only while base lacks the classifier', () => {
+  // The required "Executor Result Validation" context is normally created only
+  // by issue_comment / workflow_dispatch, and those events run the workflow
+  // file from the DEFAULT BRANCH. So for the PR that first lands RMA the
+  // required context comes entirely from main's pre-RMA validator, which
+  // rejects the branch outright -- unclearable, and unfixable by the PR that
+  // carries the fix. pull_request is the one event whose workflow file comes
+  // from the head, so it takes the identity while, and only while, the
+  // classifier is absent from the trusted base checkout.
+  const erv = readWorkflow('executor-result-validator.yml');
+  assert.match(erv, /if \[ ! -f scripts\/ops\/merge-authority\.cjs \]; then/);
+  assert.match(erv, /if \[ "\$EVENT_NAME" = "pull_request" \] && \[ -n "\$BOOTSTRAP" \]; then/);
+  // The literal the bootstrap branch emits must be the required context name
+  // itself -- a drifted string would create a check nothing requires.
+  assert.match(erv, new RegExp(`NAME="${REQUIRED_CHECK_NAME}"`));
+  // Outside bootstrap the name still comes from the tested resolver, never a
+  // second hand-written literal.
+  assert.match(erv, /NAME=\$\(pnpm exec tsx scripts\/ops\/executor-result-validate\.ts resolve-check-name "\$EVENT_NAME"\)/);
 });
 
 test('RMA: executor-result-validator requires a proof bundle when it cannot classify', () => {

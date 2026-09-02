@@ -103,12 +103,19 @@ function filePaths(file) {
  * Classifies a diff.
  *
  * @param {object} input
- * @param {Array<{filename: string, previous_filename?: string, patch?: string, status?: string}>} input.files
+ * @param {Array<{filename: string, previous_filename?: string, patch?: string, status?: string, additions?: number, deletions?: number}>} input.files
  *        Changed files, shaped like GitHub's pulls.listFiles response.
  * @param {object} input.policy Parsed reserved-risk policy.
+ * @param {number|null|undefined} [input.declaredFileCount] The PR's own
+ *        `changed_files` total. GitHub's List-pull-request-files endpoint stops
+ *        at 3,000 files no matter how far you paginate, so on a larger PR the
+ *        returned list is a SUBSET and a reserved file can simply be absent
+ *        from it. Comparing the count is the only way to detect that from the
+ *        API response, and a short list is treated as unclassifiable rather
+ *        than as a clean diff. Omit it only where no total is available.
  * @returns {{authority: 'auto'|'human', reasons: string[], surfaces: string[]}}
  */
-function classifyDiff({ files, policy }) {
+function classifyDiff({ files, policy, declaredFileCount }) {
   const reasons = [];
   const surfaces = new Set();
 
@@ -125,6 +132,16 @@ function classifyDiff({ files, policy }) {
       reasons: ['PR reports zero changed files — cannot classify risk, reserving merge.'],
       surfaces: ['unclassifiable'],
     };
+  }
+
+  if (typeof declaredFileCount === 'number' && files.length < declaredFileCount) {
+    // Fail closed: an incomplete file list cannot be shown to be free of
+    // reserved paths, and GitHub gives no way to fetch the remainder.
+    surfaces.add('unclassifiable');
+    reasons.push(
+      `Changed-file list is truncated (${files.length} of ${declaredFileCount} files returned) — ` +
+        'the diff cannot be shown to be free of reserved surfaces, reserving merge.'
+    );
   }
 
   for (const surface of policy.surfaces) {
@@ -162,7 +179,16 @@ function classifyDiff({ files, policy }) {
       // A file too large for GitHub to return a patch cannot be scanned. That is
       // an absence of evidence, not evidence of absence: reserve it.
       if (file.patch === undefined || file.patch === null) {
-        if (file.status === 'removed' || file.status === 'renamed') continue;
+        // A removed file contributes no added lines, so there is nothing a
+        // content rule could match. A rename is only equally safe when it is a
+        // PURE rename: GitHub omits the patch both for a 100%-similarity rename
+        // (genuinely no content change) and for a rename whose accompanying
+        // edit is too large to return. Only the counts tell those apart, so a
+        // rename is skipped solely when it reports zero additions and zero
+        // deletions; anything else -- including missing counts -- is
+        // unclassifiable.
+        if (file.status === 'removed') continue;
+        if (file.status === 'renamed' && file.additions === 0 && file.deletions === 0) continue;
         surfaces.add('unclassifiable');
         reasons.push(
           `No diff available for ${file.filename} — content rules cannot be evaluated, reserving merge.`
@@ -206,13 +232,13 @@ function classifyDiff({ files, policy }) {
  *
  * @returns {{authorized: boolean, authority: 'auto'|'human', errors: string[], notes: string[], surfaces: string[]}}
  */
-function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = false, verdictErrors = [] }) {
+function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = false, verdictErrors = [], declaredFileCount }) {
   const errors = [];
   const notes = [];
 
   let classification;
   try {
-    classification = classifyDiff({ files, policy });
+    classification = classifyDiff({ files, policy, declaredFileCount });
   } catch (e) {
     return {
       authorized: false,

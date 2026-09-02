@@ -413,3 +413,71 @@ test('the policy records the two-phase bootstrap it degrades to', () => {
   assert.equal(policy.bootstrap.degradesTo, 'human');
   assert.equal(policy.bootstrap.classifierPath, 'scripts/ops/merge-authority.cjs');
 });
+
+// ── incomplete evidence ───────────────────────────────────────────────────
+// Both of these are the same failure shape: the API answered, but its answer
+// does not describe the whole diff. Treating a partial answer as a clean one is
+// how a reserved path gets merged without anyone seeing it.
+
+test('a truncated changed-file list reserves rather than classifying the visible subset', () => {
+  // GitHub's List-pull-request-files endpoint stops at 3,000 files however far
+  // you paginate. Every file that DID come back is unreserved here, so without
+  // the count comparison this diff classifies `auto`.
+  const files = Array.from({ length: 3000 }, (_, i) => file(`apps/api/src/gen-${i}.ts`, '+const x = 1;'));
+  const visible = classifyDiff({ files, policy });
+  assert.equal(visible.authority, 'auto', 'the returned subset is genuinely unreserved');
+
+  const truncated = classifyDiff({ files, policy, declaredFileCount: 3200 });
+  assert.equal(truncated.authority, 'human');
+  assert.ok(truncated.surfaces.includes('unclassifiable'));
+  assert.match(truncated.reasons.join(' '), /truncated \(3000 of 3200 files returned\)/);
+});
+
+test('a complete file list is not treated as truncated', () => {
+  const files = [file('apps/api/src/a.ts', '+const x = 1;'), file('apps/api/src/b.ts', '+const y = 2;')];
+  assert.equal(classifyDiff({ files, policy, declaredFileCount: 2 }).authority, 'auto');
+  // A count LARGER than declared is not truncation; it must not reserve.
+  assert.equal(classifyDiff({ files, policy, declaredFileCount: 1 }).authority, 'auto');
+});
+
+test('a patchless rename is unclassifiable unless it is a pure rename', () => {
+  // GitHub omits `patch` both for a 100%-similarity rename (nothing to scan)
+  // and for a rename whose accompanying edit is too large to return. Only the
+  // counts tell them apart. Neither path here is reserved, so the content rule
+  // is the only thing standing between an added `DROP TABLE` and `auto`.
+  const pureRename = {
+    filename: 'apps/api/src/renamed.ts',
+    previous_filename: 'apps/api/src/original.ts',
+    status: 'renamed',
+    additions: 0,
+    deletions: 0,
+  };
+  assert.equal(classifyDiff({ files: [pureRename], policy }).authority, 'auto');
+
+  for (const edited of [
+    { ...pureRename, additions: 12, deletions: 0 },
+    { ...pureRename, additions: undefined, deletions: undefined },
+  ]) {
+    const result = classifyDiff({ files: [edited], policy });
+    assert.equal(result.authority, 'human', `${JSON.stringify(edited)} must not classify as auto`);
+    assert.ok(result.surfaces.includes('unclassifiable'));
+  }
+});
+
+test('a patchless removal stays skippable — a removed file adds no lines', () => {
+  const removed = { filename: 'supabase/migrations/001_old.sql', status: 'removed' };
+  // Still reserved, but by the migrations SURFACE, not by unclassifiable.
+  const result = classifyDiff({ files: [removed], policy });
+  assert.ok(!result.surfaces.includes('unclassifiable'));
+
+  const removedElsewhere = { filename: 'apps/api/src/gone.ts', status: 'removed' };
+  assert.equal(classifyDiff({ files: [removedElsewhere], policy }).authority, 'auto');
+});
+
+test('evaluateMergeAuthority forwards the declared file count to the classifier', () => {
+  const files = [file('apps/api/src/a.ts', '+const x = 1;')];
+  const decision = evaluateMergeAuthority({ files, policy, labels: [], declaredFileCount: 40 });
+  assert.equal(decision.authority, 'human');
+  assert.equal(decision.authorized, false);
+  assert.ok(decision.surfaces.includes('unclassifiable'));
+});

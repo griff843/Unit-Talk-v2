@@ -123,7 +123,7 @@ jobs:
             const { parseVerdict, validateT1Verdicts } = require('./scripts/ops/merge-gate-verdict.cjs');
 
             // ── 1. Resolve PR ──────────────────────────────────────────
-            let prNumber, headSha, headRef, baseSha, prTitle;
+            let prNumber, headSha, headRef, baseSha, prTitle, declaredFileCount;
             if (context.eventName === 'pull_request' ||
                 context.eventName === 'pull_request_review') {
               const pr = context.payload.pull_request;
@@ -132,6 +132,7 @@ jobs:
               headRef = pr.head.ref;
               baseSha = pr.base.sha;
               prTitle = pr.title || '';
+              declaredFileCount = pr.changed_files;
             } else if (context.eventName === 'workflow_dispatch') {
               prNumber = parseInt(context.payload.inputs.pull_number, 10);
               const { data: pr } = await github.rest.pulls.get({
@@ -141,6 +142,7 @@ jobs:
               headRef = pr.head.ref;
               baseSha = pr.base.sha;
               prTitle = pr.title || '';
+              declaredFileCount = pr.changed_files;
             } else {
               prNumber = context.payload.issue.number;
               const { data: pr } = await github.rest.pulls.get({
@@ -150,6 +152,7 @@ jobs:
               headRef = pr.head.ref;
               baseSha = pr.base.sha;
               prTitle = pr.title || '';
+              declaredFileCount = pr.changed_files;
             }
 
             // ── 2. Upsert the canonical exact-head check run ───────────
@@ -340,6 +343,10 @@ jobs:
                 previous_filename: f.previous_filename,
                 patch: f.patch,
                 status: f.status,
+                // additions/deletions distinguish a pure rename (no content to
+                // scan) from a rename whose patch GitHub withheld for size.
+                additions: f.additions,
+                deletions: f.deletions,
               }));
 
               if (bootstrapPhase1) {
@@ -368,6 +375,10 @@ jobs:
                   labels,
                   verdictApproved: verdictErrors.length === 0,
                   verdictErrors,
+                  // listFiles caps at 3,000 files however far you paginate, so
+                  // the classifier is told the PR's own total and reserves when
+                  // what came back is short of it.
+                  declaredFileCount,
                 });
 
                 errors.push(...decision.errors);

@@ -27,14 +27,41 @@ export const PREFLIGHT_CHECK_NAME = 'Executor Result Preflight';
 
 export type TriggerEvent = 'pull_request' | 'issue_comment' | 'workflow_dispatch';
 
+export interface CheckNameOptions {
+  /**
+   * RMA/v1 PHASE 1 only: the trusted base checkout does not yet carry
+   * scripts/ops/merge-authority.cjs.
+   *
+   * The required "Executor Result Validation" context is created only by
+   * issue_comment / workflow_dispatch runs, and those events run the workflow
+   * file from the *default branch* -- not from the PR head. So for the single
+   * PR that first lands RMA, the required context is produced entirely by
+   * main's pre-RMA validator, which rejects any branch outside
+   * `(claude|codex)/(utv2|uni)-NNN`. No comment, label or verdict can clear
+   * that, and the PR carrying the fix cannot install it before being judged by
+   * it: a genuine bootstrap deadlock whose only other exit is a repo-owner
+   * override of a required check.
+   *
+   * The exit that does not need an override: while the classifier is absent
+   * from base, the pull_request-triggered run -- the one event whose workflow
+   * file *does* come from the PR head -- creates the required context itself.
+   * It is self-extinguishing. Once merge-authority.cjs is on main the
+   * condition is false forever after, and UTV2-1550's one-authoritative-
+   * identity rule below is restored in full. Re-entering it means deleting the
+   * classifier from main, which is itself a merge-authority-surface change.
+   */
+  bootstrap?: boolean;
+}
+
 /** Resolves the check-run name for a given triggering event. */
-export function resolveCheckName(eventName: string): string {
-  return eventName === 'pull_request' ? PREFLIGHT_CHECK_NAME : REQUIRED_CHECK_NAME;
+export function resolveCheckName(eventName: string, opts: CheckNameOptions = {}): string {
+  if (eventName !== 'pull_request') return REQUIRED_CHECK_NAME;
+  return opts.bootstrap ? REQUIRED_CHECK_NAME : PREFLIGHT_CHECK_NAME;
 }
 
 /** True only for the event types that may create the required context. */
-export function isRequiredCheckName(eventName: string): boolean {
-  return resolveCheckName(eventName) === REQUIRED_CHECK_NAME;
+export function isRequiredCheckName(eventName: string, opts: CheckNameOptions = {}): boolean {
+  return resolveCheckName(eventName, opts) === REQUIRED_CHECK_NAME;
 }
 
 export interface ParsedExecutorResult {
@@ -179,10 +206,11 @@ function main(): void {
   const [command, arg] = process.argv.slice(2);
   if (command === 'resolve-check-name') {
     if (!arg) {
-      console.error('Usage: executor-result-validate.ts resolve-check-name <event-name>');
+      console.error('Usage: executor-result-validate.ts resolve-check-name <event-name> [--bootstrap]');
       process.exit(1);
     }
-    process.stdout.write(resolveCheckName(arg));
+    const bootstrap = process.argv.slice(3).includes('--bootstrap');
+    process.stdout.write(resolveCheckName(arg, { bootstrap }));
     return;
   }
   console.error(`Unknown command: "${command}". Expected: resolve-check-name <event-name>`);

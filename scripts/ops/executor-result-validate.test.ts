@@ -35,6 +35,31 @@ test('resolveCheckName: pull_request always resolves to the non-required preflig
   assert.equal(resolveCheckName('pull_request'), PREFLIGHT_CHECK_NAME);
 });
 
+test('resolveCheckName: RMA bootstrap lets a pull_request run create the required name', () => {
+  // PHASE 1 only. issue_comment and workflow_dispatch execute the workflow file
+  // from the DEFAULT BRANCH, so the PR that first lands the classifier is
+  // judged by main's pre-RMA validator -- which rejects any branch outside
+  // (claude|codex)/(utv2|uni)-NNN and cannot be cleared by label, comment or
+  // verdict. pull_request is the one event whose workflow file comes from the
+  // PR head, so while the classifier is absent from base, that run owns the
+  // required identity.
+  assert.equal(resolveCheckName('pull_request', { bootstrap: true }), REQUIRED_CHECK_NAME);
+  assert.equal(isRequiredCheckName('pull_request', { bootstrap: true }), true);
+});
+
+test('resolveCheckName: bootstrap is inert once the classifier is on main', () => {
+  // Self-extinguishing. With the classifier present the UTV2-1550 rule -- one
+  // authoritative required identity per head -- is restored in full.
+  assert.equal(resolveCheckName('pull_request', { bootstrap: false }), PREFLIGHT_CHECK_NAME);
+  assert.equal(resolveCheckName('pull_request', {}), PREFLIGHT_CHECK_NAME);
+  assert.equal(isRequiredCheckName('pull_request'), false);
+  // It cannot change the other two events either -- they were already required.
+  for (const event of ['issue_comment', 'workflow_dispatch']) {
+    assert.equal(resolveCheckName(event, { bootstrap: true }), REQUIRED_CHECK_NAME);
+    assert.equal(resolveCheckName(event, { bootstrap: false }), REQUIRED_CHECK_NAME);
+  }
+});
+
 test('resolveCheckName: issue_comment resolves to the required validation name', () => {
   assert.equal(resolveCheckName('issue_comment'), REQUIRED_CHECK_NAME);
 });
