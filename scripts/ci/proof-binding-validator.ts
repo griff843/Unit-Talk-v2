@@ -102,9 +102,15 @@ interface ManifestBindingContext {
  * execution anchor are facts of the sha_binding block, not of the markdown.
  */
 export function validatePreMergeVerificationBinding(content: string, evidence?: unknown): string[] {
-  return validateProofMergeShaIdentity({ verificationMarkdown: content, evidence }).failures.map(
-    (failure) => failure.message,
-  );
+  // `phase: 'pre-merge'` is stated, not inferred. This gate is unconditionally
+  // a pre-merge gate (see the hardcoded `gate: 'pre-merge'` contract call
+  // below), so the bundle's own merge slot must never be allowed to talk it
+  // into believing a merge already happened.
+  return validateProofMergeShaIdentity({
+    verificationMarkdown: content,
+    evidence,
+    phase: 'pre-merge',
+  }).failures.map((failure) => failure.message);
 }
 
 function git(cmd: string): string {

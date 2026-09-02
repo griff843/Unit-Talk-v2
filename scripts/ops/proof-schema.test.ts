@@ -329,6 +329,9 @@ describe('proof-binding-validator', () => {
   // sha_binding. Passing evidence is what a real caller does; the validator
   // reads the bundle it is validating.
   const preMergeBinding = (): Record<string, unknown> => ({
+    // schema_version is what selects the v2 identity rules; a bundle that does
+    // not declare it stays on the legacy path no matter what fields it carries.
+    schema_version: PROOF_SCHEMA_VERSION,
     sha_binding: { merge_sha: null, verified_source_sha: VALID_SHA },
   });
 
@@ -1778,6 +1781,10 @@ function runIdentityCli(proofDir: string, withEvidence = true): {
   const argv = [
     path.join(REPO_ROOT_1783, 'scripts/ops/proof-schema.ts'),
     'proof-identity',
+    // The phase is stated, exactly as the ERV workflow states it: this stands
+    // in for validating an OPEN pull request, which is unmerged by definition.
+    '--phase',
+    'pre-merge',
     '--verification',
     path.join(proofDir, 'verification.md'),
   ];
@@ -1846,7 +1853,7 @@ const CANONICAL_PRE_MERGE_MARKDOWN = [
  */
 function identityMigrationEvidence(sha = '<HEAD>'): Record<string, unknown> {
   return {
-    schema_version: 2,
+    schema_version: PROOF_SCHEMA_VERSION,
     issue_id: 'UTV2-1783',
     proof_profile: 'migration',
     sha_binding: {
@@ -1874,246 +1881,397 @@ function identityMigrationEvidence(sha = '<HEAD>'): Record<string, unknown> {
   };
 }
 
-describe('UTV2-1783: the pre-merge identity contract both consumers read', () => {
-  test('one migration-lane fixture satisfies proof-binding-validator AND Executor Result Validation', () => {
-    const fixture = createIdentityFixture({
-      verification: CANONICAL_PRE_MERGE_MARKDOWN,
-      evidence: identityMigrationEvidence(),
+// UTV2-1783 suite (node:test test() calls; AGENTS.md forbids describe/it)
+test('one migration-lane fixture satisfies proof-binding-validator AND Executor Result Validation', () => {
+  const fixture = createIdentityFixture({
+    verification: CANONICAL_PRE_MERGE_MARKDOWN,
+    evidence: identityMigrationEvidence(),
+  });
+  try {
+    // Consumer 1 — the gate migration lanes reach through
+    // migration-reversibility-gate.yml.
+    const binding = runBindingValidator(fixture);
+    assert.equal(binding.status, 0, binding.output);
+
+    // Consumer 2 — the required Executor Result Validation check.
+    const { status, result } = runIdentityCli(fixture.proofDir);
+    assert.equal(status, 0);
+    assert.deepEqual(result!.failures, []);
+    assert.equal(result!.mode, 'schema-v2');
+    assert.equal(result!.phase, 'pre-merge');
+    // ERV ancestry-checks execution identity, not the merge row.
+    assert.equal(result!.provenanceAnchorSha, fixture.head);
+    assert.ok(ervAcceptsAnchor(fixture, result!.provenanceAnchorSha));
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('the placeholder is presentation only and is never handed to a consumer as a git SHA', () => {
+  const fixture = createIdentityFixture({
+    verification: CANONICAL_PRE_MERGE_MARKDOWN,
+    evidence: identityMigrationEvidence(),
+  });
+  try {
+    const { result } = runIdentityCli(fixture.proofDir);
+    assert.notEqual(result!.provenanceAnchorSha, 'pending merge');
+    // The literal that the old ERV rule rejected as "not a valid git SHA" is
+    // now never routed to a SHA rule at all.
+    assert.ok(!ervAcceptsAnchor(fixture, 'pending merge'));
+    assert.ok(ervAcceptsAnchor(fixture, result!.provenanceAnchorSha));
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
+
+test('a branch/execution SHA parked in sha_binding.merge_sha fails', () => {
+  const evidence = identityMigrationEvidence();
+  (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = '<HEAD>';
+  const fixture = createIdentityFixture({ verification: CANONICAL_PRE_MERGE_MARKDOWN, evidence });
+  try {
+    const { result } = runIdentityCli(fixture.proofDir);
+    // The caller stated pre-merge, so the bundle's claim is refused outright
+    // rather than being believed and then checked for internal consistency.
+    assert.equal(result!.phase, 'pre-merge');
+    assert.ok(
+      result!.failures.some((f) => f.code === 'premature_merge_authority'),
+      JSON.stringify(result!.failures),
+    );
+    assert.notEqual(runBindingValidator(fixture).status, 0);
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
+
+/**
+ * The open-PR authority-claim regression.
+ *
+ * An open pull request is unmerged by definition, so a bundle that names a
+ * merge SHA is asserting authority GitHub never granted. If the phase were
+ * inferred from the bundle, the attacker-controlled path would be trivial:
+ * fill sha_binding.merge_sha with a plausible SHA, repeat it in both markdown
+ * merge rows, keep verified_source_sha an ancestor of the head, and the
+ * identity check falls silent because the bundle is internally consistent with
+ * its own lie. Stating the phase is what makes that unreachable.
+ */
+test('an open PR cannot grant itself merge authority, even with a fully self-consistent bundle', () => {
+  const evidence = identityMigrationEvidence();
+  (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = OTHER_SHA;
+  // Every markdown row agrees with the claim: this bundle is self-consistent.
+  const selfConsistent = CANONICAL_PRE_MERGE_MARKDOWN
+    .replace('MERGE_SHA: pending merge', `MERGE_SHA: ${OTHER_SHA}`)
+    .replace('Merge SHA: pending merge', `Merge SHA: ${OTHER_SHA}`);
+  const fixture = createIdentityFixture({ verification: selfConsistent, evidence });
+  try {
+    const { result } = runIdentityCli(fixture.proofDir);
+    assert.equal(result!.phase, 'pre-merge', 'the caller states the phase; the bundle does not');
+    assert.ok(
+      result!.failures.some((f) => f.code === 'premature_merge_authority'),
+      JSON.stringify(result!.failures),
+    );
+    assert.notEqual(runBindingValidator(fixture).status, 0);
+
+    // Inference is what the workflow must never fall back to: without a stated
+    // phase this same bundle reads as post-merge and reports nothing wrong.
+    const inferred = validateProofMergeShaIdentity({
+      verificationMarkdown: selfConsistent.replaceAll('<HEAD>', VALID_SHA),
+      evidence: (() => {
+        const e = identityMigrationEvidence(VALID_SHA);
+        (e['sha_binding'] as Record<string, unknown>)['merge_sha'] = OTHER_SHA;
+        return e;
+      })(),
     });
-    try {
-      // Consumer 1 — the gate migration lanes reach through
-      // migration-reversibility-gate.yml.
-      const binding = runBindingValidator(fixture);
-      assert.equal(binding.status, 0, binding.output);
+    assert.equal(inferred.phase, 'post-merge');
+    assert.deepEqual(inferred.failures, [], 'this is precisely why the phase is not inferred here');
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
 
-      // Consumer 2 — the required Executor Result Validation check.
-      const { status, result } = runIdentityCli(fixture.proofDir);
-      assert.equal(status, 0);
-      assert.deepEqual(result!.failures, []);
-      assert.equal(result!.mode, 'schema-v2');
-      assert.equal(result!.phase, 'pre-merge');
-      // ERV ancestry-checks execution identity, not the merge row.
-      assert.equal(result!.provenanceAnchorSha, fixture.head);
-      assert.ok(ervAcceptsAnchor(fixture, result!.provenanceAnchorSha));
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
-    }
+test('the CLI refuses to run without an explicit phase rather than defaulting to one', () => {
+  const fixture = createIdentityFixture({
+    verification: CANONICAL_PRE_MERGE_MARKDOWN,
+    evidence: identityMigrationEvidence(),
   });
-
-  test('the placeholder is presentation only and is never handed to a consumer as a git SHA', () => {
-    const fixture = createIdentityFixture({
-      verification: CANONICAL_PRE_MERGE_MARKDOWN,
-      evidence: identityMigrationEvidence(),
-    });
-    try {
-      const { result } = runIdentityCli(fixture.proofDir);
-      assert.notEqual(result!.provenanceAnchorSha, 'pending merge');
-      // The literal that the old ERV rule rejected as "not a valid git SHA" is
-      // now never routed to a SHA rule at all.
-      assert.ok(!ervAcceptsAnchor(fixture, 'pending merge'));
-      assert.ok(ervAcceptsAnchor(fixture, result!.provenanceAnchorSha));
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  try {
+    const argv = [
+      path.join(REPO_ROOT_1783, 'scripts/ops/proof-schema.ts'),
+      'proof-identity',
+      '--verification',
+      path.join(fixture.proofDir, 'verification.md'),
+      '--evidence',
+      path.join(fixture.proofDir, 'evidence.json'),
+    ];
+    const run = spawnSync(TSX_BIN, argv, { encoding: 'utf8', cwd: REPO_ROOT_1783 });
+    assert.equal(run.status, 2, 'a missing --phase must be an error, never a default');
+    assert.match(run.stderr, /--phase is required/);
+    for (const bad of ['', 'premerge', 'PRE-MERGE', 'unmerged']) {
+      const r = spawnSync(TSX_BIN, [...argv, '--phase', bad], { encoding: 'utf8', cwd: REPO_ROOT_1783 });
+      assert.equal(r.status, 2, `--phase ${JSON.stringify(bad)} must be rejected`);
     }
-  });
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
 
-  test('a branch/execution SHA parked in sha_binding.merge_sha fails', () => {
+test('a missing or invalid verified_source_sha fails execution provenance and yields no anchor', () => {
+  for (const bad of [undefined, null, '', 'pending merge', VALID_SHA.slice(0, 8)]) {
     const evidence = identityMigrationEvidence();
-    (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = '<HEAD>';
-    const fixture = createIdentityFixture({ verification: CANONICAL_PRE_MERGE_MARKDOWN, evidence });
-    try {
-      const { result } = runIdentityCli(fixture.proofDir);
-      // With merge authority claimed the bundle reads as post-merge, and the
-      // markdown then contradicts it — either way it cannot pass.
-      assert.ok(result!.failures.length > 0);
-      assert.ok(
-        result!.failures.some((f) => f.code === 'merge_row_not_merge_authority'),
-        JSON.stringify(result!.failures),
-      );
-      assert.notEqual(runBindingValidator(fixture).status, 0);
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
-    }
-  });
-
-  test('a non-null merge SHA declared while the bundle is still pre-merge fails', () => {
-    const evidence = identityMigrationEvidence();
-    (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = OTHER_SHA;
-    const fixture = createIdentityFixture({ verification: CANONICAL_PRE_MERGE_MARKDOWN, evidence });
-    try {
-      const { result } = runIdentityCli(fixture.proofDir);
-      assert.ok(
-        result!.failures.some((f) => f.code === 'merge_row_not_merge_authority'),
-        JSON.stringify(result!.failures),
-      );
-      // And the phase-forced view names the premature claim directly.
-      const forced = validateProofMergeShaIdentity({
-        verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN,
-        evidence: { sha_binding: { merge_sha: OTHER_SHA, verified_source_sha: VALID_SHA } },
-        phase: 'pre-merge',
-      });
-      assert.ok(forced.failures.some((f) => f.code === 'premature_merge_authority'));
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
-    }
-  });
-
-  test('a missing or invalid verified_source_sha fails execution provenance and yields no anchor', () => {
-    for (const bad of [undefined, null, '', 'pending merge', VALID_SHA.slice(0, 8)]) {
-      const evidence = identityMigrationEvidence();
-      const binding = evidence['sha_binding'] as Record<string, unknown>;
-      if (bad === undefined) delete binding['verified_source_sha'];
-      else binding['verified_source_sha'] = bad;
-      const result = validateProofMergeShaIdentity({
-        verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN.replaceAll('<HEAD>', VALID_SHA),
-        evidence,
-      });
-      assert.ok(
-        result.failures.some((f) => f.code === 'execution_identity_invalid'),
-        `verified_source_sha ${JSON.stringify(bad)} must fail`,
-      );
-      assert.equal(result.provenanceAnchorSha, null);
-    }
-  });
-
-  test('post-merge, merge authority is present and the markdown must present it', () => {
-    const evidence = identityMigrationEvidence(VALID_SHA);
-    (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = OTHER_SHA;
-    const rebound = CANONICAL_PRE_MERGE_MARKDOWN
-      .replace('MERGE_SHA: pending merge', `MERGE_SHA: ${OTHER_SHA}`)
-      .replace('Merge SHA: pending merge', `Merge SHA: ${OTHER_SHA}`)
-      .replaceAll('<HEAD>', VALID_SHA);
-    const ok = validateProofMergeShaIdentity({ verificationMarkdown: rebound, evidence });
-    assert.equal(ok.phase, 'post-merge');
-    assert.deepEqual(ok.failures, []);
-    // Execution identity stays truthful after the rebind: it is still the
-    // source commit, not the merge commit.
-    assert.equal(ok.provenanceAnchorSha, VALID_SHA);
-
-    // And a bundle that claims merge authority while still showing the
-    // placeholder is a rebind that only half happened.
-    const halfBound = validateProofMergeShaIdentity({
+    const binding = evidence['sha_binding'] as Record<string, unknown>;
+    if (bad === undefined) delete binding['verified_source_sha'];
+    else binding['verified_source_sha'] = bad;
+    const result = validateProofMergeShaIdentity({
       verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN.replaceAll('<HEAD>', VALID_SHA),
       evidence,
     });
-    assert.ok(halfBound.failures.some((f) => f.code === 'merge_row_not_merge_authority'));
-  });
-});
-
-describe('UTV2-1783: mutation controls — each old contradictory rule, restored', () => {
-  // Every control below re-creates one half of the original contradiction and
-  // asserts the integration regression above would fail on it. A control that
-  // cannot fail proves nothing.
-
-  test('control A — the old proof-binding rule (execution SHA in the merge row) now fails', () => {
-    const withBranchShaInMergeRow = CANONICAL_PRE_MERGE_MARKDOWN.replace(
-      'MERGE_SHA: pending merge',
-      'MERGE_SHA: <HEAD>',
+    assert.ok(
+      result.failures.some((f) => f.code === 'execution_identity_invalid'),
+      `verified_source_sha ${JSON.stringify(bad)} must fail`,
     );
-    const fixture = createIdentityFixture({
-      verification: withBranchShaInMergeRow,
-      evidence: identityMigrationEvidence(),
-    });
-    try {
-      const { result } = runIdentityCli(fixture.proofDir);
-      assert.ok(
-        result!.failures.some((f) => f.code === 'merge_row_not_placeholder'),
-        JSON.stringify(result!.failures),
-      );
-      assert.notEqual(runBindingValidator(fixture).status, 0);
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
-    }
-  });
-
-  test('control B — the old ERV rule (merge row parsed as a git SHA) would reject the canonical bundle', () => {
-    // This is the control that shows the contradiction was real rather than a
-    // formatting quibble: the canonical fixture the binding validator accepts
-    // is exactly the one the old ERV rule rejected.
-    const row = CANONICAL_PRE_MERGE_MARKDOWN.match(/^MERGE_SHA:\s*(.+)$/m)![1]!.trim();
-    const oldErvRule = /^[0-9a-f]{7,40}$/i;
-    assert.ok(!oldErvRule.test(row), 'the old rule rejected this row — that was the deadlock');
-    // The repaired contract routes ERV to a field that does satisfy it.
-    const repaired = validateProofMergeShaIdentity({
-      verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN.replaceAll('<HEAD>', VALID_SHA),
-      evidence: identityMigrationEvidence(VALID_SHA),
-    });
-    assert.deepEqual(repaired.failures, []);
-    assert.ok(oldErvRule.test(repaired.provenanceAnchorSha!));
-  });
-
-  test('control C — treating an absent evidence bundle as schema-v2 would fail the legacy shape', () => {
-    // Historical compatibility is narrow and explicit: no sha_binding means the
-    // older rule, not a relaxed one. Reading a legacy bundle under the v2 rule
-    // (or the reverse) fails, which is what keeps the two paths from blurring.
-    const legacyMarkdown = `# PROOF: lane\n\nMERGE_SHA: ${VALID_SHA}\n\n## Verification\n\nmeasured\n`;
-    const asLegacy = validateProofMergeShaIdentity({ verificationMarkdown: legacyMarkdown });
-    assert.equal(asLegacy.mode, 'legacy-anchor');
-    assert.deepEqual(asLegacy.failures, []);
-    assert.equal(asLegacy.provenanceAnchorSha, VALID_SHA);
-
-    const asV2 = validateProofMergeShaIdentity({
-      verificationMarkdown: legacyMarkdown,
-      evidence: { sha_binding: { merge_sha: null, verified_source_sha: VALID_SHA } },
-    });
-    assert.ok(asV2.failures.some((f) => f.code === 'merge_row_not_placeholder'));
-  });
-
-  test('control D — a corrupt evidence.json is an error, never a downgrade to the legacy path', () => {
-    const fixture = createIdentityFixture({
-      verification: CANONICAL_PRE_MERGE_MARKDOWN,
-      evidence: identityMigrationEvidence(),
-    });
-    try {
-      fs.writeFileSync(path.join(fixture.proofDir, 'evidence.json'), '{ not json');
-      const run = runIdentityCli(fixture.proofDir);
-      assert.equal(run.status, 2, 'unreadable evidence must exit 2, not fall back');
-    } finally {
-      fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
-    }
-  });
+    assert.equal(result.provenanceAnchorSha, null);
+  }
 });
 
-describe('UTV2-1783: the workflow wiring that makes the contract reachable', () => {
-  const ERV_WORKFLOW = fs.readFileSync(
-    path.join(REPO_ROOT_1783, '.github/workflows/executor-result-validator.yml'),
-    'utf8',
+test('post-merge, merge authority is present and the markdown must present it', () => {
+  const evidence = identityMigrationEvidence(VALID_SHA);
+  (evidence['sha_binding'] as Record<string, unknown>)['merge_sha'] = OTHER_SHA;
+  const rebound = CANONICAL_PRE_MERGE_MARKDOWN
+    .replace('MERGE_SHA: pending merge', `MERGE_SHA: ${OTHER_SHA}`)
+    .replace('Merge SHA: pending merge', `Merge SHA: ${OTHER_SHA}`)
+    .replaceAll('<HEAD>', VALID_SHA);
+  const ok = validateProofMergeShaIdentity({ verificationMarkdown: rebound, evidence });
+  assert.equal(ok.phase, 'post-merge');
+  assert.deepEqual(ok.failures, []);
+  // Execution identity stays truthful after the rebind: it is still the
+  // source commit, not the merge commit.
+  assert.equal(ok.provenanceAnchorSha, VALID_SHA);
+
+  // And a bundle that claims merge authority while still showing the
+  // placeholder is a rebind that only half happened.
+  const halfBound = validateProofMergeShaIdentity({
+    verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN.replaceAll('<HEAD>', VALID_SHA),
+    evidence,
+  });
+  assert.ok(halfBound.failures.some((f) => f.code === 'merge_row_not_merge_authority'));
+});
+
+// UTV2-1783 mutation control suite (node:test test() calls; AGENTS.md forbids describe/it)
+// Every control below re-creates one half of the original contradiction and
+// asserts the integration regression above would fail on it. A control that
+// cannot fail proves nothing.
+
+test('control A — the old proof-binding rule (execution SHA in the merge row) now fails', () => {
+  const withBranchShaInMergeRow = CANONICAL_PRE_MERGE_MARKDOWN.replace(
+    'MERGE_SHA: pending merge',
+    'MERGE_SHA: <HEAD>',
   );
-
-  test('W1 — Executor Result Validation invokes the shared contract module', () => {
-    assert.ok(
-      ERV_WORKFLOW.includes("'scripts/ops/proof-schema.ts'") &&
-        ERV_WORKFLOW.includes("'proof-identity'"),
-      'the workflow must execute scripts/ops/proof-schema.ts proof-identity',
-    );
+  const fixture = createIdentityFixture({
+    verification: withBranchShaInMergeRow,
+    evidence: identityMigrationEvidence(),
   });
+  try {
+    const { result } = runIdentityCli(fixture.proofDir);
+    assert.ok(
+      result!.failures.some((f) => f.code === 'merge_row_not_placeholder'),
+      JSON.stringify(result!.failures),
+    );
+    assert.notEqual(runBindingValidator(fixture).status, 0);
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
 
-  test('W2 — the workflow does not restate the merge-row SHA rule it used to own', () => {
-    // Comment lines are stripped first: the block explaining the removed rule
-    // necessarily quotes it, and failing on the explanation would push the next
-    // author to delete the explanation rather than the duplication.
-    const code = ERV_WORKFLOW.split('\n')
-      .filter((line) => !line.trimStart().startsWith('//') && !line.trimStart().startsWith('#'))
-      .join('\n');
-    assert.ok(
-      !/\[0-9a-f\]\{7,40\}/.test(code),
-      'the SHA rule must live in proof-schema.ts, not in a second copy here',
-    );
-    assert.ok(
-      !code.includes('Proof MERGE_SHA is not a valid git SHA'),
-      'the old merge-row-as-git-SHA rejection must not return',
-    );
+test('control B — the old ERV rule (merge row parsed as a git SHA) would reject the canonical bundle', () => {
+  // This is the control that shows the contradiction was real rather than a
+  // formatting quibble: the canonical fixture the binding validator accepts
+  // is exactly the one the old ERV rule rejected.
+  const row = CANONICAL_PRE_MERGE_MARKDOWN.match(/^MERGE_SHA:\s*(.+)$/m)![1]!.trim();
+  const oldErvRule = /^[0-9a-f]{7,40}$/i;
+  assert.ok(!oldErvRule.test(row), 'the old rule rejected this row — that was the deadlock');
+  // The repaired contract routes ERV to a field that does satisfy it.
+  const repaired = validateProofMergeShaIdentity({
+    verificationMarkdown: CANONICAL_PRE_MERGE_MARKDOWN.replaceAll('<HEAD>', VALID_SHA),
+    evidence: identityMigrationEvidence(VALID_SHA),
   });
+  assert.deepEqual(repaired.failures, []);
+  assert.ok(oldErvRule.test(repaired.provenanceAnchorSha!));
+});
 
-  test('W3 — the ancestry check runs against the contract-returned anchor, not the merge row', () => {
-    const code = ERV_WORKFLOW.split('\n')
-      .filter((line) => !line.trimStart().startsWith('//'))
-      .join('\n');
-    assert.ok(code.includes('identity.provenanceAnchorSha'));
-    assert.ok(code.includes('base: anchor, head: headSha'));
-    assert.ok(
-      !/base:\s*fileSha/.test(code),
-      'ancestry must never be computed from the markdown merge row again',
-    );
+test('control C — the discriminator is the DECLARED schema version, not the presence of sha_binding', () => {
+  // Historical compatibility is narrow and explicit: no v2 declaration means
+  // the older rule, not a relaxed one. Reading a legacy bundle under the v2
+  // rule (or the reverse) fails, which is what keeps the two paths from
+  // blurring into each other.
+  const legacyMarkdown = `# PROOF: lane\n\nMERGE_SHA: ${VALID_SHA}\n\n## Verification\n\nmeasured\n`;
+  const asLegacy = validateProofMergeShaIdentity({ verificationMarkdown: legacyMarkdown });
+  assert.equal(asLegacy.mode, 'legacy-anchor');
+  assert.deepEqual(asLegacy.failures, []);
+  assert.equal(asLegacy.provenanceAnchorSha, VALID_SHA);
+
+  // A sha_binding object alone must NOT promote a bundle to v2 — this is the
+  // mutation that would retroactively fail 157 shipped bundles.
+  const v1WithBinding = validateProofMergeShaIdentity({
+    verificationMarkdown: legacyMarkdown,
+    evidence: {
+      schema_version: 1,
+      sha_binding: { verified_source_sha: VALID_SHA },
+    },
   });
+  assert.equal(v1WithBinding.mode, 'legacy-anchor');
+  assert.deepEqual(v1WithBinding.failures, []);
+  assert.equal(v1WithBinding.provenanceAnchorSha, VALID_SHA);
+
+  // And a bundle that does declare v2 is held to the v2 rules.
+  const asV2 = validateProofMergeShaIdentity({
+    verificationMarkdown: legacyMarkdown,
+    evidence: {
+      schema_version: PROOF_SCHEMA_VERSION,
+      sha_binding: { merge_sha: null, verified_source_sha: VALID_SHA },
+    },
+    phase: 'pre-merge',
+  });
+  assert.equal(asV2.mode, 'schema-v2');
+  assert.ok(asV2.failures.some((f) => f.code === 'merge_row_not_placeholder'));
+});
+
+/**
+ * The regression the P2 review thread asked for, run against a REAL shipped
+ * bundle rather than a hand-built imitation of one.
+ *
+ * UTV2-1554 declares `schema_version: 1` and still carries a `sha_binding`
+ * block, as 157 bundles in this repository do. Discriminating on the presence
+ * of that object rather than the declared version would classify every one of
+ * them as v2 and fail them on placeholder and binding-section rules that did
+ * not exist when they were written — blocking any PR that resumes or
+ * revalidates a historical proof. A fabricated fixture could not have caught
+ * this, because the fabricated one would have been written to whatever shape
+ * the new code expected.
+ */
+test('a real historical schema-v1 bundle in this repository stays on the legacy path', () => {
+  const dir = path.join(REPO_ROOT_1783, 'docs/06_status/proof/UTV2-1554');
+  const evidence = JSON.parse(fs.readFileSync(path.join(dir, 'evidence.json'), 'utf8'));
+  const verification = fs.readFileSync(path.join(dir, 'verification.md'), 'utf8');
+
+  // Preconditions, asserted so this test fails loudly if the fixture is ever
+  // migrated rather than silently proving nothing.
+  assert.equal(evidence.schema_version, 1, 'fixture must be a real v1 bundle');
+  assert.equal(typeof evidence.sha_binding, 'object');
+  assert.ok(evidence.sha_binding !== null, 'fixture must carry a sha_binding block');
+
+  const result = validateProofMergeShaIdentity({
+    verificationMarkdown: verification,
+    evidence,
+    phase: 'pre-merge',
+  });
+  assert.equal(result.mode, 'legacy-anchor');
+  assert.deepEqual(result.failures, [], 'a shipped historical bundle must not fail retroactively');
+  assert.match(result.provenanceAnchorSha!, /^[0-9a-f]{7,40}$/i);
+});
+
+test('every schema-v1 bundle in the repository stays on the legacy path', () => {
+  // The census behind the claim above: measured, not asserted from memory.
+  const dirs = fs
+    .readdirSync(path.join(REPO_ROOT_1783, 'docs/06_status/proof'), { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => path.join(REPO_ROOT_1783, 'docs/06_status/proof', d.name));
+
+  let v1WithBinding = 0;
+  const misclassified: string[] = [];
+  for (const dir of dirs) {
+    const evidencePath = path.join(dir, 'evidence.json');
+    const verificationPath = path.join(dir, 'verification.md');
+    if (!fs.existsSync(evidencePath) || !fs.existsSync(verificationPath)) continue;
+    let evidence: Record<string, unknown>;
+    try {
+      evidence = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    } catch {
+      continue;
+    }
+    const binding = evidence['sha_binding'];
+    const isV1WithBinding =
+      Number(evidence['schema_version']) !== PROOF_SCHEMA_VERSION &&
+      typeof binding === 'object' &&
+      binding !== null;
+    if (!isV1WithBinding) continue;
+    v1WithBinding += 1;
+    const result = validateProofMergeShaIdentity({
+      verificationMarkdown: fs.readFileSync(verificationPath, 'utf8'),
+      evidence,
+      phase: 'pre-merge',
+    });
+    if (result.mode !== 'legacy-anchor') misclassified.push(path.basename(dir));
+  }
+
+  assert.ok(v1WithBinding > 100, `expected the historical corpus to be large, found ${v1WithBinding}`);
+  assert.deepEqual(misclassified, [], 'no shipped v1 bundle may be read under the v2 rules');
+});
+
+test('control D — a corrupt evidence.json is an error, never a downgrade to the legacy path', () => {
+  const fixture = createIdentityFixture({
+    verification: CANONICAL_PRE_MERGE_MARKDOWN,
+    evidence: identityMigrationEvidence(),
+  });
+  try {
+    fs.writeFileSync(path.join(fixture.proofDir, 'evidence.json'), '{ not json');
+    const run = runIdentityCli(fixture.proofDir);
+    assert.equal(run.status, 2, 'unreadable evidence must exit 2, not fall back');
+  } finally {
+    fs.rmSync(fixture.repoRoot, { recursive: true, force: true });
+  }
+});
+
+// UTV2-1783 wiring suite (node:test test() calls; AGENTS.md forbids describe/it)
+const ERV_WORKFLOW = fs.readFileSync(
+  path.join(REPO_ROOT_1783, '.github/workflows/executor-result-validator.yml'),
+  'utf8',
+);
+
+test('W1 — Executor Result Validation invokes the shared contract module', () => {
+  assert.ok(
+    ERV_WORKFLOW.includes("'scripts/ops/proof-schema.ts'") &&
+      ERV_WORKFLOW.includes("'proof-identity'"),
+    'the workflow must execute scripts/ops/proof-schema.ts proof-identity',
+  );
+});
+
+test('W2 — the workflow does not restate the merge-row SHA rule it used to own', () => {
+  // Comment lines are stripped first: the block explaining the removed rule
+  // necessarily quotes it, and failing on the explanation would push the next
+  // author to delete the explanation rather than the duplication.
+  const code = ERV_WORKFLOW.split('\n')
+    .filter((line) => !line.trimStart().startsWith('//') && !line.trimStart().startsWith('#'))
+    .join('\n');
+  assert.ok(
+    !/\[0-9a-f\]\{7,40\}/.test(code),
+    'the SHA rule must live in proof-schema.ts, not in a second copy here',
+  );
+  assert.ok(
+    !code.includes('Proof MERGE_SHA is not a valid git SHA'),
+    'the old merge-row-as-git-SHA rejection must not return',
+  );
+});
+
+test('W3 — the ancestry check runs against the contract-returned anchor, not the merge row', () => {
+  const code = ERV_WORKFLOW.split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n');
+  assert.ok(code.includes('identity.provenanceAnchorSha'));
+  assert.ok(code.includes('base: anchor, head: headSha'));
+  assert.ok(
+    !/base:\s*fileSha/.test(code),
+    'ancestry must never be computed from the markdown merge row again',
+  );
+});
+
+test('W4 — the workflow states pre-merge explicitly rather than letting the phase be inferred', () => {
+  const code = ERV_WORKFLOW.split('\n')
+    .filter((line) => !line.trimStart().startsWith('//'))
+    .join('\n');
+  // This job only ever runs against an OPEN pull request, so the phase is a
+  // fact about the caller, not about the bundle. Passing it explicitly is what
+  // stops an untrusted bundle's own merge slot from talking the validator into
+  // believing a merge already happened. The CLI refuses to run without it, so
+  // this assertion and that guard fail together rather than silently.
+  assert.ok(code.includes("'--phase'"), 'the workflow must pass --phase');
+  assert.ok(code.includes("'pre-merge'"), 'an open PR is always validated pre-merge');
 });

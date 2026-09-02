@@ -1399,10 +1399,24 @@ export function isProofStale(proof: ProofSchemaV2, currentHeadSha: string): bool
  * SHA a caller must ancestry-check is returned as `provenanceAnchorSha` and is
  * read from `verified_source_sha`, never from the markdown row.
  *
- * Historical compatibility is deliberately narrow (contract item 6): a bundle
- * with no schema-v2 `sha_binding` block keeps the legacy rule unchanged — the
- * row itself must be a real hex SHA and is the anchor. Absent evidence never
- * relaxes a rule; it selects the older, stricter-on-the-row contract.
+ * Historical compatibility is deliberately narrow (contract item 6) and keys on
+ * the DECLARED schema version, never on the incidental presence of a
+ * `sha_binding` object. 157 bundles in this repository declare
+ * `schema_version: 1` and still carry a `sha_binding` block (UTV2-1554 among
+ * them); classifying those as v2 would retroactively fail every one of them on
+ * placeholder and binding-section rules that did not exist when they were
+ * written. A bundle is v2 only when it says it is. Everything else keeps the
+ * legacy rule unchanged — the row itself must be a real hex SHA and is the
+ * anchor. Absent or older evidence never relaxes a rule; it selects the older,
+ * stricter-on-the-row contract.
+ *
+ * The phase is NOT inferred for a caller that knows it. A validator running on
+ * an open pull request knows the PR is unmerged, and inferring `post-merge`
+ * from the bundle's own merge slot would let an untrusted bundle assert merge
+ * authority that GitHub never granted: fill both markdown merge rows with a
+ * plausible SHA and the identity check falls silent. Such callers pass
+ * `phase: 'pre-merge'` explicitly, and the CLI *requires* `--phase` so a
+ * workflow cannot forget it.
  */
 export type ProofIdentityMode = 'schema-v2' | 'legacy-anchor';
 
@@ -1458,10 +1472,14 @@ export interface ProofIdentityInput {
   /** Parsed `evidence.json`, or null/undefined when the bundle carries none. */
   evidence?: unknown;
   /**
-   * Overrides phase derivation. Callers should normally omit this: the phase is
-   * a fact about the bundle (does it declare merge authority?), not a caller
-   * opinion, and letting a caller assert `pre-merge` over a populated merge slot
-   * would reintroduce exactly the "one field, two meanings" defect.
+   * The phase, when the caller knows it. Any validator running on an open pull
+   * request MUST pass `'pre-merge'`: the PR is unmerged by definition, so merge
+   * authority cannot exist, and inferring the phase from the bundle would let
+   * the bundle grant itself authority GitHub never gave it.
+   *
+   * Omit it only when the phase genuinely is a property of the bundle rather
+   * than of the caller — a post-merge reader inspecting a historical artifact.
+   * Inference then reads the declared merge slot.
    */
   phase?: ProofIdentityPhase;
 }
@@ -1470,15 +1488,21 @@ export function validateProofMergeShaIdentity(input: ProofIdentityInput): ProofI
   const failures: ProofIdentityFailure[] = [];
   const active = unfencedLines(input.verificationMarkdown);
 
-  const binding =
+  const bundle =
     input.evidence && typeof input.evidence === 'object' && !Array.isArray(input.evidence)
-      ? (input.evidence as Record<string, unknown>)['sha_binding']
-      : undefined;
+      ? (input.evidence as Record<string, unknown>)
+      : null;
+  const binding = bundle?.['sha_binding'];
   const hasBinding = Boolean(binding) && typeof binding === 'object' && !Array.isArray(binding);
-  const mode: ProofIdentityMode = hasBinding ? 'schema-v2' : 'legacy-anchor';
 
-  const bindingRecord = hasBinding ? (binding as Record<string, unknown>) : {};
-  const mergeSlot = readEvidenceMergeSlot(binding);
+  // The declared schema version is the discriminator, not the presence of a
+  // sha_binding object: 157 historical bundles declare schema_version 1 and
+  // carry one anyway, and reading those as v2 would fail them retroactively.
+  const declaredV2 = Number(bundle?.['schema_version']) === PROOF_SCHEMA_VERSION;
+  const mode: ProofIdentityMode = declaredV2 && hasBinding ? 'schema-v2' : 'legacy-anchor';
+
+  const bindingRecord = mode === 'schema-v2' ? (binding as Record<string, unknown>) : {};
+  const mergeSlot = mode === 'schema-v2' ? readEvidenceMergeSlot(binding) : { declared: false };
   const mergeAuthority =
     typeof mergeSlot.value === 'string' && SHA_RE.test(mergeSlot.value) ? mergeSlot.value : null;
 
@@ -1522,6 +1546,10 @@ export function validateProofMergeShaIdentity(input: ProofIdentityInput): ProofI
 
   // Merge authority. Pre-merge the slot must be an explicit null: a branch or
   // execution SHA parked here is the failure this contract exists to name.
+  // Reached whenever the phase is pre-merge, including when the caller forced
+  // it over a bundle that claims otherwise. That is the case the check exists
+  // for: an open PR whose bundle names a merge SHA is asserting authority that
+  // does not exist yet, and it must fail rather than be believed.
   if (phase === 'pre-merge' && mergeSlot.declared && mergeSlot.value !== null) {
     failures.push({
       code: 'premature_merge_authority',
@@ -1644,10 +1672,25 @@ export function runProofIdentityCli(argv: readonly string[]): number {
   };
   const verificationPath = arg('--verification');
   const evidencePath = arg('--evidence');
+  const phaseArg = arg('--phase');
   if (!verificationPath) {
-    process.stderr.write('usage: proof-schema.ts proof-identity --verification <path> [--evidence <path>]\n');
+    process.stderr.write(
+      'usage: proof-schema.ts proof-identity --phase <pre-merge|post-merge> --verification <path> [--evidence <path>]\n',
+    );
     return 2;
   }
+  // --phase is REQUIRED and has no default. A default would be a fail-open
+  // waiting to happen: the one caller that matters validates open pull
+  // requests, where the phase is always pre-merge, and a forgotten flag would
+  // silently restore inference from the untrusted bundle's own merge slot.
+  if (phaseArg !== 'pre-merge' && phaseArg !== 'post-merge') {
+    process.stderr.write(
+      `--phase is required and must be "pre-merge" or "post-merge" (got ${JSON.stringify(phaseArg)}). ` +
+        'A validator running on an open pull request passes "pre-merge".\n',
+    );
+    return 2;
+  }
+  const phase: ProofIdentityPhase = phaseArg;
 
   let verificationMarkdown: string;
   try {
@@ -1670,7 +1713,9 @@ export function runProofIdentityCli(argv: readonly string[]): number {
     }
   }
 
-  process.stdout.write(`${JSON.stringify(validateProofMergeShaIdentity({ verificationMarkdown, evidence }))}\n`);
+  process.stdout.write(
+    `${JSON.stringify(validateProofMergeShaIdentity({ verificationMarkdown, evidence, phase }))}\n`,
+  );
   return 0;
 }
 

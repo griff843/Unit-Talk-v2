@@ -325,9 +325,20 @@ jobs:
 
                         let identity = null;
                         try {
+                          // --phase pre-merge is not a default and is not
+                          // inferred. This workflow only ever validates an
+                          // OPEN pull request, which is unmerged by
+                          // definition, so merge authority cannot exist yet.
+                          // Without this, a bundle that names a plausible SHA
+                          // in sha_binding.merge_sha and repeats it in both
+                          // markdown merge rows would be read as post-merge
+                          // and pass -- granting itself authority GitHub
+                          // never gave it. The CLI rejects a missing --phase
+                          // rather than defaulting, so this cannot be lost.
                           const argv = [
                             'exec', 'tsx', 'scripts/ops/proof-schema.ts',
                             'proof-identity',
+                            '--phase', 'pre-merge',
                             '--verification', verificationFile
                           ];
                           if (evidenceFile) argv.push('--evidence', evidenceFile);
