@@ -315,9 +315,52 @@ coverage.
 | only the 3 gate workflows reserved | CAUGHT — 1 fail |
 | merge-wrapper-entrypoint content rule removed | CAUGHT — 1 fail |
 
+## Independent review round 4
+
+Three P1s, all accepted. Each is the same defect class: a diff that removes a control
+without touching a file the classifier reserves.
+
+- [x] **The required check ran a PR-controlled script.** `.github/workflows/ci.yml:264`
+      runs `pnpm verify:static` inside the required `verify` job, resolved from the PR's
+      OWN `package.json`. A diff repointing `verify:static` to `true` skipped
+      lint / type-check / build / test and still produced a green required context, while
+      classifying `auto`. The aggregator keys that job reaches — `verify:static`, `test`,
+      `lint`, `type-check`, `build`, `test:command-center`, `ci:db-client-boundary`,
+      `env:check` and the rest of the `verify:static` chain — are now frozen by the
+      `ci-required-check-entrypoints` content rule.
+
+      The leaf `test:<group>` keys are deliberately NOT frozen: wiring a new test file into
+      a group is the ordinary case, and reserving it would make every harness PR a human
+      relay. A second rule, `neutered-test-group`, reserves a group redefined to a value
+      that invokes no runner at all (`true`, `echo skipped`, `exit 0`). The residual is
+      stated rather than hidden: a diff can still delete individual files from a group's
+      list and stay `auto`. That change is legible in the diff itself; an emptied
+      aggregator is not.
+- [x] **JSON escapes evaded the entrypoint rule.** `"ops\u003amerge-wrapper"` decodes to
+      the key pnpm actually runs, but a regex over the raw patch text sees no colon and
+      matches nothing. Content rules now accept `decodeJsonEscapes`, and every added line
+      is tested in both its literal and its escape-decoded form.
+- [x] **The reserved chain depended on an unreserved file.** `pre-merge-authorization.ts`
+      imports `emitJson` from `scripts/ops/shared.ts` and hands it the receipt object
+      before deriving the exit code from that same mutable object — so an edit confined to
+      `shared.ts` could rewrite an authorization decision while classifying `auto`.
+      `scripts/ops/shared.ts` is now part of the `merge-authority` surface.
+
+### Mutation controls (round 4)
+
+| Mutation | Result |
+|---|---|
+| `decodeJsonEscapes` handling disabled | CAUGHT — 1 fail |
+| `ci-required-check-entrypoints` rule removed | CAUGHT — 2 fail |
+| `neutered-test-group` rule removed | CAUGHT — 1 fail |
+| `scripts/ops/shared.ts` unreserved | CAUGHT — 1 fail |
+
+Each was applied to the shipped source, the suite run, the source restored. Each was
+caught, and each failed only its own assertions.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 0f13702050b6d4c6ca662a6a491ffe2daec3c7f1
+Execution SHA: 396092cbeda45113dbeaa4aa212cdc6343fe1421
