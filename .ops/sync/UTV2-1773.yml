@@ -1,0 +1,172 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1773
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1773
+  objective: Populate the canonical reference data required by the live resolution
+    path, especially `teams`, without inventing mappings or introducing a second
+    source of truth.
+  acceptance_criteria:
+    - Re-derive the exact empty/missing canonical reference population from
+      read-only production evidence.
+    - Validate the existing bootstrap in a non-production target before any live
+      use.
+    - Prove idempotency by executing twice and showing the second run makes no
+      unintended mutation.
+    - Fail closed on ambiguous aliases, duplicate canonical identity, or
+      conflicting source data; do not guess a mapping.
+    - Return the exact governed production mutation packet and
+      rollback/verification plan before any live bootstrap is authorized.
+  guardrails:
+    - No provider resubscription, ingestion restart, member delivery, or silent
+      production mutation. PM approval is required before live data-canonical
+      writes.
+    - ---
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why
+
+      Current recovery evidence reports `teams = 0`, which starves
+      game-line/event resolution and contributes to missing event context in
+      CLV. An existing bootstrap script is believed to be idempotent, but no
+      current issue owns running/validating it as a governed recovery step.
+    - |-
+      Where to look
+      * `scripts/run-canonical-reference-bootstrap.ts`
+      * canonical aliases/sportsbooks/leagues/teams tables and their constraints
+      * the consumers that resolve event/team identity for grading/CLV
+      * [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) and [UTV2-1425](https://linear.app/unit-talk-v2/issue/UTV2-1425/grading-heartbeat-proof-p3-data-gate-verdict-refresh) findings for product-truth consequences
+    - >-
+      File scope
+
+      * `scripts/run-canonical-reference-bootstrap.ts`
+
+      * `docs/06_status/lanes/UTV2-1773.json`
+
+      * `docs/06_status/proof/UTV2-1773/`
+
+
+      Exactly the scope already established in the ratified dispatch preparation
+      below: `lane_type: data-canonical`, file scope verified to exist on
+      `main`. The production bootstrap run is OUT of scope for this lane —
+      validation happens in a non-production target only. Declare that fence in
+      `file_scope_lock` at lane-start.
+    - >-
+      Definition of done
+
+      * Canonical reference population is complete enough for the intended
+      game-line resolution path or remaining gaps are explicitly enumerated.
+
+      * Idempotency and conflict refusal are execution-proven.
+
+      * After an authorized application, CLV/event-resolution coverage can be
+      remeasured against the same baseline population.
+    - |-
+      Dispatch preparation — 2026-09-01 (PM-ratified Ready)
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. **GO-WITH-FIX** — two things must be nailed down before the executor starts.
+
+      ### 1. "Complete enough" is not measurable — fix this first
+
+      The DoD reads *"canonical reference population is complete enough for the intended game-line resolution path"*. That names no target row count, no league/team set, and no coverage threshold, so no executor can honestly declare it met and no reviewer can honestly refute it. **The lane's first deliverable is a measurable completeness criterion** — an explicit per-table target (leagues, teams, sportsbooks, aliases) with a stated coverage percentage or enumerated required set — recorded in the proof bundle before any population work begins.
+
+      ### 2. Scope fence — no production write in this lane
+
+      Requirement 5 correctly defers the live bootstrap to a separately PM-approved packet. Make that fence mechanical, not just narrative: validation happens in a non-production target only, and the production bootstrap run is **out of scope for this lane**. Declare the fence in `file_scope_lock` at lane-start so the executor cannot drift into a live write.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T3`, `derived_tier: T1`, `escalated: false`. T1 is above the floor — acceptable.
+      * **Lane type: **`data-canonical` — admits `scripts/**` plus the lane/proof directories. Note its `required_proof_artifacts` includes `canonical-diff.json`; the lane must produce it or closeout will fail.
+      * File scope verified: `scripts/run-canonical-reference-bootstrap.ts` **exists on main**.
+      * Concurrency: `data-canonical` is a **singleton** — no second data-canonical lane may run concurrently. No forbidden combination with runtime / modeling / verification / governance / hygiene. **Not Tier C** — dispatchable now, concurrent with [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+      * Dependencies: `blockedBy: []`. Blocks [UTV2-1774](https://linear.app/unit-talk-v2/issue/UTV2-1774/june-offline-replay-harness-prove-end-to-end-pipeline-before-provider) (which PM has explicitly held out of Ready) and — newly modelled — **blocks **[UTV2-1775](https://linear.app/unit-talk-v2/issue/UTV2-1775/staging-canonical-reference-parity-seed-aliases-sportsbooks-leagues), which seeds the same canonical reference tables and would otherwise bake fixture mappings this lane may contradict.
+
+      ### Containment
+
+      Passes as scoped. Non-production target only; production bootstrap deferred to separate PM authorization.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent
+    title: "Canonical reference bootstrap: populate teams and prove idempotent
+      reference truth"
+    description: |-
+      ## Objective
+
+      Populate the canonical reference data required by the live resolution path, especially `teams`, without inventing mappings or introducing a second source of truth.
+
+      ## Why
+
+      Current recovery evidence reports `teams = 0`, which starves game-line/event resolution and contributes to missing event context in CLV. An existing bootstrap script is believed to be idempotent, but no current issue owns running/validating it as a governed recovery step.
+
+      ## Where to look
+
+      * `scripts/run-canonical-reference-bootstrap.ts`
+      * canonical aliases/sportsbooks/leagues/teams tables and their constraints
+      * the consumers that resolve event/team identity for grading/CLV
+      * [UTV2-1745](https://linear.app/unit-talk-v2/issue/UTV2-1745/pick-trustworthiness-audit-can-this-system-currently-produce-a) and [UTV2-1425](https://linear.app/unit-talk-v2/issue/UTV2-1425/grading-heartbeat-proof-p3-data-gate-verdict-refresh) findings for product-truth consequences
+
+      ## Acceptance Criteria
+
+      1. Re-derive the exact empty/missing canonical reference population from read-only production evidence.
+      2. Validate the existing bootstrap in a non-production target before any live use.
+      3. Prove idempotency by executing twice and showing the second run makes no unintended mutation.
+      4. Fail closed on ambiguous aliases, duplicate canonical identity, or conflicting source data; do not guess a mapping.
+      5. Return the exact governed production mutation packet and rollback/verification plan before any live bootstrap is authorized.
+
+      ## File scope
+
+      * `scripts/run-canonical-reference-bootstrap.ts`
+      * `docs/06_status/lanes/UTV2-1773.json`
+      * `docs/06_status/proof/UTV2-1773/`
+
+      Exactly the scope already established in the ratified dispatch preparation below: `lane_type: data-canonical`, file scope verified to exist on `main`. The production bootstrap run is OUT of scope for this lane — validation happens in a non-production target only. Declare that fence in `file_scope_lock` at lane-start.
+
+      ## Definition of done
+
+      * Canonical reference population is complete enough for the intended game-line resolution path or remaining gaps are explicitly enumerated.
+      * Idempotency and conflict refusal are execution-proven.
+      * After an authorized application, CLV/event-resolution coverage can be remeasured against the same baseline population.
+
+      ## Guardrails
+
+      No provider resubscription, ingestion restart, member delivery, or silent production mutation. PM approval is required before live data-canonical writes.
+
+      ---
+
+      ## Dispatch preparation — 2026-09-01 (PM-ratified Ready)
+
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. **GO-WITH-FIX** — two things must be nailed down before the executor starts.
+
+      ### 1. "Complete enough" is not measurable — fix this first
+
+      The DoD reads *"canonical reference population is complete enough for the intended game-line resolution path"*. That names no target row count, no league/team set, and no coverage threshold, so no executor can honestly declare it met and no reviewer can honestly refute it. **The lane's first deliverable is a measurable completeness criterion** — an explicit per-table target (leagues, teams, sportsbooks, aliases) with a stated coverage percentage or enumerated required set — recorded in the proof bundle before any population work begins.
+
+      ### 2. Scope fence — no production write in this lane
+
+      Requirement 5 correctly defers the live bootstrap to a separately PM-approved packet. Make that fence mechanical, not just narrative: validation happens in a non-production target only, and the production bootstrap run is **out of scope for this lane**. Declare the fence in `file_scope_lock` at lane-start so the executor cannot drift into a live write.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T3`, `derived_tier: T1`, `escalated: false`. T1 is above the floor — acceptable.
+      * **Lane type: **`data-canonical` — admits `scripts/**` plus the lane/proof directories. Note its `required_proof_artifacts` includes `canonical-diff.json`; the lane must produce it or closeout will fail.
+      * File scope verified: `scripts/run-canonical-reference-bootstrap.ts` **exists on main**.
+      * Concurrency: `data-canonical` is a **singleton** — no second data-canonical lane may run concurrently. No forbidden combination with runtime / modeling / verification / governance / hygiene. **Not Tier C** — dispatchable now, concurrent with [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+      * Dependencies: `blockedBy: []`. Blocks [UTV2-1774](https://linear.app/unit-talk-v2/issue/UTV2-1774/june-offline-replay-harness-prove-end-to-end-pipeline-before-provider) (which PM has explicitly held out of Ready) and — newly modelled — **blocks **[UTV2-1775](https://linear.app/unit-talk-v2/issue/UTV2-1775/staging-canonical-reference-parity-seed-aliases-sportsbooks-leagues), which seeds the same canonical reference tables and would otherwise bake fixture mappings this lane may contradict.
+
+      ### Containment
+
+      Passes as scoped. Non-production target only; production bootstrap deferred to separate PM authorization.
+    captured_at: 2026-09-02T03:05:20.447Z
+    description_sha256: 0b2ed08a9b34a2c952ceaddd0ff1fb04f9aaf7ff8b64b75d41d11f961de89975
+  contract_hash: dc94de56cb012a2dc44ad776ed65aedfe75f8d86da9e36630fde65ca09435125
