@@ -41,6 +41,12 @@
       "exit_code": 0,
       "status": "PASS"
     },
+    "aggregate_verify": {
+      "command": "pnpm verify",
+      "exit_code": 1,
+      "status": "BLOCKED_DEFERRED",
+      "detail": "All verify:static stages passed; test:live-db then refused the unidentified loopback target because writable verification requires staging xskgrzbteyqdufktjrjx."
+    },
     "focused_issue_test": {
       "command": "pnpm exec tsx scripts/run-canonical-reference-bootstrap.ts self-test",
       "exit_code": 0,

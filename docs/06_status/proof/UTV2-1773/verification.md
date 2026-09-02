@@ -99,6 +99,12 @@ exit=0
 $ pnpm test
 exit=0
 
+$ pnpm verify
+All verify:static stages passed; the command then reached test:live-db.
+[assert-staging] REFUSED: target identity could not be resolved from its URL
+(host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.
+exit=1 (BLOCKED_DEFERRED at the required staging identity gate)
+
 $ pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
 Changed files: 18
