@@ -14,6 +14,7 @@ import {
   sanitizedGitEnv,
   GIT_REPO_SELECTION_VARS,
   extractScopePaths,
+  normalizeScopePath,
   parsePacket,
   resolveProfileForScope,
   assertIsolatedWorktree,
@@ -301,4 +302,75 @@ test('the deprecated dispatch skill routes to the packet flow instead of executi
     assert.ok(!body.includes(command), `deprecated skill still offers a runnable "${command}"`);
   }
   assert.match(body, /ops:codex-packet/, 'it must name the replacement route');
+});
+
+// ── scope paths must be in the form the classifier's globs are anchored to ──
+
+test('normalizeScopePath canonicalizes the spellings a packet actually uses', () => {
+  assert.equal(normalizeScopePath('./supabase/migrations/x.sql'), 'supabase/migrations/x.sql');
+  assert.equal(normalizeScopePath('supabase\\migrations\\x.sql'), 'supabase/migrations/x.sql');
+  assert.equal(normalizeScopePath('apps//api/./src/a.ts'), 'apps/api/src/a.ts');
+  assert.equal(normalizeScopePath('apps/api/../worker/src/a.ts'), 'apps/worker/src/a.ts');
+  // Nothing that leaves the repo has a reserved-surface answer, so it is not a
+  // scope path at all.
+  assert.equal(normalizeScopePath('/etc/passwd'), null);
+  assert.equal(normalizeScopePath('C:/Windows/system32'), null);
+  assert.equal(normalizeScopePath('../outside/a.ts'), null);
+  assert.equal(normalizeScopePath('https://example.com/a.ts'), null);
+  assert.equal(normalizeScopePath('   '), null);
+});
+
+test('a dot-slash scope path still classifies as reserved', () => {
+  // The classifier's globs are anchored, so `./supabase/...` matched nothing
+  // before normalization: the packet read as unreserved and could take the
+  // T2-only default profile while its eventual diff needed reserved handling.
+  assert.deepEqual(extractScopePaths('- `./supabase/migrations/0001_x.sql`'), [
+    'supabase/migrations/0001_x.sql',
+  ]);
+  assert.deepEqual(classifyScope(REPO_ROOT, extractScopePaths('- `./supabase/migrations/0001_x.sql`')), {
+    reserved: true,
+    surfaces: ['production-ddl-and-data'],
+  });
+});
+
+test('assertIsolatedWorktree refuses a SUBDIRECTORY of the primary checkout', () => {
+  // `--git-common-dir` is relative to the cwd git ran in, not to the toplevel.
+  // Resolving it against the toplevel named a directory outside the repo, so
+  // the equality test failed and a subdirectory of the control checkout passed
+  // as isolated whenever it was on a non-protected branch.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-primary-'));
+  const git = (cwd: string, ...args: string[]): void => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
+    assert.equal(r.status, 0, `${args.join(' ')}: ${r.stderr}`);
+  };
+  try {
+    git(dir, 'init', '-b', 'feature/work');
+    git(dir, 'config', 'user.email', 'test@example.com');
+    git(dir, 'config', 'user.name', 'test');
+    fs.mkdirSync(path.join(dir, 'nested', 'deeper'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'nested', 'deeper', 'a.txt'), 'x');
+    git(dir, 'add', '-A');
+    git(dir, 'commit', '-m', 'init');
+
+    // The root of the control checkout was already refused before this fix.
+    assert.throws(() => assertIsolatedWorktree(dir), /primary \(control\) checkout/);
+    // The subdirectory is the case that slipped through.
+    assert.throws(
+      () => assertIsolatedWorktree(path.join(dir, 'nested', 'deeper')),
+      /primary \(control\) checkout/,
+      'a subdirectory of the control checkout must be refused like its root',
+    );
+
+    // A linked worktree of the same repo, and its subdirectories, stay allowed.
+    const linked = path.join(dir, '..', path.basename(dir) + '-wt');
+    git(dir, 'worktree', 'add', '-b', 'feature/isolated', linked);
+    assert.equal(assertIsolatedWorktree(linked).branch, 'feature/isolated');
+    assert.equal(
+      assertIsolatedWorktree(path.join(linked, 'nested', 'deeper')).branch,
+      'feature/isolated',
+    );
+    fs.rmSync(linked, { recursive: true, force: true });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

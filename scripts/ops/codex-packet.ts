@@ -113,14 +113,44 @@ export function parsePacket(text: string): ParsedPacket {
   };
 }
 
+/**
+ * Canonical repo-relative form for a declared scope path, or null if the token
+ * cannot be one.
+ *
+ * The classifier's globs are anchored (`supabase/migrations/**`), so the common
+ * spellings `./supabase/...` and `supabase\\...` match NOTHING and the packet
+ * reads as unreserved — silently selecting a weaker model profile than its
+ * eventual diff requires. Normalizing here is what makes the two agree.
+ * Anything that escapes the repo is rejected rather than normalized: a path
+ * outside it has no reserved-surface answer at all.
+ */
+export function normalizeScopePath(token: string): string | null {
+  const slashed = token.replace(/\\/g, '/').trim();
+  if (slashed === '' || slashed.startsWith('http')) return null;
+  if (path.posix.isAbsolute(slashed) || /^[A-Za-z]:\//.test(slashed)) return null;
+  const segments: string[] = [];
+  for (const segment of slashed.split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (segments.length === 0) return null; // escapes the repo root
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.length > 0 ? segments.join('/') : null;
+}
+
 /** Pulls path-shaped tokens out of the Scope section's bullets. */
 export function extractScopePaths(scope: string): string[] {
   const out: string[] = [];
   for (const line of scope.split(/\r?\n/)) {
     const bullet = line.match(/^\s*[-*]\s+(.*)$/);
     if (!bullet) continue;
-    const token = bullet[1].match(/`([^`]+)`/)?.[1] ?? bullet[1].trim().split(/\s+/)[0];
-    if (token && /[/.]/.test(token) && !token.startsWith('http')) out.push(token.replace(/[,;]$/, ''));
+    const raw = bullet[1].match(/`([^`]+)`/)?.[1] ?? bullet[1].trim().split(/\s+/)[0];
+    if (!raw || !/[/.]/.test(raw) || raw.startsWith('http')) continue;
+    const normalized = normalizeScopePath(raw.replace(/[,;]$/, ''));
+    if (normalized) out.push(normalized);
   }
   return out;
 }
@@ -221,8 +251,22 @@ export function assertIsolatedWorktree(cwd: string): { toplevel: string; branch:
   // branch-name test alone would happily run in the control checkout on a
   // feature branch, which is exactly the shared-checkout collision this
   // repository has hit before.
-  const gitDir = path.resolve(git(['rev-parse', '--absolute-git-dir']));
-  const commonDir = path.resolve(toplevel, git(['rev-parse', '--git-common-dir']));
+  // `--git-common-dir` is documented as relative to the CURRENT DIRECTORY, not
+  // to the toplevel. For `--cwd` inside a subdirectory of the primary checkout
+  // it answers something like `../../.git`; resolving that against `toplevel`
+  // names a directory outside the repo, the equality below fails, and the
+  // control checkout passes as isolated. Resolve it against the cwd git was
+  // actually run in, and compare real paths so a symlinked worktree does not
+  // read as a different directory either.
+  const real = (p: string): string => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const gitDir = real(git(['rev-parse', '--absolute-git-dir']));
+  const commonDir = real(path.resolve(cwd, git(['rev-parse', '--git-common-dir'])));
   if (gitDir === commonDir) {
     throw new Error(
       `refusing to run in the primary (control) checkout: ${toplevel}. ` +
