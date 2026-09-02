@@ -37,5 +37,6 @@
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
-  }
+  },
+  "runtime_proof_kind": "live-schema-parity"
 }
