@@ -71,7 +71,28 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!.*\\..*).*)', '/icon.svg'],
+  // Exclude ONLY Next's own build output, which carries no application data and
+  // is served before any operator context exists. Everything else reaches
+  // middleware, and `isPublicPath` above is the single place that decides what
+  // is public.
+  //
+  // The previous matcher was `/((?!.*\..*).*)` — "every path that contains no
+  // dot". That is a shape test, not a security boundary: Next never invoked
+  // middleware for ANY dotted path, so authentication was skipped entirely
+  // rather than evaluated and allowed. It was reachable on a real route.
+  // Measured against a running server with auth required:
+  //
+  //     GET /picks/abc      -> 401   (middleware ran)
+  //     GET /picks/abc.def  -> 200   (middleware never ran)
+  //
+  // `/picks/[id]` is a dynamic segment, so any id containing a dot rendered the
+  // operator page — and executed its server components, which hold privileged
+  // database access — with no authentication at all. Every future route
+  // inherited the same hole for free.
+  //
+  // Keeping the exclusion list to literal, known prefixes means a new route can
+  // never opt itself out of authentication by the shape of its URL.
+  matcher: ['/((?!_next/static|_next/image).*)'],
 };
 
 function isPublicPath(pathname: string): boolean {
