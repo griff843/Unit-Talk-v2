@@ -8,6 +8,7 @@ export type BranchDisciplineResult = {
     | 'multiple_issue_references'
     | 'no_issue_reference'
     | 'missing_branch_issue_reference'
+    | 'no_branch_issue_reference'
     | 'branch_issue_mismatch'
     | 'exempt_branch';
   issue_ids: string[];
@@ -122,17 +123,46 @@ export function evaluateBranchDiscipline(input: {
     input.commits ?? '',
   ].join('\n'));
 
-  if (branchIssueIds.length !== 1) {
+  // A branch with no issue ID is normal under the mission-native operating
+  // model (docs/mission/intent.md): work comes from docs/mission/plan.md, not
+  // from a Linear issue, so demanding one here would red every PR that model
+  // produces. The control this guard actually protects is not "an issue exists"
+  // -- it is that a branch never drags in a DIFFERENT issue's work, which is
+  // still enforced below and on every branch that does carry an ID.
+  if (branchIssueIds.length === 0) {
+    if (issueIds.length > 1) {
+      return {
+        ok: false,
+        code: 'multiple_issue_references',
+        issue_ids: issueIds,
+        branch_issue_ids: branchIssueIds,
+        errors: [
+          `PR references multiple issue IDs (${issueIds.join(', ')}) but its branch names none. ` +
+            'Reference at most one, so the change cannot be read as belonging to two.',
+        ],
+        warning: null,
+      };
+    }
+    return {
+      ok: true,
+      code: 'no_branch_issue_reference',
+      issue_ids: issueIds,
+      branch_issue_ids: branchIssueIds,
+      errors: [],
+      warning:
+        issueIds.length === 1
+          ? `Branch names no issue; PR references ${issueIds[0]} as context only. Linear is portfolio-only.`
+          : null,
+    };
+  }
+
+  if (branchIssueIds.length > 1) {
     return {
       ok: false,
       code: 'missing_branch_issue_reference',
       issue_ids: issueIds,
       branch_issue_ids: branchIssueIds,
-      errors: [
-        branchIssueIds.length === 0
-          ? `PR branch "${branch || '<missing>'}" must include exactly one UTV2-### or UNI-### issue ID`
-          : `PR branch "${branch}" references multiple issue IDs: ${branchIssueIds.join(', ')}`,
-      ],
+      errors: [`PR branch "${branch}" references multiple issue IDs: ${branchIssueIds.join(', ')}`],
       warning: null,
     };
   }
