@@ -5,6 +5,16 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'db/migrations-rollback/**'
+      # UTV2-1822: receipt truth is not confined to supabase/migrations. A receipt
+      # binds a hash to an authoritative source under migrations_archive, so changing
+      # or deleting that source, or editing RECEIPTS.json, changes what the receipt
+      # asserts without touching the receipt file. Those paths must trigger this
+      # workflow or the structural validator below never runs for them.
+      - 'supabase/migrations_archive/**'
+      - 'scripts/ci/migration-history-receipt.ts'
+      - 'scripts/ci/migration-history-receipt-check.ts'
+      - 'scripts/ci/migration-history-receipt-validator.ts'
+      - 'scripts/ci/migration-history-replay-drill.ts'
       - 'scripts/ci/migration-reversibility-gate.ts'
       - 'scripts/ci/schema-roundtrip-hash.ts'
       - 'scripts/ci/migration-precondition-drill.ts'
@@ -33,6 +43,16 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # UTV2-1822: UNCONDITIONAL by design -- deliberately not gated on
+      # steps.detect.outputs.has_migration, which is computed with --diff-filter=A
+      # and is therefore false for exactly the cases this must catch: an existing
+      # receipt edited to contain executable SQL, or an archive source changed or
+      # deleted while the receipt's recorded hash goes stale. Gating structural
+      # validation on "a migration was added" makes it fail open for every
+      # modification. It needs no database, so it runs on every triggered run.
+      - name: Receipt manifest structural validation (UTV2-1822)
+        run: npx tsx scripts/ci/migration-history-receipt-validator.ts
 
       - name: Check down-script presence (fail-closed)
         run: |
