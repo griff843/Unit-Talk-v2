@@ -9,9 +9,16 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/1483
 Approved PR head: pending merge
 Execution SHA: 4ba80a999fc654009f7e5082f1947b5926768e77
 
-Anchor: `4ba80a999fc654009f7e5082f1947b5926768e77` — the last non-proof commit on this
-branch and the head every measurement below was taken against. Only proof-path commits
-follow it.
+Anchor: `4ba80a999fc654009f7e5082f1947b5926768e77` — the last commit carrying implementation
+changes on this branch, and the head every measurement below was taken against.
+
+What follows it: the proof bundle itself, a bot commit binding the manifest to PR #1483,
+and one manifest commit declaring `expected_proof_paths` and correcting `created_by` to
+`claude` after Close Eligibility Preflight blocked on CEP-E1/CEP-M2. All three touch only
+proof and lane-apparatus paths; none touch `scripts/` or `.github/`, so every measurement
+below still describes the code under review. Stated rather than implied, because
+`proof-binding-validator` — the gate that would enforce a proof-paths-only rule — does not
+run on this PR (see below), so the property is asserted here instead of being checked.
 
 ### Why this bundle's top-level row is a SHA and not the placeholder
 
