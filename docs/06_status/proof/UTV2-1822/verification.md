@@ -302,20 +302,40 @@ above, which runs the same script with credentials present.
 | Baseline / existing migrations modified | none |
 | Other workflow files modified | none |
 
-ASSERTIONS:
+## ASSERTIONS:
 
-EVIDENCE: every numbered assertion below cites the CI run and job that produced it; the
-runs are enumerated in `evidence.json` under `runtime_proof`, all taken at the anchor
+Every assertion cites the CI run and job that produced it; the runs are enumerated in
+`evidence.json` under `runtime_proof`, all taken at the anchor
 `b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`.
 
-## Assertions
+- [x] Local migration history is a superset of the remote ledger: `remote_only=0`,
+      measured against production.
+- [x] `db push --dry-run` proposes exactly one migration and nothing else.
+- [x] All 127 receipts replay against a clean database with `ON_ERROR_STOP=1` and leave
+      the catalog fingerprint unchanged.
+- [x] No receipt contains an executable statement, and a control fails when one is added.
+- [x] The exact SQL that executed is preserved and hash-bound; a control fails when it is
+      modified or removed.
+- [x] Ledger/archive divergence is preserved on both sides, never reconciled.
 
-1. Local migration history is a superset of the remote ledger: `remote_only=0`, measured
-   against production.
-2. `db push --dry-run` proposes exactly one migration and nothing else.
-3. All 127 receipts replay against a clean database with `ON_ERROR_STOP=1` and leave the
-   catalog fingerprint unchanged.
-4. No receipt contains an executable statement, and a control fails when one is added.
-5. The exact SQL that executed is preserved and hash-bound; a control fails when it is
-   modified or removed.
-6. Ledger/archive divergence is preserved on both sides, never reconciled.
+## EVIDENCE:
+
+The measured output for each assertion above is quoted in the fenced blocks throughout
+`## Verification`, and the CI run and job identifiers backing them are enumerated in
+`evidence.json` under `runtime_proof` — all captured at the anchor
+`b5414f8c0679e8292df65dcbdc80d80e8f66dfc7`.
+
+```
+replay set: baseline=1 receipts=127 forward=6
+phase 0: receipt manifest structurally valid
+phase 1: baseline applied, 1396 catalog entries
+phase 2: all 127 receipts replayed with ON_ERROR_STOP=1
+phase 3: catalog fingerprint identical before and after all 127 receipts (1396 entries compared)
+phase 4: 6 forward migrations replayed
+```
+(run 33628487127, job 100241832846 — Schema round-trip drill, at the anchor)
+
+```
+drilled 127 migration(s)
+```
+(run 33628487127, job 100241832630 — Fail-closed precondition drill, at the anchor)
