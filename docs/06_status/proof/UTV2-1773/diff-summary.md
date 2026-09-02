@@ -1,5 +1,7 @@
 # UTV2-1773 canonical reference bootstrap diff summary
 
+MERGE_SHA: null
+
 ## Measurable completeness criterion
 
 This criterion was recorded before any bootstrap execution. It is derived from

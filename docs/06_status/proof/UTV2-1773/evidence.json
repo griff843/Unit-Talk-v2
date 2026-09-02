@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1773",
   "tier": "T1",
   "lane_type": "data-canonical",
-  "proof_profile": "runtime",
+  "proof_profile": "static",
   "status": "blocked_pending_governed_identity_resolution_and_staging_execution",
   "title": "Canonical reference bootstrap fails closed before production mutation",
   "generated_at": "2026-09-02T12:16:00Z",
