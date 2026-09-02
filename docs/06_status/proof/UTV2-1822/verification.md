@@ -7,7 +7,7 @@ MERGE_SHA: pending merge
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1482
 
-Anchor: 34d967384ea3e66574e0ddc33b18520a2c6ecadf — the last non-proof commit on this branch and the head every CI
+Anchor: 634780300366dbee9ce24fde0fc73e37a6405cc5 — the last non-proof commit on this branch and the head every CI
 receipt below was captured against. Only proof-path commits follow it.
 
 ## Verification
@@ -104,7 +104,7 @@ behaviour rather than inspecting files.
 
 ### Behaviour-level replay — scratch Postgres
 
-`scripts/ci/migration-history-replay-drill.ts`, run 33577393522, job 100084256518 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `34d967384ea3e66574e0ddc33b18520a2c6ecadf`
+`scripts/ci/migration-history-replay-drill.ts`, run 33580370804, job 100093191911 (`migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)`), at head `634780300366dbee9ce24fde0fc73e37a6405cc5`
 
 ```
 phase 0: receipt manifest structurally valid
@@ -175,6 +175,41 @@ submission occurred in this lane.
 The "no executable SQL" rule is an allowlist — *nothing but comments* — not a keyword
 denylist, which would fail open on the first statement nobody anticipated.
 
+### The validator was fail-open in CI, and that was the real defect
+
+A validator that refuses when invoked is only half a control. The other half is that
+CI invokes it for the cases that matter, and that half was broken. PM review (P1) found
+it before merge:
+
+- the workflow did not trigger on `supabase/migrations_archive/**`, so changing or
+  deleting the authoritative source a receipt binds its hash to — or editing
+  `RECEIPTS.json` — ran nothing at all;
+- `has_migration` is computed with `git diff --diff-filter=A`, so editing an **existing**
+  receipt left it false and skipped the only validation path.
+
+Those are precisely the two mutations the validator exists to reject, so it was
+fail-open for both. This is the same class as the earlier `WIRING_CAPABILITY_ORPHAN`
+finding: the control existed and was correct, and nothing ran it.
+
+Fix: triggers now cover every receipt-truth input, including the archive tree and the
+receipt tooling itself, so a PR that weakens the validator runs it. Structural
+validation is an unconditional step in `reversibility-check` — a job with no `detect`
+step, so `has_migration` cannot gate it even by accident. It requires no database.
+
+| Mutation | Result |
+|---|---|
+| existing receipt gains executable SQL, no new migration added | `FAIL (1) receipt contains executable SQL` |
+| archive source modified, receipt hash left stale | `FAIL (1) source_sha256 mismatch — bound ab988354…, actual c0d6baf9…` |
+| archive source deleted, receipt hash left stale | `FAIL (1) source artifact … does not exist` |
+| unchanged corpus | `PASS` |
+
+The wiring is locked mechanically by W1–W3 in
+`scripts/ci/migration-reversibility-gate.test.ts`, because nothing else would catch a
+regression in a workflow file. Each was mutation-proved to fail on the regression it
+names: removing the archive path fails W1; re-adding
+`if: steps.detect.outputs.has_migration == 'true'` fails W2 and W3; relocating the step
+into the gated job fails W3. Control: 10/10 pass.
+
 ### The exemptions are not self-certifying
 
 Two gates presuppose that a new migration executes DDL. Both were taught about receipts,
@@ -219,9 +254,9 @@ Required checks are cited from CI at the anchor, not from a local run, because t
 authoritative execution is the one GitHub performed on this head:
 
 ```
-pnpm verify   (job `verify`)  → SUCCESS  run 33577393434, job 100085506615
+pnpm verify   (job `verify`)  → SUCCESS  run 33580370767, job 100094541219
               covers env:check, lint, pnpm type-check, build and pnpm test
-scripts/ci/r-level-check.ts   → SUCCESS  run 33577393440 (R-Level Compliance Check)
+scripts/ci/r-level-check.ts   → SUCCESS  run 33580370833 (R-Level Compliance Check)
 ```
 
 Stated precisely: `pnpm verify` was NOT green in this local worktree — `env:check` fails
@@ -260,7 +295,7 @@ ASSERTIONS:
 
 EVIDENCE: every numbered assertion below cites the CI run and job that produced it; the
 runs are enumerated in `evidence.json` under `runtime_proof`, all taken at the anchor
-`34d967384ea3e66574e0ddc33b18520a2c6ecadf`.
+`634780300366dbee9ce24fde0fc73e37a6405cc5`.
 
 ## Assertions
 
