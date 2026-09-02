@@ -1,6 +1,6 @@
 # PROOF: UTV2-1826 — resolve post-merge migration merge authority from the declared merge slot
 
-MERGE_SHA: pending merge
+MERGE_SHA: ef27ab62c90d8fb9bd6ee6d7688c836411a0753b
 
 > Pre-merge the merge row is intentionally the ratified pre-merge value; the Execution SHA
 > row carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
@@ -157,9 +157,9 @@ head, lane commit and base tip are four distinct objects, not by inspecting the 
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: ef27ab62c90d8fb9bd6ee6d7688c836411a0753b
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1486
-Approved PR head: pending merge
+Approved PR head: 38433c681eac52e0784888825e3f20aa44667bb8
 Execution SHA: cf3adef13a3f32ca841cbdc259961c4698149dfe
 
 Anchor: `cf3adef13a3f32ca841cbdc259961c4698149dfe` is the last non-proof commit on this

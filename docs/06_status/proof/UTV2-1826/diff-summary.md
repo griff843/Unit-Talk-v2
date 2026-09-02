@@ -1,10 +1,16 @@
 # DIFF SUMMARY: UTV2-1826 — resolve post-merge migration merge authority from the declared merge slot
 
-MERGE_SHA: pending merge
+MERGE_SHA: ef27ab62c90d8fb9bd6ee6d7688c836411a0753b
 
 Issue: UTV2-1826
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1486
+Approved PR head: 38433c681eac52e0784888825e3f20aa44667bb8
 Execution SHA: cf3adef13a3f32ca841cbdc259961c4698149dfe
+
+> Rebound to GitHub's merged-PR attestation for PR #1486. `ops:proof-rebind` and
+> `ops:lane-close --repair-merged` rewrite only evidence.json and verification.md, so this
+> file's merge anchor is set here through the governed repair branch rather than left
+> stale — truth-check P3/C4 scan the whole bundle, diff-summary.md included.
 
 ## Why anything changed
 
