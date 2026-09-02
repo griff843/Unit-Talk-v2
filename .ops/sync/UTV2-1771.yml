@@ -1,0 +1,174 @@
+version: 1
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1771
+  objective: Create a durable, independently restorable snapshot of the eight June
+    `provider_offer_history` partitions before any retention/pruning repair is
+    allowed to touch them.
+  acceptance_criteria:
+    - Snapshot the exact June partitions targeted by the retention plan to
+      durable storage outside the hot production table.
+    - Record source partition names, bounds, row counts, byte sizes, snapshot
+      location, content/checksum identity, and timestamp.
+    - Prove restorability in a non-production target by restoring a
+      representative/full snapshot and reconciling counts/checksums against the
+      source.
+    - Read-only against production except for the export/snapshot operation
+      itself; no DROP, DETACH, DELETE, pruning, retention activation, ingestion
+      restart, delivery change, or unpark.
+    - Produce a machine-readable receipt that
+      [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1)
+      can consume as a hard prerequisite.
+  guardrails:
+    - Production stays parked. No provider resubscription. No retention
+      mutation. No queue mutation. No hand-authored success receipt.
+    - ---
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Why
+
+      The retained June offer dataset is currently irreplaceable while the
+      provider subscription is off. The planned retention/`pg_cron` repair can
+      become destructive if it drops old partitions before their contents are
+      safely preserved.
+    - |-
+      Where to look
+      * Current June `provider_offer_history_pYYYYMMDD` partitions and exact row/size counts
+      * Existing Supabase backup/export facilities and repository ops tooling
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) proof for current partition layout and non-destructive forward provisioning
+      * [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) for the later retention mutation that this issue gates
+    - >-
+      File scope
+
+      * `scripts/ops/preserve-*.ts`
+
+      * `docs/06_status/lanes/UTV2-1771.json`
+
+      * `docs/06_status/proof/UTV2-1771/`
+
+
+      Exactly the scope already established in the ratified dispatch preparation
+      below: `lane_type: verification`, whose scope fence is that this lane must
+      NOT touch `packages/db/**`. Declare the same fence in `file_scope_lock` at
+      lane-start.
+    - |-
+      Definition of done
+      * Every targeted June partition has durable snapshot evidence.
+      * Restorability is demonstrated, not asserted.
+      * Source vs restored counts/checksums reconcile or any discrepancy is surfaced as FAIL.
+      * [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) remains blocked if the snapshot is incomplete or not restorable.
+    - >-
+      Verification
+
+      Run the snapshot path twice where safe to prove idempotent/no-duplicate
+      behavior, induce a bad/missing snapshot in test and prove the
+      restorability gate fails, and preserve production row counts before/after.
+    - |-
+      Dispatch preparation — 2026-09-01 (PM-ratified Ready)
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. **GO-WITH-FIX** — the three gaps below must be closed by the executor as part of the lane, not invented silently.
+
+      ### Required specification (the AC named none of these)
+
+      The acceptance criteria say "durable storage outside the hot production table", "a non-production target" and "a machine-readable receipt" without naming a destination, a target, or a schema. Left as-is the executor will invent all three. The lane must **state each one explicitly in its proof bundle before writing any code**:
+
+      1. The exact snapshot destination (path/bucket/table), and why it is outside the hot production table.
+      2. The exact non-production restore/validation target.
+      3. The receipt schema — field names and types — and where it is written.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T3`, `derived_tier: T1`, `escalated: false`. T1 is above the floor and defensible for a production-read-and-export lane.
+      * **Lane type: **`verification` — admits `scripts/**`, `proof/**`, `docs/06_status/{lanes,proof}/**`. **Scope fence:** this holds only while the file scope stays out of `packages/db/**`. If the work turns out to need `packages/db` changes the lane must be `data-canonical` instead, which consumes a singleton. Declare the fence in `file_scope_lock` at lane-start.
+      * **Concurrency:** verification, `max_per_target: 1`. Not a singleton class. **Not Tier C** — `scripts/ops/preserve-*.ts` does not match the Tier C pattern `scripts/ops/(lane|merge|tier)-*.ts`. Dispatchable now, concurrent with [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+
+      ### Dependency note (unmodelled)
+
+      `blockedBy: []`, but the body names [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry)'s proof as the source of the current partition layout — and [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) **is **`Blocked Internal` **(started), not Done**; its lease is `reclaimed`. This lane can still re-derive the layout read-only from live Postgres, which is the preferred path. If it is expected to *consume* 1736's proof instead, that must be modelled as a real `blockedBy` first — do not silently depend on an artifact from an unfinished lane.
+
+      ### Containment
+
+      Passes. The export is a read; the existing guardrails already bar DROP/DETACH, retention changes and resubscription. No production mutation.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention
+    title: Preserve June provider_offer_history partitions before retention repair
+    description: |-
+      ## Objective
+
+      Create a durable, independently restorable snapshot of the eight June `provider_offer_history` partitions before any retention/pruning repair is allowed to touch them.
+
+      ## Why
+
+      The retained June offer dataset is currently irreplaceable while the provider subscription is off. The planned retention/`pg_cron` repair can become destructive if it drops old partitions before their contents are safely preserved.
+
+      ## Where to look
+
+      * Current June `provider_offer_history_pYYYYMMDD` partitions and exact row/size counts
+      * Existing Supabase backup/export facilities and repository ops tooling
+      * [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) proof for current partition layout and non-destructive forward provisioning
+      * [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) for the later retention mutation that this issue gates
+
+      ## Acceptance Criteria
+
+      1. Snapshot the exact June partitions targeted by the retention plan to durable storage outside the hot production table.
+      2. Record source partition names, bounds, row counts, byte sizes, snapshot location, content/checksum identity, and timestamp.
+      3. Prove restorability in a non-production target by restoring a representative/full snapshot and reconciling counts/checksums against the source.
+      4. Read-only against production except for the export/snapshot operation itself; no DROP, DETACH, DELETE, pruning, retention activation, ingestion restart, delivery change, or unpark.
+      5. Produce a machine-readable receipt that [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) can consume as a hard prerequisite.
+
+      ## File scope
+
+      * `scripts/ops/preserve-*.ts`
+      * `docs/06_status/lanes/UTV2-1771.json`
+      * `docs/06_status/proof/UTV2-1771/`
+
+      Exactly the scope already established in the ratified dispatch preparation below: `lane_type: verification`, whose scope fence is that this lane must NOT touch `packages/db/**`. Declare the same fence in `file_scope_lock` at lane-start.
+
+      ## Definition of done
+
+      * Every targeted June partition has durable snapshot evidence.
+      * Restorability is demonstrated, not asserted.
+      * Source vs restored counts/checksums reconcile or any discrepancy is surfaced as FAIL.
+      * [UTV2-1370](https://linear.app/unit-talk-v2/issue/UTV2-1370/hot-db-retention-execution-wave-1) remains blocked if the snapshot is incomplete or not restorable.
+
+      ## Verification
+
+      Run the snapshot path twice where safe to prove idempotent/no-duplicate behavior, induce a bad/missing snapshot in test and prove the restorability gate fails, and preserve production row counts before/after.
+
+      ## Guardrails
+
+      Production stays parked. No provider resubscription. No retention mutation. No queue mutation. No hand-authored success receipt.
+
+      ---
+
+      ## Dispatch preparation — 2026-09-01 (PM-ratified Ready)
+
+      Reverified against live Linear and `main` @ `e48106fc` before promotion. **GO-WITH-FIX** — the three gaps below must be closed by the executor as part of the lane, not invented silently.
+
+      ### Required specification (the AC named none of these)
+
+      The acceptance criteria say "durable storage outside the hot production table", "a non-production target" and "a machine-readable receipt" without naming a destination, a target, or a schema. Left as-is the executor will invent all three. The lane must **state each one explicitly in its proof bundle before writing any code**:
+
+      1. The exact snapshot destination (path/bucket/table), and why it is outside the hot production table.
+      2. The exact non-production restore/validation target.
+      3. The receipt schema — field names and types — and where it is written.
+
+      ### Mechanical classification
+
+      * **Tier:** declared T1, `mechanical_minimum: T3`, `derived_tier: T1`, `escalated: false`. T1 is above the floor and defensible for a production-read-and-export lane.
+      * **Lane type: **`verification` — admits `scripts/**`, `proof/**`, `docs/06_status/{lanes,proof}/**`. **Scope fence:** this holds only while the file scope stays out of `packages/db/**`. If the work turns out to need `packages/db` changes the lane must be `data-canonical` instead, which consumes a singleton. Declare the fence in `file_scope_lock` at lane-start.
+      * **Concurrency:** verification, `max_per_target: 1`. Not a singleton class. **Not Tier C** — `scripts/ops/preserve-*.ts` does not match the Tier C pattern `scripts/ops/(lane|merge|tier)-*.ts`. Dispatchable now, concurrent with [UTV2-1699](https://linear.app/unit-talk-v2/issue/UTV2-1699/lane-maximizer-discovery-repair-bare-invocation-returns-an-empty-board).
+
+      ### Dependency note (unmodelled)
+
+      `blockedBy: []`, but the body names [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry)'s proof as the source of the current partition layout — and [UTV2-1736](https://linear.app/unit-talk-v2/issue/UTV2-1736/offer-history-partitions-provision-current-and-forward-with-pre-expiry) **is **`Blocked Internal` **(started), not Done**; its lease is `reclaimed`. This lane can still re-derive the layout read-only from live Postgres, which is the preferred path. If it is expected to *consume* 1736's proof instead, that must be modelled as a real `blockedBy` first — do not silently depend on an artifact from an unfinished lane.
+
+      ### Containment
+
+      Passes. The export is a read; the existing guardrails already bar DROP/DETACH, retention changes and resubscription. No production mutation.
+    captured_at: 2026-09-02T02:40:24.640Z
+    description_sha256: bcaee13013a820a3bc41402efc23dc711a99d2ff87595238f2ebcaa1b2e5e1ca
+  contract_hash: 15824b402a33f4ea6a15a59e52161d04220d37d365fa8a8dedf3e3d61fc3d322
