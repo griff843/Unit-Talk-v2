@@ -1,11 +1,11 @@
 # PROOF: UTV2-1824
 
-MERGE_SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
+MERGE_SHA: pending merge
 
-> Pre-merge this row carries the branch implementation SHA, which is the last non-proof
-> commit on the branch. `post-merge-lane-close.yml` rebinds merge authority from GitHub's
-> merged-PR attestation after merge. It is deliberately not the string `N/A`: a
-> non-SHA anchor passes the rebinder but fails required Executor Result Validation.
+> Merge authority does not exist before the merge, so this row must not present one.
+> Execution identity lives in `sha_binding.verified_source_sha`, which is
+> `284951151ef8c4c3198fbee603f50ace9143a34c` — the last non-proof commit on this branch.
+> `post-merge-lane-close.yml` rebinds this row from GitHub's merged-PR attestation.
 
 Issue: UTV2-1824
 Tier: T1
@@ -158,6 +158,7 @@ sign in; that value is operator-supplied by policy and is not set by this lane.
 
 ## Merge SHA Binding
 
-Merge SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1488
 Approved PR head: 284951151ef8c4c3198fbee603f50ace9143a34c
 Execution SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
