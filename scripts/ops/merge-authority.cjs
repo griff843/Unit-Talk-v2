@@ -100,6 +100,19 @@ function filePaths(file) {
 }
 
 /**
+ * Decodes the escape sequences a JSON encoder may use inside a string, so a
+ * content rule compares against the value a JSON parser would produce.
+ *
+ * Only string-level escapes are decoded; the line is not parsed as JSON,
+ * because a patch line is a fragment and usually will not parse.
+ */
+function decodeJsonEscapes(line) {
+  return line
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/\\\//g, '/');
+}
+
+/**
  * Classifies a diff.
  *
  * @param {object} input
@@ -199,7 +212,18 @@ function classifyDiff({ files, policy, declaredFileCount }) {
         .split('\n')
         .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
         .map((l) => l.slice(1));
-      const offending = addedLines.find((l) => pattern.test(l));
+      // A rule over a JSON manifest must see the string the PARSER sees. JSON
+      // permits `"ops\\u003amerge-wrapper"`, which decodes back to
+      // `ops:merge-wrapper` and is what pnpm then runs -- while a regex over the
+      // raw patch text matches nothing. Each added line is therefore tested in
+      // both its literal and its escape-decoded form.
+      const candidates = rule.decodeJsonEscapes
+        ? addedLines.flatMap((l) => {
+            const decoded = decodeJsonEscapes(l);
+            return decoded === l ? [l] : [l, decoded];
+          })
+        : addedLines;
+      const offending = candidates.find((l) => pattern.test(l));
       if (offending) {
         surfaces.add(rule.id);
         reasons.push(`${rule.reserved} — ${file.filename}: ${offending.trim().slice(0, 120)}`);
@@ -301,6 +325,7 @@ function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = 
 }
 
 module.exports = {
+  decodeJsonEscapes,
   POLICY_PATH,
   globToRegExp,
   matchesAnyGlob,

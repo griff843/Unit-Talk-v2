@@ -542,3 +542,89 @@ test('package.json is reserved by CONTENT, not wholesale', () => {
     assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
   }
 });
+
+// ── round 4: the classifier must not be evadable by encoding or by
+// ── repointing a control it does not itself own ────────────────────────────
+
+test('a JSON-escaped merge-wrapper key is still reserved', () => {
+  // pnpm reads the PARSED key, so "ops:merge-wrapper" is the same script.
+  // A regex over the raw patch text would see no colon and let it through.
+  const result = classifyDiff({
+    files: [file('package.json', '+    "ops\\u003amerge-wrapper": "tsx scripts/evil.ts",')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+});
+
+test('escape decoding does not lose the literal form', () => {
+  const result = classifyDiff({
+    files: [file('package.json', '+    "ops:merge-wrapper": "tsx scripts/ops/ops-merge-wrapper.ts",')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+});
+
+test("repointing the required check's own entrypoint is reserved", () => {
+  // ci.yml's required `verify` job runs `pnpm verify:static` out of the PR's
+  // own package.json. Emptying it would produce a green but vacuous check.
+  const result = classifyDiff({
+    files: [file('package.json', '+    "verify:static": "true",')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('ci-required-check-entrypoints'));
+});
+
+test('every script key the required verify job reaches is frozen', () => {
+  for (const key of [
+    'verify:static',
+    'test',
+    'lint',
+    'type-check',
+    'build',
+    'test:command-center',
+    'ci:db-client-boundary',
+    'env:check',
+  ]) {
+    const result = classifyDiff({
+      files: [file('package.json', `+    "${key}": "true",`)],
+      policy,
+    });
+    assert.equal(result.authority, 'human', `${key} must be reserved`);
+  }
+});
+
+test('wiring a new test file into a group stays automatic', () => {
+  // This is the ordinary case. If it required a human, RMA would be the old
+  // tier list under a new name.
+  const result = classifyDiff({
+    files: [file(
+      'package.json',
+      '+    "test:ops": "tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts",',
+    )],
+    policy,
+  });
+  assert.equal(result.authority, 'auto');
+});
+
+test('emptying a test group so it runs no runner is reserved', () => {
+  const result = classifyDiff({
+    files: [file('package.json', '+    "test:ops": "echo skipped",')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('neutered-test-group'));
+});
+
+test("the reserved chain's shared output helper is reserved", () => {
+  // pre-merge-authorization hands its receipt to emitJson and only then reads
+  // the exit code off that same object.
+  const result = classifyDiff({
+    files: [file('scripts/ops/shared.ts', '+const x = 1;')],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-authority'));
+});

@@ -116,7 +116,7 @@
     {
       "id": "merge-authority",
       "reserved": "Merge authority itself \u2014 the gates, the machinery that produces required checks, the merge wrapper, ownership, and this file",
-      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending. Branch protection binds CONTEXT NAMES, not workflows, and a same-repo PR runs its own copy of any workflow it edits: with `checks: write` that copy can mint a newer, successful check run under a required name. So every workflow is reserved, not only the three that legitimately produce those contexts. The merge wrapper is reserved for the mirror-image reason: the trusted wrapper would happily merge a change that makes the next wrapper authorize unconditionally.",
+      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending. Branch protection binds CONTEXT NAMES, not workflows, and a same-repo PR runs its own copy of any workflow it edits: with `checks: write` that copy can mint a newer, successful check run under a required name. So every workflow is reserved, not only the three that legitimately produce those contexts. The merge wrapper is reserved for the mirror-image reason: the trusted wrapper would happily merge a change that makes the next wrapper authorize unconditionally. The reserved chain's shared output helper (scripts/ops/shared.ts) is reserved for the same reason: pre-merge-authorization hands its receipt object to emitJson and only then derives an exit code from that same mutable object, so an unreserved change there can rewrite an authorization decision without touching a reserved file.",
       "paths": [
         ".github/workflows/**",
         ".github/actions/**",
@@ -129,6 +129,7 @@
         "scripts/ops/merge-wrapper.ts",
         "scripts/ops/ops-merge-wrapper.ts",
         "scripts/ops/merge-mutex.ts",
+        "scripts/ops/shared.ts",
         "scripts/ops/truth-check-lib.ts",
         "scripts/ops/executor-result-validate.ts",
         "docs/mission/intent.md"
@@ -152,14 +153,41 @@
     {
       "id": "merge-wrapper-entrypoint",
       "reserved": "Merge-wrapper entrypoint \u2014 repointing the sanctioned merge command is a merge-authority change",
-      "note": "package.json is edited by almost every PR (wiring a new test into test:ops), so reserving the whole file would make RMA meaningless. Only lines that define or repoint the merge commands are reserved.",
+      "note": "package.json is edited by almost every PR (wiring a new test into test:ops), so reserving the whole file would make RMA meaningless. Only lines that define or repoint the merge commands are reserved. JSON permits escapes inside a string (\"ops\\u003amerge-wrapper\" decodes to the key pnpm runs), so each added line is also matched in its escape-decoded form.",
       "pathGlobs": [
         "package.json",
         "*/package.json",
         "*/*/package.json"
       ],
       "addedLinePattern": "\"(ops:merge-wrapper|ops:merge-lock|ops:pr-merge)\"|pre-merge-authorization|ops-merge-wrapper|merge-mutex",
-      "patternFlags": "i"
+      "patternFlags": "i",
+      "decodeJsonEscapes": true
+    },
+    {
+      "id": "ci-required-check-entrypoints",
+      "reserved": "Redefinition of a script key that the required `verify` check invokes \u2014 repointing one removes a control without touching a reserved file",
+      "note": "`.github/workflows/ci.yml` runs `pnpm verify:static`, `pnpm test:command-center` and `pnpm ci:db-client-boundary` inside the required `verify` job, and `verify:static` fans out to lint / type-check / build / test. Those aggregator keys are read out of the PR's OWN package.json, so a diff that repoints one to `true` would pass a green but empty required check. They are frozen; the leaf `test:<group>` keys are NOT, because wiring a new test file into a group is the ordinary case that RMA exists to keep automatic.",
+      "pathGlobs": [
+        "package.json",
+        "*/package.json",
+        "*/*/package.json"
+      ],
+      "addedLinePattern": "\"(verify|verify:static|verify:parallel|verify:quick|verify:commands|test|lint|type-check|build|test:command-center|test:db|test:t1-proof:live|test:t1-proof:local|ci:db-client-boundary|ci:assert-staging|ci:db-smoke|env:check|ops:sync-check|ops:system-alignment-check|ops:automation-coverage-check)\"\\s*:",
+      "patternFlags": "",
+      "decodeJsonEscapes": true
+    },
+    {
+      "id": "neutered-test-group",
+      "reserved": "A `test:*` group redefined to a command that runs no test runner",
+      "note": "The complement of ci-required-check-entrypoints. Adding or removing files in a group's `tsx --test` list stays `auto` \u2014 that is ordinary wiring and the change is legible in the diff. Replacing the whole value with something that invokes no runner (`true`, `echo skipped`, `exit 0`) empties a group while the required check stays green, so it is reserved. Residual, accepted deliberately: a diff can still delete individual files from a group's list and remain `auto`.",
+      "pathGlobs": [
+        "package.json",
+        "*/package.json",
+        "*/*/package.json"
+      ],
+      "addedLinePattern": "\"test:[A-Za-z0-9:_-]+\"\\s*:\\s*\"(?![^\"]*(tsx|eslint|tsc|vitest|jest|node|pnpm|turbo))[^\"]*\"",
+      "patternFlags": "",
+      "decodeJsonEscapes": true
     }
   ],
   "scopeNote": "Risk-scoped, not the old tier list under a new name. A path is reserved because a wrong change to it costs money, leaks credentials, reaches members, destroys production data, or removes a control -- not because it used to be Tier C. Pure logic that CI can judge (packages/domain, packages/contracts, scoring, lifecycle repositories) is deliberately NOT reserved: reserving it made every PR a human relay, which is what priced the real decisions at zero attention.",
