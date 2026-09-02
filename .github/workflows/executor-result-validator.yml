@@ -262,39 +262,128 @@ jobs:
                       if (!content.includes('# PROOF:')) {
                         errors.push('Proof file missing "# PROOF:" header.');
                       }
+                      // ── MERGE_SHA / execution identity (UTV2-1783) ──
+                      // This block used to require the top-level MERGE_SHA:
+                      // row to be a real hex SHA and an ancestor of the PR
+                      // head, while scripts/ci/proof-binding-validator.ts
+                      // required that same row to be the literal "pending
+                      // merge". No bundle satisfied both, so any lane where
+                      // both consumers ran was unmergeable — invisible until
+                      // a migration lane tripped both.
+                      //
+                      // The rules now live once, in
+                      // scripts/ops/proof-schema.ts, and this workflow calls
+                      // that module rather than restating them. Restating
+                      // them here is precisely how the two drifted apart, and
+                      // a test against a restatement proves only that the
+                      // copy agrees with itself. The checkout above is pinned
+                      // to the PR base ref, so the module executed is always
+                      // the trusted main-branch version.
                       if (!content.includes('MERGE_SHA:')) {
                         errors.push('Proof file missing "MERGE_SHA:" field.');
                       } else {
-                        const shaMatch = content.match(
-                          /^MERGE_SHA:\s*(.+)$/m
+                        const fs = require('fs');
+                        const os = require('os');
+                        const path = require('path');
+                        const { execFileSync } = require('child_process');
+
+                        const tmp = fs.mkdtempSync(
+                          path.join(os.tmpdir(), 'erv-proof-')
                         );
-                        const fileSha = shaMatch
-                          ? shaMatch[1].trim()
-                          : null;
-                        if (!fileSha || !/^[0-9a-f]{7,40}$/i.test(fileSha)) {
-                          errors.push(
-                            `Proof MERGE_SHA is not a valid git SHA: "${fileSha}".`
-                          );
-                        } else {
-                          // MERGE_SHA must be an ancestor of (or equal to) the PR HEAD.
-                          // This allows proof files to reference the implementation commit
-                          // SHA rather than their own commit SHA, avoiding the SHA
-                          // preimage circular dependency.
-                          try {
-                            const cmp = await github.rest.repos.compareCommits({
-                              owner, repo, base: fileSha, head: headSha
+                        const verificationFile = path.join(tmp, 'verification.md');
+                        fs.writeFileSync(verificationFile, content);
+
+                        // evidence.json sits beside the proof artifact. Its
+                        // absence selects the narrow legacy contract (the row
+                        // itself must be a real SHA); it never relaxes a rule.
+                        // A present-but-unreadable evidence file is an error,
+                        // not a downgrade — otherwise a lane could escape the
+                        // schema-v2 contract by corrupting its own evidence.
+                        const evidencePath = proofPath.replace(
+                          /[^/]+$/, 'evidence.json'
+                        );
+                        let evidenceFile = null;
+                        try {
+                          const { data: ev } =
+                            await github.rest.repos.getContent({
+                              owner, repo, path: evidencePath, ref: headSha
                             });
-                            // status "ahead" means headSha is ahead of fileSha — valid ancestor
-                            // status "identical" means they are the same commit — also valid
-                            if (!['ahead', 'identical'].includes(cmp.data.status)) {
+                          if (ev.content) {
+                            evidenceFile = path.join(tmp, 'evidence.json');
+                            fs.writeFileSync(
+                              evidenceFile,
+                              Buffer.from(ev.content, 'base64').toString('utf-8')
+                            );
+                          }
+                        } catch (e) {
+                          if (e.status !== 404) {
+                            errors.push(
+                              `Could not read ${evidencePath}: ${e.message}`
+                            );
+                          }
+                        }
+
+                        let identity = null;
+                        try {
+                          // --phase pre-merge is not a default and is not
+                          // inferred. This workflow only ever validates an
+                          // OPEN pull request, which is unmerged by
+                          // definition, so merge authority cannot exist yet.
+                          // Without this, a bundle that names a plausible SHA
+                          // in sha_binding.merge_sha and repeats it in both
+                          // markdown merge rows would be read as post-merge
+                          // and pass -- granting itself authority GitHub
+                          // never gave it. The CLI rejects a missing --phase
+                          // rather than defaulting, so this cannot be lost.
+                          const argv = [
+                            'exec', 'tsx', 'scripts/ops/proof-schema.ts',
+                            'proof-identity',
+                            '--phase', 'pre-merge',
+                            '--verification', verificationFile
+                          ];
+                          if (evidenceFile) argv.push('--evidence', evidenceFile);
+                          identity = JSON.parse(
+                            execFileSync('pnpm', argv, { encoding: 'utf-8' })
+                          );
+                        } catch (e) {
+                          errors.push(
+                            `Proof identity contract could not be evaluated: ${e.message}`
+                          );
+                        }
+
+                        if (identity) {
+                          for (const f of identity.failures) {
+                            errors.push(`${f.field}: ${f.message}`);
+                          }
+                          // Execution provenance. Pre-merge this is
+                          // sha_binding.verified_source_sha, never the merge
+                          // row. A null anchor means the bundle failed to
+                          // declare one — treat that as unverified, never as
+                          // "nothing to check".
+                          const anchor = identity.provenanceAnchorSha;
+                          if (!anchor) {
+                            if (identity.failures.length === 0) {
                               errors.push(
-                                `Proof MERGE_SHA "${fileSha}" is not an ancestor of PR HEAD "${headSha}" (compare status: ${cmp.data.status}).`
+                                'Proof declares no execution identity to verify against the PR head.'
                               );
                             }
-                          } catch (e) {
-                            errors.push(
-                              `Could not verify MERGE_SHA "${fileSha}": ${e.message}`
-                            );
+                          } else {
+                            try {
+                              const cmp = await github.rest.repos.compareCommits({
+                                owner, repo, base: anchor, head: headSha
+                              });
+                              // "ahead": head is ahead of the anchor.
+                              // "identical": same commit. Both are valid.
+                              if (!['ahead', 'identical'].includes(cmp.data.status)) {
+                                errors.push(
+                                  `Proof execution SHA "${anchor}" is not an ancestor of PR HEAD "${headSha}" (compare status: ${cmp.data.status}).`
+                                );
+                              }
+                            } catch (e) {
+                              errors.push(
+                                `Could not verify execution SHA "${anchor}": ${e.message}`
+                              );
+                            }
                           }
                         }
                       }

@@ -25,6 +25,7 @@
 
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { isNonExecutableReceipt } from './migration-history-receipt.ts';
 import { basename } from 'node:path';
 
 const MIGRATIONS_DIR = 'supabase/migrations';
@@ -136,6 +137,26 @@ function checkDownScript(
   let isIrreversible = false;
   let irreversibleRatified = false;
   let reason: string | undefined;
+
+  // UTV2-1822: a non-executable historical version receipt has nothing to roll back.
+  // It exists so `supabase db push` finds a local counterpart for a remote ledger row
+  // whose effects the baseline snapshot already contains; it runs no statement, so a
+  // down script for it could only ever be a no-op that this gate would itself reject as
+  // comment-only. The exemption is granted on the file's verified contents, never on its
+  // header claim alone -- a file asserting the receipt header while carrying SQL fails
+  // isNonExecutableReceipt and is held to the ordinary down-script requirement.
+  if (isNonExecutableReceipt(migrationPath)) {
+    return {
+      migration: migrationPath,
+      down_script: `${ROLLBACK_DIR}/${base}.down.sql`,
+      exists: true,
+      non_empty: true,
+      is_irreversible: false,
+      irreversible_ratified: false,
+      pass: true,
+      reason: 'Non-executable historical version receipt (UTV2-1822): executes nothing, so no down script applies.',
+    };
+  }
 
   if (!exists) {
     reason = `Missing down script: ${downPath}`;

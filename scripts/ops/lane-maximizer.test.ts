@@ -9,8 +9,19 @@ import {
   type LaneManifest,
   type LinearCandidateFetchDeps,
   type MaximizationReport,
+  LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+  LINEAR_CANDIDATE_MAX_NODES,
+  LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE,
+  LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+  LINEAR_CANDIDATE_PAGE_SIZE,
+  LINEAR_CANDIDATE_QUERY,
   evaluateCandidates,
-  isBlockingLinearRelationType,
+  fetchLinearCandidates,
+  isPrerequisiteInverseRelation,
+  isPrerequisiteOutgoingRelation,
+  LINEAR_UNREADABLE_RELATIONS_SENTINEL,
+  LINEAR_CANDIDATE_QUERY,
+  linearCandidateMaxPages,
   parseQueueCandidates,
   resolveCandidateSource,
   runMaximizerCli,
@@ -306,9 +317,15 @@ test('candidate whose blocked_by is done is not blocked on BLOCKED_DEP', () => {
 });
 
 test('generic Linear related links are not treated as blocking dependencies', () => {
-  assert.equal(isBlockingLinearRelationType('related'), false);
-  assert.equal(isBlockingLinearRelationType('blocked_by'), true);
-  assert.equal(isBlockingLinearRelationType('blocks'), true);
+  // UTV2-1820: direction lives in the connection, not the type string. The
+  // same "blocks" edge appears on BOTH ends, so the outgoing copy must not be
+  // read as a prerequisite.
+  assert.equal(isPrerequisiteInverseRelation('related'), false);
+  assert.equal(isPrerequisiteInverseRelation('blocked_by'), true);
+  assert.equal(isPrerequisiteInverseRelation('blocks'), true);
+  assert.equal(isPrerequisiteOutgoingRelation('related'), false);
+  assert.equal(isPrerequisiteOutgoingRelation('blocks'), false);
+  assert.equal(isPrerequisiteOutgoingRelation('blocked_by'), true);
 });
 
 test('file scope overlap with active lane is blocked with OVERLAP', () => {
@@ -1330,6 +1347,10 @@ function candidateIssueNode(
     labels: { nodes: (overrides.labels ?? ['T2', 'lane:hygiene']).map((name) => ({ name })) },
     state: { name: 'Ready', type: 'unstarted' },
     relations: { nodes: [] },
+    // UTV2-1820: the real query now asks for `inverseRelations`, so a faithful
+    // fixture returns it. An ABSENT set is not "no prerequisites" -- it is an
+    // unreadable one, and is deliberately blocked; that path has its own test.
+    inverseRelations: { nodes: [] },
   };
 }
 
@@ -1343,6 +1364,8 @@ interface FakeLinearDeps extends LinearCandidateFetchDeps {
   cursorsSent: Array<string | null>;
   /** Every candidate-query document the implementation actually sent. */
   candidateQueries: string[];
+  /** Every `first` variable the implementation actually sent, in order. */
+  limitsSent: Array<unknown>;
 }
 
 /**
@@ -1365,6 +1388,9 @@ function fakeLinearDeps(
 ): FakeLinearDeps {
   const cursorsSent: Array<string | null> = [];
   const candidateQueries: string[] = [];
+  // UTV2-1819: the `first:` actually put on the wire, so a page size over
+  // Linear's complexity budget is caught here instead of in production.
+  const limitsSent: Array<unknown> = [];
   // cursor value -> zero-based index of the page it unlocks.
   const pageForCursor = new Map<string, number>([['', 0]]);
   for (let index = 1; index < pages.length; index += 1) {
@@ -1383,6 +1409,7 @@ function fakeLinearDeps(
     }
 
     candidateQueries.push(graphql);
+    limitsSent.push(variables.limit);
     const rawCursor = variables.cursor;
     const cursor = typeof rawCursor === 'string' ? rawCursor : null;
     cursorsSent.push(cursor);
@@ -1421,6 +1448,7 @@ function fakeLinearDeps(
     query: query as LinearCandidateFetchDeps['query'],
     cursorsSent,
     candidateQueries,
+    limitsSent,
   };
 }
 
@@ -2064,4 +2092,339 @@ test('UTV2-1699 defect 3: a throw during evaluation emits an envelope, never emp
   const parsed = JSON.parse(outcome.stdout) as Record<string, unknown>;
   assert.equal(parsed.ok, false);
   assert.equal(parsed.recommended, undefined, 'a failure envelope must carry no report-shaped keys');
+});
+
+// UTV2-1819: the candidate page size is bounded by Linear's query-complexity
+// budget, not by its row limit. `first: 100` was rejected with HTTP 400 at a
+// reported complexity of 11601/10000, which took candidate discovery -- and so
+// the entire dispatch family -- down on main. These regressions make a repeat
+// a test failure instead of a production outage.
+
+test('UTV2-1819 AC2: the candidate page size stays inside Linear query-complexity budget', () => {
+  const projected = LINEAR_CANDIDATE_PAGE_SIZE * LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE;
+  assert.ok(
+    projected < LINEAR_CANDIDATE_COMPLEXITY_BUDGET,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to complexity ${projected}, ` +
+      `which is not under Linear's budget of ${LINEAR_CANDIDATE_COMPLEXITY_BUDGET}. ` +
+      'Linear rejects an over-budget query with HTTP 400, so this is a hard outage, not a slowdown.',
+  );
+  // Headroom, so Linear re-pricing the selection slightly does not break discovery.
+  assert.ok(
+    projected <= LINEAR_CANDIDATE_COMPLEXITY_BUDGET * 0.75,
+    `page size ${LINEAR_CANDIDATE_PAGE_SIZE} projects to ${projected}, over 75% of the ` +
+      `${LINEAR_CANDIDATE_COMPLEXITY_BUDGET} budget. Leave margin for re-pricing.`,
+  );
+});
+
+test('UTV2-1819 AC4: the measured per-node cost still matches the query it was measured against', () => {
+  // The per-node complexity figure is only valid for the selection it was measured
+  // on. Linear charges for nested connections, so adding one invalidates it. Count
+  // the nested `{ nodes {` connections in the REAL exported query text.
+  const nested = [...LINEAR_CANDIDATE_QUERY.matchAll(/\w+\s*\{\s*nodes\s*\{/g)].length;
+  assert.equal(
+    nested,
+    LINEAR_CANDIDATE_NESTED_CONNECTIONS,
+    `LaneCandidates now has ${nested} nested connections, but the per-node complexity ` +
+      `figure ${LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE} was measured against ` +
+      `${LINEAR_CANDIDATE_NESTED_CONNECTIONS}. Re-measure against the live API and update ` +
+      'both constants before shipping the wider selection.',
+  );
+});
+
+test('UTV2-1819 AC3: the bounded page size reaches the wire and never caps discovery', async () => {
+  const linear = fakeLinearDeps([
+    [candidateIssueNode('UTV2-9201')],
+    [candidateIssueNode('UTV2-9202')],
+    [candidateIssueNode('UTV2-9203')],
+  ]);
+  const outcome = await runMaximizerCli([], {
+    linear,
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+
+  // The `first:` actually sent must be the bounded constant. Restoring 100 fails
+  // here, which is the whole point: Linear rejects it with HTTP 400 in production.
+  assert.deepStrictEqual(
+    linear.limitsSent,
+    [LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE, LINEAR_CANDIDATE_PAGE_SIZE],
+    'every page must request exactly the complexity-bounded page size',
+  );
+
+  // ...and the smaller page size must cost only round trips, never candidates.
+  const discovered = allResults(outcome.report!).map((entry) => entry.issue_id).sort();
+  assert.deepStrictEqual(
+    discovered,
+    ['UTV2-9201', 'UTV2-9202', 'UTV2-9203'],
+    'a bounded page size is a transport detail; it must not cap the candidate population',
+  );
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1819 (PM repair): whole-board capacity must not be a side effect of the
+// transport page size.
+//
+// The pre-repair guard was `page > 100` while the page size was 100, so the
+// supported population ceiling -- 10000 nodes -- existed only as the PRODUCT of
+// two unrelated constants. Halving the page size to satisfy Linear's complexity
+// budget would silently have halved capacity to 5000, turning a real board of
+// 6000 issues into a fail-closed discovery error with no constant anywhere
+// stating that limit. The ceiling is now named in nodes and the page bound is
+// derived from it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Minimal cursor-driven transport over a synthetic population of `total`
+ * candidate issues. Deliberately separate from `fakeLinearDeps`: these
+ * regressions run at the ten-thousand-node ceiling, so the fixture serves pages
+ * lazily from an index rather than materializing every page up front.
+ *
+ * The page size is whatever the implementation actually asks for, so a walk
+ * that sends the wrong `first:` is visible in `pagesServed`.
+ */
+function syntheticBoardDeps(total: number): LinearCandidateFetchDeps & { pagesServed: number } {
+  const state = { pagesServed: 0 };
+  const query = async (
+    graphql: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ ok: boolean; data?: unknown; error?: string }> => {
+    if (graphql.includes('ResolveTeam')) {
+      return { ok: true, data: { teams: { nodes: [{ id: 'team-fixture', key: 'UTV2' }] } } };
+    }
+    state.pagesServed += 1;
+    const offset = typeof variables.cursor === 'string' ? Number.parseInt(variables.cursor, 10) : 0;
+    const first = Number(variables.limit);
+    const end = Math.min(offset + first, total);
+    const nodes: Array<Record<string, unknown>> = [];
+    for (let index = offset; index < end; index += 1) {
+      nodes.push(candidateIssueNode(`UTV2-${100000 + index}`));
+    }
+    return {
+      ok: true,
+      data: {
+        team: {
+          issues: {
+            pageInfo: { hasNextPage: end < total, endCursor: String(end) },
+            nodes,
+          },
+        },
+      },
+    };
+  };
+  return {
+    token: 'fixture-token',
+    query: query as LinearCandidateFetchDeps['query'],
+    get pagesServed() {
+      return state.pagesServed;
+    },
+  } as LinearCandidateFetchDeps & { pagesServed: number };
+}
+
+test('UTV2-1819 AC6: a board at the supported maximum is fully discoverable', async () => {
+  const deps = syntheticBoardDeps(LINEAR_CANDIDATE_MAX_NODES);
+  const candidates = await fetchLinearCandidates([], deps);
+
+  assert.equal(
+    candidates.length,
+    LINEAR_CANDIDATE_MAX_NODES,
+    `a board of exactly ${LINEAR_CANDIDATE_MAX_NODES} candidates must be returned whole. ` +
+      'Reverting the node ceiling to a page-count guard fails here as soon as the page ' +
+      'size changes, which is the defect this repair removes.',
+  );
+});
+
+test('UTV2-1819 AC7: a board one node over the supported maximum fails closed', async () => {
+  const deps = syntheticBoardDeps(LINEAR_CANDIDATE_MAX_NODES + 1);
+  await assert.rejects(
+    () => fetchLinearCandidates([], deps),
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      assert.match(
+        message,
+        /exceeded 10000 nodes/,
+        `expected the node-ceiling refusal, got: ${message}`,
+      );
+      assert.match(message, /cannot be proven complete/, message);
+      return true;
+    },
+    'a population above the supported ceiling must fail closed, never return a truncated board',
+  );
+});
+
+test('UTV2-1819 AC8: page size does not define the supported node ceiling', () => {
+  // The invariant the pre-repair code violated: the derived page bound must
+  // always be able to carry the full node ceiling, at ANY page size. Under the
+  // old `page > 100` guard, page size 50 carried only 5000 and this fails.
+  for (const pageSize of [10, 25, 50, 75, 100, 250]) {
+    const reachable = linearCandidateMaxPages(pageSize) * pageSize;
+    assert.ok(
+      reachable >= LINEAR_CANDIDATE_MAX_NODES,
+      `page size ${pageSize} reaches only ${reachable} nodes, below the supported ceiling of ` +
+        `${LINEAR_CANDIDATE_MAX_NODES}. Transport page size must not define board capacity.`,
+    );
+  }
+
+  // ...and the loop stays bounded: the page bound is finite and never more than
+  // one page looser than the ceiling strictly needs.
+  for (const pageSize of [10, 50, 250]) {
+    assert.equal(
+      linearCandidateMaxPages(pageSize),
+      Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1,
+      'the page bound must stay derived from the node ceiling, not float free of it',
+    );
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UTV2-1820 — dependency direction.
+//
+// Linear stores one row per relation and exposes it from BOTH ends with the
+// same `type: "blocks"`. Measured live on 2026-09-01 for the real edge
+// UTV2-1771 -> UTV2-1370:
+//
+//   UTV2-1771.relations        -> { type: "blocks", relatedIssue: UTV2-1370 }
+//   UTV2-1370.inverseRelations -> { type: "blocks", issue:        UTV2-1771 }
+//
+// So the type string carries no direction; the connection does. These tests
+// drive the REAL transport mapping, not a hand-built CandidateLane, because the
+// defect lived in the mapping and a candidate fixture would bypass it entirely.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function relationNode(
+  identifier: string,
+  relations: Array<{ type: string; relatedIssue: { identifier: string } | null }>,
+  inverseRelations:
+    | Array<{ type: string; issue: { identifier: string } | null }>
+    | undefined,
+): Record<string, unknown> {
+  const node = candidateIssueNode(identifier) as Record<string, unknown>;
+  node['relations'] = { nodes: relations };
+  if (inverseRelations === undefined) {
+    delete node['inverseRelations'];
+  } else {
+    node['inverseRelations'] = { nodes: inverseRelations };
+  }
+  return node;
+}
+
+/**
+ * Runs the REAL transport mapping and returns the resulting reason codes, which
+ * is what the dispatcher actually acts on. Asserting the decision rather than an
+ * intermediate field keeps these regressions honest: a mapper that produced the
+ * right `blocked_by` but never reached the dependency check would still pass a
+ * field-level assertion.
+ */
+async function reasonCodesFor(node: Record<string, unknown>): Promise<string[]> {
+  const outcome = await runMaximizerCli([], {
+    linear: fakeLinearDeps([[node]]),
+    activeLaneDiscovery: EMPTY_ACTIVE_BOARD,
+  });
+  assert.equal(outcome.exitCode, 0, outcome.stdout);
+  const entry = allResults(outcome.report!)[0];
+  assert.ok(entry, 'the candidate must be discovered');
+  return entry.reason_codes ?? [];
+}
+
+// AC1 + AC3 (admit half). Mutation: read `blocks` off `relations` again.
+test('UTV2-1820 AC1: an outgoing "blocks" relation is not a prerequisite', async () => {
+  const codes = await reasonCodesFor(
+    relationNode(
+      'UTV2-9801',
+      [{ type: 'blocks', relatedIssue: { identifier: 'UTV2-9899' } }],
+      [],
+    ),
+  );
+
+  assert.ok(
+    !codes.includes('BLOCKED_DEP'),
+    `UTV2-9801 blocks UTV2-9899, so UTV2-9899 is downstream of it, not a prerequisite for it; got ${JSON.stringify(codes)}`,
+  );
+});
+
+// AC3 (refuse half). Mutation: stop reading `inverseRelations`.
+test('UTV2-1820 AC3: a real incoming prerequisite still blocks', async () => {
+  const codes = await reasonCodesFor(
+    relationNode('UTV2-9802', [], [
+      { type: 'blocks', issue: { identifier: 'UTV2-9898' } },
+    ]),
+  );
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'UTV2-9898 blocks UTV2-9802 on the inverse edge, so it IS a prerequisite',
+  );
+});
+
+// The exact shape the live board produced: the same issue is downstream of one
+// issue and genuinely blocked by another. Only the second may count.
+test('UTV2-1820: both edges at once — only the incoming one counts', async () => {
+  const codes = await reasonCodesFor(
+    relationNode(
+      'UTV2-9803',
+      [
+        { type: 'blocks', relatedIssue: { identifier: 'UTV2-9897' } },
+        { type: 'related', relatedIssue: { identifier: 'UTV2-9896' } },
+      ],
+      [
+        { type: 'blocks', issue: { identifier: 'UTV2-9895' } },
+        { type: 'related', issue: { identifier: 'UTV2-9894' } },
+      ],
+    ),
+  );
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'the incoming prerequisite UTV2-9895 must still block, and the outgoing edge must not',
+  );
+});
+
+// AC4. Mutation: treat a missing `inverseRelations` as an empty one.
+test('UTV2-1820 AC4: an absent relation set blocks rather than silently admitting', async () => {
+  const codes = await reasonCodesFor(relationNode('UTV2-9804', [], undefined));
+
+  assert.deepStrictEqual(
+    codes,
+    ['BLOCKED_DEP'],
+    'a server that did not return the connection has told us nothing, not "unblocked"',
+  );
+});
+
+// AC4. A relation that IS returned but names no issue is equally unreadable.
+test('UTV2-1820 AC4: a prerequisite with no identifier blocks rather than vanishing', async () => {
+  const codes = await reasonCodesFor(
+    relationNode('UTV2-9805', [], [{ type: 'blocks', issue: null }]),
+  );
+
+  assert.deepStrictEqual(codes, ['BLOCKED_DEP']);
+});
+
+// The sentinel is only useful if it actually survives the completion check.
+test('UTV2-1820 AC4: the unreadable sentinel resolves to BLOCKED_DEP, not to done', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-9806', {
+        blocked_by: [LINEAR_UNREADABLE_RELATIONS_SENTINEL],
+        file_scope: ['scripts/ops/unreadable-relations.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(findDecisionIssueIds(report, 'blocked'), ['UTV2-9806']);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['BLOCKED_DEP']);
+});
+
+// The query must actually ask for the edge the fix depends on. Without this,
+// deleting `inverseRelations` from the query would leave every candidate
+// carrying the sentinel and the failure would look like a board problem.
+test('UTV2-1820: the shipped query requests the inverse edge', () => {
+  assert.match(
+    LINEAR_CANDIDATE_QUERY,
+    /inverseRelations\s*\{\s*nodes\s*\{\s*type\s*issue\s*\{\s*identifier\s*\}/,
+    'the prerequisite edge must be in the real query text, not just in the mapper',
+  );
 });

@@ -787,8 +787,53 @@ function parseBlockedByFromText(text: string | null | undefined): string[] {
   return [...blockedLine[1].matchAll(/(?:UTV2|UNI)-\d+/g)].map((match) => match[0]);
 }
 
-export function isBlockingLinearRelationType(type: string): boolean {
+/**
+ * UTV2-1820: which relation types name a PREREQUISITE, and on which edge.
+ *
+ * Linear stores one row per relation and exposes it from both ends. Measured
+ * against the live API on 2026-09-01, for the real edge UTV2-1771 -> UTV2-1370:
+ *
+ *   UTV2-1771.relations        -> { type: "blocks", relatedIssue: UTV2-1370 }
+ *   UTV2-1370.inverseRelations -> { type: "blocks", issue:        UTV2-1771 }
+ *
+ * Both sides of the SAME edge carry `type: "blocks"`. The type string alone
+ * therefore carries no direction at all -- the direction is which connection
+ * the node came from. `relations` is the outgoing edge (this issue blocks the
+ * related one, so the related one is DOWNSTREAM), and `inverseRelations` is the
+ * incoming edge (the named issue blocks this one, so it is a PREREQUISITE).
+ *
+ * The shipped predicate treated `blocks` on the outgoing edge as a prerequisite,
+ * which inverted the dependency: an issue that unblocks other work was reported
+ * as blocked by that work and refused dispatch until its own dependents
+ * completed -- which they could not, because they were waiting on it.
+ *
+ * `blocked_by` is accepted here as well. It was never observed on the wire in
+ * the UTV2 team (the vocabulary seen is `blocks` and `related`), but if Linear
+ * ever emits it on the inverse edge it unambiguously names a prerequisite, and
+ * accepting it costs nothing while refusing it would fail open.
+ */
+/**
+ * Stand-in prerequisite used when a relation set cannot be read. It is not a
+ * real issue identifier and never resolves to a completed issue, so a candidate
+ * carrying it stays BLOCKED_DEP instead of being silently admitted.
+ */
+export const LINEAR_UNREADABLE_RELATIONS_SENTINEL = 'UNREADABLE-RELATIONS';
+
+export function isPrerequisiteInverseRelation(type: string): boolean {
   return type === 'blocks' || type === 'blocked_by';
+}
+
+/**
+ * The OUTGOING edge never names a prerequisite. This exists as a named function
+ * rather than an inlined `false` so the property is testable and so a future
+ * reader cannot "fix" the inversion back by editing a bare literal.
+ *
+ * `blocked_by` on the outgoing edge would mean "this issue is blocked by the
+ * related one", which IS a prerequisite -- so it is honoured. It has never been
+ * observed on this connection; `blocks` and `related` are what Linear returns.
+ */
+export function isPrerequisiteOutgoingRelation(type: string): boolean {
+  return type === 'blocked_by';
 }
 
 export function parseQueueCandidates(queuePath: string): CandidateLane[] {
@@ -839,19 +884,126 @@ export function parseQueueCandidates(queuePath: string): CandidateLane[] {
 }
 
 /**
- * Page size for the candidate query. Linear's `issues` connection accepts up to
- * 250 per page; 100 keeps each response small while still needing only a couple
- * of round trips for a board of a few hundred issues.
+ * Linear's server-side GraphQL query-complexity ceiling. Exceeding it is a hard
+ * HTTP 400 (`"Query too complex"`), not a soft degradation.
  */
-export const LINEAR_CANDIDATE_PAGE_SIZE = 100;
+export const LINEAR_CANDIDATE_COMPLEXITY_BUDGET = 10_000;
 
 /**
- * Hard stop on the pagination loop. If the cursor walk ever exceeds this many
- * pages the result cannot be proven complete, so discovery FAILS rather than
- * returning the pages collected so far -- a truncated candidate population is
- * exactly the fail-open this lane exists to remove.
+ * Measured complexity cost of ONE `LaneCandidates` node, taken from a live API
+ * response on 2026-09-01: `first: 100` was rejected at a reported complexity of
+ * 22601, i.e. ~226.01 per node. Linear charges for the nested connections in the
+ * selection (`labels`, `relations` and `inverseRelations`), which is why a node
+ * is this expensive.
+ *
+ * The figure was 116.01 with two connections. Adding `inverseRelations` -- which
+ * UTV2-1820 requires, because it is the only edge that names a genuine
+ * prerequisite -- very nearly doubled it, re-measured on the same day against
+ * the real query text: 100 -> 22601, 75 -> 16951, 60 -> 13561, 50 -> 11301,
+ * 40 -> OK. That is why the page size below had to move at the same time.
+ *
+ * If the node selection gains another nested connection this figure is stale --
+ * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` exists to make that a test failure
+ * rather than a production outage.
  */
-export const LINEAR_CANDIDATE_MAX_PAGES = 100;
+export const LINEAR_CANDIDATE_MEASURED_COMPLEXITY_PER_NODE = 226.01;
+
+/**
+ * Number of nested connections in the `LaneCandidates` node selection that the
+ * per-node complexity figure above was measured against: `labels { nodes }`,
+ * `relations { nodes }` and `inverseRelations { nodes }`. Adding a fourth
+ * invalidates the measurement.
+ */
+export const LINEAR_CANDIDATE_NESTED_CONNECTIONS = 3;
+
+/**
+ * Page size for the candidate query. Linear's `issues` connection accepts up to
+ * 250 rows per page, but the ROW limit is not the binding constraint -- the
+ * query-complexity budget is. At the measured ~226 complexity per node, 100 rows
+ * costs ~22601 against a ceiling of 10000 and is rejected outright with HTTP 400,
+ * which took the whole dispatch family down (UTV2-1819). 30 costs ~6780, roughly
+ * 68% of budget, leaving headroom for Linear to re-price the selection without
+ * breaking discovery again.
+ *
+ * 50 was correct for the two-connection selection and is NOT correct for this
+ * one: it costs ~11301 and would be rejected outright. The page size and the
+ * measured per-node cost have to move together, which is what
+ * `LINEAR_CANDIDATE_NESTED_CONNECTIONS` is there to force.
+ *
+ * This is a TRANSPORT detail only. It never caps the candidate population: the
+ * cursor walk in `fetchLinearCandidates` pages until `hasNextPage` is false, so
+ * a smaller page size costs an extra round trip and changes nothing else.
+ */
+export const LINEAR_CANDIDATE_PAGE_SIZE = 30;
+
+/**
+ * Hard stop on whole-board discovery, expressed in CANDIDATE NODES.
+ *
+ * This is the supported population ceiling: a board at or under this size is
+ * fully discoverable, and a board above it FAILS CLOSED rather than returning
+ * the pages collected so far -- a truncated candidate population is exactly the
+ * fail-open this lane exists to remove.
+ *
+ * It is deliberately stated in nodes, not pages. The pre-UTV2-1819 guard was
+ * `page > 100` with a page size of 100, so the real ceiling was an ACCIDENT of
+ * the transport: halving the page size to stay inside Linear's complexity
+ * budget would have silently halved supported board capacity from 10000 to
+ * 5000. Transport page size must never define whole-board population capacity,
+ * so the ceiling is named here and the page bound is derived from it below.
+ */
+export const LINEAR_CANDIDATE_MAX_NODES = 10_000;
+
+/**
+ * Loop bound for the cursor walk, DERIVED from the node ceiling so that
+ * changing `LINEAR_CANDIDATE_PAGE_SIZE` cannot change supported capacity.
+ *
+ * The node ceiling alone cannot bound the loop: a server that returns empty
+ * pages while still reporting `hasNextPage` would never reach it. This bound
+ * exists only to make that pathological case terminate, so it is one page
+ * looser than the node ceiling strictly requires and is never the guard that
+ * fires on a merely-large board.
+ */
+export function linearCandidateMaxPages(pageSize: number = LINEAR_CANDIDATE_PAGE_SIZE): number {
+  return Math.ceil(LINEAR_CANDIDATE_MAX_NODES / pageSize) + 1;
+}
+
+/**
+ * The candidate query, exported so the complexity regression inspects the REAL
+ * query text rather than a copy that could drift away from it.
+ */
+export const LINEAR_CANDIDATE_QUERY = `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
+       team(id: $teamId) {
+         issues(
+           first: $limit
+           after: $cursor
+           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
+           orderBy: createdAt
+         ) {
+           pageInfo { hasNextPage endCursor }
+           nodes {
+             identifier
+             title
+             url
+             description
+             branchName
+             labels { nodes { name } }
+             state { name type }
+             relations {
+               nodes {
+                 type
+                 relatedIssue { identifier }
+               }
+             }
+             inverseRelations {
+               nodes {
+                 type
+                 issue { identifier }
+               }
+             }
+           }
+         }
+       }
+     }`;
 
 /** Injection seam for the Linear transport, so pagination is testable offline. */
 export interface LinearCandidateFetchDeps {
@@ -877,6 +1029,18 @@ interface LinearCandidateIssueNode {
       relatedIssue: { identifier: string } | null;
     }>;
   };
+  /**
+   * Relations where this issue is the TARGET. A prerequisite of this issue
+   * appears here, not in `relations` -- see `isPrerequisiteInverseRelation`.
+   * Optional in the type because a server that omits it must be treated as
+   * unreadable and blocked, never as "no prerequisites".
+   */
+  inverseRelations?: {
+    nodes: Array<{
+      type: string;
+      issue: { identifier: string } | null;
+    }>;
+  } | null;
 }
 
 interface LinearCandidatePage {
@@ -931,6 +1095,7 @@ export async function fetchLinearCandidates(
   const nodes: LinearCandidateIssueNode[] = [];
   let cursor: string | null = null;
   let page = 0;
+  const maxPages = linearCandidateMaxPages(LINEAR_CANDIDATE_PAGE_SIZE);
 
   // Cursor pagination over the FULL eligible population. Every page must
   // succeed: a mid-walk failure throws, because half a board dressed as a whole
@@ -951,9 +1116,9 @@ export async function fetchLinearCandidates(
   // one cycle -- it can never displace an existing candidate.
   for (;;) {
     page += 1;
-    if (page > LINEAR_CANDIDATE_MAX_PAGES) {
+    if (page > maxPages) {
       throw new Error(
-        `Linear candidate pagination exceeded ${LINEAR_CANDIDATE_MAX_PAGES} pages; ` +
+        `Linear candidate pagination exceeded ${maxPages} pages; ` +
           'refusing to report a candidate population that cannot be proven complete.',
       );
     }
@@ -963,33 +1128,7 @@ export async function fetchLinearCandidates(
       : Math.min(LINEAR_CANDIDATE_PAGE_SIZE, maxCandidateIssues - nodes.length);
 
     const result: LinearQueryResult<LinearCandidatePage> = await query<LinearCandidatePage>(
-      `query LaneCandidates($teamId: String!, $limit: Int!, $cursor: String) {
-       team(id: $teamId) {
-         issues(
-           first: $limit
-           after: $cursor
-           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
-           orderBy: createdAt
-         ) {
-           pageInfo { hasNextPage endCursor }
-           nodes {
-             identifier
-             title
-             url
-             description
-             branchName
-             labels { nodes { name } }
-             state { name type }
-             relations {
-               nodes {
-                 type
-                 relatedIssue { identifier }
-               }
-             }
-           }
-         }
-       }
-     }`,
+      LINEAR_CANDIDATE_QUERY,
       { teamId, limit: pageSize, cursor },
       linearOpts,
     );
@@ -1000,6 +1139,18 @@ export async function fetchLinearCandidates(
 
     const connection = result.data.team.issues;
     nodes.push(...connection.nodes);
+
+    // Node ceiling, checked AFTER the page lands so a board of exactly
+    // LINEAR_CANDIDATE_MAX_NODES is fully discoverable and only the first node
+    // beyond it fails closed. An explicit operator sample (`--linear-limit`) is
+    // a deliberate smaller read and is handled below; this guard is about the
+    // whole board being larger than we can prove we read completely.
+    if (maxCandidateIssues === null && nodes.length > LINEAR_CANDIDATE_MAX_NODES) {
+      throw new Error(
+        `Linear candidate population exceeded ${LINEAR_CANDIDATE_MAX_NODES} nodes; ` +
+          'refusing to report a candidate population that cannot be proven complete.',
+      );
+    }
 
     if (maxCandidateIssues !== null && nodes.length >= maxCandidateIssues) {
       nodes.length = maxCandidateIssues;
@@ -1023,10 +1174,34 @@ export async function fetchLinearCandidates(
     if (!tier) {
       return [];
     }
-    const blockedBy = issue.relations.nodes
-      .filter((relation) => isBlockingLinearRelationType(relation.type))
+    // UTV2-1820: prerequisites come from the INVERSE edge. An outgoing
+    // `blocks` means this issue is the blocker, not the blocked.
+    const outgoingPrerequisites = issue.relations.nodes
+      .filter((relation) => isPrerequisiteOutgoingRelation(relation.type))
       .map((relation) => relation.relatedIssue?.identifier)
       .filter((identifier): identifier is string => Boolean(identifier));
+
+    // Fail closed on an unreadable relation set. A server that omits
+    // `inverseRelations`, or returns a relation whose issue identifier is
+    // missing, has not told us this issue is unblocked -- it has told us
+    // nothing. Admitting on silence is the fail-open this lane exists to
+    // prevent, so an unreadable set blocks under a synthetic sentinel that no
+    // completion check can ever satisfy.
+    const inverse = issue.inverseRelations;
+    let incomingPrerequisites: string[];
+    if (!inverse || !Array.isArray(inverse.nodes)) {
+      incomingPrerequisites = [LINEAR_UNREADABLE_RELATIONS_SENTINEL];
+    } else {
+      const prerequisiteNodes = inverse.nodes.filter((relation) =>
+        isPrerequisiteInverseRelation(relation.type),
+      );
+      incomingPrerequisites = prerequisiteNodes.map(
+        (relation) =>
+          relation.issue?.identifier ?? LINEAR_UNREADABLE_RELATIONS_SENTINEL,
+      );
+    }
+
+    const blockedBy = [...outgoingPrerequisites, ...incomingPrerequisites];
     const fileScope = extractFileScopeFromText(issue.description);
     return [{
       issue_id: issue.identifier,
