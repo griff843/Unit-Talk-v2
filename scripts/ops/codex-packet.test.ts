@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,8 @@ import {
   MODEL_ROUTING_POLICY_PATH,
   buildPrompt,
   classifyScope,
+  sanitizedGitEnv,
+  GIT_REPO_SELECTION_VARS,
   extractScopePaths,
   parsePacket,
   resolveProfileForScope,
@@ -131,14 +133,53 @@ test('the default profile is still resolvable against the shipped policy', () =>
 });
 
 test('classifyScope names a reserved surface and stays quiet on ordinary paths', () => {
-  assert.deepEqual(classifyScope(REPO_ROOT, ['apps/api/src/submission-service.ts']), []);
-  assert.deepEqual(classifyScope(REPO_ROOT, ['supabase/migrations/0001_x.sql']), [
-    'production-ddl-and-data',
-  ]);
+  assert.deepEqual(classifyScope(REPO_ROOT, ['apps/api/src/submission-service.ts']), {
+    reserved: false,
+    surfaces: [],
+  });
+  assert.deepEqual(classifyScope(REPO_ROOT, ['supabase/migrations/0001_x.sql']), {
+    reserved: true,
+    surfaces: ['production-ddl-and-data'],
+  });
 });
 
-test('classifyScope is advisory-safe when the policy cannot be read', () => {
-  assert.deepEqual(classifyScope(path.join(REPO_ROOT, 'does', 'not', 'exist'), ['a/b.ts']), []);
+test('classifyScope fails CLOSED when the policy cannot be read', () => {
+  // The answer selects the model profile, and a reserved scope is held to a
+  // stricter profile. Returning "nothing reserved" on an unreadable policy
+  // would make this MORE permissive than the merge gate it mirrors at exactly
+  // the moment policy truth is unavailable.
+  assert.deepEqual(classifyScope(path.join(REPO_ROOT, 'does', 'not', 'exist'), ['a/b.ts']), {
+    reserved: true,
+    surfaces: ['unclassifiable'],
+  });
+});
+
+test('classifyScope treats an empty scope as unclassifiable, never as clean', () => {
+  assert.deepEqual(classifyScope(REPO_ROOT, []), { reserved: true, surfaces: ['unclassifiable'] });
+});
+
+test('sanitizedGitEnv strips every repository-selection variable', () => {
+  // GIT_DIR overrides `git -C <dir>`: with it set, the isolation probes answer
+  // about the repository it names while codex runs somewhere else entirely.
+  const dirty = {
+    PATH: '/usr/bin',
+    GIT_DIR: '/repo/.git/worktrees/wt-x',
+    GIT_WORK_TREE: '/repo',
+    GIT_COMMON_DIR: '/repo/.git',
+    GIT_INDEX_FILE: '/repo/.git/index',
+    GIT_OBJECT_DIRECTORY: '/repo/.git/objects',
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: '/other/objects',
+    GIT_CEILING_DIRECTORIES: '/',
+    GIT_DISCOVERY_ACROSS_FILESYSTEM: '1',
+    GIT_AUTHOR_NAME: 'kept',
+  };
+  const clean = sanitizedGitEnv(dirty);
+  for (const name of GIT_REPO_SELECTION_VARS) {
+    assert.equal(clean[name], undefined, `${name} must be stripped`);
+  }
+  assert.equal(clean.PATH, '/usr/bin');
+  assert.equal(clean.GIT_AUTHOR_NAME, 'kept', 'identity vars are not repository selection');
+  assert.equal(dirty.GIT_DIR, '/repo/.git/worktrees/wt-x', 'the caller env is not mutated');
 });
 
 test('buildPrompt carries the packet and forbids ticket lookup', () => {
@@ -212,4 +253,52 @@ test('a detached HEAD is refused — there is nothing to open a PR from', () => 
   execFileSync('git', ['-C', primary, 'worktree', 'add', '-q', '--detach', wt]);
 
   assert.throws(() => assertIsolatedWorktree(wt), /detached HEAD/);
+});
+
+// ── the packet must carry a mechanically checkable file boundary ──────────
+
+test('the runner refuses a Scope section that yields no usable path', () => {
+  // Prose passes the "section is non-empty" check while extracting nothing, so
+  // without this the run would launch with no file boundary at all -- exactly
+  // what `## Scope` exists to establish.
+  const prosePacket = COMPLETE_PACKET.replace(
+    /## Scope\n[\s\S]*?\n\n/,
+    '## Scope\nThe submission service and anything it needs.\n\n'
+  );
+  assert.deepEqual(parsePacket(prosePacket).missingSections, [], 'the section itself is present');
+  assert.deepEqual(parsePacket(prosePacket).scopePaths, [], 'but nothing is extractable from it');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'packet-scope-'));
+  const packetPath = path.join(dir, 'packet.md');
+  fs.writeFileSync(packetPath, prosePacket);
+  try {
+    const result = spawnSync(
+      'pnpm',
+      ['exec', 'tsx', 'scripts/ops/codex-packet.ts', '--packet', packetPath, '--dry-run'],
+      { cwd: REPO_ROOT, encoding: 'utf8', shell: process.platform === 'win32' }
+    );
+    assert.equal(result.status, 2, result.stdout + result.stderr);
+    assert.match(result.stderr, /declares no usable path/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the deprecated dispatch skill routes to the packet flow instead of executing a lane', () => {
+  // A deprecation notice in front matter does not stop an operative body from
+  // running. The body itself must not carry a runnable legacy dispatch step.
+  const skill = fs.readFileSync(path.join(REPO_ROOT, '.agents/skills/dispatch/SKILL.md'), 'utf8');
+  const body = skill.split(/^---$/m).slice(2).join('---');
+  for (const command of [
+    'pnpm codex:dispatch',
+    'pnpm codex:classify',
+    'pnpm codex:status',
+    'pnpm codex:receive',
+    'pnpm ops:lane-start',
+    'pnpm ops:lane-finalize',
+    'pnpm ops:brief',
+  ]) {
+    assert.ok(!body.includes(command), `deprecated skill still offers a runnable "${command}"`);
+  }
+  assert.match(body, /ops:codex-packet/, 'it must name the replacement route');
 });

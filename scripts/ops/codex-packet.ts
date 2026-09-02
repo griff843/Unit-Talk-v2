@@ -172,9 +172,38 @@ export function resolveProfileForScope(profileName: string, reserved: boolean): 
  * is a typo, a primary checkout is the control-plane collision, and `main` is
  * the branch nothing may commit to directly.
  */
+export const GIT_REPO_SELECTION_VARS = [
+  'GIT_DIR',
+  'GIT_COMMON_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_CEILING_DIRECTORIES',
+  'GIT_DISCOVERY_ACROSS_FILESYSTEM',
+] as const;
+
+/**
+ * A process environment with every git repository-SELECTION variable removed.
+ *
+ * These override `-C <dir>`: with `GIT_DIR` exported, `rev-parse` answers about
+ * the repository that variable names, not the one at `cwd`. An inherited
+ * `GIT_DIR` pointing at a linked worktree would therefore let `--cwd` aim at
+ * the primary checkout while every probe below reports an isolated worktree on
+ * a feature branch -- the check passes and `codex exec` runs, with its actual
+ * filesystem cwd in the control plane. Stripping them makes the probes describe
+ * the directory that Codex will really run in.
+ */
+export function sanitizedGitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const clean: NodeJS.ProcessEnv = { ...env };
+  for (const name of GIT_REPO_SELECTION_VARS) delete clean[name];
+  return clean;
+}
+
 export function assertIsolatedWorktree(cwd: string): { toplevel: string; branch: string } {
+  const env = sanitizedGitEnv();
   const git = (args: string[]): string => {
-    const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
+    const r = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', env });
     if (r.status !== 0) throw new Error((r.stderr || r.stdout || 'git failed').trim());
     return r.stdout.trim();
   };
@@ -247,10 +276,28 @@ export function buildPrompt(packetPath: string, packetText: string): string {
   ].join('\n');
 }
 
-/** Path-only reserved-surface classification of the packet's declared scope.
- *  Advisory: a reserved packet still runs. The gate is at merge, not here. */
-export function classifyScope(repoRoot: string, scopePaths: string[]): string[] {
-  if (scopePaths.length === 0) return [];
+export interface ScopeClassification {
+  /** True when the declared scope touches a reserved surface, OR when the
+   *  classification could not be established at all. */
+  reserved: boolean;
+  surfaces: string[];
+}
+
+/**
+ * Path-only reserved-surface classification of the packet's declared scope.
+ *
+ * Advisory in one direction only: a reserved packet still RUNS -- the gate is
+ * at merge, not here. But the answer also selects the model profile, and a
+ * reserved scope is held to a stricter profile than an unreserved one. So an
+ * inability to classify must not read as "nothing reserved": the merge
+ * classifier treats exactly that condition as `human`, and this must not be
+ * more permissive than the gate it mirrors precisely when policy truth is
+ * unavailable.
+ */
+export function classifyScope(repoRoot: string, scopePaths: string[]): ScopeClassification {
+  if (scopePaths.length === 0) {
+    return { reserved: true, surfaces: ['unclassifiable'] };
+  }
   try {
     const ma = require(path.join(repoRoot, 'scripts/ops/merge-authority.cjs')) as {
       loadPolicy: (root: string) => unknown;
@@ -264,11 +311,11 @@ export function classifyScope(repoRoot: string, scopePaths: string[]): string[] 
       files: scopePaths.map((filename) => ({ filename, patch: '' })),
       policy,
     });
-    return result.surfaces.filter((s) => s !== 'unclassifiable');
+    return { reserved: result.surfaces.length > 0, surfaces: result.surfaces };
   } catch {
-    // The merge gate fails closed on an unreadable policy; this advisory does
-    // not need to duplicate that, and must not block delegation on it.
-    return [];
+    // Missing, malformed or throwing policy. The merge gate reserves here, so
+    // this does too -- the packet still runs, but under the stricter profile.
+    return { reserved: true, surfaces: ['unclassifiable'] };
   }
 }
 
@@ -309,12 +356,25 @@ function main(argv: string[]): void {
     );
   }
 
-  const surfaces = classifyScope(repoRoot, parsed.scopePaths);
+  // A non-empty `## Scope` is not the same as a usable one: prose, or paths
+  // written without bullets, satisfy the section check while yielding nothing
+  // to classify. Codex would then run with no mechanically checkable file
+  // boundary at all, which is the thing the section exists to establish.
+  if (parsed.scopePaths.length === 0) {
+    fail(
+      'packet `## Scope` declares no usable path. List each path as its own bullet, ' +
+        'ideally in backticks, e.g. a line reading: - `apps/api/src/foo.ts`. ' +
+        'Prose alone gives the run no ' +
+        'file boundary to check against.'
+    );
+  }
+
+  const { reserved, surfaces } = classifyScope(repoRoot, parsed.scopePaths);
 
   const profileName = args.get('profile') || parsed.profile || DEFAULT_PROFILE;
   let profile: ModelRoutingBlock;
   try {
-    profile = resolveProfileForScope(profileName, surfaces.length > 0);
+    profile = resolveProfileForScope(profileName, reserved);
   } catch (error) {
     fail(`model routing: ${(error as Error).message}`);
   }
@@ -335,7 +395,7 @@ function main(argv: string[]): void {
       `profile: ${profileName} (${profile.model}, effort=${profile.reasoning_effort}, policy ${profile.policy_version})`,
       `cwd:     ${checkout.toplevel} [${checkout.branch}]`,
       `scope:   ${parsed.scopePaths.length} declared path(s)`,
-      surfaces.length > 0
+      reserved
         ? `RESERVED: declared scope touches ${surfaces.join(', ')} — the resulting PR will require ` +
           "Griff's approval at merge. That is expected; it does not block the work."
         : 'reserved: none declared — the resulting PR is auto-authorized on green CI.',
@@ -362,7 +422,9 @@ function main(argv: string[]): void {
   const child = spawnSync(
     'codex',
     ['exec', ...buildCodexModelArgs(profile), '-s', 'danger-full-access', prompt],
-    { cwd, stdio: 'inherit', shell: process.platform === 'win32' }
+    // Same sanitation as the probes: the validated worktree must be the one
+    // Codex's own git commands act on, not whatever GIT_DIR the caller exported.
+    { cwd, stdio: 'inherit', shell: process.platform === 'win32', env: sanitizedGitEnv() }
   );
 
   if (child.error) {
