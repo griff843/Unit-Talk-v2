@@ -16,6 +16,13 @@ name: Readiness Ledger Refresh
 #      an unchanged file, an unadvanced timestamp, or a dimension carried forward
 #      from a previous run.
 #
+# The same run also measures the canonical production-readiness gate itself
+# (scripts/ops/readiness-contract.ts against T1_PRODUCTION_READINESS_CONTRACT.md)
+# and publishes it beside the ledger. The two answer different questions: the
+# ledger is operational hygiene, the contract is whether the production gate is
+# open. The persistence assertion below still applies to the ledger alone, so a
+# changed contract file can never stand in for an unadvanced ledger.
+#
 # What this job does NOT do: fail because production is RED. A measured RED is a
 # successful refresh — the product condition belongs to the pull-request gate and
 # to the operational lane that owns the outage. This job goes red only when the
@@ -41,6 +48,7 @@ concurrency:
 
 env:
   LEDGER_PATH: docs/06_status/readiness/readiness-score.json
+  CONTRACT_PATH: docs/06_status/readiness/production-readiness-contract.json
   ALERT_TITLE: 'Readiness ledger: observer failure or stale artifact'
 
 jobs:
@@ -96,20 +104,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: pnpm ops:readiness-refresh
 
+      - name: Measure the T1 production readiness contract (read-only)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        # This is the canonical gate from T1_PRODUCTION_READINESS_CONTRACT.md,
+        # measured rather than asserted in prose. It runs on the same schedule and
+        # the same read-only credential as the ledger because it answers the
+        # question the ledger does not: is the production gate actually closed.
+        #
+        # A measured FAIL or UNKNOWN is a successful measurement, exactly as it is
+        # for the ledger above. This step goes red only if the measurement itself
+        # could not be taken.
+        run: pnpm ops:readiness-contract
+
       - name: Commit and push the refreshed ledger
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "$LEDGER_PATH"
+          git add "$LEDGER_PATH" "$CONTRACT_PATH"
           if git diff --cached --quiet; then
             # Not swallowed: the persistence assertion below fails on an
             # unchanged ledger. Exiting 0 here keeps that the reported reason.
             echo "::warning::Generator produced a byte-identical ledger; the persistence assertion will fail."
             exit 0
           fi
-          git commit -m "ops(readiness): refresh ledger [skip ci]"
+          git commit -m "ops(readiness): refresh ledger and contract measurement [skip ci]"
           for attempt in 1 2 3; do
             if git push; then
               echo "Pushed on attempt ${attempt}."
