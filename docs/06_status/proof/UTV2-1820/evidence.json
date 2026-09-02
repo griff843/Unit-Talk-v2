@@ -8,20 +8,26 @@
     "verified_source_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
     "evidence_commit_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
     "current_pr_head_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
-    "merge_sha": null,
+    "merge_sha": "565b578eaa8280e01ae164f3dc474fab2c629cd6",
     "ci_sentinels": {
       "evidence_commit_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670",
       "current_pr_head_sha": "7044e59b2698190e8f7c225e14ed2b7a52b35670"
     },
     "note": "7044e59b2698190e8f7c225e14ed2b7a52b35670 is the last non-proof commit on this branch. This bundle is a proof-only commit on top of it. merge_sha is null because it is authored pre-merge.",
-    "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-01T00:00:00Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-02T00:14:50.304Z"
   },
   "static_proof": {
     "unit_tests": {
       "command": "pnpm exec tsx --test scripts/ops/lane-maximizer.test.ts",
       "exit_code": 0,
-      "row_counts": { "tests": 88, "pass": 88, "fail": 0, "pre_existing": 81, "new": 7 }
+      "row_counts": {
+        "tests": 88,
+        "pass": 88,
+        "fail": 0,
+        "pre_existing": 81,
+        "new": 7
+      }
     },
     "verify": {
       "command": "pnpm verify",
@@ -29,10 +35,19 @@
       "exit_code": 1,
       "status": "REFUSED_AT_LIVE_DB",
       "is_pass": false,
-      "row_counts": { "tests": 5545, "pass": 5545, "fail": 0, "skipped": 0, "not_ok_lines": 0 },
+      "row_counts": {
+        "tests": 5545,
+        "pass": 5545,
+        "fail": 0,
+        "skipped": 0,
+        "not_ok_lines": 0
+      },
       "note": "This command FAILED, exit 1, and is recorded as a refusal rather than a pass. Every stage through verify:commands was exit 0; the non-zero exit is test:live-db, where assert-staging-target refuses a workstation target by design."
     },
-    "type_check": { "command": "pnpm type-check", "exit_code": 0 }
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    }
   },
   "runtime_proof": {
     "profile": "static",
@@ -41,23 +56,63 @@
       "target": "api.linear.app (live), team UTV2 (00075741-4bdd-49ac-942e-eee06cc56fb5)",
       "exit_code": 0,
       "candidates_total": 107,
-      "blocked_solely_on_blocked_dep_after": ["UTV2-1677", "UTV2-1806", "UTV2-1807", "UTV2-1808"],
-      "blocked_solely_on_blocked_dep_before": ["UTV2-1407", "UTV2-1425", "UTV2-1429", "UTV2-1677", "UTV2-1771", "UTV2-1773", "UTV2-1805", "UTV2-1806", "UTV2-1807", "UTV2-1808"],
+      "blocked_solely_on_blocked_dep_after": [
+        "UTV2-1677",
+        "UTV2-1806",
+        "UTV2-1807",
+        "UTV2-1808"
+      ],
+      "blocked_solely_on_blocked_dep_before": [
+        "UTV2-1407",
+        "UTV2-1425",
+        "UTV2-1429",
+        "UTV2-1677",
+        "UTV2-1771",
+        "UTV2-1773",
+        "UTV2-1805",
+        "UTV2-1806",
+        "UTV2-1807",
+        "UTV2-1808"
+      ],
       "note": "10 -> 4. Each of the six freed candidates was independently confirmed against live Linear to have an EMPTY incoming blocker set, and each of the four still refused to have a real incomplete incoming blocker. The fix does not simply unblock everything."
     },
     "direction_evidence": {
       "source": "api.linear.app GraphQL, 2026-09-01",
       "edge": "UTV2-1771 -> UTV2-1370",
       "observed": {
-        "UTV2-1771.relations": [{ "type": "blocks", "relatedIssue": "UTV2-1370" }],
-        "UTV2-1370.inverseRelations": [{ "type": "blocks", "issue": "UTV2-1771" }]
+        "UTV2-1771.relations": [
+          {
+            "type": "blocks",
+            "relatedIssue": "UTV2-1370"
+          }
+        ],
+        "UTV2-1370.inverseRelations": [
+          {
+            "type": "blocks",
+            "issue": "UTV2-1771"
+          }
+        ]
       },
       "conclusion": "The same edge carries type 'blocks' on BOTH ends, so the type string encodes no direction. The connection does: relations is outgoing (downstream), inverseRelations is incoming (prerequisite)."
     },
     "complexity_remeasurement": {
       "method": "the real LINEAR_CANDIDATE_QUERY text, varying only first:",
-      "two_connections": { "100": "400 complexity 11601", "75": "OK", "60": "OK", "50": "OK", "40": "OK", "30": "OK" },
-      "three_connections": { "100": "400 complexity 22601", "75": "400 complexity 16951", "60": "400 complexity 13561", "50": "400 complexity 11301", "40": "OK", "30": "OK" },
+      "two_connections": {
+        "30": "OK",
+        "40": "OK",
+        "50": "OK",
+        "60": "OK",
+        "75": "OK",
+        "100": "400 complexity 11601"
+      },
+      "three_connections": {
+        "30": "OK",
+        "40": "OK",
+        "50": "400 complexity 11301",
+        "60": "400 complexity 13561",
+        "75": "400 complexity 16951",
+        "100": "400 complexity 22601"
+      },
       "per_node_before": 116.01,
       "per_node_after": 226.01,
       "page_size_before": 50,
@@ -70,31 +125,63 @@
       {
         "id": "N1",
         "mutation": "restore the shipped inversion: outgoing 'blocks' counts as a prerequisite",
-        "under_mutation": { "tests": 88, "pass": 86, "fail": 2 },
-        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "under_mutation": {
+          "tests": 88,
+          "pass": 86,
+          "fail": 2
+        },
+        "after_revert": {
+          "tests": 88,
+          "pass": 88,
+          "fail": 0
+        },
         "caught_by": "UTV2-1820 AC1, plus the pre-existing related-links regression"
       },
       {
         "id": "N2",
         "mutation": "stop reading the inverse edge (fail open on real prerequisites)",
-        "under_mutation": { "tests": 88, "pass": 84, "fail": 4 },
-        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "under_mutation": {
+          "tests": 88,
+          "pass": 84,
+          "fail": 4
+        },
+        "after_revert": {
+          "tests": 88,
+          "pass": 88,
+          "fail": 0
+        },
         "caught_by": "UTV2-1820 AC3 and both AC4 cases",
         "note": "AC1 correctly does NOT fire: dropping the inverse edge makes the tool block less, not more, so only the refusal tests can catch it."
       },
       {
         "id": "N3",
         "mutation": "treat an absent relation set as an empty one",
-        "under_mutation": { "tests": 88, "pass": 87, "fail": 1 },
-        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "under_mutation": {
+          "tests": 88,
+          "pass": 87,
+          "fail": 1
+        },
+        "after_revert": {
+          "tests": 88,
+          "pass": 88,
+          "fail": 0
+        },
         "caught_by": "UTV2-1820 AC4 (absent set)",
         "note": "Exactly one test owns this property and it fires."
       },
       {
         "id": "N4",
         "mutation": "drop inverseRelations from the shipped query only",
-        "under_mutation": { "tests": 88, "pass": 86, "fail": 2 },
-        "after_revert": { "tests": 88, "pass": 88, "fail": 0 },
+        "under_mutation": {
+          "tests": 88,
+          "pass": 86,
+          "fail": 2
+        },
+        "after_revert": {
+          "tests": 88,
+          "pass": 88,
+          "fail": 0
+        },
         "caught_by": "UTV2-1820 query assertion and UTV2-1819 AC4",
         "note": "Cross-lane: UTV2-1819's complexity guard fires on the selection change, which is exactly what it was built for."
       }

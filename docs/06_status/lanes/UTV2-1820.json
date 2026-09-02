@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1820-blocks-relation-direction",
   "branch": "claude/utv2-1820-blocks-relation-direction",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "565b578eaa8280e01ae164f3dc474fab2c629cd6",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1480",
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1820/diff-summary.md",
+    "docs/06_status/proof/UTV2-1820/evidence.json",
+    "docs/06_status/proof/UTV2-1820/verification.md",
+    "scripts/ops/lane-maximizer.test.ts",
+    "scripts/ops/lane-maximizer.ts"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1820.yml",
     "docs/06_status/proof/UTV2-1820/diff-summary.md",
@@ -22,14 +28,22 @@
     "docs/06_status/proof/UTV2-1820/diff-summary.md",
     "docs/06_status/proof/UTV2-1820/verification.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-09-01T22:59:13.109Z",
-  "heartbeat_at": "2026-09-01T22:59:13.109Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-02T00:14:53.070Z",
+  "closed_at": "2026-09-02T00:14:53.070Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1820-blocks-relation-direction.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-02T00:14:50.307Z",
+      "verdict": "pass",
+      "merge_sha": "565b578eaa8280e01ae164f3dc474fab2c629cd6",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
