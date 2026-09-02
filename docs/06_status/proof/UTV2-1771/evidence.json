@@ -1,0 +1,76 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1771",
+  "tier": "T1",
+  "lane_type": "verification",
+  "proof_profile": "static",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ce1695689b0d3d65eed3aa34e0fba651b74bfea9",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "focused_command": "npx tsx --test scripts/ops/preserve-june-offer-history.ts",
+    "required_commands": [
+      "pnpm verify:static",
+      "pnpm test:db",
+      "pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD"
+    ],
+    "receipt_generated_by": "scripts/ops/preserve-june-offer-history.ts"
+  },
+  "runtime_proof": {
+    "status": "FAIL",
+    "queries": [
+      {
+        "operation": "local writable-live-DB precondition",
+        "result": "BLOCKED_DEFERRED",
+        "target_required": "xskgrzbteyqdufktjrjx"
+      }
+    ],
+    "row_counts": [],
+    "receipts": []
+  },
+  "generated_at": "2026-09-02T12:21:54.174Z",
+  "verdict": "FAIL",
+  "prerequisite_for": "UTV2-1370",
+  "snapshot_set_id": "",
+  "source": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "parent_table": "public.provider_offer_history",
+    "read_only": true,
+    "rows_before": 0,
+    "rows_after": 0,
+    "unchanged": false
+  },
+  "destination": {
+    "provider": "cloudflare-r2",
+    "bucket_identity_sha256": "",
+    "object_prefix": "db-backups/provider-offer-history/UTV2-1771/2026-06",
+    "receipt_object_key": "db-backups/provider-offer-history/UTV2-1771/2026-06/receipt.json",
+    "schema_object_key": "",
+    "schema_object_sha256": "",
+    "format": "canonical-csv+restore-ddl",
+    "outside_hot_table": true,
+    "encrypted": true
+  },
+  "restore_target": {
+    "project_ref": "xskgrzbteyqdufktjrjx",
+    "schema": "utv2_1771_restore",
+    "production": false
+  },
+  "partitions": [],
+  "checks": {
+    "exact_partition_set": false,
+    "production_rows_unchanged": false,
+    "all_objects_uploaded": false,
+    "full_restore_completed": false,
+    "all_counts_match": false,
+    "all_checksums_match": false,
+    "idempotent_replay": false
+  },
+  "failures": [
+    "Writable live-DB proof is blocked/deferred: target identity could not be resolved from its URL (host=unparseable). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials."
+  ],
+  "receipt_sha256": "4927c4acbb4b5471cba5e1fbda906499af94ab4b3077076d4a41a0410e85ce18"
+}
