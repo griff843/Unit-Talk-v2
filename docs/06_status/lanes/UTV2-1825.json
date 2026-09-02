@@ -23,7 +23,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-02T14:51:58.306Z",
-  "heartbeat_at": "2026-09-02T14:56:29.904Z",
+  "heartbeat_at": "2026-09-02T14:56:42.903Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1825-rebind-pending-merge-placeholder.json",
