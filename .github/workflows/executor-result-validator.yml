@@ -248,18 +248,40 @@ jobs:
                 //
                 // Loaded from the base checkout pinned above, so a PR cannot
                 // supply the classifier that decides its own evidence bar.
-                const { loadPolicy, classifyDiff } = require('./scripts/ops/merge-authority.cjs');
+                //
+                // Two-phase bootstrap, mirroring merge-gate.yml. PHASE 1 is the
+                // single PR that first lands the classifier: base does not have
+                // it yet, so require() throws. That absence demands a proof
+                // bundle rather than excusing one -- the strictest reading, and
+                // the only one that lets RMA land without a repo-owner override
+                // of this required check. PHASE 2 is every PR after; base
+                // carries the classifier and this branch is unreachable.
+                // MODULE_NOT_FOUND only: a malformed policy still fails closed.
                 const changedFiles = await github.paginate(
                   github.rest.pulls.listFiles,
                   { owner, repo, pull_number: prNumber, per_page: 100 }
                 );
-                const risk = classifyDiff({
-                  files: changedFiles.map(f => ({
-                    filename: f.filename, patch: f.patch, status: f.status,
-                  })),
-                  policy: loadPolicy(),
-                });
-                const proofRequired = risk.authority === 'human';
+                let risk = null;
+                let proofRequired;
+                try {
+                  const { loadPolicy, classifyDiff } = require('./scripts/ops/merge-authority.cjs');
+                  risk = classifyDiff({
+                    // previous_filename included so a rename out of a reserved
+                    // path cannot lower this PR's evidence bar.
+                    files: changedFiles.map(f => ({
+                      filename: f.filename,
+                      previous_filename: f.previous_filename,
+                      patch: f.patch,
+                      status: f.status,
+                    })),
+                    policy: loadPolicy(),
+                  });
+                  proofRequired = risk.authority === 'human';
+                } catch (e) {
+                  if (e.code !== 'MODULE_NOT_FOUND') throw e;
+                  risk = { authority: 'human', surfaces: ['bootstrap-pending'], reasons: [] };
+                  proofRequired = true;
+                }
 
                 // ── 7. Validate proof file ─────────────────────────────
                 const proofPath = r.proofPath;

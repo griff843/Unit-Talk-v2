@@ -259,7 +259,7 @@ jobs:
               // Under the tier model every PR resolved to T1, so a typo fix and
               // a production migration demanded identical human relay. Pricing
               // everything as reserved prices the real decisions at zero
-              // attention. RMA reserves the six surfaces Griff owns and
+              // attention. RMA reserves the eight surfaces Griff owns and
               // authorizes the rest on green CI -- `verify`, `P0 Protocol` and
               // `Executor Result Validation` remain independently required by
               // branch protection, so "authorized" here never means "unchecked".
@@ -269,9 +269,38 @@ jobs:
               // policy additionally reserves its own files, which is what makes
               // RMA non-self-amending: widening authority always requires a
               // human.
-              const { loadPolicy, evaluateMergeAuthority } =
-                require('./scripts/ops/merge-authority.cjs');
-              const riskPolicy = loadPolicy();
+              // Two-phase bootstrap. This gate reads its classifier from the
+              // BASE checkout, so on the one PR that FIRST introduces that
+              // classifier the base commit does not have it yet and the
+              // require() below throws. Treating that as an internal error made
+              // RMA unlandable except by a repo-owner override of a required
+              // check -- which is the one thing a merge-authority control must
+              // never depend on.
+              //
+              // PHASE 1: base has no classifier. Reserve the merge as `human`
+              // -- the MOST restrictive outcome, not a relaxation -- clearable
+              // only by the ordinary reserved-surface artifacts below.
+              // PHASE 2: base carries it; this branch is unreachable. Getting
+              // back to PHASE 1 means deleting merge-authority.cjs from main,
+              // which is itself a merge-authority-surface change and so already
+              // requires a human.
+              //
+              // Only MODULE_NOT_FOUND enters the bootstrap path. A malformed or
+              // unreadable policy still fails closed as an internal error: that
+              // is corruption of a control that exists, not the absence of one
+              // that does not exist yet.
+              let mergeAuthority = null;
+              let riskPolicy = null;
+              let bootstrapPhase1 = false;
+              try {
+                mergeAuthority = require('./scripts/ops/merge-authority.cjs');
+              } catch (e) {
+                if (e.code !== 'MODULE_NOT_FOUND') throw e;
+                bootstrapPhase1 = true;
+              }
+              if (mergeAuthority) {
+                riskPolicy = mergeAuthority.loadPolicy();
+              }
 
               // Changed files come from the API rather than a local diff so the
               // job never has to materialize PR head content.
@@ -302,20 +331,48 @@ jobs:
                 authorizedReviewers: AUTHORIZED_REVIEWERS,
               });
 
-              const decision = evaluateMergeAuthority({
-                files: changedFiles.map(f => ({
-                  filename: f.filename,
-                  patch: f.patch,
-                  status: f.status,
-                })),
-                policy: riskPolicy,
-                labels,
-                verdictApproved: verdictErrors.length === 0,
-                verdictErrors,
-              });
+              // previous_filename is what makes a rename classifiable. GitHub
+              // reports the destination in `filename` and the reserved source
+              // in `previous_filename`; dropping the latter would let
+              // `git mv .github/CODEOWNERS anything-else` classify as `auto`.
+              const classifiableFiles = changedFiles.map(f => ({
+                filename: f.filename,
+                previous_filename: f.previous_filename,
+                patch: f.patch,
+                status: f.status,
+              }));
 
-              errors.push(...decision.errors);
-              notes.push(...decision.notes);
+              if (bootstrapPhase1) {
+                notes.push(
+                  'RMA/v1 PHASE 1 (bootstrap): the trusted base checkout does not yet carry ' +
+                  'scripts/ops/merge-authority.cjs. Reserving this merge as `human` -- the ' +
+                  'most restrictive classification -- until it is on main. See the ' +
+                  '`bootstrap` block in docs/05_operations/RESERVED_RISK_SURFACES.json.'
+                );
+                if (labels.includes('governance:pause')) {
+                  errors.push('governance:pause label is active. All merges blocked until removed by Griff.');
+                }
+                const bootstrapLabels = ['griff-approved', 't1-approved'];
+                if (!bootstrapLabels.some(l => labels.includes(l))) {
+                  errors.push(
+                    'Bootstrap (PHASE 1): requires the "griff-approved" label from a CODEOWNERS member.'
+                  );
+                }
+                if (verdictErrors.length > 0) {
+                  errors.push(...verdictErrors);
+                }
+              } else {
+                const decision = mergeAuthority.evaluateMergeAuthority({
+                  files: classifiableFiles,
+                  policy: riskPolicy,
+                  labels,
+                  verdictApproved: verdictErrors.length === 0,
+                  verdictErrors,
+                });
+
+                errors.push(...decision.errors);
+                notes.push(...decision.notes);
+              }
 
             } catch (e) {
               evaluatorError = e;

@@ -81,7 +81,34 @@ const RISK_FILES: Record<MergeGateRisk, Array<{ filename: string; patch: string;
   auto: [{ filename: 'apps/smart-form/lib/form-utils.ts', patch: '+const x = 1;', status: 'modified' }],
 };
 
-async function createMergeGateHarness(risk: MergeGateRisk, initialChecks: MockCheckRun[] = []) {
+/** The github-script body merge-gate.yml actually executes. */
+function mergeGateEvaluatorScript(): string {
+  const gate = objectField(objectField(readWorkflowYaml('merge-gate.yml'), 'jobs'), 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+  const evalStep = steps.find(
+    (step) =>
+      typeof step.with === 'object' &&
+      step.with &&
+      typeof (step.with as Record<string, unknown>).script === 'string',
+  );
+  assert.ok(evalStep, 'merge-gate.yml must have an executable github-script step');
+  return stringField(objectField(evalStep, 'with'), 'script');
+}
+
+type MergeGateHarnessOptions = {
+  /**
+   * Simulates the PHASE 1 bootstrap: the trusted BASE checkout does not yet
+   * carry scripts/ops/merge-authority.cjs, so `require` throws
+   * MODULE_NOT_FOUND exactly as it does on the PR that first introduces it.
+   */
+  classifierMissingFromBase?: boolean;
+};
+
+async function createMergeGateHarness(
+  risk: MergeGateRisk,
+  initialChecks: MockCheckRun[] = [],
+  options: MergeGateHarnessOptions = {},
+) {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const gate = objectField(objectField(workflow, 'jobs'), 'gate');
   const steps = gate.steps as Array<Record<string, unknown>>;
@@ -211,7 +238,16 @@ async function createMergeGateHarness(risk: MergeGateRisk, initialChecks: MockCh
     };
     const requireModule = (specifier: unknown) => {
       if (specifier === './scripts/ops/merge-gate-verdict.cjs') return verdictModule;
-      if (specifier === './scripts/ops/merge-authority.cjs') return authorityModule;
+      if (specifier === './scripts/ops/merge-authority.cjs') {
+        if (options.classifierMissingFromBase) {
+          const err = new Error(
+            "Cannot find module './scripts/ops/merge-authority.cjs'",
+          ) as Error & { code?: string };
+          err.code = 'MODULE_NOT_FOUND';
+          throw err;
+        }
+        return authorityModule;
+      }
       throw new assert.AssertionError({
         message: `merge-gate.yml required an unexpected module: ${String(specifier)}`,
       });
@@ -1968,4 +2004,94 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     /\$\{\{\s*github\.sha\s*\}\}/u,
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
+});
+
+// ── RMA/v1 two-phase bootstrap ────────────────────────────────────────────
+// Merge Gate loads its classifier from the PR's BASE checkout, so on the one
+// PR that first lands that classifier the require() throws. Treated as an
+// internal error, that made RMA landable only by a repo-owner override of a
+// required check — the single dependency a merge-authority control must not
+// have. These tests execute the real workflow script down the bootstrap path.
+
+test('RMA bootstrap: a base checkout without the classifier reserves the merge as human, it does not release it', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'failure',
+    'an unclassifiable diff must block, even one that would classify as auto',
+  );
+  const summary = harness.checks[0].output?.summary ?? '';
+  assert.match(summary, /PHASE 1 \(bootstrap\)/);
+  assert.match(summary, /griff-approved/);
+  assert.doesNotMatch(
+    summary,
+    /Internal error/,
+    'the bootstrap must be a stated classification, not an unclearable internal error',
+  );
+});
+
+test('RMA bootstrap: the CODEOWNERS label plus a head-bound verdict clears it — no admin override needed', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.labels.push('griff-approved');
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-09-02T15:30:00Z',
+    user: { login: 'griff843', type: 'User' },
+  });
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'success',
+    'the bootstrap must be clearable by the ordinary reserved-surface artifacts',
+  );
+  assert.strictEqual(harness.checks.length, 1, 'the canonical check identity must be updated in place');
+});
+
+test('RMA bootstrap: the label alone does not clear it', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+  harness.labels.push('griff-approved');
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+});
+
+test('RMA bootstrap: only MODULE_NOT_FOUND takes the bootstrap path', () => {
+  // A corrupted policy is not the same condition as a policy that does not
+  // exist yet. If any thrown error entered the bootstrap branch, breaking the
+  // classifier would become a way to reach a path with weaker checks.
+  const script = mergeGateEvaluatorScript();
+  assert.match(script, /if \(e\.code !== 'MODULE_NOT_FOUND'\) throw e;/);
+});
+
+test('RMA: both required gates classify previous_filename, so a rename cannot leave a reserved surface', () => {
+  for (const name of ['merge-gate.yml', 'executor-result-validator.yml']) {
+    assert.match(
+      readWorkflow(name),
+      /previous_filename: f\.previous_filename/,
+      `${name} must pass previous_filename to the classifier`,
+    );
+  }
+});
+
+test('RMA: executor-result-validator requires a proof bundle when it cannot classify', () => {
+  const erv = readWorkflow('executor-result-validator.yml');
+  assert.match(erv, /proofRequired = true;/);
+  assert.match(erv, /if \(e\.code !== 'MODULE_NOT_FOUND'\) throw e;/);
 });

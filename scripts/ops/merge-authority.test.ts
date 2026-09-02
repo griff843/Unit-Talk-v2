@@ -262,3 +262,154 @@ test('an exclusion in one surface cannot release a file another surface reserves
   const result = classifyDiff({ files: [file('.github/workflows/deploy.yml', '+x')], policy });
   assert.equal(result.authority, 'human');
 });
+
+// ── renames ───────────────────────────────────────────────────────────────
+// GitHub reports a rename as `filename` (destination) + `previous_filename`
+// (source). Classifying only the destination let a reserved path walk out of
+// its surface: `git mv .github/CODEOWNERS notes.txt` deletes the ownership
+// boundary in a diff that, read by destination alone, touches nothing reserved.
+
+test('renaming a reserved file to an unreserved name is still reserved', () => {
+  const result = classifyDiff({
+    files: [{ filename: 'docs/notes.txt', previous_filename: '.github/CODEOWNERS', status: 'renamed' }],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-authority'));
+  assert.match(result.reasons.join('\n'), /\.github\/CODEOWNERS -> docs\/notes\.txt/);
+});
+
+test('renaming an unreserved file INTO a reserved path is reserved', () => {
+  const result = classifyDiff({
+    files: [{ filename: 'supabase/migrations/900_x.sql', previous_filename: 'scratch/x.sql', status: 'renamed' }],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('production-ddl-and-data'));
+});
+
+test('renaming the gate workflow out of .github/workflows is reserved', () => {
+  const result = classifyDiff({
+    files: [{
+      filename: '.github/disabled/merge-gate.yml',
+      previous_filename: '.github/workflows/merge-gate.yml',
+      status: 'renamed',
+    }],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-authority'));
+});
+
+test('an ordinary rename between two unreserved paths stays auto', () => {
+  const result = classifyDiff({
+    files: [{
+      filename: 'apps/smart-form/lib/b.ts',
+      previous_filename: 'apps/smart-form/lib/a.ts',
+      status: 'renamed',
+      patch: '+const x = 1;',
+    }],
+    policy,
+  });
+  assert.equal(result.authority, 'auto');
+});
+
+test('a content rule is evaluated against the previous path too', () => {
+  // A .sql file renamed to an extension outside pathGlobs must not escape the
+  // destructive-SQL scan by its destination name alone.
+  const result = classifyDiff({
+    files: [{
+      filename: 'scratch/notes.txt',
+      previous_filename: 'scratch/cleanup.sql',
+      status: 'modified',
+      patch: '+DELETE FROM picks;',
+    }],
+    policy,
+  });
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('destructive-sql'));
+});
+
+// ── the surfaces themselves ───────────────────────────────────────────────
+// Risk-scoped, not the old Tier C list renamed. These assert both halves:
+// what must stay reserved, and what must NOT be.
+
+test('auth and authorization authority is reserved', () => {
+  for (const f of [
+    'apps/api/src/auth.ts',
+    'apps/api/src/authority-enforcement.ts',
+    'apps/api/src/automated-write-boundary.ts',
+    'packages/db/src/writer-authority.ts',
+    'packages/contracts/src/dual-auth.ts',
+    'apps/smart-form/lib/auth-config.ts',
+    'apps/smart-form/app/api/auth/[...nextauth]/route.ts',
+    'apps/command-center/src/middleware.ts',
+  ]) {
+    const result = classifyDiff({ files: [file(f, '+const x = 1;')], policy });
+    assert.equal(result.authority, 'human', `${f} must be reserved`);
+    assert.ok(result.surfaces.includes('auth-and-authorization'), f);
+  }
+});
+
+test('member-delivery gating is reserved, including the distribution decision', () => {
+  for (const f of [
+    'apps/api/src/distribution-service.ts',
+    'apps/api/src/distribution-worker-service.ts',
+    'apps/api/src/routes/kill-switch.ts',
+  ]) {
+    const result = classifyDiff({ files: [file(f, '+const x = 1;')], policy });
+    assert.equal(result.authority, 'human', `${f} must be reserved`);
+    assert.ok(result.surfaces.includes('member-delivery-activation'), f);
+  }
+});
+
+test('worker delivery implementation is reserved while containment holds', () => {
+  for (const f of [
+    'apps/worker/src/runner.ts',
+    'apps/worker/src/delivery-adapters.ts',
+    'apps/worker/src/circuit-breaker.ts',
+  ]) {
+    const result = classifyDiff({ files: [file(f, '+const x = 1;')], policy });
+    assert.equal(result.authority, 'human', `${f} must be reserved`);
+    assert.ok(result.surfaces.includes('worker-delivery-implementation'), f);
+  }
+});
+
+test('a worker TEST file is not reserved — it cannot deliver to a member', () => {
+  const result = classifyDiff({
+    files: [file('apps/worker/src/delivery-adapters.test.ts', '+assert.ok(true);')],
+    policy,
+  });
+  assert.equal(result.authority, 'auto');
+});
+
+test('pure logic CI can judge is deliberately NOT reserved', () => {
+  // The point of risk-scoping. Under the tier model each of these was Tier C,
+  // every PR resolved to T1, and the human relay stopped meaning anything.
+  for (const f of [
+    'packages/domain/src/scoring.ts',
+    'packages/contracts/src/canonical-pick.ts',
+    'packages/db/src/lifecycle.ts',
+    'packages/db/src/repositories.ts',
+    'apps/api/src/board-construction-service.ts',
+  ]) {
+    const result = classifyDiff({ files: [file(f, '+const x = 1;')], policy });
+    assert.equal(result.authority, 'auto', `${f} must NOT be reserved`);
+  }
+});
+
+test('every surface in the shipped policy declares at least one path', () => {
+  for (const s of policy.surfaces) {
+    assert.ok(Array.isArray(s.paths) && s.paths.length > 0, `${s.id} declares no paths`);
+    assert.ok(typeof s.reserved === 'string' && s.reserved.length > 0, `${s.id} has no rationale`);
+  }
+});
+
+test('the policy records the two-phase bootstrap it degrades to', () => {
+  // The bootstrap path in merge-gate.yml / executor-result-validator.yml is a
+  // documented rollout step, not folklore. It must degrade to `human`; a
+  // policy that ever said `auto` here would turn the first RMA PR into a
+  // self-authorizing one.
+  assert.equal(policy.bootstrap.degradesTo, 'human');
+  assert.equal(policy.bootstrap.classifierPath, 'scripts/ops/merge-authority.cjs');
+});

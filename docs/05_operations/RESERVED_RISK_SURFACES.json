@@ -33,10 +33,40 @@
       "reserved": "Activating member delivery, or weakening the delivery kill switch",
       "paths": [
         "apps/api/src/routes/kill-switch.ts",
-        "apps/worker/src/runner.ts",
+        "apps/api/src/distribution-service.ts",
+        "apps/api/src/distribution-worker-service.ts",
         "apps/discord-bot/src/delivery/**",
         "docs/05_operations/DELIVERY_KILL_SWITCH.md",
         "docs/05_operations/delivery_operating_model.md"
+      ],
+      "note": "distribution-service.ts carries GOVERNANCE_BRAKE_SOURCES and the routing/gating decision that determines whether anything reaches a member at all. It is reserved for that gate, not for its size."
+    },
+    {
+      "id": "worker-delivery-implementation",
+      "reserved": "Worker delivery implementation, for as long as production containment is mandated",
+      "note": "Scoped to containment, not permanent. While containment holds, the worker is the code path between the outbox and a real member, and the exactly-one-DeliveryOutcome invariant is enforced here rather than by any downstream check. Retire this surface when containment is lifted -- see docs/05_operations/RUNTIME_MODE_CONTRACT.md.",
+      "paths": [
+        "apps/worker/src/**"
+      ],
+      "excludePaths": [
+        "apps/worker/src/**/*.test.ts"
+      ],
+      "excludeNote": "A test file cannot deliver to a member. Reserving the worker's tests would price writing a regression test at the same attention as changing the delivery path, which is exactly the incentive that makes people stop writing them."
+    },
+    {
+      "id": "auth-and-authorization",
+      "reserved": "Authentication and authorization authority -- who may act, and as whom",
+      "note": "A weakened authz check is invisible in green CI: the tests that would catch it are the same tests the change edits. This is the one surface where 'the suite passed' is the least informative signal.",
+      "paths": [
+        "apps/api/src/auth.ts",
+        "apps/api/src/authority-enforcement.ts",
+        "apps/api/src/automated-write-boundary.ts",
+        "packages/db/src/writer-authority.ts",
+        "packages/contracts/src/dual-auth.ts",
+        "apps/smart-form/auth.ts",
+        "apps/smart-form/lib/auth-*.ts",
+        "apps/smart-form/app/api/auth/**",
+        "apps/command-center/src/middleware.ts"
       ]
     },
     {
@@ -61,13 +91,14 @@
     },
     {
       "id": "pricing-and-tier-authority",
-      "reserved": "Pricing, member tier authority, and paid provider/subscription commitments",
+      "reserved": "Pricing, member tier authority, and paid provider / subscription spend commitments",
       "paths": [
         "docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md",
         "docs/05_operations/PS_M1_COMMERCIAL_FOUNDATION_CONTRACT.md",
         "docs/05_operations/T1_CAPPER_TIER_SYSTEM_CONTRACT.md",
         "docs/05_operations/SUPABASE_BRANCH_COST_POLICY.md",
-        "scripts/ops/monetization-proof.ts"
+        "scripts/ops/monetization-proof.ts",
+        "docs/05_operations/PROVIDER_DATA_DECISION_RECORD.md"
       ]
     },
     {
@@ -113,5 +144,12 @@
       "addedLinePattern": "\\b(DROP\\s+(TABLE|SCHEMA|DATABASE|COLUMN|VIEW|FUNCTION|TYPE|INDEX)|TRUNCATE\\s+(TABLE\\s+)?[A-Za-z_\"]|DELETE\\s+FROM)\\b",
       "patternFlags": "i"
     }
-  ]
+  ],
+  "scopeNote": "Risk-scoped, not the old tier list under a new name. A path is reserved because a wrong change to it costs money, leaks credentials, reaches members, destroys production data, or removes a control -- not because it used to be Tier C. Pure logic that CI can judge (packages/domain, packages/contracts, scoring, lifecycle repositories) is deliberately NOT reserved: reserving it made every PR a human relay, which is what priced the real decisions at zero attention.",
+  "bootstrap": {
+    "phase": 2,
+    "note": "Two-phase rollout. Merge Gate and Executor Result Validation load this policy and scripts/ops/merge-authority.cjs from the PR's BASE checkout, so neither can read them until they exist on main. PHASE 1 is the single PR that first lands them: on that PR the base checkout has no classifier, so both gates take their documented bootstrap path and reserve the merge as `human` -- the most restrictive outcome, clearable only by the ordinary reserved-surface artifacts (CODEOWNERS label + head-bound pm-verdict/v1), never by a repo-owner override of a required check. PHASE 2 is every PR after that one: base carries the classifier and the bootstrap path is unreachable. Re-entering PHASE 1 would require deleting merge-authority.cjs from main, which is itself a change to the merge-authority surface and therefore requires a human.",
+    "classifierPath": "scripts/ops/merge-authority.cjs",
+    "degradesTo": "human"
+  }
 }

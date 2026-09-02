@@ -9,7 +9,7 @@
 // Rationale (docs/mission/intent.md): under the tier model every PR resolved to
 // T1, so every PR — a typo fix and a production migration alike — required the
 // same human relay. Making everything reserved is the same as reserving nothing:
-// it prices the real risk decisions at zero attention. RMA reserves the six
+// it prices the real risk decisions at zero attention. RMA reserves the
 // surfaces Griff actually owns and authorizes the rest on green CI.
 //
 // CommonJS so merge-gate.yml's actions/github-script step can `require()` it
@@ -86,10 +86,24 @@ function loadPolicy(repoRoot = process.cwd()) {
 }
 
 /**
+ * Every path a changed-file entry occupies, before and after.
+ *
+ * GitHub reports a rename as `filename` (destination) plus `previous_filename`
+ * (source). Classifying only the destination would let a reserved path escape
+ * by rename: moving `.github/CODEOWNERS` or `merge-gate.yml` to an unreserved
+ * name would be classified as `auto` and delete the boundary in a diff that
+ * never "touches" a reserved path. A rename is a change to BOTH paths, so both
+ * are classified and either one reserves.
+ */
+function filePaths(file) {
+  return [file.filename, file.previous_filename].filter((n) => typeof n === 'string' && n !== '');
+}
+
+/**
  * Classifies a diff.
  *
  * @param {object} input
- * @param {Array<{filename: string, patch?: string, status?: string}>} input.files
+ * @param {Array<{filename: string, previous_filename?: string, patch?: string, status?: string}>} input.files
  *        Changed files, shaped like GitHub's pulls.listFiles response.
  * @param {object} input.policy Parsed reserved-risk policy.
  * @returns {{authority: 'auto'|'human', reasons: string[], surfaces: string[]}}
@@ -119,13 +133,18 @@ function classifyDiff({ files, policy }) {
     // never release a file another surface reserves.
     const excluded = surface.excludePaths || [];
     const hits = files
-      .map((f) => f.filename)
-      .filter(
-        (name) =>
-          typeof name === 'string' &&
-          matchesAnyGlob(name, surface.paths) &&
-          !matchesAnyGlob(name, excluded)
-      );
+      .flatMap((f) => {
+        const names = filePaths(f);
+        const matched = names.filter(
+          (name) => matchesAnyGlob(name, surface.paths) && !matchesAnyGlob(name, excluded)
+        );
+        if (matched.length === 0) return [];
+        // Report a rename as "old -> new" so the reason names the path that was
+        // reserved, not only the one it landed on.
+        return names.length > 1 && names[0] !== names[1]
+          ? [`${names[1]} -> ${names[0]}`]
+          : [matched[0]];
+      });
     if (hits.length > 0) {
       surfaces.add(surface.id);
       const shown = hits.slice(0, 5).join(', ');
@@ -137,8 +156,9 @@ function classifyDiff({ files, policy }) {
   for (const rule of policy.contentRules || []) {
     const pattern = new RegExp(rule.addedLinePattern, rule.patternFlags || '');
     for (const file of files) {
-      if (typeof file.filename !== 'string') continue;
-      if (rule.pathGlobs && !matchesAnyGlob(file.filename, rule.pathGlobs)) continue;
+      const names = filePaths(file);
+      if (names.length === 0) continue;
+      if (rule.pathGlobs && !names.some((n) => matchesAnyGlob(n, rule.pathGlobs))) continue;
       // A file too large for GitHub to return a patch cannot be scanned. That is
       // an absence of evidence, not evidence of absence: reserve it.
       if (file.patch === undefined || file.patch === null) {
@@ -258,6 +278,7 @@ module.exports = {
   POLICY_PATH,
   globToRegExp,
   matchesAnyGlob,
+  filePaths,
   loadPolicy,
   classifyDiff,
   evaluateMergeAuthority,

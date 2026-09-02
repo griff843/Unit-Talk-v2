@@ -37,7 +37,7 @@ it is that they got the same scrutiny as typo fixes, from a human who had to ser
 
 Replaces lane-manifest tier with classification over what a diff *touches*.
 
-- `docs/05_operations/RESERVED_RISK_SURFACES.json` — the six surfaces Griff reserves, as data.
+- `docs/05_operations/RESERVED_RISK_SURFACES.json` — the surfaces Griff reserves, as data.
 - `scripts/ops/merge-authority.cjs` — classifier. Fail-closed on every error path.
 - `scripts/ops/merge-authority.test.ts` — 31 tests, including one per reserved surface and the
   fail-closed cases (missing diff, empty diff, unreadable policy, unavailable patch).
