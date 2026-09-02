@@ -23,14 +23,18 @@
     "scripts/ops/proof-schema.test.ts",
     "scripts/ops/proof-schema.ts"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1783/diff-summary.md",
+    "docs/06_status/proof/UTV2-1783/evidence.json",
+    "docs/06_status/proof/UTV2-1783/verification.md"
+  ],
   "status": "in_review",
   "started_at": "2026-09-02T02:59:43.857Z",
   "heartbeat_at": "2026-09-02T03:59:54.800Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1783-merge-sha-identity-contract.json",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
   "execution_location": {
