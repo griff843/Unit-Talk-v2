@@ -1,6 +1,6 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: e0288a2aadab38ae61be1a4f2a9157282f487554
+MERGE_SHA: f6b7f415ffb9098e7b49222d1194ac9d130694c1
 
 The value above is the last non-proof commit on this branch — the merge commit from the
 sanctioned Update-branch on PR #1477, which carries implementation commit `4c3a71cf` — not
@@ -106,23 +106,24 @@ MUTATION B  delete the migration file
 Production migration ledger, read-only from `supabase_migrations.schema_migrations`:
 
 ```
-local versions   8      remote versions  127      intersection  0
-would `supabase db push --linked` execute ONLY UTV2-1811?   NO
-also pending: baseline_live_schema, add_delivery_kill_switch,
-              bootstrap_delivery_kill_switch_posture, utv2_1399_fixture…,
-              utv2_1633_reporting_reader_role, utv2_1640_system_runs_autovacuum_tuning,
-              utv2_1540_command_center_ledger_repair
-STOPPED — no repair, no push, no production DDL.
+local migration files  135     remote ledger rows  134     intersection  134
+local-only  : 20260901150000_utv2_1811_rate_limit_buckets.sql   (exactly one)
+remote-only : (none)
+would `supabase db push --linked` execute ONLY UTV2-1811?   YES
+STOPPED ANYWAY — selection proven safe, but no push and no production DDL.
+Supersedes this bundle's earlier reading (8 local / 127 remote / intersection 0 / NO),
+which UTV2-1822 resolved by restoring the historical migration files under their
+production version numbers with per-file hash receipts.
 ```
 
-CEP-E7 receipts, bound to `e0288a2a` — the last non-proof commit:
+CEP-E7 receipts, bound to `f6b7f415` — the last non-proof commit:
 
 ```
-precondition_drill          PASS  run 33558730956  job 100025828660
-schema_roundtrip_drill      PASS  run 33558730956  job 100025828834
-writable_db_proof_staging   PASS  run 33558730726  job 100025972146  (inside required verify)
+precondition_drill          PASS  run 33658161099  job 100341823650
+schema_roundtrip_drill      PASS  run 33658161099  job 100341824294
+writable_db_proof_staging   PASS  run 33658161190  job 100342098974  (inside required verify)
 live_schema_parity          BLOCKED_ON_PRODUCTION_DDL
-                                  run 33558730886  job 100025888197
+                                  run 33658161186  job 100341847669
 ```
 
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.
@@ -143,7 +144,7 @@ ASSERTIONS:
 - [x] The down script refuses to drop either object unless it carries the `UTV2-1811` ownership marker, proven with the function guard exercised in isolation.
 - [x] SQL comments can no longer satisfy the RPC parity check; a commented-out `CREATE FUNCTION` is treated as missing, and the control fails under mutation when the stripping is removed.
 - [x] The staging replay executed the byte-exact committed migration, closing the earlier normalised-copy fidelity gap.
-- [x] `supabase db push --linked` would apply seven additional migrations besides UTV2-1811; this was reported as a blocker and no repair, push or production DDL was performed.
+- [x] `supabase db push --linked` would now apply exactly one migration — this lane's — and nothing else: 135 local files against 134 remote ledger rows, intersection 134, remote-only empty. The earlier blocker reading is recorded rather than erased; UTV2-1822 resolved it. No push and no production DDL were performed.
 - [x] Every control in this lane was observed failing under mutation before being trusted.
 - [x] Both new suites are wired into `test:t1-proof:local` and run under required verify.
 - [x] Staging carries the applied contract; production does not, and no production DDL was performed or is authorized.

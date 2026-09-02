@@ -6,21 +6,28 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1477
-Verified source SHA: e0288a2aadab38ae61be1a4f2a9157282f487554
+Verified source SHA: f6b7f415ffb9098e7b49222d1194ac9d130694c1
 
-The verified source SHA is the last non-proof commit on this branch and the head every
-receipt below was captured against. It is the merge commit produced by the sanctioned
-Update-branch on PR #1477, which brought this branch level with main at `eae9f43b`. What
-main introduced since the previous anchor is UTV2-1699 — the lane-maximizer candidate and
-active-lane discovery repair, its proof bundle, its sync file and manifest, and a readiness
-ledger refresh. None of it touches a file this lane touches, and none of it is on any code
-path this lane's evidence depends on; `scripts/ops/lane-maximizer.ts` is dispatch tooling.
+The verified source SHA is the last non-proof commit on this branch and the head every receipt
+below was captured against. It supersedes `e0288a2a`, which the proof-binding validator
+correctly refused once `main` moved: two non-proof commits landed after it.
 
-The substantive commit under this anchor is `4c3a71cf`, which lands the two fixes returned
-by PM review. It supersedes `16c15506`, which superseded `97e2d9eb` after required verify's
-executable-wiring check correctly refused a test file reachable from no package script. The
-branch's remaining commits are `ac47388c` and `330e47d6` — lane manifest, sync metadata and
-PR binding written by `ops:lane-start` and the lane-binding workflow.
+The first is the sanctioned `ops:merge-wrapper git-merge-main` that brought this branch level
+with `main` at `5fd7d299`. That verb preserves history rather than rewriting it, so no earlier
+SHA quoted in this bundle was invalidated. What `main` introduced is dominated by UTV2-1822,
+which restored the historical migration files under their production version numbers and
+archived their authoritative sources with per-file hash receipts under
+`supabase/migrations_archive/`. That repair is the reason the production migration ledger
+section below now reads RESOLVED rather than BLOCKER.
+
+The second is the lane manifest correction: `file_scope_lock` named two placeholder test paths
+this lane never created and omitted the three it actually touches.
+
+The substantive migration commit is still `4c3a71cf`, which landed the two fixes returned by PM
+review — SQL-comment stripping before the RPC parity scan, and a fail-closed refusal on a
+pre-existing exact function. The migration file's bytes are unchanged across the sync
+(`md5 af2c42582dbde2ee7990a3ca15c1d3e8`, verified at this head), so every staging fidelity, ACL
+and fingerprint claim below still describes the shipped file.
 
 ## Verification
 
@@ -280,68 +287,53 @@ unqualified — `IF EXISTS` was removed, because the guard has already establish
 objects exist and are this migration's, and `IF EXISTS` would only hide a disagreement
 between the guard and the drop.
 
-### Production migration ledger — BLOCKER, no apply attempted
+### Production migration ledger — RESOLVED; `db push` now selects exactly this migration
 
-`supabase migration list --linked` could not be executed: `SUPABASE_ACCESS_TOKEN` is empty
-in `local.env` and the project is not linked in this checkout, so there is no credential for
-the CLI's remote read. The remote side was instead read from
-`supabase_migrations.schema_migrations` in production over a read-only `SELECT` — the same
-table the CLI reads to build its Remote column. No write, no DDL, no link, no repair.
+The blocker this section previously recorded is gone, and it is worth stating plainly what
+changed rather than quietly editing the numbers. When this bundle was first written, the
+repository held 8 migration files and production's `supabase_migrations.schema_migrations`
+held 127 rows, and **not one local version matched a remote one** — intersection 0. A
+`supabase db push --linked` would have re-run the full baseline schema and six
+already-applied migrations against a database that already held their objects. That was
+reported as a blocker and nothing was applied.
+
+UTV2-1822 repaired the correspondence at the source: it restored the historical migration
+files under their production version numbers and archived their authoritative sources with
+per-file hash receipts under `supabase/migrations_archive/`. The ledger and the file set now
+describe the same history.
+
+Re-measured after that repair, read-only from production `zfzdnfwdarxucxtaojxm` over a
+`SELECT` against `supabase_migrations.schema_migrations` — the same table the CLI reads to
+build its Remote column. No write, no DDL, no link, no repair:
 
 ```
-LOCAL (this branch)                                          REMOTE
-00000000000000  baseline_live_schema                         127 rows
-20260714120000  add_delivery_kill_switch                     min version 202603200001
-20260714130000  bootstrap_delivery_kill_switch_posture       max version 20260801222906
-20260731000000  utv2_1399_fixture_excluding_reporting_views
-20260801000000  utv2_1633_reporting_reader_role
-20260801220000  utv2_1640_system_runs_autovacuum_tuning
-20260803230000  utv2_1540_command_center_ledger_repair
-20260901150000  utv2_1811_rate_limit_buckets
+local migration files (this branch)   135
+remote ledger rows                    134     min 00000000000000   max 20260803230000
+intersection                          134
 
-local-only  : all 8
-remote-only : all 127
-intersection: 0
+LOCAL-ONLY  (what `db push --linked` would execute)
+  20260901150000   utv2_1811_rate_limit_buckets
+
+REMOTE-ONLY (applied remotely with no local file)
+  (none)
 ```
+
+**Would `supabase db push --linked` execute only
+`20260901150000_utv2_1811_rate_limit_buckets.sql`? Yes — and nothing else.** `db push` keys
+the version prefix of each local filename against `schema_migrations.version`; a local
+version absent from that column is pending. Exactly one local version, `20260901150000`, is
+absent. Every other local file, all 134 of them, is present remotely. The remote-only set is
+empty, so the correspondence holds in both directions and the ledger is not merely a superset.
 
 Migration immediately preceding UTV2-1811 locally:
-`20260803230000_utv2_1540_command_center_ledger_repair.sql`.
+`20260803230000_utv2_1540_command_center_ledger_repair.sql`, which is remote version
+`20260803230000` — present, and therefore not re-run.
 
-Intended command: `supabase db push --linked`.
-
-**Would it execute only `20260901150000_utv2_1811_rate_limit_buckets.sql`? No.** `db push`
-keys the version prefix of each local filename against `schema_migrations.version`; a local
-version absent from that column is pending. A left join of the 8 local versions against the
-remote table returned `present_in_remote_ledger = false` for every one — including
-`20260801220000_utv2_1640`, whose work is demonstrably already in production. These would
-also execute:
-
-```
-00000000000000_baseline_live_schema.sql
-20260714120000_add_delivery_kill_switch.sql
-20260714130000_bootstrap_delivery_kill_switch_posture.sql
-20260731000000_utv2_1399_fixture_excluding_reporting_views.sql
-20260801000000_utv2_1633_reporting_reader_role.sql
-20260801220000_utv2_1640_system_runs_autovacuum_tuning.sql
-20260803230000_utv2_1540_command_center_ledger_repair.sql
-```
-
-The cause is visible in the data: the remote ledger was not written by pushing these files.
-Five of the seven pre-existing migrations appear remotely under regenerated version numbers
-— local `20260714120000` is remote version `20260714203644` under the name
-`20260714120000_add_delivery_kill_switch`; local `20260731000000` is remote `20260801134241`
-under the name `utv2_1399_fixture_excluding_reporting_views`; local `20260801000000` is
-remote `20260801134256`; local `20260801220000` is remote `20260801222906`. The `name`
-column is itself inconsistent, sometimes carrying the local version prefix and sometimes
-not. Two local migrations have no remote row under any version or name:
-`00000000000000_baseline_live_schema` and `20260803230000_utv2_1540_command_center_ledger_repair`
-— although the latter's two tables, `command_center_game_threads` and
-`command_center_delivery_mappings`, do resolve in production. The ledger and the live schema
-disagree.
-
-Stopped here. No ledger repair, no push, no production DDL. This is a pre-existing condition
-of the repository, not something this lane introduced, and repairing it is out of this lane's
-scope and outside its authorization.
+Still stopped here. **No push has been executed and no production DDL has been applied.**
+This section proves the selection is now safe and precise; it does not authorize the apply.
+Applying `20260901150000` to production requires explicit production-DDL authorization,
+which this lane does not hold. `live_schema_parity` below remains FAIL for exactly that
+reason and is the only remaining gate on this lane.
 
 ### What is deliberately not claimed
 
@@ -361,23 +353,21 @@ mechanically required at this head; it belongs after production application.
 An independent audit at exact head correctly flagged that this bundle mixes two grades of
 evidence in the same schema position. Stated plainly:
 
-**Receipted — verifiable from GitHub Actions, bound to `e0288a2a`:**
+**Receipted — verifiable from GitHub Actions, bound to `f6b7f415`:**
 
 ```
-precondition_drill          PASS  run 33558730956  job 100025828660
-schema_roundtrip_drill      PASS  run 33558730956  job 100025828834
-writable_db_proof_staging   PASS  run 33558730726  job 100025972146  (inside required verify)
-live_schema_parity          FAIL  run 33558730886  job 100025888197  (honestly recorded, not waived)
+precondition_drill          PASS  run 33658161099  job 100341823650
+schema_roundtrip_drill      PASS  run 33658161099  job 100341824294
+writable_db_proof_staging   PASS  run 33658161190  job 100342098974  (inside required verify)
+live_schema_parity          FAIL  run 33658161186  job 100341847669  (honestly recorded, not waived)
 ```
 
 A fifth job in the same reversibility-gate run, `proof-binding-validator` ("Down-script
-presence check (fail-closed)"), is not a CEP-E7 receipt slot but is worth naming so nobody
-has to rediscover it from the job list. At `e0288a2a` it failed, correctly: the bundle at
-that moment still carried the previous anchor `16c15506`, so every file the round-2 fixes
-and the main-sync touched read as "non-proof files changed after the substantive commit".
-The proof-only commit that re-anchored to `e0288a2a` exists to close exactly that, and the
-job now resolves `verified_source_sha: e0288a2a` with its only remaining violation being the
-`live_schema_parity` blocker recorded above.
+presence check (fail-closed)"), is not a CEP-E7 receipt slot but is worth naming so nobody has
+to rediscover it from the job list. It fails on any non-proof file that changed after the
+declared anchor, which is exactly what the main-sync and the manifest correction are. This
+proof-only commit re-anchors to `f6b7f415` — the last of those non-proof commits — for that
+reason, and it is the only commit after `f6b7f415` on this branch.
 
 **Not receipted — read by the orchestrator against staging, no run or job id:** the ACL
 catalog reads, the control-object comparison, the ACL-inclusive round-trip fingerprints,
@@ -396,14 +386,14 @@ fail after merge. Merging before the migration is applied to production would st
 lane merged-but-unclosable. The order that avoids it: apply to production, let parity go
 green, then merge and close.
 
-### A gate reddened by main, not by this branch
+### The standing cost of holding this lane open
 
-`proof-binding-validator` also reports `docs/06_status/readiness/readiness-score.json` as a
-non-proof file changed after the substantive commit. This branch never touches that file.
-The validator diffs from the PR *merge ref*, so a bot commit on `main` (`19a143a2`,
-`ops(readiness): refresh ledger`) is attributed to this branch. It is a measurement
-artifact, but it is a fail-closed gate and `main` takes bot commits continuously, so this
-bundle degrades on its own the longer the lane stays open.
+`proof-binding-validator` diffs from the PR *merge ref*, not from the branch alone, so any bot
+commit on `main` is attributed to this branch and reddens the gate. `main` takes bot commits
+continuously (readiness-ledger refreshes every few hours), so this bundle degrades on its own
+the longer the lane stays open, and each re-anchor costs a full receipt re-capture. That is a
+real cost of the wait for production-DDL authorization, not an argument for merging early — the
+CEP-E7 consequence above is the reason merging early is worse.
 
 ### What this migration does not own
 
@@ -430,11 +420,11 @@ EVIDENCE:
 - Production `zfzdnfwdarxucxtaojxm` — read-only confirmation that `consume_rate_limit_bucket` is absent. No DDL and no write was performed there.
 
 ASSERTIONS:
-- `consume_rate_limit_bucket` was absent from production, staging and every governed migration before this change.
-- The applied function's callable signature matches the four named arguments `SupabaseRpcApiRateLimitStore` sends.
-- Limiter semantics on real PostgreSQL are identical to `InMemoryApiRateLimitStore`, including 429 at limit+1 rather than an exception.
-- `anon`, `authenticated` and PUBLIC hold no EXECUTE on the function and no privilege on the table; a control without the revokes shows all three would otherwise have it.
-- Apply → down → reapply converges on a byte-identical fingerprint that includes ACLs.
-- The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when absent.
-- Every control in this lane was observed failing under mutation.
-- No production DDL, no production write, no containment change.
+- [x] `consume_rate_limit_bucket` was absent from production, staging and every governed migration before this change.
+- [x] The applied function's callable signature matches the four named arguments `SupabaseRpcApiRateLimitStore` sends.
+- [x] Limiter semantics on real PostgreSQL are identical to `InMemoryApiRateLimitStore`, including 429 at limit+1 rather than an exception.
+- [x] `anon`, `authenticated` and PUBLIC hold no EXECUTE on the function and no privilege on the table; a control without the revokes shows all three would otherwise have it.
+- [x] Apply → down → reapply converges on a byte-identical fingerprint that includes ACLs.
+- [x] The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when absent.
+- [x] Every control in this lane was observed failing under mutation.
+- [x] No production DDL, no production write, no containment change.
