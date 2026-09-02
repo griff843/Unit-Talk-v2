@@ -17,6 +17,7 @@ import {
   normalizePreMergeEvidenceJson,
   normalizePreMergeVerificationMarkdown,
   rebindEvidenceJsonSha,
+  rebindMergeShaAnchorsInMarkdown,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
   rebindVerificationMdSha,
@@ -25,6 +26,7 @@ import {
   ProofPreservationError,
   type ProofGitTruth,
 } from './proof-generate.js';
+import { MERGE_AUTHORITY_PLACEHOLDER } from './proof-schema.js';
 import { ROOT } from './shared.js';
 import type { LaneManifest } from './shared.js';
 
@@ -2827,4 +2829,122 @@ test('UTV2-1729: a non-ancestor execution SHA is what the validator ancestry rul
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1825 — the post-merge rebinder must bind the pre-merge placeholder the
+// pre-merge contract mandates.
+//
+// UTV2-1822 merged and could not be closed: its proof carried the ratified
+// placeholder, and the rebinder's accepted-value pattern listed only the bare
+// word `pending`, which does not match `pending merge`. The lane was stranded
+// after merge, with the branch already gone.
+//
+// Every fixture below is produced by normalizePreMergeVerificationMarkdown
+// rather than hand-typed, so the test is anchored to the string the pre-merge
+// path actually writes. A hand-typed copy would keep passing if the two drifted.
+// ---------------------------------------------------------------------------
+
+const UTV2_1825_EXECUTION_SHA = 'b5414f8c0679e8292df65dcbdc80d80e8f66dfc7';
+const UTV2_1825_MERGE_SHA = '1817eddc17ae4954cdd5876372763e1524e427fd';
+
+function preMergeProof(body: string): string {
+  return normalizePreMergeVerificationMarkdown(
+    body,
+    'docs/06_status/proof/UTV2-1825/verification.md',
+    UTV2_1825_EXECUTION_SHA,
+    'https://github.com/griff843/Unit-Talk-v2/pull/1482',
+  );
+}
+
+test('UTV2-1825: the placeholder the pre-merge path writes is the one the rebinder binds', () => {
+  const preMerge = preMergeProof('# PROOF: UTV2-1825\n\nMERGE_SHA: pending\n');
+
+  // Guard the premise: if the pre-merge writer ever stops emitting this row,
+  // the rest of this test would pass vacuously.
+  assert.ok(
+    preMerge.includes(`MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'pre-merge normalization must write the ratified placeholder into the top-level row',
+  );
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(preMerge, UTV2_1825_MERGE_SHA, null);
+
+  assert.ok(
+    rebound.includes(`MERGE_SHA: ${UTV2_1825_MERGE_SHA}`),
+    'the top-level row must carry the merge SHA after rebinding',
+  );
+  // `Approved PR head:` is deliberately NOT rebound here. It is a different
+  // fact from merge authority, this function is never given it, and writing the
+  // merge SHA into it would be a fabricated value rather than a stale one.
+  // `ops:proof-rebind` owns that row (BINDING_ROW_LABELS) and receives
+  // --approved-head explicitly.
+  assert.ok(
+    rebound.includes(`Approved PR head: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the approved-head row is out of this rebinder\'s authority and must be left alone',
+  );
+  assert.equal(
+    rebound.split('\n').filter((line) => /^MERGE_SHA:/u.test(line))
+      .some((line) => line.includes(MERGE_AUTHORITY_PLACEHOLDER)),
+    false,
+    'no merge-authority row may still read as pending after a post-merge rebind',
+  );
+});
+
+test('UTV2-1825: the Merge SHA Binding section body rebinds along with the top-level row', () => {
+  const preMerge = preMergeProof('# PROOF: UTV2-1825\n\nMERGE_SHA: pending\n');
+
+  assert.ok(
+    preMerge.includes(`Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the generated binding section must carry the placeholder',
+  );
+  assert.ok(
+    preMerge.includes(`Approved PR head: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the generated binding section must carry the placeholder on the approved-head row too',
+  );
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(preMerge, UTV2_1825_MERGE_SHA, null);
+
+  assert.ok(rebound.includes(`Merge SHA: ${UTV2_1825_MERGE_SHA}`));
+  assert.ok(
+    rebound.includes(`Execution SHA: ${UTV2_1825_EXECUTION_SHA}`),
+    'execution identity is a separate fact and must survive the rebind unchanged',
+  );
+});
+
+test('UTV2-1825: an authored non-placeholder value is still refused, not overwritten', () => {
+  // This is what makes planExistingProofArtifact throw unbindable_proof_artifact
+  // rather than clobber measured evidence. Widening the placeholder alternation
+  // must not widen this.
+  const authored = '# PROOF: UTV2-1825\n\nMERGE_SHA: see the release ticket\n';
+
+  assert.equal(
+    rebindMergeShaAnchorsInMarkdown(authored, UTV2_1825_MERGE_SHA, null),
+    authored,
+    'an authored value is not a placeholder and must be left byte-identical',
+  );
+});
+
+test('UTV2-1825: a placeholder inside a fenced evidence block is left untouched', () => {
+  const fenced = [
+    '# PROOF: UTV2-1825',
+    '',
+    `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`,
+    '',
+    '## EVIDENCE:',
+    '',
+    '```',
+    `$ grep MERGE_SHA verification.md`,
+    `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`,
+    '```',
+    '',
+  ].join('\n');
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(fenced, UTV2_1825_MERGE_SHA, null);
+
+  assert.equal(
+    rebound.split('\n').filter((line) => line === `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`).length,
+    1,
+    'the quoted command output inside the fence is a measurement and must survive verbatim',
+  );
+  assert.ok(rebound.includes(`MERGE_SHA: ${UTV2_1825_MERGE_SHA}`));
 });

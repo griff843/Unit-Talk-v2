@@ -21,7 +21,11 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { validatePreMergeModelRoutingEvidence, type ModelRoutingBlock } from './model-routing.js';
-import { declaredProfileForLaneType, markdownFencedLineIndexes } from './proof-schema.js';
+import {
+  declaredProfileForLaneType,
+  markdownFencedLineIndexes,
+  MERGE_AUTHORITY_PLACEHOLDER,
+} from './proof-schema.js';
 import { duplicateKeysInSameObject } from './proof-rebind.js';
 
 type ProofArtifactName = 'diff-summary.md' | 'verification.md';
@@ -346,7 +350,7 @@ export function normalizePreMergeVerificationMarkdown(
       + 'Refusing to emit a placeholder.',
     );
   }
-  lines[matches[0]!] = 'MERGE_SHA: pending merge';
+  lines[matches[0]!] = `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`;
   let next = lines.join(eol);
   const nextFenced = markdownFencedLineIndexes(next);
   const nextLines = next.split(/\r?\n/u);
@@ -360,9 +364,9 @@ export function normalizePreMergeVerificationMarkdown(
     const suffix = [
       '## Merge SHA Binding',
       '',
-      'Merge SHA: pending merge',
+      `Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`,
       `PR: ${prUrl ?? 'pending'}`,
-      'Approved PR head: pending merge',
+      `Approved PR head: ${MERGE_AUTHORITY_PLACEHOLDER}`,
       `Execution SHA: ${executionSha}`,
       '',
     ].join(eol);
@@ -612,7 +616,7 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
       + 'so no truthful identity can be written. Refusing to emit a placeholder.',
     );
   }
-  const mergeAnchor = gitTruth.merge_sha ?? 'pending merge';
+  const mergeAnchor = gitTruth.merge_sha ?? MERGE_AUTHORITY_PLACEHOLDER;
   const executionAnchor = gitTruth.head_sha ?? 'pending';
 
   return [
@@ -659,9 +663,9 @@ export function buildRuntimeVerification(input: ProofGenerateInput): string {
     // The narrative binding section reports true merge identity, which is
     // unknown before merge. Only the top-level gate-read anchor above falls
     // back to the execution SHA; this row must never imply a merge happened.
-    `Merge SHA: ${gitTruth.merge_sha ?? 'pending merge'}`,
+    `Merge SHA: ${gitTruth.merge_sha ?? MERGE_AUTHORITY_PLACEHOLDER}`,
     `PR: ${manifest.pr_url ?? 'pending'}`,
-    `Approved PR head: ${gitTruth.merge_sha ? executionAnchor : 'pending merge'}`,
+    `Approved PR head: ${gitTruth.merge_sha ? executionAnchor : MERGE_AUTHORITY_PLACEHOLDER}`,
     `Execution SHA: ${executionAnchor}`,
     '',
   ].join('\n');
@@ -684,7 +688,30 @@ const MERGE_SHA_BINDING_HEADING = '## Merge SHA Binding';
  */
 const MERGE_SHA_LABEL_PATTERN = /^(\s*(?:[-*]\s+)?(?:\*\*)?(?:MERGE_SHA|Merge SHA|MERGE SHA)(?:\*\*)?:\s*)(.*)$/;
 const FULL_SHA_TOKEN_PATTERN = /\b[0-9a-f]{40}\b/;
-const PLACEHOLDER_VALUE_PATTERN = /^`?(?:N\/A|TBD|pending|stale|<merge[_ -]?sha>)`?$/i;
+/** Escapes a literal so it can be embedded in a RegExp source safely. */
+function escapeRegExpLiteral(literal: string): string {
+  return literal.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+/**
+ * UTV2-1825: the first alternative is the ratified pre-merge placeholder, taken
+ * from proof-schema's single definition rather than restated here.
+ *
+ * It has to be, because `normalizePreMergeVerificationMarkdown` writes exactly
+ * that string and `scripts/ci/proof-binding-validator.ts` requires exactly that
+ * string — while this pattern, which decides what the post-merge rebinder may
+ * bind, previously listed only the bare word `pending`. Being anchored, it did
+ * not match `pending merge`. So a bundle that followed the pre-merge contract
+ * merged and then could not be bound: `planExistingProofArtifact` refused to
+ * guess (correctly — it must never overwrite authored evidence) and the lane
+ * was stranded post-merge with its branch already gone. UTV2-1822 hit this for
+ * real. Deriving the alternative from the constant is what keeps the two ends
+ * of the contract from drifting apart again.
+ */
+const PLACEHOLDER_VALUE_PATTERN = new RegExp(
+  `^\`?(?:${escapeRegExpLiteral(MERGE_AUTHORITY_PLACEHOLDER)}|N/A|TBD|pending|stale|<merge[_ -]?sha>)\`?$`,
+  'i',
+);
 
 /**
  * Substitutes the SHA token inside a labelled merge-SHA value, preserving any
