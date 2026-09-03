@@ -1,6 +1,6 @@
 # PROOF: UTV2-1789
 
-MERGE_SHA: pending merge
+MERGE_SHA: 01a2d2d67de5602441b9609d43a00c532dd73dce
 
 > UTV2-1783 split merge authority from execution identity. This row presents
 > merge authority only, which does not exist before merge, so it reads
@@ -201,7 +201,7 @@ Command Center's auth mode to fail-open.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 01a2d2d67de5602441b9609d43a00c532dd73dce
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1474
 Approved PR head: pending merge
 Execution SHA: 974da2705296e8a0dd561a333e9cd23db3793396

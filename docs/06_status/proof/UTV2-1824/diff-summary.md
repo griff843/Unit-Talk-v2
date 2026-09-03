@@ -5,7 +5,7 @@ Tier: T1
 Lane type: delivery-ui
 Branch: claude/utv2-1824-smart-form-canonical-identity
 Head SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
-Merge SHA: pending merge
+Merge SHA: 2ac23342444ee2b3fbb086493e1b6ca6d862c59f
 Diff base: 5fd7d299643be0755c7ca347dbca30cc5af0b998
 
 > Merge authority does not exist before the merge. The head row carries execution identity —
@@ -54,4 +54,4 @@ A	docs/06_status/proof/UTV2-1824/verification.md
 
 ## SHA Binding
 Head SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
-Merge SHA: pending merge
+Merge SHA: 2ac23342444ee2b3fbb086493e1b6ca6d862c59f

@@ -4,17 +4,19 @@
   "tier": "T1",
   "lane_type": "delivery-ui",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
     "verified_source_sha": "974da2705296e8a0dd561a333e9cd23db3793396",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "merge_sha": null,
+    "merge_sha": "01a2d2d67de5602441b9609d43a00c532dd73dce",
     "ci_sentinels": {
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "note": "974da270 is the last non-proof commit on this branch: it adds the exhaustive deployed-environment regression. Every receipt below was re-executed against that exact tree. It supersedes 8afcba52, which an earlier revision of this file named and which no longer describes the shipped tree."
+    "note": "974da270 is the last non-proof commit on this branch: it adds the exhaustive deployed-environment regression. Every receipt below was re-executed against that exact tree. It supersedes 8afcba52, which an earlier revision of this file named and which no longer describes the shipped tree.",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T05:46:54.381Z"
   },
   "static_proof": {
     "status": "pass",
