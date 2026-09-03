@@ -186,8 +186,8 @@ would catch a weakened authz check are the same tests such a change edits.
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2913 tests, 2913 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 77 pass, 0 fail
+- [x] `pnpm test:ops`: 2916 tests, 2916 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 80 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 77 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/bootstrap-head-fallback-guard.test.ts`: 5 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
@@ -697,9 +697,62 @@ Each applied alone, suite run, restored, and confirmed to fail only its own asse
 == restored                                                     -> # fail 0
 ```
 
+## Independent review round 9
+
+Two P1s, both real, both instances of one gap: the validator proved a script NAMES a runner,
+never that it still runs the suite.
+
+### The `--filter` edge resolved against the wrong manifest
+
+`pnpm --filter @unit-talk/smart-form verify` runs `verify` in `apps/smart-form`. The resolver
+looked that word up in the manifest it was already reading, found the ROOT `verify`, and
+reported on a command that never runs. Round 6 had intended a filtered edge to be unprovable
+and round 7 restated that intent; neither actually held, because the lookup happened anyway.
+A filtered edge is now unprovable here whatever follows it — there is no manifest in hand that
+could prove one.
+
+### And the script it names was unprotected
+
+The required `verify` job depends on `apps/smart-form`'s `verify` exactly as much as on a root
+script. It lives in a manifest the root graph traversal cannot reach, so changing it to run
+nothing left every required check green — the round-8 reachability fix stopped at the file
+boundary. The root closure has exactly three filtered edges today, and they are now named in
+policy and held to the same rule: `smart-form verify`, `discord-bot command-manifest:check`,
+`command-center test`. Measured from the closure, not guessed.
+
+### A runner can run a real file and none of the suite
+
+Replacing `test:ops` with `node scripts/validate-env.mjs` names a runner, executes a real
+script, and runs no tests. `node -c file` syntax-checks and exits 0. No amount of runner-name
+matching separates either from the suite, because both ARE runner invocations.
+
+So inside the required chain a change must be a **widening**: every operand the old value ran
+must still be present, and every flag must be one the chain uses. Adding a test file is a
+superset and stays automatic. Dropping one, swapping the target, or adding a selector is not.
+This subsumes the round-8 flag rule rather than sitting beside it — the flag allowlist is now
+one half of a single question, "does this still run at least what it ran before?".
+
+Stated cost: renaming a test file inside a required-chain script reserves, because the old
+operand is gone. That is a narrowing by the rule's own definition, it is rare, and a human
+clears it once.
+
+### Replay
+
+Same 40 merged PRs: 25 auto / 15 human — unchanged from round 8. Three rounds of tightening
+have now cost nothing measurable on real work.
+
+### Mutation controls (round 9)
+
+```
+== M1 resolve past a --filter edge in this manifest again      -> not ok 72;     # fail 1
+== M2 drop the operand-superset half of the widening rule      -> not ok 73, 74; # fail 2
+== M3 empty the cross-manifest workspace-script list           -> not ok 73;     # fail 1
+== restored                                                    -> # fail 0
+```
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: dd415660c18120fc276ff7475fd29218aa08bea4
+Execution SHA: 16dceb8c5fd0b4b40583c9bb812dca2bec66d2cd

@@ -6,13 +6,13 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "dd415660c18120fc276ff7475fd29218aa08bea4",
-    "evidence_commit_sha": "dd415660c18120fc276ff7475fd29218aa08bea4",
+    "verified_source_sha": "16dceb8c5fd0b4b40583c9bb812dca2bec66d2cd",
+    "evidence_commit_sha": "16dceb8c5fd0b4b40583c9bb812dca2bec66d2cd",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_lint": "PASS",
       "pnpm_type_check": "PASS",
-      "pnpm_test": "PASS (test:ops 2913 tests, 0 failures)",
+      "pnpm_test": "PASS (test:ops 2916 tests, 0 failures)",
       "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
     }
   },
@@ -28,14 +28,14 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test:ops",
-      "tests": 2913,
+      "tests": 2916,
       "failures": 0
     },
     "targeted_suites": [
       {
         "status": "PASS",
         "command": "pnpm exec tsx --test scripts/ops/merge-authority.test.ts",
-        "tests": 77,
+        "tests": 80,
         "failures": 0
       },
       {
@@ -64,6 +64,24 @@
       }
     ],
     "mutation_controls": [
+      {
+        "mutation": "resolve past a --filter edge in this manifest again",
+        "expected": "the filtered-edge assertion fails; a root script proves a workspace command",
+        "observed": "not ok 72; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "drop the operand-superset half of the widening rule",
+        "expected": "both required-chain assertions fail; a narrowing passes as auto",
+        "observed": "not ok 73, 74; # fail 2",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "empty the cross-manifest requiredChainWorkspaceScripts list",
+        "expected": "the workspace-script assertion fails",
+        "observed": "not ok 73; # fail 1",
+        "status": "CAUGHT"
+      },
       {
         "mutation": "strip the path from a runner word again, accepting ./tsx",
         "expected": "the bare-word assertion fails; a diff-supplied binary counts as the toolchain",
@@ -116,8 +134,8 @@
     ],
     "classification_dry_run": {
       "status": "PASS",
-      "command": "replay classifyDiff over the last 40 merged PRs, round-7 rules vs round-8 rules, same sample",
-      "detail": "round 7: 24 auto / 16 human. round 8: 25 auto / 15 human. The PR that moved is #1453, which wired a new test file into test:ops and had been reserved by the merge-command-pattern false positive; confirmed by reading the PR, not inferred. Round 8 blocks two more evasions at strictly LOWER human load than round 7."
+      "command": "replay classifyDiff over the last 40 merged PRs after each round",
+      "detail": "round 7: 24 auto / 16 human. round 8: 25/15 (the mover is #1453, a false positive fixed - verified by reading the PR). round 9: 25/15, unchanged. Three rounds of tightening at no measurable cost on real work."
     },
     "verify": {
       "status": "PENDING-CI",
