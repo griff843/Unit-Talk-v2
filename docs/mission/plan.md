@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-03
+**Last reconciled against live truth:** 2026-09-03T05:00Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -13,14 +13,16 @@ and what was learned.
 Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, and the
 `Direct Main Push Guard` run log. Not against docs or chat history.
 
-- `main` is `72a4da762` (`ops(readiness): refresh ledger [skip ci]`, github-actions[bot]).
+- `main` is `01a2d2d67` (UTV2-1789, PR #1474, merged 2026-09-03T04:53Z). The two commits ahead of
+  `72a4da762` are #1488 (UTV2-1824, 04:52Z) and #1474 (UTV2-1789, 04:53Z), both merged by Griff
+  while this plan was being written.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews.
-- 16 PRs are open. None is blocked on a failing test, a type error, or a real risk finding.
+- 15 PRs are open. None is blocked on a failing test, a type error, or a real risk finding.
   They are blocked on `Merge Gate` in two distinct ways, and the distinction matters:
-  - **Missing a human approval artifact** (#1474, #1477, #1484, #1485, #1488) — a `pm-verdict/v1`
-    comment and/or the `t1-approved` label.
+  - **Missing a human approval artifact** (#1477, #1484, #1485) — a `pm-verdict/v1`
+    comment and/or the `t1-approved` label. #1474 and #1488 were in this group and have merged.
   - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498) — opened
     with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
     title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect.
@@ -102,10 +104,10 @@ the operator path.
 |---|---|
 | Reach the deployed form | **Infrastructure done.** `smart-form` is deployed, healthy, routed by Caddy at `UNIT_TALK_SMART_FORM_DOMAIN`. The hostname is a secret and is not in the repo. |
 | Authenticate | Deployed. Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`. |
-| Resolve canonical identity as `griff843` | **Blocked on a secret change.** See below. |
+| Resolve canonical identity as `griff843` | **Code merged, secret not yet changed — this is now a live production hazard.** See below. |
 | Submit + persist a canonical pick | Deployed. `parked` stops provider ingestion and delivery; it does not stop capper submission. |
 | Prove Track Only cannot create member delivery | **Built and mutation-tested** (UTV2-1672): the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
-| Observe through the operator path | **Blocked.** The Command Center has never been deployed (#1496), and carried a live authentication bypass (#1493). |
+| Observe through the operator path | **Blocked.** The Command Center has never been deployed (#1496) and still carries the dotted-path authentication bypass (#1493, open). The fail-open downgrade (#1474) merged 2026-09-03. No `COMMAND_CENTER_*` secret exists in the repo. |
 
 ### The identity blocker, precisely
 
@@ -119,16 +121,22 @@ That value is not cosmetic. `apps/smart-form/auth.ts` puts it in the session JWT
 `apps/api/src/handlers/submit-pick.ts` prefers that claim over whatever `submittedBy` the form sent,
 so it becomes the persisted identity of a real pick. Milestone 1 requires `griff843`.
 
-#1488 fixes this by requiring each allow-list entry to carry its canonical ID explicitly, refusing
-anything not already canonical rather than repairing it. That changes the required shape of an
-existing secret:
+#1488 merged at 2026-09-03T04:52Z. It requires each allow-list entry to carry its canonical ID
+explicitly, refusing anything not already canonical rather than repairing it. That changes the
+required shape of an existing secret:
 
 ```
 ALLOWED_CAPPER_EMAILS = griffadavi@gmail.com=griff843
 ```
 
-An entry with no `=` is dropped and does **not** fall back to the local part, so **merging #1488
-without updating the secret means nobody can sign in.** The secret must change with the merge.
+An entry with no `=` is dropped and does **not** fall back to the local part.
+
+**Measured 2026-09-03T05:00Z: `ALLOWED_CAPPER_EMAILS` was last updated 2026-09-01T13:26Z — before
+#1488 merged — and no `Deploy` run has fired since (latest is `e48106fc`, 2026-09-01T13:28Z).**
+Production therefore still runs the old derivation and still works. The next deploy ships the new
+code against the old secret shape, every entry is dropped, and nobody can sign in. This is the one
+open item where doing nothing is not safe: the secret must be updated before the next deploy, not
+before the next pilot.
 
 ---
 
@@ -140,8 +148,8 @@ Production-first. Wave 0 is entirely Griff; everything else is blocked behind it
 
 | # | Action | Why reserved |
 |---|---|---|
-| 1 | Approve **#1488** (`pm-verdict/v1` + `t1-approved`) **and** set `ALLOWED_CAPPER_EMAILS=griffadavi@gmail.com=griff843` in the same action | Secrets |
-| 2 | Re-authorize **#1474** against head `285fa8998` — the verdict is stale (approved `9f9e7fc6`), not negative | — |
+| 1 | ~~Approve **#1488**~~ merged 04:52Z. **Still owed: set `ALLOWED_CAPPER_EMAILS=griffadavi@gmail.com=griff843` before the next deploy.** The code shipped; the secret did not. | Secrets |
+| 2 | ~~Re-authorize **#1474**~~ merged 04:53Z. | — |
 | 3 | Decide **#1477** — standing verdict is `CHANGES_REQUIRED` | Production DDL |
 | 4 | Create `COMMAND_CENTER_DOMAIN`, `COMMAND_CENTER_AUTH_TOKEN`, `UNIT_TALK_CC_API_KEY` | Secrets |
 | 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority |
@@ -253,9 +261,11 @@ it by hand. PR #1485 is the related fix and is itself blocked.
 
 Consolidated from Wave 0, in dependency order:
 
-1. **#1488 + the `ALLOWED_CAPPER_EMAILS` secret, together** — Milestone 1 identity step.
-2. **Command Center secrets** — Milestone 1 observation step.
-3. **#1474 re-authorization** — stale verdict only.
+1. **`ALLOWED_CAPPER_EMAILS` = `griffadavi@gmail.com=griff843`** — urgent. #1488 merged at
+   2026-09-03T04:52Z; the secret still holds the pre-#1488 shape (last updated 2026-09-01T13:26Z).
+   The next deploy locks every capper out until this is set. Milestone 1 identity step.
+2. **Command Center secrets** — Milestone 1 observation step. None of the three exist yet.
+3. **#1493** — the remaining Command Center authentication defect, still open. #1474 merged.
 4. **#1477, #1451** — production DDL.
 5. **#1491 / #1492 architecture review** — merge authority and agent authority.
 6. **Direct-`main` prevention** — branch protection change; sequence after the backlog clears.
