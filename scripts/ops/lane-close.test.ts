@@ -4173,13 +4173,14 @@ test('UTV2-1828: a diff-summary.md with no bindable anchor refuses instead of cl
   withTempRepairState(({ repoRoot }) => {
     const issueId = 'UTV2-1745';
     const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId);
-    // `pending merge` is the pre-merge placeholder the UTV2-1783 contract
-    // mandates, and rebindMergeShaAnchorsInMarkdown does not yet recognise it
-    // (PLACEHOLDER_VALUE_PATTERN matches `pending`, not `pending merge`) -- that
-    // is UTV2-1825/PR #1485. Until it lands, such a file cannot be bound, and
-    // the honest outcome is a refusal that names the file rather than a
-    // closeout that reports success and then fails at truth-check P3/C4.
-    writeDiffSummary(proofDir, issueId, 'pending merge');
+    // UTV2-1825 made `pending merge` -- the pre-merge placeholder the UTV2-1783
+    // contract mandates -- a BINDABLE anchor, so it can no longer stand for the
+    // unbindable case this test names. The anchor below is deliberately neither
+    // a full SHA nor any value PLACEHOLDER_VALUE_PATTERN accepts, so the file
+    // genuinely carries nothing to bind. The honest outcome is still a refusal
+    // that names the file, rather than a closeout that reports success and then
+    // fails at truth-check P3/C4.
+    writeDiffSummary(proofDir, issueId, 'unbound');
     const manifest = utv2_1745Manifest(issueId);
 
     assert.throws(
