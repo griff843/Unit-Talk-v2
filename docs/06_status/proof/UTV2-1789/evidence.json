@@ -1,0 +1,151 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1789",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "pre_merge",
+  "sha_binding": {
+    "verified_source_sha": "974da2705296e8a0dd561a333e9cd23db3793396",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci"
+    },
+    "note": "974da270 is the last non-proof commit on this branch: it adds the exhaustive deployed-environment regression. Every receipt below was re-executed against that exact tree. It supersedes 8afcba52, which an earlier revision of this file named and which no longer describes the shipped tree."
+  },
+  "static_proof": {
+    "status": "pass",
+    "note": "pnpm verify:static EXIT=0 on 974da2705296e8a0dd561a333e9cd23db3793396; 99 node:test blocks, 0 failures; r-level-check PASS (Changed files: 9, rules matched: operator-ui). test:live-db needs the staging-ci credential held only by the CI staging-db-proof job and is proven there, not claimed here."
+  },
+  "pr_number": 1474,
+  "source_sha": "974da2705296e8a0dd561a333e9cd23db3793396",
+  "reviewed_head_sha": "974da2705296e8a0dd561a333e9cd23db3793396",
+  "generated_at": "2026-09-01T15:27:02Z",
+  "gate_results": [
+    {
+      "gate": "pnpm verify:static",
+      "verdict": "PASS",
+      "detail": "EXIT=0 on 974da2705296e8a0dd561a333e9cd23db3793396; 99 node:test blocks, every one reporting '# fail 0'."
+    },
+    {
+      "gate": "pnpm type-check",
+      "verdict": "PASS",
+      "detail": "Executed as a stage of verify:static."
+    },
+    {
+      "gate": "pnpm test",
+      "verdict": "PASS",
+      "detail": "Executed as a stage of verify:static."
+    },
+    {
+      "gate": "r-level-check",
+      "verdict": "PASS",
+      "detail": "Verdict: PASS. Changed files: 9. Rules matched: operator-ui."
+    },
+    {
+      "gate": "mutation testing",
+      "verdict": "PASS WITH DOCUMENTED EXCEPTION",
+      "detail": "Four mutations applied to the merged source and re-executed after a regression was inserted; each failed exactly the tests naming its condition (8 / 1 / 1 / 1). Restored source: pass 17 / fail 0. EXCEPTION, recorded rather than papered over: the early isDeployedEnvironment guard in server-api.ts is NOT independently mutation-pinnable. It is observationally redundant with the rewritten fail_open branch because DEPLOYED_ENVIRONMENTS and DEVELOPMENT_ENVIRONMENTS are disjoint. Proven exhaustively, not argued: an 800-combination differential over the real exported entry point is identical with and without the guard, and an independent reviewer reproduced this at 5070 combinations spanning all three mode aliases, mixed case, whitespace and empty values, difference count 0. The guard was NOT removed to manufacture a failure -- a second-order probe shows it is load-bearing: with the classifier weakened from every to some, the guard alone prevents an auth bypass. What is pinned instead is the invariant, by the regression named below. See verification.md section \"Mutation coverage limit\"."
+    },
+    {
+      "gate": "PM merge approval",
+      "verdict": "FAIL",
+      "detail": "No approval artifact exists. T1 requires the t1-approved label and a pm-verdict/v1 comment at the exact head."
+    }
+  ],
+  "runtime_proof": {
+    "status": "pass",
+    "measurement_basis": "The exported entry point the Command Center middleware calls, plus middleware() itself driven with a real NextRequest, at this exact head. No stub auth layer, no fixture UI. Four in-place mutations of the guards under test.",
+    "queries": [
+      {
+        "name": "an anonymous production request under COMMAND_CENTER_AUTH_MODE=fail_open is refused",
+        "method": "middleware(new NextRequest('http://cc.local/picks')) with NODE_ENV=production, UNIT_TALK_APP_ENV=production, COMMAND_CENTER_AUTH_MODE=fail_open and no credential",
+        "result": "Refusal status (401 or 503), body.ok === false, and no x-command-center-actor header attached to the request.",
+        "significance": "The exposure was that this exact configuration returned ok:true with role 'operator'. It now cannot."
+      },
+      {
+        "name": "every alias that used to disable auth is inert in production",
+        "method": "authenticateCommandCenterRequest with each of fail_open / disabled / FAIL_OPEN / Disabled across COMMAND_CENTER_AUTH_MODE, UNIT_TALK_COMMAND_CENTER_AUTH_MODE and UNIT_TALK_OPERATOR_RUNTIME_MODE -- twelve combinations",
+        "result": "All twelve refused.",
+        "significance": "The fix is not keyed to one spelling or one variable name."
+      },
+      {
+        "name": "a bypassed request does not enter the privileged-action audit stream",
+        "method": "middleware() under NODE_ENV=development with console.info/console.warn captured",
+        "result": "command_center.dev_bypass was emitted; command_center.privileged_action was not.",
+        "significance": "The audit trail no longer attests to a fabricated 'command-center:dev-bypass' operator identity."
+      },
+      {
+        "name": "an unlabelled runtime requires authentication",
+        "method": "authenticateCommandCenterRequest with no NODE_ENV, no UNIT_TALK_APP_ENV, and separately with nothing set at all",
+        "result": "Both refused.",
+        "significance": "Absence of evidence that we are in development is not evidence that we are."
+      },
+      {
+        "name": "a correctly configured production deployment still works",
+        "method": "middleware() with COMMAND_CENTER_AUTH_TOKEN set and a matching Bearer header, under production",
+        "result": "200, and command_center.privileged_action emitted.",
+        "significance": "The control is a gate, not a blanket refusal -- without this the mutation evidence would be satisfiable by simply breaking the app."
+      },
+      {
+        "name": "the shipped example configuration no longer disables auth",
+        "method": "Read apps/command-center/.env.example and assert no AUTH_MODE line equals fail_open or disabled",
+        "result": "Only COMMAND_CENTER_AUTH_MODE=fail_closed is present.",
+        "significance": "The example file is the artifact that actually caused the exposure; the code fix alone does not stop the next copy of a bad default."
+      },
+      {
+        "name": "no deployed environment is optional-auth under any mode",
+        "method": "resolveCommandCenterAccessConfig driven over 2 deployed environments (production, staging) x 8 COMMAND_CENTER_AUTH_MODE values (unset, fail_open, disabled, FAIL_OPEN, Disabled, fail_closed, required, bogus) x 4 NODE_ENV values (production, development, test, unset) -- 64 combinations",
+        "result": "required === true for all 64.",
+        "significance": "This is the invariant the redundant guard cannot itself pin. Proven non-vacuous: under the original mode-before-environment ordering this spec fails along with 7 siblings (17 tests, 9 pass, 8 fail)."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "fail-closed auth specs passing at this head",
+        "value": 17
+      },
+      {
+        "probe": "pre-existing server-api specs still passing unchanged",
+        "value": 15
+      },
+      {
+        "probe": "specs that fail when the mode-before-environment ordering is restored",
+        "value": 8
+      },
+      {
+        "probe": "specs that fail when an unlabelled runtime defaults open",
+        "value": 1
+      },
+      {
+        "probe": "specs that fail when .env.example is reverted to fail_open",
+        "value": 1
+      },
+      {
+        "probe": "specs that fail when the middleware dev_bypass branch is removed",
+        "value": 1
+      },
+      {
+        "probe": "files changed outside apps/command-center/**",
+        "value": 0
+      },
+      {
+        "probe": "root .env.example lines modified",
+        "value": 0
+      }
+    ],
+    "known_limitations": [
+      "MUTATION COVERAGE: the early isDeployedEnvironment guard is not independently mutation-pinnable and is redundantly enforced. Removing it leaves the suite at 17/17. It is kept because a second-order probe shows it is load-bearing when the environment classifier is weakened. Full reasoning and the 800-combination differential are in verification.md.",
+      "REQUEST SURFACE: this bundle does NOT prove that every Command Center route is authenticated. The middleware matcher /((?!.*\\..*).*) excludes any path containing a dot, while app/picks/[id]/page.tsx matches a dotted segment, so GET /picks/anything.json renders the pick-detail page -- which mounts settlement, correction and intervention server actions -- without entering the middleware. Pre-existing, neither introduced nor fixed here, tracked as UTV2-1812 and marked a hard blocker for any Command Center production deployment.",
+      "AUDIT TRAIL: the middleware still sets the x-command-center-actor header (middleware.ts:78, actor command-center:dev-bypass) AND x-command-center-role: operator (middleware.ts:79) on the dev-bypass branch, for every non-public matched route that passes auth. What changed is the emitted audit event (command_center.dev_bypass, not command_center.privileged_action). git grep confirms no application code reads either header, but they are emitted and this bundle does not claim otherwise.",
+      "SIBLING RUNTIME MODES: only four of the six declared *_RUNTIME_MODE variables are backstopped by assertProductionRuntimeConfig (api, discord-bot, ingestor, worker). UNIT_TALK_ALERT_AGENT_RUNTIME_MODE (shipped fail_open at root .env.example:100) and UNIT_TALK_OPERATOR_RUNTIME_MODE have no enforcement path. An earlier revision of this file claimed all five were backstopped; that was false and is corrected here. Tracked as UTV2-1813, not fixed in this lane.",
+      "Command Center is not deployed to production today (docker-compose.prod.yml:77-83 places it behind an opt-in profiles: [command-center], and no workflow under .github/workflows deploys it), so this is a latent exposure closed before first deployment rather than a live one closed after. There is consequently no live production request to point at. Because a deployed environment is now unconditionally auth-required and no COMMAND_CENTER_AUTH_* value is provisioned in the deploy path, whoever first deploys must provision a credential in the same change or every route returns 503 COMMAND_CENTER_AUTH_MISCONFIGURED.",
+      "The probes drive middleware() in-process rather than a running Next.js server. The middleware is the only auth boundary in front of the matched routes and is exercised whole, but a full browser-level E2E against a built Command Center was not run.",
+      "The writable staging leg did not execute: ci:assert-staging refuses the containment target. CI run-scoped staging receipt, verified inside required verify, carries the authoritative T1 receipt for this head.",
+      "apps/api/src/auth.ts carries the same precedence shape. It is unreachable in production because the runtime-config resolver refuses to boot the API with fail_open under a production-like environment, but it is left unchanged: it is a shared API auth surface outside this lane scope."
+    ]
+  }
+}
