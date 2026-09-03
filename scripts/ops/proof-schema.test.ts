@@ -2275,3 +2275,214 @@ test('W4 — the workflow states pre-merge explicitly rather than letting the ph
   assert.ok(code.includes("'--phase'"), 'the workflow must pass --phase');
   assert.ok(code.includes("'pre-merge'"), 'an open PR is always validated pre-merge');
 });
+
+/**
+ * UTV2-1826: the shape a real schema-v2 migration lane has after merge, where
+ * merge authority and execution identity are deliberately different commits.
+ *
+ *   base ──────────────────────────────── merge
+ *     └── execution ── prHead ───────────────┘
+ *
+ * `base` is the pre-PR main tip GitHub merged into, `execution` is the lane's
+ * last non-proof commit (the SHA its CI receipts were captured at, and the SHA
+ * `sha_binding.verified_source_sha` names), `prHead` adds proof files only, and
+ * `merge` is the two-parent merge commit GitHub recorded.
+ */
+function createSplitIdentityMigrationRepo(): {
+  repoRoot: string;
+  baseSha: string;
+  executionSha: string;
+  prHead: string;
+  mergeSha: string;
+} {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1826-split-identity-'));
+  const git = (...args: string[]): string => execFileSync('git', args, { cwd: repoRoot, encoding: 'utf8' }).trim();
+  const write = (relativePath: string, content: string): void => {
+    const absolutePath = path.join(repoRoot, relativePath);
+    fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+    fs.writeFileSync(absolutePath, content);
+  };
+
+  git('init', '-b', 'main');
+  git('config', 'user.email', 'proof-schema@example.test');
+  git('config', 'user.name', 'Proof Schema Test');
+  write('source.txt', 'main before the lane\n');
+  git('add', '.');
+  git('commit', '-m', 'main tip before the PR');
+  const baseSha = git('rev-parse', 'HEAD');
+
+  write('supabase/migrations/20260101000000_lane.sql', '-- lane migration\n');
+  git('add', '.');
+  git('commit', '-m', 'lane implementation');
+  const executionSha = git('rev-parse', 'HEAD');
+
+  write('docs/06_status/proof/UTV2-9000/evidence.json', '{"proof":true}\n');
+  write('docs/06_status/lanes/UTV2-9000.json', '{}\n');
+  git('add', '.');
+  git('commit', '-m', 'proof bundle');
+  const prHead = git('rev-parse', 'HEAD');
+
+  const mergeSha = git(
+    'commit-tree',
+    git('rev-parse', `${prHead}^{tree}`),
+    '-p',
+    baseSha,
+    '-p',
+    prHead,
+    '-m',
+    'Merge pull request',
+  );
+
+  return { repoRoot, baseSha, executionSha, prHead, mergeSha };
+}
+
+/** Migration evidence with the two identity fields set independently. */
+function splitIdentityMigrationEvidence(
+  receiptHead: string,
+  verifiedSourceSha: string,
+  mergeSlot: unknown,
+  options: { declareMergeSlot?: boolean } = {},
+) {
+  const evidence = migrationEvidence();
+  evidence.sha_binding.verified_source_sha = verifiedSourceSha;
+  evidence.runtime_proof.head = receiptHead;
+  if (options.declareMergeSlot === false) {
+    delete (evidence.sha_binding as Record<string, unknown>)['merge_sha'];
+  } else {
+    (evidence.sha_binding as Record<string, unknown>)['merge_sha'] = mergeSlot;
+  }
+  return evidence;
+}
+
+describe('UTV2-1826 post-merge migration merge authority', () => {
+  test('a migration bundle whose merge slot is the attested merge and whose verified source is a PR commit passes', () => {
+    const repo = createSplitIdentityMigrationRepo();
+    try {
+      const result = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.executionSha, repo.mergeSha),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      // Before UTV2-1826 this failed with migration_receipt_merge_attestation_mismatch,
+      // because the merge attestation was resolved from the execution identity.
+      assert.equal(result.valid, true, JSON.stringify(result.failures));
+    } finally {
+      fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('a declared merge slot that is not the GitHub-recorded merge still fails, naming the merge slot', () => {
+    const repo = createSplitIdentityMigrationRepo();
+    try {
+      const result = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.executionSha, repo.baseSha),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      assert.equal(result.valid, false);
+      const failure = result.failures.find(
+        (candidate) => candidate.code === 'migration_receipt_merge_attestation_mismatch',
+      );
+      assert.ok(failure, JSON.stringify(result.failures));
+      assert.equal(failure.field, 'sha_binding.merge_sha');
+    } finally {
+      fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('a verified source outside the attested PR is still refused once the merge slot carries authority', () => {
+    const repo = createSplitIdentityMigrationRepo();
+    try {
+      // baseSha is on the base side of the merge: present in main before the PR
+      // existed, so it is not a commit this PR contributed.
+      const result = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.baseSha, repo.mergeSha),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      assert.equal(result.valid, false);
+      const failure = result.failures.find(
+        (candidate) => candidate.code === 'migration_receipt_source_not_in_merged_pr',
+      );
+      assert.ok(failure, JSON.stringify(result.failures));
+      assert.equal(failure.field, 'sha_binding.verified_source_sha');
+    } finally {
+      fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('a declared merge slot still holding its pre-merge null is a post-merge contradiction', () => {
+    const repo = createSplitIdentityMigrationRepo();
+    try {
+      const result = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.executionSha, null),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      assert.equal(result.valid, false);
+      const failure = result.failures.find(
+        (candidate) => candidate.code === 'migration_receipt_merge_slot_invalid',
+      );
+      assert.ok(failure, JSON.stringify(result.failures));
+      assert.equal(failure.field, 'sha_binding.merge_sha');
+    } finally {
+      fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  test('a bundle that declares no merge slot keeps the pre-UTV2-1783 rule unchanged', () => {
+    const repo = createSplitIdentityMigrationRepo();
+    try {
+      const legacyBound = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.mergeSha, undefined, { declareMergeSlot: false }),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      assert.equal(legacyBound.valid, true, JSON.stringify(legacyBound.failures));
+
+      const legacyUnbound = validateEvidenceBundleContract(
+        splitIdentityMigrationEvidence(repo.executionSha, repo.executionSha, undefined, { declareMergeSlot: false }),
+        {
+          gate: 'post-merge-read',
+          laneType: 'migration',
+          tier: 'T1',
+          repoRoot: repo.repoRoot,
+          mergedPrAttestation: mergedPrAttestation(repo.mergeSha, repo.prHead),
+        },
+      );
+      assert.equal(legacyUnbound.valid, false);
+      const failure = legacyUnbound.failures.find(
+        (candidate) => candidate.code === 'migration_receipt_merge_attestation_mismatch',
+      );
+      assert.ok(failure, JSON.stringify(legacyUnbound.failures));
+      assert.equal(failure.field, 'sha_binding.verified_source_sha');
+    } finally {
+      fs.rmSync(repo.repoRoot, { recursive: true, force: true });
+    }
+  });
+});
