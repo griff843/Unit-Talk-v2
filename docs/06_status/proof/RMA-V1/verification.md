@@ -186,8 +186,8 @@ would catch a weakened authz check are the same tests such a change edits.
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2909 tests, 2909 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 73 pass, 0 fail
+- [x] `pnpm test:ops`: 2913 tests, 2913 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 77 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 77 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/bootstrap-head-fallback-guard.test.ts`: 5 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
@@ -630,9 +630,76 @@ and the invalid PM verdict template found on #1492, that is three parsers in one
 treat a WRONG artifact as an ABSENT one. The defect class, not the three instances, is what
 should be fixed.
 
+## Independent review round 8
+
+Two P1s, both real. Both are the shape I explicitly asked round 8 to look for, which is worth
+recording: the review request named "a runner that no-ops on some argument shape" and "a PATH
+effect", and both existed.
+
+```
+./tsx --test a.test.ts                                 # a runner the diff itself supplies
+node --test --test-name-pattern NEVERMATCH a.test.ts   # a real runner that runs no test
+```
+
+Naming a runner is not the same as running work. The round-7 grammar proved that a script
+resolves to a recognised runner and stopped there.
+
+### A runner must be a bare word
+
+`./tsx` executes a file the PR can add in the same diff, so the diff supplies both the
+"runner" and its behaviour. A bare word resolves through the workspace's own
+`node_modules/.bin`, which cannot be repointed without changing a manifest this validator
+already reserves — so the bare-word requirement inherits protection that already exists
+rather than adding a new rule to maintain.
+
+### Required-check protection follows reachability
+
+CI invokes `test`. `test` invokes `test:ops`. Nothing in CI names `test:ops`, so weakening it
+left all four required checks green while an entire suite stopped running. The protected set
+is now the TRANSITIVE CLOSURE over the script graph, computed across base and head so that
+neither adding nor removing a link can hide the change that did it.
+
+The obvious version of this rule was wrong, and it is worth saying why. Reserving every change
+to a reachable script would reserve *adding a test file to a group* — the most ordinary change
+in this repository, and precisely the case a replay caught RMA getting wrong once already
+(#1469). So inside the closure the trigger is a FLAG the required chain does not use. A
+selector (`--test-name-pattern`, `-t`, `--grep`, `--shard`) makes a check pass while running
+LESS; another file path makes it run MORE. The whole 37-script closure uses five flags today,
+which is what makes an allowlist practical here rather than optimistic.
+
+### A test named after a control is not the control
+
+`test:ops` lists `pre-merge-authorization.test.ts`, so the merge-command value regex matched
+every edit to that group and reserved it as though the script had been repointed at the merge
+wrapper. Running a test NAMED after a control is the opposite of repointing at it. Test-file
+words are excluded before the pattern applies; repointing a script at the wrapper still
+reserves, and there is a test for each direction.
+
+### Replay: the strictness paid for itself
+
+Same 40 merged PRs: **25 auto / 15 human**, up from 24/16 under round 7. The PR that moved is
+#1453, which wired a new test file into `test:ops` and had been reserved by exactly the
+false positive above. That was verified by reading the actual PR, not inferred from the
+number changing.
+
+So round 8 is net LESS human load than round 7 while blocking two more evasions. That is the
+first round where tightening and cost moved in opposite directions, and it happened because
+the fix was aimed at a wrong RULE rather than at a missing case.
+
+### Mutation controls (round 8)
+
+Each applied alone, suite run, restored, and confirmed to fail only its own assertions:
+
+```
+== M1 strip the path from a runner word again (./tsx accepted)  -> not ok 74; # fail 1
+== M2 protect only the NAMED entrypoints, not the closure       -> not ok 75; # fail 1
+== M3 apply the merge-command pattern to the raw value again    -> not ok 77; # fail 1
+== restored                                                     -> # fail 0
+```
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 10abed063743ab076f4aadf70bd6c4e1d961ceb8
+Execution SHA: dd415660c18120fc276ff7475fd29218aa08bea4
