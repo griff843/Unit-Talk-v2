@@ -200,13 +200,20 @@ function elementRunsRunner(element, scripts, config, visited) {
       // what remains is a script this manifest does not define, it stays
       // unproven and reserves.
       const next = [];
+      let filtered = false;
       for (let i = 1; i < words.length; i += 1) {
         const w = words[i];
-        if (w === '--filter' || w === '-F') { i += 1; continue; }
-        if (w.startsWith('--filter=')) continue;
+        if (w === '--filter' || w === '-F') { filtered = true; i += 1; continue; }
+        if (w.startsWith('--filter=')) { filtered = true; continue; }
         if (w.startsWith('-')) continue;
         next.push(w);
       }
+      // `pnpm --filter <pkg> verify` runs the script named `verify` in ANOTHER
+      // manifest. Resolving the remaining word here would look it up in THIS
+      // manifest and follow a same-named root script instead -- reporting on a
+      // command that never runs. There is no manifest here that can prove it,
+      // so it stays unproven.
+      if (filtered) return false;
       words = next;
       continue;
     }
@@ -229,6 +236,33 @@ function elementRunsRunner(element, scripts, config, visited) {
  * chain is protected from that moment, and one dropped out of it is still
  * protected for the change that dropped it.
  */
+/**
+ * Is a script's new value a WIDENING of its old one?
+ *
+ * A required-chain script may gain work and may not lose it. Adding a test file
+ * is ordinary; swapping the whole value for `node scripts/validate-env.mjs`
+ * runs a real runner and none of the suite, and naming a runner cannot tell
+ * those apart. Comparing the operand SETS can: every word the old value ran
+ * must still be there, and every flag must be one the required chain uses.
+ */
+function isWidening(baseValue, headValue, allowedFlags) {
+  if (typeof headValue !== 'string') return false;
+  const parts = (value) => {
+    const words = String(value).split(/\s+/).filter(Boolean);
+    return {
+      flags: words.filter((w) => w.startsWith('-')).map((w) => w.split('=')[0]),
+      operands: new Set(words.filter((w) => !w.startsWith('-'))),
+    };
+  };
+  const head = parts(headValue);
+  for (const flag of head.flags) if (!allowedFlags.has(flag)) return false;
+  if (typeof baseValue !== 'string') return true;
+  for (const operand of parts(baseValue).operands) {
+    if (!head.operands.has(operand)) return false;
+  }
+  return true;
+}
+
 function reachableScripts(entrypoints, headScripts, baseScripts) {
   const reachable = new Set();
   const queue = [...entrypoints];
@@ -346,17 +380,14 @@ function analyzeManifests({ files, manifests, config }) {
         }
         // Below the named entrypoints the rule is narrower on purpose. Adding a
         // test file to a group is the most ordinary change there is and must
-        // stay automatic; adding a SELECTOR is not, because it leaves every
-        // required check green while the suite runs less. So the flags a
-        // required-chain script may use are allowlisted -- the whole closure
-        // uses five of them today, which is what makes this practical.
-        for (const word of String(headScripts[key]).split(/\s+/)) {
-          if (!word.startsWith('-')) continue;
-          const flag = word.split('=')[0];
-          if (allowedFlags.has(flag)) continue;
+        // stay automatic; running LESS than before is not, because it leaves
+        // every required check green while the suite shrinks. So a change here
+        // must be a widening: no operand may be dropped, and every flag must be
+        // one the required chain actually uses.
+        if (!isWidening(baseScripts[key], headScripts[key], allowedFlags)) {
           reserve(
             'ci-required-check-entrypoints',
-            `Root script "${key}" is reachable from a required-check entrypoint and now passes "${flag}", which is not a flag the required chain uses. A selector here makes the check pass while running less.`
+            `Root script "${key}" is reachable from a required-check entrypoint and its change is not a widening — it drops something it used to run, or passes a flag the required chain does not use: ${String(headScripts[key]).slice(0, 120)}`
           );
         }
       }
@@ -365,6 +396,25 @@ function analyzeManifests({ files, manifests, config }) {
           reserve(
             'control-toolchain',
             `Root dependency "${dep}" changed — the merge-authority chain executes through it, so a replacement binary can satisfy the gate without evaluating it.`
+          );
+        }
+      }
+    }
+
+    // A manifest OTHER than the root can still carry a script the required
+    // chain runs, reached through `pnpm --filter <pkg> <script>`. The root
+    // graph traversal cannot see it -- it is in a different file -- so it was
+    // unprotected, and changing apps/smart-form's `verify` to run nothing left
+    // every required check green.
+    if (!isRoot) {
+      const workspaceScripts = (config.requiredChainWorkspaceScripts || {})[head && head.name] || [];
+      const allowed = new Set(config.requiredChainAllowedFlags || []);
+      for (const key of workspaceScripts) {
+        if (headScripts[key] === baseScripts[key]) continue;
+        if (!isWidening(baseScripts[key], headScripts[key], allowed)) {
+          reserve(
+            'ci-required-check-entrypoints',
+            `Script "${key}" in ${name} is invoked by the root required chain through \`pnpm --filter\`, and its change is not a widening: ${String(headScripts[key]).slice(0, 120)}`
           );
         }
       }

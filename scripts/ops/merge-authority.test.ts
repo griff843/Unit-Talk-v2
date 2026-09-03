@@ -693,6 +693,9 @@ test('a runner name inside a comment does not count as running it', () => {
 });
 
 test('real commands are recognised as invoking a runner', () => {
+  // Assigned to a key OUTSIDE the required chain: inside it, a change must also
+  // be a widening, which is a different question from "does this run work".
+
   for (const command of [
     'tsx --test a.test.ts',
     'pnpm exec tsc -b tsconfig.json',
@@ -706,7 +709,7 @@ test('real commands are recognised as invoking a runner', () => {
   ]) {
     const result = classifyRoot(
       rootManifest((m) => {
-        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+        (m as never as { scripts: Record<string, string> }).scripts['demo:run'] = command;
       }),
     );
     assert.equal(result.authority, 'auto', command);
@@ -880,25 +883,92 @@ test('an alternation is refused outright', () => {
   assert.ok(both.surfaces.includes('neutered-workspace-script'));
 });
 
-test('a filtered pnpm command is resolved, not trusted for its --filter', () => {
-  // `pnpm --filter <pkg> exec true` exits 0 having run only `true`. Treating
-  // `--filter` itself as proof of work accepted it.
-  const inert = classifyRoot(
-    rootManifest((m) => {
-      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
-        'pnpm --filter @unit-talk/contracts exec true';
-    }),
-  );
-  assert.equal(inert.authority, 'human');
-  assert.ok(inert.surfaces.includes('neutered-workspace-script'));
+test('a --filter edge is unprovable here, whatever follows it', () => {
+  // Round 9. `pnpm --filter <pkg> <script>` runs a script in ANOTHER manifest.
+  // Resolving the word after the filter against THIS manifest found a
+  // same-named root script and reported on a command that never runs -- so
+  // `pnpm --filter @unit-talk/smart-form verify` was proven by the ROOT
+  // `verify`. There is no manifest here that can prove a filtered edge, so it
+  // stays unproven regardless of how much work the words after it appear to do.
+  for (const command of [
+    'pnpm --filter @unit-talk/contracts exec true',
+    'pnpm --filter @unit-talk/contracts exec tsx --test test/a.test.ts',
+    'pnpm --filter @unit-talk/smart-form verify',
+    'pnpm --filter=@unit-talk/smart-form verify',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), command);
+  }
+});
 
-  const real = classifyRoot(
-    rootManifest((m) => {
-      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
-        'pnpm --filter @unit-talk/contracts exec tsx --test test/a.test.ts';
-    }),
-  );
-  assert.equal(real.authority, 'auto');
+test('a workspace script the required chain reaches by --filter is protected', () => {
+  // The other half of the same finding. The root required chain runs
+  // `pnpm --filter @unit-talk/smart-form verify`, so the required `verify` job
+  // depends on that script exactly as much as on a root one -- but it lives in
+  // a manifest the root graph traversal cannot reach, so changing it to run
+  // nothing left every required check green.
+  const base = JSON.stringify({
+    name: '@unit-talk/smart-form',
+    scripts: { verify: 'tsx --test a.test.ts b.test.ts' },
+  });
+  const classifyWorkspace = (scripts: Record<string, string>) =>
+    classifyDiff({
+      files: [file('apps/smart-form/package.json', '+ irrelevant')],
+      policy,
+      manifests: {
+        'apps/smart-form/package.json': {
+          base,
+          head: JSON.stringify({ name: '@unit-talk/smart-form', scripts }),
+        },
+      },
+    });
+
+  const widened = classifyWorkspace({ verify: 'tsx --test a.test.ts b.test.ts c.test.ts' });
+  assert.equal(widened.authority, 'auto', widened.reasons.join(' | '));
+
+  for (const narrowed of [
+    { verify: 'tsx --test --test-name-pattern NEVER a.test.ts b.test.ts' },
+    { verify: 'tsx --test a.test.ts' },
+    { verify: 'echo skipped' },
+  ]) {
+    const result = classifyWorkspace(narrowed);
+    assert.equal(result.authority, 'human', JSON.stringify(narrowed));
+    assert.ok(
+      result.surfaces.includes('ci-required-check-entrypoints'),
+      JSON.stringify(narrowed),
+    );
+  }
+});
+
+test('a required-chain script may gain work but not lose it', () => {
+  // `node scripts/validate-env.mjs` is a real runner running a real file, and
+  // none of the suite. Naming a runner cannot tell that apart from the suite
+  // itself; comparing the operand sets can.
+  for (const command of [
+    'node scripts/validate-env.mjs',
+    'node -c scripts/validate-env.test.mjs',
+    'tsx --test scripts/ops/a.test.ts',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+      JSON.stringify({
+        ...JSON.parse(BASE_ROOT),
+        scripts: {
+          ...JSON.parse(BASE_ROOT).scripts,
+          'test:ops': 'tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts',
+        },
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('ci-required-check-entrypoints'), command);
+  }
 });
 
 test('a cross-package script name cannot be proven, so it reserves', () => {
