@@ -402,6 +402,105 @@ introduced here. It resolves mechanically when #1491 merges: this PR then retarg
 a structurally expected red as an unresolved failure, and so that no one is tempted to
 "fix" it by renaming the branch — which would close the PR.
 
+## Independent review round 8b
+
+Five findings at `973c9c71`. Two of them are defects in round 8's own fixes, which is the
+more useful half of the review and is recorded as such rather than folded into the rest.
+
+### P1 — the rollback preflight asserted the wrong credentials (a defect I introduced)
+
+Round 8 asserted `SUPABASE_DB_URL` alone for rollback and stated that the operation connects
+over it. Verified in source, which is what round 8 should have done:
+
+- `scripts/backup/rollback-validate.ts:199` reads `SUPABASE_DB_URL` only to build
+  `options.supabaseDbUrl`, which `assertProductionGuard` uses and nothing else does.
+- `createDefaultClient` (line 342) builds its client from
+  `createServiceRoleDatabaseConnectionConfig(loadEnvironment())`.
+- That resolves through `requireSupabaseEnvironment` (`packages/config/src/env.ts:348`), which
+  requires `SUPABASE_URL`, `SUPABASE_ANON_KEY` **and** `SUPABASE_SERVICE_ROLE_KEY`.
+
+So the live command would have failed *after* a passing preflight, on exactly the minimal
+host round 8 claimed to support — the worst possible place for the claim to be wrong, since
+the whole point of that fix was to make rollback usable under pressure.
+
+The split is per command, not per operation, because the difference is real:
+`runRollbackValidate` skips the client entirely when `dryRun` is set, so the dry run genuinely
+needs only the guard variable. The live path asserts all three.
+
+The lesson is the one this bundle keeps relearning: an assertion about what a command needs
+is a claim about code, and it has to be read out of the code. Round 8 inferred it from the
+CLI flag name.
+
+### P1 — runtime-verifier treated an approval-blocked Merge Gate as a broken one
+
+Under risk-scoped authority, Merge Gate failing on an `authority: human` PR is not a failure —
+it is the mechanism by which a reserved diff waits for its label and head-bound verdict. The
+agent's rule read "any `failure` on a required check = FAILED", so it returned FAILED for
+every reserved PR, and its own handoff became unreachable: `VERIFIED -> proceed to the merge
+gate` cannot be issued because the gate cannot go green before the label, and the label is not
+requested until the agent says VERIFIED. A deadlock written into a procedure.
+
+Now WAITING — but conditioned on the gate's own `output.summary` naming a missing approval
+artifact, never inferred from `authority: human` alone. A reserved PR can also be red for
+ordinary reasons, and reporting that as "waiting for Griff" would hide a genuine break behind
+an expected one. That distinction is the whole content of the fix; without it the change would
+just move the failure.
+
+### P2 — replay capture had no provider-key assertion
+
+`--action capture` reaches the live provider. With neither `SGO_API_KEY` nor `SGO_API_KEYS`
+set, `scripts/utv2-796-slate-replay.ts:105` substitutes the literal string `replay-key` and
+attempts the capture anyway. A silent bad default is worse than a missing one: the failure
+surfaces as a provider authentication error rather than as a setup error, which is a much
+longer path to the cause. Asserted now, and only for `--action capture` — slate replay and
+in-memory replay still assert nothing, which is the property that keeps a replay reproducible
+offline.
+
+### P2 — a path-shaped line outside a bullet was silently dropped
+
+The Scope grammar is one path per bullet. `splitScopePaths` skipped every non-bullet line, so
+a mixed section — one valid bullet plus `Also edit ../outside/a.ts` — kept the valid bullet,
+passed the nonempty-scope check, and ran under the permissive default profile, while the
+executor still read the raw instruction and could edit a path outside the repository. Neither
+reserved-surface gate can see that: a file changed outside Git never reaches a diff.
+
+This is the third distinct parser in this work to show the same defect — a WRONG artifact
+read as an ABSENT one — after the malformed `EXECUTOR_RESULT` and the fenced PM-verdict
+example line. It is recorded as a class, not an incident.
+
+The narrowing matters as much as the fix: prose, headings, block quotes and URLs inside a
+Scope section stay unreported. A check that fires on ordinary context is a check that gets
+switched off.
+
+### P2 — round 8's own packet prohibition was stricter than the gate it anticipates
+
+The prohibition added earlier in round 8 forbade every `.env.*` file, including
+`.env.example`, `.env.template` and `.env.sample` — which the secrets surface excludes on
+purpose, because they carry variable names rather than values. Adding an environment variable
+normally requires updating that template in the same change, so the prompt told the executor
+to stop on an edit the classifier itself returns `auto` for.
+
+This is precisely the divergence round 8 corrected once already, in `classifyScope`,
+reintroduced two files over within the same round. Worth stating plainly: the failure mode is
+not "forgot the exclusion list" but "wrote a second, informal copy of a policy that already
+exists". The exclusions belong to the policy; anything restating them will drift from them.
+
+### Mutation controls (round 8b)
+
+```
+== N1 non-bullet lines skipped again            -> not ok 40; # fail 1
+== N2 template exemption removed from prompt    -> not ok 39; # fail 1
+== N3 runbook rollback/replay assertions reverted-> not ok 76; # fail 1
+== N4 runtime-verifier reverted                 -> not ok 75; # fail 1
+== restored                                     ->            # fail 0
+```
+
+```
+$ pnpm lint         -> pass (silent)
+$ pnpm type-check   -> pass (silent)
+$ pnpm test:ops     -> # tests 3012  # pass 3012  # fail 0
+```
+
 ## Merge SHA Binding
 
 Bound after merge by `ops:proof-generate --merge-sha`. The `Execution SHA` below is the last
@@ -410,4 +509,4 @@ non-proof commit on this branch and is what the assertions above were verified a
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1492
 Approved PR head: pending merge
-Execution SHA: 5265aba228a167d9bf14dc7500f3678aba2120ed
+Execution SHA: 880a960d289b0de341ca3fcbae1dcb6b02c80be5
