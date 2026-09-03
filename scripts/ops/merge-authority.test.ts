@@ -915,3 +915,89 @@ test('a cross-package script name cannot be proven, so it reserves', () => {
   );
   assert.equal(result.authority, 'human');
 });
+
+// ── round 8: naming a runner is not the same as running work ──────────────
+
+test('a runner must be a bare word, not a path the diff controls', () => {
+  // `./tsx --test a.test.ts` looks like the toolchain. It executes a file the
+  // PR itself can add, so the diff supplies both the "runner" and its
+  // behaviour. A bare word resolves through the workspace's own
+  // node_modules/.bin, which a diff cannot repoint without changing a manifest
+  // this validator already reserves.
+  for (const command of [
+    './tsx --test scripts/ops/a.test.ts',
+    'node_modules/.bin/tsx --test scripts/ops/a.test.ts',
+    '../tsx --test scripts/ops/a.test.ts',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), command);
+  }
+});
+
+test('a required-check script is protected through the whole chain, not just at its entrypoint', () => {
+  // CI invokes `test`. `test` invokes `test:ops`. Nothing in CI names
+  // `test:ops`, so weakening it left every required check green while a whole
+  // suite stopped running. Reachability is the property that matters.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      const scripts = (m as never as { scripts: Record<string, string> }).scripts;
+      scripts['test:ops'] = 'node --test --test-name-pattern NEVERMATCH scripts/ops/a.test.ts';
+    }),
+  );
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('ci-required-check-entrypoints'));
+  assert.ok(
+    result.reasons.some((r: string) => r.includes('--test-name-pattern')),
+    'the reason should name the selector that was introduced',
+  );
+});
+
+test('widening a required-chain group stays automatic', () => {
+  // The other half of the same rule, and the one that matters more often:
+  // adding a test file to a group is the most ordinary change there is. A rule
+  // that reserved it would price ordinary work at a human's attention, which is
+  // the cost RMA exists to remove.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      const scripts = (m as never as { scripts: Record<string, string> }).scripts;
+      scripts['test:ops'] = `${scripts['test:ops']} scripts/ops/b.test.ts`;
+    }),
+  );
+  assert.equal(result.authority, 'auto', result.reasons.join(' | '));
+});
+
+test('a test file named after the merge chain is not the merge chain', () => {
+  // `test:ops` lists `pre-merge-authorization.test.ts`, so a value regex over
+  // the whole script matched every edit to that group and reserved it as if the
+  // script had been repointed at the merge wrapper. Running a test NAMED after
+  // a control is the opposite of repointing at it.
+  const widened = classifyRoot(
+    rootManifest((m) => {
+      const scripts = (m as never as { scripts: Record<string, string> }).scripts;
+      scripts['test:ops'] = 'tsx --test scripts/ops/pre-merge-authorization.test.ts scripts/ops/b.test.ts';
+    }),
+    JSON.stringify({
+      ...JSON.parse(BASE_ROOT),
+      scripts: {
+        ...JSON.parse(BASE_ROOT).scripts,
+        'test:ops': 'tsx --test scripts/ops/pre-merge-authorization.test.ts',
+      },
+    }),
+  );
+  assert.equal(widened.authority, 'auto', widened.reasons.join(' | '));
+
+  // Repointing a script AT the wrapper still reserves.
+  const repointed = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'tsx scripts/ops/ops-merge-wrapper.ts';
+    }),
+  );
+  assert.equal(repointed.authority, 'human');
+  assert.ok(repointed.surfaces.includes('merge-wrapper-entrypoint'));
+});

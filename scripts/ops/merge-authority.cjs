@@ -184,7 +184,14 @@ function elementRunsRunner(element, scripts, config, visited) {
   // `FOO=bar tsx --test x` runs tsx. A prefix assignment is not a command.
   while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
   while (words.length) {
-    const base = words[0].replace(/^.*\//, '');
+    const word = words[0];
+    const base = word.replace(/^.*\//, '');
+    // A runner must be a BARE word. `./tsx --test a.test.ts` looks like the
+    // toolchain and is not: it executes a file the PR itself can add, so the
+    // diff supplies both the "runner" and its behaviour. A bare word resolves
+    // through the workspace's own `node_modules/.bin`, which a diff cannot
+    // repoint without changing a manifest this validator already reserves.
+    if (word !== base) return false;
     if (runners.has(base)) return true;
     if (wrappers.has(base)) {
       // `pnpm --filter <pkg> <thing>` selects another workspace project; it is
@@ -212,6 +219,33 @@ function elementRunsRunner(element, scripts, config, visited) {
     return false;
   }
   return false;
+}
+
+/**
+ * Every root script reachable from a set of entrypoints, in either manifest.
+ *
+ * The closure is computed over base AND head so that neither adding nor
+ * removing a link can hide a change: a script newly pulled into the required
+ * chain is protected from that moment, and one dropped out of it is still
+ * protected for the change that dropped it.
+ */
+function reachableScripts(entrypoints, headScripts, baseScripts) {
+  const reachable = new Set();
+  const queue = [...entrypoints];
+  while (queue.length) {
+    const key = queue.shift();
+    if (reachable.has(key)) continue;
+    reachable.add(key);
+    for (const scripts of [headScripts, baseScripts]) {
+      const value = scripts[key];
+      if (typeof value !== 'string') continue;
+      for (const word of value.split(/[\s&;|]+/)) {
+        if (word && Object.prototype.hasOwnProperty.call(headScripts, word)) queue.push(word);
+        else if (word && Object.prototype.hasOwnProperty.call(baseScripts, word)) queue.push(word);
+      }
+    }
+  }
+  return reachable;
 }
 
 function scriptsOf(manifest) {
@@ -292,11 +326,37 @@ function analyzeManifests({ files, manifests, config }) {
     const isRoot = name === 'package.json';
 
     if (isRoot) {
-      for (const key of config.protectedRootScripts || []) {
-        if (headScripts[key] !== baseScripts[key]) {
+      // The protected set is the TRANSITIVE CLOSURE, not the named entrypoints.
+      // `verify` and `test` are what CI invokes, but they invoke `test:ops`,
+      // which invokes nothing CI names -- so weakening `test:ops` left every
+      // required check green while a whole suite stopped running. Reachability
+      // is the property that matters: if a required check's outcome depends on
+      // a script, that script decides what the check proves.
+      const named = new Set(config.protectedRootScripts || []);
+      const allowedFlags = new Set(config.requiredChainAllowedFlags || []);
+      const protectedClosure = reachableScripts([...named], headScripts, baseScripts);
+      for (const key of protectedClosure) {
+        if (headScripts[key] === baseScripts[key]) continue;
+        if (named.has(key)) {
           reserve(
             'ci-required-check-entrypoints',
             `Root script "${key}" changed — the required \`verify\` job invokes it, so repointing it changes what that check proves.`
+          );
+          continue;
+        }
+        // Below the named entrypoints the rule is narrower on purpose. Adding a
+        // test file to a group is the most ordinary change there is and must
+        // stay automatic; adding a SELECTOR is not, because it leaves every
+        // required check green while the suite runs less. So the flags a
+        // required-chain script may use are allowlisted -- the whole closure
+        // uses five of them today, which is what makes this practical.
+        for (const word of String(headScripts[key]).split(/\s+/)) {
+          if (!word.startsWith('-')) continue;
+          const flag = word.split('=')[0];
+          if (allowedFlags.has(flag)) continue;
+          reserve(
+            'ci-required-check-entrypoints',
+            `Root script "${key}" is reachable from a required-check entrypoint and now passes "${flag}", which is not a flag the required chain uses. A selector here makes the check pass while running less.`
           );
         }
       }
@@ -319,7 +379,16 @@ function analyzeManifests({ files, manifests, config }) {
       if ((config.mergeCommandScripts || []).includes(key)) {
         reserve('merge-wrapper-entrypoint', `Script "${key}" in ${name} was repointed — this is the sanctioned merge command.`);
       }
-      if (mergeCommandPattern && mergeCommandPattern.test(String(value))) {
+      // A TEST FILE named after the merge chain is not the merge chain.
+      // `test:ops` lists `pre-merge-authorization.test.ts`, so adding any test
+      // file to that group matched this pattern and reserved as if the script
+      // had been repointed at the merge wrapper. Running a test named after a
+      // control is the opposite of repointing at it.
+      const executable = String(value)
+        .split(/\s+/)
+        .filter((word) => !/\.test\.[cm]?[jt]s$/.test(word))
+        .join(' ');
+      if (mergeCommandPattern && mergeCommandPattern.test(executable)) {
         reserve('merge-wrapper-entrypoint', `Script "${key}" in ${name} now invokes the merge-authorization chain.`);
       }
       if (!commandInvokesRunner(String(value), headScripts, config)) {

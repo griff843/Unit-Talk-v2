@@ -263,6 +263,17 @@
       "nice",
       "concurrently"
     ],
-    "runnerCheckNote": "A script is reserved when its new value executes nothing from `runnerCommands`. `pnpm <script>` resolves inside the same manifest; `pnpm --filter <pkg> <script>` delegates to another manifest whose own scripts this rule checks when that manifest changes. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and stay `auto` -- that change is legible in the diff, an emptied script is not."
+    "runnerCheckNote": "A script is reserved when its new value executes nothing from `runnerCommands`. `pnpm <script>` resolves inside the same manifest; `pnpm --filter <pkg> <script>` delegates to another manifest whose own scripts this rule checks when that manifest changes. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and stay `auto` -- that change is legible in the diff, an emptied script is not.",
+    "requiredChainAllowedFlags": [
+      "--test",
+      "--cache",
+      "--cache-location",
+      "--filter",
+      "-F",
+      "-b",
+      "-c",
+      "--config"
+    ],
+    "requiredChainAllowedFlagsNote": "Flags permitted in a root script that is reachable from a required-check entrypoint. The named entrypoints reserve on any change; the scripts BELOW them reserve only when the change widens what a flag can do. Adding a test file to a group is ordinary work and stays automatic; adding a selector such as --test-name-pattern, -t, --grep, --shard or --bail does not, because it makes a required check pass while running less. The entire 37-script closure uses five flags today, so the allowlist is short by measurement rather than by optimism."
   }
 }
