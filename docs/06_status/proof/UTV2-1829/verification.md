@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-03T16:40:00.000Z
+Generated at: 2026-09-03T19:47:57.000Z
 Issue: UTV2-1829
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: 5b895abdb96c881030e2c2979bde100e1c151e37
+Head SHA: 31d09de7150791a81fc57e4e0f40d0149a185c85
 result: pass
 
 ## ASSERTIONS:
@@ -175,7 +175,7 @@ result: pass
 
 ```
 $ git rev-parse HEAD
-5b895abdb96c881030e2c2979bde100e1c151e37
+31d09de7150791a81fc57e4e0f40d0149a185c85
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -249,7 +249,7 @@ exit 0
 
 $ pnpm test
 exit 0
-AGGREGATE tests=5463 pass=5463 fail=0
+AGGREGATE tests=5466 pass=5466 fail=0
 
 $ pnpm verify
 [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
@@ -262,13 +262,21 @@ $ pnpm verify
 - [x] `pnpm type-check`: PASS (exit 0)
 - [x] `pnpm lint`: PASS (exit 0)
 - [x] `pnpm build`: PASS (exit 0)
-- [x] `pnpm test`: PASS (exit 0) — 5463 tests, 5463 pass, 0 fail
+- [x] `pnpm test`: PASS (exit 0) — 5466 tests, 5466 pass, 0 fail (re-measured at the sync anchor; the earlier 5463 predates UTV2-1823 merging into main)
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no rules matched
-- [ ] `pnpm verify`: **not obtainable locally.** The chain reaches `test:live-db` and
-      `ci:assert-staging` refuses a non-staging target under local containment, by design.
-      Every stage before it (`env:check`, `lint`, `type-check`, `build`, `test`,
-      `verify:commands`) passed. CI runs `verify` in the `staging-ci` environment; the
-      required `verify` check on PR #1499 is the authoritative receipt.
+- [x] `pnpm verify`: **PASS in CI at this exact anchor.** It is still not obtainable locally —
+      the chain reaches `test:live-db` and `ci:assert-staging` refuses a non-staging target
+      under local containment, by design, and the refusal transcript above is that behaviour,
+      not a failure. Every stage before it (`env:check`, `lint`, `type-check`, `build`,
+      `test`, `verify:commands`) passed locally. The authoritative receipt is the required
+      `verify` check on PR #1499, which completed **success** at
+      `31d09de7150791a81fc57e4e0f40d0149a185c85` — run `33796694464`, job `100788217584`,
+      19:36:04Z to 19:40:26Z. That job is gated on the `Writable DB proof (staging only)`
+      producer job `100786016749`, which also succeeded; verify's "Assert the DB proof
+      producer succeeded" step fails closed on any other producer result.
+
+      This box is checked because the run has completed. It was correctly unchecked while
+      the run had not, and the box is not a claim that `pnpm verify` was run on this machine.
 
 ## Runtime Verification
 
@@ -282,4 +290,4 @@ and none should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: 5b895abdb96c881030e2c2979bde100e1c151e37
+Execution SHA: 31d09de7150791a81fc57e4e0f40d0149a185c85

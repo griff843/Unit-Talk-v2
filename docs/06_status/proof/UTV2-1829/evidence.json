@@ -7,15 +7,15 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "5b895abdb96c881030e2c2979bde100e1c151e37",
-    "evidence_commit_sha": "5b895abdb96c881030e2c2979bde100e1c151e37",
+    "verified_source_sha": "31d09de7150791a81fc57e4e0f40d0149a185c85",
+    "evidence_commit_sha": "31d09de7150791a81fc57e4e0f40d0149a185c85",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
       "pnpm_build": "PASS",
-      "pnpm_test": "PASS (5463 tests, 0 failures)",
-      "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "pnpm_test": "PASS (5466 tests, 0 failures) — re-measured at the sync anchor 31d09de71; the previous 5463 was measured before UTV2-1823 merged into main and its three new server.test.ts cases entered this branch.",
+      "pnpm_verify": "PASS — required `verify` check completed success at 31d09de7150791a81fc57e4e0f40d0149a185c85 (run 33796694464, job 100788217584, 19:36:04Z→19:40:26Z), gated on the staging DB-proof producer job 100786016749 (success). This replaces the earlier PENDING-CI sentinel, which was accurate when written and is no longer.",
       "r_level_check": "PASS (no R-level artifacts required for this diff)"
     }
   },
@@ -36,7 +36,7 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 5463,
+      "tests": 5466,
       "failures": 0
     },
     "scope_controls": [
@@ -129,6 +129,13 @@
         "command": "git show --name-only --format='' 5b895abdb; git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|scripts/|package\\.json|docs/05_operations/)'",
         "expected": "the correction commit touches exactly docs/mission/plan.md and docs/mission/spec.md; zero gate, workflow, tooling or canonical-contract files anywhere in the branch diff",
         "observed": "the correction commit 5b895abdb names exactly two files, docs/mission/plan.md and docs/mission/spec.md; the gate/tooling/contract count across the whole branch diff is 0. Branch protection is untouched, which matters here because the plan.md correction is about a branch-protection decision — the lane records the correct sequencing and leaves the reserved decision to PM rather than acting on it.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A15 — the sanctioned main sync (dd85e434d -> 31d09de71) changed none of this lane's own files; it only imported the already-merged UTV2-1823",
+        "command": "git diff --name-only dd85e434d 31d09de71 -- CLAUDE.md AGENTS.md docs/mission/ .lane/lanes/governance.yml docs/06_status/proof/UTV2-1829/ docs/06_status/lanes/UTV2-1829.json .ops/sync/UTV2-1829.yml; git diff --name-only dd85e434d 31d09de71",
+        "expected": "first command no output; second command lists only UTV2-1823 paths",
+        "observed": "first command produced no output. Second listed exactly 8 paths, all UTV2-1823: .ops/sync/UTV2-1823.yml, apps/api/src/server.test.ts, apps/api/src/server.ts, docs/06_status/lanes/UTV2-1823.json and the four docs/06_status/proof/UTV2-1823/ artifacts. The sync was performed with `ops:merge-wrapper git-merge-main` under the merge mutex and is a non-rewriting `ort` merge, so no previously reviewed commit on this branch was altered.",
         "status": "PASS"
       }
     ]
