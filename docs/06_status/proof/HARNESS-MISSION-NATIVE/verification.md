@@ -71,20 +71,20 @@ $ pnpm type-check
 (silent)
 
 $ pnpm test:ops
-# tests 2977
-# pass 2977
+# tests 2998
+# pass 2998
 # fail 0
 
 $ pnpm exec tsx --test scripts/ops/mission-native-agents.test.ts
-# pass 17
+# pass 28
 # fail 0
 
 $ pnpm exec tsx --test scripts/ops/codex-packet.test.ts
-# pass 32
+# pass 34
 # fail 0
 
 $ pnpm exec tsx --test scripts/ops/classify-diff.test.ts
-# pass 13
+# pass 15
 # fail 0
 
 $ pnpm exec tsx --test scripts/ops/branch-discipline-guard.test.ts
@@ -108,7 +108,7 @@ $ pnpm exec tsx --test scripts/codex-dispatch.test.ts
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2977 tests, 2977 pass, 0 fail
+- [x] `pnpm test:ops`: 2998 tests, 2998 pass, 0 fail
 - [x] Seven targeted suites green, as listed above
 - [ ] `pnpm verify` end-to-end: not obtainable off-CI — the final `test:live-db` step is
       refused by the fail-closed staging guard on a host with no staging identity. The
@@ -186,6 +186,65 @@ own assertions:
 == restored                                   -> # fail 0
 ```
 
+## Independent review round 7
+
+One P1 and six P2s, all real.
+
+**P1 — the operator runbook gated rollback on a Linear credential.** Promoting
+`/operator-runbook` as mission-native exposed a universal preflight that exits 1 without
+`LINEAR_API_TOKEN`, plus a health-check that ran `pnpm linear:work`. Rollback and restore do
+not read Linear, so the operations most likely to be run under pressure stopped on a
+credential they never use. That is worse than a stale doc: it is a working blocker introduced
+by advertising the file as ready.
+
+**The deprecated Linear skill still mutated Linear.** Its description said read-only and
+deprecated; its body listed `linear:update`, `linear:comment` and `linear:close` as default
+commands and declared Linear to be queue truth. Routing reads the description, so a body that
+contradicts it is worse than no deprecation at all. Rewritten read-only, with the three
+mutating commands explicitly refused rather than merely absent.
+
+**The agent brief attached lane-era requirements to every packet.** It is prepended to every
+dispatch, and section 18 still instructed executors to choose a lane type and update proof
+path lists in a lane manifest and a per-issue sync file. Mission-native work has none of
+those, so the instruction could only stop work to satisfy something nothing enforces.
+
+**Rule 8 ran post-merge QA only "after a T2 or T3 PR".** A mission-native PR carries no tier,
+so the predicate is unsatisfiable and the router silently skipped the QA it advertises. Now
+triggered by the changed path.
+
+**codex-return-reviewer fell back to a filename list.** `--name-only` cannot evaluate the
+policy's CONTENT rules, so an ordinary `.ts` file adding `DELETE FROM` read as unreserved
+there while Merge Gate correctly classified it `human`. A reviewer that disagrees with the
+gate in the PERMISSIVE direction is worse than one that declines to answer, so it now stops
+rather than guessing when the ref cannot be fetched.
+
+**`ops:classify-diff` never passed `manifests`.** The mandated pre-PR preview therefore
+returned `human` / `unclassifiable` for every diff touching any `package.json` — including
+adding a test script, which Merge Gate accepts. Wrong in the RESTRICTIVE direction is still
+wrong: it routes ordinary work to a human who did not need to see it, which is the cost RMA
+exists to remove.
+
+**A wildcard packet scope escaped reserved classification.** `apps/**` was compared verbatim,
+so `**` read as a literal directory component and `apps/worker/**` did not appear to live
+under it. A packet covering the whole of `apps/` reported unreserved and took the permissive
+default profile. Containment is now tested between literal prefixes in both directions, and
+there is a test that a wildcard over unreserved ground stays unreserved — so the fix is not
+"any wildcard reserves", which would be a different way of reserving everything.
+
+### Mutation controls (round 7)
+
+Each applied alone, suite run, restored, and confirmed to fail only its own assertions:
+
+```
+== M1 Linear credential hard-fail restored in the runbook   -> not ok 73;     # fail 1
+== M2 linear:close restored to the deprecated skill         -> not ok 74;     # fail 1
+== M3 tier predicate restored in Rule 8                     -> not ok 76;     # fail 1
+== M4 --name-only classification fallback restored          -> not ok 77;     # fail 1
+== M5 manifests withheld from the classify-diff CLI         -> not ok 14, 15; # fail 2
+== M6 verbatim wildcard scope comparison restored           -> not ok 48;     # fail 1
+== restored                                                 -> # fail 0
+```
+
 ## Merge SHA Binding
 
 Bound after merge by `ops:proof-generate --merge-sha`. The `Execution SHA` below is the last
@@ -194,4 +253,4 @@ non-proof commit on this branch and is what the assertions above were verified a
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1492
 Approved PR head: pending merge
-Execution SHA: 02011e1202d825eadf598ccd7adbc2ea5ba48ef9
+Execution SHA: 6eba4d90004f654c40e92abffe94ad669bc1c6ff
