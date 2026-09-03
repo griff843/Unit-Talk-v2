@@ -4,8 +4,8 @@ import { revalidatePath } from 'next/cache';
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
-  resolveOperatorIdentity,
 } from '@/lib/server-api';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
 
 export type ReviewDecision = 'approve' | 'deny' | 'hold' | 'return';
 
@@ -19,7 +19,11 @@ export async function reviewPick(
   reason: string,
 ): Promise<ReviewResult> {
   const apiUrl = resolveApiBaseUrl();
-  const operatorActor = resolveOperatorIdentity();
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    return { ok: false, error: actorResolution.error };
+  }
+  const operatorActor = actorResolution.actor;
   const headers = resolveCommandCenterApiHeaders();
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/review`, {
