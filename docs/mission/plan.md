@@ -194,6 +194,59 @@ For the ones being kept, the fix is readmission through `ops:lane-start` under a
 change to the gate. Renaming an open PR's head branch closes it and it will not reopen, so
 readmission means a replacement PR carrying the same diff.
 
+### `Lane authority` rejects dotfiles inside its own allowed globs
+
+Observed on this lane (UTV2-1829, PR #1499). `ops:lane-start` creates and commits
+`docs/06_status/proof/<issue>/.gitkeep`. `File scope lock` accepted it; `Lane authority` and
+`Return review packet` both rejected it as `out-of-scope files:
+docs/06_status/proof/UTV2-1829/.gitkeep` — even though `.lane/lanes/governance.yml` lists
+`docs/06_status/proof/**` as an allowed glob.
+
+The cause is not a missing allowlist entry. `matchesAny()` in `scripts/lane-contract.ts` calls
+`micromatch.isMatch()` with no `dot` option, and micromatch does not match a leading dot against `*`
+or `**` by default:
+
+```
+micromatch.isMatch('docs/06_status/proof/UTV2-1829/.gitkeep', 'docs/06_status/proof/**')            // false
+micromatch.isMatch('docs/06_status/proof/UTV2-1829/.gitkeep', 'docs/06_status/proof/**', {dot:true}) // true
+```
+
+This is the same defect class as the `nocase` bug that `.lane/lanes/governance.yml` documents inline
+under UTV2-1541 (`docs/06_status/incidents/**` never matching `docs/06_status/INCIDENTS/**`): a
+micromatch default silently narrowing an allowlist that reads as if it covers the path. Every
+`.gitkeep`, `.keep` or dot-prefixed control file a sanctioned lane command writes into an allowed
+directory is affected. This lane removed the placeholder rather than widen its scope; the underlying
+defect is unfixed.
+
+### `docs/mission/**` is not admitted by any lane path contract
+
+Also observed here, and currently blocking this PR. `.lane/lanes/governance.yml` enumerates every
+docs subtree a governance lane may touch — `docs/governance/**`, `docs/05_operations/**`,
+`docs/00_constitution/**`, `docs/02_architecture/**`, `docs/ops/**`, `docs/archive/**`, plus
+`CLAUDE.md` and `AGENTS.md` individually. `docs/mission/**` is in none of them, so `Lane authority`
+and `Return review packet` fail this PR on `docs/mission/intent.md`, `spec.md` and `plan.md`.
+
+That file's own comments record this exact situation eight times (UTV2-1524, 1528, 1541, 1557, 1199,
+1384, 1253, 1629), each time closed by the lane that hit it adding its path in the same PR. That
+route is not available here: `.lane/lanes/governance.yml` is outside this lane's `file_scope_lock`
+(`AGENTS.md`, `CLAUDE.md`, `docs/mission/**`), the lock is pinned to the lane-start commit, and
+widening it requires a `scope-override/v1` comment authored by a CODEOWNERS human — Griff. An agent
+cannot self-authorize it.
+
+`Lane authority` and `Return review packet` are not in `main`'s required-check set (`verify`,
+`Executor Result Validation`, `Merge Gate`, `P0 Protocol`), so this PR is mechanically mergeable with
+both red. Merging past a red path-authority check on a governance PR is not something this lane
+should decide on its own. Registering `docs/mission/**` once, under a lane authorized to edit
+`.lane/**`, is the durable fix.
+
+### `MERGE_SHA: pending merge` needs a schema-v2 bundle
+
+Also observed here. Executor Result Validation rejects the ratified `pending merge` anchor under the
+legacy contract, which demands the row be a real commit — impossible before a merge exists. The
+escape is a schema-v2 `sha_binding` block in `evidence.json` (`merge_sha: null` plus
+`verified_source_sha`). `ops:proof-generate` does not emit one, so every lane hits this and authors
+it by hand. PR #1485 is the related fix and is itself blocked.
+
 ---
 
 ## Requires Griff
@@ -207,6 +260,9 @@ Consolidated from Wave 0, in dependency order:
 5. **#1491 / #1492 architecture review** — merge authority and agent authority.
 6. **Direct-`main` prevention** — branch protection change; sequence after the backlog clears.
 7. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1.
+8. **`docs/mission/**` lane registration** — either a `scope-override/v1` comment on PR #1499
+   authorizing `.lane/lanes/governance.yml`, or a separate governance lane that adds the glob. Until
+   one of those, `Lane authority` and `Return review packet` stay red on the mission-layer PR.
 
 ---
 
