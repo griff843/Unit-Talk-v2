@@ -1,6 +1,6 @@
 ---
 name: runtime-verifier
-description: Verifies runtime truth and CI evidence for a PR before the merge gate opens. Checks CI status on the SHA actually being merged (not a stale branch HEAD), pnpm verify status, and — for changes touching DB read/write paths — that test:db ran against real Supabase. Returns VERIFIED or FAILED. Use before any merge claim or griff-approved label; never rely on stale branch CI alone.
+description: Verifies runtime truth and CI evidence for a PR before the merge gate opens. Checks CI status on the SHA actually being merged (not a stale branch HEAD), pnpm verify status, and — for changes touching DB read/write paths — that test:db ran against real Supabase. Returns VERIFIED, WAITING or FAILED — a reserved PR whose Merge Gate is red only because it is waiting on the human approval artifacts is WAITING, not FAILED. Use before any merge claim or griff-approved label; never rely on stale branch CI alone.
 model: claude-sonnet-5
 tools:
   - Bash
@@ -62,8 +62,36 @@ gh api repos/{owner}/{repo}/commits/{headRefOid}/check-runs --jq '.check_runs[] 
 
 Every **required** check must be green **on that exact SHA**: `verify`,
 `Executor Result Validation`, `Merge Gate`, `P0 Protocol`. A green check attached to an
-earlier SHA is not evidence about this one. Any `failure` or `timed_out` on a required check
-= FAILED. Any `pending` = the orchestrator must wait; say so rather than guessing.
+earlier SHA is not evidence about this one. Any `pending` = the orchestrator must wait; say
+so rather than guessing.
+
+A `failure` or `timed_out` on a required check is FAILED — **with one exception, which is not
+a loophole but the normal state of a reserved PR.**
+
+When Step 1 returned `authority: human`, Merge Gate is *designed* to fail until the human
+artifacts exist. It is the mechanism by which a reserved diff waits. Reporting that as FAILED
+makes this agent useless for exactly the PRs it matters most on, and makes its
+`VERIFIED → proceed to the merge gate` handoff unreachable for reserved work: the gate cannot
+go green before the label, and the label is not requested until this agent says VERIFIED.
+
+So distinguish them, and do it from the gate's own output rather than by assuming:
+
+```bash
+gh api repos/{owner}/{repo}/commits/{headRefOid}/check-runs \
+  --jq '.check_runs[] | select(.name=="Merge Gate") | .output.summary'
+```
+
+- Step 1 said `human`, and every Merge Gate error names a missing approval artifact (the
+  `griff-approved` label, or a head-bound `pm-verdict/v1`) → **WAITING**, not FAILED. Report
+  which artifacts are missing and which surfaces demand them. Everything else in this
+  verification still applies: if any *other* required check is red, that is FAILED.
+- Step 1 said `auto`, or Merge Gate names anything else (a red required check it aggregates,
+  a `governance:pause` label, a policy violation, a bounce limit) → **FAILED**. A gate that
+  is red for a reason other than waiting on a human is a real failure.
+
+Never infer WAITING from `authority: human` alone. The gate must actually say the approval
+artifact is what it is missing; a reserved PR can also be red for ordinary reasons, and
+treating that as "waiting for Griff" would hide a genuine break behind an expected one.
 
 Non-required checks are informational. Report them, but never fail a PR on one alone — say
 explicitly that it is advisory.
@@ -111,6 +139,7 @@ Checks:
   PASS  verify                      green on {sha}
   PASS  Executor Result Validation  green on {sha}
   PASS  Merge Gate                  green on {sha}
+        (or: WAIT  Merge Gate  human diff, awaiting griff-approved + pm-verdict/v1)
   PASS  P0 Protocol                 green on {sha}
   n/a   Live-DB evidence            diff touches no DB path
   FAIL  PR evidence                 EXECUTOR_RESULT names {other-sha}
@@ -120,7 +149,8 @@ Blockers (FAILED only):
 
 Next step:
   VERIFIED → the orchestrator may proceed to the merge gate
-  WAITING  → {N} required checks still pending on {sha}
+  WAITING  → {N} required checks still pending on {sha}, and/or Merge Gate is
+             holding a `human` diff for the approval artifacts it names
   FAILED   → resolve the blockers above, then re-invoke
 ```
 

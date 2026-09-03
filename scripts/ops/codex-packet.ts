@@ -164,7 +164,34 @@ export function splitScopePaths(scope: string): {
   const invalidScopePaths: string[] = [];
   for (const line of scope.split(/\r?\n/)) {
     const bullet = line.match(/^\s*[-*]\s+(.*)$/);
-    if (!bullet) continue;
+    if (!bullet) {
+      // A NON-bullet line that is path-shaped is an invalid scope entry, not
+      // an absent one. Skipping it silently is the same silent-skip defect
+      // this codebase has hit in three separate parsers: a WRONG artifact read
+      // as an ABSENT one. Concretely, a Scope of
+      //
+      //   - `scripts/ops/thing.ts`
+      //   Also edit ../outside/a.ts
+      //
+      // kept the valid bullet, so the nonempty-scope check passed and the
+      // packet ran under the default profile -- while the executor still read
+      // the raw instruction and could edit a path outside the repository,
+      // where neither reserved-surface gate can see it, because a file changed
+      // outside Git never reaches a diff. The scope grammar is one path per
+      // bullet; anything path-shaped that does not conform is reported, and
+      // `invalidScopePaths` is what refuses the packet.
+      const stray = line.trim();
+      if (
+        stray &&
+        !stray.startsWith('#') &&
+        !stray.startsWith('>') &&
+        !stray.startsWith('http') &&
+        /(^|\s)[.~/]*[\w.@-]+\/[\w./@*-]+/.test(stray)
+      ) {
+        invalidScopePaths.push(stray);
+      }
+      continue;
+    }
     const raw = bullet[1].match(/`([^`]+)`/)?.[1] ?? bullet[1].trim().split(/\s+/)[0];
     // Not path-shaped at all: ordinary prose in a bullet, or a URL. Those were
     // never scope declarations, so they are not errors either.
@@ -362,10 +389,16 @@ export function buildPrompt(packetPath: string, packetText: string): string {
     'entire contract.',
     '',
     'Reserved filename shapes are prohibited ANYWHERE in your diff, including inside your declared',
-    'scope: do not create or edit `.env`, `.env.*`, `.npmrc`, or `.pnpmfile.cjs`. These are reserved by',
-    'filename, not by location, so an ordinary-looking scope does not admit them. If the work',
-    'genuinely requires one, stop and say so — the merge classifier will reserve the PR for a human',
-    'either way, and finding that out at merge costs a cycle.',
+    'scope: do not create or edit `.env` or any `.env.*` file that carries values, nor `.npmrc` or',
+    '`.pnpmfile.cjs`. These are reserved by filename, not by location, so an ordinary-looking scope',
+    'does not admit them. If the work genuinely requires one, stop and say so — the merge classifier',
+    'will reserve the PR for a human either way, and finding that out at merge costs a cycle.',
+    '',
+    'The committed templates `.env.example`, `.env.template` and `.env.sample` are NOT prohibited.',
+    'They carry variable names, not values, and the reserved-surface policy excludes them on',
+    'purpose: adding an environment variable normally requires updating the template in the same',
+    'change. Forbidding them would block that ordinary edit while the classifier itself returns',
+    '`auto`, which is a prohibition stricter than the gate it is meant to anticipate.',
     '',
     'When you are done:',
     '  1. `pnpm verify` must be green.',

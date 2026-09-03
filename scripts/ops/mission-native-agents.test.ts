@@ -342,3 +342,61 @@ test('pr-unblock does not demand a human verdict for an auto diff', () => {
     'step 3 does not tell the reader to skip the verdict on an auto diff',
   );
 });
+
+test('runtime-verifier distinguishes an approval-blocked Merge Gate from a broken one', () => {
+  // Round 8 review: under risk-scoped authority Merge Gate is DESIGNED to fail
+  // on an `authority: human` PR until the label and head-bound verdict exist —
+  // that failure is how a reserved diff waits. A rule reading "any failure on a
+  // required check = FAILED" therefore returned FAILED for every reserved PR,
+  // making this agent useless on exactly the PRs it matters most on, and making
+  // its own `VERIFIED -> proceed to the merge gate` handoff unreachable: the
+  // gate cannot go green before the label, and the label is not requested until
+  // the agent says VERIFIED. A deadlock written into a procedure.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/agents/runtime-verifier.md'), 'utf8');
+
+  assert.match(source, /\bWAITING\b/, 'no WAITING verdict');
+  assert.match(
+    source,
+    /Never infer WAITING from `authority: human` alone/,
+    'the WAITING path is not conditioned on what the gate actually says',
+  );
+  // It must read the gate's own reason rather than assume from the authority.
+  assert.match(source, /select\(\.name=="Merge Gate"\) \| \.output\.summary/);
+  // And the frontmatter must advertise the third verdict, since selection and
+  // the caller's expectations are set there.
+  const frontmatter = /^---\n([\s\S]*?)\n---/.exec(source)?.[1] ?? '';
+  assert.match(frontmatter, /WAITING/, 'frontmatter still promises only VERIFIED or FAILED');
+});
+
+test('the operator runbook asserts the credentials each command actually uses', () => {
+  // Round 8 review, and a defect I introduced in round 8's own fix: the rollback
+  // section asserted SUPABASE_DB_URL alone and claimed the operation connects
+  // over it. It does not. rollback-validate.ts reads SUPABASE_DB_URL only for
+  // its production guard and builds its client from
+  // createServiceRoleDatabaseConnectionConfig, whose resolver requires all three
+  // REST variables. The live command failed AFTER a passing preflight, on the
+  // exact minimal host the section claimed to support.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/operator-runbook.md'), 'utf8');
+  const section = (name: string) => {
+    const start = source.indexOf(`## ${name}`);
+    assert.notEqual(start, -1, `missing section: ${name}`);
+    const next = source.indexOf('\n## ', start + 1);
+    return source.slice(start, next === -1 ? undefined : next);
+  };
+
+  const rollback = section('rollback');
+  for (const v of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    assert.ok(rollback.includes(v), `rollback does not assert ${v} for its live path`);
+  }
+  // ...and must still keep the dry run cheap, or the fix has just recreated the
+  // problem it was meant to solve.
+  assert.match(rollback, /Dry run/i);
+
+  // Capture reaches the live provider, and with no key the CLI substitutes the
+  // literal `replay-key` rather than failing — a silent bad default.
+  const replay = section('replay');
+  assert.ok(
+    replay.includes('SGO_API_KEY') && replay.includes('SGO_API_KEYS'),
+    'replay does not assert a provider key for --action capture',
+  );
+});

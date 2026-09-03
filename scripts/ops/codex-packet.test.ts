@@ -550,3 +550,54 @@ test('the packet prompt prohibits reserved filename shapes outright', () => {
     assert.ok(prompt.includes(shape), `prompt does not prohibit ${shape}`);
   }
 });
+
+test('the packet prohibition does not forbid the templates policy excludes', () => {
+  // Round 8 review, on the prohibition added earlier in round 8: it forbade
+  // every `.env.*` file, including `.env.example`, which the secrets surface
+  // excludes on purpose. Adding an environment variable normally requires
+  // updating that template in the same change, so the prompt blocked an
+  // ordinary edit that the classifier itself returns `auto` for — a
+  // prohibition stricter than the gate it anticipates, which is the same
+  // divergence this round already corrected once in classifyScope.
+  const prompt = buildPrompt('docs/mission/packets/x.md', '# packet');
+  for (const template of ['.env.example', '.env.template', '.env.sample']) {
+    assert.ok(prompt.includes(template), `prompt does not exempt ${template}`);
+  }
+  assert.match(prompt, /NOT prohibited/);
+  // The credential-bearing shapes are still forbidden.
+  for (const shape of ['.npmrc', '.pnpmfile.cjs']) {
+    assert.ok(prompt.includes(shape), `prompt no longer prohibits ${shape}`);
+  }
+});
+
+test('a path-shaped line outside a bullet is an invalid scope entry, not an absent one', () => {
+  // Round 8 review. The Scope grammar is one path per bullet. A mixed section —
+  // one valid bullet plus an unbulleted instruction — kept the valid bullet, so
+  // the nonempty-scope check passed and the packet ran under the permissive
+  // default profile, while the executor still read the raw instruction and
+  // could edit a path OUTSIDE the repository. Neither reserved-surface gate can
+  // see that: a file changed outside Git never reaches a diff. This is the same
+  // silent-skip defect class as the malformed EXECUTOR_RESULT and the fenced
+  // PM-verdict example — a WRONG artifact read as an ABSENT one.
+  const mixed = splitScopePaths(
+    ['- `scripts/ops/thing.ts`', 'Also edit ../outside/a.ts'].join('\n'),
+  );
+  assert.deepEqual(mixed.scopePaths, ['scripts/ops/thing.ts']);
+  assert.equal(mixed.invalidScopePaths.length, 1, JSON.stringify(mixed));
+  assert.match(mixed.invalidScopePaths[0]!, /outside\/a\.ts/);
+
+  // Prose and headings in a Scope section are not scope declarations and must
+  // not be reported — otherwise every packet with a sentence of context fails,
+  // and a check that fires on everything gets switched off.
+  const prose = splitScopePaths(
+    [
+      '- `scripts/ops/thing.ts`',
+      'Keep the change small and focused.',
+      '# Notes',
+      '> quoted guidance',
+      'See https://example.com/docs/thing for background.',
+    ].join('\n'),
+  );
+  assert.deepEqual(prose.scopePaths, ['scripts/ops/thing.ts']);
+  assert.deepEqual(prose.invalidScopePaths, [], JSON.stringify(prose.invalidScopePaths));
+});

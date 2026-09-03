@@ -131,12 +131,30 @@ Validates that a target database still has the minimum required tables, row coun
 
 ### Preflight assertions
 
+Split by command, because the dry run and the live validation do not need the same things.
+An earlier version of this section asserted `SUPABASE_DB_URL` alone and claimed the operation
+connects over it. It does not: `rollback-validate.ts:342` builds its client from
+`createServiceRoleDatabaseConnectionConfig(loadEnvironment())`, and
+`requireSupabaseEnvironment` (`packages/config/src/env.ts:348`) demands all three REST
+variables. `SUPABASE_DB_URL` is read at line 199 for the production guard and nothing else.
+The live command would have failed *after* a passing preflight, on exactly the minimal host
+this section claimed to support — the worst place to be wrong.
+
+Dry run — the guard is all that executes (`runRollbackValidate` skips the client entirely
+when `dryRun` is set):
+
 ```bash
 require_env SUPABASE_DB_URL || exit 1
 require_tool npx || exit 1
 ```
 
-No GitHub token and no Supabase REST credentials: `rollback-validate.ts` connects over `SUPABASE_DB_URL` only. This is the operation most likely to run under pressure on a host that has nothing else configured.
+Live validation — additionally:
+
+```bash
+require_env SUPABASE_URL SUPABASE_ANON_KEY SUPABASE_SERVICE_ROLE_KEY || exit 1
+```
+
+Still no `GITHUB_TOKEN`: nothing in this operation reaches GitHub.
 
 ### Exact commands to run
 
@@ -181,13 +199,31 @@ Replays a previously captured provider-offer pack or runs the slate replay harne
 
 ### Preflight assertions
 
+Slate replay and `--action replay --persistence in-memory` assert no credentials at all,
+which is the point: a replay must be reproducible offline.
+
 ```bash
 require_tool npx || exit 1
-# Only when capturing or replaying against live sources:
-# require_env SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY || exit 1
 ```
 
-Slate replay and `--persistence in-memory` replay assert no credentials at all, which is the point: a replay must be reproducible offline.
+`--action capture` reaches the live provider, and needs a provider key:
+
+```bash
+{ [ -n "${SGO_API_KEY:-}" ] || [ -n "${SGO_API_KEYS:-}" ]; } \
+  || { echo "SGO_API_KEY or SGO_API_KEYS is required for --action capture against a live provider." >&2; exit 1; }
+```
+
+Assert it here rather than relying on the command to complain: with neither set, the CLI
+substitutes the literal string `replay-key` (`scripts/utv2-796-slate-replay.ts:105`) and
+attempts the capture with invalid authentication. A silent bad default is worse than a
+missing one, because the failure surfaces as a provider error rather than as a setup error.
+
+Only add the Supabase REST credentials when persisting to the database — the default
+in-memory capture does not touch it:
+
+```bash
+require_env SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY || exit 1
+```
 
 ### Exact commands to run
 
