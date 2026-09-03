@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "b7d9fc07fca5a03d5cf0b343beb3161c58295aed",
     "verified_source_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
     "evidence_commit_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
     "current_pr_head_sha": "set-by-ci",
@@ -16,7 +16,9 @@
       "pnpm_test_db": "PASS — 7/7 against staging in the required verify job at this exact anchor SHA (run 33785176215, producer job 100748085293, ci-db-proof-receipt/v2 sha256=157d9c7ef1113e76bdac47ebb64eca2fc0cbe7f4b0749cde264d2a81d0bcc1a7). This replaces the earlier PENDING-CI sentinel, which was accurate when written and is no longer.",
       "r_level_check": "PASS (no R-level artifacts required for this diff)",
       "pnpm_verify": "PASS — required `verify` check completed success at 38ef1fd97e1e57b55f4da1263a124905665996f8 (job 100750090391, 17:38:56Z→17:42:45Z)."
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T19:28:01.853Z"
   },
   "static_proof": {
     "type_check": {

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1823-authenticate-trace",
   "branch": "claude/utv2-1823-authenticate-trace",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "b7d9fc07fca5a03d5cf0b343beb3161c58295aed",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1501",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,22 @@
     "docs/06_status/proof/UTV2-1823/evidence.json",
     "docs/06_status/proof/UTV2-1823/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-03T05:04:51.163Z",
-  "heartbeat_at": "2026-09-03T05:04:51.163Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-03T19:28:05.483Z",
+  "closed_at": "2026-09-03T19:28:05.483Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1823-authenticate-trace.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-03T19:28:03.235Z",
+      "verdict": "pass",
+      "merge_sha": "b7d9fc07fca5a03d5cf0b343beb3161c58295aed",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
