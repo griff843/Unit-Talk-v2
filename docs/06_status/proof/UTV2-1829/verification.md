@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-03T05:30:00.000Z
+Generated at: 2026-09-03T05:52:00.000Z
 Issue: UTV2-1829
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d
+Head SHA: d4d48d037f889d82a56085b39faeb5c6f9d8935c
 result: pass
 
 ## ASSERTIONS:
@@ -66,11 +66,23 @@ result: pass
       sanctioned secret store. Measured: 0 email addresses in the added lines of the whole
       diff.
 
+- [x] **A10 — The branch was resynced to `main` through the sanctioned wrapper, and the
+      reconciliation that followed changed live state only.** `main` advanced past this lane
+      when #1485 (UTV2-1825) merged, so the branch was brought forward with
+      `pnpm ops:merge-wrapper git-merge-main` — never a raw `git merge`, and never a rebase,
+      so the implementation history and the proof anchor stay reachable. The only content
+      change in the resync commit is `plan.md` and `intent.md`: `main` is now `5b5f7a3b8`,
+      #1485 has moved out of the awaiting-approval group, the `MERGE_SHA: pending merge`
+      section records a resolved defect rather than a live one, and `intent.md` records one
+      PM ratification made today about Milestone 1 step 7. No contract was added, no glob was
+      widened, and nothing from #1491/#1492 entered — A2 measures the second half of that
+      directly.
+
 ## EVIDENCE:
 
 ```
 $ git rev-parse HEAD
-bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d
+d4d48d037f889d82a56085b39faeb5c6f9d8935c
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -125,8 +137,13 @@ Files outside this lane scope:
 $ npx tsx scripts/ci/file-scope-guard.ts --branch claude/utv2-1829-mission-context \
     --changed-files-file <diff> --manifest-source git \
     --override-file <CODEOWNERS scope-override/v1 record> \
-    --pr-number 1499 --head-sha bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d
+    --pr-number 1499 --head-sha <PR head at the time of evaluation>
 No file scope lock conflicts or scope violations detected.
+
+(The override record is pinned to the PR head, not to the implementation anchor above.
+A new commit invalidates it and a fresh override is required — that is the control working,
+not a defect. The head this bundle was authored against is recorded in the EXECUTOR_RESULT
+comment on PR #1499.)
 
 $ pnpm type-check
 exit 0
@@ -139,7 +156,7 @@ exit 0
 
 $ pnpm test
 exit 0
-AGGREGATE tests=5459 pass=5459 fail=0
+AGGREGATE tests=5463 pass=5463 fail=0
 
 $ pnpm verify
 [assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
@@ -152,7 +169,7 @@ $ pnpm verify
 - [x] `pnpm type-check`: PASS (exit 0)
 - [x] `pnpm lint`: PASS (exit 0)
 - [x] `pnpm build`: PASS (exit 0)
-- [x] `pnpm test`: PASS (exit 0) — 5459 tests, 5459 pass, 0 fail
+- [x] `pnpm test`: PASS (exit 0) — 5463 tests, 5463 pass, 0 fail
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no rules matched
 - [ ] `pnpm verify`: **not obtainable locally.** The chain reaches `test:live-db` and
       `ci:assert-staging` refuses a non-staging target under local containment, by design.
@@ -172,4 +189,4 @@ and none should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d
+Execution SHA: d4d48d037f889d82a56085b39faeb5c6f9d8935c

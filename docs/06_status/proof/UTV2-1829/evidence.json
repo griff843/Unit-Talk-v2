@@ -7,14 +7,14 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d",
-    "evidence_commit_sha": "bfa1cedd631e98913f8ce4dc39c5e424e09cfd5d",
+    "verified_source_sha": "d4d48d037f889d82a56085b39faeb5c6f9d8935c",
+    "evidence_commit_sha": "d4d48d037f889d82a56085b39faeb5c6f9d8935c",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
       "pnpm_build": "PASS",
-      "pnpm_test": "PASS (5459 tests, 0 failures)",
+      "pnpm_test": "PASS (5463 tests, 0 failures)",
       "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
       "r_level_check": "PASS (no R-level artifacts required for this diff)"
     }
@@ -36,7 +36,7 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 5459,
+      "tests": 5463,
       "failures": 0
     },
     "scope_controls": [
@@ -94,6 +94,13 @@
         "command": "git diff -U0 origin/main..HEAD | grep '^+' | grep -iE '@[a-z0-9.-]+\\.(com|net|org)' | grep -v noreply@anthropic",
         "expected": "no output",
         "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A10 \u2014 the branch was resynced to main through the sanctioned merge wrapper, not a raw merge or a rebase, and the reconciliation that followed changed live state only",
+        "command": "pnpm ops:merge-wrapper git-merge-main --issue UTV2-1829 --branch claude/utv2-1829-mission-context",
+        "expected": "a merge commit that leaves the implementation history and the proof anchor reachable; the only content change is plan.md/intent.md live-state reconciliation",
+        "observed": "ok: true, 'Merge made by the ort strategy'; the follow-up commit touches docs/mission/plan.md and docs/mission/intent.md only, and A2 still measures 0 workflow/script/hook/settings files",
         "status": "PASS"
       }
     ]
