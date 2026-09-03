@@ -17,6 +17,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1829/diff-summary.md",
+    "docs/06_status/proof/UTV2-1829/evidence.json",
     "docs/06_status/proof/UTV2-1829/verification.md"
   ],
   "status": "in_review",
