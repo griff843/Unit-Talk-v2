@@ -26,6 +26,10 @@ const ACTIVE = [
   '.claude/agents/pr-risk-reviewer.md',
   '.claude/agents/runtime-verifier.md',
   '.agents/skills/system-state-loader/SKILL.md',
+  // Round 7 added these three. Each advertised itself as mission-native, or was
+  // promoted as one, while its body still ran or demanded Linear-era state.
+  '.claude/commands/operator-runbook.md',
+  '.claude/agent-brief.md',
 ];
 
 /**
@@ -155,4 +159,75 @@ test('the reserved-surface policy is the source of risk, not a hand-kept path ta
       `${rel} still scores packages/domain as HIGH from the retired Tier C table`,
     );
   }
+});
+
+// ── round 7 ───────────────────────────────────────────────────────────────
+
+test('the operator runbook does not gate rollback on a Linear credential', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/operator-runbook.md'), 'utf8');
+  for (const block of fencedBlocks(source)) {
+    assert.ok(
+      !/LINEAR_API_(TOKEN|KEY).*(exit 1|required)/s.test(block),
+      'the universal preflight still hard-fails without a Linear credential; rollback and ' +
+        'restore do not read Linear, so that stops the operations most likely to be run ' +
+        'under pressure on a credential they never use',
+    );
+  }
+});
+
+test('the deprecated Linear skill cannot mutate Linear', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.agents/skills/linear-execution/SKILL.md'), 'utf8');
+  for (const block of fencedBlocks(source)) {
+    for (const mutation of ['linear:update', 'linear:comment', 'linear:close']) {
+      assert.ok(
+        !block.includes(mutation),
+        `the skill declares itself read-only and deprecated but still lists \`${mutation}\` ` +
+          'as a runnable step. The description is what gets read when routing, so a body that ' +
+          'contradicts it is worse than no deprecation at all.',
+      );
+    }
+  }
+  assert.ok(
+    !/treat Linear as queue truth/i.test(source),
+    'the skill still declares Linear to be queue truth',
+  );
+});
+
+test('the agent brief does not attach lane-era requirements to a work packet', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.claude/agent-brief.md'), 'utf8');
+  // The brief is prepended to every packet, so a stale instruction here is
+  // attached to work that has none of the artifacts it names.
+  for (const stale of ['lane_type:', 'expected_proof_paths', '.ops/sync/']) {
+    assert.ok(
+      !source.includes(stale),
+      `the brief still instructs an executor to satisfy \`${stale}\`, which no longer exists`,
+    );
+  }
+});
+
+test('post-merge QA triggers on the changed path, not on a tier', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/three-brain.md'), 'utf8');
+  assert.ok(
+    !/After a T2 or T3 PR merges/.test(source),
+    'Rule 8 still predicates QA on a tier label. A mission-native PR has none, so the router ' +
+      'finds no value to test and silently skips the QA it advertises.',
+  );
+  assert.ok(
+    /After ANY PR merges that touches a user-visible surface/.test(source),
+    'Rule 8 should trigger on the changed path',
+  );
+});
+
+test('the return reviewer never classifies risk from a filename list', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.claude/agents/codex-return-reviewer.md'), 'utf8');
+  const reserved = source.slice(source.indexOf('### Check 2: reserved surfaces'));
+  const blocks = fencedBlocks(reserved);
+  assert.ok(blocks.length > 0, 'the reserved-surface check should carry a command block');
+  assert.ok(
+    !blocks[0]!.includes('--name-only'),
+    'a filename list cannot evaluate the policy CONTENT rules, so an ordinary .ts file adding ' +
+      'DELETE FROM reads as unreserved here while Merge Gate classifies it human. A reviewer ' +
+      'that disagrees with the gate in the permissive direction is worse than one that declines.',
+  );
+  assert.ok(blocks[0]!.includes('ops:classify-diff'), 'it should run the real classifier');
 });

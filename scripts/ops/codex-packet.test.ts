@@ -479,3 +479,23 @@ test('an ordinary directory scope stays unreserved', () => {
     assert.equal(result.reserved, false, `${dir}: ${result.surfaces.join(',')}`);
   }
 });
+
+test('a wildcard scope is reserved by what it can reach', () => {
+  // Round 7: normalization accepts a broad wildcard, but the descendant check
+  // compared it verbatim -- `**` was treated as a literal directory name, so
+  // `apps/worker/**` did not appear to live under `apps/**/` and a packet
+  // covering the whole of apps/ reported unreserved and took the permissive
+  // default profile. A broader scope must be at least as reserved as anything
+  // inside it.
+  for (const scope of ['apps/**', 'supabase/**', '.github/**', 'apps/*']) {
+    const result = classifyScope(REPO_ROOT, [scope]);
+    assert.equal(result.reserved, true, `${scope}: ${result.surfaces.join(',')}`);
+  }
+});
+
+test('a wildcard scope over unreserved ground stays unreserved', () => {
+  // The fix must not collapse into "any wildcard reserves", which would be a
+  // different way of reserving everything.
+  const result = classifyScope(REPO_ROOT, ['packages/domain/src/**']);
+  assert.equal(result.reserved, false, result.surfaces.join(','));
+});

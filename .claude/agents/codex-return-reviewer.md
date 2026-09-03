@@ -43,10 +43,16 @@ which it looks like, and let the orchestrator decide.
 ### Check 2: reserved surfaces
 
 ```bash
-pnpm ops:classify-diff --base origin/main --head {branch}
-# or, on a PR you have not fetched:
-gh pr diff {PR} --name-only   # then compare against the policy below
+# Fetch the PR ref first. Always classify a real patch, never a file list.
+git fetch origin "pull/{PR}/head:pr-{PR}" && git fetch origin main
+pnpm ops:classify-diff --base origin/main --head "pr-{PR}"
 ```
+
+Do not fall back to `gh pr diff --name-only`. A filename list cannot evaluate the policy's
+CONTENT rules, so an ordinary unreserved `.ts` file that adds a `DELETE FROM` reads as
+unreserved here while Merge Gate correctly classifies it `human`. A reviewer that disagrees
+with the gate in the permissive direction is worse than one that declines to answer: if the
+ref cannot be fetched, say so and stop, rather than reporting "no reserved surface".
 
 Policy: `docs/05_operations/RESERVED_RISK_SURFACES.json`.
 

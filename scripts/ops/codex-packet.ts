@@ -421,12 +421,25 @@ export function classifyScope(repoRoot: string, scopePaths: string[]): ScopeClas
     // permissive profile. A scope is therefore also reserved when it CONTAINS a
     // reserved location: compare each surface glob's literal prefix, the part
     // before its first wildcard, against the scope directory.
+    //
+    // Both sides are reduced to their literal prefix, and containment is tested
+    // in BOTH directions. A scope may itself be a wildcard -- `apps/**` or
+    // `supabase/**` -- and comparing that verbatim treated `**` as a literal
+    // directory name, so `apps/worker/**` did not appear to live under
+    // `apps/**/` and a packet covering the whole of apps/ reported unreserved.
+    // A broader scope must be at least as reserved as anything inside it.
+    const literalDir = (value: string): string => {
+      const prefix = value.split(/[*?[]/)[0] ?? '';
+      return prefix.endsWith('/') ? prefix : `${prefix}/`;
+    };
     for (const surface of policy.surfaces || []) {
       for (const glob of surface.paths || []) {
-        const literalPrefix = glob.split(/[*?[]/)[0];
+        const surfaceDir = literalDir(glob);
         for (const scope of scopePaths) {
-          const dir = scope.endsWith('/') ? scope : `${scope}/`;
-          if (literalPrefix.startsWith(dir)) surfaces.add(surface.id);
+          const scopeDir = literalDir(scope);
+          if (surfaceDir.startsWith(scopeDir) || scopeDir.startsWith(surfaceDir)) {
+            surfaces.add(surface.id);
+          }
         }
       }
     }

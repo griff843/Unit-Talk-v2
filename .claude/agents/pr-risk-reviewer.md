@@ -28,10 +28,6 @@ hand-maintained path table — the old Tier C list deliberately no longer matche
 ## Step 0: classify the diff against the real policy
 
 ```bash
-gh pr diff {PR} --name-only
-```
-
-```bash
 git fetch origin "pull/{PR}/head:pr-{PR}" && git fetch origin main
 pnpm ops:classify-diff --base origin/main --head "pr-{PR}"
 ```

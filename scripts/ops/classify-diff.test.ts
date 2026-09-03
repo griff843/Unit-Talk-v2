@@ -162,3 +162,49 @@ test('an empty range says so instead of reporting a reservation the gate would n
   assert.equal(code, 0);
   assert.match(out, /Nothing to classify/);
 });
+
+// ── manifests reach the classifier ────────────────────────────────────────
+// Round 7: the CLI omitted the `manifests` input the manifest rules need, so
+// the classifier saw a changed package.json it had not been given and reserved
+// it as `unclassifiable`. Every diff touching any package.json reported
+// `human`. A preview that disagrees with the gate in the RESTRICTIVE direction
+// is still wrong -- it routes ordinary work to a human who did not need to see
+// it, which is the cost RMA exists to remove.
+
+test('adding an ordinary test script to a manifest stays automatic', () => {
+  const dir = scratchRepo();
+  const manifest = (scripts: Record<string, string>) =>
+    fs.writeFileSync(path.join(dir, 'apps/demo/package.json'), JSON.stringify({ name: 'demo', scripts }, null, 2));
+  fs.mkdirSync(path.join(dir, 'apps/demo'), { recursive: true });
+  manifest({ test: 'tsx --test test/a.test.ts' });
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'manifest'], { cwd: dir });
+  manifest({ test: 'tsx --test test/a.test.ts test/b.test.ts' });
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'extend tests'], { cwd: dir });
+
+  const { code, out } = capture(() => main(['--base', 'HEAD~1', '--head', 'HEAD'], dir));
+  assert.equal(code, 0);
+  assert.doesNotMatch(out, /unclassifiable/, 'the manifest contents never reached the classifier');
+  assert.match(out, /authority: auto/);
+});
+
+test('a neutered manifest script is still caught by the CLI', () => {
+  // The other direction: supplying manifests must not make the CLI blind to a
+  // script that stops running work.
+  const dir = scratchRepo();
+  fs.mkdirSync(path.join(dir, 'apps/demo'), { recursive: true });
+  const manifest = (scripts: Record<string, string>) =>
+    fs.writeFileSync(path.join(dir, 'apps/demo/package.json'), JSON.stringify({ name: 'demo', scripts }, null, 2));
+  manifest({ test: 'tsx --test test/a.test.ts' });
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'manifest'], { cwd: dir });
+  manifest({ test: 'echo skipped' });
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'neuter'], { cwd: dir });
+
+  const { code, out } = capture(() => main(['--base', 'HEAD~1', '--head', 'HEAD'], dir));
+  assert.equal(code, 0);
+  assert.match(out, /authority: human/);
+  assert.match(out, /neutered-workspace-script/);
+});

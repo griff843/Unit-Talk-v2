@@ -216,23 +216,28 @@ A bounded stop with precise evidence is strictly better than a wider blast radiu
 
 ---
 
-## 18. Proof files must be `.md`; `lane_type: verification` does not cover `apps/api/src/**`
+## 18. Proof files must be `.md` and carry a `## Verification` header
 
-**The trap:** Codex defaults to `lane_type: verification` for test-correction work and writes proof as `verification.md`. Both break CI in ways that aren't obvious from the error.
+**The trap:** proof written as `verification.log`, or as `verification.md` without the exact
+section header the gate scans for. Both fail in ways the error message does not explain —
+the failure says "No runtime-verification file found" even when `verification.md` exists with
+perfect content, because the gate is looking for the heading, not the file.
 
-**`verification.md` must contain a `## Verification` header.** The gate scans for that exact header. The failure message says "No runtime-verification file found" even if `verification.md` exists with perfect content. Add `## Verification` as a section heading.
+**Proof file requirements:**
+- Name: `verification.md` — contains "verification", ends in `.md`. A `.log` file is
+  gitignored, so it is not in the diff the gate reads.
+- Header: `## Verification` (not `## Commands` — this is a literal `hasRequiredSection` check)
+- Body: must mention `pnpm type-check` and `pnpm test`
+- Merge SHA: pre-merge the anchor row is `Merge SHA: pending merge`; it is rebound to the real
+  SHA after merge. Writing a real SHA pre-merge FAILS the binding validator.
 
-**`lane_type: verification` blocks `apps/api/src/**`.** Only `apps/api/src/database-smoke.test.ts` is allowed. Every other `apps/api/src/` file fails lane-authority with `outside_allowed_paths`. Use `lane_type: runtime` for any test file in `apps/api/`.
+**No lane manifest, no `.ops/sync` file, no `lane_type`, and no tier label are involved.**
+An earlier version of this section told executors to declare a lane type and to update proof
+path lists inside a lane manifest and a per-issue sync file. Those artifacts no longer exist,
+and following that instruction meant stopping to satisfy a requirement nothing enforces.
+Merge authority now comes from what the diff touches — run `pnpm ops:classify-diff` to see it.
 
-**Proof file requirements for runtime lanes:**
-- Name: `verification.md` (contains "verification", ends in `.md`)
-- Header: `## Verification` (not `## Commands` — `hasRequiredSection` check)
-- Body: must mention `pnpm type-check` and `pnpm test` (P12 check)
-- After merge: append the merge SHA (`Merge SHA: <sha>`) to pass P3/C4
-
-**Also update:** `expected_proof_paths` in the lane manifest and `proofs:` in `.ops/sync/UTV2-###.yml` must reference `.md`, not `.log`.
-
-Canonical spec: `docs/05_operations/LANE_MANIFEST_SPEC.md §14`
+Canonical spec: `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md`
 
 ---
 

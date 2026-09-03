@@ -108,10 +108,52 @@ export function collectChangedFiles(base: string, head: string, cwd: string): Ch
   return attachPatches(parseNameStatus(raw), base, head, cwd);
 }
 
-export function classify(files: ChangedFile[], repoRoot: string): Classification {
+/**
+ * Reads each changed `package.json` at both refs.
+ *
+ * The manifest rules compare the PARSED manifest at base against the PARSED
+ * manifest at head, and the classifier treats a manifest it was not given as
+ * unclassifiable and reserves. Omitting this made the CLI report `human` with
+ * `unclassifiable` for every diff touching any package.json -- including the
+ * ordinary case of adding a test script, which Merge Gate accepts. A preview
+ * that disagrees with the gate in the RESTRICTIVE direction is still wrong:
+ * it routes ordinary work to a human who did not need to see it, which is the
+ * exact cost RMA exists to avoid.
+ */
+export function collectManifests(
+  files: ChangedFile[],
+  base: string,
+  head: string,
+  cwd: string,
+): Record<string, { base: string | null; head: string | null }> {
+  const paths = new Set<string>();
+  for (const file of files) {
+    for (const name of [file.filename, file.previous_filename]) {
+      if (name && /(^|\/)package\.json$/.test(name)) paths.add(name);
+    }
+  }
+  const readAt = (p: string, ref: string): string | null => {
+    try {
+      return git(['show', `${ref}:${p}`], cwd);
+    } catch {
+      // Absent at that ref -- the file was added or deleted. That is a real
+      // state the classifier distinguishes from "could not read".
+      return null;
+    }
+  };
+  const manifests: Record<string, { base: string | null; head: string | null }> = {};
+  for (const p of paths) manifests[p] = { base: readAt(p, base), head: readAt(p, head) };
+  return manifests;
+}
+
+export function classify(
+  files: ChangedFile[],
+  repoRoot: string,
+  manifests: Record<string, { base: string | null; head: string | null }> = {},
+): Classification {
   const modulePath = path.join(repoRoot, 'scripts', 'ops', 'merge-authority.cjs');
   const { loadPolicy, classifyDiff } = require_(modulePath);
-  return classifyDiff({ files, policy: loadPolicy(repoRoot) });
+  return classifyDiff({ files, policy: loadPolicy(repoRoot), manifests });
 }
 
 export function formatReport(files: ChangedFile[], result: Classification, json: boolean): string {
@@ -159,7 +201,7 @@ export function main(argv: string[], cwd: string): number {
     process.stdout.write(`No changes between ${base} and ${head}. Nothing to classify.\n`);
     return 0;
   }
-  const result = classify(files, repoRoot);
+  const result = classify(files, repoRoot, collectManifests(files, base, head, repoRoot));
   process.stdout.write(`${formatReport(files, result, json)}\n`);
   // Exit 0 either way: `human` is a fact about the diff, not a failure. A
   // non-zero exit here would make an ordinary migration look like a broken

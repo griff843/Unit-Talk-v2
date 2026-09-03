@@ -39,10 +39,14 @@ Do not substitute a first-match loop (`for f in local.env .env; do ... break; do
 Then confirm the values the operations below actually depend on:
 
 ```bash
-[ -n "${LINEAR_API_TOKEN:-}" ] || [ -n "${LINEAR_API_KEY:-}" ] || { echo "LINEAR_API_TOKEN or LINEAR_API_KEY is required for operator queue and lane checks." >&2; exit 1; }
 [ -n "${GITHUB_TOKEN:-}" ] || { echo "GITHUB_TOKEN is required for PR and merge-state checks." >&2; exit 1; }
 { [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; } || { echo "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for runtime and DB-backed operator commands." >&2; exit 1; }
 ```
+
+There is deliberately no Linear credential check here. Rollback and restore do not read
+Linear, and a universal preflight that demanded one stopped those operations — the ones most
+likely to be run under pressure — on a credential they never use. Linear is historical
+reference now, not queue truth.
 
 ### Required tools / CLIs
 
@@ -72,7 +76,6 @@ Produces a current operational snapshot: repo health, active lanes, GitHub PR st
 
 ### Required env vars
 
-- `LINEAR_API_TOKEN` or `LINEAR_API_KEY`
 - `GITHUB_TOKEN`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
@@ -82,7 +85,6 @@ Produces a current operational snapshot: repo health, active lanes, GitHub PR st
 ```bash
 pnpm ops:health
 pnpm ops:brief
-pnpm linear:work
 pnpm github:current
 pnpm pipeline:health
 ```
@@ -90,13 +92,15 @@ pnpm pipeline:health
 ### Expected output
 
 - `pnpm ops:health` ends with `VERDICT: HEALTHY` or `VERDICT: DEGRADED`
-- `pnpm ops:brief` prints `Recommendation`, `Overview`, `Linear`, `GitHub`, and `Pipeline`
+- `pnpm ops:brief` prints `Recommendation`, `Overview`, `GitHub`, and `Pipeline`. It may also
+  print a `Linear` block; that block is historical reference, not operational state, and an
+  empty or stale one is not a health signal.
 - `pnpm github:current` identifies the PR for the current branch or reports `(no pull request for current branch)`
 - `pnpm pipeline:health` prints current queue counts such as `pending`, `processing`, `sent`, `failed`, or `dead_letter`
 
 ### What failure looks like
 
-- Missing env: `LINEAR_API_TOKEN or LINEAR_API_KEY is required`, `GITHUB_TOKEN is required`, or `SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set`
+- Missing env: `GITHUB_TOKEN is required`, or `SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set`
 - Missing tool: `pnpm is required for /operator-runbook.`
 - Operational blocker: `VERDICT: BLOCKED`
 - Runtime degradation: `CRITICAL`, `WARN`, `DOWN`, or repeated `dead_letter` rows in pipeline output

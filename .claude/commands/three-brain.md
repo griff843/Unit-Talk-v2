@@ -193,7 +193,7 @@ Reset the counter when: test/build passes, user changes the goal, or user says "
 Route to the Explore subagent when:
 
 - "Find every place X / scan the whole repo / map all callers of Y / architecture impact"
-- Cross-package impact analysis before a T1 refactor (run recon first, synthesize before presenting)
+- Cross-package impact analysis before a wide-blast-radius refactor (run recon first, synthesize before presenting)
 - QA Agent requests coverage gap analysis before adding surface tests
 - Answering a question requires correlating more than 3 files
 
@@ -211,12 +211,18 @@ Agent({
 
 ### Rule 8 — QA Agent: post-merge surface verification
 
-After a T2 or T3 PR merges that touches any of:
+After ANY PR merges that touches a user-visible surface:
 
 ```
 apps/command-center/**
 apps/worker/**       (UI-visible output path)
 ```
+
+The trigger is the changed path, not a tier. A mission-native PR carries no tier label, so a
+predicate of "after a T2 or T3 PR" is unsatisfiable — the router would find no value to test
+and skip the QA it advertises, silently. Reserved surfaces do not exempt a PR from this
+either: `apps/worker/**` is reserved AND user-visible, so it merges through human approval and
+then still gets QA'd.
 
 **Announce before running:**
 
