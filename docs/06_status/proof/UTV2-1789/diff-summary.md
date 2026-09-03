@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: claude/utv2-1789-cc-auth-fail-closed
 PR URL: N/A
 Head SHA: a42dbc39e992f6cbbb98f89127c3c052e742f919
-Merge SHA: N/A
+Merge SHA: 01a2d2d67de5602441b9609d43a00c532dd73dce
 Diff base: 62ecf8daf8ae52520ac057e114662956269040a8
 Diff target: a42dbc39e992f6cbbb98f89127c3c052e742f919
 
@@ -39,4 +39,4 @@ A	docs/06_status/proof/UTV2-1789/.gitkeep
 
 ## SHA Binding
 Head SHA: a42dbc39e992f6cbbb98f89127c3c052e742f919
-Merge SHA: N/A
+Merge SHA: 01a2d2d67de5602441b9609d43a00c532dd73dce
