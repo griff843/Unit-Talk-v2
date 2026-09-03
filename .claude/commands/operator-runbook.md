@@ -8,7 +8,9 @@ Zero-context operator runbook for the four failure-sensitive operations that mus
 - `/operator-runbook replay`
 - `/operator-runbook restore-verify`
 
-**Rule:** run the preflight block first. Do not skip failed checks.
+**Rule:** run the universal preflight first, then the *chosen operation's own* preflight. Do not skip failed checks.
+
+The universal preflight deliberately asserts nothing about credentials or service CLIs. Each operation needs a different set, and three of the four do not need GitHub or the Supabase REST credentials at all — an emergency `rollback`, a `restore-verify`, or an in-memory `replay` must stay runnable on a host that has none of them. Credential and tool assertions therefore live in each operation's own **Preflight assertions** block below.
 
 ---
 
@@ -36,35 +38,37 @@ Do not substitute a first-match loop (`for f in local.env .env; do ... break; do
 
 `.env.example` is a template, so a variable present only there carries a placeholder value. That is exactly what the Node loader does too, so the checks below still verify the values the application would actually see.
 
-Then confirm the values the operations below actually depend on:
+Loading the layers is universal. **Asserting** particular variables is not — do that in the chosen operation's own preflight block.
+
+There is deliberately no Linear credential check anywhere in this runbook. None of these four
+operations reads Linear. Linear is historical reference now, not queue truth.
+
+### Assertion helpers
+
+Define these once, then call them from the operation you are running.
 
 ```bash
-[ -n "${GITHUB_TOKEN:-}" ] || { echo "GITHUB_TOKEN is required for PR and merge-state checks." >&2; exit 1; }
-{ [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; } || { echo "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for runtime and DB-backed operator commands." >&2; exit 1; }
+require_env() { for v in "$@"; do [ -n "${!v:-}" ] || { echo "$v is required for this operation." >&2; return 1; }; done; }   # bash indirect expansion
+require_tool() { for t in "$@"; do command -v "$t" >/dev/null 2>&1 || { echo "$t is required for this operation." >&2; return 1; }; done; }
 ```
 
-There is deliberately no Linear credential check here. Rollback and restore do not read
-Linear, and a universal preflight that demanded one stopped those operations — the ones most
-likely to be run under pressure — on a credential they never use. Linear is historical
-reference now, not queue truth.
+### Universal tools
 
-### Required tools / CLIs
+Only the three every operation uses:
 
 ```bash
-for tool in git node pnpm npx gh psql pg_restore gzip; do
-  command -v "$tool" >/dev/null 2>&1 || { echo "$tool is required for /operator-runbook." >&2; exit 1; }
-done
+require_tool git node pnpm || exit 1
 ```
+
+`gh`, `psql`, `pg_restore`, and `gzip` are asserted by the operations that invoke them, not here.
 
 ### Repository sanity
 
 ```bash
 git status --short --branch
-pnpm ops:health -- --json
-pnpm ops:brief
 ```
 
-If `git status --short --branch` shows unrelated changes, record them before continuing. If `pnpm ops:health -- --json` exits non-zero, treat the repo as degraded until the blocker is understood.
+If this shows unrelated changes, record them before continuing. `pnpm ops:health` and `pnpm ops:brief` are **not** run here: both reach GitHub, so a universal invocation would fail on exactly the offline hosts where `rollback` and `restore-verify` matter most. They are part of `health-check`, which does depend on GitHub.
 
 ---
 
@@ -79,6 +83,13 @@ Produces a current operational snapshot: repo health, active lanes, GitHub PR st
 - `GITHUB_TOKEN`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+
+### Preflight assertions
+
+```bash
+require_env GITHUB_TOKEN SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY || exit 1
+require_tool npx gh || exit 1
+```
 
 ### Exact commands to run
 
@@ -117,6 +128,15 @@ Validates that a target database still has the minimum required tables, row coun
 
 - `SUPABASE_DB_URL`
 - Optional override: `ALLOW_PROD_ROLLBACK_VALIDATE=1` only if you intentionally validate production
+
+### Preflight assertions
+
+```bash
+require_env SUPABASE_DB_URL || exit 1
+require_tool npx || exit 1
+```
+
+No GitHub token and no Supabase REST credentials: `rollback-validate.ts` connects over `SUPABASE_DB_URL` only. This is the operation most likely to run under pressure on a host that has nothing else configured.
 
 ### Exact commands to run
 
@@ -158,6 +178,16 @@ Replays a previously captured provider-offer pack or runs the slate replay harne
 - For slate replay: repo defaults only
 - For provider-offer capture/replay against live sources: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - Optional live source auth: `SGO_API_KEY` or `SGO_API_KEYS`
+
+### Preflight assertions
+
+```bash
+require_tool npx || exit 1
+# Only when capturing or replaying against live sources:
+# require_env SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY || exit 1
+```
+
+Slate replay and `--persistence in-memory` replay assert no credentials at all, which is the point: a replay must be reproducible offline.
 
 ### Exact commands to run
 
@@ -207,6 +237,17 @@ Restores a dump into a non-production target and proves the restored database co
 - `BACKUP_RESTORE_VERIFY_TARGET_ENV`
 - Optional: `BACKUP_RESTORE_VERIFY_SCHEMA`
 - Optional: `BACKUP_RESTORE_VERIFY_TABLES`
+
+### Preflight assertions
+
+```bash
+require_env BACKUP_RESTORE_VERIFY_DUMP BACKUP_RESTORE_VERIFY_TARGET_ENV || exit 1
+{ [ -n "${BACKUP_RESTORE_VERIFY_DATABASE_URL:-}" ] || [ -n "${RESTORE_VERIFY_DATABASE_URL:-}" ]; } \
+  || { echo "BACKUP_RESTORE_VERIFY_DATABASE_URL or RESTORE_VERIFY_DATABASE_URL is required." >&2; exit 1; }
+require_tool npx psql pg_restore gzip || exit 1
+```
+
+This is the only operation that needs `psql`, `pg_restore`, and `gzip`.
 
 ### Exact commands to run
 

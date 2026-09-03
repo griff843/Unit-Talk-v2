@@ -30,6 +30,9 @@ const ACTIVE = [
   // promoted as one, while its body still ran or demanded Linear-era state.
   '.claude/commands/operator-runbook.md',
   '.claude/agent-brief.md',
+  // Round 8: CLAUDE.md's mission-native skill table promotes /pr-unblock, so it
+  // is an execution path and belongs under the same guard as the rest.
+  '.claude/commands/pr-unblock.md',
 ];
 
 /**
@@ -230,4 +233,112 @@ test('the return reviewer never classifies risk from a filename list', () => {
       'that disagrees with the gate in the permissive direction is worse than one that declines.',
   );
   assert.ok(blocks[0]!.includes('ops:classify-diff'), 'it should run the real classifier');
+});
+
+test('the legacy proof-closeout skill does not advertise itself for ordinary work', () => {
+  // Round 8 review: the body was correctly marked legacy, but the SELECTOR was
+  // not. `description` said "Use when verifying implementation, ... checking
+  // runtime health" and `trigger` repeated it verbatim. Selection happens on
+  // those two fields, so an ordinary verification task still landed here — and
+  // the body then routed straight into `ops:brief`, `proof:t1 --issue
+  // <UTV2-ID>` and lane closeout, reintroducing exactly the ticket-and-lane
+  // workflow a mission-native packet does not have. A legacy label on the body
+  // is worth nothing if the selector still volunteers for the common case.
+  const source = fs.readFileSync(
+    path.join(ROOT, '.agents/skills/proof-closeout/SKILL.md'),
+    'utf8',
+  );
+  const frontmatter = /^---\n([\s\S]*?)\n---/.exec(source)?.[1] ?? '';
+  assert.notEqual(frontmatter, '', 'no frontmatter found');
+
+  const description = /^description:\s*(.*)$/m.exec(frontmatter)?.[1] ?? '';
+  const trigger = /^trigger:\s*(.*)$/m.exec(frontmatter)?.[1] ?? '';
+
+  assert.match(description, /LEGACY/, 'description must mark the skill legacy');
+
+  // The selector must be conditioned on a bundle that already exists, not on
+  // the activity of verifying.
+  assert.match(
+    trigger,
+    /docs\/06_status\/proof\//,
+    'trigger must condition on an existing proof bundle, not on verification in general',
+  );
+
+  for (const field of [description, trigger]) {
+    assert.doesNotMatch(
+      field,
+      /verifying implementation|checking runtime health/i,
+      `selector still advertises ordinary verification: ${field}`,
+    );
+  }
+
+  // And the body must send the common case somewhere else rather than run it.
+  assert.match(source, /Ordinary verification/i);
+  assert.doesNotMatch(source, /pnpm proof:t1/, 'body still runs the ticket-keyed T1 proof flow');
+  assert.doesNotMatch(source, /C:\/Dev\//, 'body still carries a non-portable Windows path');
+});
+
+test('the operator runbook does not gate every operation on credentials three of them never use', () => {
+  // Round 8 review: removing the Linear check from the universal preflight was
+  // not enough. The same block still exited on GITHUB_TOKEN, SUPABASE_URL and
+  // SUPABASE_SERVICE_ROLE_KEY, and the runbook forbids skipping it — so an
+  // emergency `rollback` (which needs only SUPABASE_DB_URL), a
+  // `restore-verify` (its own BACKUP_RESTORE_VERIFY_* set) and an in-memory
+  // `replay` (repo defaults only) all stayed unusable on a host that has none
+  // of them. Those are precisely the operations most likely to be run under
+  // pressure on a degraded host.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/operator-runbook.md'), 'utf8');
+  const universal = source.slice(
+    source.indexOf('## Universal preflight'),
+    source.indexOf('## health-check'),
+  );
+  assert.notEqual(universal, '', 'universal preflight section not found');
+
+  for (const credential of ['GITHUB_TOKEN', 'SUPABASE_SERVICE_ROLE_KEY']) {
+    for (const block of fencedBlocks(universal)) {
+      assert.ok(
+        !new RegExp(`\\$\\{${credential}:-\\}`).test(block),
+        `universal preflight still asserts ${credential}`,
+      );
+    }
+  }
+
+  // And it must not universally run the GitHub-reaching brief either.
+  for (const block of fencedBlocks(universal)) {
+    assert.doesNotMatch(block, /pnpm ops:brief/, 'universal preflight still reaches GitHub');
+  }
+
+  // Each operation must carry its own assertions instead.
+  for (const op of ['health-check', 'rollback', 'replay', 'restore-verify']) {
+    const start = source.indexOf(`## ${op}`);
+    assert.notEqual(start, -1, `operation section missing: ${op}`);
+    const next = source.indexOf('\n## ', start + 1);
+    const section = source.slice(start, next === -1 ? undefined : next);
+    assert.match(section, /### Preflight assertions/, `${op} has no preflight assertions block`);
+  }
+});
+
+test('pr-unblock does not demand a human verdict for an auto diff', () => {
+  // Round 8 review: promoting /pr-unblock as mission-native exposed a
+  // re-authorization procedure whose last step was an unconditional "request PM
+  // verdict / t1-approved". Under risk-scoped authority only a `human` diff
+  // needs one, so on an ordinary auto PR that step invents a human dependency
+  // the policy does not impose — and the wait is pure cost.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/pr-unblock.md'), 'utf8');
+  const start = source.indexOf('## Step 3 — re-authorization after a head change');
+  assert.notEqual(start, -1, 'step 3 section not found');
+  const next = source.indexOf('\n---', start);
+  const section = source.slice(start, next === -1 ? undefined : next);
+
+  // The procedure must reclassify at the new head rather than reuse a stale answer.
+  assert.match(section, /ops:classify-diff/, 'step 3 does not reclassify at the new head');
+  // And it must branch, naming both outcomes.
+  assert.match(section, /`auto`/, 'step 3 does not name the auto outcome');
+  assert.match(section, /`human`/, 'step 3 does not name the human outcome');
+  // The prohibition itself.
+  assert.match(
+    section,
+    /Do \*\*not\*\* request a human verdict/,
+    'step 3 does not tell the reader to skip the verdict on an auto diff',
+  );
 });

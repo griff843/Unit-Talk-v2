@@ -499,3 +499,54 @@ test('a wildcard scope over unreserved ground stays unreserved', () => {
   const result = classifyScope(REPO_ROOT, ['packages/domain/src/**']);
   assert.equal(result.reserved, false, result.surfaces.join(','));
 });
+
+test('a scope naming a reserved-by-filename file is reserved', () => {
+  // Round 8 review: `**/.env` has no literal directory prefix, so the
+  // directory-containment supplement below it cannot match. It does not need
+  // to -- classifyDiff already answers the file case, using the same code and
+  // the same excludePaths the merge gate uses. Asserted so a future
+  // "simplification" of classifyScope that drops the classifyDiff call is
+  // caught here rather than by a packet running under a permissive profile.
+  for (const scope of [
+    'packages/config/.env',
+    '.env',
+    'apps/worker/.env.production',
+    'packages/db/.npmrc',
+    '.pnpmfile.cjs',
+  ]) {
+    const result = classifyScope(REPO_ROOT, [scope]);
+    assert.equal(result.reserved, true, `${scope}: ${result.surfaces.join(',')}`);
+  }
+});
+
+test('this function does not disagree with the gate it mirrors on excluded paths', () => {
+  // A hand-rolled glob matcher added here to "cover" suffix-only globs made
+  // `**/.env.example` reserved, even though the secrets surface excludes
+  // committed templates on purpose. Being stricter than the merge gate is a
+  // divergence, not extra safety: it prices a documentation edit at credential
+  // attention, which is the exact failure the excludeNote exists to prevent.
+  const result = classifyScope(REPO_ROOT, ['packages/config/.env.example']);
+  assert.equal(result.reserved, false, result.surfaces.join(','));
+});
+
+test('a directory scope that could contain a credential file is not reserved on that basis', () => {
+  // Deliberate, and the reason is worth stating: EVERY directory in the repo
+  // can contain a `.env`, so reserving on that possibility returns the same
+  // answer for every input. A control that cannot distinguish its inputs is
+  // not a control. The directory case is carried by the packet prohibition
+  // (next test) and enforced where the actual diff is visible.
+  for (const dir of ['packages/domain/src', 'apps/smart-form/components']) {
+    const result = classifyScope(REPO_ROOT, [dir]);
+    assert.equal(result.reserved, false, `${dir}: ${result.surfaces.join(',')}`);
+  }
+});
+
+test('the packet prompt prohibits reserved filename shapes outright', () => {
+  // The directory case cannot be answered from the scope path, so the
+  // prohibition has to reach the executor in words. If this text is dropped, a
+  // directory-scoped packet has nothing telling it not to write a `.env`.
+  const prompt = buildPrompt('docs/mission/packets/x.md', '# packet');
+  for (const shape of ['.env', '.npmrc', '.pnpmfile.cjs']) {
+    assert.ok(prompt.includes(shape), `prompt does not prohibit ${shape}`);
+  }
+});

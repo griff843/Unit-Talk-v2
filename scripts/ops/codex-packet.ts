@@ -361,6 +361,12 @@ export function buildPrompt(packetPath: string, packetText: string): string {
     'one, do not create one, and do not reference one in commits or the PR. The packet below is the',
     'entire contract.',
     '',
+    'Reserved filename shapes are prohibited ANYWHERE in your diff, including inside your declared',
+    'scope: do not create or edit `.env`, `.env.*`, `.npmrc`, or `.pnpmfile.cjs`. These are reserved by',
+    'filename, not by location, so an ordinary-looking scope does not admit them. If the work',
+    'genuinely requires one, stop and say so — the merge classifier will reserve the PR for a human',
+    'either way, and finding that out at merge costs a cycle.',
+    '',
     'When you are done:',
     '  1. `pnpm verify` must be green.',
     '  2. Open a PR with `gh pr create`, using the PR body template in AGENTS.md.',
@@ -428,6 +434,29 @@ export function classifyScope(repoRoot: string, scopePaths: string[]): ScopeClas
     // directory name, so `apps/worker/**` did not appear to live under
     // `apps/**/` and a packet covering the whole of apps/ reported unreserved.
     // A broader scope must be at least as reserved as anything inside it.
+    //
+    // This containment check covers ANCHORED globs only -- ones whose literal
+    // prefix is a real directory. A SUFFIX-ONLY glob (`**/.env`, `**/.env.*`,
+    // `**/.npmrc`, `**/.pnpmfile.cjs`) names a filename SHAPE anywhere in the
+    // tree, and has no literal prefix; `literalDir` normalises it to `/`, which
+    // compares unequal to every scope. That is deliberate, and it is not the
+    // hole it looks like:
+    //
+    //   - A scope that NAMES such a file (`packages/config/.env`) is already
+    //     reserved by the classifyDiff call above, which is the same code the
+    //     merge gate runs and which honours the surface's excludePaths. Adding
+    //     a second glob matcher here would duplicate it less correctly --
+    //     `**/.env.example` is excluded from the secrets surface, and a
+    //     hand-rolled matcher that ignored excludePaths made this function
+    //     STRICTER than the gate it exists to mirror.
+    //
+    //   - A DIRECTORY scope (`packages/config`) genuinely cannot be answered
+    //     from the path: every directory in the repo can contain a `.env`.
+    //     Reserving on that basis returns the same answer for every input,
+    //     which is not a control. The directory case is carried by the explicit
+    //     prohibition in buildPrompt, and enforced at the two places that see
+    //     the actual diff: the reserved-surface hook and the merge classifier.
+    //     The profile is a prior; the gate is at merge.
     const literalDir = (value: string): string => {
       const prefix = value.split(/[*?[]/)[0] ?? '';
       return prefix.endsWith('/') ? prefix : `${prefix}/`;
