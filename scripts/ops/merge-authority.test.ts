@@ -412,6 +412,18 @@ test('the policy records the two-phase bootstrap it degrades to', () => {
   // self-authorizing one.
   assert.equal(policy.bootstrap.degradesTo, 'human');
   assert.equal(policy.bootstrap.classifierPath, 'scripts/ops/merge-authority.cjs');
+
+  // The active phase is DERIVED by the gate -- it checks whether the trusted
+  // base checkout carries classifierPath. This file carried a static
+  // `"phase": 2` alongside that, which nothing read and which contradicted the
+  // runtime on the one PR where the distinction matters: the PR that first
+  // lands the classifier is IN phase 1, while the constant declared phase 2.
+  // A number that nothing reads cannot be wrong in a way anything catches,
+  // which is exactly why it must not be there.
+  assert.ok(
+    !('phase' in policy.bootstrap),
+    'bootstrap must not declare a static phase; the gate derives it from the base checkout',
+  );
 });
 
 // ── incomplete evidence ───────────────────────────────────────────────────
