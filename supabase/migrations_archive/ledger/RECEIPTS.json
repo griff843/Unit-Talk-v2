@@ -1,0 +1,1276 @@
+{
+  "receipt_version": 1,
+  "baseline": "supabase/migrations/00000000000000_baseline_live_schema.sql",
+  "receipts": [
+    {
+      "remote_version": "202603200001",
+      "remote_name": "v2_foundation",
+      "receipt_file": "202603200001_v2_foundation.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200001_v2_foundation.sql",
+      "source_sha256": "580e9dfa5f07afb070f937ee1cc88cdc7998669b99fffaf57ca6a3527fdfeffc",
+      "archive_intent_path": "supabase/migrations_archive/202603200001_v2_foundation.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200002",
+      "remote_name": "v2_schema_hardening",
+      "receipt_file": "202603200002_v2_schema_hardening.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200002_v2_schema_hardening.sql",
+      "source_sha256": "abca3603c582d690823fa759adc89c0136cf705f79f5247401f4697fe2e471c3",
+      "archive_intent_path": "supabase/migrations_archive/202603200002_v2_schema_hardening.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200003",
+      "remote_name": "distribution_receipts_idempotency",
+      "receipt_file": "202603200003_distribution_receipts_idempotency.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200003_distribution_receipts_idempotency.sql",
+      "source_sha256": "9d34d6e227fec803ca40cf35887728cdb16cca021da164b9b5cc88ede1025f55",
+      "archive_intent_path": "supabase/migrations_archive/202603200003_distribution_receipts_idempotency.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200004",
+      "remote_name": "system_runs_finished_at_trigger",
+      "receipt_file": "202603200004_system_runs_finished_at_trigger.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200004_system_runs_finished_at_trigger.sql",
+      "source_sha256": "ab988354389ae5a64253a4f58cf0d4bf144bc94a8f3ed4dcbdb4580c75baafdb",
+      "archive_intent_path": "supabase/migrations_archive/202603200004_system_runs_finished_at_trigger.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200005",
+      "remote_name": "pick_promotion_state",
+      "receipt_file": "202603200005_pick_promotion_state.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200005_pick_promotion_state.sql",
+      "source_sha256": "f1d7fd2b83daaa8cbe9c0ecc5474580befa8479d2a69bae10656a3000921d709",
+      "archive_intent_path": "supabase/migrations_archive/202603200005_pick_promotion_state.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200006",
+      "remote_name": "settlement_runtime_alignment",
+      "receipt_file": "202603200006_settlement_runtime_alignment.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200006_settlement_runtime_alignment.sql",
+      "source_sha256": "8dc6ef351bcef3a500d492d1e87822f3fa857ff81544462fd750ba2efee72c54",
+      "archive_intent_path": "supabase/migrations_archive/202603200006_settlement_runtime_alignment.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200007",
+      "remote_name": "promotion_target_multi",
+      "receipt_file": "202603200007_promotion_target_multi.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200007_promotion_target_multi.sql",
+      "source_sha256": "fa006ba62c0bcc6c6cb046c012601139254a23264e273107cb4ad081ca545f13",
+      "archive_intent_path": "supabase/migrations_archive/202603200007_promotion_target_multi.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200008",
+      "remote_name": "reference_data_foundation",
+      "receipt_file": "202603200008_reference_data_foundation.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200008_reference_data_foundation.sql",
+      "source_sha256": "385fceb064fc9178b6e8822bbc0c66743e088c7ea61cdcdf17ec349002ed5641",
+      "archive_intent_path": "supabase/migrations_archive/202603200008_reference_data_foundation.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200009",
+      "remote_name": "provider_offers",
+      "receipt_file": "202603200009_provider_offers.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200009_provider_offers.sql",
+      "source_sha256": "cad7218ca11177610e149e2e42d9600e83dd284fa3eb732fb7151bdd9c931131",
+      "archive_intent_path": "supabase/migrations_archive/202603200009_provider_offers.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200010",
+      "remote_name": "entity_resolution_indexes",
+      "receipt_file": "202603200010_entity_resolution_indexes.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200010_entity_resolution_indexes.sql",
+      "source_sha256": "6aa0f1aed3ca0e87251df57d96ec225c97283030ff9758866fbf59c7e2c33447",
+      "archive_intent_path": "supabase/migrations_archive/202603200010_entity_resolution_indexes.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200011",
+      "remote_name": "clv_lookup_index",
+      "receipt_file": "202603200011_clv_lookup_index.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200011_clv_lookup_index.sql",
+      "source_sha256": "5fa4acf9f6ef0ed1986ae166c6172af91a2e4fa333757ff1c9461a5393c53250",
+      "archive_intent_path": "supabase/migrations_archive/202603200011_clv_lookup_index.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200012",
+      "remote_name": "game_results",
+      "receipt_file": "202603200012_game_results.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200012_game_results.sql",
+      "source_sha256": "406a08dea408e0e4e281688c6860e7078d6689b0273e338ecd576f309d5b9a80",
+      "archive_intent_path": "supabase/migrations_archive/202603200012_game_results.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200013",
+      "remote_name": "settlement_source_grading",
+      "receipt_file": "202603200013_settlement_source_grading.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200013_settlement_source_grading.sql",
+      "source_sha256": "4a4e5d85d341c9acc43ee4a3cae137071746d60e6eb64a77877fff1c45856fd1",
+      "archive_intent_path": "supabase/migrations_archive/202603200013_settlement_source_grading.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200014",
+      "remote_name": "alert_detections",
+      "receipt_file": "202603200014_alert_detections.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200014_alert_detections.sql",
+      "source_sha256": "b7d1a33900f20aa5c14da15cdb66e2268215143ca57d4acbaba2d6e853a5d541",
+      "archive_intent_path": "supabase/migrations_archive/202603200014_alert_detections.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200015",
+      "remote_name": "exclusive_insights_target",
+      "receipt_file": "202603200015_exclusive_insights_target.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200015_exclusive_insights_target.sql",
+      "source_sha256": "a4c0c15d9e062053b7ac92d4f94a9e10baf2feb28faa345924cdc6345c71ab5f",
+      "archive_intent_path": "supabase/migrations_archive/202603200015_exclusive_insights_target.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200016",
+      "remote_name": "hedge_opportunities",
+      "receipt_file": "202603200016_hedge_opportunities.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200016_hedge_opportunities.sql",
+      "source_sha256": "cdd3ea7687a3c4b72846128c236f062cfbe7f0939cf0c17669f9e7c8afc73e3f",
+      "archive_intent_path": "supabase/migrations_archive/202603200016_hedge_opportunities.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200017",
+      "remote_name": "member_tiers",
+      "receipt_file": "202603200017_member_tiers.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200017_member_tiers.sql",
+      "source_sha256": "8c99b209e13ad4ae4bc1d3b66841fa1a7662591121818fc8ca1a228ca50fd846",
+      "archive_intent_path": "supabase/migrations_archive/202603200017_member_tiers.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603200018",
+      "remote_name": "pick_reviews",
+      "receipt_file": "202603200018_pick_reviews.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603200018_pick_reviews.sql",
+      "source_sha256": "96dd279ccc71580fc812b3456e31b01ed43b663354b6384eb451d4202aa5f781",
+      "archive_intent_path": "supabase/migrations_archive/202603200018_pick_reviews.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603310001",
+      "remote_name": "submission_idempotency",
+      "receipt_file": "202603310001_submission_idempotency.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603310001_submission_idempotency.sql",
+      "source_sha256": "abebae3db1e70546e9ab1bbb70c5f8bc909bb222cf00515d8d42cf0d0d6dd331",
+      "archive_intent_path": "supabase/migrations_archive/202603310001_submission_idempotency.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202603310002",
+      "remote_name": "settlement_idempotency",
+      "receipt_file": "202603310002_settlement_idempotency.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202603310002_settlement_idempotency.sql",
+      "source_sha256": "b575804529f81ab8017d3843c25b94c35881ea74847125c964053a42d8f8c7ca",
+      "archive_intent_path": "supabase/migrations_archive/202603310002_settlement_idempotency.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604010001",
+      "remote_name": "reference_data_catalog_expansion",
+      "receipt_file": "202604010001_reference_data_catalog_expansion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604010001_reference_data_catalog_expansion.sql",
+      "source_sha256": "96369bb0ba057c2f738e900199c815839d9fad8fdefdc4648e268937ab74ae37",
+      "archive_intent_path": "supabase/migrations_archive/202604010001_reference_data_catalog_expansion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604010002",
+      "remote_name": "enqueue_atomicity_rpc",
+      "receipt_file": "202604010002_enqueue_atomicity_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604010002_enqueue_atomicity_rpc.sql",
+      "source_sha256": "4b15ccb285ac3bd73b9eb67e74cde7525a85723b5bc6d9651e7e7514ae513e2d",
+      "archive_intent_path": "supabase/migrations_archive/202604010002_enqueue_atomicity_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604010003",
+      "remote_name": "delivery_idempotency_rpc",
+      "receipt_file": "202604010003_delivery_idempotency_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604010003_delivery_idempotency_rpc.sql",
+      "source_sha256": "312383b8fcf170e0e02359bdd068c70a2438c3fb6c9020badfbe11cf41768d7a",
+      "archive_intent_path": "supabase/migrations_archive/202604010003_delivery_idempotency_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604010004",
+      "remote_name": "settlement_atomicity_rpc",
+      "receipt_file": "202604010004_settlement_atomicity_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604010004_settlement_atomicity_rpc.sql",
+      "source_sha256": "9d3cc290f970d4f8680ae8995ab801da387abd8f58883b052caffdf577efd911",
+      "archive_intent_path": "supabase/migrations_archive/202604010004_settlement_atomicity_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604010005",
+      "remote_name": "submission_atomicity_rpc",
+      "receipt_file": "202604010005_submission_atomicity_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604010005_submission_atomicity_rpc.sql",
+      "source_sha256": "d0ed3799bb64d7b43aea09d47c4f06a4fc960368f9fe611948d532db82c7ce91",
+      "archive_intent_path": "supabase/migrations_archive/202604010005_submission_atomicity_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604020001",
+      "remote_name": "canonical_reference_backbone",
+      "receipt_file": "202604020001_canonical_reference_backbone.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604020001_canonical_reference_backbone.sql",
+      "source_sha256": "419f1ebafb95fc50bda35cf07866a4e0322703771f2211f600ec8b7576357c9d",
+      "archive_intent_path": "supabase/migrations_archive/202604020001_canonical_reference_backbone.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604020002",
+      "remote_name": "canonical_market_taxonomy",
+      "receipt_file": "202604020002_canonical_market_taxonomy.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604020002_canonical_market_taxonomy.sql",
+      "source_sha256": "59c0a8bef308637789ba59b1238f51a6e8cced97fd03012433dc0bd6c004e884",
+      "archive_intent_path": "supabase/migrations_archive/202604020002_canonical_market_taxonomy.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604020003",
+      "remote_name": "canonical_reference_bootstrap",
+      "receipt_file": "202604020003_canonical_reference_bootstrap.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604020003_canonical_reference_bootstrap.sql",
+      "source_sha256": "63bc418aa45fb16d93e794031f3161e6fe87dc4efd9fafa7dbadd2cb5c917f33",
+      "archive_intent_path": "supabase/migrations_archive/202604020003_canonical_reference_bootstrap.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604020004",
+      "remote_name": "canonical_reference_bootstrap_dedupe",
+      "receipt_file": "202604020004_canonical_reference_bootstrap_dedupe.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604020004_canonical_reference_bootstrap_dedupe.sql",
+      "source_sha256": "e67c9a7d64c30eb811f8833768beb1b5e3ac26f2db2495744d492e8a0184b24e",
+      "archive_intent_path": "supabase/migrations_archive/202604020004_canonical_reference_bootstrap_dedupe.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604020005",
+      "remote_name": "odds_api_alias_backfill",
+      "receipt_file": "202604020005_odds_api_alias_backfill.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604020005_odds_api_alias_backfill.sql",
+      "source_sha256": "b8ff738298499073a8ac48578ffaa1839d88922c33bd7b0a1172669037f05e1e",
+      "archive_intent_path": "supabase/migrations_archive/202604020005_odds_api_alias_backfill.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604030001",
+      "remote_name": "model_registry",
+      "receipt_file": "202604030001_model_registry.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604030001_model_registry.sql",
+      "source_sha256": "21959d298b4ba3dbaad73f0d300fd28f70cb3fc83019b76e77ea24e85ec7f868",
+      "archive_intent_path": "supabase/migrations_archive/202604030001_model_registry.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604030002",
+      "remote_name": "model_health_snapshots",
+      "receipt_file": "202604030002_model_health_snapshots.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604030002_model_health_snapshots.sql",
+      "source_sha256": "fe1f4b5d893f8f3d51f213f60bc540d583c42d6d81b61915f44e0147241fec71",
+      "archive_intent_path": "supabase/migrations_archive/202604030002_model_health_snapshots.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604040001",
+      "remote_name": "alert_detection_first_mover",
+      "receipt_file": "202604040001_alert_detection_first_mover.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604040001_alert_detection_first_mover.sql",
+      "source_sha256": "174cd663528c1da972819b2dbea5ae7021d1086d6d169a2b352158d68b8f0a31",
+      "archive_intent_path": "supabase/migrations_archive/202604040001_alert_detection_first_mover.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604040002",
+      "remote_name": "alert_detection_steam",
+      "receipt_file": "202604040002_alert_detection_steam.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604040002_alert_detection_steam.sql",
+      "source_sha256": "7bd7f0e7387098f2faa30dcfa643b1fc71cc54c0dc51056013fdaa2bb2a137a6",
+      "archive_intent_path": "supabase/migrations_archive/202604040002_alert_detection_steam.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604040003",
+      "remote_name": "game_line_results_index",
+      "receipt_file": "202604040003_game_line_results_index.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604040003_game_line_results_index.sql",
+      "source_sha256": "1ecdfee5889510ac5078e64d4d4bd5b50f45f454c9b69e77ebd24d00081b6ae1",
+      "archive_intent_path": "supabase/migrations_archive/202604040003_game_line_results_index.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604040004",
+      "remote_name": "provider_offers_bookmaker_key",
+      "receipt_file": "202604040004_provider_offers_bookmaker_key.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604040004_provider_offers_bookmaker_key.sql",
+      "source_sha256": "92d87369fe128e52c421757b2a64262def05ffc65e92ec8e80cad5bbc1c05c43",
+      "archive_intent_path": "supabase/migrations_archive/202604040004_provider_offers_bookmaker_key.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050005",
+      "remote_name": "utv2_388_market_catalog_expansion",
+      "receipt_file": "202604050005_utv2_388_market_catalog_expansion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050005_utv2_388_market_catalog_expansion.sql",
+      "source_sha256": "d7646e4571957b5d9a19cd9655b11ad8f351ce0ba5adcbc077a4614398e809f4",
+      "archive_intent_path": "supabase/migrations_archive/202604050005_utv2_388_market_catalog_expansion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050006",
+      "remote_name": "utv2_395_picks_fk_columns",
+      "receipt_file": "202604050006_utv2_395_picks_fk_columns.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050006_utv2_395_picks_fk_columns.sql",
+      "source_sha256": "a68e74bc66171e5470c8ca55bcb27657a7a5986c13be9a929d0387af073354ec",
+      "archive_intent_path": "supabase/migrations_archive/202604050006_utv2_395_picks_fk_columns.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050007",
+      "remote_name": "utv2_396_picks_current_state_view",
+      "receipt_file": "202604050007_utv2_396_picks_current_state_view.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050007_utv2_396_picks_current_state_view.sql",
+      "source_sha256": "74a13a8a1b830d5afdd7e1e019c6148ee86bb555bb0640a0a7c20affb9dafe2e",
+      "archive_intent_path": "supabase/migrations_archive/202604050007_utv2_396_picks_current_state_view.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050008",
+      "remote_name": "utv2_397_drop_sport_market_types",
+      "receipt_file": "202604050008_utv2_397_drop_sport_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050008_utv2_397_drop_sport_market_types.sql",
+      "source_sha256": "707c32b063d559ae9990d93d3e5ee186f5622b2c4d4f70f912642efef3e1bf6b",
+      "archive_intent_path": "supabase/migrations_archive/202604050008_utv2_397_drop_sport_market_types.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050009",
+      "remote_name": "utv2_394_nba_alias_completion",
+      "receipt_file": "202604050009_utv2_394_nba_alias_completion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050009_utv2_394_nba_alias_completion.sql",
+      "source_sha256": "e3c2f1b396c26fe4789b1d5052946273af7f8f77208a4d4073ebc6317c096197",
+      "archive_intent_path": "supabase/migrations_archive/202604050009_utv2_394_nba_alias_completion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604050010",
+      "remote_name": "utv2_391_mlb_taxonomy_completion",
+      "receipt_file": "202604050010_utv2_391_mlb_taxonomy_completion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604050010_utv2_391_mlb_taxonomy_completion.sql",
+      "source_sha256": "dc18f005bc3c6da72ee3b61a1b87797dbfebfb8d14f8df5cd74cbd817c6085df",
+      "archive_intent_path": "supabase/migrations_archive/202604050010_utv2_391_mlb_taxonomy_completion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604070011",
+      "remote_name": "utv2_398_picks_player_id",
+      "receipt_file": "202604070011_utv2_398_picks_player_id.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604070011_utv2_398_picks_player_id.sql",
+      "source_sha256": "382580ec248bc1d87bc877ba62ae377c924a2ddc23bf48a15e7251be6a1b595e",
+      "archive_intent_path": "supabase/migrations_archive/202604070011_utv2_398_picks_player_id.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604070012",
+      "remote_name": "utv2_393_nfl_nhl_ncaaf_taxonomy_completion",
+      "receipt_file": "202604070012_utv2_393_nfl_nhl_ncaaf_taxonomy_completion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604070012_utv2_393_nfl_nhl_ncaaf_taxonomy_completion.sql",
+      "source_sha256": "f18953aa3053d44393b24eb10b6dcf9a9f9ada2baf64690d2319f5f1cb4c24c4",
+      "archive_intent_path": "supabase/migrations_archive/202604070012_utv2_393_nfl_nhl_ncaaf_taxonomy_completion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604070013",
+      "remote_name": "utv2_392_nba_ncaab_taxonomy_completion",
+      "receipt_file": "202604070013_utv2_392_nba_ncaab_taxonomy_completion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604070013_utv2_392_nba_ncaab_taxonomy_completion.sql",
+      "source_sha256": "9df72a8f3976115620921fc39c6aa0f00038b82dab370d5e44d85af3676963f3",
+      "archive_intent_path": "supabase/migrations_archive/202604070013_utv2_392_nba_ncaab_taxonomy_completion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604070014",
+      "remote_name": "utv2_436_mlb_stat_types_column_fix",
+      "receipt_file": "202604070014_utv2_436_mlb_stat_types_column_fix.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604070014_utv2_436_mlb_stat_types_column_fix.sql",
+      "source_sha256": "c4f3647c0c32d1f62bfad23c88a83df142f62a1ca40a9570f32197a27d4b5d1d",
+      "archive_intent_path": "supabase/migrations_archive/202604070014_utv2_436_mlb_stat_types_column_fix.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604080015",
+      "remote_name": "utv2_437_audit_log_created_at_index",
+      "receipt_file": "202604080015_utv2_437_audit_log_created_at_index.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604080015_utv2_437_audit_log_created_at_index.sql",
+      "source_sha256": "f67b182d736d364bd8d857e0f86e3b4392540b66e9089a4a62f940678bda63ef",
+      "archive_intent_path": "supabase/migrations_archive/202604080015_utv2_437_audit_log_created_at_index.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604080016",
+      "remote_name": "utv2_439_pg_cron_retention",
+      "receipt_file": "202604080016_utv2_439_pg_cron_retention.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604080016_utv2_439_pg_cron_retention.sql",
+      "source_sha256": "a6db240cdda9c85675efa5db1ad33d0028de26ded23e74f4d91b2ab2cddee497",
+      "archive_intent_path": "supabase/migrations_archive/202604080016_utv2_439_pg_cron_retention.sql",
+      "archive_diverges": true
+    },
+    {
+      "remote_version": "202604090001",
+      "remote_name": "utv2_459_market_universe",
+      "receipt_file": "202604090001_utv2_459_market_universe.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090001_utv2_459_market_universe.sql",
+      "source_sha256": "57e0f2a0a228468a17fb18f4b99880ddeb5978d367e34040807f293b2a86b452",
+      "archive_intent_path": "supabase/migrations_archive/202604090001_utv2_459_market_universe.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090002",
+      "remote_name": "utv2_460_pick_candidates",
+      "receipt_file": "202604090002_utv2_460_pick_candidates.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090002_utv2_460_pick_candidates.sql",
+      "source_sha256": "d4e911a7b532728dc348ca475b722483695064c03acaa2de5a46e5d5467c9de7",
+      "archive_intent_path": "supabase/migrations_archive/202604090002_utv2_460_pick_candidates.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090003",
+      "remote_name": "utv2_459_market_universe_null_safe_constraint",
+      "receipt_file": "202604090003_utv2_459_market_universe_null_safe_constraint.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090003_utv2_459_market_universe_null_safe_constraint.sql",
+      "source_sha256": "d2c5fdebfa4cb6c10942f9e03d094496bb10c8fc0fd6d533d5c6242fb5c5d5b4",
+      "archive_intent_path": "supabase/migrations_archive/202604090003_utv2_459_market_universe_null_safe_constraint.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090004",
+      "remote_name": "add_missing_fk_indexes",
+      "receipt_file": "202604090004_add_missing_fk_indexes.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090004_add_missing_fk_indexes.sql",
+      "source_sha256": "0a0b2534f21e0a80f77da3aafbb6c215c2df333ee2a87f800401a9870ee6ada1",
+      "archive_intent_path": "supabase/migrations_archive/202604090004_add_missing_fk_indexes.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090005",
+      "remote_name": "sync_autovacuum_and_brin",
+      "receipt_file": "202604090005_sync_autovacuum_and_brin.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090005_sync_autovacuum_and_brin.sql",
+      "source_sha256": "b8e249e0febe8896e9bef678d64e69af43902708eaa26aba43c48e1969a1d9c1",
+      "archive_intent_path": "supabase/migrations_archive/202604090005_sync_autovacuum_and_brin.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090006",
+      "remote_name": "backfill_sgo_player_entity_aliases",
+      "receipt_file": "202604090006_backfill_sgo_player_entity_aliases.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090006_backfill_sgo_player_entity_aliases.sql",
+      "source_sha256": "73035d88a27f1662eb44c6781c171bbf2514d410c85fcae86742adfe11b0def5",
+      "archive_intent_path": "supabase/migrations_archive/202604090006_backfill_sgo_player_entity_aliases.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090007",
+      "remote_name": "utv2_473_pick_candidate_ranking_fields",
+      "receipt_file": "202604090007_utv2_473_pick_candidate_ranking_fields.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090007_utv2_473_pick_candidate_ranking_fields.sql",
+      "source_sha256": "fca8f66d6b4c489a6d78022a62472563aed2c895dea06d0a92db3cc6d574b425",
+      "archive_intent_path": "supabase/migrations_archive/202604090007_utv2_473_pick_candidate_ranking_fields.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604090008",
+      "remote_name": "utv2_474_syndicate_board",
+      "receipt_file": "202604090008_utv2_474_syndicate_board.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604090008_utv2_474_syndicate_board.sql",
+      "source_sha256": "4a83837c6567159f597c335549162ebe0c5e634ec9a8299886837401a0004ec4",
+      "archive_intent_path": "supabase/migrations_archive/202604090008_utv2_474_syndicate_board.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100001",
+      "remote_name": "utv2_479_governed_pick_performance_view",
+      "receipt_file": "202604100001_utv2_479_governed_pick_performance_view.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100001_utv2_479_governed_pick_performance_view.sql",
+      "source_sha256": "9b05bfe555d9df6b3dc56ecd4c2ac1441b70f59902137641a562f334f805928b",
+      "archive_intent_path": "supabase/migrations_archive/202604100001_utv2_479_governed_pick_performance_view.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100002",
+      "remote_name": "utv2_480_market_family_trust",
+      "receipt_file": "202604100002_utv2_480_market_family_trust.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100002_utv2_480_market_family_trust.sql",
+      "source_sha256": "fb4ac49e838ec5ce1f36f6d651cc7d0fd804d3dc5bb00201b1b82f4badb66479",
+      "archive_intent_path": "supabase/migrations_archive/202604100002_utv2_480_market_family_trust.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100003",
+      "remote_name": "utv2_491_picks_awaiting_approval_state",
+      "receipt_file": "202604100003_utv2_491_picks_awaiting_approval_state.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100003_utv2_491_picks_awaiting_approval_state.sql",
+      "source_sha256": "c26924873decb73bcc8502ddeceeec4a07391ff2b2e50e3ee46276a45acff028",
+      "archive_intent_path": "supabase/migrations_archive/202604100003_utv2_491_picks_awaiting_approval_state.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100004",
+      "remote_name": "utv2_519_pick_lifecycle_awaiting_approval_constraint",
+      "receipt_file": "202604100004_utv2_519_pick_lifecycle_awaiting_approval_constraint.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100004_utv2_519_pick_lifecycle_awaiting_approval_constraint.sql",
+      "source_sha256": "aba9c2de0b66ee31517d5c209582ad0646897ffe4d3d4492e78574fb1d574166",
+      "archive_intent_path": "supabase/migrations_archive/202604100004_utv2_519_pick_lifecycle_awaiting_approval_constraint.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100005",
+      "remote_name": "utv2_519_transition_pick_lifecycle_rpc",
+      "receipt_file": "202604100005_utv2_519_transition_pick_lifecycle_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100005_utv2_519_transition_pick_lifecycle_rpc.sql",
+      "source_sha256": "884fe748d851209e04408847715df238cffebe2ab13d0ec0d86d2d0d8a44c852",
+      "archive_intent_path": "supabase/migrations_archive/202604100005_utv2_519_transition_pick_lifecycle_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604100006",
+      "remote_name": "utv2_526_awaiting_approval_drift_monitor",
+      "receipt_file": "202604100006_utv2_526_awaiting_approval_drift_monitor.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604100006_utv2_526_awaiting_approval_drift_monitor.sql",
+      "source_sha256": "05396c925b38676bfe72f5e0542649e2a1179b3218982a2f723258f1c9725ee9",
+      "archive_intent_path": "supabase/migrations_archive/202604100006_utv2_526_awaiting_approval_drift_monitor.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604110001",
+      "remote_name": "utv2_539_backfill_pick_awaiting_approval_rpc",
+      "receipt_file": "202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql",
+      "source_sha256": "07d6fb6f1283e4106f9f188e1e7a361305383a52e6238e2a98318b65573b7b46",
+      "archive_intent_path": "supabase/migrations_archive/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604130001",
+      "remote_name": "team_abbreviation_backfill",
+      "receipt_file": "202604130001_team_abbreviation_backfill.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604130001_team_abbreviation_backfill.sql",
+      "source_sha256": "979aea5cd1b2a5ea166b528781dbfd034be61486e82062b274a451f658031ef8",
+      "archive_intent_path": "supabase/migrations_archive/202604130001_team_abbreviation_backfill.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604150001",
+      "remote_name": "utv2_616_provider_offers_closing_index",
+      "receipt_file": "202604150001_utv2_616_provider_offers_closing_index.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604150001_utv2_616_provider_offers_closing_index.sql",
+      "source_sha256": "122781502550fc61f81880239b31ae985167ff2fbe687ad91052fae87bc5d95e",
+      "archive_intent_path": "supabase/migrations_archive/202604150001_utv2_616_provider_offers_closing_index.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604150002",
+      "remote_name": "utv2_614_process_submission_atomic_player_id",
+      "receipt_file": "202604150002_utv2_614_process_submission_atomic_player_id.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604150002_utv2_614_process_submission_atomic_player_id.sql",
+      "source_sha256": "1b00bfb56d5bff06c04bfdfd491fd7272fdf779f0d8e8f78482c9cb0e14610ae",
+      "archive_intent_path": "supabase/migrations_archive/202604150002_utv2_614_process_submission_atomic_player_id.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604170001",
+      "remote_name": "sgo_book_aliases_expansion",
+      "receipt_file": "202604170001_sgo_book_aliases_expansion.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604170001_sgo_book_aliases_expansion.sql",
+      "source_sha256": "2f328a73e5917f684934951ec1803be0e466d08537828fd8fbb96f6240c710a5",
+      "archive_intent_path": "supabase/migrations_archive/202604170001_sgo_book_aliases_expansion.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604190001",
+      "remote_name": "utv2_rls_enable_canonical_tables",
+      "receipt_file": "202604190001_utv2_rls_enable_canonical_tables.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604190001_utv2_rls_enable_canonical_tables.sql",
+      "source_sha256": "0997040aafee9035ee1837af20fb876080afac5a225048e42ea4ca9e8330d0a2",
+      "archive_intent_path": "supabase/migrations_archive/202604190001_utv2_rls_enable_canonical_tables.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604200001",
+      "remote_name": "utv2_698_remove_sgo_sportsbook",
+      "receipt_file": "202604200001_utv2_698_remove_sgo_sportsbook.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604200001_utv2_698_remove_sgo_sportsbook.sql",
+      "source_sha256": "8be21eba314b40e530acc6126dd72195f2cc1e2611a25e1ed08e57e396e1dcb7",
+      "archive_intent_path": "supabase/migrations_archive/202604200001_utv2_698_remove_sgo_sportsbook.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604200002",
+      "remote_name": "utv2_700_period_half_inning_market_types",
+      "receipt_file": "202604200002_utv2_700_period_half_inning_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604200002_utv2_700_period_half_inning_market_types.sql",
+      "source_sha256": "5c1f188b7a3acb1f7cf22113d19bce805ecf3d4312574eae783a3e6a0924fb7f",
+      "archive_intent_path": "supabase/migrations_archive/202604200002_utv2_700_period_half_inning_market_types.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604210001",
+      "remote_name": "utv2_704_mlb_1st_inning_market_types",
+      "receipt_file": "202604210001_utv2_704_mlb_1st_inning_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210001_utv2_704_mlb_1st_inning_market_types.sql",
+      "source_sha256": "1e842f24dcb2519eeb9a29857e8f6e434c2a4292fb16e33a00cd1d018740aeb1",
+      "archive_intent_path": "supabase/migrations_archive/202604210001_utv2_704_mlb_1st_inning_market_types.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604210002",
+      "remote_name": "utv2_701_ncaab_period_half_market_types",
+      "receipt_file": "202604210002_utv2_701_ncaab_period_half_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210002_utv2_701_ncaab_period_half_market_types.sql",
+      "source_sha256": "f29e53f8c7f05d45f79f1e5aa9fdaf5335d3bfd58da827cd7c92496932666a44",
+      "archive_intent_path": "supabase/migrations_archive/202604210002_utv2_701_ncaab_period_half_market_types.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604210003",
+      "remote_name": "utv2_705_mlb_underscore_player_prop_aliases",
+      "receipt_file": "202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql",
+      "source_sha256": "4fdfe9d66d9ab610fb2ac92796b7e0afd06a71d1e7b0fe2724d52064f02d1809",
+      "archive_intent_path": "supabase/migrations_archive/202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604210004",
+      "remote_name": "utv2_702_ncaaf_period_half_market_types",
+      "receipt_file": "202604210004_utv2_702_ncaaf_period_half_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210004_utv2_702_ncaaf_period_half_market_types.sql",
+      "source_sha256": "02a2c438b8f398e09259081292f810a589d4c1fdbc049110096ebc51f0127b59",
+      "archive_intent_path": "supabase/migrations_archive/202604210004_utv2_702_ncaaf_period_half_market_types.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604210005",
+      "remote_name": "utv2_703_wnba_period_half_market_types",
+      "receipt_file": "202604210005_utv2_703_wnba_period_half_market_types.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210005_utv2_703_wnba_period_half_market_types.sql",
+      "source_sha256": "9e2af9bef78c2aa1493c95d449f345b88a95e5a4a6d0df53f55d11b7cbaf7c35",
+      "archive_intent_path": "supabase/migrations_archive/202604210005_utv2_703_wnba_period_half_market_types.sql",
+      "archive_diverges": true
+    },
+    {
+      "remote_version": "202604210006",
+      "remote_name": "utv2_619_fix_mlb_sport_key_mismatch",
+      "receipt_file": "202604210006_utv2_619_fix_mlb_sport_key_mismatch.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604210006_utv2_619_fix_mlb_sport_key_mismatch.sql",
+      "source_sha256": "d61de6adde08318027b1c82772a85f2a0dc0ea365dd827d239dcb0aea8a05a1d",
+      "archive_intent_path": "supabase/migrations_archive/202604210006_utv2_619_fix_mlb_sport_key_mismatch.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604230001",
+      "remote_name": "utv2_719_fix_team_external_ids_and_league",
+      "receipt_file": "202604230001_utv2_719_fix_team_external_ids_and_league.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604230001_utv2_719_fix_team_external_ids_and_league.sql",
+      "source_sha256": "06fe0382d4e8308334edd90591825429504c0ae968094fb485d6d93e8d05a2bd",
+      "archive_intent_path": "supabase/migrations_archive/202604230001_utv2_719_fix_team_external_ids_and_league.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202604230002",
+      "remote_name": null,
+      "receipt_file": "202604230002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604230002_utv2_735_experiment_ledger_shadow_comparison.sql",
+      "source_sha256": "26111da545f3919f269a63a2c44d888056f8fa10fd12a8fd582376fa6353a8e9",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260424202018",
+      "remote_name": "add_stake_units_to_settlement_records_with_trigger",
+      "receipt_file": "20260424202018_add_stake_units_to_settlement_records_with_trigger.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260424202018_add_stake_units_to_settlement_records_with_trigger.sql",
+      "source_sha256": "cc8a00300c525eb1c65ff632106bfa6eef1308d6e7dc6ed49d877752a54fd8e5",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604250001",
+      "remote_name": null,
+      "receipt_file": "202604250001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604250001_utv2_727_backfill_market_universe_closing_from_provider_offers.sql",
+      "source_sha256": "522c75e67d433f84b1e69eda462336386acc919e59d0e3d8aaeb52eed38172bb",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604250002",
+      "remote_name": null,
+      "receipt_file": "202604250002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604250002_utv2_727_sgo_replay_coverage_view.sql",
+      "source_sha256": "5dde34641dd46c39e6278216f33a661134514cf0a70c4cb4df0745b17f9f094f",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604250004",
+      "remote_name": null,
+      "receipt_file": "202604250004_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604250004_utv2_750_fix_mlb_clv_alias_mismatch.sql",
+      "source_sha256": "e2b8c20dd0a641b05d925c8ebf10b6d32935a143241eb05628a7baaf3e3ea3c9",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604250005",
+      "remote_name": null,
+      "receipt_file": "202604250005_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604250005_utv2_753_backfill_settlement_profit_loss.sql",
+      "source_sha256": "72b04aa3420cf649013a2872ba62a3466190ce0609cefc04c143ed7d44537540",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260425030626",
+      "remote_name": "utv2_727_backfill_market_universe_closing_from_provider_offers",
+      "receipt_file": "20260425030626_utv2_727_backfill_market_universe_closing_from_provider_offers.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260425030626_utv2_727_backfill_market_universe_closing_from_provider_offers.sql",
+      "source_sha256": "39cef0544fd32b0e8fa70a40aa7416b56c2d080e0c104f2487ba700d1133651f",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260425030656",
+      "remote_name": "utv2_727_sgo_replay_coverage_view",
+      "receipt_file": "20260425030656_utv2_727_sgo_replay_coverage_view.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260425030656_utv2_727_sgo_replay_coverage_view.sql",
+      "source_sha256": "d24202828742e0a0ed9bcb133256669f150f5127b180e7e4a20fc0a3b1a4fa76",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260425132920",
+      "remote_name": "utv2_753_backfill_settlement_profit_loss",
+      "receipt_file": "20260425132920_utv2_753_backfill_settlement_profit_loss.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260425132920_utv2_753_backfill_settlement_profit_loss.sql",
+      "source_sha256": "e7544e34f6d9d1be26264486b7f4d2e2c1d8817f07004bf5f4f37aebfe992338",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604270001",
+      "remote_name": null,
+      "receipt_file": "202604270001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604270001_utv2_752_fix_market_universe_canonical_key.sql",
+      "source_sha256": "38d30d2269e2509f1093ebae73f34f6d449c8d880010652f31769d0cf0a1b134",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604270002",
+      "remote_name": null,
+      "receipt_file": "202604270002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604270002_utv2_82_closing_materializer_indexes.sql",
+      "source_sha256": "7c89f2ff0177506c7a89692d5f56e68b0842664a4d25246943a1d0d04c15ce0d",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260427045252",
+      "remote_name": "202604270001_utv2_752_fix_market_universe_canonical_key",
+      "receipt_file": "20260427045252_202604270001_utv2_752_fix_market_universe_canonical_key.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260427045252_202604270001_utv2_752_fix_market_universe_canonical_key.sql",
+      "source_sha256": "c80186f472e0e32e8c9e913708a074ee17b51b40b0e87fde8ae393eb2b09139c",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260427182229",
+      "remote_name": "utv2_82_closing_materializer_indexes",
+      "receipt_file": "20260427182229_utv2_82_closing_materializer_indexes.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260427182229_utv2_82_closing_materializer_indexes.sql",
+      "source_sha256": "5ab93289aca22e178afd8606b6421c5da5e561d1bb583e9007912be48743da4a",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604280001",
+      "remote_name": "202604280001_utv2_787_provider_offer_staging_scaffold",
+      "receipt_file": "202604280001_202604280001_utv2_787_provider_offer_staging_scaffold.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604280001_utv2_787_provider_offer_staging_scaffold.sql",
+      "source_sha256": "a2def7b26c90244d29dedb1b365fe6e58bcda5bb5e2a2f6264f27ec43daf9523",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604290001",
+      "remote_name": "202604290001_utv2_797_provider_cycle_failure_taxonomy",
+      "receipt_file": "202604290001_202604290001_utv2_797_provider_cycle_failure_taxonomy.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604290001_utv2_797_provider_cycle_failure_taxonomy.sql",
+      "source_sha256": "2b4d37c76e918c2d74565b8ee0bf7415a8edf8e736b1a9ac27a8f61974380326",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604290002",
+      "remote_name": "202604290002_utv2_781_chunked_provider_offer_merge",
+      "receipt_file": "202604290002_202604290002_utv2_781_chunked_provider_offer_merge.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604290002_utv2_781_chunked_provider_offer_merge.sql",
+      "source_sha256": "5054beb47913eb4c968961deb78fa6f0fc34e84fa1e16cea72c0a1390d50d9bd",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604290003",
+      "remote_name": "202604290003_utv2_781_provider_offer_current_view",
+      "receipt_file": "202604290003_202604290003_utv2_781_provider_offer_current_view.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604290003_utv2_781_provider_offer_current_view.sql",
+      "source_sha256": "208c9f2f07d6f9ab22f24a57c9bdea1025387a630be5d4952db121b668a81dbd",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604290004",
+      "remote_name": "202604290004_utv2_781_provider_offer_current_indexes",
+      "receipt_file": "202604290004_202604290004_utv2_781_provider_offer_current_indexes.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604290004_utv2_781_provider_offer_current_indexes.sql",
+      "source_sha256": "2f18bd0e41299b251c860db9edbab0dea3fa3423fb359e22abd7746688bd2c2b",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604290005",
+      "remote_name": "202604290005_utv2_781_provider_offer_current_opening_fn",
+      "receipt_file": "202604290005_202604290005_utv2_781_provider_offer_current_opening_fn.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604290005_utv2_781_provider_offer_current_opening_fn.sql",
+      "source_sha256": "a9bc8be1a812416a8b9123405878853e0a75c9c1973ef9acc0b8c009eb9bbb87",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604291001",
+      "remote_name": null,
+      "receipt_file": "202604291001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604291001_utv2_772_bounded_provider_offers_retention.sql",
+      "source_sha256": "fb244bbd2c7081eb67a33926089c33c0d11cb3e86c59aae1f5cab65238475e36",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604291002",
+      "remote_name": null,
+      "receipt_file": "202604291002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604291002_utv2_772_provider_offer_history_partitioning.sql",
+      "source_sha256": "189453df8dfd86378e70ca4dc448b14b68f88c45e0f9f63f85352b54cffab749",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604291003",
+      "remote_name": null,
+      "receipt_file": "202604291003_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202604291003_utv2_772_provider_offer_current_table_cutover.sql",
+      "source_sha256": "ab70ea232b9176fd48f5a10e85dd36d9faf4d795d63d68224b9a02f6dc9d7482",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202604300003",
+      "remote_name": "utv2_803_pick_offer_snapshots_posting_kind",
+      "receipt_file": "202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql",
+      "source_sha256": "c08fa1acbc69f63e3f7c3d21649fbadecd44f4a7b353b3a65cabcf9235ebb497",
+      "archive_intent_path": "supabase/migrations_archive/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql",
+      "archive_diverges": false
+    },
+    {
+      "remote_version": "202605020001",
+      "remote_name": null,
+      "receipt_file": "202605020001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605020001_utv2_725_pick_candidates_sport_key.sql",
+      "source_sha256": "fbfaac2ca7e61dcb3f9219235b63592beef0104493b566d0ec064a4c13e896d4",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605020002",
+      "remote_name": null,
+      "receipt_file": "202605020002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605020002_utv2_725_backfill_pick_candidates_pick_id.sql",
+      "source_sha256": "04ec103f109850b05146d5d96f432e9ae1159037288051b8ffc5eb79df76cbe4",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605030001",
+      "remote_name": null,
+      "receipt_file": "202605030001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605030001_utv2_772_provider_offer_history_partition_retention.sql",
+      "source_sha256": "1b58a58fdf7586872f8ae00324ab86b8d226e116701d0a2955082740007b2e9e",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605030002",
+      "remote_name": null,
+      "receipt_file": "202605030002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+      "source_sha256": "99713abd7a3df91d4ebfb06ca35bc18e785f7b1cc177864d48ca1dc97929e0a6",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605070001",
+      "remote_name": null,
+      "receipt_file": "202605070001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605070001_utv2_845_stake_units_integrity_guard.sql",
+      "source_sha256": "75da1e643543ac5db33806479bcb86c34dfde333f05c19588634d9907355c49c",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605070002",
+      "remote_name": null,
+      "receipt_file": "202605070002_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605070002_utv2_854_model_ownership_persistence.sql",
+      "source_sha256": "86faed1630d222308f6e595a6db7c35a0821bb7c8dc40bd77633e71a10871291",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "202605090001",
+      "remote_name": null,
+      "receipt_file": "202605090001_unnamed_remote_migration.sql",
+      "source_kind": "archive_fallback",
+      "source_path": "supabase/migrations_archive/202605090001_utv2_862_cron_fix_partition_lifecycle.sql",
+      "source_sha256": "c54977c85e947dabf29ff2122ca9daa0cf4727f6535aae756d7dce868da53fbd",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260509160906",
+      "remote_name": "202605090001_utv2_862_cron_fix_partition_lifecycle",
+      "receipt_file": "20260509160906_202605090001_utv2_862_cron_fix_partition_lifecycle.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260509160906_202605090001_utv2_862_cron_fix_partition_lifecycle.sql",
+      "source_sha256": "121629cd7e411c5fd290337b1d97b0dcbe38e8496005fdc14175b3dcdfd546ba",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260512054225",
+      "remote_name": "utv2_883_link_market_universe_participant_ids",
+      "receipt_file": "20260512054225_utv2_883_link_market_universe_participant_ids.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260512054225_utv2_883_link_market_universe_participant_ids.sql",
+      "source_sha256": "31a95b5b1f716f0f359341900f8e93e0c427e12bca386d933660b3cc059bed93",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260514215742",
+      "remote_name": "202605140001_utv2_912_market_type_id_alias_backfill",
+      "receipt_file": "20260514215742_202605140001_utv2_912_market_type_id_alias_backfill.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260514215742_202605140001_utv2_912_market_type_id_alias_backfill.sql",
+      "source_sha256": "c978569a3a984c5969bb6d6208dad84622d5ba95c87aef69ef42930f82ce33d1",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260517172650",
+      "remote_name": "add_provider_offer_history_partitions_may_jun_2026",
+      "receipt_file": "20260517172650_add_provider_offer_history_partitions_may_jun_2026.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260517172650_add_provider_offer_history_partitions_may_jun_2026.sql",
+      "source_sha256": "0515047f85d233aeb4c4806f72db769ff781d7dab952a477c8b165be8fe7a7e6",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260523190446",
+      "remote_name": "utv2_1084_raw_payload_store",
+      "receipt_file": "20260523190446_utv2_1084_raw_payload_store.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260523190446_utv2_1084_raw_payload_store.sql",
+      "source_sha256": "302a03955fb2496be62e6f9b92d3c4464ba5a0d82411c966f3c6078b2e329375",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260523223150",
+      "remote_name": "utv2_1085_odds_snapshots",
+      "receipt_file": "20260523223150_utv2_1085_odds_snapshots.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260523223150_utv2_1085_odds_snapshots.sql",
+      "source_sha256": "08f374586624762f7ac6b8dee091954c1cd1c1f30dacb5b231de1fd47436260b",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260524163253",
+      "remote_name": "utv2_1086_snapshot_cutover",
+      "receipt_file": "20260524163253_utv2_1086_snapshot_cutover.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260524163253_utv2_1086_snapshot_cutover.sql",
+      "source_sha256": "3377fb11fa1b0b6414ecece5ba94364d585552ed45599717a96df26dcbf378cb",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260526162305",
+      "remote_name": "utv2_1096_certification_records",
+      "receipt_file": "20260526162305_utv2_1096_certification_records.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260526162305_utv2_1096_certification_records.sql",
+      "source_sha256": "476410b6215a6fda9e9c9d676d4626dd976036557662582f086f44daacd9cfa4",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260528025417",
+      "remote_name": "utv2_1107_picks_fsm_trigger",
+      "receipt_file": "20260528025417_utv2_1107_picks_fsm_trigger.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260528025417_utv2_1107_picks_fsm_trigger.sql",
+      "source_sha256": "e574c0137dc77ca3975518e4f98d2aa305a12ec8e69a528acea03a0a1736f6b8",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260530072345",
+      "remote_name": "utv2_1132_execution_intents",
+      "receipt_file": "20260530072345_utv2_1132_execution_intents.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260530072345_utv2_1132_execution_intents.sql",
+      "source_sha256": "1b9f3d77dc6e8f6528d4cbf8e3c6e89922f30f15904fb68b39b91b2146198c03",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260530230230",
+      "remote_name": "20260530002_utv2_1136_settlement_records_immutability_trigger",
+      "receipt_file": "20260530230230_20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260530230230_20260530002_utv2_1136_settlement_records_immutability_trigger.sql",
+      "source_sha256": "75024a26641c807c622a7c87feabfb641b3397bf5f58ea1a22dd78ecc7b9263d",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260531090921",
+      "remote_name": "utv2_1137_settlement_corrections",
+      "receipt_file": "20260531090921_utv2_1137_settlement_corrections.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260531090921_utv2_1137_settlement_corrections.sql",
+      "source_sha256": "342a72a4da15ae2d305d3778d03a1711ef67ea56f5c7c72ccbc97f6f42f5a509",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260604121540",
+      "remote_name": "utv2_1116_immutable_model_version_artifact_sha",
+      "receipt_file": "20260604121540_utv2_1116_immutable_model_version_artifact_sha.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260604121540_utv2_1116_immutable_model_version_artifact_sha.sql",
+      "source_sha256": "318a23a4f1d79ae16ecaf8256e5d42a9fe938e6410615407c5cc8fbb009d88f0",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260605125112",
+      "remote_name": "utv2_1205_market_universe_fair_prob_constraint",
+      "receipt_file": "20260605125112_utv2_1205_market_universe_fair_prob_constraint.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260605125112_utv2_1205_market_universe_fair_prob_constraint.sql",
+      "source_sha256": "2c4fbea00c4f8b9447a88011387bb705c0aad704537627f6ba508c9a25044f5f",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260609164544",
+      "remote_name": "20260609001_utv2_1244_provider_offer_history_event_snapshot_index",
+      "receipt_file": "20260609164544_20260609001_utv2_1244_provider_offer_history_event_snapshot_index.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260609164544_20260609001_utv2_1244_provider_offer_history_event_snapshot_index.sql",
+      "source_sha256": "eca33069cd23ef8c723fc8ca5c0ae76d9afd394749ad592da9608c7824008649",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260714203644",
+      "remote_name": "20260714120000_add_delivery_kill_switch",
+      "receipt_file": "20260714203644_20260714120000_add_delivery_kill_switch.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260714203644_20260714120000_add_delivery_kill_switch.sql",
+      "source_sha256": "07347b08a596dc904b484a97c61281160802733c996cdfeab086758c3212142e",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260714231357",
+      "remote_name": "20260714130000_bootstrap_delivery_kill_switch_posture",
+      "receipt_file": "20260714231357_20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260714231357_20260714130000_bootstrap_delivery_kill_switch_posture.sql",
+      "source_sha256": "b7338e7dba8b495cb83c6071308de7f08bf826198a175e581ed2e5c17289668b",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260801134241",
+      "remote_name": "utv2_1399_fixture_excluding_reporting_views",
+      "receipt_file": "20260801134241_utv2_1399_fixture_excluding_reporting_views.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260801134241_utv2_1399_fixture_excluding_reporting_views.sql",
+      "source_sha256": "8e5d6eb40ef985ac2eb403d4bbaa1f73d651c4d4396126a7d4dd745c7e1ed11a",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260801134256",
+      "remote_name": "utv2_1633_reporting_reader_role",
+      "receipt_file": "20260801134256_utv2_1633_reporting_reader_role.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260801134256_utv2_1633_reporting_reader_role.sql",
+      "source_sha256": "c11fb041196f9a597ac3873d3de0f5640c00eeb15b6c4ea5a50b61c4b3c283d6",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    },
+    {
+      "remote_version": "20260801222906",
+      "remote_name": "utv2_1640_system_runs_autovacuum_tuning",
+      "receipt_file": "20260801222906_utv2_1640_system_runs_autovacuum_tuning.sql",
+      "source_kind": "ledger_payload",
+      "source_path": "supabase/migrations_archive/ledger/20260801222906_utv2_1640_system_runs_autovacuum_tuning.sql",
+      "source_sha256": "9c76b38b0b0b8a84a6c4205b0889623c2eb63f8765d052dd34031c3f96cd117f",
+      "archive_intent_path": null,
+      "archive_diverges": null
+    }
+  ]
+}

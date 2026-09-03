@@ -49,6 +49,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { isNonExecutableReceipt } from './migration-history-receipt.ts';
 
 /** Anchored: prose that merely mentions the marker must not count as declaring it. */
 const PRECONDITION_MARKER = /^[ \t]*--[ \t]*FAIL-CLOSED-PRECONDITION:[ \t]*(.+)$/im;
@@ -144,6 +145,30 @@ function snapshotSchema(dsn: string): string {
 
 export function runDrill(dsn: string, migrationPath: string): DrillCase[] {
   const sqlText = readFileSync(migrationPath, 'utf8');
+
+  // UTV2-1822: a fail-closed precondition guards the moment a migration would create an
+  // object that already exists. A non-executable historical version receipt creates
+  // nothing and runs no statement, so there is no such moment and no guard it could
+  // meaningfully declare -- the drill's own refusal test (seed a decoy relation, then
+  // require the migration to abort) has nothing to exercise.
+  //
+  // Reported as a pass rather than skipped silently, and named in the output, so the
+  // caller's "a run that drilled nothing is not a pass" backstop still sees a real
+  // result for every file it counted. The exemption reads the file's actual contents:
+  // a receipt that gains an executable statement stops qualifying here and is put back
+  // through the ordinary declaration requirement below.
+  if (isNonExecutableReceipt(migrationPath)) {
+    return [
+      {
+        name: 'declaration',
+        status: 'pass',
+        detail:
+          `${migrationPath} is a verified non-executable historical version receipt ` +
+          '(UTV2-1822): it executes no statement, so it has no fail-closed precondition to drill.',
+      },
+    ];
+  }
+
   const relations = parseDeclaredRelations(sqlText);
   const cases: DrillCase[] = [];
 

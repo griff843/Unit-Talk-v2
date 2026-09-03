@@ -20,6 +20,7 @@ import {
   ModelRoutingRebindError,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
+  rebindVerificationMdSha,
   safeRepoPath,
   type ShaRebindOutcome,
 } from './proof-generate.js';
@@ -1060,6 +1061,12 @@ export function ensureAttestedPrHeadAvailable(
 interface ActiveStaticReattestationCandidate {
   evidencePath: string;
   verificationPath: string;
+  /**
+   * `docs/06_status/proof/<ID>/diff-summary.md` when the bundle ships one, else
+   * null. Unlike the two canonical artifacts it is optional: a bundle without
+   * one is well-formed and must rebind exactly as before.
+   */
+  diffSummaryPath: string | null;
   executionSha: string | null;
   needsStructuralRepair: boolean;
 }
@@ -1116,9 +1123,11 @@ function activeStaticReattestationCandidate(
   const executionSha = typeof (binding as Record<string, unknown>)['verified_source_sha'] === 'string'
     ? (binding as Record<string, unknown>)['verified_source_sha'] as string
     : null;
+  const diffSummaryPath = safeRepoPath(repoRoot, path.posix.join(proofRoot, 'diff-summary.md'));
   return {
     evidencePath,
     verificationPath,
+    diffSummaryPath: fs.existsSync(diffSummaryPath) ? diffSummaryPath : null,
     executionSha,
     needsStructuralRepair: malformedGeneratorShape || legacySectionOnlyShape,
   };
@@ -1249,8 +1258,73 @@ export function rebindRepairedLaneProof(
       path: checksum.file,
       status: checksum.changed ? 'updated' : 'unchanged',
     }));
+    // UTV2-1828: `rebindProofBundle` covers exactly evidence.json and
+    // verification.md, but `ops:truth-check` P3 ("proof files missing merge SHA
+    // reference") and C4 ("proof artifacts missing required SHA binding") scan
+    // the whole proof directory. A bundle shipping a diff-summary.md therefore
+    // merged with a correct manifest, passed every other gate, and died at
+    // closeout on those two -- with no in-repo path to fix it, because
+    // post-merge-lane-close.yml skips ops:proof-generate entirely on
+    // workflow_dispatch and delegates binding to exactly this function.
+    //
+    // The strict planner is deliberately NOT reused here: it requires a
+    // `## Merge SHA Binding` section, which a canonically generated
+    // diff-summary.md (proof-generate.ts buildDiffSummary) does not have. The
+    // tolerant markdown rebinder handles both that shape and the hand-authored
+    // `MERGE_SHA:` one.
+    if (structuralCandidate!.diffSummaryPath) {
+      const diffSummaryRel = path
+        .relative(repoRoot, structuralCandidate!.diffSummaryPath)
+        .split(path.sep)
+        .join(path.posix.sep);
+      outcomes.push(
+        rebindVerificationMdSha(structuralCandidate!.diffSummaryPath, mergeSha, manifest.pr_url, {
+          write: true,
+          relPath: diffSummaryRel,
+        }),
+      );
+      // Fail closed rather than report a partial rebind as a complete one. The
+      // tolerant rebinder returns `unchanged` both when the file already names
+      // the merge SHA and when it carries no bindable anchor at all; only
+      // reading the result back distinguishes them, and the second case is
+      // precisely what leaves the lane unclosable at P3/C4.
+      if (!fs.readFileSync(structuralCandidate!.diffSummaryPath, 'utf8').includes(mergeSha)) {
+        throw new Error(
+          `Merged-PR proof re-attestation refused: ${diffSummaryRel} still does not reference the ` +
+            `merge SHA ${mergeSha} after rebinding. It carries no bindable merge-SHA anchor, so ` +
+            'truth-check P3/C4 would fail after merge. Add a `MERGE_SHA:` or `Merge SHA:` line ' +
+            'through the governed repair path rather than closing on a partial rebind.',
+        );
+      }
+    }
   } else {
     outcomes = rebindMergeSha(repoRoot, manifest.issue_id, mergeSha, generatedAt, manifest.pr_url);
+    // Same P3/C4 coverage gap on the tolerant path. `rebindMergeSha` lives in
+    // scripts/ops/proof-generate.ts and lists the same two artifacts; that file
+    // is inside UTV2-1825's active file scope lock (PR #1485, open), so the
+    // list is extended from this call site instead of edited there.
+    //
+    // No fail-closed read-back here, unlike the attested branch above: this
+    // path deliberately serves historical, profileless and optional bundles
+    // whose shape predates the anchor requirement, and refusing them would
+    // block closeouts that succeed today. A bundle that genuinely carries no
+    // anchor still fails loudly, at truth-check P3/C4, rather than silently.
+    if (mergeSha) {
+      // Uppercased to match rebindMergeSha's own proofRoot resolution.
+      const diffSummaryRel = path.posix.join(
+        'docs',
+        '06_status',
+        'proof',
+        manifest.issue_id.toUpperCase(),
+        'diff-summary.md',
+      );
+      outcomes.push(
+        rebindVerificationMdSha(safeRepoPath(repoRoot, diffSummaryRel), mergeSha, manifest.pr_url, {
+          write: true,
+          relPath: diffSummaryRel,
+        }),
+      );
+    }
   }
 
   if (mergeSha) {
