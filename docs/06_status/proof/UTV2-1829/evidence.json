@@ -7,8 +7,8 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b7f0179e4ad3d20dcfc6872caca2ebb780b36806",
-    "evidence_commit_sha": "b7f0179e4ad3d20dcfc6872caca2ebb780b36806",
+    "verified_source_sha": "13a69aa221abe863aa545c8551c2ff6550bddfd9",
+    "evidence_commit_sha": "13a69aa221abe863aa545c8551c2ff6550bddfd9",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
@@ -42,42 +42,42 @@
     },
     "scope_controls": [
       {
-        "assertion": "A1 — no file changed outside CLAUDE.md, AGENTS.md, docs/mission/** or this lane's own control-plane paths",
+        "assertion": "A1 \u2014 no file changed outside CLAUDE.md, AGENTS.md, docs/mission/** or this lane's own control-plane paths",
         "command": "git diff --name-only origin/main..HEAD | grep -vE '^(CLAUDE\\.md|AGENTS\\.md|docs/mission/|\\.ops/sync/UTV2-1829\\.yml$|docs/06_status/lanes/UTV2-1829\\.json$|docs/06_status/proof/UTV2-1829/)'",
         "expected": "no output",
         "observed": "no output",
         "status": "PASS"
       },
       {
-        "assertion": "A2 — nothing from #1491/#1492 rides along: no workflow, hook, agent, script, eslint or package.json change",
+        "assertion": "A2 \u2014 nothing from #1491/#1492 rides along: no workflow, hook, agent, script, eslint or package.json change",
         "command": "git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|\\.agents/|scripts/|eslint\\.config|package\\.json)'",
         "expected": "0",
         "observed": "0",
         "status": "PASS"
       },
       {
-        "assertion": "A3 — CLAUDE.md and AGENTS.md are pure insertions; no existing instruction altered",
+        "assertion": "A3 \u2014 CLAUDE.md and AGENTS.md are pure insertions; no existing instruction altered",
         "command": "git diff --numstat origin/main..HEAD -- CLAUDE.md AGENTS.md",
         "expected": "deletion column 0 on both",
         "observed": "21\t0\tCLAUDE.md / 18\t0\tAGENTS.md",
         "status": "PASS"
       },
       {
-        "assertion": "A4 — every repo path spec.md references exists on main",
+        "assertion": "A4 \u2014 every repo path spec.md references exists on main",
         "command": "for p in $(grep -oE '`(docs/[A-Za-z0-9_/.-]+\\.(md|json)|packages/db/src/database\\.types\\.ts|\\.github/workflows/merge-gate\\.yml)`' docs/mission/spec.md | tr -d '`' | sort -u); do [ -f \"$p\" ] || echo \"MISSING: $p\"; done",
         "expected": "no MISSING lines",
         "observed": "47 paths checked, 0 missing",
         "status": "PASS"
       },
       {
-        "assertion": "A5 — spec.md introduces no competing readiness threshold",
+        "assertion": "A5 \u2014 spec.md introduces no competing readiness threshold",
         "command": "grep -nE '[0-9]+(\\.[0-9]+)?\\s*%|>=\\s*[0-9]|threshold of [0-9]' docs/mission/spec.md",
         "expected": "no match",
         "observed": "no match",
         "status": "PASS"
       },
       {
-        "assertion": "A6 — no R-level artifacts required for this diff",
+        "assertion": "A6 \u2014 no R-level artifacts required for this diff",
         "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
         "expected": "PASS",
         "observed": "Verdict: PASS; changed files 8; rules matched: none",

@@ -12,7 +12,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: b7f0179e4ad3d20dcfc6872caca2ebb780b36806
+Head SHA: 13a69aa221abe863aa545c8551c2ff6550bddfd9
 result: pass
 
 ## ASSERTIONS:
@@ -37,13 +37,23 @@ result: pass
       PASS, rules matched: none.
 - [x] **A7 — `main` was not modified.** The change reached `main` only as PR #1499 from
       the lane branch; the control checkout carries no commit.
+- [x] **A8 — The governance lane's path contract does not admit `docs/mission/**`, and this
+      lane did not widen it.** `.lane/lanes/governance.yml` enumerates every docs subtree a
+      governance lane may touch; `docs/mission/**` is in none of them, so `lane:check` fails
+      on `intent.md`, `spec.md` and `plan.md` (measured below). The file that would fix it is
+      outside this lane's pinned `file_scope_lock`, and widening that lock requires a
+      `scope-override/v1` comment from a CODEOWNERS human. Measured: 0 changes to
+      `.lane/**`. `Lane authority` and `Return review packet` are consequently red on PR
+      #1499. Neither is in `main`'s required-check set, so the PR is mechanically mergeable
+      with both red — that is a fact about the gates, not an authorization. Falsifies if any
+      `.lane/**` file appears in the diff.
 
 ## EVIDENCE:
 
 ```
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
-Changed files: 8
+Changed files: 10
 Rules matched: (none) — no R-level artifacts required for this diff
 
 $ git diff --name-only origin/main..HEAD | grep -vE '^(CLAUDE\.md|AGENTS\.md|docs/mission/|\.ops/sync/UTV2-1829\.yml$|docs/06_status/lanes/UTV2-1829\.json$|docs/06_status/proof/UTV2-1829/)'
@@ -61,6 +71,12 @@ spec.md referenced repo paths: 47 checked, 0 missing
 
 $ grep -nE '[0-9]+(\.[0-9]+)?\s*%|>=\s*[0-9]|threshold of [0-9]' docs/mission/spec.md
 (none)
+
+$ pnpm exec tsx scripts/lane-check.ts --lane governance --base origin/main --head HEAD
+lane:check FAIL lane=governance
+- outside_allowed_paths: docs/mission/intent.md is outside allowed paths for lane governance
+- outside_allowed_paths: docs/mission/plan.md is outside allowed paths for lane governance
+- outside_allowed_paths: docs/mission/spec.md is outside allowed paths for lane governance
 
 $ pnpm ops:preflight UTV2-1829 --branch claude/utv2-1829-mission-context --tier T2 --refresh --files CLAUDE.md --files AGENTS.md --files 'docs/mission/**'
 VERDICT: PASS (38 checks)
@@ -107,4 +123,4 @@ should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: b7f0179e4ad3d20dcfc6872caca2ebb780b36806
+Execution SHA: 13a69aa221abe863aa545c8551c2ff6550bddfd9
