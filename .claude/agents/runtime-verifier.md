@@ -41,13 +41,15 @@ the merge commit SHA instead and say which you used.
 Classify the diff with the same policy the merge gate uses — never by your own path list:
 
 ```bash
-node -e '
-  const { loadPolicy, classifyDiff } = require("./scripts/ops/merge-authority.cjs");
-  const files = process.argv.slice(1).map((filename) => ({ filename, patch: "" }));
-  const r = classifyDiff({ files, policy: loadPolicy(process.cwd()) });
-  console.log(r.authority, JSON.stringify(r.surfaces));
-' $(gh pr diff {PR} --name-only)
+git fetch origin "pull/{PR}/head:pr-{PR}" && git fetch origin main
+pnpm ops:classify-diff --base origin/main --head "pr-{PR}"
 ```
+
+This runs the same classifier the Merge Gate runs, over the real patch content. **Do not**
+hand-roll it with `patch: ""` — content rules (destructive SQL, a repointed required-check
+script) live in the patch, so an empty patch reports `auto` for a diff the gate reserves.
+`ops:classify-diff` is a preview: the blocking decision is still the Merge Gate's, made from
+GitHub's own changed-file list against the PR's base checkout.
 
 Report the authority and surfaces. They decide the evidence bar below, and nothing else does.
 
@@ -68,9 +70,16 @@ explicitly that it is advisory.
 
 ## Step 3: live-DB evidence, when the diff earns it
 
-Required only when the diff touches a DB read/write path — a change under `packages/db/`,
-`supabase/`, or a repository/lifecycle module — or when Step 1 returned the
-`production-ddl-and-data` surface.
+Required when the diff touches a DB read/write path, or when Step 1 returned the
+`production-ddl-and-data` surface. DB read/write paths are:
+
+- `packages/db/**`
+- `supabase/**`
+- any repository or lifecycle module (`lifecycle.ts`, `repositories.ts`, `runtime-repositories.ts`)
+- **`apps/api/src/*-service.ts`** — these write to the database directly
+  (`submission-service.ts` is the canonical case). Omitting them was a real gap: a service
+  that writes rows would otherwise report live-DB evidence as "not applicable".
+- `apps/worker/**` — delivery writes a `DeliveryOutcome` per attempt
 
 ```bash
 gh run list --commit {headRefOid} --limit 10

@@ -32,13 +32,15 @@ gh pr diff {PR} --name-only
 ```
 
 ```bash
-node -e '
-  const { loadPolicy, classifyDiff } = require("./scripts/ops/merge-authority.cjs");
-  const files = process.argv.slice(1).map((filename) => ({ filename, patch: "" }));
-  const r = classifyDiff({ files, policy: loadPolicy(process.cwd()) });
-  console.log(JSON.stringify(r, null, 2));
-' $(gh pr diff {PR} --name-only)
+git fetch origin "pull/{PR}/head:pr-{PR}" && git fetch origin main
+pnpm ops:classify-diff --base origin/main --head "pr-{PR}"
 ```
+
+This runs the same classifier the Merge Gate runs, over the real patch content. **Do not**
+hand-roll it with `patch: ""` — content rules (destructive SQL, a repointed required-check
+script) live in the patch, so an empty patch reports `auto` for a diff the gate reserves.
+`ops:classify-diff` is a preview: the blocking decision is still the Merge Gate's, made from
+GitHub's own changed-file list against the PR's base checkout.
 
 This is `docs/05_operations/RESERVED_RISK_SURFACES.json` — the same policy the Merge Gate
 uses. Its `authority` and `surfaces` are Dimension 1. Do not substitute your own path list,

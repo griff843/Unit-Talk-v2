@@ -237,8 +237,15 @@ If QA Agent returns FAIL: Claude investigates. If the same surface fails 2× →
 Stop and request PM presence when any of the following apply:
 
 **Mandatory gates:**
-- Before implementing anything that will classify `human` — the plan, not just the merge
 - Before merging any `human`-classified diff
+
+Reserved work is **implemented and opened as a PR like any other**. Griff's approval gates
+the MERGE, not the keyboard. Stopping a declared-reserved packet before implementation
+restores the plan-approval gate RMA/v1 removed, and strands every reserved packet before
+either executor can prepare the change. Escalate before implementation only when an
+always-escalate condition below applies, or when the packet does NOT declare the reserved
+surface it turns out to need — an undeclared reserved touch is a packet defect, and the
+packet is what needs fixing.
 
 An `auto`-classified merge is **not** a Rule 9 stop condition: per `merge-gate.yml` (RMA/v1)
 a diff touching no reserved surface is authorized on green CI. Escalate one only if an

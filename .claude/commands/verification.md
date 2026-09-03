@@ -91,17 +91,33 @@ required for ordinary work. When a bundle exists it must still be true — see `
 ## PM verdict format (required only for a `human`-classified diff)
 
 A reserved diff needs both the `griff-approved` label and this comment; neither alone is sufficient,
-and the comment must bind the current head SHA. An `auto` diff needs no verdict at all. When posting
-a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
+and the comment must bind the current head SHA. An `auto` diff needs no verdict at all.
+
+Post exactly this — all five lines. The first three are positional (`PM_VERDICT`, `schema`,
+`Issue`); `PR:` and `Head SHA:` may appear anywhere below them, but **both are required** —
+`validateT1Verdicts()` rejects a verdict missing either, so a three-line comment parses and is
+then thrown away:
 
 ```
 PM_VERDICT: APPROVED
 schema: pm-verdict/v1
-Issue: UTV2-NNN
+Issue: PR-1492
+PR: #1492
+Head SHA: <the exact 40-character head SHA you reviewed>
 ```
 
-Replace `APPROVED` with `CHANGES_REQUIRED` to block. The `Issue:` line is required by the parser
-(minimum 3 lines, `Issue:` on line 3); where no issue exists, the PR number is the identifier.
+Replace `APPROVED` with `CHANGES_REQUIRED` to block.
+
+**The `Issue:` identifier.** Mission-native work has no Linear issue, so use `PR-<number>`.
+The field is constrained, not free text: `none`, `mission-native` and a bare number are all
+refused. `UTV2-###` / `UNI-###` still parse, for work that does have an issue.
+
+**One exception, until RMA/v1 is on `main`.** Merge Gate loads the parser from the PR's BASE
+checkout. Until the ticketless form is merged, a PR based on `main` is judged by the old
+parser, which accepts only `UTV2-###` / `UNI-###`. For those, use an existing issue id — the
+parser pattern-matches the field and never checks that the identifier exists. Check which
+applies by reading `parseVerdict` in `scripts/ops/merge-gate-verdict.cjs` on the PR's base.
+
 Full schema: `docs/05_operations/schemas/pm-verdict-v1.md`.
 
 ---

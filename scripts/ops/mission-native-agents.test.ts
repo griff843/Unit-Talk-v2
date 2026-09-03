@@ -85,6 +85,61 @@ for (const rel of ACTIVE) {
   });
 }
 
+test('classification uses the real patch, never an empty one', () => {
+  // A content rule -- destructive SQL, a repointed required-check script --
+  // lives in the PATCH. Handing the classifier `patch: ""` reports `auto` for
+  // a diff the Merge Gate reserves, which is the most dangerous possible
+  // wrong answer for a review aid to give.
+  for (const rel of ['.claude/agents/pr-risk-reviewer.md', '.claude/agents/runtime-verifier.md']) {
+    const source = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+    assert.ok(
+      !/patch:\s*""/.test(source.replace(/hand-roll it with `patch: ""`[^\n]*/g, '')),
+      `${rel} classifies with an empty patch, so content rules are invisible to it`,
+    );
+    assert.ok(
+      source.includes('ops:classify-diff'),
+      `${rel} must classify through ops:classify-diff, which carries the real patch`,
+    );
+  }
+});
+
+test('the DB-evidence trigger covers API services that write rows', () => {
+  const source = fs.readFileSync(path.join(ROOT, '.claude/agents/runtime-verifier.md'), 'utf8');
+  for (const trigger of ['apps/api/src/*-service.ts', 'packages/db/', 'supabase/', 'apps/worker/']) {
+    assert.ok(source.includes(trigger), `runtime-verifier omits ${trigger} from the DB-evidence trigger`);
+  }
+});
+
+test('reserved work is gated at the merge, not at the keyboard', () => {
+  // Stopping a declared-reserved packet before implementation restores the
+  // plan-approval gate RMA/v1 removed, and strands every reserved packet.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/three-brain.md'), 'utf8');
+  assert.ok(
+    !/Before implementing anything that will classify `human`/.test(source),
+    'three-brain still stops reserved work before implementation',
+  );
+  assert.ok(
+    /gates\s+the MERGE, not the keyboard/.test(source),
+    'three-brain must say plainly that approval gates the merge',
+  );
+});
+
+test('the documented PM verdict template is one the gate accepts', () => {
+  // validateT1Verdicts rejects a verdict missing PR: or Head SHA:, so a
+  // three-line template parses and is then thrown away -- the operator follows
+  // the documented procedure and the reserved merge still has no exit.
+  const source = fs.readFileSync(path.join(ROOT, '.claude/commands/verification.md'), 'utf8');
+  const template = source.match(/```\nPM_VERDICT:[\s\S]*?```/);
+  assert.ok(template, 'verification.md must publish a PM verdict template');
+  for (const field of ['PM_VERDICT:', 'schema: pm-verdict/v1', 'Issue:', 'PR:', 'Head SHA:']) {
+    assert.ok(template![0].includes(field), `the published template omits ${field}`);
+  }
+  assert.ok(
+    !/Issue: UTV2-NNN/.test(template![0]),
+    'the template must not tell an operator to invent a Linear issue id',
+  );
+});
+
 test('the reserved-surface policy is the source of risk, not a hand-kept path table', () => {
   // The old Tier C table and the policy deliberately disagree now:
   // packages/domain and packages/contracts are NOT reserved. A reviewer that
