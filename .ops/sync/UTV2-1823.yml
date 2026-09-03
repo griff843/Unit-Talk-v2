@@ -1,0 +1,300 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1823
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1823
+  objective: |-
+    Authenticate `GET /api/picks/{id}/trace` so canonical pick truth is not readable by an anonymous caller on the public API hostname.
+    PM disposition (2026-09-02): **treat this as an authentication / data-exposure security change even though the mechanical lane type is** `runtime`**. Claude only — do not route to Codex.** PM plan approval and PM merge approval are both required.
+    This is child A2 of the Command Center pilot wave under [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative). It is the only lane authorized to start from that packet right now. A1 (production deployment wiring) and Child B (Track Only operator evidence) are NOT authorized to start.
+    ---
+  acceptance_criteria:
+    - Anonymous `GET /api/picks/<valid-id>/trace` returns **401** with the
+      standard `UNAUTHORIZED` error body and **zero** pick data — no metadata,
+      no outbox row, no audit entry, no field of the record in any form.
+    - "Authenticated request with a valid operator/service credential returns
+      the **unchanged 200 payload** (byte-compatible shape: `pick`,
+      `submissionEvents`, `promotionHistory`, `outboxEntries`,
+      `distributionReceipts`, `settlementRecords`, `auditLogEntries`,
+      `lifecycleEvents`)."
+    - Authenticated request for an **unknown** pick id still returns **404**
+      `PICK_NOT_FOUND` — authentication failure and not-found remain
+      distinguishable, and 404 is never used to mask a 401 or vice versa.
+    - No other route's auth behaviour changes. `POST` routes and
+      `/api/discord/kill-switch` behave exactly as before; every other
+      currently-public GET keeps its current status unless explicitly
+      dispositioned in this issue.
+    - "`/api/picks/{id}/routing-preview` and `/api/picks/{id}/promotion-preview`
+      are explicitly dispositioned in the proof: either gated in this same pass,
+      or documented with the reason they remain public. Silence is not an
+      acceptable outcome for either."
+    - "No consumer regression: Command Center does not call `/trace` (verified —
+      it reads Supabase directly), so no operator surface breaks. Any other
+      in-repo caller found during implementation must be reported before the
+      change lands."
+    - ---
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Verified defect (against origin/main @ c26257b4, 2026-09-02)
+
+      `apps/api/src/server.ts:604` is the API's only auth gate:
+
+
+      ```
+
+      if (method === 'POST' || url.pathname === '/api/discord/kill-switch') {
+
+      ```
+
+
+      Every GET route declared above that line is unauthenticated. `GET
+      /api/picks/{id}/trace` (`server.ts:511-527` → `handleTracePickRoute` →
+      `tracePickController`) is one of them, and it returns:
+
+
+      * the full `PickRecord` including `metadata` (which carries
+      `distributionMode`, `submittedBy`, `eventId`, promotion scores),
+
+      * `submissionEvents`, `promotionHistory`,
+
+      * `outboxEntries` and `distributionReceipts` (delivery targets and
+      external IDs),
+
+      * `settlementRecords`,
+
+      * `auditLogEntries`,
+
+      * `lifecycleEvents`.
+
+
+      Anyone who knows or guesses a pick UUID can read all of it over the public
+      Caddy-terminated API hostname. UTV2-1427 already established the governing
+      precedent in the same predicate: the kill-switch **GET** was gated because
+      "its response reveals staff-only operational state ... not public delivery
+      truth". A pick's full lifecycle, audit trail and delivery receipts are
+      staff-only operational state by the same standard.
+
+
+      This must close **before** Griff submits the first real Smart Form Track
+      Only pilot pick, because the pilot creates exactly the record this route
+      exposes.
+
+
+      ---
+    - >-
+      Scope (bounded)
+
+      Allowed:
+
+
+      * `apps/api/src/server.ts` — the auth gate predicate only
+
+      * one test file asserting the new behaviour (extend
+      `apps/api/src/server.test.ts` or add a focused sibling test)
+
+      * this lane's own artifacts: `.ops/sync/<ID>.yml`,
+      `docs/06_status/lanes/<ID>.json`, `docs/06_status/proof/<ID>/**`
+
+
+      Prohibited:
+
+
+      * `apps/api/src/auth.ts` **must not be edited.** It is a Tier C exact
+      path; `authenticateRequest` / `authorizeRoute` are sufficient as they
+      stand.
+
+      * No change to `tracePickController`, the route handlers, response shape,
+      or any repository.
+
+      * No new role, no new token type, no new env var, no change to
+      `authorizeRoute`'s role policy.
+
+      * No Command Center, deployment, contracts, DB, migration, delivery,
+      scoring or production-data change.
+
+
+      ---
+    - >-
+      Verification / mutation plan
+
+      * `pnpm verify` green on the branch and on the merge SHA.
+
+      * New test asserts all three of: 401 anonymous, 200 authenticated, 404
+      authenticated-unknown-id.
+
+      * **Mutation control (required, non-negotiable):** revert the gate
+      predicate to its pre-change form and re-run — the anonymous-401 test
+      **must fail**. A test that passes with the guard removed proves nothing
+      and does not satisfy this lane. Record the failing output verbatim in
+      `verification.md` per `/mutation-test`.
+
+      * T1 runtime proof bundle: `diff-summary.md`, `evidence.json`,
+      `verification.md`, `runtime-health.json`, plus `pnpm test:db` green
+      (run-scoped staging receipt verified inside required `verify`).
+
+      * Proof binds to the merge SHA, not branch HEAD.
+
+
+      ---
+    - >-
+      Lane classification (mechanical, not asserted)
+
+      Run 2026-09-02 via `npx tsx scripts/ops/tier-classifier.ts`:
+
+
+      ```
+
+      declared_tier: T1
+
+      mechanical_minimum: T1
+
+      derived_tier: T1
+
+      escalated: false
+
+      ```
+
+
+      * lane_type: `runtime` (`.lane/lanes/runtime.yml` admits `apps/api/**`;
+      `verification.yml` explicitly forbids `apps/api/src/**` except the DB
+      smoke test)
+
+      * executor: **Claude only** (PM directive;
+      `docs/05_operations/DELEGATION_POLICY.md:117` — security/authorization
+      posture changes are Tier C, and `:226` — a Codex lane is never authorized
+      to run Tier C work)
+
+      * runtime is a singleton lane type; no runtime lane was active at
+      admission time
+
+
+      ---
+    - |-
+      Sequencing context (PM-directed, 2026-09-02)
+      ```
+      A2 (this issue)  — start now, Claude, T1 runtime
+      UTV2-1789        — continues unchanged, in flight
+      then, in order:  UTV2-1812 → UTV2-1802 → Child B (Track Only operator evidence)
+      A1 (CC production deployment) may begin ONLY after 1789, 1812 and 1802 all truth-close.
+      ```
+
+      Child B and A1 are not yet created and must not be started. [UTV2-1812](https://linear.app/unit-talk-v2/issue/UTV2-1812/command-center-middleware-matcher-excludes-dotted-paths-so-privileged) and [UTV2-1802](https://linear.app/unit-talk-v2/issue/UTV2-1802/command-center-remove-or-fail-closed-gate-the-management-api-arbitrary) already exist — no replacement issues are to be created for them.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1823/authenticate-get-apipicksidtrace-close-the-unauthenticated-canonical
+    title: Authenticate GET /api/picks/{id}/trace — close the unauthenticated
+      canonical pick-truth exposure before the Track Only pilot
+    description: |-
+      ## Objective
+
+      Authenticate `GET /api/picks/{id}/trace` so canonical pick truth is not readable by an anonymous caller on the public API hostname.
+
+      PM disposition (2026-09-02): **treat this as an authentication / data-exposure security change even though the mechanical lane type is** `runtime`**. Claude only — do not route to Codex.** PM plan approval and PM merge approval are both required.
+
+      This is child A2 of the Command Center pilot wave under [UTV2-1788](https://linear.app/unit-talk-v2/issue/UTV2-1788/command-center-phase-0-stabilization-consolidate-the-authoritative). It is the only lane authorized to start from that packet right now. A1 (production deployment wiring) and Child B (Track Only operator evidence) are NOT authorized to start.
+
+      ---
+
+      ## Verified defect (against origin/main @ c26257b4, 2026-09-02)
+
+      `apps/api/src/server.ts:604` is the API's only auth gate:
+
+      ```
+      if (method === 'POST' || url.pathname === '/api/discord/kill-switch') {
+      ```
+
+      Every GET route declared above that line is unauthenticated. `GET /api/picks/{id}/trace` (`server.ts:511-527` → `handleTracePickRoute` → `tracePickController`) is one of them, and it returns:
+
+      * the full `PickRecord` including `metadata` (which carries `distributionMode`, `submittedBy`, `eventId`, promotion scores),
+      * `submissionEvents`, `promotionHistory`,
+      * `outboxEntries` and `distributionReceipts` (delivery targets and external IDs),
+      * `settlementRecords`,
+      * `auditLogEntries`,
+      * `lifecycleEvents`.
+
+      Anyone who knows or guesses a pick UUID can read all of it over the public Caddy-terminated API hostname. UTV2-1427 already established the governing precedent in the same predicate: the kill-switch **GET** was gated because "its response reveals staff-only operational state ... not public delivery truth". A pick's full lifecycle, audit trail and delivery receipts are staff-only operational state by the same standard.
+
+      This must close **before** Griff submits the first real Smart Form Track Only pilot pick, because the pilot creates exactly the record this route exposes.
+
+      ---
+
+      ## Scope (bounded)
+
+      Allowed:
+
+      * `apps/api/src/server.ts` — the auth gate predicate only
+      * one test file asserting the new behaviour (extend `apps/api/src/server.test.ts` or add a focused sibling test)
+      * this lane's own artifacts: `.ops/sync/<ID>.yml`, `docs/06_status/lanes/<ID>.json`, `docs/06_status/proof/<ID>/**`
+
+      Prohibited:
+
+      * `apps/api/src/auth.ts` **must not be edited.** It is a Tier C exact path; `authenticateRequest` / `authorizeRoute` are sufficient as they stand.
+      * No change to `tracePickController`, the route handlers, response shape, or any repository.
+      * No new role, no new token type, no new env var, no change to `authorizeRoute`'s role policy.
+      * No Command Center, deployment, contracts, DB, migration, delivery, scoring or production-data change.
+
+      ---
+
+      ## Acceptance criteria
+
+      1. Anonymous `GET /api/picks/<valid-id>/trace` returns **401** with the standard `UNAUTHORIZED` error body and **zero** pick data — no metadata, no outbox row, no audit entry, no field of the record in any form.
+      2. Authenticated request with a valid operator/service credential returns the **unchanged 200 payload** (byte-compatible shape: `pick`, `submissionEvents`, `promotionHistory`, `outboxEntries`, `distributionReceipts`, `settlementRecords`, `auditLogEntries`, `lifecycleEvents`).
+      3. Authenticated request for an **unknown** pick id still returns **404** `PICK_NOT_FOUND` — authentication failure and not-found remain distinguishable, and 404 is never used to mask a 401 or vice versa.
+      4. No other route's auth behaviour changes. `POST` routes and `/api/discord/kill-switch` behave exactly as before; every other currently-public GET keeps its current status unless explicitly dispositioned in this issue.
+      5. `/api/picks/{id}/routing-preview` and `/api/picks/{id}/promotion-preview` are explicitly dispositioned in the proof: either gated in this same pass, or documented with the reason they remain public. Silence is not an acceptable outcome for either.
+      6. No consumer regression: Command Center does not call `/trace` (verified — it reads Supabase directly), so no operator surface breaks. Any other in-repo caller found during implementation must be reported before the change lands.
+
+      ---
+
+      ## Verification / mutation plan
+
+      * `pnpm verify` green on the branch and on the merge SHA.
+      * New test asserts all three of: 401 anonymous, 200 authenticated, 404 authenticated-unknown-id.
+      * **Mutation control (required, non-negotiable):** revert the gate predicate to its pre-change form and re-run — the anonymous-401 test **must fail**. A test that passes with the guard removed proves nothing and does not satisfy this lane. Record the failing output verbatim in `verification.md` per `/mutation-test`.
+      * T1 runtime proof bundle: `diff-summary.md`, `evidence.json`, `verification.md`, `runtime-health.json`, plus `pnpm test:db` green (run-scoped staging receipt verified inside required `verify`).
+      * Proof binds to the merge SHA, not branch HEAD.
+
+      ---
+
+      ## Lane classification (mechanical, not asserted)
+
+      Run 2026-09-02 via `npx tsx scripts/ops/tier-classifier.ts`:
+
+      ```
+      declared_tier: T1
+      mechanical_minimum: T1
+      derived_tier: T1
+      escalated: false
+      ```
+
+      * lane_type: `runtime` (`.lane/lanes/runtime.yml` admits `apps/api/**`; `verification.yml` explicitly forbids `apps/api/src/**` except the DB smoke test)
+      * executor: **Claude only** (PM directive; `docs/05_operations/DELEGATION_POLICY.md:117` — security/authorization posture changes are Tier C, and `:226` — a Codex lane is never authorized to run Tier C work)
+      * runtime is a singleton lane type; no runtime lane was active at admission time
+
+      ---
+
+      ## Sequencing context (PM-directed, 2026-09-02)
+
+      ```
+      A2 (this issue)  — start now, Claude, T1 runtime
+      UTV2-1789        — continues unchanged, in flight
+      then, in order:  UTV2-1812 → UTV2-1802 → Child B (Track Only operator evidence)
+      A1 (CC production deployment) may begin ONLY after 1789, 1812 and 1802 all truth-close.
+      ```
+
+      Child B and A1 are not yet created and must not be started. [UTV2-1812](https://linear.app/unit-talk-v2/issue/UTV2-1812/command-center-middleware-matcher-excludes-dotted-paths-so-privileged) and [UTV2-1802](https://linear.app/unit-talk-v2/issue/UTV2-1802/command-center-remove-or-fail-closed-gate-the-management-api-arbitrary) already exist — no replacement issues are to be created for them.
+    captured_at: 2026-09-03T05:04:38.458Z
+    description_sha256: f5ac8402893b49831b97643432176a8dd61433916c786f83874d0b68b4cd3a53
+  contract_hash: 90041186eaa859a8781e7cf4e37d887020247b24d8a9cbbbd1e3b28fc79aae36
