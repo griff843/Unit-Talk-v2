@@ -8,7 +8,7 @@
   "status": "READY_FOR_REVIEW",
   "generated_at": "2026-09-02T00:15:00Z",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1817eddc17ae4954cdd5876372763e1524e427fd",
     "verified_source_sha": "b5414f8c0679e8292df65dcbdc80d80e8f66dfc7",
     "verified_source_note": "The merge commit that synced this branch to main after its blocking lane UTV2-1783 merged, and the last non-proof commit on this branch. Every CI receipt in this bundle was re-captured at this exact head; the previous anchor 63478030 is superseded because the sync introduced non-proof files after it, which proof-binding-validator correctly rejected. Only proof-path commits follow this anchor. merge_sha stays null pre-merge per the schema-v2 evidence contract (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
     "evidence_commit_sha": "set-by-ci",
@@ -17,8 +17,8 @@
       "evidence_commit_sha": "set-by-ci",
       "current_pr_head_sha": "set-by-ci"
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-02T00:15:00Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-02T16:50:10.256Z"
   },
   "verdict": {
     "statement": "supabase db push refused to run against production at all, because 127 remote migration-ledger versions had no local counterpart. Each now has a non-executable receipt that binds the exact SQL that executed and asserts baseline subsumption. Correspondence is restored against live production (remote_only=0) and the sanctioned dry-run proposes exactly one migration.",
@@ -33,14 +33,14 @@
       "result": "PASS",
       "run": "33628487127",
       "job": "100241832846",
-      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
       "step": "Migration history receipt replay drill (UTV2-1822)",
       "baseline_catalog_entries": 1396,
       "receipts_replayed": 127,
       "forward_migrations_replayed": 6,
       "fingerprint_identical_before_and_after": true,
       "detail": "Behaviour-level, not file inspection. Baseline applied to a clean database in its own scratch DB; all 127 receipts replayed under ON_ERROR_STOP=1; catalog fingerprint over relations, columns, constraints and function identities identical before and after; the six active forward migrations then replayed on top.",
-      "non_vacuity_control": "Phase 1 refuses below a floor of 200 catalog entries. Without it, a baseline that silently failed to apply would leave both fingerprints empty and identical and the drill would report PASS having proven nothing. The first CI execution reported '1 catalog entries' \u2014 a line-counting artefact of COPY ... TO STDOUT escaping newlines \u2014 which is why the floor and per-row output were added rather than the number being explained away."
+      "non_vacuity_control": "Phase 1 refuses below a floor of 200 catalog entries. Without it, a baseline that silently failed to apply would leave both fingerprints empty and identical and the drill would report PASS having proven nothing. The first CI execution reported '1 catalog entries' — a line-counting artefact of COPY ... TO STDOUT escaping newlines — which is why the floor and per-row output were added rather than the number being explained away."
     },
     "precondition_drill": {
       "result": "PASS",
@@ -50,9 +50,9 @@
       "drilled": 127,
       "detail": "All 127 receipts returned a named pass: a receipt executes no statement, so it has no fail-closed precondition to drill. Reported as a result rather than skipped, so the job's own 'a run that drilled nothing is not a pass' backstop still sees one result per counted file.",
       "cases": [
-        "all 127 new migrations are verified non-executable historical version receipts \u2014 each returned a named pass rather than being skipped, so the job's 'a run that drilled nothing is not a pass' backstop saw one result per counted file (drilled 127)",
-        "applies on an empty scratch database \u2014 in job 100073671950 of the same run, a freshly created scratch database took the baseline plus all 127 receipts under ON_ERROR_STOP=1, reaching 1396 catalog entries; this lane adds no object-creating migration, so successful application on an empty target is demonstrated by that replay rather than by a refusal-drill apply case",
-        "a receipt that gains an executable statement loses the exemption and is required to declare a fail-closed precondition \u2014 proven by mutation, not by inspection"
+        "all 127 new migrations are verified non-executable historical version receipts — each returned a named pass rather than being skipped, so the job's 'a run that drilled nothing is not a pass' backstop saw one result per counted file (drilled 127)",
+        "applies on an empty scratch database — in job 100073671950 of the same run, a freshly created scratch database took the baseline plus all 127 receipts under ON_ERROR_STOP=1, reaching 1396 catalog entries; this lane adds no object-creating migration, so successful application on an empty target is demonstrated by that replay rather than by a refusal-drill apply case",
+        "a receipt that gains an executable statement loses the exemption and is required to declare a fail-closed precondition — proven by mutation, not by inspection"
       ]
     },
     "reversibility_gate": {
@@ -64,7 +64,7 @@
       "project_ref": "zfzdnfwdarxucxtaojxm",
       "access": "read_only_and_dry_run",
       "evidence_class": "operator_cli_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD \u2014 run by the orchestrator from the lane worktree against the linked production project. Read-only `supabase migration list --linked` and `supabase db push --linked --dry-run`. No CI job in this repo can produce this: no workflow holds a production database credential. Carries no run or job id and is weaker than the four receipted drill fields. Re-derivable by re-running the same two commands.",
+      "capture_method": "CAPTURE METHOD — run by the orchestrator from the lane worktree against the linked production project. Read-only `supabase migration list --linked` and `supabase db push --linked --dry-run`. No CI job in this repo can produce this: no workflow holds a production database credential. Carries no run or job id and is weaker than the four receipted drill fields. Re-derivable by re-running the same two commands.",
       "migration_list_before": {
         "both": 7,
         "local_only": 0,
@@ -75,7 +75,7 @@
         "local_only": 0,
         "remote_only": 0
       },
-      "dry_run_output": "Would push these migrations:\n \u2022 20260901150000_utv2_1811_rate_limit_buckets.sql",
+      "dry_run_output": "Would push these migrations:\n • 20260901150000_utv2_1811_rate_limit_buckets.sql",
       "dry_run_exit": 0,
       "migrations_proposed": 1,
       "push_executed": false
@@ -90,7 +90,7 @@
       "result": "PASS",
       "run": "33628487127",
       "job": "100241832846",
-      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
       "detail": "Job passed. Stated precisely so it is not over-read: all 127 new migrations are non-executable receipts and were exempted from the apply/rollback/reapply cycle, because a receipt executes nothing and its only possible down script is a no-op the reversibility gate itself rejects as comment-only. No convergence cycle was therefore exercised by this lane's files. The substantive behavioural evidence in this same job is runtime_proof.receipt_replay_drill, which applies the baseline and all 127 receipts to a clean database and compares catalog fingerprints.",
       "convergence_cycles_exercised": 0,
       "receipts_exempted": 127
@@ -100,7 +100,7 @@
       "run": "33580370923",
       "job": "100093204517",
       "workflow": "Live Schema Parity / Live Schema Parity",
-      "detail": "Repo migration set diffed against the live production database: no unauthorized findings. Expected \u2014 this lane adds no schema object. Every receipt is comments-only, so the expected schema is unchanged from main, which is itself corroboration that the 127 receipts introduce no DDL."
+      "detail": "Repo migration set diffed against the live production database: no unauthorized findings. Expected — this lane adds no schema object. Every receipt is comments-only, so the expected schema is unchanged from main, which is itself corroboration that the 127 receipts introduce no DDL."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
@@ -133,7 +133,7 @@
     },
     "double_applied_versions": {
       "pairs": 6,
-      "detail": "Same logical migration applied twice under two different version strings. Two are proven by the later row's name embedding its partner's version (20260427045252, 20260509160906); four share a UTV2 slug. All six pairs have different source hashes \u2014 the second application executed different SQL, not a replay of the first.",
+      "detail": "Same logical migration applied twice under two different version strings. Two are proven by the later row's name embedding its partner's version (20260427045252, 20260509160906); four share a UTV2 slug. All six pairs have different source hashes — the second application executed different SQL, not a replay of the first.",
       "versions": [
         "202604250001",
         "20260425030626",
@@ -186,7 +186,7 @@
       {
         "control": "receipt contains no executable SQL",
         "mutation": "appended DROP TABLE public.picks; to a receipt",
-        "observed": "receipt contains executable SQL \u2014 non-comment content",
+        "observed": "receipt contains executable SQL — non-comment content",
         "verdict": "non-vacuous"
       },
       {
@@ -240,25 +240,25 @@
       {
         "control": "down-script exemption is not self-certifying",
         "mutation": "receipt header retained, DROP TABLE public.picks; appended",
-        "observed": "FAIL \u2014 Missing down script",
+        "observed": "FAIL — Missing down script",
         "verdict": "non-vacuous"
       },
       {
         "control": "down-script exemption requires the header",
         "mutation": "removed the receipt header, body still comment-only",
-        "observed": "FAIL \u2014 Missing down script",
+        "observed": "FAIL — Missing down script",
         "verdict": "non-vacuous"
       },
       {
         "control": "precondition exemption is not self-certifying",
         "mutation": "receipt header retained, DROP TABLE public.picks; appended",
-        "observed": "FAIL \u2014 has no FAIL-CLOSED-PRECONDITION declaration",
+        "observed": "FAIL — has no FAIL-CLOSED-PRECONDITION declaration",
         "verdict": "non-vacuous"
       },
       {
         "control": "precondition exemption requires the header",
         "mutation": "removed the receipt header",
-        "observed": "FAIL \u2014 has no FAIL-CLOSED-PRECONDITION declaration",
+        "observed": "FAIL — has no FAIL-CLOSED-PRECONDITION declaration",
         "verdict": "non-vacuous"
       }
     ]

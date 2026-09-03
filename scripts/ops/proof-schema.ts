@@ -252,7 +252,19 @@ type MigrationReceiptBindingResult =
   | { status: 'not-ancestor' }
   | { status: 'non-proof-delta'; paths: string[] }
   | { status: 'attestation-mismatch'; detail: string }
+  | { status: 'source-not-in-pr'; detail: string }
   | { status: 'unverified'; detail: string };
+
+/**
+ * The SHA a migration bundle offers as merge authority, plus the evidence field
+ * it was drawn from so a mismatch names the field that lied. UTV2-1783 moved
+ * merge authority into `sha_binding.merge_sha`; bundles that predate that slot
+ * keep offering `verified_source_sha` and keep the historical meaning.
+ */
+interface MigrationMergeAuthority {
+  sha: string;
+  field: 'sha_binding.merge_sha' | 'sha_binding.verified_source_sha';
+}
 
 type MergedPrAttestationResolution =
   | { status: 'pass'; attestation: MergedPrAttestation; mainRef: string }
@@ -525,6 +537,7 @@ function resolveMergedPrAttestation(
 function verifyPostMergeMigrationReceiptBinding(
   receiptHead: string,
   verifiedSourceSha: string,
+  mergeAuthority: MigrationMergeAuthority,
   issueId: string,
   context: EvidenceContractContext,
 ): MigrationReceiptBindingResult {
@@ -535,9 +548,43 @@ function verifyPostMergeMigrationReceiptBinding(
   const receiptUnavailable = verifyCommitAvailable(receiptHead, 'migration receipt head', context);
   if (receiptUnavailable) return receiptUnavailable;
 
-  const resolution = resolveMergedPrAttestation(verifiedSourceSha, context);
+  // UTV2-1826: merge authority comes from `mergeAuthority`, never from the
+  // execution identity. This path used to hand `verified_source_sha` to the
+  // attestation resolver, which requires whatever value it is given to equal
+  // the GitHub-recorded merge SHA. Under the UTV2-1783 contract those two
+  // fields are deliberately different -- the declared slot carries merge
+  // authority, and the verified source is a commit the PR contributed -- so
+  // every honest schema-v2 migration bundle failed post-merge and its lane
+  // could not be truth-closed.
+  const resolution = resolveMergedPrAttestation(mergeAuthority.sha, context, mergeAuthority.field);
   if (resolution.status !== 'pass') return resolution;
   const { attestation, mainRef } = resolution;
+
+  // Execution identity keeps its own obligation once it is no longer what
+  // grants merge authority: it must still be the merge commit itself, or a
+  // commit the attested PR actually contributed. Without this, moving merge
+  // authority to the declared slot would leave `verified_source_sha` entirely
+  // unconstrained, and a bundle could name a commit carrying none of the
+  // lane's work.
+  if (
+    mergeAuthority.field === 'sha_binding.merge_sha' &&
+    verifiedSourceSha.toLowerCase() !== attestation.merge_sha.toLowerCase()
+  ) {
+    const sourceInPr = verifiedSourceIsContributedByAttestedPr(
+      verifiedSourceSha,
+      attestation.head_sha,
+      mainRef,
+      context,
+    );
+    if (typeof sourceInPr === 'string') return { status: 'unverified', detail: sourceInPr };
+    if (!sourceInPr) {
+      return {
+        status: 'source-not-in-pr',
+        detail: `sha_binding.verified_source_sha ${verifiedSourceSha} is neither the GitHub-recorded merge SHA ` +
+          `nor a commit contributed by the attested PR (head ${attestation.head_sha}, base ${mainRef})`,
+      };
+    }
+  }
 
   if (receiptHead.toLowerCase() === attestation.head_sha.toLowerCase()) {
     return { status: 'pass' };
@@ -1057,36 +1104,62 @@ function validateProfileEvidence(
           message: 'pre-merge migration receipt head must equal sha_binding.verified_source_sha',
         });
       } else if (context.gate === 'post-merge-read') {
-        const ancestry = verifyPostMergeMigrationReceiptBinding(
-          receiptHead,
-          verifiedSourceSha,
-          String(bundle['issue_id'] ?? ''),
-          context,
-        );
-        if (ancestry.status === 'not-ancestor') {
+        // UTV2-1826: prefer the declared merge slot, which is where UTV2-1783
+        // put merge authority. A bundle that predates the slot keeps offering
+        // its verified source and keeps the historical behaviour. A bundle that
+        // declares the slot but has not had it bound to a real merge SHA is a
+        // post-merge contradiction, and is reported as exactly that rather than
+        // being silently re-routed onto the legacy field.
+        const mergeSlot = readEvidenceMergeSlot(binding);
+        const slotValue = mergeSlot.declared ? mergeSlot.value : undefined;
+        if (mergeSlot.declared && (typeof slotValue !== 'string' || !SHA_RE.test(slotValue))) {
           failures.push({
-            code: 'migration_receipt_not_ancestor',
-            field: 'runtime_proof.head',
-            message: 'migration receipt head is not connected by a proof-only path to the attested PR head or merge SHA',
+            code: 'migration_receipt_merge_slot_invalid',
+            field: 'sha_binding.merge_sha',
+            message: 'post-merge migration evidence requires sha_binding.merge_sha to be a full 40-character Git SHA',
           });
-        } else if (ancestry.status === 'non-proof-delta') {
-          failures.push({
-            code: 'migration_receipt_non_proof_delta',
-            field: 'runtime_proof.head',
-            message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
-          });
-        } else if (ancestry.status === 'attestation-mismatch') {
-          failures.push({
-            code: 'migration_receipt_merge_attestation_mismatch',
-            field: 'sha_binding.verified_source_sha',
-            message: ancestry.detail,
-          });
-        } else if (ancestry.status === 'unverified') {
-          failures.push({
-            code: 'migration_receipt_ancestry_unverified',
-            field: 'runtime_proof.head',
-            message: `migration receipt ancestry could not be mechanically verified: ${ancestry.detail}`,
-          });
+        } else {
+          const mergeAuthority: MigrationMergeAuthority = typeof slotValue === 'string'
+            ? { sha: slotValue, field: 'sha_binding.merge_sha' }
+            : { sha: verifiedSourceSha, field: 'sha_binding.verified_source_sha' };
+          const ancestry = verifyPostMergeMigrationReceiptBinding(
+            receiptHead,
+            verifiedSourceSha,
+            mergeAuthority,
+            String(bundle['issue_id'] ?? ''),
+            context,
+          );
+          if (ancestry.status === 'not-ancestor') {
+            failures.push({
+              code: 'migration_receipt_not_ancestor',
+              field: 'runtime_proof.head',
+              message: 'migration receipt head is not connected by a proof-only path to the attested PR head or merge SHA',
+            });
+          } else if (ancestry.status === 'non-proof-delta') {
+            failures.push({
+              code: 'migration_receipt_non_proof_delta',
+              field: 'runtime_proof.head',
+              message: `non-proof commits exist between the migration receipt and rebound source: ${ancestry.paths.join(', ')}`,
+            });
+          } else if (ancestry.status === 'attestation-mismatch') {
+            failures.push({
+              code: 'migration_receipt_merge_attestation_mismatch',
+              field: mergeAuthority.field,
+              message: ancestry.detail,
+            });
+          } else if (ancestry.status === 'source-not-in-pr') {
+            failures.push({
+              code: 'migration_receipt_source_not_in_merged_pr',
+              field: 'sha_binding.verified_source_sha',
+              message: ancestry.detail,
+            });
+          } else if (ancestry.status === 'unverified') {
+            failures.push({
+              code: 'migration_receipt_ancestry_unverified',
+              field: 'runtime_proof.head',
+              message: `migration receipt ancestry could not be mechanically verified: ${ancestry.detail}`,
+            });
+          }
         }
       }
     }

@@ -1,0 +1,64 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1826",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "cf3adef13a3f32ca841cbdc259961c4698149dfe",
+    "evidence_commit_sha": "cf3adef13a3f32ca841cbdc259961c4698149dfe",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5439 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)",
+      "automation_coverage": "PASS (fail=0, no new unwired tests or orphan capabilities)"
+    }
+  },
+  "static_proof": {
+    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "lint": { "status": "PASS", "command": "pnpm lint" },
+    "build": { "status": "PASS", "command": "pnpm build" },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5439,
+      "failures": 0
+    },
+    "targeted_suite": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/proof-schema.test.ts",
+      "tests": 99,
+      "failures": 0
+    },
+    "mutation_controls": [
+      {
+        "mutation": "resolve the merged-PR attestation from sha_binding.verified_source_sha again, as the shipped code did",
+        "expected": "the split-identity regression fails with the message the live UTV2-1822 closeout produced",
+        "observed": "not ok 1 - migration_receipt_merge_attestation_mismatch: sha_binding.verified_source_sha does not equal the GitHub-recorded merge SHA; 97 pass, 2 fail",
+        "status": "CAUGHT"
+      }
+    ],
+    "r_level_check": {
+      "status": "PASS",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "rules_matched": 0
+    },
+    "automation_coverage": {
+      "status": "PASS",
+      "command": "pnpm ops:automation-coverage-check",
+      "detail": "verdict=PASS fail=0 warn=1 classified=15; the single warning is the pre-existing baselined WIRING_GLOB_SHADOWED finding under apps/qa-agent, untouched by this lane"
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "every verify:static step passed locally; test:live-db refused on a host with no staging identity ([assert-staging] REFUSED: target identity could not be resolved from its URL, host=127.0.0.1). The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "pr_number": 1486
+}
