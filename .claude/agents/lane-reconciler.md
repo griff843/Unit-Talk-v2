@@ -1,6 +1,6 @@
 ---
 name: lane-reconciler
-description: Reconciles ghost lanes — cases where lane manifests, Linear state, and GitHub PR/branch state have drifted apart. Finds PRs merged but Linear still "In Codex/Claude", lane manifests for Done issues, branches with no PR, and manifests with no branch. Use when ops:health reports drift or before starting a new dispatch cycle.
+description: LEGACY (lane execution primitive, superseded by docs/mission/intent.md) — do not use to admit new work; retained to finish or clean up lanes still open. Reconciles ghost lanes — cases where lane manifests, Linear state, and GitHub PR/branch state have drifted apart. Finds PRs merged but Linear still "In Codex/Claude", lane manifests for Done issues, branches with no PR, and manifests with no branch. Use when ops:health reports drift or before starting a new dispatch cycle.
 model: claude-sonnet-5
 tools:
   - Bash

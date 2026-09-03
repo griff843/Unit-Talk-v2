@@ -27,8 +27,17 @@ function readWorkflowYaml(name: string): WorkflowDocument {
   return parsed as WorkflowDocument;
 }
 
+/**
+ * Reads a skill doc from `.claude/commands/`, falling back to the demoted
+ * `legacy/` subdirectory. The dispatch and lane skills moved there when the
+ * lane primitive was superseded; they are no longer the execution path, but the
+ * assertions below still guard their content — a legacy doc that quietly grew a
+ * hardcoded lane cap or a stale command is exactly as wrong as it was before.
+ */
 function readClaudeCommand(name: string): string {
-  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', name), 'utf8');
+  const primary = path.join(ROOT, '.claude', 'commands', name);
+  if (fs.existsSync(primary)) return fs.readFileSync(primary, 'utf8');
+  return fs.readFileSync(path.join(ROOT, '.claude', 'commands', 'legacy', name), 'utf8');
 }
 
 function objectField(input: WorkflowDocument, key: string): WorkflowDocument {
@@ -342,16 +351,31 @@ test('branch discipline fails on multiple issue IDs', () => {
   assert.match(result.warning ?? '', /UTV2-123, UTV2-124/);
 });
 
-test('branch discipline requires an issue ID in the PR branch', () => {
+// Mission-native branches carry no tracker ID. The control that matters is that a
+// branch never drags in a DIFFERENT issue's work — not that an ID exists at all.
+test('branch discipline accepts a branch with no issue ID at all', () => {
   const result = evaluateBranchDiscipline({
     title: 'fix runtime truth check',
     branch: 'codex/g4-admin-merge-truth',
     commits: 'fix runtime truth check',
   });
 
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'no_branch_issue_reference');
+  assert.deepStrictEqual(result.branch_issue_ids, []);
+  assert.deepStrictEqual(result.issue_ids, []);
+});
+
+test('branch discipline still fails a branchless PR that references two issues', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix runtime truth check UTV2-123',
+    branch: 'codex/g4-admin-merge-truth',
+    commits: 'fix runtime truth check UTV2-124',
+  });
+
   assert.strictEqual(result.ok, false);
-  assert.strictEqual(result.code, 'missing_branch_issue_reference');
-  assert.match(result.errors.join('\n'), /must include exactly one/);
+  assert.strictEqual(result.code, 'multiple_issue_references');
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-123', 'UTV2-124']);
 });
 
 test('branch discipline requires all PR issue references to match the branch issue', () => {

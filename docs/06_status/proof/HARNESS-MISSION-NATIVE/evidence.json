@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "tier": "reserved",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "880a960d289b0de341ca3fcbae1dcb6b02c80be5",
+    "evidence_commit_sha": "880a960d289b0de341ca3fcbae1dcb6b02c80be5",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_lint": "PASS",
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS (test:ops 2998 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
+    }
+  },
+  "static_proof": {
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test:ops",
+      "tests": 2998,
+      "failures": 0
+    },
+    "targeted_suites": [
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/mission-native-agents.test.ts",
+        "tests": 28,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/codex-packet.test.ts",
+        "tests": 34,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/classify-diff.test.ts",
+        "tests": 15,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/branch-discipline-guard.test.ts",
+        "tests": 7,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+        "tests": 78,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ci/concurrency-doc-drift-guard.test.ts",
+        "tests": 19,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/codex-dispatch.test.ts",
+        "tests": 15,
+        "failures": 0
+      }
+    ],
+    "mutation_controls": [
+      {
+        "mutation": "restore the Linear credential hard-fail in the runbook preflight",
+        "expected": "the rollback-not-gated-on-Linear assertion fails",
+        "observed": "not ok 73; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "restore linear:close to the deprecated skill's command list",
+        "expected": "the read-only assertion fails",
+        "observed": "not ok 74; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "restore the tier predicate in three-brain Rule 8",
+        "expected": "the path-triggered QA assertion fails",
+        "observed": "not ok 76; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "restore the --name-only classification fallback in codex-return-reviewer",
+        "expected": "the real-patch assertion fails",
+        "observed": "not ok 77; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "stop passing manifests from the classify-diff CLI",
+        "expected": "the ordinary-manifest-change assertion fails, and the neutered-script reason degrades to unclassifiable",
+        "observed": "not ok 14, 15; # fail 2",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "compare wildcard packet scopes verbatim again",
+        "expected": "the wildcard-scope assertion fails; apps/** reports unreserved",
+        "observed": "not ok 48; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 6] restore empty-patch classification in the agent docs",
+        "expected": "the real-patch classification assertion fails",
+        "observed": "not ok 13; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 6] drop apps/api/src/*-service.ts from the DB-evidence trigger",
+        "expected": "the DB-evidence-trigger assertion fails",
+        "observed": "not ok 14; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 6] restore three-brain Rule 9's pre-implementation stop",
+        "expected": "the merge-not-keyboard assertion fails",
+        "observed": "not ok 15; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 6] restore the three-line PM verdict template",
+        "expected": "the five-field verdict assertion fails",
+        "observed": "not ok 16; # fail 1",
+        "status": "CAUGHT"
+      }
+    ],
+    "unreproduced_failure": {
+      "observed": "the first test:ops run after the round-6 edits reported 2960/2961 with 1 failure",
+      "reproduction_attempts": 5,
+      "reproduction_result": "0 failures on all five subsequent full runs (three pre-rebase, two post-rebase)",
+      "disclosure": "the failing test's identity was not captured before the buffer was lost, so no claim is made that it was unrelated or benign"
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "lint, type-check and test:ops green locally; test:live-db is refused off-CI by the fail-closed staging guard. The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "containment": {
+    "production_ddl": "none",
+    "database_mutation": "none",
+    "deployment": "none",
+    "ingestion": "unchanged (parked)",
+    "delivery": "unchanged (parked)",
+    "branch_protection": "unchanged",
+    "gates_loosened": "none - tier-c-path-guard is replaced by reserved-surface-guard reading the ratified surface policy; commit-msg-linear-check is removed because a mission-native commit has no Linear ID, making it a guard capable only of false refusals"
+  },
+  "pr_number": 1492
+}

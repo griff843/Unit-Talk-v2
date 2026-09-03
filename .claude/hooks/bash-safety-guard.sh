@@ -37,7 +37,7 @@ fi
 if [ -n "$matched" ]; then
   echo "SAFETY BLOCK: Destructive pattern blocked — $matched" >&2
   echo "This call was denied (fail-closed). If the operation is genuinely required:" >&2
-  echo "  - use the sanctioned script for it (e.g. ops:lane-clean for worktree removal, ops:merge-wrapper for branch ops), or" >&2
+  echo "  - use the sanctioned script for it (e.g. ops:merge-wrapper for merge/branch operations), or" >&2
   echo "  - ask the operator to run or explicitly approve the exact command." >&2
   echo "Do not retry the same command verbatim. Hook: bash-safety-guard." >&2
   exit 2

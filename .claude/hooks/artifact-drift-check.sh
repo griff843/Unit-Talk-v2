@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # .claude/hooks/artifact-drift-check.sh
-# PostToolUse hook: warns on generated artifacts under src/ and status doc edits.
+# PostToolUse hook: warns when a generated build artifact is written under src/.
+# (The former PROGRAM_STATUS.md -> "sync Linear" reminder was removed: Linear is
+# portfolio-only and is not synchronized from repo state — docs/mission/intent.md.)
 # Exit 2 = show as non-blocking feedback to Claude.
 
 input=$(cat)
@@ -26,12 +28,5 @@ if echo "$fp" | grep -qE '/src/.*\.(js|d\.ts|js\.map)$'; then
   exit 2
 fi
 
-# --- Check 2: PROGRAM_STATUS.md edited — remind to sync Linear ---
-if echo "$fp" | grep -q "PROGRAM_STATUS.md"; then
-  echo "REMINDER: PROGRAM_STATUS.md was updated." >&2
-  echo "Verify that Linear issue statuses reflect the current program state." >&2
-  echo "  pnpm linear:issues   — check queue state" >&2
-  exit 2
-fi
 
 exit 0

@@ -1,5 +1,11 @@
 # /system-state-loader
 
+> **LEGACY — not the execution path.**
+> This skill belongs to the prior Linear/lane execution primitive, superseded by the
+> mission-native model in `docs/mission/intent.md`. Session orientation is now `/mission`:
+> read `docs/mission/plan.md`, reconcile it against live `main`/PRs/runtime, and work the
+> nearest executable item. Do not load state from Linear.
+
 Load current system state before acting. Run at session start and after `/clear`. Never assume state from memory.
 
 ---

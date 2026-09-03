@@ -23,7 +23,7 @@ const LIVE = (() => {
 
 // ── 1. Real, current instruction files pass ─────────────────────────────
 
-test('real current-instruction files (AGENTS.md, .claude/commands/*.md, lane-governor.md) contain no stale concurrency claims', () => {
+test('real current-instruction files (AGENTS.md, .claude/commands/**/*.md, lane-governor.md) contain no stale concurrency claims', () => {
   const report = buildDriftReport();
   assert.equal(
     report.verdict,
@@ -32,7 +32,7 @@ test('real current-instruction files (AGENTS.md, .claude/commands/*.md, lane-gov
   );
   assert.ok(report.files_checked.includes('AGENTS.md'));
   assert.ok(report.files_checked.includes('.claude/agents/lane-governor.md'));
-  assert.ok(report.files_checked.includes('.claude/commands/dispatch.md'));
+  assert.ok(report.files_checked.includes('.claude/commands/legacy/dispatch.md'));
   assert.ok(report.files_checked.length > 5, 'expected multiple command docs to be checked');
 });
 
@@ -236,12 +236,13 @@ test("the guard's live base config matches loadConcurrencyConfig() and execution
 
 // ── resolveCommandDocs / resolveAllowlist shape ──────────────────────────
 
-test('resolveCommandDocs enumerates .claude/commands/*.md deterministically', () => {
+test('resolveCommandDocs enumerates .claude/commands/**/*.md deterministically', () => {
   const docs = resolveCommandDocs();
   assert.ok(docs.length > 5);
-  assert.ok(docs.includes('.claude/commands/dispatch.md'));
-  assert.ok(docs.includes('.claude/commands/lane-management.md'));
-  assert.ok(docs.includes('.claude/commands/loop-dispatch.md'));
+  assert.ok(docs.includes('.claude/commands/legacy/dispatch.md'));
+  assert.ok(docs.includes('.claude/commands/legacy/lane-management.md'));
+  assert.ok(docs.includes('.claude/commands/legacy/loop-dispatch.md'));
+  assert.ok(docs.includes('.claude/commands/verification.md'));
   const sorted = [...docs].sort();
   assert.deepEqual(docs, sorted, 'resolveCommandDocs must return a deterministically sorted list');
 });
@@ -250,5 +251,5 @@ test('resolveAllowlist includes the static files plus every command doc', () => 
   const allowlist = resolveAllowlist();
   assert.ok(allowlist.includes('AGENTS.md'));
   assert.ok(allowlist.includes('.claude/agents/lane-governor.md'));
-  assert.ok(allowlist.includes('.claude/commands/dispatch.md'));
+  assert.ok(allowlist.includes('.claude/commands/legacy/dispatch.md'));
 });

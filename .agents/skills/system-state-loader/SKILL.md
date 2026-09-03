@@ -1,6 +1,6 @@
 ---
 name: system-state-loader
-description: Load current Unit Talk repo state at session start or after context loss. Use when beginning work, after a reset, or whenever repo, queue, and runtime truth may have drifted from memory.
+description: DEPRECATED for queue/lane state — current state is live `main`, open PRs, runtime, and docs/mission/plan.md, never Linear (docs/mission/intent.md). Load repo state at session start or after context loss. Use when beginning work, after a reset, or whenever repo, queue, and runtime truth may have drifted from memory.
 category: governance
 owner: codex
 trigger: Beginning work, after reset/context loss, or whenever repo, queue, and runtime truth may have drifted.
@@ -8,39 +8,53 @@ trigger: Beginning work, after reset/context loss, or whenever repo, queue, and 
 
 # System State Loader
 
-Use this at the start of a session, after `/clear`, or when repo/queue truth is uncertain.
+Use this at the start of a session, after `/clear`, or when repo truth is uncertain.
+
+Current state is the **repository and its runtime**: `main`, the open PRs, and
+`docs/mission/plan.md`. Linear is not consulted — a stale portfolio row must never block or
+redirect work that the repository says is live.
 
 ## Core workflow
 
-1. Run:
+1. Sync, so every later premise is about the real `main`:
+```bash
+git fetch origin && git status --short --branch
+```
+2. Read the plan — it is the queue:
+```bash
+cat docs/mission/plan.md
+```
+3. Read what is actually in flight:
+```bash
+gh pr list --state open --json number,title,headRefName,isDraft,mergeStateStatus \
+  --jq '.[] | "#\(.number) \(.headRefName) \(.mergeStateStatus)\(.isDraft | if . then " DRAFT" else "" end)  \(.title)"'
+git worktree list
+```
+4. Read runtime health for anything the next step depends on:
 ```bash
 pnpm ops:brief
 ```
-2. Read the output fully before acting.
-3. If the task is queue or branch related, also inspect:
-```bash
-pnpm linear:work
-pnpm github:current
-```
-4. Confirm three things before proceeding:
-   - active branch and repo state
-   - executable issue or requested task
-   - current blocker, if any
 
-## Proceed only when
+## Confirm three things before proceeding
 
-- repo state is clear
-- the issue or task is clear
-- no stale branch/queue conflict blocks execution
+- the active branch and working-tree state
+- the next concrete piece of work, named from `docs/mission/plan.md` or an open PR
+- the current blocker, if any
 
 ## Stop and reconcile when
 
-- `ops:brief` fails
-- Linear state conflicts with repo truth
-- mainline health is unclear
-- you cannot name the next concrete lane
+- the working tree is dirty on a branch you did not expect
+- an open PR and the plan disagree about what is in flight
+- `main` has moved under a branch you were about to build on
+- you cannot name the next concrete piece of work
+
+## Do not
+
+- run `pnpm linear:work`, or treat Linear as queue truth
+- ask for an issue ID, tier label, lane manifest or R-level — mission-native work has none
+- infer state from memory or from a previous session's summary when a command can answer
 
 ## Reference
 
-For the full shared team version, read:
-- [`.claude/commands/system-state-loader.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/system-state-loader.md)
+Full shared version: [`.claude/commands/legacy/system-state-loader.md`](../../../.claude/commands/legacy/system-state-loader.md)
+(legacy; retained for the Linear-era procedure it documents, not as current practice)

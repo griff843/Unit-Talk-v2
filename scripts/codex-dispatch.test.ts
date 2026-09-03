@@ -210,17 +210,26 @@ test('UTV2-1533: codex-dispatch imports requireVerificationTarget from shared.js
   assert.match(source, /from '\.\/ops\/shared\.js'/);
 });
 
-test('dispatch skill documents the Codex lane workflow', () => {
+test('dispatch skill is a deprecation stop, not a runnable lane workflow', () => {
+  // This used to assert the skill DOCUMENTED each legacy dispatch command.
+  // Under the mission-native model those commands are the superseded execution
+  // path, and a skill body that still spells them out is an active route back
+  // into it -- front-matter deprecation does not stop an operative body from
+  // being followed. The contract is now the opposite of what it was.
   const skill = fs.readFileSync(
     path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),
     'utf8',
   );
 
   assert.match(skill, /name: dispatch/);
-  assert.match(skill, /pnpm codex:dispatch -- --issue UTV2-###/);
-  assert.match(skill, /pnpm codex:status/);
-  assert.match(skill, /pnpm codex:receive -- --issue UTV2-###/);
-  assert.match(skill, /pnpm ops:lane-finalize -- --issue UTV2-###/);
-  assert.match(skill, /main checkout is control and merge only/i);
-  assert.match(skill, /Do not use the removed `--allowed` flag/);
+  assert.match(skill, /DEPRECATED/);
+  assert.match(skill, /ops:codex-packet/, 'it must name the replacement route');
+  for (const command of [
+    'pnpm codex:dispatch',
+    'pnpm codex:status',
+    'pnpm codex:receive',
+    'pnpm ops:lane-finalize',
+  ]) {
+    assert.ok(!skill.includes(command), `the skill still offers a runnable "${command}"`);
+  }
 });

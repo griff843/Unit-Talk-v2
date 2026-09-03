@@ -38,8 +38,19 @@ jobs:
               (pr.title || '').match(/((?:UTV2|UNI)-\d+)/i);
             const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
+            // No issue ID means this PR was not admitted through a Linear
+            // lane -- the normal case under the mission-native operating model
+            // (docs/mission/intent.md), where work comes from
+            // docs/mission/plan.md. There is no authoritative tier to mirror,
+            // and nothing has gone wrong. Tier labels are not merge authority
+            // either: that is Risk-Scoped Merge Authority, which classifies
+            // what the diff touches (.github/workflows/merge-gate.yml). This
+            // job stays for lane branches that still carry an issue ID.
             if (!issueId) {
-              core.setFailed('No issue ID found in PR branch or title. Cannot resolve authoritative tier.');
+              core.notice(
+                'No issue ID in branch or title — mission-native PR, no lane tier to mirror. ' +
+                'Merge authority is decided by merge-gate.yml, not by a tier label.'
+              );
               return;
             }
 

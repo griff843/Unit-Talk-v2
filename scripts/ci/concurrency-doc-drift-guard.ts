@@ -56,14 +56,30 @@ const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 
 const STATIC_ALLOWLIST: string[] = ['AGENTS.md', '.claude/agents/lane-governor.md'];
 
-/** `.claude/commands/*.md` — every dispatch/lane-management skill doc. */
+/**
+ * `.claude/commands/**\/*.md` — every skill doc, including the demoted
+ * `legacy/` ones. One level of nesting is walked deliberately: the lane and
+ * dispatch skills moved to `.claude/commands/legacy/` when the lane primitive
+ * was superseded, and a top-level-only read would have silently stopped
+ * checking exactly the documents most likely to carry a stale ceiling.
+ */
 export function resolveCommandDocs(root = SCRIPT_ROOT): string[] {
   const dir = path.join(root, '.claude', 'commands');
   if (!existsSync(dir)) return [];
-  return readdirSync(dir)
-    .filter((entry) => entry.endsWith('.md'))
-    .map((entry) => path.posix.join('.claude', 'commands', entry))
-    .sort();
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      const nested = path.join(dir, entry.name);
+      for (const child of readdirSync(nested)) {
+        if (child.endsWith('.md')) {
+          out.push(path.posix.join('.claude', 'commands', entry.name, child));
+        }
+      }
+      continue;
+    }
+    if (entry.name.endsWith('.md')) out.push(path.posix.join('.claude', 'commands', entry.name));
+  }
+  return out.sort();
 }
 
 export function resolveAllowlist(root = SCRIPT_ROOT): string[] {

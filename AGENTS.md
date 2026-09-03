@@ -6,12 +6,21 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 ## Workspace
 
-- Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
-- Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
+- Active repo: this checkout (`/home/griff843/code/Unit-Talk-v2`)
+- Legacy repo: `unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
-**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, Linear Done, and lane closeout remain serialized through the merge mutex.
+**Execution model:** the mission is Production Recovery (`docs/mission/intent.md`); the live plan is
+`docs/mission/plan.md`. Execution state is the plan, the branches, the open PRs and the live runtime.
+Linear is portfolio/history only — do not read it for execution state and do not update it.
 
-**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
+Work arrives as a **work packet** (see Work Unit Contract below), runs on its own branch — in a
+dedicated git worktree when it runs in parallel — and lands as a PR on green CI. The main checkout is
+the control and merge checkout; do not branch-switch it to run parallel work. Merge, branch-refresh
+and post-merge `main` sync stay serialized through `pnpm ops:merge-wrapper`.
+
+**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when
+working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an
+explicit reminder.
 
 ---
 
@@ -143,12 +152,20 @@ Get these wrong and tests will fail or data will corrupt:
 
 ---
 
-## Lane Discipline — What Codex Owns
+## Work Unit Contract — What Codex Owns
 
-Codex is the **implementation lane**. You own:
+Codex receives a **work packet** (`docs/mission/packets/TEMPLATE.md`), not a Linear issue. The packet
+is the whole contract: goal, scope, acceptance, and what not to touch. Everything Codex needs must be
+in it — Codex does not read Linear, chat history, or a lane manifest.
+
+The packet is delivered by `pnpm ops:codex-packet --packet <path> --cwd <isolated worktree>`, which
+runs Codex in that worktree with
+the packet as its task contract. There is no lane admission step.
+
+Codex owns:
 
 - runtime implementation (services, handlers, adapters)
-- database migrations
+- database migrations (written; merged only with Griff's approval)
 - schema/type updates
 - tests
 - CI changes
@@ -156,47 +173,62 @@ Codex is the **implementation lane**. You own:
 - endpoint implementation
 - repository implementations (InMemory + Database)
 
-**Codex does NOT own:**
-- docs in `docs/` (Claude lane) — do not create or edit docs files unless an AC explicitly requires a specific doc as proof
-- `PROGRAM_STATUS.md`, `ISSUE_QUEUE.md`, `status_source_of_truth.md` — Claude lane only
-- readiness decisions, closeout artifacts, proof templates
-- Linear / Notion syncing
+Codex does **not** own:
 
-## Executor Concurrency Limits
+- `docs/mission/**` — the mission intent, spec index and plan are Claude/Griff-owned
+- readiness decisions, or declaring the mission or a milestone done
+- widening the packet's scope, or deciding that a different problem is the real one
+  (report that instead — it is useful, but it is a plan change, and the plan is Claude's)
 
-These limits are set by PM and enforced mechanically by `ops:lane-start` reading `docs/governance/CONCURRENCY_CONFIG.json`. Codex does not self-authorize lane expansion. **Do not hard-code numeric caps here or anywhere else in prose** — the config file is the only source of truth and it has already changed once (a prior concurrency-ramp lane raised it above its original stabilization-era ceiling; see `docs/governance/LANE_CONCURRENCY_POLICY.md`'s provenance note for the historical values). Any number shown below is illustrative of the mechanism only, not authoritative.
-
-| Executor | Default limit | Notes |
-|---|---|---|
-| Claude Code | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.claude`) | Governed by config and lane-start enforcement |
-| Codex CLI | the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `executors.codex`) | Governed by config and lane-start enforcement |
-
-**Current total cap:** the current config-driven cap (see `CONCURRENCY_CONFIG.json` → `total`). To read the live values, run `pnpm ops:execution-state -- --json` (`.dispatch_slots`) or `pnpm exec tsx scripts/ops/lane-maximizer.ts`.
-
-**Hard singleton work classes:** runtime, migration, modeling, data-canonical.
-
-Canonical policy: `docs/governance/LANE_CONCURRENCY_POLICY.md`; machine-readable authority: `docs/governance/CONCURRENCY_CONFIG.json`.
+When the packet is done: `pnpm verify` green, PR open, report what was and was not achieved. Do not
+close anything out; there is nothing to close.
 
 ---
 
-## Tier C Paths — Stop and Report, Do Not Touch
+## Parallelism
 
-If your task requires modifying any path below, **stop immediately and report** what decision is needed. Do not proceed or make partial edits. Leave the working tree clean.
+Parallel work runs in dedicated git worktrees, one work unit per branch per PR. Claude owns how much
+runs in parallel and decides it from real constraints — overlapping files, serialized migrations, and
+the merge mutex — not from a fixed quota.
 
-These paths require PM plan approval + PM merge approval (Delegation Policy Tier C):
+Codex does not self-authorize additional parallel work. Do the packet you were given; if it needs to
+be split, say so and return.
 
-| Path | Reason |
-|---|---|
-| `supabase/migrations/**` | Migrations — serial merge required, never two in one deploy |
-| `packages/contracts/src/**` | Cross-package contracts |
-| `packages/domain/src/**` | Pure domain logic — no I/O allowed |
-| `packages/db/src/lifecycle.ts` | Lifecycle FSM write authority |
-| `packages/db/src/repositories.ts` | Repository authority |
-| `packages/db/src/runtime-repositories.ts` | Runtime repository authority |
-| `apps/api/src/distribution-service.ts` | Routing, gating, GOVERNANCE_BRAKE_SOURCES |
-| `apps/api/src/auth.ts` | Auth/RBAC — always escalate |
-| `apps/worker/**` | Delivery adapters — one DeliveryOutcome per attempt |
-| `packages/db/src/database.types.ts` | Generated — never hand-edit; run pnpm supabase:types |
+**Hard serialization rules that still hold:**
+- Migrations merge one at a time. Never two migrations in one deploy.
+- Merge, branch-refresh and post-merge `main` sync go through `pnpm ops:merge-wrapper` (merge mutex).
+- Two changes to the same file do not run in parallel — they queue.
+
+`docs/governance/CONCURRENCY_CONFIG.json` and `LANE_CONCURRENCY_POLICY.md` describe the legacy
+lane-slot model. They remain in place for lanes that are still open and are not authority for new work.
+
+---
+
+## Reserved Surfaces — implement if the packet says so, but flag them
+
+`docs/05_operations/RESERVED_RISK_SURFACES.json` is the machine-readable list of surfaces Griff
+reserves. It is enforced at **merge** by `.github/workflows/merge-gate.yml` — not at the keyboard.
+
+If your change touches one of these paths:
+
+1. Do not silently widen the change beyond what the packet asked for.
+2. State the surface, the production effect, and how it is reversed, in the PR body under
+   `## Risk surfaces`.
+3. Expect the PR to sit until Griff approves it. That is correct behavior, not a failure.
+
+If the packet does **not** ask for a reserved-surface change and your work seems to require one,
+stop and report what decision is needed. Leave the working tree clean.
+
+The reserved surfaces are: production DDL and data deletion, member-delivery activation, secrets,
+pricing/tier authority, production containment, and merge authority itself. Read the JSON for the
+exact path globs — never re-derive the list from memory or from this file.
+
+Beyond the reserved surfaces, these paths are high-consequence and warrant extra care, but they do
+not require an approval artifact: `packages/contracts/src/**` (cross-package contracts),
+`packages/domain/src/**` (pure — no I/O), `packages/db/src/lifecycle.ts` (lifecycle FSM),
+`packages/db/src/repositories.ts` and `runtime-repositories.ts` (write authority),
+`apps/api/src/distribution-service.ts` (routing/gating), `apps/api/src/auth.ts` (auth/RBAC).
+`packages/db/src/database.types.ts` is generated — never hand-edit it; run `pnpm supabase:types`.
 
 ---
 
@@ -209,7 +241,7 @@ These paths require PM plan approval + PM merge approval (Delegation Policy Tier
 - **Never** mutate `settlement_records` rows — corrections use `corrects_id`
 - **Never** UPDATE or DELETE from `audit_log` — append-only
 - **Never** create new packages without a clear justification
-- **Never** widen the scope of an issue beyond its acceptance criteria
+- **Never** widen the scope of a work packet beyond what it asks for
 - **Never** skip `pnpm verify` — it is the gate; all PRs must pass it
 
 ---
@@ -247,33 +279,34 @@ pnpm verify
 
 This runs: env:check + lint + type-check + build + test. All must pass. If any fail, fix before submitting.
 
-**`pnpm test:db` requirements:**
-```bash
-pnpm test:db
-```
-T1 issues ALWAYS require `pnpm test:db` regardless of whether they explicitly touch the DB layer.
-T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. When in doubt, run it — it's non-destructive.
+**`pnpm test:db` requirements:** run it when the change touches DB read/write paths — changed files
+include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts` — or when the
+packet asks for runtime evidence. When in doubt, run it; it is non-destructive. Paste the output into
+the PR body. Verification depth follows what the change risks, not a tier label.
 
 ---
 
 ## Codex Pre-PR Checklist
 
-Before opening any PR, complete all 7 steps in order:
+Before opening any PR, complete these in order:
 
-1. **R-level lookup** — open `docs/05_operations/r1-r5-rules.json`, identify which rules match your changed file paths, and confirm all `artifactRequirements[]` are satisfied. If any required artifact is absent, produce it or document why it is not applicable.
-2. **pnpm verify** — must be green. No exceptions.
-   Run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`.
-   If it prints FAIL, generate the missing artifacts from the NEXT_ACTION_COMMANDS output, then re-run until PASS.
-   Paste the final PASS output into the PR body under `## R-level compliance`.
-3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
-4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
+1. **pnpm verify** — must be green. No exceptions.
+2. **Scope check** — every file you changed must be within the packet's declared scope. Revert any
+   scope bleed. If the work genuinely requires a file outside scope, say so in the PR body.
+3. **Reserved-surface check** — run `pnpm ops:classify-diff`. It prints `authority: auto` or
+   `authority: human` and names the surfaces; the policy behind it is
+   `docs/05_operations/RESERVED_RISK_SURFACES.json`. If the diff classifies `human`, the PR still
+   opens normally — it simply cannot merge until Griff approves it. Say which surface it touched in
+   the PR body.
+4. **No new `any` casts** — unless the existing code already uses them and the packet does not
+   require typed fixes.
 5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
-6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
-7. **Tier label** — after opening the PR with `gh pr create`, immediately run:
-   ```bash
-   gh pr edit <PR-URL-or-number> --add-label "tier:T2"
-   ```
-   Replace `T2` with the actual tier from the Linear issue labels. Never skip this step — tier-label-check CI will block the merge gate.
+6. **Open the PR** with `gh pr create` using the body template below.
+
+No Linear issue ID, no tier label and no lane manifest is required. Those belonged to the prior
+execution primitive. An advisory R-level check
+(`tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`) still exists and may be useful on
+lifecycle/domain paths, but it does not gate the merge.
 
 ### Forbidden actions (never do these in a PR)
 
@@ -283,7 +316,8 @@ Before opening any PR, complete all 7 steps in order:
 4. Activate a blocked Discord target (`discord:exclusive-insights`, `discord:game-threads`, `discord:strategy-room`)
 5. Mutate `settlement_records` rows — corrections use `corrects_id`
 6. UPDATE or DELETE from `audit_log` — append-only, enforced by DB trigger
-7. Create new packages without explicit justification in the issue AC
+7. Create new packages without explicit justification in the packet
+8. Push directly to `main`, or merge your own PR past a red or missing required check
 
 ---
 
@@ -300,30 +334,33 @@ Every PR body must include these sections exactly:
 
 ## Verification
 <paste last 20 lines of `pnpm verify` output>
-
-## R-level compliance
-<which rules in r1-r5-rules.json were triggered by the changed paths>
-<for each triggered rule: list required[] levels and whether artifacts are present>
-<if no runtime paths triggered: write "N/A — no lifecycle/domain/strategy/UI paths touched">
+<if the change touches DB read/write paths, paste `pnpm test:db` output too>
 
 ## Test coverage
 <list new or updated test files and what scenario each covers>
+<for a behavior change: name the test that fails if the change is reverted>
+
+## Risk surfaces
+<state whether the diff touches any surface in docs/05_operations/RESERVED_RISK_SURFACES.json>
+<if none: "No reserved surface touched — merge authority is `auto` on green CI.">
+<if any: name the surface and describe the production effect and how it is reversed>
 
 ## Merge order
 State whether this PR must merge before or after any other currently open PR.
-- If independent: "No open lanes share overlapping files — no merge dependency."
-- If dependent: "Must merge after PR #NNN (UTV2-###) — that lane changes X which this PR imports."
+- If independent: "No open PR shares overlapping files — no merge dependency."
+- If dependent: "Must merge after PR #NNN — that branch changes X which this PR imports."
 ```
 
 ---
 
 ## What a Good PR Looks Like
 
-- Only touches files relevant to the issue's acceptance criteria
+- Only touches files the packet's scope names
 - Adds or updates tests in the same PR as the implementation
 - All new tests use `node:test` + `node:assert/strict`
 - `pnpm verify` passes
-- No new `any` casts unless the existing code already uses them and the issue doesn't require typed fixes
+- No new `any` casts unless the existing code already uses them and the packet doesn't require typed fixes
 - No new packages added without clear necessity
-- No docs files modified unless the AC explicitly requires it
-- Commit message references the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`)
+- Commit message says what changed and why, in conventional-commit form
+  (e.g. `fix(api): reject submissions with an unresolvable capper identity`)
+- If the diff touches a reserved surface, the PR body says so explicitly

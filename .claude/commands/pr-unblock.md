@@ -128,10 +128,23 @@ Any push, refresh, or amend invalidates every head-pinned artifact. Re-authorize
 3. Repost `EXECUTOR_RESULT` bound to the new head.
 4. Repost or re-apply any `scope-override/v1`.
 5. Regenerate and rebind proof if the proof content changed (`/proof-authoring`).
-6. Request the independent review at the new head.
-7. Only then request PM verdict / `t1-approved`.
+6. Reclassify the diff at the new head — the head changed, so the previous classification is stale:
+
+   ```bash
+   base=$(gh pr view <number> --json baseRefName -q .baseRefName)
+   git fetch origin "$base" && git fetch origin "pull/<number>/head"
+   pnpm ops:classify-diff --base "origin/$base" --head FETCH_HEAD --json
+   ```
+
+   Read `.authority` from the JSON: `auto` or `human` (`.surfaces` and `.reasons` name exactly why). Take the base from the PR rather than hardcoding `origin/main` — a stacked PR is based on another branch, and classifying against the wrong base reports the whole stack's diff.
+
+7. Branch on that result, do not assume:
+   - **`auto`** — you are done. Steps 1–5 plus green required checks are the whole authorization. Do **not** request a human verdict or the `griff-approved` label; asking for one on an `auto` diff invents a human dependency the policy does not impose, and the wait is pure cost.
+   - **`human`** — request the independent review at the new head, then the human verdict / `griff-approved` for the reserved surfaces the classifier named.
 
 Requesting a verdict before step 2 produces a verdict that a later push silently invalidates.
+
+A push that changes only unreserved files does not turn an `auto` PR into a `human` one — but a push *can* move a PR from `auto` to `human` by touching a reserved path, which is exactly why step 6 re-runs rather than reusing the earlier answer.
 
 ---
 
