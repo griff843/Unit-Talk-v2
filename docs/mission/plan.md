@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-03T05:00Z
+**Last reconciled against live truth:** 2026-09-03T05:30Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -22,7 +22,10 @@ Verified against `origin/main`, the GitHub API, branch protection, check-run out
 - 15 PRs are open. None is blocked on a failing test, a type error, or a real risk finding.
   They are blocked on `Merge Gate` in two distinct ways, and the distinction matters:
   - **Missing a human approval artifact** (#1477, #1484, #1485) — a `pm-verdict/v1`
-    comment and/or the `t1-approved` label. #1474 and #1488 were in this group and have merged.
+    comment and/or the `t1-approved` label. #1474 and #1488 were in this group and merged
+    2026-09-03 (`01a2d2d6`, `2ac23342`). Measured the same day: `strict: true` did **not** block
+    #1474 even though it was genuinely BEHIND `main`, so head-pinned verdicts do not serialize to
+    one merge per cycle and an approved-but-BEHIND PR needs no re-verdict round trip.
   - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498) — opened
     with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
     title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect.
@@ -97,39 +100,53 @@ model".
 ## Milestone 1 — what is actually left
 
 Reach the deployed Smart Form → authenticate → resolve identity as `griff843` → submit a real
-canonical pick → persist it → prove Track Only cannot create member delivery → observe it through
-the operator path.
+internal Track Only pick → persist it → prove Track Only cannot create member delivery → observe it
+through a safe internal/operator path. Containment stays parked throughout; see `intent.md`
+§ "Containment during Milestone 1".
 
 | Step | State |
 |---|---|
 | Reach the deployed form | **Infrastructure done.** `smart-form` is deployed, healthy, routed by Caddy at `UNIT_TALK_SMART_FORM_DOMAIN`. The hostname is a secret and is not in the repo. |
-| Authenticate | Deployed. Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`. |
-| Resolve canonical identity as `griff843` | **Code merged, secret not yet changed — this is now a live production hazard.** See below. |
-| Submit + persist a canonical pick | Deployed. `parked` stops provider ingestion and delivery; it does not stop capper submission. |
-| Prove Track Only cannot create member delivery | **Built and mutation-tested** (UTV2-1672): the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
-| Observe through the operator path | **Blocked.** The Command Center has never been deployed (#1496) and still carries the dotted-path authentication bypass (#1493, open). The fail-open downgrade (#1474) merged 2026-09-03. No `COMMAND_CENTER_*` secret exists in the repo. |
+| Authenticate | Deployed. Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`. Blocked only on the secret reshape (Wave 0 item 1). |
+| Resolve canonical identity as `griff843` | **Code merged (#1488, `2ac23342`), secret not yet reshaped — this is a live production hazard.** See below. |
+| Submit + persist a real internal Track Only pick | Deployed. `trackOnly` defaults to `true` in both `apps/smart-form/lib/form-schema.ts` and `BetForm.tsx`, so the form submits Track Only by default. `parked` stops provider ingestion and delivery; it does not stop capper submission. **Canonical reference-data coverage is not a precondition** — honest structured or manual `canonical-coverage-gap` provenance is acceptable for this contained pilot. |
+| Prove Track Only cannot create member delivery | **Built, mutation-tested, and deployed.** UTV2-1672 (`6a8eface9`) is an ancestor of the running `e48106fc`: the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
+| Observe through an internal/operator path | **Not blocked.** A safe read-only internal observation — the pick's persisted `capper_id`, `metadata->>'distributionMode'`, provenance and the absence of any outbox row — satisfies this step. Deploying the Command Center (#1496) is desirable product work tracked on its own merits and is **not** a Milestone 1 gate; no `COMMAND_CENTER_*` secret is a prerequisite. |
+
+### Containment during the pilot
+
+Paid provider ingestion, provider activation or purchase, system picks
+(`SYNDICATE_MACHINE_MODE=parked`) and member-facing delivery — including every deferred delivery
+target — all remain parked for the duration of Milestone 1 and as a condition of it being
+considered done. The last `Deploy` run verified `{"event":"syndicate_machine_mode.validated",
+"mode":"parked"}` and re-read each value out of the running container. Nothing in the pilot may
+unpark any of them.
 
 ### The identity blocker, precisely
 
-Production today (`e48106fc`) derives the capper ID from the email local part:
-
-```
-deriveCapperIdFromEmail('griffadavi@gmail.com') -> 'griffadavi'
-```
+Production today (`e48106fc`) derives the capper ID from the email local part, so a sign-in
+address whose local part is not already the canonical capper id resolves to a non-canonical
+identity.
 
 That value is not cosmetic. `apps/smart-form/auth.ts` puts it in the session JWT as `capperId`, and
 `apps/api/src/handlers/submit-pick.ts` prefers that claim over whatever `submittedBy` the form sent,
-so it becomes the persisted identity of a real pick. Milestone 1 requires `griff843`.
+so it becomes the persisted identity of a real pick. Milestone 1 requires the canonical capper id.
 
 #1488 merged at 2026-09-03T04:52Z. It requires each allow-list entry to carry its canonical ID
 explicitly, refusing anything not already canonical rather than repairing it. That changes the
-required shape of an existing secret:
+required *shape* of an existing secret, `ALLOWED_CAPPER_EMAILS`, to a comma-separated list of
+`<email>=<canonicalCapperId>` pairs:
 
 ```
-ALLOWED_CAPPER_EMAILS = griffadavi@gmail.com=griff843
+ALLOWED_CAPPER_EMAILS = <email>=<canonicalCapperId>[, <email>=<canonicalCapperId>]
 ```
 
-An entry with no `=` is dropped and does **not** fall back to the local part.
+`<canonicalCapperId>` must match `^[a-z0-9][a-z0-9_-]*$`. An entry with no `=` is dropped and does
+**not** fall back to the local part.
+
+**The actual address and mapping are not recorded here or anywhere else in the repository.** They
+live only in the sanctioned secret store. Mission docs name the secret and its required shape; they
+never carry its value.
 
 **Measured 2026-09-03T05:00Z: `ALLOWED_CAPPER_EMAILS` was last updated 2026-09-01T13:26Z — before
 #1488 merged — and no `Deploy` run has fired since (latest is `e48106fc`, 2026-09-01T13:28Z).**
@@ -142,26 +159,39 @@ before the next pilot.
 
 ## Execution waves
 
-Production-first. Wave 0 is entirely Griff; everything else is blocked behind it.
+Production-first. The waves are a dependency ordering, not a queue: work in a later wave that
+does not depend on a reserved item proceeds immediately and in parallel.
 
-### Wave 0 — PM unblock
+**A reserved gate blocks only the action it reserves.** It does not block the mission, and it does
+not block unrelated safe production work. Nothing in this plan should be read as "everything is
+waiting on Griff" — at any moment most of the board is independent of every open reserved item.
 
-| # | Action | Why reserved |
-|---|---|---|
-| 1 | ~~Approve **#1488**~~ merged 04:52Z. **Still owed: set `ALLOWED_CAPPER_EMAILS=griffadavi@gmail.com=griff843` before the next deploy.** The code shipped; the secret did not. | Secrets |
-| 2 | ~~Re-authorize **#1474**~~ merged 04:53Z. | — |
-| 3 | Decide **#1477** — standing verdict is `CHANGES_REQUIRED` | Production DDL |
-| 4 | Create `COMMAND_CENTER_DOMAIN`, `COMMAND_CENTER_AUTH_TOKEN`, `UNIT_TALK_CC_API_KEY` | Secrets |
-| 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority |
+### Wave 0 — reserved actions (Griff only)
 
-Items 1 and 4 gate Milestone 1.
+| # | Action | Why reserved | What it actually blocks |
+|---|---|---|---|
+| 1 | **Rewrite `ALLOWED_CAPPER_EMAILS` into the `<email>=<canonicalCapperId>` shape before the next deploy.** #1488 shipped the code; the secret still holds the pre-#1488 shape. | Secrets | The next deploy, and Milestone 1 step 2. Nothing else. |
+| 2 | Dispatch a `Deploy` run once item 1 is done | Production deploy | Milestone 1 steps 1–5. Nothing else. |
+| 3 | Decide **#1477** — standing verdict is `CHANGES_REQUIRED` | Production DDL | #1477 only. |
+| 4 | Approve **#1485** (`t1-approved` + `pm-verdict/v1`) | T1 merge authority | Post-merge proof rebinding repo-wide — see "`MERGE_SHA: pending merge`" below. |
+| 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
+
+Command Center secrets are **not** in this table. They are not a Milestone 1 prerequisite; see
+`intent.md` § "Step 7 — observation path".
 
 ### Wave 1 — Smart Form Track Only pilot (Milestone 1)
 
-Land #1488 and #1477, then **run the pilot itself as one lane**: reach the form, authenticate,
-resolve `griff843`, submit a real canonical pick, assert persistence, observe the Track Only guards
-holding during the run, and observe the result through the operator path. This is the deliverable
-that has never been attempted end to end.
+#1488 (identity) is merged. What remains before the pilot can run is Wave 0 items 1 and 2, plus
+UTV2-1823 (authenticate `GET /api/picks/{id}/trace`, which today returns a pick's entire lifecycle
+aggregate to any anonymous caller and would expose the pilot's own pick).
+
+Then **run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`, submit
+a real internal Track Only pick, assert persistence, observe the Track Only guards holding during
+the run, and observe the result through a safe read-only internal/operator path. Containment stays
+parked throughout. This is the deliverable that has never been attempted end to end.
+
+#1477 is **not** a Milestone 1 dependency; it is unrelated rate-limit DDL and is sequenced on its
+own merits.
 
 ### Wave 2 — CLV / data truth
 
@@ -175,8 +205,11 @@ that has never been attempted end to end.
 ### Wave 3 — Command Center
 
 #1493 (dotted-path auth bypass) and #1494 (arbitrary management SQL) first — both are live security
-defects with green `verify`. Then #1496 (deployment) once the Wave 0 secrets exist. All three need
-readmission as lanes; see "Admissibility debt" below.
+defects with green `verify`, and neither depends on any reserved action. Then #1496 (deployment),
+which does need Command Center secrets and a hostname. All three need readmission as lanes; see
+"Admissibility debt" below.
+
+Deployment is tracked here on its own product merits. It is **not** a Milestone 1 gate.
 
 ### Wave 4 — models / research
 
@@ -226,26 +259,21 @@ micromatch default silently narrowing an allowlist that reads as if it covers th
 directory is affected. This lane removed the placeholder rather than widen its scope; the underlying
 defect is unfixed.
 
-### `docs/mission/**` is not admitted by any lane path contract
+### `docs/mission/**` lane registration — resolved in this PR
 
-Also observed here, and currently blocking this PR. `.lane/lanes/governance.yml` enumerates every
-docs subtree a governance lane may touch — `docs/governance/**`, `docs/05_operations/**`,
-`docs/00_constitution/**`, `docs/02_architecture/**`, `docs/ops/**`, `docs/archive/**`, plus
-`CLAUDE.md` and `AGENTS.md` individually. `docs/mission/**` is in none of them, so `Lane authority`
-and `Return review packet` fail this PR on `docs/mission/intent.md`, `spec.md` and `plan.md`.
+`.lane/lanes/governance.yml` enumerates every docs subtree a governance lane may touch, and
+`docs/mission/**` was in none of them, so `Lane authority` and `Return review packet` failed this
+PR on `docs/mission/intent.md`, `spec.md` and `plan.md`. `CLAUDE.md` and `AGENTS.md` were already
+individually admitted — a governance lane could add the pointer but never the target.
 
-That file's own comments record this exact situation eight times (UTV2-1524, 1528, 1541, 1557, 1199,
-1384, 1253, 1629), each time closed by the lane that hit it adding its path in the same PR. That
-route is not available here: `.lane/lanes/governance.yml` is outside this lane's `file_scope_lock`
-(`AGENTS.md`, `CLAUDE.md`, `docs/mission/**`), the lock is pinned to the lane-start commit, and
-widening it requires a `scope-override/v1` comment authored by a CODEOWNERS human — Griff. An agent
-cannot self-authorize it.
+That file's own comments record this exact situation eight times (UTV2-1524, 1528, 1541, 1557,
+1199, 1384, 1253, 1629), each closed by the lane that hit it adding its path in the same PR. This
+PR does the same, bounded to `docs/mission/**` and nothing else.
 
-`Lane authority` and `Return review packet` are not in `main`'s required-check set (`verify`,
-`Executor Result Validation`, `Merge Gate`, `P0 Protocol`), so this PR is mechanically mergeable with
-both red. Merging past a red path-authority check on a governance PR is not something this lane
-should decide on its own. Registering `docs/mission/**` once, under a lane authorized to edit
-`.lane/**`, is the durable fix.
+`.lane/lanes/governance.yml` is outside this lane's `file_scope_lock` (`AGENTS.md`, `CLAUDE.md`,
+`docs/mission/**`), and the lock is pinned to the lane-start commit and cannot be widened by an
+agent. The bounded expansion is therefore authorized by a `scope-override/v1` comment authored by
+CODEOWNERS on this PR. Without that comment `File scope lock` fails on this file, and correctly so.
 
 ### `MERGE_SHA: pending merge` needs a schema-v2 bundle
 
@@ -261,18 +289,25 @@ it by hand. PR #1485 is the related fix and is itself blocked.
 
 Consolidated from Wave 0, in dependency order:
 
-1. **`ALLOWED_CAPPER_EMAILS` = `griffadavi@gmail.com=griff843`** — urgent. #1488 merged at
+1. **Rewrite `ALLOWED_CAPPER_EMAILS` into the `<email>=<canonicalCapperId>` shape** — urgent. #1488 merged at
    2026-09-03T04:52Z; the secret still holds the pre-#1488 shape (last updated 2026-09-01T13:26Z).
-   The next deploy locks every capper out until this is set. Milestone 1 identity step.
-2. **Command Center secrets** — Milestone 1 observation step. None of the three exist yet.
-3. **#1493** — the remaining Command Center authentication defect, still open. #1474 merged.
-4. **#1477, #1451** — production DDL.
-5. **#1491 / #1492 architecture review** — merge authority and agent authority.
-6. **Direct-`main` prevention** — branch protection change; sequence after the backlog clears.
-7. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1.
-8. **`docs/mission/**` lane registration** — either a `scope-override/v1` comment on PR #1499
-   authorizing `.lane/lanes/governance.yml`, or a separate governance lane that adds the glob. Until
-   one of those, `Lane authority` and `Return review packet` stay red on the mission-layer PR.
+   The next deploy locks every capper out until this is set. Milestone 1 identity step. The value
+   belongs only in the secret store — it is not recorded in this repository.
+2. **Dispatch a `Deploy` run** once item 1 is done. Production is 23 commits behind `main` and does
+   not yet carry #1488. Milestone 1 steps 1–5.
+3. **Approve #1485** (`t1-approved` + `pm-verdict/v1`). Post-merge proof rebinding is failing
+   repo-wide on the ratified `pending merge` anchor; both lanes merged 2026-09-03 are merged but
+   cannot truth-close until this lands.
+4. **#1493** — the remaining Command Center authentication defect, still open. #1474 merged. Not a
+   Milestone 1 gate.
+5. **#1477, #1451** — production DDL. Neither is a Milestone 1 gate.
+6. **#1491 / #1492 architecture review** — merge authority and agent authority.
+7. **Direct-`main` prevention** — branch protection change; sequence after the backlog clears.
+8. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
+   explicitly excluded from it. Command Center secrets are likewise not a Milestone 1 gate.
+9. **`scope-override/v1` comment on PR #1499** authorizing `.lane/lanes/governance.yml`, so the
+   bounded `docs/mission/**` registration in that PR is admitted. The glob is already written; only
+   the human-authored override artifact is missing, and an agent cannot author it.
 
 ---
 

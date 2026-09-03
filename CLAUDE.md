@@ -92,12 +92,11 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 
 ---
 
-## Build status — Phase 7A: Governance Brake (SHIPPED)
+## Current build status
 
-**Ratification:** `docs/06_status/PHASE7R_RATIFICATION.md`
-**Execution plan:** `docs/06_status/PHASE7E_EXECUTION_PLAN.md`
+Deliberately not recorded here. This file is stable and pointer-based; a "current focus" paragraph goes stale the moment it is written and is then read as truth.
 
-Phase 7A shipped: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–7A closed; boundary rules are in production. Current focus: system hardening, live-proof gating, and infrastructure provisioning (Hetzner, SGO).
+Current state, what is executable, what is blocked, and what requires Griff: **`docs/mission/plan.md`**, reconciled against live GitHub and runtime truth.
 
 ---
 
