@@ -405,12 +405,32 @@ export function classifyScope(repoRoot: string, scopePaths: string[]): ScopeClas
         surfaces: string[];
       };
     };
-    const policy = ma.loadPolicy(repoRoot);
+    const policy = ma.loadPolicy(repoRoot) as {
+      surfaces: { id: string; paths: string[] }[];
+    };
     const result = ma.classifyDiff({
       files: scopePaths.map((filename) => ({ filename, patch: '' })),
       policy,
     });
-    return { reserved: result.surfaces.length > 0, surfaces: result.surfaces };
+    const surfaces = new Set(result.surfaces);
+
+    // A packet scopes DIRECTORIES ("supabase/migrations", "apps/worker/src"),
+    // but the classifier answers about FILES. `supabase/migrations` matches no
+    // reserved glob -- the glob is `supabase/migrations/**` -- so a directory
+    // whose every descendant is reserved would otherwise be admitted under the
+    // permissive profile. A scope is therefore also reserved when it CONTAINS a
+    // reserved location: compare each surface glob's literal prefix, the part
+    // before its first wildcard, against the scope directory.
+    for (const surface of policy.surfaces || []) {
+      for (const glob of surface.paths || []) {
+        const literalPrefix = glob.split(/[*?[]/)[0];
+        for (const scope of scopePaths) {
+          const dir = scope.endsWith('/') ? scope : `${scope}/`;
+          if (literalPrefix.startsWith(dir)) surfaces.add(surface.id);
+        }
+      }
+    }
+    return { reserved: surfaces.size > 0, surfaces: [...surfaces] };
   } catch {
     // Missing, malformed or throwing policy. The merge gate reserves here, so
     // this does too -- the packet still runs, but under the stricter profile.

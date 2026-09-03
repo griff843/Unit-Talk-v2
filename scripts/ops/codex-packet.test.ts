@@ -460,3 +460,22 @@ test('assertIsolatedWorktree refuses a linked worktree of a DIFFERENT repository
     fs.rmSync(base, { recursive: true, force: true });
   }
 });
+
+test('a directory scope is reserved by what it contains', () => {
+  // A packet scopes directories; the classifier answers about files.
+  // `supabase/migrations` matches no reserved glob on its own, but every file
+  // it can contain is reserved.
+  for (const dir of ['supabase/migrations', 'supabase', '.github/workflows', '.github']) {
+    const result = classifyScope(REPO_ROOT, [dir]);
+    assert.equal(result.reserved, true, dir);
+  }
+});
+
+test('an ordinary directory scope stays unreserved', () => {
+  // Deliberately not `apps/smart-form/lib`: that directory contains
+  // `auth-*.ts`, so reserving it is correct, not a false positive.
+  for (const dir of ['packages/domain/src', 'apps/smart-form/components']) {
+    const result = classifyScope(REPO_ROOT, [dir]);
+    assert.equal(result.reserved, false, `${dir}: ${result.surfaces.join(',')}`);
+  }
+});
