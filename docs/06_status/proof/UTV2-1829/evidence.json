@@ -1,0 +1,124 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1829",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "bc87a718701ef11a798511e0857a4aa29ed29076",
+    "evidence_commit_sha": "bc87a718701ef11a798511e0857a4aa29ed29076",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5463 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)"
+    }
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "build": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "detail": "executed as part of pnpm verify, which completed every static stage and handed off to test:live-db"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5463,
+      "failures": 0
+    },
+    "scope_controls": [
+      {
+        "assertion": "A1 \u2014 no file changed outside CLAUDE.md, AGENTS.md, docs/mission/**, this lane's own control-plane paths, or the one scope-override-authorized .lane/lanes/governance.yml",
+        "command": "git diff --name-only origin/main..HEAD | grep -vE '^(CLAUDE\\.md|AGENTS\\.md|docs/mission/|\\.lane/lanes/governance\\.yml$|\\.ops/sync/UTV2-1829\\.yml$|docs/06_status/lanes/UTV2-1829\\.json$|docs/06_status/proof/UTV2-1829/)'",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 \u2014 nothing from #1491/#1492 rides along: no workflow, hook, agent, script, eslint or package.json change",
+        "command": "git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|\\.agents/|scripts/|eslint\\.config|package\\.json)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 \u2014 AGENTS.md is a pure insertion; CLAUDE.md is an insertion plus the deliberate replacement of the stale Build-status block with a pointer to docs/mission/plan.md",
+        "command": "git diff --numstat origin/main..HEAD -- CLAUDE.md AGENTS.md",
+        "expected": "AGENTS.md deletion column 0; CLAUDE.md deletions confined to the 4-line Build-status block",
+        "observed": "18\t0\tAGENTS.md / 24\t4\tCLAUDE.md",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A4 \u2014 every repo path spec.md references exists on main",
+        "command": "for p in $(grep -oE '`(docs/[A-Za-z0-9_/.-]+\\.(md|json)|packages/db/src/database\\.types\\.ts|\\.github/workflows/merge-gate\\.yml)`' docs/mission/spec.md | tr -d '`' | sort -u); do [ -f \"$p\" ] || echo \"MISSING: $p\"; done",
+        "expected": "no MISSING lines",
+        "observed": "47 paths checked, 0 missing",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 \u2014 spec.md introduces no competing readiness threshold",
+        "command": "grep -nE '[0-9]+(\\.[0-9]+)?\\s*%|>=\\s*[0-9]|threshold of [0-9]' docs/mission/spec.md",
+        "expected": "no match",
+        "observed": "no match",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A6 \u2014 no R-level artifacts required for this diff",
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; changed files 11; rules matched: none",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A8 \u2014 the bounded lane-contract expansion admits docs/mission/** and nothing wider, and is authorized only by an externally authored CODEOWNERS scope-override/v1 record",
+        "command": "pnpm exec tsx scripts/lane-check.ts --lane governance --base origin/main --head HEAD; pnpm exec tsx scripts/ci/file-scope-guard.ts --branch claude/utv2-1829-mission-context --base origin/main --head HEAD  [without override]; then the same invocation plus --override-file <file> --pr-number 1499 --head-sha <head>  [with override]. Note: file-scope-guard.ts accepts no --issue flag; passing one throws 'Unknown argument' at parseArgs.",
+        "expected": "lane:check PASS; exactly one .lane/** file; guard FAILS without the override and PASSES with it",
+        "observed": "lane:check PASS lane=governance files=11; git diff --name-only -- '.lane/**' => .lane/lanes/governance.yml (1 file); guard without override exits 1 with 'FILE SCOPE LOCK CHECK FAILED / .lane/lanes/governance.yml is not declared by UTV2-1829'; the same guard with a well-formed override array pinned to the then-current proof head exits 0 with 'No file scope lock conflicts or scope violations detected.' Both arms were re-measured on this branch at anchor 938c45fb5. No SHA is quoted for the with-override arm on purpose: the guard matches head_sha exactly, so the record can only ever be pinned to the final PR head, and the authority for that arm is the File scope lock check on #1499 \u2014 not this bundle.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A9 \u2014 no personal address and no secret value is committed anywhere in the diff",
+        "command": "git diff -U0 origin/main..HEAD | grep '^+' | grep -iE '@[a-z0-9.-]+\\.(com|net|org)' | grep -v noreply@anthropic",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A10 \u2014 the branch was resynced to main through the sanctioned merge wrapper, and the lane history was then collapsed onto that sync without changing any content outside the plan.md reconciliation",
+        "command": "pnpm ops:merge-wrapper git-merge-main --issue UTV2-1829 --branch claude/utv2-1829-mission-context; git diff --stat ea1c1558d HEAD -- . ':(exclude)docs/06_status/proof/UTV2-1829'",
+        "expected": "wrapper ok:true with a merge commit; and the pre-collapse-to-anchor diff names exactly one path, docs/mission/plan.md, so the collapse dropped and added nothing else",
+        "observed": "ok: true, 'Merge made by the ort strategy' (readiness-score.json only), head moved 5f61bf8da -> ea1c1558d and the wrapper named every head-pinned artifact it invalidated; the collapse diff reports 'docs/mission/plan.md | 37 +++---, 1 file changed, 27 insertions(+), 10 deletions(-)' and no other path",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A11 \u2014 the plan.md reconciliation changed live-state sections only: no mission intent, architecture, scope, execution authority, readiness threshold or other approved content",
+        "command": "git diff ea1c1558d 938c45fb5 -- docs/mission/plan.md; git diff 938c45fb5 HEAD -- docs/mission/plan.md; git diff --stat origin/backup/utv2-1829-pre-collapse HEAD -- docs/mission/spec.md",
+        "expected": "the reconciliation confined to the reconciled-truth header, the resolved-defect section, Requires-Griff items 2 and 9 and the timestamp; the policy commit confined to admissibility debt, Wave 6 and Learned; spec.md byte-identical",
+        "observed": "reconciliation +27/-10 across 5 hunks; policy commit across 3 hunks (admissibility-debt, Wave 6, Learned); spec.md diff empty. No mission intent, architecture, scope, execution authority or readiness threshold altered in either.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A12 \u2014 intent.md carries exactly one addition and it is a PM ratification recorded, not an agent decision: it creates no contract, doc family or process and touches no gate, tier, lane contract or merge-authority path",
+        "command": "git diff --numstat 938c45fb5 HEAD -- docs/mission/intent.md; git diff --name-only origin/main..HEAD -- docs/05_operations/; git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|scripts/|package\\.json)'",
+        "expected": "intent.md deletion column 0; no file under docs/05_operations/; 0 gate/tooling files",
+        "observed": "27\t0\tdocs/mission/intent.md (pure insertion, no existing owner intent modified or removed); docs/05_operations/ diff empty; gate/tooling count 0",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "Not applicable and not claimed. Assertions A1 and A2 measure that this diff adds no code path, schema, workflow, or runtime behavior; it changes documentation, two agent instruction files, and one lane path-contract entry only."
+}
