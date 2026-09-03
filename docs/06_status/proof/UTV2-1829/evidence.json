@@ -1,0 +1,90 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1829",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "b7f0179e4ad3d20dcfc6872caca2ebb780b36806",
+    "evidence_commit_sha": "b7f0179e4ad3d20dcfc6872caca2ebb780b36806",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5442 tests across 129 suites, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)"
+    }
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "build": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "detail": "executed as part of pnpm verify, which completed every static stage and handed off to test:live-db"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5442,
+      "failures": 0,
+      "suites": 129
+    },
+    "scope_controls": [
+      {
+        "assertion": "A1 — no file changed outside CLAUDE.md, AGENTS.md, docs/mission/** or this lane's own control-plane paths",
+        "command": "git diff --name-only origin/main..HEAD | grep -vE '^(CLAUDE\\.md|AGENTS\\.md|docs/mission/|\\.ops/sync/UTV2-1829\\.yml$|docs/06_status/lanes/UTV2-1829\\.json$|docs/06_status/proof/UTV2-1829/)'",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 — nothing from #1491/#1492 rides along: no workflow, hook, agent, script, eslint or package.json change",
+        "command": "git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|\\.agents/|scripts/|eslint\\.config|package\\.json)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 — CLAUDE.md and AGENTS.md are pure insertions; no existing instruction altered",
+        "command": "git diff --numstat origin/main..HEAD -- CLAUDE.md AGENTS.md",
+        "expected": "deletion column 0 on both",
+        "observed": "21\t0\tCLAUDE.md / 18\t0\tAGENTS.md",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A4 — every repo path spec.md references exists on main",
+        "command": "for p in $(grep -oE '`(docs/[A-Za-z0-9_/.-]+\\.(md|json)|packages/db/src/database\\.types\\.ts|\\.github/workflows/merge-gate\\.yml)`' docs/mission/spec.md | tr -d '`' | sort -u); do [ -f \"$p\" ] || echo \"MISSING: $p\"; done",
+        "expected": "no MISSING lines",
+        "observed": "47 paths checked, 0 missing",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 — spec.md introduces no competing readiness threshold",
+        "command": "grep -nE '[0-9]+(\\.[0-9]+)?\\s*%|>=\\s*[0-9]|threshold of [0-9]' docs/mission/spec.md",
+        "expected": "no match",
+        "observed": "no match",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A6 — no R-level artifacts required for this diff",
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; changed files 8; rules matched: none",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "Not applicable and not claimed. Assertions A1 and A2 measure that this diff adds no code path, schema, workflow, or runtime behavior; it changes documentation and two agent instruction files only."
+}
