@@ -108,7 +108,7 @@ $ pnpm exec tsx --test scripts/codex-dispatch.test.ts
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2998 tests, 2998 pass, 0 fail
+- [x] `pnpm test:ops`: 3008 tests, 3008 pass, 0 fail (round 8 head)
 - [x] Seven targeted suites green, as listed above
 - [ ] `pnpm verify` end-to-end: not obtainable off-CI — the final `test:live-db` step is
       refused by the fail-closed staging guard on a host with no staging identity. The
@@ -245,6 +245,127 @@ Each applied alone, suite run, restored, and confirmed to fail only its own asse
 == restored                                                 -> # fail 0
 ```
 
+## Independent review round 8
+
+Round 7's head (`bbca9017`) drew four findings — two P1, two P2. All four are resolved here.
+Each fix carries a control, and each control was proven by applying the mutation alone,
+running the suite, and restoring.
+
+### P1 — the operator runbook gated every operation on credentials three of them never use
+
+Round 7 removed the Linear hard-fail from the universal preflight. That was not enough. The
+same block still exited on `GITHUB_TOKEN`, `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`,
+and line 11 of the runbook forbids skipping it. So an emergency `rollback` — which connects
+over `SUPABASE_DB_URL` and nothing else — a `restore-verify`, which uses its own
+`BACKUP_RESTORE_VERIFY_*` set, and an in-memory `replay`, which needs repo defaults only,
+were all unusable on a host without GitHub and Supabase REST credentials. Those are exactly
+the operations most likely to be run under pressure on a degraded host, so this was the
+expensive direction to be wrong in.
+
+The universal preflight now asserts only what is genuinely universal: env layering,
+`git`/`node`/`pnpm`, and `git status`. `pnpm ops:health` and `pnpm ops:brief` leave it as
+well — both reach GitHub, so a universal invocation fails on the same offline hosts. Two
+helpers (`require_env`, `require_tool`) are defined once, and each operation carries its own
+**Preflight assertions** block naming its real inputs. `psql`, `pg_restore` and `gzip` are
+asserted only by `restore-verify`, the one operation that invokes them.
+
+The helpers were checked by execution, not by reading: `require_env` uses bash indirect
+expansion (`${!v:-}`) and was run against a set variable, an unset variable, a present tool
+and an absent tool, confirming pass/fail in all four cases.
+
+### P1 — pr-unblock demanded a human verdict for an ordinary auto diff
+
+`CLAUDE.md` promotes `/pr-unblock` in the mission-native skill table. Its Step 3
+re-authorization procedure ended with an unconditional "Only then request PM verdict /
+`t1-approved`". Under risk-scoped authority only a `human` diff needs one; on an ordinary
+`auto` PR that step invents a human dependency the policy does not impose, and the wait is
+pure cost — the precise failure RMA/v1 exists to remove.
+
+Step 3 now reclassifies at the new head and branches on the answer. The invocation is real
+and was verified by running it against PR #1492 rather than written from memory: an earlier
+draft of this section documented a `--pr` flag that `classify-diff` does not have, and a
+`.decision` field it does not emit. The shipped text uses `--base`/`--head`/`--json` and
+reads `.authority`, and takes the base from `gh pr view --json baseRefName` because a
+stacked PR is not based on `main`.
+
+`pr-unblock.md` also joins the ACTIVE guard list, since a file promoted as an execution path
+should be held to the same standard as the rest.
+
+### P2 — codex-packet and suffix-only reserved globs
+
+The finding: `literalDir('**/.env')` yields `/`, which compares unequal to every scope, so a
+packet scoped at `packages/config` reads unreserved even though `packages/config/.env` is
+reserved. The same holds for `**/.npmrc` and `**/.pnpmfile.cjs`.
+
+The first fix I wrote was wrong, and the way it was caught is worth recording. I added a glob
+matcher for suffix-only patterns. A probe of the actual classifier output — run before
+trusting the passing tests — showed that scopes naming those files were ALREADY reserved
+without it: `classifyScope` first calls `classifyDiff`, the same code the merge gate runs,
+which handles the file case correctly and honours the surface's `excludePaths`. The only
+behaviour my matcher changed was to make `**/.env.example` reserved, which the secrets
+surface excludes on purpose. It made this function STRICTER than the gate it exists to
+mirror — a divergence, not extra safety, and precisely the failure the `excludeNote` was
+written to prevent. It was reverted.
+
+The tempting alternative — return an empty prefix so `startsWith('')` always holds — is also
+wrong, for a reason worth stating plainly: every directory in the repo can contain a `.env`,
+so it reserves every scope unconditionally. A control that returns the same answer for every
+input is not a control.
+
+What is left is the genuine gap: a DIRECTORY scope cannot be answered from its path. That is
+carried by an explicit prohibition in the packet prompt — `.env`, `.env.*`, `.npmrc`,
+`.pnpmfile.cjs` are refused anywhere in the diff, including inside the declared scope — and
+enforced at the two places that see the actual diff, the reserved-surface hook and the merge
+classifier. The profile is a prior; the gate is at merge.
+
+A test records the divergence that is NOT fixed: `classifyScope` and the merge gate agree on
+`.env.example` today, and the test asserts that agreement so a future "coverage" patch cannot
+reintroduce the stricter answer silently.
+
+### P2 — the proof-closeout skill advertised itself for ordinary work
+
+The body was correctly marked legacy. The selector was not. `description` still ended with
+"Use when verifying implementation, preparing closeout evidence, checking runtime health",
+and `trigger` repeated it verbatim. Selection happens on those two fields, so an ordinary
+verification task still landed here, and the body then routed into `pnpm ops:brief`,
+`pnpm proof:t1 -- --issue <UTV2-ID>` and `ops:lane-close` — reintroducing exactly the
+ticket-and-lane workflow a mission-native packet does not have. A legacy label on the body is
+worth nothing while the selector volunteers for the common case.
+
+Both fields are now conditioned on a bundle that already exists under
+`docs/06_status/proof/`. The body opens with an explicit selection rule and sends ordinary
+verification to `pnpm verify` plus the PR-body template. The legacy commands are documented
+with their REAL flags, checked against the sources: `ops:proof-check` takes the issue ID as a
+positional, `ops:proof-rebind` requires `--issue` and previews unless given `--apply`, and
+refuses `--pr-url` by design. Documenting that they are keyed by a `UTV2-###` ID is the point
+— that dependency is what makes them legacy, not a rough edge to route around. Three broken
+`C:/Dev/Unit-Talk-v2-main/...` references were replaced with repo-relative paths.
+
+### Mutation controls (round 8)
+
+Each mutation was applied alone, the suite run, and the file restored.
+
+```
+== MUTATION A packet prohibition text removed        -> not ok 38 "the packet prompt prohibits reserved filename shapes outright"; # fail 1
+== MUTATION B classifyDiff answer discarded          -> not ok 35 "a scope naming a reserved-by-filename file is reserved";        # fail 1
+== MUTATION C anchored=true (pre-fix glob handling)  -> not ok 37 "this function does not disagree with the gate it mirrors";      # fail 1
+== MUTATION D proof-closeout SKILL.md reverted       -> not ok 29 "the legacy proof-closeout skill does not advertise itself";     # fail 1
+== MUTATION E runbook + pr-unblock reverted          -> not ok 30, not ok 31;                                                       # fail 2
+== restored                                          -> # fail 0
+```
+
+Mutation C is the control on the reverted first fix: with the pre-fix glob handling restored,
+the `.env.example` agreement test fails, which is what pins this function to the gate's
+answer rather than to a stricter one.
+
+### Verification at this head
+
+```
+$ pnpm lint         -> pass (silent)
+$ pnpm type-check   -> pass (silent)
+$ pnpm test:ops     -> # tests 3008  # pass 3008  # fail 0
+```
+
 ## Merge SHA Binding
 
 Bound after merge by `ops:proof-generate --merge-sha`. The `Execution SHA` below is the last
@@ -253,4 +374,4 @@ non-proof commit on this branch and is what the assertions above were verified a
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1492
 Approved PR head: pending merge
-Execution SHA: 6eba4d90004f654c40e92abffe94ad669bc1c6ff
+Execution SHA: 5265aba228a167d9bf14dc7500f3678aba2120ed

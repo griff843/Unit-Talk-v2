@@ -6,8 +6,8 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "6eba4d90004f654c40e92abffe94ad669bc1c6ff",
-    "evidence_commit_sha": "6eba4d90004f654c40e92abffe94ad669bc1c6ff",
+    "verified_source_sha": "5265aba228a167d9bf14dc7500f3678aba2120ed",
+    "evidence_commit_sha": "5265aba228a167d9bf14dc7500f3678aba2120ed",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_lint": "PASS",
