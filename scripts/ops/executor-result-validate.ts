@@ -27,14 +27,41 @@ export const PREFLIGHT_CHECK_NAME = 'Executor Result Preflight';
 
 export type TriggerEvent = 'pull_request' | 'issue_comment' | 'workflow_dispatch';
 
+export interface CheckNameOptions {
+  /**
+   * RMA/v1 PHASE 1 only: the trusted base checkout does not yet carry
+   * scripts/ops/merge-authority.cjs.
+   *
+   * The required "Executor Result Validation" context is created only by
+   * issue_comment / workflow_dispatch runs, and those events run the workflow
+   * file from the *default branch* -- not from the PR head. So for the single
+   * PR that first lands RMA, the required context is produced entirely by
+   * main's pre-RMA validator, which rejects any branch outside
+   * `(claude|codex)/(utv2|uni)-NNN`. No comment, label or verdict can clear
+   * that, and the PR carrying the fix cannot install it before being judged by
+   * it: a genuine bootstrap deadlock whose only other exit is a repo-owner
+   * override of a required check.
+   *
+   * The exit that does not need an override: while the classifier is absent
+   * from base, the pull_request-triggered run -- the one event whose workflow
+   * file *does* come from the PR head -- creates the required context itself.
+   * It is self-extinguishing. Once merge-authority.cjs is on main the
+   * condition is false forever after, and UTV2-1550's one-authoritative-
+   * identity rule below is restored in full. Re-entering it means deleting the
+   * classifier from main, which is itself a merge-authority-surface change.
+   */
+  bootstrap?: boolean;
+}
+
 /** Resolves the check-run name for a given triggering event. */
-export function resolveCheckName(eventName: string): string {
-  return eventName === 'pull_request' ? PREFLIGHT_CHECK_NAME : REQUIRED_CHECK_NAME;
+export function resolveCheckName(eventName: string, opts: CheckNameOptions = {}): string {
+  if (eventName !== 'pull_request') return REQUIRED_CHECK_NAME;
+  return opts.bootstrap ? REQUIRED_CHECK_NAME : PREFLIGHT_CHECK_NAME;
 }
 
 /** True only for the event types that may create the required context. */
-export function isRequiredCheckName(eventName: string): boolean {
-  return resolveCheckName(eventName) === REQUIRED_CHECK_NAME;
+export function isRequiredCheckName(eventName: string, opts: CheckNameOptions = {}): boolean {
+  return resolveCheckName(eventName, opts) === REQUIRED_CHECK_NAME;
 }
 
 export interface ParsedExecutorResult {
@@ -106,21 +133,22 @@ export interface ValidationContext {
 export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: ValidationContext): string[] {
   const errors: string[] = [];
 
-  if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
-    errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+  // RMA/v1: a Linear issue is no longer the execution primitive, so mission
+  // branches carry none. Absent is fine; malformed is still a mistake.
+  if (r.issueId && !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+    errors.push(`Invalid Issue ID: "${r.issueId}". Must match UTV2-NNN or UNI-NNN when present.`);
   }
 
   if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
     errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
   }
 
-  const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
-  if (!r.branch || !branchRe.test(r.branch)) {
-    errors.push(
-      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`,
-    );
-  }
-  if (r.branch && r.branch !== ctx.headRef) {
+  // The load-bearing assertion is that the executor attests to THIS branch.
+  // The old `(claude|codex)/(utv2|uni)-NNN` shape encoded the Linear coupling on
+  // top of that and rejected mission branches outright.
+  if (!r.branch) {
+    errors.push('Branch missing from executor result.');
+  } else if (r.branch !== ctx.headRef) {
     errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${ctx.headRef}".`);
   }
 
@@ -140,18 +168,30 @@ export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: Valid
   return errors;
 }
 
-/** Resolves the T1/T2/T3 tier from a PR's label list, or null if absent. */
-export function resolveTier(prLabels: string[]): 'T1' | 'T2' | 'T3' | null {
-  const tierLabel = prLabels.find((l) => /^tier:T[123]$/i.test(l));
-  return tierLabel ? (tierLabel.split(':')[1].toUpperCase() as 'T1' | 'T2' | 'T3') : null;
+/**
+ * True when this result declares no usable proof artifact.
+ *
+ * Split deliberately from the question of whether one is *required*: what the
+ * comment says is a property of the comment, while what the diff demands is a
+ * property of the diff.
+ */
+export function proofArtifactMissing(r: ParsedExecutorResult): boolean {
+  return (
+    !r.proofPath || r.proofPath.toLowerCase() === 'ci only' || r.proofPath.toLowerCase() === 'n/a'
+  );
 }
 
-/** True when a proof artifact path is required for this result's tier. */
-export function proofArtifactRequired(r: ParsedExecutorResult, prLabels: string[]): boolean {
-  const tier = resolveTier(prLabels);
-  const proofSkipped =
-    !r.proofPath || r.proofPath.toLowerCase() === 'ci only' || r.proofPath.toLowerCase() === 'n/a';
-  return proofSkipped && tier !== 'T3';
+/**
+ * True when a proof artifact is required and absent.
+ *
+ * `reservedSurface` comes from scripts/ops/merge-authority.cjs — the same
+ * classifier that drives Merge Gate. It replaces the previous `tier:T3` label
+ * lookup, under which a missing or wrong label silently moved the evidence bar.
+ * Risk is read off the diff, and no label can talk a reserved diff out of
+ * carrying proof.
+ */
+export function proofArtifactRequired(r: ParsedExecutorResult, reservedSurface: boolean): boolean {
+  return proofArtifactMissing(r) && reservedSurface;
 }
 
 // ── CLI entrypoint ───────────────────────────────────────────────────────
@@ -166,10 +206,11 @@ function main(): void {
   const [command, arg] = process.argv.slice(2);
   if (command === 'resolve-check-name') {
     if (!arg) {
-      console.error('Usage: executor-result-validate.ts resolve-check-name <event-name>');
+      console.error('Usage: executor-result-validate.ts resolve-check-name <event-name> [--bootstrap]');
       process.exit(1);
     }
-    process.stdout.write(resolveCheckName(arg));
+    const bootstrap = process.argv.slice(3).includes('--bootstrap');
+    process.stdout.write(resolveCheckName(arg, { bootstrap }));
     return;
   }
   console.error(`Unknown command: "${command}". Expected: resolve-check-name <event-name>`);

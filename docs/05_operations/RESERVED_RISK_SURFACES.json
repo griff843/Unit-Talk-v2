@@ -1,0 +1,288 @@
+{
+  "schema": "reserved-risk-surfaces/v1",
+  "ratified": "2026-09-02",
+  "authority": "docs/mission/intent.md",
+  "enforcedBy": [
+    ".github/workflows/merge-gate.yml",
+    "scripts/ops/merge-authority.cjs"
+  ],
+  "summary": "Risk-Scoped Merge Authority (RMA/v1). Merge authorization is determined by what a diff TOUCHES, not by a lane manifest tier. A diff that touches no reserved surface is authorized on green CI. A diff that touches a reserved surface requires an explicit human approval artifact from a CODEOWNERS member. Fail-closed: anything unclassifiable is treated as reserved.",
+  "approval": {
+    "label": "griff-approved",
+    "legacyLabels": [
+      "t1-approved"
+    ],
+    "verdictSchema": "pm-verdict/v1",
+    "verdictMustBindHeadSha": true,
+    "note": "Both a label and a head-SHA-bound pm-verdict/v1 APPROVED comment from a CODEOWNERS member are required for a reserved diff. Either alone is insufficient."
+  },
+  "surfaces": [
+    {
+      "id": "production-ddl-and-data",
+      "reserved": "Production DDL and production data deletion",
+      "paths": [
+        "supabase/migrations/**",
+        "supabase/**/*.sql",
+        "scripts/db/**",
+        "packages/db/src/target-identity.ts",
+        "packages/db/src/privileged-client-boundary.ts"
+      ]
+    },
+    {
+      "id": "member-delivery-activation",
+      "reserved": "Activating member delivery, or weakening the delivery kill switch",
+      "paths": [
+        "apps/api/src/routes/kill-switch.ts",
+        "apps/api/src/distribution-service.ts",
+        "apps/api/src/distribution-worker-service.ts",
+        "apps/discord-bot/src/delivery/**",
+        "docs/05_operations/DELIVERY_KILL_SWITCH.md",
+        "docs/05_operations/delivery_operating_model.md"
+      ],
+      "note": "distribution-service.ts carries GOVERNANCE_BRAKE_SOURCES and the routing/gating decision that determines whether anything reaches a member at all. It is reserved for that gate, not for its size."
+    },
+    {
+      "id": "worker-delivery-implementation",
+      "reserved": "Worker delivery implementation, for as long as production containment is mandated",
+      "note": "Scoped to containment, not permanent. While containment holds, the worker is the code path between the outbox and a real member, and the exactly-one-DeliveryOutcome invariant is enforced here rather than by any downstream check. Retire this surface when containment is lifted -- see docs/05_operations/RUNTIME_MODE_CONTRACT.md.",
+      "paths": [
+        "apps/worker/src/**"
+      ],
+      "excludePaths": [
+        "apps/worker/src/**/*.test.ts"
+      ],
+      "excludeNote": "A test file cannot deliver to a member. Reserving the worker's tests would price writing a regression test at the same attention as changing the delivery path, which is exactly the incentive that makes people stop writing them."
+    },
+    {
+      "id": "auth-and-authorization",
+      "reserved": "Authentication and authorization authority -- who may act, and as whom",
+      "note": "A weakened authz check is invisible in green CI: the tests that would catch it are the same tests the change edits. This is the one surface where 'the suite passed' is the least informative signal.",
+      "paths": [
+        "apps/api/src/auth.ts",
+        "apps/api/src/authority-enforcement.ts",
+        "apps/api/src/automated-write-boundary.ts",
+        "packages/db/src/writer-authority.ts",
+        "packages/contracts/src/dual-auth.ts",
+        "apps/smart-form/auth.ts",
+        "apps/smart-form/lib/auth-*.ts",
+        "apps/smart-form/app/api/auth/**",
+        "apps/command-center/src/middleware.ts"
+      ]
+    },
+    {
+      "id": "secrets",
+      "reserved": "Secrets and credential material",
+      "paths": [
+        "**/.env",
+        "**/.env.*",
+        "local.env",
+        ".github/workflows/deploy.yml",
+        ".github/workflows/staging-deploy.yml",
+        "docs/05_operations/REQUIRED_SECRETS.md",
+        "docs/05_operations/SECRETS_INVENTORY.md",
+        "docs/05_operations/credential-purpose-inventory.md"
+      ],
+      "excludePaths": [
+        "**/.env.example",
+        "**/.env.template",
+        "**/.env.sample"
+      ],
+      "excludeNote": "Committed templates carry variable NAMES, not values. Reserving them would price a documentation edit at the same attention as a credential rotation, which is how a control loses its meaning."
+    },
+    {
+      "id": "pricing-and-tier-authority",
+      "reserved": "Pricing, member tier authority, and paid provider / subscription spend commitments",
+      "paths": [
+        "docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md",
+        "docs/05_operations/PS_M1_COMMERCIAL_FOUNDATION_CONTRACT.md",
+        "docs/05_operations/T1_CAPPER_TIER_SYSTEM_CONTRACT.md",
+        "docs/05_operations/SUPABASE_BRANCH_COST_POLICY.md",
+        "scripts/ops/monetization-proof.ts",
+        "docs/05_operations/PROVIDER_DATA_DECISION_RECORD.md"
+      ]
+    },
+    {
+      "id": "production-containment",
+      "reserved": "Production containment posture while containment is mandated",
+      "paths": [
+        ".github/workflows/ops-p0-containment.yml",
+        "docs/05_operations/RUNTIME_MODE_CONTRACT.md",
+        "docs/05_operations/SIMULATION_MODE_CONTRACT.md",
+        "docs/05_operations/BREAK_GLASS_PROTOCOL.md",
+        "docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md",
+        "docs/05_operations/STANDING_GUARDRAILS.md"
+      ]
+    },
+    {
+      "id": "merge-authority",
+      "reserved": "Merge authority itself \u2014 the gates, the machinery that produces required checks, the merge wrapper, ownership, and this file",
+      "note": "A PR must never be able to widen its own authority. This surface is what makes RMA non-self-amending. Branch protection binds CONTEXT NAMES, not workflows, and a same-repo PR runs its own copy of any workflow it edits: with `checks: write` that copy can mint a newer, successful check run under a required name. So every workflow is reserved, not only the three that legitimately produce those contexts. The merge wrapper is reserved for the mirror-image reason: the trusted wrapper would happily merge a change that makes the next wrapper authorize unconditionally. The reserved chain's shared output helper (scripts/ops/shared.ts) is reserved for the same reason: pre-merge-authorization hands its receipt object to emitJson and only then derives an exit code from that same mutable object, so an unreserved change there can rewrite an authorization decision without touching a reserved file.",
+      "paths": [
+        ".github/workflows/**",
+        ".github/actions/**",
+        ".github/CODEOWNERS",
+        "docs/05_operations/RESERVED_RISK_SURFACES.json",
+        "scripts/ops/merge-authority.cjs",
+        "scripts/ops/merge-gate-verdict.cjs",
+        "scripts/ops/apply-branch-protection.sh",
+        "scripts/ops/pre-merge-authorization.ts",
+        "scripts/ops/merge-wrapper.ts",
+        "scripts/ops/ops-merge-wrapper.ts",
+        "scripts/ops/merge-mutex.ts",
+        "scripts/ops/shared.ts",
+        "scripts/ops/truth-check-lib.ts",
+        "scripts/ops/executor-result-validate.ts",
+        "docs/mission/intent.md"
+      ]
+    },
+    {
+      "id": "control-toolchain",
+      "reserved": "The toolchain and package-manager configuration the merge-authority chain executes through",
+      "note": "The merge wrapper runs `pnpm exec tsx scripts/ops/pre-merge-authorization.ts`. Reserving that TypeScript file is worthless if the diff can replace what executes it: pnpm reads project configuration from `.npmrc`, where `script-shell` redirects every script in the repository to an attacker-supplied shell, and the resolved `tsx` binary comes from `pnpm-lock.yaml`. A replacement that prints an authorization and exits 0 satisfies the gate without evaluating a single reserved line. None of the last 40 merged PRs touched any of these files, so reserving them costs nothing measurable.",
+      "paths": [
+        ".npmrc",
+        "**/.npmrc",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        ".pnpmfile.cjs",
+        "**/.pnpmfile.cjs",
+        ".nvmrc",
+        ".node-version"
+      ]
+    }
+  ],
+  "contentRules": [
+    {
+      "id": "destructive-sql",
+      "reserved": "Destructive SQL anywhere in the diff, regardless of file location",
+      "pathGlobs": [
+        "**/*.sql",
+        "**/*.ts",
+        "**/*.cjs",
+        "**/*.mjs",
+        "**/*.js"
+      ],
+      "addedLinePattern": "\\b(DROP\\s+(TABLE|SCHEMA|DATABASE|COLUMN|VIEW|FUNCTION|TYPE|INDEX)|TRUNCATE\\s+(TABLE\\s+)?[A-Za-z_\"]|DELETE\\s+FROM)\\b",
+      "patternFlags": "i"
+    }
+  ],
+  "scopeNote": "Risk-scoped, not the old tier list under a new name. A path is reserved because a wrong change to it costs money, leaks credentials, reaches members, destroys production data, or removes a control -- not because it used to be Tier C. Pure logic that CI can judge (packages/domain, packages/contracts, scoring, lifecycle repositories) is deliberately NOT reserved: reserving it made every PR a human relay, which is what priced the real decisions at zero attention.",
+  "bootstrap": {
+    "phaseNote": "The active phase is DERIVED, never declared here: the gate checks whether the trusted BASE checkout carries classifierPath, and takes the bootstrap path exactly when it does not. A static phase number in this file would be a constant that nothing reads and that goes stale the moment the classifier lands -- a reader would conclude the bootstrap was over while the gate was still in it. Asserted by scripts/ops/merge-authority.test.ts.",
+    "note": "Two-phase rollout. Merge Gate and Executor Result Validation load this policy and scripts/ops/merge-authority.cjs from the PR's BASE checkout, so neither can read them until they exist on main. PHASE 1 is the single PR that first lands them: on that PR the base checkout has no classifier, so both gates take their documented bootstrap path and reserve the merge as `human` -- the most restrictive outcome, clearable only by the ordinary reserved-surface artifacts (CODEOWNERS label + head-bound pm-verdict/v1), never by a repo-owner override of a required check. PHASE 2 is every PR after that one: base carries the classifier and the bootstrap path is unreachable. Re-entering PHASE 1 would require deleting merge-authority.cjs from main, which is itself a change to the merge-authority surface and therefore requires a human.",
+    "classifierPath": "scripts/ops/merge-authority.cjs",
+    "degradesTo": "human"
+  },
+  "manifestPolicy": {
+    "note": "Structural rules over PARSED package.json, not over patch text. Three separate evasions of a line regex were found in review -- a JSON escape, a key split from its colon across two added lines, and a runner name inside a `#` comment -- and each produced exactly the value pnpm runs. Comparing parsed base against parsed head makes encoding, reformatting and commentary irrelevant. A changed manifest whose contents are not supplied, or which does not parse, is `unclassifiable`.",
+    "protectedRootScripts": [
+      "verify",
+      "verify:static",
+      "verify:parallel",
+      "verify:quick",
+      "verify:commands",
+      "test",
+      "lint",
+      "type-check",
+      "build",
+      "test:command-center",
+      "test:db",
+      "test:t1-proof:live",
+      "test:t1-proof:local",
+      "ci:db-client-boundary",
+      "ci:assert-staging",
+      "ci:db-smoke",
+      "env:check",
+      "ops:sync-check",
+      "ops:system-alignment-check",
+      "ops:automation-coverage-check"
+    ],
+    "protectedRootScriptsNote": "The keys `.github/workflows/ci.yml`'s required `verify` job invokes, plus everything `verify:static` fans out to. Scoped to the ROOT manifest: a workspace package's own `build`/`test` is scaffolding new packages legitimately add, and is covered by the runner check instead.",
+    "mergeCommandScripts": [
+      "ops:merge-wrapper",
+      "ops:merge-lock",
+      "ops:pr-merge"
+    ],
+    "mergeCommandValuePattern": "pre-merge-authorization|ops-merge-wrapper|merge-mutex",
+    "controlToolchainDependencies": [
+      "tsx",
+      "typescript",
+      "eslint",
+      "turbo",
+      "pnpm"
+    ],
+    "runnerCommands": [
+      "tsx",
+      "tsc",
+      "node",
+      "eslint",
+      "vitest",
+      "jest",
+      "mocha",
+      "ava",
+      "tap",
+      "tape",
+      "playwright",
+      "cypress",
+      "jasmine",
+      "karma",
+      "next",
+      "vite",
+      "turbo",
+      "bun",
+      "deno",
+      "c8",
+      "nyc",
+      "esbuild",
+      "rollup",
+      "webpack",
+      "biome",
+      "prettier",
+      "supabase",
+      "prisma",
+      "drizzle-kit",
+      "python3",
+      "python",
+      "make",
+      "bash",
+      "sh",
+      "zsh"
+    ],
+    "commandWrappers": [
+      "pnpm",
+      "npm",
+      "yarn",
+      "npx",
+      "exec",
+      "run",
+      "dlx",
+      "env",
+      "cross-env",
+      "dotenv",
+      "time",
+      "nice",
+      "concurrently"
+    ],
+    "runnerCheckNote": "A script is reserved when its new value executes nothing from `runnerCommands`. `pnpm <script>` resolves inside the same manifest; `pnpm --filter <pkg> <script>` delegates to another manifest whose own scripts this rule checks when that manifest changes. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and stay `auto` -- that change is legible in the diff, an emptied script is not.",
+    "requiredChainAllowedFlags": [
+      "--test",
+      "--cache",
+      "--cache-location",
+      "--filter",
+      "-b"
+    ],
+    "requiredChainAllowedFlagsNote": "Flags permitted in a root script that is reachable from a required-check entrypoint. The named entrypoints reserve on any change; the scripts BELOW them reserve only when the change widens what a flag can do. Adding a test file to a group is ordinary work and stays automatic; adding a selector such as --test-name-pattern, -t, --grep, --shard or --bail does not, because it makes a required check pass while running less. This list is EXACTLY the flags the 37-script closure uses today, measured rather than guessed. Deliberately absent: --config and -c, which point a runner at a file that can itself disable the work; a required-chain script that needs one reserves.",
+    "requiredChainWorkspaceScripts": {
+      "apps/smart-form/package.json": [
+        "verify"
+      ],
+      "apps/discord-bot/package.json": [
+        "command-manifest:check"
+      ],
+      "apps/command-center/package.json": [
+        "test"
+      ]
+    },
+    "requiredChainWorkspaceScriptsNote": "Scripts in OTHER manifests that the root required chain invokes through `pnpm --filter`. Keyed by MANIFEST PATH, never by package name: `pnpm --filter <name>` that matches nothing prints \"No projects matched\" and exits 0 unless --fail-if-no-match is passed, and the root chain does not pass it -- so keying by name let a workspace leave the protected set by renaming itself, turning `pnpm --filter @unit-talk/smart-form verify` into a successful no-op while `verify:static` stayed green. A path cannot change without moving the file, which is its own diff event. Renaming a protected workspace reserves on its own. Each entry is an ENTRYPOINT: the protected set is the transitive closure over that manifest's own script graph, because smart-form's `verify` is `pnpm type-check && pnpm test` and it is `test` that runs the six test files."
+  }
+}

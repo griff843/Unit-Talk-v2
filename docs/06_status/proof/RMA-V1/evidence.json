@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "tier": "reserved",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "fc1cfa7ac273d6c8c7666d1b790ec71aa054eec1",
+    "evidence_commit_sha": "fc1cfa7ac273d6c8c7666d1b790ec71aa054eec1",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_lint": "PASS",
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS (test:ops 2916 tests, 0 failures)",
+      "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
+    }
+  },
+  "static_proof": {
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test:ops",
+      "tests": 2916,
+      "failures": 0
+    },
+    "targeted_suites": [
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/merge-authority.test.ts",
+        "tests": 80,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
+        "tests": 77,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts",
+        "tests": 49,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts",
+        "tests": 29,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/bootstrap-head-fallback-guard.test.ts",
+        "tests": 5,
+        "failures": 0
+      }
+    ],
+    "mutation_controls": [
+      {
+        "mutation": "resolve past a --filter edge in this manifest again",
+        "expected": "the filtered-edge assertion fails; a root script proves a workspace command",
+        "observed": "not ok 72; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "drop the operand-superset half of the widening rule",
+        "expected": "both required-chain assertions fail; a narrowing passes as auto",
+        "observed": "not ok 73, 74; # fail 2",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "empty the cross-manifest requiredChainWorkspaceScripts list",
+        "expected": "the workspace-script assertion fails",
+        "observed": "not ok 73; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "strip the path from a runner word again, accepting ./tsx",
+        "expected": "the bare-word assertion fails; a diff-supplied binary counts as the toolchain",
+        "observed": "not ok 74; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "protect only the NAMED entrypoints instead of the reachable closure",
+        "expected": "the required-chain assertion fails; test:ops can be weakened invisibly",
+        "observed": "not ok 75; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "apply the merge-command pattern to the raw script value again",
+        "expected": "the test-file-name assertion fails; widening test:ops reserves",
+        "observed": "not ok 77; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 7] accept a && chain when ANY link runs work",
+        "expected": "the every-link, refused-syntax and short-circuit assertions fail",
+        "observed": "not ok 64, 65, 70; # fail 3",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 7] drop & (backgrounding) from the refused-syntax set",
+        "expected": "the refused-syntax assertion fails on the backgrounded runner",
+        "observed": "not ok 65; # fail 1",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 7] drop | (pipes) from the refused-syntax set",
+        "expected": "the refused-syntax and alternation assertions fail",
+        "observed": "not ok 65, 71; # fail 2",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 7] accept `true` and `false` as runners",
+        "expected": "five assertions fail; inert commands classify as work",
+        "observed": "not ok 62, 64, 65, 67, 72; # fail 5",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "[round 7] drop { } from the refused-syntax set",
+        "expected": "the function-shadowing assertion fails",
+        "observed": "# fail 0 - CAUGHT NOTHING",
+        "status": "NOT A CONTROL",
+        "note": "a shell function definition necessarily contains ( ) and ;, each of which already refuses the value, so the brace characters are defensive rather than load-bearing. Recorded rather than counted."
+      }
+    ],
+    "classification_dry_run": {
+      "status": "PASS",
+      "command": "replay classifyDiff over the last 40 merged PRs after each round",
+      "detail": "round 7: 24 auto / 16 human. round 8: 25/15 (the mover is #1453, a false positive fixed - verified by reading the PR). round 9: 25/15, unchanged. Three rounds of tightening at no measurable cost on real work."
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "lint, type-check and test:ops green locally; test:live-db is refused off-CI by the fail-closed staging guard. The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "containment": {
+    "production_ddl": "none",
+    "database_mutation": "none",
+    "deployment": "none",
+    "ingestion": "unchanged (parked)",
+    "delivery": "unchanged (parked)",
+    "branch_protection": "unchanged",
+    "gates_loosened": "none - every change is in the restrictive direction; the one intentional relaxation is RMA's ratified premise itself, which is what the human approval on this PR authorizes"
+  },
+  "pr_number": 1491
+}

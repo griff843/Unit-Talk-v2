@@ -27,7 +27,11 @@ function parseVerdict(body) {
   const verdictMatch = lines[0].replace(/^\$/, '').match(/^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i);
   if (!verdictMatch) return null;
   if (lines[1] !== 'schema: pm-verdict/v1') return null;
-  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+  // RMA/v1: a mission-native PR has no Linear issue, so a ticketless identifier
+  // is accepted. Without it the documented approval procedure could not produce
+  // an artifact this parser accepts, and a reserved merge would have no exit --
+  // the gate would demand a verdict that nothing could validly write.
+  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+|PR-\d+)$/i);
   if (!issueMatch) return null;
 
   const field = (name) => {
@@ -50,8 +54,14 @@ function parseVerdict(body) {
 }
 
 /**
- * Validates the T1 pm-verdict/v1 gate against live PR context. Returns an
- * array of error strings; empty means the gate passes.
+ * Validates the pm-verdict/v1 gate against live PR context. Returns an array of
+ * error strings; empty means the gate passes.
+ *
+ * Named for the T1 tier it originally served. Under RMA/v1 the caller is the
+ * reserved-surface branch of merge-gate.yml rather than a tier, but the rules
+ * -- latest-verdict-wins, CODEOWNERS authorization, exact-head binding -- are
+ * unchanged, so the function and its suite were kept intact rather than
+ * rewritten for a rename.
  *
  * @param {Array<{user: string|null, userType: string|null, parsed: object, createdAt: string}>} verdicts
  *   Already-parsed verdict records (parseVerdict result attached), in
@@ -63,7 +73,7 @@ function validateT1Verdicts(verdicts, ctx) {
   const errors = [];
 
   if (verdicts.length === 0) {
-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+    errors.push('A reserved surface requires a valid pm-verdict/v1 comment from a CODEOWNERS member.');
     return errors;
   }
 
@@ -91,7 +101,7 @@ function validateT1Verdicts(verdicts, ctx) {
         `PM verdict author "${rawLatest.user}" is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
       );
     }
-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+    errors.push('A reserved surface requires a valid pm-verdict/v1 comment from a CODEOWNERS member.');
     return errors;
   }
 
@@ -103,14 +113,14 @@ function validateT1Verdicts(verdicts, ctx) {
     // PR/head-SHA freshness only gates verdicts intended to approve the
     // merge -- a CHANGES_REQUIRED verdict already blocks above regardless.
     if (!latest.parsed.prNumber) {
-      errors.push('T1 pm-verdict/v1 comment is missing a "PR:" field. PM must bind the verdict to this exact PR.');
+      errors.push('pm-verdict/v1 comment is missing a "PR:" field. The verdict must be bound to this exact PR.');
     } else if (latest.parsed.prNumber !== ctx.prNumber) {
       errors.push(`PM verdict PR mismatch: comment declares PR #${latest.parsed.prNumber}, actual is #${ctx.prNumber}.`);
     }
 
     if (!latest.parsed.headSha) {
       errors.push(
-        'T1 pm-verdict/v1 comment is missing a "Head SHA:" field. PM must bind approval to the exact reviewed head.',
+        'pm-verdict/v1 comment is missing a "Head SHA:" field. Approval must be bound to the exact reviewed head.',
       );
     } else if (latest.parsed.headSha.toLowerCase() !== ctx.headSha.toLowerCase()) {
       errors.push(

@@ -216,3 +216,40 @@ test('UTV2-1554: bounce limit only counts authorized CHANGES_REQUIRED verdicts',
   const errors = validateT1Verdicts(verdicts, { prNumber: PR_NUMBER, headSha: HEAD_SHA, authorizedReviewers: REVIEWERS });
   assert.ok(!errors.some((e) => /Bounce limit exceeded/i.test(e)));
 });
+
+test('a ticketless verdict identifier is accepted', () => {
+  // A mission-native PR has no Linear issue. Requiring UTV2-###/UNI-### made
+  // the documented approval procedure unable to produce an artifact this
+  // parser accepts, so a reserved merge had no valid exit at all.
+  const parsed = parseVerdict(
+    [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: PR-1491',
+      'PR: #1491',
+      'Head SHA: 922fd4e7904230437b168cfa07149b99f62b12fa',
+    ].join('\n'),
+  );
+  assert.ok(parsed, 'a ticketless verdict must parse');
+  assert.equal(parsed?.verdict, 'APPROVED');
+  assert.equal(parsed?.issueId, 'PR-1491');
+  assert.equal(parsed?.prNumber, 1491);
+  assert.equal(parsed?.headSha, '922fd4e7904230437b168cfa07149b99f62b12fa');
+});
+
+test('an issue-bound verdict still parses unchanged', () => {
+  const parsed = parseVerdict(
+    ['PM_VERDICT: APPROVED', 'schema: pm-verdict/v1', 'Issue: UTV2-1550', 'PR: #1', 'Head SHA: abc'].join('\n'),
+  );
+  assert.equal(parsed?.issueId, 'UTV2-1550');
+});
+
+test('a free-form identifier is still refused', () => {
+  // The field is still constrained: it is a ticketless FORM, not free text.
+  for (const id of ['Issue: none', 'Issue: mission-native', 'Issue: PR-', 'Issue: 1491']) {
+    const parsed = parseVerdict(
+      ['PM_VERDICT: APPROVED', 'schema: pm-verdict/v1', id, 'PR: #1', 'Head SHA: abc'].join('\n'),
+    );
+    assert.equal(parsed, null, id);
+  }
+});

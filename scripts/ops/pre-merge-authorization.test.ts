@@ -87,6 +87,12 @@ const GREEN_CHECK_RUNS: GitHubCheckRun[] = [
   checkRun('Executor Result Validation', 'success', 2),
 ];
 
+// RMA/v1: `Merge Gate` required but with no run on THIS head. Required-check
+// evaluation fails on it AND `mergeGateGreenOnHead` is false, so the verdict
+// requirement stays in force -- the fixture for every "the defect still blocks"
+// counterpart below.
+const NO_MERGE_GATE_ON_HEAD: GitHubCheckRun[] = [checkRun('Executor Result Validation', 'success', 2)];
+
 test('green path: all required checks pass with exact identity and a valid current-head PM verdict authorizes the merge', async () => {
   const deps: PreMergeAuthorizationDeps = {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
@@ -166,9 +172,18 @@ test('a malformed PM verdict (missing the Head SHA field) rejects the merge', as
 
   const receipt = await evaluatePreMergeAuthorization(INPUT, deps);
 
-  assert.strictEqual(receipt.authorized, false);
+  // The defect is still detected and recorded. Whether it BLOCKS is RMA/v1's
+  // question, not this module's: a green `Merge Gate` on this exact head means
+  // the ratified gate already decided the verdict was not required here.
   assert.strictEqual(receipt.pmVerdict.valid, false);
-  assert.match(receipt.reason ?? '', /Head SHA/);
+  assert.strictEqual(receipt.authorized, true);
+
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...deps,
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
+  });
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.match(withoutGate.reason ?? '', /Head SHA/);
 });
 
 test('a schema-valid PM verdict bound to a stale head SHA (a push landed after approval) rejects the merge', async () => {
@@ -180,11 +195,17 @@ test('a schema-valid PM verdict bound to a stale head SHA (a push landed after a
 
   const receipt = await evaluatePreMergeAuthorization(INPUT, deps);
 
-  assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.pmVerdict.valid, false);
   assert.strictEqual(receipt.pmVerdict.parsedHeadSha, STALE_HEAD_SHA);
   assert.strictEqual(receipt.headSha, CURRENT_HEAD_SHA);
-  assert.match(receipt.reason ?? '', /stale/i);
+  assert.strictEqual(receipt.authorized, true, 'Merge Gate is green on this head, so RMA already decided');
+
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...deps,
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
+  });
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.match(withoutGate.reason ?? '', /stale/i);
 });
 
 test('race-prevention: the head SHA is re-fetched fresh on every call, and it is the last fetch performed before the decision', async () => {
@@ -254,7 +275,7 @@ test('allowAdminMergeGateBypass is never applied pre-merge: a Merge-Gate-only fa
   assert.match(receipt.reason ?? '', /Merge Gate/);
 });
 
-test('no pm-verdict/v1 comment at all rejects the merge even when required checks pass', async () => {
+test('RMA/v1: a missing pm-verdict blocks exactly when Merge Gate is not green on this head', async () => {
   const deps: PreMergeAuthorizationDeps = {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     fetchComments: async () => [],
@@ -263,10 +284,19 @@ test('no pm-verdict/v1 comment at all rejects the merge even when required check
 
   const receipt = await evaluatePreMergeAuthorization(INPUT, deps);
 
-  assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.pmVerdict.valid, false);
   assert.strictEqual(receipt.pmVerdict.commentUrl, null);
-  assert.match(receipt.reason ?? '', /pm-verdict\/v1/);
+  // A diff that needed a verdict could not have produced a green Merge Gate on
+  // this head, so demanding one again here only blocks the `auto` diffs the
+  // gate deliberately cleared.
+  assert.strictEqual(receipt.authorized, true);
+
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...deps,
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
+  });
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.match(withoutGate.reason ?? '', /pm-verdict\/v1/);
 });
 
 test('an unresolvable head SHA fails closed instead of skipping the check', async () => {
@@ -334,41 +364,63 @@ test('UTV2-1661: a T3 PR with all required checks green and no pm-verdict is aut
   assert.strictEqual(receipt.tier.pmVerdictRequired, false);
 });
 
-test('UTV2-1661: a T1 PR with all required checks green but NO pm-verdict is still refused', async () => {
+test('RMA/v1: a T1 manifest is recorded but no longer decides -- Merge Gate does', async () => {
+  // Pre-RMA this was refused on the manifest tier alone. Under RMA the reserved
+  // surfaces decide, and a `human` diff cannot have produced the green
+  // `Merge Gate` this fixture asserts: the gate itself required the label and
+  // the head-bound verdict before going green.
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     ...stateDeps(['tier:T1'], 'T1'),
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false);
-  assert.strictEqual(receipt.tier.resolved, 'T1');
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(receipt.authorized, true);
+  assert.strictEqual(receipt.tier.resolved, 'T1', 'the tier is still recorded for diagnostics');
+  assert.strictEqual(receipt.tier.pmVerdictRequired, false);
+
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
+    ...stateDeps(['tier:T1'], 'T1'),
+    fetchComments: async () => [],
+  });
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.strictEqual(withoutGate.tier.pmVerdictRequired, true);
 });
 
-test('UTV2-1661 fail-closed: an UNLABELLED PR is held to the strict T1 rule, not relaxed', async () => {
+test('RMA/v1: an unlabelled, manifest-less PR is the normal case, not a fail-closed one', async () => {
+  // The mission-native shape: no tier label, no lane manifest, nothing to look
+  // one up by. Pre-RMA this was unmergeable through the sanctioned wrapper
+  // however green it was -- the deadlock this change exists to remove.
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     ...stateDeps([], null),
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false);
+  assert.strictEqual(receipt.authorized, true);
   assert.strictEqual(receipt.tier.resolved, null);
   assert.strictEqual(receipt.tier.source, 'unresolved');
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(receipt.tier.pmVerdictRequired, false);
 });
 
-test('UTV2-1661 fail-closed: a malformed tier label does not resolve and does not relax the gate', async () => {
+test('RMA/v1: a malformed tier label neither resolves nor changes the decision', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     ...stateDeps(['tier:T4', 'tier-T2', 'T2'], null),
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.tier.resolved, null);
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(receipt.authorized, true, 'labels are not an input to merge authority any more');
+
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
+    ...stateDeps(['tier:T4', 'tier-T2', 'T2'], null),
+    fetchComments: async () => [],
+  });
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.strictEqual(withoutGate.tier.pmVerdictRequired, true);
 });
 
 test('UTV2-1661: tier never overrides required checks -- a T3 PR with a failing check is refused', async () => {
@@ -385,16 +437,15 @@ test('UTV2-1661: tier never overrides required checks -- a T3 PR with a failing 
   assert.match(receipt.reason ?? '', /required checks missing or failing/);
 });
 
-test('UTV2-1661: the legacy fetchHeadSha dep surfaces no labels, so it stays on the strict path', async () => {
+test('RMA/v1: the legacy fetchHeadSha dep surfaces no labels, and no longer needs to', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     fetchHeadSha: async () => CURRENT_HEAD_SHA,
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.tier.resolved, null);
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(receipt.authorized, true);
 });
 
 test('UTV2-1661: a stale-SHA verdict on a T2 PR is recorded but is not merge-blocking', async () => {
@@ -418,30 +469,31 @@ test('UTV2-1661: a stale-SHA verdict on a T2 PR is recorded but is not merge-blo
 //       present and green ON THE CURRENT HEAD, closing the relabel/check race.
 // ─────────────────────────────────────────────────────────────────────────────
 
-test('UTV2-1661: a T1 manifest with a mutable T2 label cannot relax authority', async () => {
+test('RMA/v1: manifest/label disagreement is still recorded, and no longer decides', async () => {
+  // Both halves of the old rule -- "a label may not downgrade a T1 lane" and
+  // "disagreement is unproven classification" -- protected a tier input that
+  // merge authority no longer reads. The receipt keeps reporting the
+  // disagreement; what it cannot do is block a diff Merge Gate cleared.
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     ...stateDeps(['tier:T2'], 'T1'),
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false, 'a label must never downgrade a T1 lane');
   assert.strictEqual(receipt.tier.resolved, 'T1');
   assert.strictEqual(receipt.tier.source, 'lane_manifest');
   assert.strictEqual(receipt.tier.labelTier, 'T2');
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
-});
+  assert.strictEqual(receipt.tier.labelDisagreement, true);
+  assert.strictEqual(receipt.authorized, true);
 
-test('UTV2-1661: manifest/label disagreement fails closed even when both are non-T1', async () => {
-  const receipt = await evaluatePreMergeAuthorization(INPUT, {
-    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
+  const withoutGate = await evaluatePreMergeAuthorization(INPUT, {
+    ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, NO_MERGE_GATE_ON_HEAD),
     ...stateDeps(['tier:T3'], 'T2'),
     fetchComments: async () => [],
   });
-
-  assert.strictEqual(receipt.authorized, false, 'disagreement means the classification is unproven');
-  assert.strictEqual(receipt.tier.labelDisagreement, true);
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(withoutGate.authorized, false);
+  assert.strictEqual(withoutGate.tier.labelDisagreement, true);
+  assert.strictEqual(withoutGate.tier.pmVerdictRequired, true);
 });
 
 test('UTV2-1661: a T2 manifest with Merge Gate MISSING from required-check discovery fails closed', async () => {
@@ -500,7 +552,7 @@ test('UTV2-1661: a T2 manifest with a current-head GREEN Merge Gate and no verdi
   assert.strictEqual(receipt.reason, undefined);
 });
 
-test('UTV2-1661: a manifest read failure fails closed rather than relaxing', async () => {
+test('RMA/v1: a manifest read failure is recorded and no longer decides', async () => {
   const receipt = await evaluatePreMergeAuthorization(INPUT, {
     ...depsWithCheckRuns(GREEN_REQUIRED_CHECKS, GREEN_CHECK_RUNS),
     fetchPullRequestState: async () => ({
@@ -514,10 +566,12 @@ test('UTV2-1661: a manifest read failure fails closed rather than relaxing', asy
     fetchComments: async () => [],
   });
 
-  assert.strictEqual(receipt.authorized, false);
+  // A manifest read failure no longer changes the decision, because the
+  // manifest no longer feeds it. The receipt still records the failure to
+  // resolve, and `Merge Gate` remains the thing that must be green.
   assert.strictEqual(receipt.tier.resolved, null);
   assert.strictEqual(receipt.tier.source, 'unresolved');
-  assert.strictEqual(receipt.tier.pmVerdictRequired, true);
+  assert.strictEqual(receipt.authorized, true);
 });
 
 test('UTV2-1661: isMergeGateGreenOnHead is exact-identity and fails closed on ambiguity', () => {
@@ -611,11 +665,39 @@ test('UTV2-1661 default path: a confirmed 404 resolves to unresolved/strict, not
 
   assert.strictEqual(manifest, null);
   assert.strictEqual(resolveTierFromManifest(manifest), null);
+  // RMA/v1: an absent manifest no longer forces a verdict. Merge authority is
+  // decided once, by Merge Gate, from what the diff touches -- and a
+  // mission-native branch has no tracker id to look a manifest up by at all, so
+  // keying the requirement off manifest absence would block every such PR
+  // permanently. The requirement now rests entirely on Merge Gate's own
+  // head-bound result.
   assert.strictEqual(
     pmVerdictRequiredForTier({ manifestTier: null, labelTier: 'T2', mergeGateGreenOnHead: true }),
-    true,
-    'a confirmed-absent manifest must keep the strict requirement',
+    false,
+    'with Merge Gate green on this exact head, the RMA decision is already satisfied',
   );
+  assert.strictEqual(
+    pmVerdictRequiredForTier({ manifestTier: null, labelTier: 'T2', mergeGateGreenOnHead: false }),
+    true,
+    'without a green Merge Gate on this head, the requirement stays in force',
+  );
+});
+
+test('RMA/v1: no tier value can relax the verdict requirement on its own', () => {
+  for (const manifestTier of [null, 'T1', 'T2', 'T3'] as const) {
+    for (const labelTier of [null, 'T1', 'T2', 'T3'] as const) {
+      assert.strictEqual(
+        pmVerdictRequiredForTier({ manifestTier, labelTier, mergeGateGreenOnHead: false }),
+        true,
+        `tier ${manifestTier}/${labelTier} must not relax the requirement without a green Merge Gate`,
+      );
+      assert.strictEqual(
+        pmVerdictRequiredForTier({ manifestTier, labelTier, mergeGateGreenOnHead: true }),
+        false,
+        `tier ${manifestTier}/${labelTier} must not re-impose it once Merge Gate is green on head`,
+      );
+    }
+  }
 });
 
 for (const status of [401, 403, 429, 500, 502, 503]) {
@@ -687,7 +769,7 @@ test('UTV2-1661 integration: the default path drives a real T2 authorization end
   assert.strictEqual(receipt.tier.mergeGateGreenOnHead, true);
 });
 
-test('UTV2-1661 integration: the default path keeps a T1 lane strict end-to-end', async () => {
+test('RMA/v1 integration: the default manifest path still resolves the tier for the receipt', async () => {
   const receipt = await withStubbedFetch(
     (async () => jsonResponse(200, { content: b64({ issue_id: 'UTV2-1661', tier: 'T1' }) })) as unknown as typeof fetch,
     () =>
@@ -702,9 +784,9 @@ test('UTV2-1661 integration: the default path keeps a T1 lane strict end-to-end'
       }),
   );
 
-  assert.strictEqual(receipt.authorized, false);
   assert.strictEqual(receipt.tier.resolved, 'T1');
   assert.strictEqual(receipt.tier.labelDisagreement, true);
+  assert.strictEqual(receipt.authorized, true, 'the resolved tier is diagnostic, not authority');
 });
 
 // ── UTV2-1619 capability 19: bootstrap identity in the merge wrapper ──────────

@@ -35,6 +35,31 @@ test('resolveCheckName: pull_request always resolves to the non-required preflig
   assert.equal(resolveCheckName('pull_request'), PREFLIGHT_CHECK_NAME);
 });
 
+test('resolveCheckName: RMA bootstrap lets a pull_request run create the required name', () => {
+  // PHASE 1 only. issue_comment and workflow_dispatch execute the workflow file
+  // from the DEFAULT BRANCH, so the PR that first lands the classifier is
+  // judged by main's pre-RMA validator -- which rejects any branch outside
+  // (claude|codex)/(utv2|uni)-NNN and cannot be cleared by label, comment or
+  // verdict. pull_request is the one event whose workflow file comes from the
+  // PR head, so while the classifier is absent from base, that run owns the
+  // required identity.
+  assert.equal(resolveCheckName('pull_request', { bootstrap: true }), REQUIRED_CHECK_NAME);
+  assert.equal(isRequiredCheckName('pull_request', { bootstrap: true }), true);
+});
+
+test('resolveCheckName: bootstrap is inert once the classifier is on main', () => {
+  // Self-extinguishing. With the classifier present the UTV2-1550 rule -- one
+  // authoritative required identity per head -- is restored in full.
+  assert.equal(resolveCheckName('pull_request', { bootstrap: false }), PREFLIGHT_CHECK_NAME);
+  assert.equal(resolveCheckName('pull_request', {}), PREFLIGHT_CHECK_NAME);
+  assert.equal(isRequiredCheckName('pull_request'), false);
+  // It cannot change the other two events either -- they were already required.
+  for (const event of ['issue_comment', 'workflow_dispatch']) {
+    assert.equal(resolveCheckName(event, { bootstrap: true }), REQUIRED_CHECK_NAME);
+    assert.equal(resolveCheckName(event, { bootstrap: false }), REQUIRED_CHECK_NAME);
+  }
+});
+
 test('resolveCheckName: issue_comment resolves to the required validation name', () => {
   assert.equal(resolveCheckName('issue_comment'), REQUIRED_CHECK_NAME);
 });
@@ -137,36 +162,84 @@ test('validateExecutorResultFields: this head-mismatch error must never surface 
 
 // ── proof artifact requirement ───────────────────────────────────────────
 
-test('proofArtifactRequired: required for T1/T2 when path is missing', () => {
+test('proofArtifactRequired: required when the diff touches a reserved surface', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const noProof = { ...r, proofPath: null };
-  assert.equal(proofArtifactRequired(noProof, ['tier:T2']), true);
-  assert.equal(proofArtifactRequired(noProof, ['tier:T1']), true);
+  assert.equal(proofArtifactRequired(noProof, true), true);
 });
 
-test('proofArtifactRequired: not required for T3', () => {
+test('proofArtifactRequired: not required when the diff touches no reserved surface', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const noProof = { ...r, proofPath: null };
-  assert.equal(proofArtifactRequired(noProof, ['tier:T3']), false);
+  assert.equal(proofArtifactRequired(noProof, false), false);
 });
 
-test('proofArtifactRequired: "CI only" and "N/A" count as skipped', () => {
+test('proofArtifactRequired: a declared proof path satisfies a reserved diff', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
-  assert.equal(proofArtifactRequired({ ...r, proofPath: 'CI only' }, ['tier:T2']), true);
-  assert.equal(proofArtifactRequired({ ...r, proofPath: 'N/A' }, ['tier:T2']), true);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'docs/06_status/proof/X.md' }, true), false);
+});
+
+test('proofArtifactRequired: "CI only" and "N/A" count as no proof', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'CI only' }, true), true);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: 'N/A' }, true), true);
+});
+
+// No label can move this bar. Under the previous tier lookup a missing or wrong
+// `tier:T3` label silently excused a production-schema diff from carrying proof.
+test('proofArtifactRequired: labels cannot excuse a reserved diff', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  assert.equal(proofArtifactRequired({ ...r, proofPath: null }, true), true);
 });
 
 // ── field-level validation coverage ──────────────────────────────────────
 
-test('validateExecutorResultFields: invalid issue ID format is rejected', () => {
+test('validateExecutorResultFields: a malformed issue ID is still rejected', () => {
   const r = parseExecutorResultComment(VALID_COMMENT);
   assert.ok(r);
   const bad = { ...r, issueId: 'not-an-issue' };
   const errors = validateExecutorResultFields(bad, CTX);
   assert.ok(errors.some((e) => e.includes('Invalid Issue ID')));
+});
+
+// RMA/v1: mission branches carry no Linear issue. Absent must be accepted, or
+// every PR opened under the new execution primitive is permanently blocked by a
+// required check.
+test('validateExecutorResultFields: an absent issue ID is accepted', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, issueId: null }, CTX);
+  assert.deepEqual(errors, []);
+});
+
+test('validateExecutorResultFields: a branch with no issue number is accepted when it matches the head ref', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const branch = 'claude/rma-v1-risk-scoped-merge-authority';
+  const errors = validateExecutorResultFields(
+    { ...r, issueId: null, branch },
+    { ...CTX, headRef: branch },
+  );
+  assert.deepEqual(errors, []);
+});
+
+test('validateExecutorResultFields: a branch that is not the PR head is still rejected', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, branch: 'claude/some-other-branch' }, CTX);
+  assert.ok(errors.some((e) => e.includes('Branch mismatch')));
+});
+
+test('validateExecutorResultFields: a missing branch is rejected', () => {
+  const r = parseExecutorResultComment(VALID_COMMENT);
+  assert.ok(r);
+  const errors = validateExecutorResultFields({ ...r, branch: null }, CTX);
+  assert.ok(errors.some((e) => e.includes('Branch missing')));
 });
 
 test('validateExecutorResultFields: invalid lane is rejected', () => {

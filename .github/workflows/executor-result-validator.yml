@@ -52,7 +52,16 @@ on:
         required: true
         type: number
   pull_request:
-    types: [opened, synchronize, reopened]
+    # `labeled`/`unlabeled` are the RMA/v1 PHASE 1 re-trigger. On opened /
+    # synchronize / reopened this workflow starts at the same moment as ci.yml,
+    # so a bootstrap run (which owns the required identity -- see the check-name
+    # step) always evaluates while `verify` is still queued and reports "CI check
+    # is queued, not completed". ci.yml uses the DEFAULT pull_request types,
+    # which do not include `labeled`, so toggling a label re-evaluates this
+    # workflow alone -- without restarting CI, which is what made close/reopen a
+    # loop that could never converge. Outside bootstrap this only ever refreshes
+    # the non-required preflight.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -97,10 +106,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve check name (UTV2-1550)
+      - name: Resolve check name (UTV2-1550 / RMA/v1 bootstrap)
         id: check_name
+        env:
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          NAME=$(pnpm exec tsx scripts/ops/executor-result-validate.ts resolve-check-name "${{ github.event_name }}")
+          # RMA/v1 PHASE 1. The required "Executor Result Validation" context is
+          # normally created only by issue_comment / workflow_dispatch runs, and
+          # those events execute the workflow file from the DEFAULT BRANCH, not
+          # from the PR head. For the single PR that first lands the classifier
+          # that means the required context is produced entirely by main's
+          # pre-RMA validator, which rejects any branch outside
+          # (claude|codex)/(utv2|uni)-NNN -- unclearable by any label, comment or
+          # verdict, and unfixable by the PR carrying the fix. The one event
+          # whose workflow file does come from the PR head is pull_request, so
+          # while the classifier is absent from the (trusted, base-pinned)
+          # checkout, that run creates the required context itself.
+          #
+          # Self-extinguishing: once scripts/ops/merge-authority.cjs is on main
+          # the guard is false forever after and UTV2-1550's
+          # one-authoritative-identity rule is restored in full. The literal
+          # below is asserted equal to REQUIRED_CHECK_NAME by
+          # scripts/ops/workflow-hardening.test.ts, so it cannot drift.
+          BOOTSTRAP=""
+          if [ ! -f scripts/ops/merge-authority.cjs ]; then
+            BOOTSTRAP="--bootstrap"
+          fi
+          if [ "$EVENT_NAME" = "pull_request" ] && [ -n "$BOOTSTRAP" ]; then
+            NAME="Executor Result Validation"
+            echo "RMA/v1 PHASE 1: base checkout lacks scripts/ops/merge-authority.cjs; this pull_request run creates the required context."
+          else
+            NAME=$(pnpm exec tsx scripts/ops/executor-result-validate.ts resolve-check-name "$EVENT_NAME")
+          fi
           echo "Resolved check name: $NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
@@ -114,7 +151,7 @@ jobs:
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const checkName = process.env.CHECK_NAME;
-            let prNumber, headSha, headRef, prLabels;
+            let prNumber, headSha, headRef, prLabels, declaredFileCount;
 
             // ── 1. Resolve PR ──────────────────────────────────────────
             if (context.eventName === 'pull_request') {
@@ -122,6 +159,7 @@ jobs:
               prNumber = pr.number;
               headSha = pr.head.sha;
               headRef = pr.head.ref;
+              declaredFileCount = pr.changed_files;
               prLabels = (pr.labels || []).map(l => l.name);
             } else {
               prNumber = context.eventName === 'workflow_dispatch'
@@ -132,6 +170,7 @@ jobs:
               });
               headSha = pr.head.sha;
               headRef = pr.head.ref;
+              declaredFileCount = pr.changed_files;
               // Labels are on the issue, not the PR object from pulls.get
               const { data: issue } = await github.rest.issues.get({
                 owner, repo, issue_number: prNumber
@@ -203,19 +242,26 @@ jobs:
                 const r = parsed[parsed.length - 1];
 
                 // ── 5. Validate schema fields ──────────────────────────
-                if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
-                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
+                // RMA/v1: a Linear issue is no longer the execution primitive,
+                // so mission branches carry none. `Issue:` is optional now, but
+                // a malformed one is still an error -- an unparseable id is a
+                // mistake, whereas an absent one is the new normal.
+                if (r.issueId && !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+                  errors.push(`Invalid Issue ID: "${r.issueId}". Must match UTV2-NNN or UNI-NNN when present.`);
                 }
 
                 if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
                   errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
                 }
 
-                const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
-                if (!r.branch || !branchRe.test(r.branch)) {
-                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`);
-                }
-                if (r.branch && r.branch !== headRef) {
+                // The real assertion is that the executor is attesting to THIS
+                // branch. The old `(claude|codex)/(utv2|uni)-NNN` shape encoded
+                // the Linear coupling on top of that and rejected mission
+                // branches outright; equality with the head ref is the part that
+                // actually prevents a misattributed attestation.
+                if (!r.branch) {
+                  errors.push('Branch missing from executor result.');
+                } else if (r.branch !== headRef) {
                   errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${headRef}".`);
                 }
 
@@ -231,21 +277,104 @@ jobs:
                   errors.push(`HEAD SHA mismatch: comment has "${r.headSha}", current PR head is "${headSha}". Re-post executor result after pushing.`);
                 }
 
-                // ── 6. Determine tier from PR labels ───────────────────
-                const tierLabel = prLabels.find(l => /^tier:T[123]$/i.test(l));
-                const tier = tierLabel
-                  ? tierLabel.split(':')[1].toUpperCase()
-                  : null;
+                // ── 6. Decide whether a proof artifact is required ─────
+                // Previously keyed off a `tier:T3` label, so a missing or wrong
+                // label silently changed the evidence bar. RMA/v1 keys it off
+                // the same reserved-surface classifier that drives Merge Gate:
+                // a diff that touches production DDL/data, delivery activation,
+                // secrets, pricing, containment, or merge authority must carry a
+                // proof bundle, and no label can talk it out of that.
+                //
+                // Loaded from the base checkout pinned above, so a PR cannot
+                // supply the classifier that decides its own evidence bar.
+                //
+                // Two-phase bootstrap, mirroring merge-gate.yml. PHASE 1 is the
+                // single PR that first lands the classifier: base does not have
+                // it yet, so require() throws. That absence demands a proof
+                // bundle rather than excusing one -- the strictest reading, and
+                // the only one that lets RMA land without a repo-owner override
+                // of this required check. PHASE 2 is every PR after; base
+                // carries the classifier and this branch is unreachable.
+                // MODULE_NOT_FOUND only: a malformed policy still fails closed.
+                const changedFiles = await github.paginate(
+                  github.rest.pulls.listFiles,
+                  { owner, repo, pull_number: prNumber, per_page: 100 }
+                );
+                const ervBaseSha = (await github.rest.pulls.get({ owner, repo, pull_number: prNumber })).data.base.sha;
+
+                // Structural manifest comparison needs the PARSED file at both
+                // refs, not the patch. Three separate line-regex evasions were
+                // found in review -- a JSON escape, a key split from its colon
+                // across two added lines, and a runner name inside a `#` comment
+                // -- and each parsed to exactly the value pnpm runs. A manifest
+                // whose contents cannot be read is unclassifiable, never clean.
+                const manifestPaths = new Set();
+                for (const f of changedFiles) {
+                  for (const n of [f.filename, f.previous_filename]) {
+                    if (n && /(^|\/)package\.json$/.test(n)) manifestPaths.add(n);
+                  }
+                }
+                const readManifestAt = async (p, ref) => {
+                  try {
+                    const r = await github.rest.repos.getContent({ owner, repo, path: p, ref });
+                    return Buffer.from(r.data.content, r.data.encoding || 'base64').toString('utf8');
+                  } catch (e) {
+                    // 404 means the file genuinely does not exist at that ref.
+                    // Anything else is a failure to read, which must not be
+                    // reported as "unchanged" -- let it reserve.
+                    if (e.status === 404) return null;
+                    throw e;
+                  }
+                };
+                const manifests = {};
+                for (const p of manifestPaths) {
+                  manifests[p] = {
+                    base: await readManifestAt(p, ervBaseSha),
+                    head: await readManifestAt(p, headSha),
+                  };
+                }
+
+                let risk = null;
+                let proofRequired;
+                try {
+                  const { loadPolicy, classifyDiff } = require('./scripts/ops/merge-authority.cjs');
+                  risk = classifyDiff({
+                    // previous_filename included so a rename out of a reserved
+                    // path cannot lower this PR's evidence bar.
+                    files: changedFiles.map(f => ({
+                      filename: f.filename,
+                      previous_filename: f.previous_filename,
+                      patch: f.patch,
+                      status: f.status,
+                      // Tells a pure rename apart from one whose patch GitHub
+                      // withheld for size.
+                      additions: f.additions,
+                      deletions: f.deletions,
+                    })),
+                    policy: loadPolicy(),
+                    // listFiles stops at 3,000 files however far you paginate;
+                    // a short list reserves rather than waiving proof.
+                    declaredFileCount,
+                    manifests,
+                  });
+                  proofRequired = risk.authority === 'human';
+                } catch (e) {
+                  if (e.code !== 'MODULE_NOT_FOUND') throw e;
+                  risk = { authority: 'human', surfaces: ['bootstrap-pending'], reasons: [] };
+                  proofRequired = true;
+                }
 
                 // ── 7. Validate proof file ─────────────────────────────
                 const proofPath = r.proofPath;
-                const isT3 = tier === 'T3';
                 const proofSkipped = !proofPath ||
                   proofPath.toLowerCase() === 'ci only' ||
                   proofPath.toLowerCase() === 'n/a';
 
-                if (proofSkipped && !isT3) {
-                  errors.push('Proof Artifact path is required for T1/T2 issues.');
+                if (proofSkipped && proofRequired) {
+                  errors.push(
+                    `Proof Artifact path is required: this diff touches reserved surface(s) ` +
+                    `${risk.surfaces.join(', ')}.`
+                  );
                 } else if (!proofSkipped) {
                   try {
                     const { data: file } = await github.rest.repos.getContent({

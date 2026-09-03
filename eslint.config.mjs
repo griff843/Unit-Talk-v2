@@ -40,6 +40,11 @@ export default tseslint.config(
         ...globals.node,
       },
     },
+    rules: {
+      // `require()` is the module system these files are declared to use --
+      // the whole reason they are .cjs. The TS-oriented ban does not apply.
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
   {
     files: ['**/*.ts'],

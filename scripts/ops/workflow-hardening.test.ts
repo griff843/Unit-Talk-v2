@@ -13,6 +13,7 @@ import {
   normalizeProofOutputForIssueBinding,
 } from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
+import { REQUIRED_CHECK_NAME } from './executor-result-validate.js';
 
 type WorkflowDocument = Record<string, unknown>;
 
@@ -70,7 +71,45 @@ interface MockComment {
   user: { login: string; type: string };
 }
 
-async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: MockCheckRun[] = []) {
+// RMA/v1 replaced the lane-manifest tier with risk classification over the
+// diff, so the harness parameterizes on what the PR TOUCHES rather than on how
+// its lane was admitted. 'reserved' stands in for any file under a reserved
+// surface; 'auto' for ordinary product code.
+type MergeGateRisk = 'reserved' | 'auto';
+
+const RISK_FILES: Record<MergeGateRisk, Array<{ filename: string; patch: string; status: string }>> = {
+  reserved: [{ filename: 'supabase/migrations/20260902_x.sql', patch: '+SELECT 1;', status: 'added' }],
+  auto: [{ filename: 'apps/smart-form/lib/form-utils.ts', patch: '+const x = 1;', status: 'modified' }],
+};
+
+/** The github-script body merge-gate.yml actually executes. */
+function mergeGateEvaluatorScript(): string {
+  const gate = objectField(objectField(readWorkflowYaml('merge-gate.yml'), 'jobs'), 'gate');
+  const steps = gate.steps as Array<Record<string, unknown>>;
+  const evalStep = steps.find(
+    (step) =>
+      typeof step.with === 'object' &&
+      step.with &&
+      typeof (step.with as Record<string, unknown>).script === 'string',
+  );
+  assert.ok(evalStep, 'merge-gate.yml must have an executable github-script step');
+  return stringField(objectField(evalStep, 'with'), 'script');
+}
+
+type MergeGateHarnessOptions = {
+  /**
+   * Simulates the PHASE 1 bootstrap: the trusted BASE checkout does not yet
+   * carry scripts/ops/merge-authority.cjs, so `require` throws
+   * MODULE_NOT_FOUND exactly as it does on the PR that first introduces it.
+   */
+  classifierMissingFromBase?: boolean;
+};
+
+async function createMergeGateHarness(
+  risk: MergeGateRisk,
+  initialChecks: MockCheckRun[] = [],
+  options: MergeGateHarnessOptions = {},
+) {
   const workflow = readWorkflowYaml('merge-gate.yml');
   const gate = objectField(objectField(workflow, 'jobs'), 'gate');
   const steps = gate.steps as Array<Record<string, unknown>>;
@@ -86,6 +125,8 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
   const AsyncFunction = Object.getPrototypeOf(async () => undefined).constructor as AsyncFunctionConstructor;
   const evaluate = new AsyncFunction('github', 'context', 'core', 'require', script);
   const verdictModule = await import('./merge-gate-verdict.cjs');
+  const authorityModule = await import('./merge-authority.cjs');
+  const changedFiles = RISK_FILES[risk];
 
   const prNumber = 1585;
   const headSha = '1585158515851585158515851585158515851585';
@@ -96,7 +137,8 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
     base: { sha: baseSha },
     title: 'feat(ops): UTV2-1585 canonical check identity',
   };
-  const labels = [`tier:${tier}`];
+  // RMA/v1 carries no tier label; authority comes from the diff.
+  const labels: string[] = [];
   const comments: MockComment[] = [];
   const reviews: Array<{ state: string }> = [];
   const postedGateComments: string[] = [];
@@ -114,9 +156,14 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
 
   const github = {
     paginate: async (
-      endpoint: (params: Record<string, unknown>) => Promise<{ data: { check_runs: MockCheckRun[] } }>,
+      endpoint: (params: Record<string, unknown>) => Promise<{ data: unknown }>,
       params: Record<string, unknown>,
-    ) => (await endpoint(params)).data.check_runs,
+    ) => {
+      const { data } = await endpoint(params);
+      // checks.listForRef pages on `.check_runs`; pulls.listFiles pages on the
+      // array itself. The real Octokit paginate handles both.
+      return Array.isArray(data) ? data : (data as { check_runs: MockCheckRun[] }).check_runs;
+    },
     rest: {
       checks: {
         listForRef,
@@ -164,14 +211,17 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
       pulls: {
         get: async () => ({ data: pr }),
         listReviews: async () => ({ data: reviews }),
+        listFiles: async () => ({ data: changedFiles }),
       },
       repos: {
-        getContent: async () => ({
-          data: {
-            content: Buffer.from(JSON.stringify({ issue_id: 'UTV2-1585', tier })).toString('base64'),
-            encoding: 'base64',
-          },
-        }),
+        // RMA/v1 derives authority from the diff, never from a lane manifest.
+        // Throwing here is the assertion that the manifest read is really gone
+        // rather than merely unused on the paths these tests happen to take.
+        getContent: async () => {
+          throw new assert.AssertionError({
+            message: 'merge-gate.yml must not read repository content to resolve merge authority',
+          });
+        },
       },
     },
   };
@@ -188,8 +238,20 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
       },
     };
     const requireModule = (specifier: unknown) => {
-      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
-      return verdictModule;
+      if (specifier === './scripts/ops/merge-gate-verdict.cjs') return verdictModule;
+      if (specifier === './scripts/ops/merge-authority.cjs') {
+        if (options.classifierMissingFromBase) {
+          const err = new Error(
+            "Cannot find module './scripts/ops/merge-authority.cjs'",
+          ) as Error & { code?: string };
+          err.code = 'MODULE_NOT_FOUND';
+          throw err;
+        }
+        return authorityModule;
+      }
+      throw new assert.AssertionError({
+        message: `merge-gate.yml required an unexpected module: ${String(specifier)}`,
+      });
     };
 
     await evaluate(github, { eventName, payload, repo: { owner: 'unit-talk', repo: 'v2' } }, core, requireModule);
@@ -504,8 +566,8 @@ test('UTV2-1585: only the custom exact-head check owns the required Merge Gate i
   );
 });
 
-test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
-  const harness = await createMergeGateHarness('T1');
+test('UTV2-1585 (RMA): reserved-surface pre-verdict, review, and exact-head verdict events update one canonical check in place', async () => {
+  const harness = await createMergeGateHarness('reserved');
 
   await harness.run('pull_request');
   assert.strictEqual(harness.createCount(), 1);
@@ -540,27 +602,50 @@ test('UTV2-1585: T1 pre-verdict, review, and exact-head verdict events update on
   assert.strictEqual(harness.checks[0].conclusion, 'success');
 });
 
-test('UTV2-1585: T2 review approval and dismissal re-evaluate the same canonical check', async () => {
-  const harness = await createMergeGateHarness('T2');
+// RMA/v1 removed the GitHub-review approval path. It was unusable in practice
+// -- GitHub blocks self-approval and every executor here opens PRs under the
+// same griff843 identity -- and keeping it would have meant two different human
+// artifacts authorizing the same reserved change. The label + head-bound verdict
+// pair is now the single path, and reviews carry no authority in either
+// direction.
+test('UTV2-1585 (RMA): a review approval does not authorize a reserved diff', async () => {
+  const harness = await createMergeGateHarness('reserved');
 
   await harness.run('pull_request');
   assert.strictEqual(harness.checks[0].conclusion, 'failure');
 
   harness.reviews.push({ state: 'APPROVED' });
   await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'success');
-
-  harness.reviews.splice(0, harness.reviews.length, { state: 'DISMISSED' });
-  await harness.run('pull_request_review');
-  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'failure',
+    'a GitHub review approval must not substitute for the label + head-bound verdict',
+  );
   assert.strictEqual(harness.createCount(), 1);
   assert.strictEqual(harness.checks.length, 1);
+});
+
+test('UTV2-1585 (RMA): an unreserved diff is authorized with no human artifact at all', async () => {
+  const harness = await createMergeGateHarness('auto');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'success');
+  assert.strictEqual(harness.labels.length, 0, 'no approval label should be required');
+  assert.strictEqual(harness.comments.length, 0, 'no verdict comment should be required');
+});
+
+test('UTV2-1585 (RMA): governance:pause blocks even an unreserved diff', async () => {
+  const harness = await createMergeGateHarness('auto');
+  harness.labels.push('governance:pause');
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
 });
 
 test('UTV2-1585: same-identity duplicate exact-head failures are neutralized and cannot override the canonical result', async () => {
   const headSha = '1585158515851585158515851585158515851585';
   const harnessPrNumber = 1585;
-  const harness = await createMergeGateHarness('T3', [
+  const harness = await createMergeGateHarness('auto', [
     {
       id: 4,
       name: 'Merge Gate',
@@ -604,7 +689,7 @@ test('UTV2-1585: pre-fix legacy duplicates without a canonical external_id are a
   // Mirrors the real state observed on PR #1304's head after the former
   // create-on-every-event behavior: six same-head "Merge Gate" checks, none
   // carrying the canonical external_id format, four of them failure.
-  const harness = await createMergeGateHarness('T3', [
+  const harness = await createMergeGateHarness('auto', [
     { id: 100, name: 'Merge Gate', head_sha: headSha, external_id: '3dd4c479-23c0-58a9-94de-3da9c130d6a9', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
     { id: 101, name: 'Merge Gate', head_sha: headSha, external_id: 'ea2023ef-0e17-54d1-a5ec-18c7a0431972', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
     { id: 102, name: 'Merge Gate', head_sha: headSha, external_id: '066178b1-5a03-5e40-a62d-aae8aa550458', app: { slug: 'github-actions' }, status: 'completed', conclusion: 'failure' },
@@ -1920,4 +2005,148 @@ test('UTV2-1713: linear-auto-close is not queued behind the closeout mutex', () 
     /\$\{\{\s*github\.sha\s*\}\}/u,
     'linear-auto-close must scope its concurrency group per commit so distinct merges never queue behind one another',
   );
+});
+
+// ── RMA/v1 two-phase bootstrap ────────────────────────────────────────────
+// Merge Gate loads its classifier from the PR's BASE checkout, so on the one
+// PR that first lands that classifier the require() throws. Treated as an
+// internal error, that made RMA landable only by a repo-owner override of a
+// required check — the single dependency a merge-authority control must not
+// have. These tests execute the real workflow script down the bootstrap path.
+
+test('RMA bootstrap: a base checkout without the classifier reserves the merge as human, it does not release it', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.checks.length, 1);
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'failure',
+    'an unclassifiable diff must block, even one that would classify as auto',
+  );
+  const summary = harness.checks[0].output?.summary ?? '';
+  assert.match(summary, /PHASE 1 \(bootstrap\)/);
+  assert.match(summary, /griff-approved/);
+  assert.doesNotMatch(
+    summary,
+    /Internal error/,
+    'the bootstrap must be a stated classification, not an unclearable internal error',
+  );
+});
+
+test('RMA bootstrap: the CODEOWNERS label plus a head-bound verdict clears it — no admin override needed', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+
+  await harness.run('pull_request');
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+
+  harness.labels.push('griff-approved');
+  harness.comments.push({
+    body: [
+      'PM_VERDICT: APPROVED',
+      'schema: pm-verdict/v1',
+      'Issue: UTV2-1585',
+      `PR: ${harness.prNumber}`,
+      `Head SHA: ${harness.headSha}`,
+    ].join('\n'),
+    created_at: '2026-09-02T15:30:00Z',
+    user: { login: 'griff843', type: 'User' },
+  });
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(
+    harness.checks[0].conclusion,
+    'success',
+    'the bootstrap must be clearable by the ordinary reserved-surface artifacts',
+  );
+  assert.strictEqual(harness.checks.length, 1, 'the canonical check identity must be updated in place');
+});
+
+test('RMA bootstrap: the label alone does not clear it', async () => {
+  const harness = await createMergeGateHarness('auto', [], { classifierMissingFromBase: true });
+  harness.labels.push('griff-approved');
+
+  await harness.run('pull_request');
+
+  assert.strictEqual(harness.checks[0].conclusion, 'failure');
+});
+
+test('RMA bootstrap: only MODULE_NOT_FOUND takes the bootstrap path', () => {
+  // A corrupted policy is not the same condition as a policy that does not
+  // exist yet. If any thrown error entered the bootstrap branch, breaking the
+  // classifier would become a way to reach a path with weaker checks.
+  const script = mergeGateEvaluatorScript();
+  assert.match(script, /if \(e\.code !== 'MODULE_NOT_FOUND'\) throw e;/);
+});
+
+test('RMA: both required gates classify previous_filename, so a rename cannot leave a reserved surface', () => {
+  for (const name of ['merge-gate.yml', 'executor-result-validator.yml']) {
+    assert.match(
+      readWorkflow(name),
+      /previous_filename: f\.previous_filename/,
+      `${name} must pass previous_filename to the classifier`,
+    );
+  }
+});
+
+test('RMA: both required gates tell the classifier the PR\'s own changed-file total', () => {
+  // listFiles stops at 3,000 files however far you paginate, so a reserved file
+  // can simply be absent from the response. The count comparison is the only
+  // way to notice from the API alone; without it both gates would classify the
+  // visible subset of an oversized PR as a complete, clean diff.
+  for (const name of ['merge-gate.yml', 'executor-result-validator.yml']) {
+    const wf = readWorkflow(name);
+    assert.match(wf, /declaredFileCount = pr\.changed_files;/, `${name} must capture the PR total`);
+    assert.match(wf, /^\s+declaredFileCount,$/m, `${name} must pass it to the classifier`);
+    assert.match(wf, /additions: f\.additions/, `${name} must pass rename change counts`);
+  }
+});
+
+test('RMA bootstrap: a pull_request run owns the required ERV identity only while base lacks the classifier', () => {
+  // The required "Executor Result Validation" context is normally created only
+  // by issue_comment / workflow_dispatch, and those events run the workflow
+  // file from the DEFAULT BRANCH. So for the PR that first lands RMA the
+  // required context comes entirely from main's pre-RMA validator, which
+  // rejects the branch outright -- unclearable, and unfixable by the PR that
+  // carries the fix. pull_request is the one event whose workflow file comes
+  // from the head, so it takes the identity while, and only while, the
+  // classifier is absent from the trusted base checkout.
+  const erv = readWorkflow('executor-result-validator.yml');
+  assert.match(erv, /if \[ ! -f scripts\/ops\/merge-authority\.cjs \]; then/);
+  assert.match(erv, /if \[ "\$EVENT_NAME" = "pull_request" \] && \[ -n "\$BOOTSTRAP" \]; then/);
+  // The literal the bootstrap branch emits must be the required context name
+  // itself -- a drifted string would create a check nothing requires.
+  assert.match(erv, new RegExp(`NAME="${REQUIRED_CHECK_NAME}"`));
+  // Outside bootstrap the name still comes from the tested resolver, never a
+  // second hand-written literal.
+  assert.match(erv, /NAME=\$\(pnpm exec tsx scripts\/ops\/executor-result-validate\.ts resolve-check-name "\$EVENT_NAME"\)/);
+});
+
+test('RMA bootstrap: the ERV re-trigger must not also restart CI', () => {
+  // A bootstrap run owns the required identity and fires on the same event as
+  // ci.yml, so on opened/synchronize/reopened it always evaluates while
+  // `verify` is still queued and reports "CI check is queued, not completed".
+  // Close/reopen cannot fix that -- it restarts verify too, so the loop never
+  // converges. `labeled` is the way out precisely because ci.yml does NOT
+  // listen for it; if ci.yml ever declared explicit types including `labeled`,
+  // this re-trigger would silently become another restart.
+  const erv = parseYaml(readWorkflow('executor-result-validator.yml'));
+  const ervTypes: string[] = erv.on.pull_request.types;
+  assert.ok(ervTypes.includes('labeled'), 'ERV must re-evaluate on a label change');
+
+  const ci = parseYaml(readWorkflow('ci.yml'));
+  const ciTypes: string[] | undefined = ci.on.pull_request?.types;
+  // Undefined means GitHub's defaults (opened/synchronize/reopened), which
+  // exclude `labeled`. An explicit list must exclude it too.
+  if (ciTypes) {
+    assert.ok(!ciTypes.includes('labeled'), 'ci.yml must not re-run verify on a label change');
+  }
+});
+
+test('RMA: executor-result-validator requires a proof bundle when it cannot classify', () => {
+  const erv = readWorkflow('executor-result-validator.yml');
+  assert.match(erv, /proofRequired = true;/);
+  assert.match(erv, /if \(e\.code !== 'MODULE_NOT_FOUND'\) throw e;/);
 });
