@@ -181,8 +181,24 @@ function elementRunsRunner(element, scripts, config, visited) {
   const runners = new Set(config.runnerCommands || []);
   const wrappers = new Set(config.commandWrappers || []);
   let words = element.split(/\s+/).filter(Boolean);
-  // `FOO=bar tsx --test x` runs tsx. A prefix assignment is not a command.
-  while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
+  // A leading `VAR=value` prefix is REFUSED, not skipped over.
+  //
+  // Skipping it was the reasoning error: `PATH=./fake-bin tsx --test x` was
+  // read as "assignment, then the bare runner `tsx`", and a bare runner was
+  // trusted on the grounds that it resolves through the workspace's own
+  // `node_modules/.bin`. That grounds is exactly what the assignment removes.
+  // A PR that adds an executable `fake-bin/tsx` exiting 0 then supplies both
+  // the runner and its behaviour -- the same escape the bare-word rule was
+  // written to close, reached one word earlier.
+  //
+  // Refusing outright rather than allowlisting "harmless" variables: whether a
+  // variable affects resolution is a property of the environment, not of this
+  // file, and enumerating the ones that do is the arms race this grammar
+  // exists to stop. The cost was measured before choosing: across the root and
+  // every workspace manifest exactly ONE script uses a leading assignment
+  // (`apps/smart-form` `test:e2e:fixture`), and it is not in the required
+  // chain. Inside the protected closure this costs nothing.
+  if (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) return false;
   while (words.length) {
     const word = words[0];
     const base = word.replace(/^.*\//, '');
@@ -407,14 +423,44 @@ function analyzeManifests({ files, manifests, config }) {
     // unprotected, and changing apps/smart-form's `verify` to run nothing left
     // every required check green.
     if (!isRoot) {
-      const workspaceScripts = (config.requiredChainWorkspaceScripts || {})[head && head.name] || [];
+      // Keyed by MANIFEST PATH, not by package name.
+      //
+      // Keying by `head.name` meant a workspace could leave the protected set
+      // by renaming itself: the lookup found no entry and the change went
+      // `auto`. That is not merely a missed reservation -- it silently removes
+      // the checks. `pnpm --filter <name>` that matches nothing prints
+      // "No projects matched" and exits 0 unless `--fail-if-no-match` is
+      // passed, and the root chain does not pass it. So renaming
+      // `@unit-talk/smart-form` makes `pnpm --filter @unit-talk/smart-form
+      // verify` a successful no-op and `verify:static` stays green while an
+      // entire app stops being verified. A path cannot be changed without
+      // moving the file, which appears in the diff as its own reserved event.
+      const entrypoints = (config.requiredChainWorkspaceScripts || {})[name] || [];
       const allowed = new Set(config.requiredChainAllowedFlags || []);
-      for (const key of workspaceScripts) {
+
+      // Renaming a protected workspace IS the attack above, so it reserves on
+      // its own -- before any script comparison, because after the rename the
+      // filter selects nothing and the scripts no longer matter.
+      if (entrypoints.length > 0 && base && head && base.name !== head.name) {
+        reserve(
+          'ci-required-check-entrypoints',
+          `${name} is selected by the root required chain through \`pnpm --filter ${String(base.name)}\`, and its package name changed to "${String(head.name)}". An unmatched filter is a successful no-op, so this silently removes the checks it names.`
+        );
+      }
+
+      // The closure, not the named entrypoints. The policy names smart-form's
+      // `verify`, but that is `pnpm type-check && pnpm test` -- so `test`,
+      // which runs six test files, was reachable from the required chain and
+      // unprotected. Replacing it with a single file returned `auto` while
+      // five required test files stopped running and `verify:static` stayed
+      // green. Same reasoning as the root closure, applied one file over.
+      const protectedClosure = reachableScripts([...entrypoints], headScripts, baseScripts);
+      for (const key of protectedClosure) {
         if (headScripts[key] === baseScripts[key]) continue;
         if (!isWidening(baseScripts[key], headScripts[key], allowed)) {
           reserve(
             'ci-required-check-entrypoints',
-            `Script "${key}" in ${name} is invoked by the root required chain through \`pnpm --filter\`, and its change is not a widening: ${String(headScripts[key]).slice(0, 120)}`
+            `Script "${key}" in ${name} is reachable from the root required chain through \`pnpm --filter\`, and its change is not a widening: ${String(headScripts[key]).slice(0, 120)}`
           );
         }
       }

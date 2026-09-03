@@ -713,7 +713,6 @@ test('real commands are recognised as invoking a runner', () => {
     'pnpm exec tsc -b tsconfig.json',
     'eslint . --cache',
     'turbo run build',
-    'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts',
     // Both links resolve inside this manifest. (Not `pnpm test:ops`, which
     // would be a self-reference and therefore a cycle that runs nothing.)
     'pnpm test:apps && pnpm lint',
@@ -726,6 +725,23 @@ test('real commands are recognised as invoking a runner', () => {
     );
     assert.equal(result.authority, 'auto', command);
   }
+
+  // `NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts` used to be in that list.
+  // Round 10 moved it here on purpose: an environment assignment is refused,
+  // not skipped over, because skipping it destroys the premise of the
+  // bare-word rule (see 'an environment assignment is refused, not skipped
+  // over'). The cost of refusing it is recorded here rather than hidden --
+  // this is a real reduction in permissiveness, and it is bounded: exactly one
+  // script in the repo uses a leading assignment, and it is not in the
+  // required chain.
+  const assigned = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['demo:run'] =
+        'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts';
+    }),
+  );
+  assert.equal(assigned.authority, 'human');
+  assert.ok(assigned.surfaces.includes('neutered-workspace-script'));
 });
 
 test('a script is unproven unless EVERY link of its && chain runs work', () => {
@@ -1104,4 +1120,144 @@ test('a config flag is ordinary OUTSIDE the required chain and reserved inside i
   );
   assert.equal(inside.authority, 'human');
   assert.ok(inside.surfaces.includes('ci-required-check-entrypoints'));
+});
+
+// ── round 10: three escapes an independent review found at 3b08de02 ─────────
+
+test('an environment assignment is refused, not skipped over', () => {
+  // The bare-word rule trusted `tsx` because a bare word resolves through the
+  // workspace's own node_modules/.bin, which a diff cannot repoint without
+  // changing a manifest this validator reserves. Stripping a leading
+  // `VAR=value` prefix and then applying that rule destroyed its own premise:
+  // `PATH=./fake-bin tsx --test x`, plus an executable `fake-bin/tsx` added in
+  // the same diff that exits 0, supplies both the runner and its behaviour.
+  // /bin/sh resolves it to the fake and returns success without running a test.
+  const base = JSON.stringify({ scripts: { verify: 'pnpm test:ops', 'test:ops': 'tsx --test a.test.ts' } });
+  const classifyRoot = (scripts: Record<string, string>) =>
+    classifyDiff({
+      files: [file('package.json', '+ irrelevant')],
+      policy,
+      manifests: { 'package.json': { base, head: JSON.stringify({ scripts }) } },
+    });
+
+  for (const value of [
+    'PATH=./fake-bin tsx --test a.test.ts b.test.ts',
+    'NODE_OPTIONS=--test-only tsx --test a.test.ts b.test.ts',
+    'FOO=bar tsx --test a.test.ts b.test.ts',
+  ]) {
+    const result = classifyRoot({ verify: 'pnpm test:ops', 'test:ops': value });
+    assert.equal(result.authority, 'human', value);
+    // `neutered-workspace-script` is the surface: the command cannot be shown
+    // to run work at all, which is a stronger statement than "it narrowed".
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), `${value}: ${result.surfaces.join(',')}`);
+  }
+
+  // Refusing outright is only defensible because it costs nothing: the plain
+  // widening still passes.
+  const widened = classifyRoot({ verify: 'pnpm test:ops', 'test:ops': 'tsx --test a.test.ts b.test.ts' });
+  assert.equal(widened.authority, 'auto', widened.reasons.join(' | '));
+});
+
+test('the workspace protected set is a closure, not the named entrypoint', () => {
+  // Policy names smart-form's `verify`. That script is `pnpm type-check &&
+  // pnpm test`, and it is `test` that runs the six test files. Checking only
+  // the named entrypoint left `test` reachable from the required chain and
+  // unprotected: replacing it with a single file returned `auto` while five
+  // required test files stopped running and `verify:static` stayed green.
+  const base = JSON.stringify({
+    name: '@unit-talk/smart-form',
+    scripts: { verify: 'pnpm type-check && pnpm test', 'type-check': 'tsc --noEmit', test: 'tsx --test a.test.ts b.test.ts c.test.ts' },
+  });
+  const classifyWorkspace = (scripts: Record<string, string>) =>
+    classifyDiff({
+      files: [file('apps/smart-form/package.json', '+ irrelevant')],
+      policy,
+      manifests: {
+        'apps/smart-form/package.json': {
+          base,
+          head: JSON.stringify({ name: '@unit-talk/smart-form', scripts }),
+        },
+      },
+    });
+
+  const narrowed = classifyWorkspace({
+    verify: 'pnpm type-check && pnpm test',
+    'type-check': 'tsc --noEmit',
+    test: 'tsx --test a.test.ts',
+  });
+  assert.equal(narrowed.authority, 'human', narrowed.reasons.join(' | '));
+  assert.ok(narrowed.surfaces.includes('ci-required-check-entrypoints'));
+
+  // And adding a file to the reached script stays automatic, which is what
+  // stops this from being "reserve every workspace manifest edit".
+  const widened = classifyWorkspace({
+    verify: 'pnpm type-check && pnpm test',
+    'type-check': 'tsc --noEmit',
+    test: 'tsx --test a.test.ts b.test.ts c.test.ts d.test.ts',
+  });
+  assert.equal(widened.authority, 'auto', widened.reasons.join(' | '));
+});
+
+test('renaming a protected workspace does not remove it from the protected set', () => {
+  // `pnpm --filter <name>` that matches nothing prints "No projects matched"
+  // and exits 0 unless --fail-if-no-match is passed; the root chain does not
+  // pass it. So keying the protected set by package name let a workspace leave
+  // it by renaming itself: the lookup found no entry, the change classified
+  // `auto`, and `pnpm --filter @unit-talk/smart-form verify` became a
+  // successful no-op while `verify:static` stayed green. The set is keyed by
+  // manifest path now, and the rename itself reserves.
+  const base = JSON.stringify({
+    name: '@unit-talk/smart-form',
+    scripts: { verify: 'tsx --test a.test.ts b.test.ts' },
+  });
+  const renamed = classifyDiff({
+    files: [file('apps/smart-form/package.json', '+ irrelevant')],
+    policy,
+    manifests: {
+      'apps/smart-form/package.json': {
+        base,
+        head: JSON.stringify({ name: '@unit-talk/smart-form-v2', scripts: { verify: 'tsx --test a.test.ts b.test.ts' } }),
+      },
+    },
+  });
+  assert.equal(renamed.authority, 'human', renamed.reasons.join(' | '));
+  assert.ok(renamed.surfaces.includes('ci-required-check-entrypoints'));
+
+  // The rename plus a gutted script is the full attack, and must also reserve.
+  const renamedAndGutted = classifyDiff({
+    files: [file('apps/smart-form/package.json', '+ irrelevant')],
+    policy,
+    manifests: {
+      'apps/smart-form/package.json': {
+        base,
+        head: JSON.stringify({ name: '@unit-talk/smart-form-v2', scripts: { verify: 'echo skipped' } }),
+      },
+    },
+  });
+  assert.equal(renamedAndGutted.authority, 'human');
+
+  // An unprotected workspace renaming itself is ordinary and stays automatic.
+  const ordinary = classifyDiff({
+    files: [file('packages/domain/package.json', '+ irrelevant')],
+    policy,
+    manifests: {
+      'packages/domain/package.json': {
+        base: JSON.stringify({ name: '@unit-talk/domain', scripts: { test: 'tsx --test a.test.ts' } }),
+        head: JSON.stringify({ name: '@unit-talk/domain-core', scripts: { test: 'tsx --test a.test.ts' } }),
+      },
+    },
+  });
+  assert.equal(ordinary.authority, 'auto', ordinary.reasons.join(' | '));
+});
+
+test('the policy keys protected workspaces by manifest path', () => {
+  // The keys are load-bearing: a package name here silently protects nothing
+  // once the workspace renames itself, and nothing else in the system would
+  // notice. Asserted so the shape cannot regress to names.
+  const entries = Object.keys(policy.manifestPolicy.requiredChainWorkspaceScripts ?? {});
+  assert.ok(entries.length > 0, 'no protected workspace scripts declared');
+  for (const key of entries) {
+    assert.match(key, /package\.json$/, `not a manifest path: ${key}`);
+    assert.doesNotMatch(key, /^@/, `looks like a package name: ${key}`);
+  }
 });

@@ -273,16 +273,16 @@
     ],
     "requiredChainAllowedFlagsNote": "Flags permitted in a root script that is reachable from a required-check entrypoint. The named entrypoints reserve on any change; the scripts BELOW them reserve only when the change widens what a flag can do. Adding a test file to a group is ordinary work and stays automatic; adding a selector such as --test-name-pattern, -t, --grep, --shard or --bail does not, because it makes a required check pass while running less. This list is EXACTLY the flags the 37-script closure uses today, measured rather than guessed. Deliberately absent: --config and -c, which point a runner at a file that can itself disable the work; a required-chain script that needs one reserves.",
     "requiredChainWorkspaceScripts": {
-      "@unit-talk/smart-form": [
+      "apps/smart-form/package.json": [
         "verify"
       ],
-      "@unit-talk/discord-bot": [
+      "apps/discord-bot/package.json": [
         "command-manifest:check"
       ],
-      "@unit-talk/command-center": [
+      "apps/command-center/package.json": [
         "test"
       ]
     },
-    "requiredChainWorkspaceScriptsNote": "Scripts in OTHER manifests that the root required chain invokes through `pnpm --filter`. The required `verify` job depends on them exactly as much as on a root script, but they live in a manifest the root graph traversal cannot reach, so they were unprotected: changing apps/smart-form's `verify` to run nothing left every required check green. Measured from the root closure, which has exactly these three filtered edges today. Same widening rule applies as for a root required-chain script."
+    "requiredChainWorkspaceScriptsNote": "Scripts in OTHER manifests that the root required chain invokes through `pnpm --filter`. Keyed by MANIFEST PATH, never by package name: `pnpm --filter <name>` that matches nothing prints \"No projects matched\" and exits 0 unless --fail-if-no-match is passed, and the root chain does not pass it -- so keying by name let a workspace leave the protected set by renaming itself, turning `pnpm --filter @unit-talk/smart-form verify` into a successful no-op while `verify:static` stayed green. A path cannot change without moving the file, which is its own diff event. Renaming a protected workspace reserves on its own. Each entry is an ENTRYPOINT: the protected set is the transitive closure over that manifest's own script graph, because smart-form's `verify` is `pnpm type-check && pnpm test` and it is `test` that runs the six test files."
   }
 }
