@@ -366,6 +366,42 @@ $ pnpm type-check   -> pass (silent)
 $ pnpm test:ops     -> # tests 3008  # pass 3008  # fail 0
 ```
 
+### The required Executor Result Validation context is red here, and will stay red until #1491 lands
+
+Traced rather than assumed, because a red required check that is expected must be
+distinguishable from one that is not.
+
+`executor-result-validator.yml` chooses its checkout ref by event:
+
+- `pull_request` -> the PR's **base** SHA. Deliberate, and it is the fix for a `pwn_request`:
+  this job holds `checks: write` and executes `executor-result-validate.ts` from whatever is
+  checked out, so pinning to the base means it always runs trusted code.
+- `issue_comment` / `workflow_dispatch` -> `github.sha`, which for those events is the
+  **default branch** HEAD, i.e. `main`.
+
+And it chooses its check NAME by whether the checked-out base carries
+`scripts/ops/merge-authority.cjs`. Absent (RMA/v1 phase 1) the `pull_request` run creates the
+required `Executor Result Validation` context itself; present, it creates only the
+non-required `Executor Result Preflight`, and the required context comes solely from
+`issue_comment`.
+
+This PR is based on #1491's branch, which carries the classifier. So it is NOT in phase 1:
+its `pull_request` run publishes `Executor Result Preflight` (green at every recent head),
+while the required `Executor Result Validation` is produced by an `issue_comment` run
+executing **main's pre-RMA validator**, which rejects it for exactly the assumptions this PR
+removes:
+
+```
+- Invalid Issue ID: "<missing>". Must match UTV2-NNN or UNI-NNN.
+- Invalid branch: "harness/mission-native-recalibration". Must match claude/utv2-NNN-*, ...
+```
+
+That is unclearable from this PR by any comment, label or verdict, and it is not a defect
+introduced here. It resolves mechanically when #1491 merges: this PR then retargets to
+`main`, and main's validator is the corrected one. Recorded so that a reviewer does not read
+a structurally expected red as an unresolved failure, and so that no one is tempted to
+"fix" it by renaming the branch — which would close the PR.
+
 ## Merge SHA Binding
 
 Bound after merge by `ops:proof-generate --merge-sha`. The `Execution SHA` below is the last
