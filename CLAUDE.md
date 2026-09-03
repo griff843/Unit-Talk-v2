@@ -12,6 +12,27 @@ Unit Talk V2 is a contract-first, fail-closed sports-betting pick pipeline. Clau
 
 ---
 
+## Mission — mandatory context
+
+Before planning, executing, reviewing, delegating, or resuming work, read:
+
+@docs/mission/intent.md
+@docs/mission/spec.md
+@docs/mission/plan.md
+@docs/05_operations/STANDING_GUARDRAILS.md
+
+These define the current mission.
+
+- `intent.md` is Griff-owned. Do not change its intent without Griff ratification.
+- `spec.md` defines the required outcome and points to canonical contracts.
+- `plan.md` is Claude-owned. Reconcile it against live GitHub/runtime truth and update it as reality changes.
+- Live evidence establishes current state.
+- Relevant canonical contracts remain authoritative for their governed domains.
+
+Claude owns orchestration from this context. Do not require Griff to restate the mission in chat.
+
+---
+
 ## Commands
 
 ```bash

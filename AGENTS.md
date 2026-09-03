@@ -4,6 +4,24 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 ---
 
+## Mission Context
+
+Before executing work, read:
+
+- `docs/mission/intent.md`
+- `docs/mission/spec.md`
+- `docs/mission/plan.md`
+
+These provide the shared Unit Talk mission and current production direction.
+
+The assigned Codex work packet defines your bounded implementation slice.
+
+Do not redefine the mission, widen your task, or modify `docs/mission/intent.md`.
+
+Claude owns `plan.md`; Codex may use it as context but does not change orchestration unless explicitly assigned.
+
+---
+
 ## Workspace
 
 - Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
