@@ -1,6 +1,6 @@
 # PROOF: UTV2-1824
 
-MERGE_SHA: pending merge
+MERGE_SHA: 2ac23342444ee2b3fbb086493e1b6ca6d862c59f
 
 > Merge authority does not exist before the merge, so this row must not present one.
 > Execution identity lives in `sha_binding.verified_source_sha`, which is
@@ -158,7 +158,7 @@ sign in; that value is operator-supplied by policy and is not set by this lane.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 2ac23342444ee2b3fbb086493e1b6ca6d862c59f
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1488
 Approved PR head: 284951151ef8c4c3198fbee603f50ace9143a34c
 Execution SHA: 284951151ef8c4c3198fbee603f50ace9143a34c
