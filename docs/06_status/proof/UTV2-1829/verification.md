@@ -12,7 +12,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: bc87a718701ef11a798511e0857a4aa29ed29076
+Head SHA: 5b895abdb96c881030e2c2979bde100e1c151e37
 result: pass
 
 ## ASSERTIONS:
@@ -105,9 +105,58 @@ result: pass
       resolved-defect section, Requires-Griff items 2 and 9, and the timestamp. **(b) The policy
       instances** (`938c45fb5` → HEAD): three hunks — the admissibility-debt section gains the two
       canonical issue owners and the PM ruling that the gate is not changed; Wave 6 gains the
-      empty-slot rule; Learned gains four entries. Both commits touch live state and recorded
-      observation only. `spec.md` is byte-identical across the whole lane; `intent.md` is covered
-      separately by A12. Falsifies if either diff reaches a section outside those named.
+      empty-slot rule; Learned gains four entries. **(c) The PM-directed corrections**
+      (`938c45fb5` → `5b895abdb`): exactly two files, `docs/mission/plan.md` and
+      `docs/mission/spec.md`. All three commits touch live state, recorded observation and index
+      pointers only. `intent.md` is covered separately by A12.
+
+      An earlier revision of this assertion said `spec.md` was byte-identical across the whole
+      lane. That was true when written and stopped being true at `5b895abdb`, which corrects the
+      program-status pointer and the incident-runbook binding status. It is restated here rather
+      than left standing. Falsifies if any of the three diffs reaches a section outside those
+      named.
+
+- [x] **A13 — the four PM-identified overstatements are corrected, and each correction is backed by
+      the source that contradicted the earlier claim.** Every measurement below is read from
+      `origin/main`, not from this branch, so a reviewer can check the corrections against a source
+      this PR does not control.
+
+      **(1) Deploy smoke vs. current readiness.** `plan.md` previously headed the section
+      "Production is deployed, healthy, and contained". `origin/main`'s
+      `docs/06_status/readiness/readiness-score.json`, generated `2026-09-03T15:40:56.081Z`, reports
+      `verdict: RED`, `observability: degraded`, `deployed_sha e48106fc…` against
+      `main_sha 48b5f679…` — the deployed commit is not `main`. The section now separates the
+      point-in-time 2026-09-01 smoke from current readiness and states the RED verdict up front.
+
+      **(2) Direct-`main` prevention sequencing.** The sentence "it should follow the backlog, not
+      precede it" now occurs 0 times. The prohibition is already in force; what is outstanding is a
+      *mechanical* prevention control, which is a reserved PM decision. Incorrectly created PRs do
+      not earn a deferral of a safety control. Branch protection is not changed in this lane (A14).
+
+      **(3) Program-status entrypoint.** `origin/main`'s `PROGRAM_STATUS.md` line 3 reads
+      "SUPERSEDED / HISTORICAL — This document is retained for audit history only" and names
+      `docs/06_status/CURRENT_STATE.md`. `spec.md` now points at `CURRENT_STATE.md`, lists
+      `PROGRAM_STATUS.md` only so an agent who finds it knows what it is, and states that live
+      evidence overrides every status snapshot including `CURRENT_STATE.md`.
+
+      **(4) Incident runbooks.** `INCIDENT_RUNBOOK.md` declares `Status: DRAFT — PM ratification
+      required before treated as binding process`; `SUPABASE_WRITE_PATH_INCIDENT_RUNBOOK.md`
+      declares `Status: DRAFT`. Listing them unqualified in a safety-boundary table promoted them by
+      placement to an authority their own text refuses. They are now marked non-binding, and the
+      ratified authorities that actually govern incident action are named:
+      `DB_ENVIRONMENT_OPERATOR_POLICY.md` (RATIFIED), `BREAK_GLASS_PROTOCOL.md` (Active),
+      `STANDING_GUARDRAILS.md`, and the reserved decisions in `intent.md`.
+
+      Falsifies if any of the four quoted source strings differs on `origin/main`, or if the
+      deferral sentence reappears.
+
+- [x] **A14 — the corrections change no gate, contract, workflow or branch protection.** The
+      correction commit `5b895abdb` names exactly two files, `docs/mission/plan.md` and
+      `docs/mission/spec.md`. Across the whole branch diff,
+      `git diff --name-only origin/main..HEAD | grep -cE '^(\.github/|\.claude/|scripts/|package\.json|docs/05_operations/)'`
+      returns **0**. This matters specifically because correction (2) is *about* a branch-protection
+      decision: the lane records the correct sequencing and leaves the reserved decision to PM
+      rather than acting on it. Falsifies if that count is non-zero.
 
 - [x] **A12 — `intent.md` carries exactly one addition, and it is a PM ratification recorded rather
       than an agent decision.** The only change to the owner-authored file is the section
@@ -126,7 +175,7 @@ result: pass
 
 ```
 $ git rev-parse HEAD
-bc87a718701ef11a798511e0857a4aa29ed29076
+5b895abdb96c881030e2c2979bde100e1c151e37
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -233,4 +282,4 @@ and none should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: bc87a718701ef11a798511e0857a4aa29ed29076
+Execution SHA: 5b895abdb96c881030e2c2979bde100e1c151e37
