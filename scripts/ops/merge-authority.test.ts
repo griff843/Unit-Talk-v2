@@ -701,8 +701,10 @@ test('real commands are recognised as invoking a runner', () => {
     'playwright test -c playwright.config.ts',
     'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts',
     'pnpm test:apps && pnpm test:ops',
-    'pnpm --filter @unit-talk/smart-form verify',
     'node --test scripts/a.test.mjs',
+    // A cross-package script it cannot resolve does not disqualify a chain
+    // whose other links do run work.
+    'pnpm lint && pnpm --filter @unit-talk/smart-form verify',
   ]) {
     const result = classifyRoot(
       rootManifest((m) => {
@@ -782,4 +784,71 @@ test('a shell invoked with -c is judged on what it was handed', () => {
     }),
   );
   assert.equal(real.authority, 'auto');
+});
+
+// ── round 6: control flow is part of what a command does ──────────────────
+
+test('short-circuited and unreachable runners do not count', () => {
+  // POSIX `||` runs the right side only when the left FAILS, so `true || tsx`
+  // never launches tsx. Nothing after `exit 0` runs either. A resolver that
+  // treats a command as a flat bag of segments accepts both.
+  for (const command of [
+    'true || tsx --test scripts/ops/a.test.ts',
+    'exit 0 && tsx --test scripts/ops/a.test.ts',
+    'exit 0; tsx --test scripts/ops/a.test.ts',
+    ': || tsx --test scripts/ops/a.test.ts',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), command);
+  }
+});
+
+test('an alternation is proven only when every branch runs work', () => {
+  const both = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'tsx --test scripts/ops/a.test.ts || tsx --test scripts/ops/b.test.ts';
+    }),
+  );
+  assert.equal(both.authority, 'auto');
+});
+
+test('a filtered pnpm command is resolved, not trusted for its --filter', () => {
+  // `pnpm --filter <pkg> exec true` exits 0 having run only `true`. Treating
+  // `--filter` itself as proof of work accepted it.
+  const inert = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'pnpm --filter @unit-talk/contracts exec true';
+    }),
+  );
+  assert.equal(inert.authority, 'human');
+  assert.ok(inert.surfaces.includes('neutered-workspace-script'));
+
+  const real = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'pnpm --filter @unit-talk/contracts exec tsx --test test/a.test.ts';
+    }),
+  );
+  assert.equal(real.authority, 'auto');
+});
+
+test('a cross-package script name cannot be proven, so it reserves', () => {
+  // `pnpm --filter X verify` names a script in a manifest this diff does not
+  // contain. Nothing here can show what it runs, so it stays unproven. The
+  // cost is small and stated: only the root `dev*` keys use this shape, and
+  // every other key that does is already frozen as a CI entrypoint.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'pnpm --filter @unit-talk/smart-form verify';
+    }),
+  );
+  assert.equal(result.authority, 'human');
 });

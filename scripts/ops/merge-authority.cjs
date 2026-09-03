@@ -124,46 +124,84 @@ function decodeJsonEscapes(line) {
 // produces the same parsed value produces the same verdict.
 
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
+/** Commands after which nothing in the same sequence runs. */
+const TERMINATORS = new Set(['exit', 'return']);
 
-/** Does a script command actually execute something that runs work? */
+/**
+ * Does a script command actually execute something that runs work?
+ *
+ * Control flow is honoured, because the shell honours it. `true || tsx --test`
+ * contains a runner that POSIX short-circuiting guarantees never launches, and
+ * `exit 0 && tsx --test` contains one that is never reached. Treating a command
+ * as a flat bag of segments accepts both.
+ */
 function commandInvokesRunner(command, scripts, config, seen) {
   if (typeof command !== 'string') return false;
-  const runners = new Set(config.runnerCommands || []);
-  const wrappers = new Set(config.commandWrappers || []);
   const visited = seen || new Set();
-  for (const rawSegment of command.split(/&&|\|\||;|\|/)) {
+  // `a || b` runs b only when a fails, so EITHER branch may be the one that
+  // executes. The command is proven only when every alternative is proven.
+  const alternatives = command.split('||');
+  if (alternatives.length > 1) {
+    return alternatives.every((alt) => sequenceInvokesRunner(alt, scripts, config, visited));
+  }
+  return sequenceInvokesRunner(command, scripts, config, visited);
+}
+
+/** One `||`-free sequence: segments joined by `&&`, `;` or a pipe. */
+function sequenceInvokesRunner(sequence, scripts, config, visited) {
+  for (const rawSegment of sequence.split(/&&|;|\|/)) {
     // A `#` comment is inert to the shell, so a runner name inside one proves
     // nothing about what the command executes.
     const segment = rawSegment.replace(/(^|\s)#.*$/, '').trim();
     if (!segment) continue;
-    let words = segment.split(/\s+/).filter(Boolean);
-    while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
-    while (words.length) {
-      const base = words[0].replace(/^.*\//, '');
-      // `bash -c "true"` invokes a shell but runs nothing. Judge what the shell
-      // was actually handed, not the fact that a shell appears.
-      if (SHELLS.has(base) && words[1] === '-c') {
-        const inline = words.slice(2).join(' ').replace(/^["']|["']$/g, '');
-        return commandInvokesRunner(inline, scripts, config, visited);
-      }
-      if (runners.has(base)) return true;
-      if (wrappers.has(base)) {
-        // `pnpm --filter <pkg> <script>` delegates into another manifest, whose
-        // own scripts this same rule checks when that manifest changes.
-        if (words.some((w) => w === '--filter' || w === '-F' || w.startsWith('--filter='))) {
-          return true;
-        }
-        words = words.slice(1).filter((w) => !w.startsWith('-'));
-        continue;
-      }
-      // `pnpm test:apps` resolves inside the same manifest. The visited set stops
-      // a cycle from recursing forever; a cycle runs nothing, so it stays false.
-      if (Object.prototype.hasOwnProperty.call(scripts, base) && !visited.has(base)) {
-        visited.add(base);
-        if (commandInvokesRunner(scripts[base], scripts, config, visited)) return true;
-      }
-      break;
+    const verdict = segmentInvokesRunner(segment, scripts, config, visited);
+    if (verdict === 'terminates') return false;
+    if (verdict === true) return true;
+  }
+  return false;
+}
+
+/** @returns {true|false|'terminates'} */
+function segmentInvokesRunner(segment, scripts, config, visited) {
+  const runners = new Set(config.runnerCommands || []);
+  const wrappers = new Set(config.commandWrappers || []);
+  let words = segment.split(/\s+/).filter(Boolean);
+  while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
+  while (words.length) {
+    const base = words[0].replace(/^.*\//, '');
+    // Nothing after `exit 0` in this sequence runs.
+    if (TERMINATORS.has(base)) return 'terminates';
+    // `bash -c "true"` invokes a shell but runs nothing. Judge what the shell
+    // was actually handed, not the fact that a shell appears.
+    if (SHELLS.has(base) && words[1] === '-c') {
+      const inline = words.slice(2).join(' ').replace(/^["']|["']$/g, '');
+      return commandInvokesRunner(inline, scripts, config, visited);
     }
+    if (runners.has(base)) return true;
+    if (wrappers.has(base)) {
+      // `pnpm --filter <pkg> <thing>` selects another workspace project; it is
+      // not itself proof of work. `pnpm --filter X exec true` exits 0 having run
+      // only `true`. Drop the selector and keep resolving what follows -- and
+      // when what follows is a script in a manifest this diff does not contain,
+      // nothing here can prove it runs anything, so it stays unproven.
+      const next = [];
+      for (let i = 1; i < words.length; i += 1) {
+        const w = words[i];
+        if (w === '--filter' || w === '-F') { i += 1; continue; }
+        if (w.startsWith('--filter=')) continue;
+        if (w.startsWith('-')) continue;
+        next.push(w);
+      }
+      words = next;
+      continue;
+    }
+    // `pnpm test:apps` resolves inside the same manifest. The visited set stops
+    // a cycle from recursing forever; a cycle runs nothing, so it stays false.
+    if (Object.prototype.hasOwnProperty.call(scripts, base) && !visited.has(base)) {
+      visited.add(base);
+      return commandInvokesRunner(scripts[base], scripts, config, visited);
+    }
+    return false;
   }
   return false;
 }

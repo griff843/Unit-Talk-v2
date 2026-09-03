@@ -27,7 +27,11 @@ function parseVerdict(body) {
   const verdictMatch = lines[0].replace(/^\$/, '').match(/^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i);
   if (!verdictMatch) return null;
   if (lines[1] !== 'schema: pm-verdict/v1') return null;
-  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+  // RMA/v1: a mission-native PR has no Linear issue, so a ticketless identifier
+  // is accepted. Without it the documented approval procedure could not produce
+  // an artifact this parser accepts, and a reserved merge would have no exit --
+  // the gate would demand a verdict that nothing could validly write.
+  const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+|PR-\d+)$/i);
   if (!issueMatch) return null;
 
   const field = (name) => {
