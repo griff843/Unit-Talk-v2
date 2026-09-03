@@ -771,9 +771,89 @@ $ pnpm test:ops     -> # tests 2916  # pass 2916  # fail 0
 $ merge-authority.test.ts -> # pass 80  # fail 0
 ```
 
+## Independent review round 10
+
+Three P1 findings at `3b08de02`, all resolved. Each defeats a rule by attacking its premise
+rather than the rule itself, which is the shape this validator has been iterating against
+since round 7.
+
+### An environment assignment was skipped over instead of refused
+
+The bare-word runner rule trusts `tsx` on the grounds that a bare word resolves through the
+workspace's own `node_modules/.bin`, which a diff cannot repoint without changing a manifest
+this validator already reserves. `elementRunsRunner` stripped a leading `VAR=value` prefix
+and then applied that rule — destroying its own premise one word earlier.
+`PATH=./fake-bin tsx --test x`, plus an executable `fake-bin/tsx` added in the same diff that
+exits 0, supplies both the runner and its behaviour. The reviewer confirmed `/bin/sh`
+resolves it to the fake and returns success without running a test.
+
+Refused outright rather than allowlisting "harmless" variables. Which variables affect
+resolution is a property of the environment, not of this file, and enumerating them is the
+arms race the round-7 grammar exists to end. The cost was measured before the choice, not
+after: across the root manifest and every workspace manifest, exactly ONE script uses a
+leading assignment — `apps/smart-form` `test:e2e:fixture` — and it is not in the required
+chain.
+
+This is a real reduction in permissiveness and it is recorded rather than hidden.
+`commandInvokesRunner` also gates the `neutered-workspace-script` surface, so ANY script with
+a leading assignment, in any manifest, now reserves. Test 63 carries that case explicitly
+instead of leaving it to be rediscovered.
+
+### The workspace protected set was the named entrypoint, not its closure
+
+Policy named smart-form's `verify`. That script is `pnpm type-check && pnpm test`, and it is
+`test` that runs the six test files. So `test` was reachable from the required chain and
+unprotected: replacing it with `tsx --test test/form-schema.test.ts` returned `auto` while
+five required test files stopped running and the root `verify:static` chain stayed green.
+
+This is the round-8 root-closure finding, one file over. The fix is the same instrument —
+`reachableScripts` over that manifest's own script graph — which is the point: the property
+that matters is reachability, and it does not care which file a script lives in.
+
+### A protected workspace could leave the protected set by renaming itself
+
+The set was keyed by package name. `pnpm --filter <name>` that matches nothing prints
+`No projects matched` and exits **0** unless `--fail-if-no-match` is passed, and the root
+chain does not pass it. So changing `apps/smart-form/package.json`'s `name` made the lookup
+find no entry — the change classified `auto` — while
+`pnpm --filter @unit-talk/smart-form verify` became a successful no-op and an entire app
+stopped being verified with every required check green.
+
+Keyed by MANIFEST PATH now. A path cannot change without moving the file, which appears in
+the diff as its own event. And renaming a protected workspace reserves on its own, before any
+script comparison, because after the rename the scripts no longer matter.
+
+### Mutation controls (round 10)
+
+```
+== M1 skip assignments instead of refusing        -> not ok 63, not ok 81;  # fail 2
+== M2 workspace entrypoints only, no closure      -> not ok 82;             # fail 1
+== M3 drop the workspace rename reservation       -> not ok 83;             # fail 1
+== M4 key workspaces by package name again        -> not ok 73, 82, 83, 84; # fail 4
+== restored                                       ->                        # fail 0
+```
+
+### Cost, measured on the same corpus
+
+```
+round 9 classifier  -> replay over 40 merged PRs: 25 auto / 15 human
+round 10 classifier -> replay over 40 merged PRs: 25 auto / 15 human
+```
+
+Both numbers produced by running the two classifiers over the identical cached payload, so
+the comparison is not between two samples. Four consecutive rounds of tightening at zero
+added human load.
+
+```
+$ pnpm lint         -> pass (silent)
+$ pnpm type-check   -> pass (silent)
+$ pnpm test:ops     -> # tests 2920  # pass 2920  # fail 0
+$ merge-authority.test.ts -> # pass 84  # fail 0
+```
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: fc39bd9c7da10d5f6a9645d7219fec96d93e6128
+Execution SHA: fc1cfa7ac273d6c8c7666d1b790ec71aa054eec1
