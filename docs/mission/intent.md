@@ -67,6 +67,33 @@ a PR whose stated purpose is something else.
 Until such a change is ratified, the canonical execution and governance contracts indexed in
 `spec.md` are in force exactly as written.
 
+## Governance and tooling debt policy
+
+Ratified by PM on 2026-09-03. These are durable rules, not a new contract — nothing here creates a
+contract family, a doc, or a process. They bound how governance and tooling debt is *recorded* and
+*staffed*; they change no gate, no tier, and no merge authority.
+
+**1. Filing threshold.** A new governance or tooling issue is created only when the defect blocks
+active production now, has affected at least two real lanes, represents a material safety,
+data-truth or security exposure, or PM explicitly decides it should be staffed. Otherwise the
+finding is recorded under `plan.md` → Learned and production continues. Recording a finding is not
+deferring it; it is refusing to pretend a queue position exists.
+
+**2. One defect class, one canonical issue.** Before filing governance or tooling debt, search
+Linear for the existing owner. A new occurrence is attached to the canonical issue as evidence or an
+instance — never filed as a new issue. Fragmenting one defect across many issues is what makes the
+backlog unreadable and the real cost invisible.
+
+**3. The governance slot may stand empty.** The single governance/reliability slot is a ceiling, not
+a quota. It is staffed only when the defect currently blocks production, repeatedly strands lanes,
+materially threatens safety or data truth, or has accumulated enough *measured* operating cost to
+justify the slot. An empty slot alongside moving production work is a correct state.
+
+**Disposition of the existing backlog.** The accumulated governance backlog is not mass-closed. It
+is dispositioned in a later deliberate pass that classifies each issue as canonical defect,
+duplicate or instance, superseded, or genuinely deferred and accepted. Closing unstaffed work
+without classifying it first would discard real diagnoses.
+
 ## Standing prohibitions
 
 - Ordinary direct-`main` bypass is prohibited. All planned work lands via PR on green CI, per

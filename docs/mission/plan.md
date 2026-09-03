@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-03T16:35Z
+**Last reconciled against live truth:** 2026-09-03T17:05Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -229,19 +229,38 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-The current one is this lane (UTV2-1829, mission context). The next candidate is the direct-`main`
-prevention repair. RMA is an architecture review, not a governance lane.
+The current one is this lane (UTV2-1829, mission context). RMA is an architecture review, not a
+governance lane.
+
+Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
+empty.** After this lane closes it is deliberately left unstaffed: the closeout defects below are
+survivable by hand, the Command Center auth exposures are not, and production security work does
+not consume this slot. The strongest current candidate when the slot is next spent is the
+`pre-proof-validator` classification repair recorded under Learned.
 
 ---
 
 ## Admissibility debt
 
 Seven open PRs cannot be evaluated by `Merge Gate` because they were opened outside the lane system
-and carry no resolvable tier: #1491, #1492, #1493, #1494, #1495, #1496, #1498.
+and carry no resolvable tier: #1491, #1492, #1493, #1494, #1495, #1496, #1498. All seven fail the
+identical set of checks — `Check issue references`, `Sync tier label`, `Executor Result Validation`,
+`Merge Gate` — every one of them downstream of the same single cause.
 
-For the ones being kept, the fix is readmission through `ops:lane-start` under a real issue, not a
-change to the gate. Renaming an open PR's head branch closes it and it will not reopen, so
-readmission means a replacement PR carrying the same diff.
+**PM ruling 2026-09-03: `Merge Gate` is not changed to admit incorrectly-created branches.** The fix
+is readmission through `ops:lane-start` under the real issue. Renaming an open PR's head branch
+closes it and it will not reopen, so readmission means a replacement PR carrying the same diff.
+
+Two of them are security fixes that already have canonical Linear owners — the work and the issue
+exist, they were simply never joined:
+
+| PR | Fix | Canonical issue |
+|---|---|---|
+| #1493 (+121/-1) | a dot in the path no longer skips Command Center authentication | **UTV2-1812** (Backlog) |
+| #1494 (+503/-61) | the management token can no longer be handed arbitrary SQL | **UTV2-1802** (Backlog) |
+
+These are being re-homed onto those issues through normal governed lanes. They are production
+security work, not governance work, and do not consume the governance slot.
 
 ### `Lane authority` rejects dotfiles inside its own allowed globs
 
@@ -343,6 +362,46 @@ Consolidated from Wave 0, in dependency order:
 ---
 
 ## Learned
+
+- **The OS re-derives diagnoses it has already written down, and that is its dominant hidden cost.**
+  On 2026-09-03 the closeout strand was diagnosed from scratch as "a lane can run end to end with
+  its Linear state untouched," and the head-pinning tax was measured from scratch as "automated
+  ledger commits invalidate every open lane's approval artifacts." **Both were already filed, and
+  better.** `UTV2-1730` names the first with reference case UTV2-1451 and classifies it as the
+  UTV2-1724 defect class on another limb. `UTV2-1818` names the second with a measured reproducer:
+  PR #1476 approved at an exact head, `19a143a27` pushed by the readiness bot fifty seconds later,
+  strict freshness making it BEHIND, and the sanctioned sync then moving the proof anchor and
+  forcing a *second* head change. Five of six "new" improvements proposed that day already existed
+  as issues — `UTV2-1818`, `UTV2-1730`, `UTV2-1529`, `UTV2-1675`, `UTV2-1767`/`UTV2-1769`. The
+  backlog is not a record of what is broken; it is a record of what has already been understood and
+  will not be staffed, and re-reading it costs less than re-deriving it.
+
+- **An unbounded diagnosis rate against a capped repair rate accumulates monotonically.** 69 issues
+  carry `governance-critical`; 39 are open and unstarted. That is not a failure of any individual
+  fix — it is the arithmetic of a system that produces correct diagnoses far faster than one lane at
+  a time can consume them, which is why the filing threshold and the empty-slot rule in `intent.md`
+  are bounds rather than features. Disposition of the existing backlog is a later classified pass,
+  never a mass close.
+
+- **A fail-closed control that allocates a resource before classifying the command can deny
+  everything, including its own recovery.** `.claude/hooks/pre-proof-validator.sh:21` calls `mktemp`
+  on *every* Bash invocation, before it inspects whether the command is even a commit, and exits 2
+  when allocation fails. A full `/tmp` therefore denied every Bash call in every session — including
+  the `rm` that would clear it — while the hook's actual validation (lines 367-374) only ever runs
+  on staged `docs/06_status/proof/*` paths. Cost: an entire session segment, more than any gate
+  cost that day. **Repair candidate:** command classification must happen *before* any
+  temp-workspace requirement, so ordinary diagnostics and recovery commands can never be globally
+  denied by ENOSPC, while actual proof and commit mutations stay fail-closed. The detection step
+  writes to stdout and can be captured in a shell variable, so no temp file is needed to decide
+  whether the command is in scope. This is an instance of the same aggregate-conflation class as
+  `UTV2-1730`/`UTV2-1724` — infrastructure failure and policy refusal reported as one verdict —
+  and is recorded here rather than filed, per the filing threshold.
+
+- **Head-pinned governance artifacts should be requested last, not first.** Every commit that moves
+  the head invalidates `scope-override/v1`, `t1-approved`, `pm-verdict/v1` and `EXECUTOR_RESULT`
+  alike. The reconciliation and the resync on this lane were therefore both landed *before* the
+  override was requested, so a single human action binds a head that will not move again. Asking
+  first and reconciling after costs the owner one round trip per reconciliation.
 
 - **The bottleneck was never capability.** Every open PR sat green on real safety. Establishing that
   took reading branch protection and a handful of check-run outputs — a question nobody had asked
