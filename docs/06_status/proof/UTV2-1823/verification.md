@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1823-authenticate-trace
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1501
-Head SHA: 76d0f6f151d63f2eff08bcbcd6f3184fbfb044cf
+Head SHA: 38ef1fd97e1e57b55f4da1263a124905665996f8
 result: pass
 
 ## ASSERTIONS:
@@ -26,7 +26,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on the lane worktree at head `76d0f6f151d63f2eff08bcbcd6f3184fbfb044cf`.
+Measured on the lane worktree at head `38ef1fd97e1e57b55f4da1263a124905665996f8`.
 
 ```
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -54,7 +54,7 @@ $ pnpm exec tsx --test apps/api/src/server.test.ts
 - [x] `pnpm test`: PASS -- 5462/5462 tests pass, 0 fail
 - [x] `pnpm exec tsx --test apps/api/src/server.test.ts`: PASS -- 53/53, including the three UTV2-1823 acceptance tests
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS -- no R-level artifacts required for this diff
-- [ ] `pnpm verify`: run by CI on the PR head; the required `verify` context is the authority for this lane, not a local run (see Runtime Verification)
+- [x] `pnpm verify`: **PASS** — required `verify` check completed `success` at the anchor SHA `38ef1fd97e1e57b55f4da1263a124905665996f8` (run [33785176215](https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215), job 100750090391, 17:38:56Z → 17:42:45Z). It is checked here because the run has completed; it was correctly unchecked while it had not.
 
 ## Runtime Verification
 
@@ -63,8 +63,25 @@ a database by design: `local.env` pins `SUPABASE_URL` to `http://127.0.0.1:1`
 so that no local shell can touch production. `pnpm test:db` is therefore not
 run locally, and no local run is claimed here. The T1 live-DB receipt for this
 lane is the run-scoped staging receipt produced inside the required `verify`
-job at this PR's head SHA, against the staging project — recorded in the CI
-receipts section below once `verify` completes on the PR.
+job at this PR's head SHA, against the staging project.
+
+**That receipt now exists and is green.** At the anchor
+`38ef1fd97e1e57b55f4da1263a124905665996f8`:
+
+- `pnpm test:db` — **7 tests, 7 pass, 0 fail** against staging, in producer job
+  [100748085293](https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215/job/100748085293)
+- receipt `ci-db-proof-receipt/v2`, `sha256=157d9c7ef1113e76bdac47ebb64eca2fc0cbe7f4b0749cde264d2a81d0bcc1a7`,
+  consumed by `scripts/ci/verify-db-proof-receipt.ts` inside the required `verify` job
+- `verify`'s "Assert the DB proof producer succeeded" step read
+  `staging-db-proof result: success`; it fails closed on any other result
+- the "Run the T1 live proof suites against staging" step reported `# fail 0` throughout
+
+The receipt's target is masked by secret redaction in the log. It is staging,
+not production: `staging-path-enforcement` and the production-credential guard
+both gate that job, and production credentials are not available to it.
+
+Full detail, with run and job ids, is in `runtime-health.json` alongside this
+file.
 
 **What the change touches at runtime.** The diff moves one route match and its
 handler across an existing predicate in `apps/api/src/server.ts`. It performs
@@ -193,4 +210,4 @@ the PM rather than silently absorbed.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1501
 Approved PR head: pending merge
-Execution SHA: 76d0f6f151d63f2eff08bcbcd6f3184fbfb044cf
+Execution SHA: 38ef1fd97e1e57b55f4da1263a124905665996f8
