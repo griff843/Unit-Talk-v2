@@ -522,97 +522,232 @@ test('the whole sanctioned merge-wrapper chain is reserved', () => {
   }
 });
 
-test('package.json is reserved by CONTENT, not wholesale', () => {
-  // Almost every PR edits package.json to wire a new test into test:ops.
-  // Reserving the whole file would make RMA meaningless, so only lines that
-  // define or repoint the merge commands reserve it.
-  const wiring = classifyDiff({
-    files: [file('package.json', '+    "test:ops": "tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts",')],
-    policy,
-  });
-  assert.equal(wiring.authority, 'auto', 'ordinary package.json wiring must stay auto');
+// ── package.json is judged structurally, on the PARSED manifest ────────────
+//
+// Three separate line-regex evasions were found in review -- a JSON escape, a
+// key split from its colon across two added lines, and a runner name inside a
+// `#` comment. Each parsed to exactly the value pnpm runs. These tests are
+// written against parsed manifests for that reason: they assert on the value,
+// not on how the diff happened to spell it.
 
-  for (const line of [
-    '+    "ops:merge-wrapper": "tsx scripts/ops/evil.ts",',
-    '+    "ops:merge-lock": "true",',
-    '+    "something": "tsx scripts/ops/pre-merge-authorization.ts --always-yes",',
-  ]) {
-    const result = classifyDiff({ files: [file('package.json', line)], policy });
-    assert.equal(result.authority, 'human', `${line} must reserve`);
-    assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
-  }
+const BASE_ROOT = JSON.stringify({
+  scripts: {
+    'verify:static': 'pnpm lint && pnpm type-check && pnpm build && pnpm test',
+    lint: 'eslint .',
+    'type-check': 'pnpm exec tsc -b tsconfig.json',
+    build: 'turbo run build',
+    test: 'pnpm test:apps && pnpm test:ops',
+    'test:apps': 'tsx --test apps/api/src/a.test.ts',
+    'test:ops': 'tsx --test scripts/ops/a.test.ts',
+    'ops:merge-wrapper': 'tsx scripts/ops/ops-merge-wrapper.ts',
+  },
+  devDependencies: { tsx: '4.21.0', typescript: '5.6.2' },
 });
 
-// ── round 4: the classifier must not be evadable by encoding or by
-// ── repointing a control it does not itself own ────────────────────────────
+function rootManifest(mutate: (m: Record<string, never>) => void): string {
+  const m = JSON.parse(BASE_ROOT);
+  mutate(m);
+  return JSON.stringify(m);
+}
 
-test('a JSON-escaped merge-wrapper key is still reserved', () => {
-  // pnpm reads the PARSED key, so "ops:merge-wrapper" is the same script.
-  // A regex over the raw patch text would see no colon and let it through.
-  const result = classifyDiff({
-    files: [file('package.json', '+    "ops\\u003amerge-wrapper": "tsx scripts/evil.ts",')],
+/** Classify a root-package.json-only change from parsed base/head manifests. */
+function classifyRoot(headJson: string, baseJson = BASE_ROOT) {
+  return classifyDiff({
+    files: [file('package.json', '+ irrelevant')],
     policy,
+    manifests: { 'package.json': { base: baseJson, head: headJson } },
   });
+}
+
+test('a changed manifest with no contents supplied is unclassifiable', () => {
+  // Fail closed: absence of evidence is not evidence of absence.
+  const result = classifyDiff({ files: [file('package.json', '+ x')], policy });
   assert.equal(result.authority, 'human');
-  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+  assert.ok(result.surfaces.includes('unclassifiable'));
 });
 
-test('escape decoding does not lose the literal form', () => {
-  const result = classifyDiff({
-    files: [file('package.json', '+    "ops:merge-wrapper": "tsx scripts/ops/ops-merge-wrapper.ts",')],
-    policy,
-  });
+test('an unparseable manifest is unclassifiable, not clean', () => {
+  const result = classifyRoot('{ not json');
   assert.equal(result.authority, 'human');
-  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+  assert.ok(result.surfaces.includes('unclassifiable'));
+});
+
+test('wiring a new test file into a group stays automatic', () => {
+  // The ordinary case. If it required a human, RMA would be the old tier list
+  // under a new name.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts';
+    }),
+  );
+  assert.equal(result.authority, 'auto');
 });
 
 test("repointing the required check's own entrypoint is reserved", () => {
   // ci.yml's required `verify` job runs `pnpm verify:static` out of the PR's
-  // own package.json. Emptying it would produce a green but vacuous check.
-  const result = classifyDiff({
-    files: [file('package.json', '+    "verify:static": "true",')],
-    policy,
-  });
+  // own package.json. Emptying it produced a green but vacuous check.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['verify:static'] = 'true';
+    }),
+  );
   assert.equal(result.authority, 'human');
   assert.ok(result.surfaces.includes('ci-required-check-entrypoints'));
 });
 
 test('every script key the required verify job reaches is frozen', () => {
-  for (const key of [
-    'verify:static',
-    'test',
-    'lint',
-    'type-check',
-    'build',
-    'test:command-center',
-    'ci:db-client-boundary',
-    'env:check',
-  ]) {
-    const result = classifyDiff({
-      files: [file('package.json', `+    "${key}": "true",`)],
-      policy,
-    });
-    assert.equal(result.authority, 'human', `${key} must be reserved`);
+  for (const key of ['verify:static', 'test', 'lint', 'type-check', 'build']) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts[key] = 'tsx scripts/other.ts';
+      }),
+    );
+    assert.ok(
+      result.surfaces.includes('ci-required-check-entrypoints'),
+      `${key} must be reserved even when the replacement does run something`,
+    );
   }
 });
 
-test('wiring a new test file into a group stays automatic', () => {
-  // This is the ordinary case. If it required a human, RMA would be the old
-  // tier list under a new name.
-  const result = classifyDiff({
-    files: [file(
-      'package.json',
-      '+    "test:ops": "tsx --test scripts/ops/a.test.ts scripts/ops/b.test.ts",',
-    )],
-    policy,
-  });
-  assert.equal(result.authority, 'auto');
+test('removing a script entirely is reserved', () => {
+  const result = classifyRoot(
+    rootManifest((m) => {
+      delete (m as never as { scripts: Record<string, string> }).scripts['test:apps'];
+    }),
+  );
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('neutered-workspace-script'));
 });
 
-test('emptying a script so it runs no runner is reserved', () => {
+test('repointing the sanctioned merge command is reserved', () => {
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> })['ops:merge-wrapper' as never] = undefined as never;
+      (m as never as { scripts: Record<string, string> }).scripts['ops:merge-wrapper'] =
+        'tsx scripts/ops/evil.ts';
+    }),
+  );
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+});
+
+test('a new script that invokes the authorization chain is reserved', () => {
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['something'] =
+        'tsx scripts/ops/pre-merge-authorization.ts --always-yes';
+    }),
+  );
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('merge-wrapper-entrypoint'));
+});
+
+test('replacing the toolchain the control chain runs through is reserved', () => {
+  // The wrapper runs `pnpm exec tsx scripts/ops/pre-merge-authorization.ts`.
+  // A replacement `tsx` can print an authorization and exit 0 without ever
+  // evaluating the reserved TypeScript file.
+  const result = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { devDependencies: Record<string, string> }).devDependencies.tsx =
+        'file:./vendor/tsx';
+    }),
+  );
+  assert.equal(result.authority, 'human');
+  assert.ok(result.surfaces.includes('control-toolchain'));
+});
+
+test('pnpm execution configuration is reserved', () => {
+  // `script-shell` in .npmrc redirects every script in the repository.
+  for (const f of ['.npmrc', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', '.pnpmfile.cjs']) {
+    const result = classifyDiff({ files: [file(f, '+script-shell=./sh')], policy });
+    assert.equal(result.authority, 'human', f);
+    assert.ok(result.surfaces.includes('control-toolchain'), f);
+  }
+});
+
+// ── the three line-regex evasions, asserted on the parsed value ────────────
+
+test('an escaped or reformatted key is judged by what it parses to', () => {
+  // `"ops\u003amerge-wrapper"` and a key split from its colon across two added
+  // lines both parse to the same script. Structural comparison sees one thing.
+  for (const raw of [
+    '{"scripts":{"ops\u003amerge-wrapper":"tsx scripts/evil.ts"}}',
+    '{"scripts":{"ops:merge-wrapper"\n:\n"tsx scripts/evil.ts"}}'.replace(/\\n/g, '\n'),
+  ]) {
+    const result = classifyRoot(raw);
+    assert.equal(result.authority, 'human', raw);
+  }
+});
+
+test('a runner name inside a comment does not count as running it', () => {
+  for (const command of ['true # tsx --test', 'echo tsx', 'exit 0', ':', 'echo "vitest run"']) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), command);
+  }
+});
+
+test('real commands are recognised as invoking a runner', () => {
+  for (const command of [
+    'tsx --test a.test.ts',
+    'pnpm exec tsc -b tsconfig.json',
+    'eslint . --cache',
+    'turbo run build',
+    'playwright test -c playwright.config.ts',
+    'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts',
+    'pnpm test:apps && pnpm test:ops',
+    'pnpm --filter @unit-talk/smart-form verify',
+    'node --test scripts/a.test.mjs',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'auto', command);
+  }
+});
+
+test("a workspace package's own test/build wiring stays automatic", () => {
+  // Regression probe: replaying the last 40 merged PRs through the classifier
+  // caught #1469 here. It extends apps/smart-form's `test` key with new test
+  // files, and an earlier draft reserved it -- freezing exactly the ordinary
+  // case RMA exists to keep automatic.
+  const base = JSON.stringify({ scripts: { test: 'tsx --test test/a.test.ts' } });
+  for (const command of [
+    'tsx --test test/a.test.ts test/b.test.ts',
+    'playwright test -c playwright.config.ts',
+    'tsc -b',
+  ]) {
+    const result = classifyDiff({
+      files: [file('apps/smart-form/package.json', '+ x')],
+      policy,
+      manifests: {
+        'apps/smart-form/package.json': {
+          base,
+          head: JSON.stringify({ scripts: { test: command } }),
+        },
+      },
+    });
+    assert.equal(result.authority, 'auto', command);
+  }
+});
+
+test('a neutered script is reserved in a workspace package too', () => {
   const result = classifyDiff({
-    files: [file('package.json', '+    "test:ops": "echo skipped",')],
+    files: [file('apps/smart-form/package.json', '+ x')],
     policy,
+    manifests: {
+      'apps/smart-form/package.json': {
+        base: JSON.stringify({ scripts: { test: 'tsx --test test/a.test.ts' } }),
+        head: JSON.stringify({ scripts: { test: 'true' } }),
+      },
+    },
   });
   assert.equal(result.authority, 'human');
   assert.ok(result.surfaces.includes('neutered-workspace-script'));
@@ -629,29 +764,22 @@ test("the reserved chain's shared output helper is reserved", () => {
   assert.ok(result.surfaces.includes('merge-authority'));
 });
 
-test("a workspace package's own test/build wiring stays automatic", () => {
-  // Regression probe: replaying the last 40 merged PRs through the classifier
-  // caught #1469 here. It extends apps/smart-form's `test` key with new test
-  // files, and an earlier draft of these rules reserved it -- freezing exactly
-  // the ordinary case RMA exists to keep automatic.
-  for (const patch of [
-    '+    "test": "tsx --test test/a.test.ts test/b.test.ts",',
-    '+    "test:e2e": "playwright test -c playwright.config.ts",',
-    '+    "build": "tsc -b",',
-  ]) {
-    const result = classifyDiff({
-      files: [file('apps/smart-form/package.json', patch)],
-      policy,
-    });
-    assert.equal(result.authority, 'auto', patch);
-  }
-});
+test('a shell invoked with -c is judged on what it was handed', () => {
+  // `bash -c "true"` invokes a shell and runs nothing. Treating the shell's
+  // presence as proof of work would reopen the hole the runner check closes.
+  const inert = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = 'bash -c "true"';
+    }),
+  );
+  assert.equal(inert.authority, 'human');
+  assert.ok(inert.surfaces.includes('neutered-workspace-script'));
 
-test('a neutered script is reserved in a workspace package too', () => {
-  const result = classifyDiff({
-    files: [file('apps/smart-form/package.json', '+    "test": "true",')],
-    policy,
-  });
-  assert.equal(result.authority, 'human');
-  assert.ok(result.surfaces.includes('neutered-workspace-script'));
+  const real = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'bash -c "tsx --test scripts/ops/a.test.ts"';
+    }),
+  );
+  assert.equal(real.authority, 'auto');
 });

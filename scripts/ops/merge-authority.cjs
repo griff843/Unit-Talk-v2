@@ -112,6 +112,186 @@ function decodeJsonEscapes(line) {
     .replace(/\\\//g, '/');
 }
 
+// ── Structural analysis of package manifests ───────────────────────────────
+//
+// Three independent evasions of a line regex over `package.json` were found in
+// review before this became structural: a JSON escape (`"ops:merge-wrapper"`),
+// a key and its colon split across two added lines, and a runner name sitting in
+// a comment (`true # tsx --test`). Each parses to exactly the value pnpm runs, and
+// each matched nothing. A regex over patch text is the wrong instrument for a
+// structured file: these rules compare the PARSED manifest at base against the
+// PARSED manifest at head, so any encoding, reformatting or commentary that
+// produces the same parsed value produces the same verdict.
+
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
+
+/** Does a script command actually execute something that runs work? */
+function commandInvokesRunner(command, scripts, config, seen) {
+  if (typeof command !== 'string') return false;
+  const runners = new Set(config.runnerCommands || []);
+  const wrappers = new Set(config.commandWrappers || []);
+  const visited = seen || new Set();
+  for (const rawSegment of command.split(/&&|\|\||;|\|/)) {
+    // A `#` comment is inert to the shell, so a runner name inside one proves
+    // nothing about what the command executes.
+    const segment = rawSegment.replace(/(^|\s)#.*$/, '').trim();
+    if (!segment) continue;
+    let words = segment.split(/\s+/).filter(Boolean);
+    while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
+    while (words.length) {
+      const base = words[0].replace(/^.*\//, '');
+      // `bash -c "true"` invokes a shell but runs nothing. Judge what the shell
+      // was actually handed, not the fact that a shell appears.
+      if (SHELLS.has(base) && words[1] === '-c') {
+        const inline = words.slice(2).join(' ').replace(/^["']|["']$/g, '');
+        return commandInvokesRunner(inline, scripts, config, visited);
+      }
+      if (runners.has(base)) return true;
+      if (wrappers.has(base)) {
+        // `pnpm --filter <pkg> <script>` delegates into another manifest, whose
+        // own scripts this same rule checks when that manifest changes.
+        if (words.some((w) => w === '--filter' || w === '-F' || w.startsWith('--filter='))) {
+          return true;
+        }
+        words = words.slice(1).filter((w) => !w.startsWith('-'));
+        continue;
+      }
+      // `pnpm test:apps` resolves inside the same manifest. The visited set stops
+      // a cycle from recursing forever; a cycle runs nothing, so it stays false.
+      if (Object.prototype.hasOwnProperty.call(scripts, base) && !visited.has(base)) {
+        visited.add(base);
+        if (commandInvokesRunner(scripts[base], scripts, config, visited)) return true;
+      }
+      break;
+    }
+  }
+  return false;
+}
+
+function scriptsOf(manifest) {
+  return manifest && typeof manifest.scripts === 'object' && manifest.scripts ? manifest.scripts : {};
+}
+
+function dependencyVersion(manifest, name) {
+  if (!manifest) return undefined;
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies', 'pnpm']) {
+    const bag = manifest[field];
+    if (bag && typeof bag === 'object' && name in bag) return bag[name];
+  }
+  return undefined;
+}
+
+const MANIFEST_NAME = /(^|\/)package\.json$/;
+
+/**
+ * Compares every changed package.json structurally.
+ *
+ * @param {object} input
+ * @param {Array} input.files Changed files, as given to classifyDiff.
+ * @param {object|undefined} input.manifests
+ *        `{ '<path>': { base: <raw json or null>, head: <raw json or null> } }`.
+ *        `null` means the file does not exist at that ref. A changed manifest
+ *        with no entry here is unclassifiable, not clean.
+ * @param {object} input.config The policy's `manifestPolicy` block.
+ */
+function analyzeManifests({ files, manifests, config }) {
+  const surfaces = new Set();
+  const reasons = [];
+  if (!config) return { surfaces: [], reasons: [] };
+
+  const changedManifests = [];
+  for (const f of files) {
+    for (const name of filePaths(f)) {
+      if (MANIFEST_NAME.test(name) && !changedManifests.includes(name)) changedManifests.push(name);
+    }
+  }
+  if (changedManifests.length === 0) return { surfaces: [], reasons: [] };
+
+  const reserve = (surface, reason) => {
+    surfaces.add(surface);
+    reasons.push(reason);
+  };
+
+  for (const name of changedManifests) {
+    const entry = manifests && typeof manifests === 'object' ? manifests[name] : undefined;
+    if (!entry) {
+      reserve(
+        'unclassifiable',
+        `${name} changed but its contents were not supplied — the parsed scripts cannot be compared, reserving merge.`
+      );
+      continue;
+    }
+    const parse = (raw, ref) => {
+      if (raw === null || raw === undefined) return null;
+      try {
+        return JSON.parse(String(raw));
+      } catch (e) {
+        reserve('unclassifiable', `${name} at ${ref} is not parseable JSON (${e.message}) — reserving merge.`);
+        return undefined;
+      }
+    };
+    const base = parse(entry.base, 'base');
+    const head = parse(entry.head, 'head');
+    if (base === undefined || head === undefined) continue;
+    if (head === null) {
+      reserve(
+        'neutered-workspace-script',
+        `${name} was deleted — every script it contributed to the required chain is gone, reserving merge.`
+      );
+      continue;
+    }
+
+    const baseScripts = scriptsOf(base);
+    const headScripts = scriptsOf(head);
+    const isRoot = name === 'package.json';
+
+    if (isRoot) {
+      for (const key of config.protectedRootScripts || []) {
+        if (headScripts[key] !== baseScripts[key]) {
+          reserve(
+            'ci-required-check-entrypoints',
+            `Root script "${key}" changed — the required \`verify\` job invokes it, so repointing it changes what that check proves.`
+          );
+        }
+      }
+      for (const dep of config.controlToolchainDependencies || []) {
+        if (dependencyVersion(head, dep) !== dependencyVersion(base, dep)) {
+          reserve(
+            'control-toolchain',
+            `Root dependency "${dep}" changed — the merge-authority chain executes through it, so a replacement binary can satisfy the gate without evaluating it.`
+          );
+        }
+      }
+    }
+
+    const mergeCommandPattern = config.mergeCommandValuePattern
+      ? new RegExp(config.mergeCommandValuePattern, 'i')
+      : null;
+
+    for (const [key, value] of Object.entries(headScripts)) {
+      if (value === baseScripts[key]) continue;
+      if ((config.mergeCommandScripts || []).includes(key)) {
+        reserve('merge-wrapper-entrypoint', `Script "${key}" in ${name} was repointed — this is the sanctioned merge command.`);
+      }
+      if (mergeCommandPattern && mergeCommandPattern.test(String(value))) {
+        reserve('merge-wrapper-entrypoint', `Script "${key}" in ${name} now invokes the merge-authorization chain.`);
+      }
+      if (!commandInvokesRunner(String(value), headScripts, config)) {
+        reserve(
+          'neutered-workspace-script',
+          `Script "${key}" in ${name} was changed to a command that executes no known runner: ${String(value).slice(0, 120)}`
+        );
+      }
+    }
+    for (const key of Object.keys(baseScripts)) {
+      if (key in headScripts) continue;
+      reserve('neutered-workspace-script', `Script "${key}" was removed from ${name} — whatever it contributed no longer runs.`);
+    }
+  }
+
+  return { surfaces: [...surfaces], reasons };
+}
+
 /**
  * Classifies a diff.
  *
@@ -128,7 +308,7 @@ function decodeJsonEscapes(line) {
  *        than as a clean diff. Omit it only where no total is available.
  * @returns {{authority: 'auto'|'human', reasons: string[], surfaces: string[]}}
  */
-function classifyDiff({ files, policy, declaredFileCount }) {
+function classifyDiff({ files, policy, declaredFileCount, manifests }) {
   const reasons = [];
   const surfaces = new Set();
 
@@ -231,6 +411,10 @@ function classifyDiff({ files, policy, declaredFileCount }) {
     }
   }
 
+  const manifestResult = analyzeManifests({ files, manifests, config: policy.manifestPolicy });
+  for (const id of manifestResult.surfaces) surfaces.add(id);
+  reasons.push(...manifestResult.reasons);
+
   return {
     authority: reasons.length > 0 ? 'human' : 'auto',
     reasons,
@@ -256,13 +440,13 @@ function classifyDiff({ files, policy, declaredFileCount }) {
  *
  * @returns {{authorized: boolean, authority: 'auto'|'human', errors: string[], notes: string[], surfaces: string[]}}
  */
-function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = false, verdictErrors = [], declaredFileCount }) {
+function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = false, verdictErrors = [], declaredFileCount, manifests }) {
   const errors = [];
   const notes = [];
 
   let classification;
   try {
-    classification = classifyDiff({ files, policy, declaredFileCount });
+    classification = classifyDiff({ files, policy, declaredFileCount, manifests });
   } catch (e) {
     return {
       authorized: false,
@@ -326,6 +510,8 @@ function evaluateMergeAuthority({ files, policy, labels = [], verdictApproved = 
 
 module.exports = {
   decodeJsonEscapes,
+  commandInvokesRunner,
+  analyzeManifests,
   POLICY_PATH,
   globToRegExp,
   matchesAnyGlob,

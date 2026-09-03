@@ -42,14 +42,47 @@ test('BHF-1: the bootstrap head-read exception is absent from Merge Gate', () =>
   }
 });
 
-test('BHF-2: Merge Gate never reads repository content to resolve authority', () => {
-  // getContent was how the manifest (and the bootstrap artifact) were read. Any
-  // reintroduction means authority is being sourced from a ref again, which is
-  // the shape of the original vulnerability regardless of which ref is chosen.
-  assert.ok(
-    !WORKFLOW.includes('repos.getContent'),
-    'Merge Gate must classify the diff, not read authority artifacts out of a ref',
+test('BHF-2: Merge Gate reads repository content only as the SUBJECT of classification', () => {
+  // The original vulnerability was reading an AUTHORIZING artifact out of a ref
+  // and believing it: a lane manifest, a bootstrap marker, anything whose
+  // presence granted permission. Reading a PR's own package.json to classify it
+  // is the opposite operation -- nothing read there can ever produce `auto`
+  // where refusing to read would not, and a read that fails reserves.
+  //
+  // So the guard is no longer "never call getContent". It is: every read is the
+  // manifest reader, it only reads package.json, its result reaches the
+  // classifier as `manifests` and nothing else, and a failure that is not a
+  // genuine 404 propagates instead of being reported as "unchanged".
+  const reads = WORKFLOW.match(/repos\.getContent/g) || [];
+  assert.equal(
+    reads.length,
+    1,
+    'exactly one repository read may exist, and it must be the manifest reader',
   );
+  assert.match(
+    WORKFLOW,
+    /const readManifestAt = async \(p, ref\) => \{/,
+    'the single read must be the named manifest reader, not an ad hoc fetch',
+  );
+  assert.match(
+    WORKFLOW,
+    /if \(n && \/\(\^\|\\\/\)package\\\.json\$\/\.test\(n\)\) manifestPaths\.add\(n\)/,
+    'only package.json paths may be read',
+  );
+  assert.match(
+    WORKFLOW,
+    /if \(e\.status === 404\) return null;\s*\n\s*throw e;/,
+    'a read failure that is not a 404 must propagate, never read as "unchanged"',
+  );
+  assert.match(
+    WORKFLOW,
+    /\n\s+manifests,\n/,
+    'the manifests must be handed to the classifier, which is the only thing they may feed',
+  );
+  for (const forbidden of ['lane', 'tier', 'proof', 'approval']) {
+    const pattern = new RegExp(`getContent\\([^)]*${forbidden}`, 'i');
+    assert.ok(!pattern.test(WORKFLOW), `getContent must not read a ${forbidden} artifact`);
+  }
 });
 
 test('BHF-3: Merge Gate resolves authority from the reserved-surface policy', () => {

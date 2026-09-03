@@ -134,6 +134,21 @@
         "scripts/ops/executor-result-validate.ts",
         "docs/mission/intent.md"
       ]
+    },
+    {
+      "id": "control-toolchain",
+      "reserved": "The toolchain and package-manager configuration the merge-authority chain executes through",
+      "note": "The merge wrapper runs `pnpm exec tsx scripts/ops/pre-merge-authorization.ts`. Reserving that TypeScript file is worthless if the diff can replace what executes it: pnpm reads project configuration from `.npmrc`, where `script-shell` redirects every script in the repository to an attacker-supplied shell, and the resolved `tsx` binary comes from `pnpm-lock.yaml`. A replacement that prints an authorization and exits 0 satisfies the gate without evaluating a single reserved line. None of the last 40 merged PRs touched any of these files, so reserving them costs nothing measurable.",
+      "paths": [
+        ".npmrc",
+        "**/.npmrc",
+        "pnpm-workspace.yaml",
+        "pnpm-lock.yaml",
+        ".pnpmfile.cjs",
+        "**/.pnpmfile.cjs",
+        ".nvmrc",
+        ".node-version"
+      ]
     }
   ],
   "contentRules": [
@@ -149,43 +164,6 @@
       ],
       "addedLinePattern": "\\b(DROP\\s+(TABLE|SCHEMA|DATABASE|COLUMN|VIEW|FUNCTION|TYPE|INDEX)|TRUNCATE\\s+(TABLE\\s+)?[A-Za-z_\"]|DELETE\\s+FROM)\\b",
       "patternFlags": "i"
-    },
-    {
-      "id": "merge-wrapper-entrypoint",
-      "reserved": "Merge-wrapper entrypoint \u2014 repointing the sanctioned merge command is a merge-authority change",
-      "note": "package.json is edited by almost every PR (wiring a new test into test:ops), so reserving the whole file would make RMA meaningless. Only lines that define or repoint the merge commands are reserved. JSON permits escapes inside a string (\"ops\\u003amerge-wrapper\" decodes to the key pnpm runs), so each added line is also matched in its escape-decoded form.",
-      "pathGlobs": [
-        "package.json",
-        "*/package.json",
-        "*/*/package.json"
-      ],
-      "addedLinePattern": "\"(ops:merge-wrapper|ops:merge-lock|ops:pr-merge)\"|pre-merge-authorization|ops-merge-wrapper|merge-mutex",
-      "patternFlags": "i",
-      "decodeJsonEscapes": true
-    },
-    {
-      "id": "ci-required-check-entrypoints",
-      "reserved": "Redefinition of a ROOT script key that the required `verify` check invokes \u2014 repointing one removes a control without touching a reserved file",
-      "note": "`.github/workflows/ci.yml` runs `pnpm verify:static`, `pnpm test:command-center` and `pnpm ci:db-client-boundary` inside the required `verify` job, and `verify:static` fans out to lint / type-check / build / test. Those keys are read out of the PR's OWN root package.json, so a diff repointing one to `true` would pass a green but empty required check. Root aggregators are frozen outright: they change rarely, so the cost is near zero. Scoped to the ROOT package.json only -- a workspace package's own `build`/`test` key is scaffolding that new packages legitimately add, and is covered instead by `neutered-workspace-script`.",
-      "pathGlobs": [
-        "package.json"
-      ],
-      "addedLinePattern": "\"(verify|verify:static|verify:parallel|verify:quick|verify:commands|test|lint|type-check|build|test:command-center|test:db|test:t1-proof:live|test:t1-proof:local|ci:db-client-boundary|ci:assert-staging|ci:db-smoke|env:check|ops:sync-check|ops:system-alignment-check|ops:automation-coverage-check)\"\\s*:",
-      "patternFlags": "",
-      "decodeJsonEscapes": true
-    },
-    {
-      "id": "neutered-workspace-script",
-      "reserved": "Any package.json script redefined to a command that invokes no known runner",
-      "note": "The complement of ci-required-check-entrypoints, and the rule that covers workspace packages. Adding or removing files in a `tsx --test` list -- or scaffolding a new package's `build`/`test` -- stays `auto`: that is ordinary wiring, legible in the diff, and the case RMA exists to keep out of a human's inbox. Replacing a value with something that runs nothing (`true`, `echo skipped`, `exit 0`) empties a step while the required check stays green, so it is reserved. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and remain `auto`.",
-      "pathGlobs": [
-        "package.json",
-        "*/package.json",
-        "*/*/package.json"
-      ],
-      "addedLinePattern": "\"(test|test:[A-Za-z0-9:_-]+|build|lint|type-check|verify|verify:[A-Za-z0-9:_-]+)\"\\s*:\\s*\"(?![^\"]*(tsx|eslint|tsc|vitest|jest|mocha|ava|tap|playwright|cypress|jasmine|karma|vite|next|turbo|c8|nyc|node|bun|deno|pnpm|npm|yarn|supabase|prisma|make|bash|sh ))[^\"]*\"",
-      "patternFlags": "",
-      "decodeJsonEscapes": true
     }
   ],
   "scopeNote": "Risk-scoped, not the old tier list under a new name. A path is reserved because a wrong change to it costs money, leaks credentials, reaches members, destroys production data, or removes a control -- not because it used to be Tier C. Pure logic that CI can judge (packages/domain, packages/contracts, scoring, lifecycle repositories) is deliberately NOT reserved: reserving it made every PR a human relay, which is what priced the real decisions at zero attention.",
@@ -194,5 +172,97 @@
     "note": "Two-phase rollout. Merge Gate and Executor Result Validation load this policy and scripts/ops/merge-authority.cjs from the PR's BASE checkout, so neither can read them until they exist on main. PHASE 1 is the single PR that first lands them: on that PR the base checkout has no classifier, so both gates take their documented bootstrap path and reserve the merge as `human` -- the most restrictive outcome, clearable only by the ordinary reserved-surface artifacts (CODEOWNERS label + head-bound pm-verdict/v1), never by a repo-owner override of a required check. PHASE 2 is every PR after that one: base carries the classifier and the bootstrap path is unreachable. Re-entering PHASE 1 would require deleting merge-authority.cjs from main, which is itself a change to the merge-authority surface and therefore requires a human.",
     "classifierPath": "scripts/ops/merge-authority.cjs",
     "degradesTo": "human"
+  },
+  "manifestPolicy": {
+    "note": "Structural rules over PARSED package.json, not over patch text. Three separate evasions of a line regex were found in review -- a JSON escape, a key split from its colon across two added lines, and a runner name inside a `#` comment -- and each produced exactly the value pnpm runs. Comparing parsed base against parsed head makes encoding, reformatting and commentary irrelevant. A changed manifest whose contents are not supplied, or which does not parse, is `unclassifiable`.",
+    "protectedRootScripts": [
+      "verify",
+      "verify:static",
+      "verify:parallel",
+      "verify:quick",
+      "verify:commands",
+      "test",
+      "lint",
+      "type-check",
+      "build",
+      "test:command-center",
+      "test:db",
+      "test:t1-proof:live",
+      "test:t1-proof:local",
+      "ci:db-client-boundary",
+      "ci:assert-staging",
+      "ci:db-smoke",
+      "env:check",
+      "ops:sync-check",
+      "ops:system-alignment-check",
+      "ops:automation-coverage-check"
+    ],
+    "protectedRootScriptsNote": "The keys `.github/workflows/ci.yml`'s required `verify` job invokes, plus everything `verify:static` fans out to. Scoped to the ROOT manifest: a workspace package's own `build`/`test` is scaffolding new packages legitimately add, and is covered by the runner check instead.",
+    "mergeCommandScripts": [
+      "ops:merge-wrapper",
+      "ops:merge-lock",
+      "ops:pr-merge"
+    ],
+    "mergeCommandValuePattern": "pre-merge-authorization|ops-merge-wrapper|merge-mutex",
+    "controlToolchainDependencies": [
+      "tsx",
+      "typescript",
+      "eslint",
+      "turbo",
+      "pnpm"
+    ],
+    "runnerCommands": [
+      "tsx",
+      "tsc",
+      "node",
+      "eslint",
+      "vitest",
+      "jest",
+      "mocha",
+      "ava",
+      "tap",
+      "tape",
+      "playwright",
+      "cypress",
+      "jasmine",
+      "karma",
+      "next",
+      "vite",
+      "turbo",
+      "bun",
+      "deno",
+      "c8",
+      "nyc",
+      "esbuild",
+      "rollup",
+      "webpack",
+      "biome",
+      "prettier",
+      "supabase",
+      "prisma",
+      "drizzle-kit",
+      "python3",
+      "python",
+      "make",
+      "bash",
+      "sh",
+      "zsh"
+    ],
+    "commandWrappers": [
+      "pnpm",
+      "npm",
+      "yarn",
+      "npx",
+      "exec",
+      "run",
+      "dlx",
+      "env",
+      "cross-env",
+      "dotenv",
+      "time",
+      "nice",
+      "concurrently"
+    ],
+    "runnerCheckNote": "A script is reserved when its new value executes nothing from `runnerCommands`. `pnpm <script>` resolves inside the same manifest; `pnpm --filter <pkg> <script>` delegates to another manifest whose own scripts this rule checks when that manifest changes. Residual, accepted deliberately: a diff can still delete individual files from a runner's argument list and stay `auto` -- that change is legible in the diff, an emptied script is not."
   }
 }
