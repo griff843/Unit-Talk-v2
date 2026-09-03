@@ -4,9 +4,9 @@
   "tier": "T1",
   "lane_type": "delivery-ui",
   "proof_profile": "app-runtime",
-  "status": "pre_merge",
+  "status": "merged",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "2ac23342444ee2b3fbb086493e1b6ca6d862c59f",
     "verified_source_sha": "284951151ef8c4c3198fbee603f50ace9143a34c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -14,7 +14,9 @@
       "type_check": "pass",
       "test": "pass",
       "r_level_check": "pass"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T05:49:55.247Z"
   },
   "static_proof": {
     "status": "pass",
@@ -78,7 +80,7 @@
     "queries": [
       {
         "name": "an authorized login resolves to its mapped canonical id, not its local-part",
-        "method": "parseAllowedCapperEmails('pilot.capper@example.com=griff843, other.capper@example.com=other-capper') then findAllowedCapper('PILOT.Capper@Example.com', \u2026)",
+        "method": "parseAllowedCapperEmails('pilot.capper@example.com=griff843, other.capper@example.com=other-capper') then findAllowedCapper('PILOT.Capper@Example.com', …)",
         "result": "resolved capperId = 'griff843' for an address whose local-part is 'pilot.capper'",
         "significance": "The identity comes from the explicit mapping. Under the previous implementation this same address would have resolved to \"pilotcapper\"."
       },
@@ -109,7 +111,7 @@
       {
         "name": "mutation: restoring local-part derivation breaks the acceptance tests",
         "method": "reinstated the fallback email.split('@')[0].replace(/[^a-z0-9_-]/g,'') for entries with no '=' and re-ran the suite",
-        "result": "# pass 7 / # fail 2 \u2014 \"an entry with no explicit mapping is rejected and admits nobody\" and \"a non-canonical capper id is refused rather than sanitised\" both failed; mutation reverted before commit",
+        "result": "# pass 7 / # fail 2 — \"an entry with no explicit mapping is rejected and admits nobody\" and \"a non-canonical capper id is refused rather than sanitised\" both failed; mutation reverted before commit",
         "significance": "The tests fail on the exact condition they name, so they are load-bearing rather than decorative."
       }
     ],
