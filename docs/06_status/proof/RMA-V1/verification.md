@@ -372,9 +372,100 @@ without touching a file the classifier reserves.
 Each was applied to the shipped source, the suite run, the source restored. Each was
 caught, and each failed only its own assertions.
 
+## Independent review round 5
+
+Three P1s and a P2, all accepted, and together they say one thing: **a line regex over a
+structured file is the wrong instrument.** Round 4 added two content rules over
+`package.json` patch text. Review then found three independent ways to write the same
+parsed value while matching neither rule:
+
+- a JSON escape — `"ops\u003amerge-wrapper"` is the key pnpm runs, and carries no colon;
+- a reformat — `"verify:static"` on one added line and `: "true"` on the next parses to the
+  same key, and neither line matches a pattern that requires both on one line;
+- a comment — `true # tsx --test` contains `tsx`, satisfies a substring allowlist, and runs
+  nothing.
+
+Patching the regex a fourth time would have been the wrong move. **The package.json rules
+are now structural**: `analyzeManifests` parses the manifest at base and at head and
+compares the parsed values. Encoding, whitespace, key order and commentary become
+irrelevant by construction, because the comparison is on what the parser produces — which is
+exactly what pnpm executes.
+
+- [x] **Protected script keys are compared as parsed values.** A root script the required
+      `verify` job reaches is reserved when its parsed value changes at all — including to
+      another working command, because "what that check proves" is what changed. Every other
+      script, in any workspace manifest, is reserved when its new value *executes nothing*:
+      the command is split on shell operators, comments are dropped, leading `VAR=` removed,
+      `pnpm`/`npx`/`exec`/`run` unwrapped, `pnpm <script>` resolved inside the same manifest,
+      `pnpm --filter <pkg> <script>` accepted as delegation, and `bash -c "..."` judged on
+      what the shell was handed rather than on the shell's presence.
+- [x] **The pnpm execution configuration is reserved.** `script-shell` in `.npmrc` redirects
+      every script in the repository, so a diff could hand `verify:static` to a shell that
+      returns success without running it while still delegating the DB commands needed to
+      produce a genuine receipt. `.npmrc`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`,
+      `.pnpmfile.cjs`, `.nvmrc` and `.node-version` are now the `control-toolchain` surface.
+- [x] **The toolchain the control chain runs through is reserved.** The wrapper executes
+      `pnpm exec tsx scripts/ops/pre-merge-authorization.ts`. Reserving that TypeScript file
+      is worthless if the diff can replace what evaluates it: a changed `tsx`, `typescript`,
+      `eslint`, `turbo` or `pnpm` version in the root manifest now reserves.
+- [x] **A runner substring is no longer taken as proof of a runner.** The check resolves the
+      command word actually executed, so `true # tsx --test`, `echo tsx`, `exit 0`, `:` and
+      `bash -c "true"` all reserve.
+
+A changed manifest whose contents were not supplied, or that does not parse, is
+`unclassifiable` — the classifier fails closed rather than treating an unreadable file as a
+clean one. Both gates fetch the manifests they need at base and at head; a read failure that
+is not a genuine 404 propagates rather than being reported as "unchanged".
+
+### The head-read guard had to be narrowed, deliberately
+
+`bootstrap-head-fallback-guard.test.ts` asserted Merge Gate *never* calls `repos.getContent`.
+That guard exists because the retired bootstrap exception read an **authorizing artifact**
+out of a ref and believed it. Reading a PR's own `package.json` to classify it is the
+opposite operation: nothing read there can produce `auto` where refusing to read would not,
+and a failed read reserves. BHF-2 now asserts the properties that actually matter — exactly
+one repository read exists, it is the named manifest reader, it reads only `package.json`
+paths, a non-404 failure propagates, the result reaches the classifier as `manifests`, and
+no lane/tier/proof/approval artifact is read. Three mutations confirm it is not decorative.
+
+### Replay against real work
+
+The unit tests passed on round 4's regex rules; replaying the last 40 merged PRs through the
+classifier is what caught their false positive. That replay is now part of the evidence, run
+again against the structural rules with real base/head manifests fetched from GitHub:
+
+| | Round 4 (regex) | Round 5 (structural) |
+|---|---|---|
+| `auto` | 20 / 40 | 20 / 40 |
+| PRs newly reserved by the manifest rules | 1 (#1469, a false positive) | 0 |
+
+No merged PR in that sample touched `.npmrc`, `pnpm-lock.yaml` or `pnpm-workspace.yaml`, so
+reserving the toolchain surface costs nothing measurable against real work.
+
+### Mutation controls (round 5)
+
+| Mutation | Result |
+|---|---|
+| missing manifest contents treated as clean | CAUGHT — 1 fail |
+| `control-toolchain` surface removed | CAUGHT — 1 fail |
+| toolchain dependency comparison disabled | CAUGHT — 1 fail |
+| runner check disabled | CAUGHT — 2 fail |
+| `bash -c` recursion removed | CAUGHT — 1 fail |
+| BHF-2: non-404 read failure swallowed | CAUGHT — 1 fail |
+| BHF-2: manifest path filter widened to any file | CAUGHT — 1 fail |
+| BHF-2: a second repository read added | CAUGHT — 1 fail |
+
+Each was applied to the shipped source, the suite run, the source restored. Each was caught,
+and each failed only its own assertions.
+
+One thing this round did NOT establish: comment stripping in the runner check is defensive
+rather than load-bearing. Removing it broke no test, because the first resolved command word
+already decides `true # tsx --test`. It is kept because it is correct, not because a control
+proves it.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 2f76b00c72fb23b4757ef9fe9f7e2209ccca6085
+Execution SHA: 51b596f04fd7e25aedb779d752429d68d189d366
