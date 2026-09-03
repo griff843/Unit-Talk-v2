@@ -112,12 +112,41 @@ ratifies a replacement.
 | Standing guardrails | `docs/05_operations/STANDING_GUARDRAILS.md` |
 | Break-glass | `docs/05_operations/BREAK_GLASS_PROTOCOL.md` |
 | Required CI checks | `docs/05_operations/REQUIRED_CI_CHECKS.md` |
-| Incident response | `docs/05_operations/INCIDENT_RUNBOOK.md`, `SUPABASE_WRITE_PATH_INCIDENT_RUNBOOK.md` |
+| Incident response (**DRAFT — non-binding**, see below) | `docs/05_operations/INCIDENT_RUNBOOK.md`, `SUPABASE_WRITE_PATH_INCIDENT_RUNBOOK.md` |
+
+### The incident runbooks are not binding authority
+
+Both incident runbooks declare their own status as **DRAFT** in their second line —
+`INCIDENT_RUNBOOK.md` says "DRAFT — PM ratification required before treated as binding process", and
+`SUPABASE_WRITE_PATH_INCIDENT_RUNBOOK.md` says "DRAFT". Listing them in a table of safety boundaries
+without that qualification would promote them, by placement alone, to an authority their own text
+refuses. They are **useful procedure, not binding authority**, until PM ratifies them.
+
+Neither grants any permission. Both state that live production writes remain operator-owned and that
+they authorize nothing beyond existing policy. The **ratified** authority for what an agent or
+operator may actually do during an incident is:
+
+| Question | Ratified authority |
+|---|---|
+| What may be run against a live database, and by whom | `docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md` (RATIFIED) |
+| Merging or acting under emergency conditions | `docs/05_operations/BREAK_GLASS_PROTOCOL.md` (Active) |
+| What no agent may do regardless of a directive | `docs/05_operations/STANDING_GUARDRAILS.md` |
+| Reserved decisions requiring Griff | `docs/mission/intent.md` |
 
 ## Program state
 
 | Concern | Doc |
 |---|---|
-| Program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Current program status | `docs/06_status/CURRENT_STATE.md` |
+| Program status before 2026-05-20 (**superseded, audit history only**) | `docs/06_status/PROGRAM_STATUS.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
 | Current execution plan | `docs/mission/plan.md` |
+
+`PROGRAM_STATUS.md` declares itself SUPERSEDED in its own first line and names
+`docs/06_status/CURRENT_STATE.md` as current state. It is listed here so an agent who finds it knows
+what it is, never as a status source to read.
+
+**Live evidence overrides every status snapshot in this table**, including `CURRENT_STATE.md`. Each
+of these is a document written at a moment; `main`, the running system, the database and the
+readiness ledger are the system itself. Where a snapshot and live evidence disagree, the snapshot is
+stale by definition — re-measure, and fix the snapshot rather than reasoning from it.

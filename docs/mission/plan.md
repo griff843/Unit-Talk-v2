@@ -37,10 +37,19 @@ Verified against `origin/main`, the GitHub API, branch protection, check-run out
   two of them concurrently against the same branches. Lane mechanics exist to prevent that and were
   not in force, because none of the new branches were lanes.
 
-### Production is deployed, healthy, and contained
+### Production deployed and passed its smoke on 2026-09-01 — current readiness is RED
+
+Two different claims live in this section and they must not be collapsed. The first is a *point-in-
+time deploy smoke*; the second is *current readiness*. Only the first was healthy.
+
+**Current readiness is RED.** `docs/06_status/readiness/readiness-score.json` on `main`, generated
+2026-09-03T15:40:56Z from run `33774007367`, records `"verdict": "RED"` and
+`"observability": "degraded"`, with `deployed_sha` `e48106fc` against `main_sha` `48b5f679` — the
+deployed commit is not `main`. Nothing below licenses a statement that production is *currently*
+healthy; the smoke below is evidence about 2026-09-01, not about today.
 
 Measured from the `Deploy` run of 2026-09-01 (`e48106fc`), which promoted and passed its
-post-deploy smoke:
+post-deploy smoke **at that time**:
 
 - Running containers: `api`, `worker`, `ingestor`, `discord-bot`, `grading-cron`, `web`,
   `smart-form`, `caddy`, plus Loki/Grafana. `web` and `smart-form` both reported `healthy`.
@@ -75,8 +84,21 @@ occurrence class**, not a novel event.
 Prevention requires one of: `enforce_admins: true`; a ruleset restricting `main` pushes to the
 Actions app with a named break-glass bypass; or a `pre-push` hook refusing `refs/heads/main` without
 a referenced incident file. All three are PM decisions — merge authority and branch protection are
-reserved surfaces. **Sequencing note:** `enforce_admins: true` also removes the only route by which
-several currently-blocked PRs can land, so it should follow the backlog, not precede it.
+reserved surfaces.
+
+**Sequencing.** The active direct-`main` prohibition is not deferred behind this backlog. The
+prohibition is already in force and already binding on every agent; what is outstanding is a
+*mechanical* prevention control, and that control is a reserved PM decision on branch protection —
+not a lane, and explicitly not changed here.
+
+It is worth stating plainly why, because an earlier draft of this plan got it backwards:
+`enforce_admins: true` would also close the only route by which several currently-inadmissible PRs
+could land. That is a real consequence, but it is an argument for correcting how those PRs were
+created — they were opened outside the lane system and are inadmissible for that reason — not an
+argument for leaving `main` mechanically unprotected until they clear. Incorrectly created PRs do
+not earn a deferral of a safety control. The correct order is: PM decides the prevention control on
+its own merits and on its own timeline; the inadmissible PRs are re-homed through normal governed
+lanes regardless of that decision.
 
 ---
 
@@ -348,7 +370,10 @@ Consolidated from Wave 0, in dependency order:
    Milestone 1 gate.
 5. **#1477, #1451** — production DDL. Neither is a Milestone 1 gate.
 6. **#1491 / #1492 architecture review** — merge authority and agent authority.
-7. **Direct-`main` prevention** — branch protection change; sequence after the backlog clears.
+7. **Direct-`main` prevention** — branch protection change, decided on its own merits and its own
+   timeline. **Not sequenced behind the inadmissible-PR backlog:** the prohibition is already in
+   force, and incorrectly created PRs do not earn a deferral of a safety control. Not changed in
+   this lane.
 8. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
    explicitly excluded from it. Command Center secrets are likewise not a Milestone 1 gate.
 9. **`scope-override/v1` comment on PR #1499** authorizing `.lane/lanes/governance.yml`, so the
