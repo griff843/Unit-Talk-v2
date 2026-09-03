@@ -750,9 +750,30 @@ have now cost nothing measurable on real work.
 == restored                                                    -> # fail 0
 ```
 
+### Self-review at the round-9 head: a constant nothing reads
+
+Re-reading the policy before requesting round 10 found `"phase": 2` in the bootstrap block.
+Nothing reads it — merge-gate.yml derives the active phase by asking whether the trusted BASE
+checkout carries `classifierPath`, which is the only source that cannot be edited by the PR
+under judgement. The constant was also wrong precisely where it mattered: the PR that first
+lands the classifier IS in phase 1, while the file declared phase 2, so a reader would
+conclude the bootstrap was over while the gate was still taking it.
+
+This is the defect class this bundle has hit repeatedly — a self-consistent artifact that no
+assertion constrains. The fix is to remove the constant rather than correct it, and to assert
+its absence: `assert.ok(!('phase' in policy.bootstrap))`. Mutation control: reintroducing
+`"phase": 2` fails test 43 and nothing else.
+
+```
+$ pnpm lint         -> pass (silent)
+$ pnpm type-check   -> pass (silent)
+$ pnpm test:ops     -> # tests 2916  # pass 2916  # fail 0
+$ merge-authority.test.ts -> # pass 80  # fail 0
+```
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 16dceb8c5fd0b4b40583c9bb812dca2bec66d2cd
+Execution SHA: fc39bd9c7da10d5f6a9645d7219fec96d93e6128
