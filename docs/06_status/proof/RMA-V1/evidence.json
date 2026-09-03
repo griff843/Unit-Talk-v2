@@ -6,13 +6,13 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9f30bd4b8eda549a0519ee9780e5b7e104bd6308",
-    "evidence_commit_sha": "9f30bd4b8eda549a0519ee9780e5b7e104bd6308",
+    "verified_source_sha": "10abed063743ab076f4aadf70bd6c4e1d961ceb8",
+    "evidence_commit_sha": "10abed063743ab076f4aadf70bd6c4e1d961ceb8",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_lint": "PASS",
       "pnpm_type_check": "PASS",
-      "pnpm_test": "PASS (test:ops 2884 tests, 0 failures)",
+      "pnpm_test": "PASS (test:ops 2909 tests, 0 failures)",
       "pnpm_verify": "PENDING-CI - lint, type-check and test:ops green locally; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head."
     }
   },
@@ -28,47 +28,78 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test:ops",
-      "tests": 2871,
+      "tests": 2909,
       "failures": 0
     },
     "targeted_suites": [
       {
         "status": "PASS",
         "command": "pnpm exec tsx --test scripts/ops/merge-authority.test.ts",
-        "tests": 43,
+        "tests": 73,
         "failures": 0
       },
       {
         "status": "PASS",
         "command": "pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts",
-        "tests": 74,
+        "tests": 77,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts",
+        "tests": 49,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts",
+        "tests": 29,
+        "failures": 0
+      },
+      {
+        "status": "PASS",
+        "command": "pnpm exec tsx --test scripts/ops/bootstrap-head-fallback-guard.test.ts",
+        "tests": 5,
         "failures": 0
       }
     ],
     "mutation_controls": [
       {
-        "mutation": "filePaths returns only file.filename, restoring destination-only rename classification",
-        "expected": "the three rename assertions fail; a reserved file renamed out of its surface classifies as auto",
-        "observed": "not ok 32, 34, 36; 40 pass, 3 fail",
+        "mutation": "accept a && chain when ANY link runs work (round-6 semantics)",
+        "expected": "the every-link, refused-syntax and short-circuit assertions fail",
+        "observed": "not ok 64, 65, 70; # fail 3",
         "status": "CAUGHT"
       },
       {
-        "mutation": "merge-gate.yml rethrows instead of entering PHASE 1 on MODULE_NOT_FOUND",
-        "expected": "the four bootstrap assertions fail; the gate returns an unclearable internal error",
-        "observed": "not ok 69, 70, 71, 72; 70 pass, 4 fail",
+        "mutation": "drop & (backgrounding) from the refused-syntax set",
+        "expected": "the refused-syntax assertion fails on the backgrounded runner",
+        "observed": "not ok 65; # fail 1",
         "status": "CAUGHT"
       },
       {
-        "mutation": "remove the auth-and-authorization surface from RESERVED_RISK_SURFACES.json",
-        "expected": "the auth assertion fails; auth.ts and the writer-authority boundary classify as auto",
-        "observed": "not ok 37; 42 pass, 1 fail",
+        "mutation": "drop | (pipes) from the refused-syntax set",
+        "expected": "the refused-syntax and alternation assertions fail",
+        "observed": "not ok 65, 71; # fail 2",
         "status": "CAUGHT"
+      },
+      {
+        "mutation": "accept `true` and `false` as runners",
+        "expected": "five assertions fail; inert commands classify as work",
+        "observed": "not ok 62, 64, 65, 67, 72; # fail 5",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "drop { } from the refused-syntax set",
+        "expected": "the function-shadowing assertion fails",
+        "observed": "# fail 0 - CAUGHT NOTHING",
+        "status": "NOT A CONTROL",
+        "note": "a shell function definition necessarily contains ( ) and ;, each of which already refuses the value, so the brace characters are defensive rather than load-bearing. Recorded rather than counted."
       }
     ],
     "classification_dry_run": {
       "status": "PASS",
-      "command": "classifyDiff over every open PR against real pulls.listFiles payloads",
-      "detail": "8 auto / 7 human across the open board. #1488 and #1474 move from auto to human under the new auth surface."
+      "command": "replay classifyDiff over the last 40 merged PRs under the round-6 rules and the round-7 rules, same sample, back to back",
+      "detail": "identical verdict on all 40 under both rule sets: 24 auto / 16 human, no script rule firing in either run. The round-7 tightening costs nothing on real work."
     },
     "verify": {
       "status": "PENDING-CI",

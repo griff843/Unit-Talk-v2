@@ -186,9 +186,10 @@ would catch a weakened authz check are the same tests such a change edits.
 
 - [x] `pnpm lint`: pass (silent)
 - [x] `pnpm type-check`: pass (silent)
-- [x] `pnpm test:ops`: 2884 tests, 2884 pass, 0 fail
-- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 51 pass, 0 fail
+- [x] `pnpm test:ops`: 2909 tests, 2909 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/merge-authority.test.ts`: 73 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: 77 pass, 0 fail
+- [x] `pnpm exec tsx --test scripts/ops/bootstrap-head-fallback-guard.test.ts`: 5 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/pre-merge-authorization.test.ts`: 49 pass, 0 fail
 - [x] `pnpm exec tsx --test scripts/ops/executor-result-validate.test.ts`: 29 pass, 0 fail
 - [x] Both workflow files parse as YAML after editing (`yaml.safe_load`)
@@ -549,9 +550,89 @@ selecting a stale one and reported a SHA mismatch against a commit from hours ea
 comment format is fixed; the underlying sharp edge — that malformed input degrades to
 *stale* input rather than to an error — is worth its own repair and is not fixed here.
 
+## Independent review round 7
+
+Three P1s, all real, all reproduced:
+
+```
+false && tsx --test a.test.ts; true     # unreachable runner, then exits 0 anyway
+tsx --test a.test.ts & true             # backgrounded; the status is discarded
+tsx() { true; }; tsx --test a.test.ts   # the runner name shadowed by a no-op
+```
+
+Each classified `auto`. The `&&` split treated a conditional as a plain separator; `&` was
+not a separator at all, so the backgrounded form's first word was still `tsx`; and a function
+definition redefines what a word means, which no word-matching rule can see.
+
+### The instrument was the wrong shape
+
+Rounds 4, 5, 6 and 7 each fixed a real evasion and each was followed by another. That is not
+four unlucky misses — it is a generator. The shell has more ways to discard a command's
+execution or its status than a validator can enumerate, so a rule shaped as "assume work
+unless a known trick is present" loses by construction. The number of rounds is the evidence,
+not any individual finding.
+
+So the default is inverted. A script value must PROVE it runs work, in a grammar small enough
+to reason about: a `&&`-joined chain in which every element is a plain word resolving to a
+configured runner. Backgrounding, pipes, subshells, function definitions, redirection,
+command substitution, quoting, `;` and `||` are refused WITHOUT being interpreted. That
+refusal set is strictly larger than any list of known tricks, and it does not grow when
+someone invents a new one.
+
+Every element must resolve, not merely one. In `a && b` the shell runs `b` only when `a`
+succeeded, so requiring all of them makes reachability moot instead of something to reason
+about — which is precisely what `false && tsx` exploited.
+
+### Two deliberate false positives, kept
+
+- `bash -c "tsx --test x"` really does run tests, and now reserves. Round 6 answered the
+  `bash -c "true"` case by parsing the inner string; that is a second language to model, and
+  the validator was losing that race one construct at a time.
+- `a || b` reserves even when both branches run work. A fallback chain inside a
+  required-check entrypoint is worth one human glance.
+
+Both are regressions in permissiveness relative to round 6, stated rather than hidden.
+
+### The strictness is free on real work
+
+The same 40 merged PRs replayed under the round-6 rules and under these rules produce an
+IDENTICAL verdict on every single one: 24 `auto` / 16 `human`, with no script rule firing in
+either run. Same sample, both rule sets, run back to back — so the tightening is not being
+paid for by anyone. Four root scripts (`verify`, `verify:static`, `verify:commands`, `test`)
+became unprovable because they delegate across workspaces via `--filter`; all four are
+already reserved unconditionally as protected CI entrypoints, so nothing changes for them
+either.
+
+### Mutation controls (round 7)
+
+Each applied alone, suite run, restored, and confirmed to fail only its own assertions:
+
+```
+== M1 accept a chain when ANY link runs work (round-6 semantics)   -> not ok 64, 65, 70; # fail 3
+== M2 drop & (backgrounding) from the refused-syntax set           -> not ok 65;         # fail 1
+== M3 drop | (pipes) from the refused-syntax set                   -> not ok 65, 71;     # fail 2
+== M4 accept `true` and `false` as runners                         -> not ok 62, 64, 65, 67, 72; # fail 5
+== restored                                                        -> # fail 0
+```
+
+A fifth mutation — dropping `{` and `}` from the refused set — caught NOTHING, and is
+recorded as such rather than counted. A shell function definition necessarily contains `(`,
+`)` and `;`, each of which already refuses the value, so the brace characters are defensive
+rather than load-bearing. This is the same honesty the round-6 comment-stripping control got.
+
+### A second silent-skip defect, same class as the first
+
+The documented approval procedure in this bundle was itself unusable for a reason worth
+recording: an `Issue:` line inside a fenced example block, posted in the same comment as the
+executor result, is parsed by ERV as a real field. The comment reddened the required check it
+was explaining. Combined with the malformed-`EXECUTOR_RESULT` defect already recorded above
+and the invalid PM verdict template found on #1492, that is three parsers in one session that
+treat a WRONG artifact as an ABSENT one. The defect class, not the three instances, is what
+should be fixed.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 9f30bd4b8eda549a0519ee9780e5b7e104bd6308
+Execution SHA: 10abed063743ab076f4aadf70bd6c4e1d961ceb8
