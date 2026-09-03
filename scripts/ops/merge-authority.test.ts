@@ -698,7 +698,6 @@ test('real commands are recognised as invoking a runner', () => {
     'pnpm exec tsc -b tsconfig.json',
     'eslint . --cache',
     'turbo run build',
-    'playwright test -c playwright.config.ts',
     'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts',
     // Both links resolve inside this manifest. (Not `pnpm test:ops`, which
     // would be a self-reference and therefore a cycle that runs nothing.)
@@ -1000,4 +999,27 @@ test('a test file named after the merge chain is not the merge chain', () => {
   );
   assert.equal(repointed.authority, 'human');
   assert.ok(repointed.surfaces.includes('merge-wrapper-entrypoint'));
+});
+
+test('a config flag is ordinary OUTSIDE the required chain and reserved inside it', () => {
+  // `-c` / `--config` point a runner at a file that can itself disable the
+  // work, so the required chain does not get to use one. Outside that chain the
+  // same flag is unremarkable: a script nothing required depends on cannot make
+  // a required check falsely green.
+  const outside = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:e2e'] =
+        'playwright test -c playwright.config.ts';
+    }),
+  );
+  assert.equal(outside.authority, 'auto', outside.reasons.join(' | '));
+
+  const inside = classifyRoot(
+    rootManifest((m) => {
+      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
+        'playwright test -c playwright.config.ts';
+    }),
+  );
+  assert.equal(inside.authority, 'human');
+  assert.ok(inside.surfaces.includes('ci-required-check-entrypoints'));
 });
