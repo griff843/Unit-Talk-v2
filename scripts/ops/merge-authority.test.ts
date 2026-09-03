@@ -700,11 +700,10 @@ test('real commands are recognised as invoking a runner', () => {
     'turbo run build',
     'playwright test -c playwright.config.ts',
     'NEXT_PUBLIC_QA=1 playwright test e2e/a.spec.ts',
-    'pnpm test:apps && pnpm test:ops',
+    // Both links resolve inside this manifest. (Not `pnpm test:ops`, which
+    // would be a self-reference and therefore a cycle that runs nothing.)
+    'pnpm test:apps && pnpm lint',
     'node --test scripts/a.test.mjs',
-    // A cross-package script it cannot resolve does not disqualify a chain
-    // whose other links do run work.
-    'pnpm lint && pnpm --filter @unit-talk/smart-form verify',
   ]) {
     const result = classifyRoot(
       rootManifest((m) => {
@@ -712,6 +711,64 @@ test('real commands are recognised as invoking a runner', () => {
       }),
     );
     assert.equal(result.authority, 'auto', command);
+  }
+});
+
+test('a script is unproven unless EVERY link of its && chain runs work', () => {
+  // Round 7. `a && b` runs b only when a succeeded, so a chain whose first link
+  // can fail reaches nothing after it. Rather than deciding which links are
+  // reachable, every link must be a recognised runner -- which makes the
+  // question of reachability moot.
+  for (const command of [
+    // The reported evasion: the runner is unreachable, and the trailing `true`
+    // makes the whole script exit 0 anyway.
+    'false && tsx --test scripts/ops/a.test.ts; true',
+    'false && tsx --test a.test.ts',
+    'test -f missing && tsx --test a.test.ts',
+    // A cross-package script cannot be resolved from a manifest this diff does
+    // not carry, so a chain containing one is unproven. Stated cost, not a bug.
+    'pnpm lint && pnpm --filter @unit-talk/smart-form verify',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+  }
+});
+
+test('shell syntax this validator does not model is refused, not interpreted', () => {
+  // Round 7 found two more constructs that look like work and are not:
+  // backgrounding discards the runner's exit status, and a function definition
+  // shadows the runner's name with a no-op. Four rounds of enumerating such
+  // tricks is evidence that enumeration is the wrong shape, so anything outside
+  // a `&&` chain of plain words is refused WITHOUT being interpreted.
+  for (const command of [
+    // Backgrounded: the shell returns the foreground `true`, so a failing test
+    // cannot fail the check.
+    'tsx --test scripts/ops/a.test.ts & true',
+    'tsx --test a.test.ts &',
+    // A function shadowing the runner name.
+    'tsx() { true; }; tsx --test scripts/ops/a.test.ts',
+    // Constructs from earlier rounds, still refused under the new rule.
+    'true || tsx --test a.test.ts',
+    'exit 0 && tsx --test a.test.ts',
+    'bash -c "true"',
+    'true # tsx --test a.test.ts',
+    // Command substitution, pipes, subshells and redirection all discard or
+    // divert what the runner would report.
+    'echo $(tsx --test a.test.ts)',
+    'tsx --test a.test.ts | tee out.log',
+    '(tsx --test a.test.ts)',
+    'tsx --test a.test.ts > /dev/null',
+  ]) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
   }
 });
 
@@ -766,24 +823,24 @@ test("the reserved chain's shared output helper is reserved", () => {
   assert.ok(result.surfaces.includes('merge-authority'));
 });
 
-test('a shell invoked with -c is judged on what it was handed', () => {
-  // `bash -c "true"` invokes a shell and runs nothing. Treating the shell's
-  // presence as proof of work would reopen the hole the runner check closes.
-  const inert = classifyRoot(
-    rootManifest((m) => {
-      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = 'bash -c "true"';
-    }),
-  );
-  assert.equal(inert.authority, 'human');
-  assert.ok(inert.surfaces.includes('neutered-workspace-script'));
-
-  const real = classifyRoot(
-    rootManifest((m) => {
-      (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
-        'bash -c "tsx --test scripts/ops/a.test.ts"';
-    }),
-  );
-  assert.equal(real.authority, 'auto');
+test('a shell invoked with -c is refused either way', () => {
+  // `bash -c "true"` invokes a shell and runs nothing. Round 6 answered this by
+  // parsing what the shell was handed and judging THAT. Round 7 stops parsing
+  // it: an inner command string is a whole second language to model, and the
+  // validator was losing that race one construct at a time. Both forms are now
+  // refused -- including the one that really does run tests.
+  //
+  // That is a deliberate false positive. A root script that needs `bash -c`
+  // reserves, and a human clears it once.
+  for (const command of ['bash -c "true"', 'bash -c "tsx --test scripts/ops/a.test.ts"']) {
+    const result = classifyRoot(
+      rootManifest((m) => {
+        (m as never as { scripts: Record<string, string> }).scripts['test:ops'] = command;
+      }),
+    );
+    assert.equal(result.authority, 'human', command);
+    assert.ok(result.surfaces.includes('neutered-workspace-script'), command);
+  }
 });
 
 // ── round 6: control flow is part of what a command does ──────────────────
@@ -808,14 +865,20 @@ test('short-circuited and unreachable runners do not count', () => {
   }
 });
 
-test('an alternation is proven only when every branch runs work', () => {
+test('an alternation is refused outright', () => {
+  // Round 6 proved an alternation by requiring every branch to run work, which
+  // correctly accepted this one. Round 7 refuses `||` unparsed instead: the
+  // reachability question it raises is the same one that made `false && tsx`
+  // slip through, and a fallback chain in a required-check entrypoint is worth
+  // a human glance regardless of what its branches contain.
   const both = classifyRoot(
     rootManifest((m) => {
       (m as never as { scripts: Record<string, string> }).scripts['test:ops'] =
         'tsx --test scripts/ops/a.test.ts || tsx --test scripts/ops/b.test.ts';
     }),
   );
-  assert.equal(both.authority, 'auto');
+  assert.equal(both.authority, 'human');
+  assert.ok(both.surfaces.includes('neutered-workspace-script'));
 });
 
 test('a filtered pnpm command is resolved, not trusted for its --filter', () => {

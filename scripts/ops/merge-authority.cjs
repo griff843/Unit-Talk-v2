@@ -123,67 +123,75 @@ function decodeJsonEscapes(line) {
 // PARSED manifest at head, so any encoding, reformatting or commentary that
 // produces the same parsed value produces the same verdict.
 
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh']);
-/** Commands after which nothing in the same sequence runs. */
-const TERMINATORS = new Set(['exit', 'return']);
+/**
+ * Shell syntax this validator does not model. Its presence in a script value
+ * makes the value UNPROVEN, which reserves.
+ *
+ * This list is deliberately the wrong shape for an arms race. Four rounds of
+ * review defeated four successive attempts to enumerate the ways a script can
+ * look like work without doing it -- `true || tsx`, `exit 0 && tsx`,
+ * `pnpm --filter X exec true`, then `false && tsx; true`, `tsx ... & true`, and
+ * `tsx() { true; }; tsx ...`. Each fix was correct and each was followed by
+ * another construct. The generator of those evasions is that the shell has more
+ * ways to discard a command's execution or its status than a validator can
+ * enumerate, so enumerating them is a losing position by construction.
+ *
+ * So the default is inverted here. Rather than proving a command is a no-op,
+ * a command must prove it is work, in a grammar small enough to reason about:
+ * a `&&`-joined list of plain words. Everything else -- backgrounding, pipes,
+ * subshells, function definitions, redirection, command substitution, quoting,
+ * `;`, `||` -- is refused without being interpreted. That is a strictly larger
+ * refusal set than any list of known tricks, and it does not grow when someone
+ * invents a new one.
+ */
+const UNMODELLED_SHELL_SYNTAX = /[&;|()<>`$\\{}'"\n\r]/;
 
 /**
- * Does a script command actually execute something that runs work?
+ * Does this script value PROVABLY run work?
  *
- * Control flow is honoured, because the shell honours it. `true || tsx --test`
- * contains a runner that POSIX short-circuiting guarantees never launches, and
- * `exit 0 && tsx --test` contains one that is never reached. Treating a command
- * as a flat bag of segments accepts both.
+ * Returns true only for a `&&`-joined chain in which every element resolves to
+ * a configured runner. Every element must resolve, not merely one: in `a && b`
+ * the shell runs `b` only if `a` succeeded, so a chain whose first element is
+ * `false` (or any command that can fail) reaches nothing after it. Requiring
+ * all of them removes the need to reason about which ones are reachable.
+ *
+ * Anything unproven reserves. Unproven is not an accusation that the script is
+ * neutered; it means this validator cannot show that it is not, and a
+ * merge-authority control resolves that direction.
  */
 function commandInvokesRunner(command, scripts, config, seen) {
   if (typeof command !== 'string') return false;
   const visited = seen || new Set();
-  // `a || b` runs b only when a fails, so EITHER branch may be the one that
-  // executes. The command is proven only when every alternative is proven.
-  const alternatives = command.split('||');
-  if (alternatives.length > 1) {
-    return alternatives.every((alt) => sequenceInvokesRunner(alt, scripts, config, visited));
+  const trimmed = command.trim();
+  if (!trimmed) return false;
+  const elements = trimmed.split('&&');
+  for (const raw of elements) {
+    const element = raw.trim();
+    // An empty element means the split produced something the grammar does not
+    // describe -- a bare `&` (backgrounding), a trailing `&&`, or `&&&`.
+    if (!element) return false;
+    if (UNMODELLED_SHELL_SYNTAX.test(element)) return false;
+    if (!elementRunsRunner(element, scripts, config, visited)) return false;
   }
-  return sequenceInvokesRunner(command, scripts, config, visited);
+  return true;
 }
 
-/** One `||`-free sequence: segments joined by `&&`, `;` or a pipe. */
-function sequenceInvokesRunner(sequence, scripts, config, visited) {
-  for (const rawSegment of sequence.split(/&&|;|\|/)) {
-    // A `#` comment is inert to the shell, so a runner name inside one proves
-    // nothing about what the command executes.
-    const segment = rawSegment.replace(/(^|\s)#.*$/, '').trim();
-    if (!segment) continue;
-    const verdict = segmentInvokesRunner(segment, scripts, config, visited);
-    if (verdict === 'terminates') return false;
-    if (verdict === true) return true;
-  }
-  return false;
-}
-
-/** @returns {true|false|'terminates'} */
-function segmentInvokesRunner(segment, scripts, config, visited) {
+/** One element of a `&&` chain: plain words, already known free of shell syntax. */
+function elementRunsRunner(element, scripts, config, visited) {
   const runners = new Set(config.runnerCommands || []);
   const wrappers = new Set(config.commandWrappers || []);
-  let words = segment.split(/\s+/).filter(Boolean);
+  let words = element.split(/\s+/).filter(Boolean);
+  // `FOO=bar tsx --test x` runs tsx. A prefix assignment is not a command.
   while (words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[0])) words = words.slice(1);
   while (words.length) {
     const base = words[0].replace(/^.*\//, '');
-    // Nothing after `exit 0` in this sequence runs.
-    if (TERMINATORS.has(base)) return 'terminates';
-    // `bash -c "true"` invokes a shell but runs nothing. Judge what the shell
-    // was actually handed, not the fact that a shell appears.
-    if (SHELLS.has(base) && words[1] === '-c') {
-      const inline = words.slice(2).join(' ').replace(/^["']|["']$/g, '');
-      return commandInvokesRunner(inline, scripts, config, visited);
-    }
     if (runners.has(base)) return true;
     if (wrappers.has(base)) {
       // `pnpm --filter <pkg> <thing>` selects another workspace project; it is
-      // not itself proof of work. `pnpm --filter X exec true` exits 0 having run
-      // only `true`. Drop the selector and keep resolving what follows -- and
-      // when what follows is a script in a manifest this diff does not contain,
-      // nothing here can prove it runs anything, so it stays unproven.
+      // not itself proof of work, and the manifest that would prove it is not
+      // in this diff. Drop the selector and keep resolving what follows; if
+      // what remains is a script this manifest does not define, it stays
+      // unproven and reserves.
       const next = [];
       for (let i = 1; i < words.length; i += 1) {
         const w = words[i];
@@ -317,7 +325,7 @@ function analyzeManifests({ files, manifests, config }) {
       if (!commandInvokesRunner(String(value), headScripts, config)) {
         reserve(
           'neutered-workspace-script',
-          `Script "${key}" in ${name} was changed to a command that executes no known runner: ${String(value).slice(0, 120)}`
+          `Script "${key}" in ${name} was changed to a command this validator cannot prove runs work — it is not a && chain of recognised runners: ${String(value).slice(0, 120)}`
         );
       }
     }
