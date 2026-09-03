@@ -463,9 +463,95 @@ rather than load-bearing. Removing it broke no test, because the first resolved 
 already decides `true # tsx --test`. It is kept because it is correct, not because a control
 proves it.
 
+## Independent review round 6
+
+Two P1s, both accepted, both defects in the round-5 command resolver rather than in the
+structural approach. Both are the same mistake: **a command is not a flat bag of segments —
+the shell's control flow decides what actually runs.**
+
+- [x] **Short-circuiting was ignored.** `true || tsx --test scripts/ops/merge-authority.test.ts`
+      classified `auto`. POSIX runs the right side of `||` only when the left *fails*, so
+      `tsx` never launches — yet splitting on separators found a runner and accepted it. The
+      resolver now splits alternation first and proves a command only when **every** `||`
+      branch runs work. `exit` and `return` terminate a sequence, so nothing after
+      `exit 0 &&` counts either.
+- [x] **`--filter` was taken as proof of work.** `pnpm --filter @unit-talk/contracts exec true`
+      classified `auto`: it exits 0 having run only `true`. The selector is now stripped and
+      resolution continues on what follows, so `... exec true` reserves and
+      `... exec tsx --test a.ts` does not.
+
+The second fix has a stated cost. `pnpm --filter <pkg> <script>` names a script in a manifest
+the diff does not contain, so nothing available to the classifier can prove what it runs, and
+it now reserves. In this repository that shape appears only in the root `dev`,
+`dev:command-center` and `dev:smart-form` keys — every other user of it
+(`test:command-center`, `verify:commands`, `verify:static`) is already frozen as a CI
+entrypoint. A chain is unaffected when its other links run work:
+`pnpm lint && pnpm --filter @unit-talk/smart-form verify` still proves.
+
+### A reserved merge had no valid exit
+
+Review of the stacked harness PR surfaced a defect that belongs to RMA/v1 itself, not to the
+harness: **the approval artifact this gate demands could not be validly written for a
+mission-native PR.** `parseVerdict` required line 3 to match `Issue: (UTV2|UNI)-\d+`, and a
+mission-native PR has no Linear issue. So the reserved branch of the gate demanded a
+`pm-verdict/v1` that nothing could produce — a merge reserved to a human, with no way for the
+human to unreserve it. That is not a strict gate; it is a deadlock, and it is exactly the
+class of failure the two-phase bootstrap exists to avoid.
+
+The parser now also accepts a ticketless `Issue: PR-<number>`. The field stays constrained —
+`none`, `mission-native`, `PR-` and a bare number are all still refused — so this is a
+ticketless FORM, not free text.
+
+One consequence worth stating before it bites: **this PR cannot benefit from its own fix.**
+Merge Gate loads the parser from the PR's BASE checkout, and base is `main`, which carries
+the old regex. Approving #1491 therefore requires an `Issue:` line matching
+`(UTV2|UNI)-\d+`. The old parser only pattern-matches that field — it never checks the
+identifier exists — so referencing an existing issue id satisfies it without creating one.
+Every PR after this one can use `PR-<number>`.
+
+### Mutation controls (round 6)
+
+| Mutation | Result |
+|---|---|
+| `\|\|` treated as an ordinary separator | CAUGHT — 1 fail |
+| `exit 0` no longer terminates a sequence | CAUGHT — 1 fail |
+| `--filter` trusted as proof of work again | CAUGHT — 2 fail |
+| ticketless verdict form removed | CAUGHT — 1 fail |
+
+### Live proof of the PHASE 2 path
+
+Round 5 shipped a manifest fetch that **cannot execute on this PR**: PHASE 1 takes the
+bootstrap branch, so `analyzeManifests` is never reached here. It is exercised on #1492,
+whose base carries the classifier. Merge Gate run `33698016161` on #1492 head `8894a122`
+completed and returned a classification —
+
+```
+MERGE GATE: BLOCKED
+- Reserved surface touched. Requires the "griff-approved" label from a CODEOWNERS member.
+- A reserved surface requires a valid pm-verdict/v1 comment from a CODEOWNERS member.
+```
+
+— not the bootstrap message and not `Internal error`. #1492's diff includes `package.json`,
+so both `readManifestAt` calls ran against the API and `analyzeManifests` returned without
+throwing. The gate's PHASE 2 path is therefore proved by execution, not by argument.
+
+### The re-trigger is proved in production too
+
+Two ERV runs fired on `pull_request` at 00:10 from a label toggle on head `922fd4e7` while
+`verify` stayed `pass` — the `labeled`/`unlabeled` escape works, and does not restart CI.
+
+That run also surfaced a real defect in this session's own operating: every
+`EXECUTOR_RESULT` comment posted during rounds 4-6 was **silently skipped**, because the
+validator requires the literal lines `EXECUTOR_RESULT: READY_FOR_REVIEW` and
+`schema: executor-result/v1` plus a `Head SHA:` field, and the comments used
+`EXECUTOR_RESULT/v1` and `Head:`. A malformed comment is skipped, not failed, so ERV kept
+selecting a stale one and reported a SHA mismatch against a commit from hours earlier. The
+comment format is fixed; the underlying sharp edge — that malformed input degrades to
+*stale* input rather than to an error — is worth its own repair and is not fixed here.
+
 ## Merge SHA Binding
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1491
 Approved PR head: pending merge
-Execution SHA: 51b596f04fd7e25aedb779d752429d68d189d366
+Execution SHA: 9f30bd4b8eda549a0519ee9780e5b7e104bd6308
