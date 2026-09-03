@@ -139,6 +139,12 @@ identity, distribution mode, provenance and the absence of any delivery record s
 Deploying the Command Center remains desirable product work and is tracked on its own merits; it is
 not a Milestone 1 gate.
 
+Ratified by PM on 2026-09-03: **step 7 may be satisfied by a governed read-only production
+observation of the exact submitted pick and its non-delivery state.** A deployed Command Center is
+not required for the contained pilot. "Governed" and "read-only" are both load-bearing — the
+observation reads the one pick the pilot created and its delivery records, writes nothing, and
+changes no containment setting.
+
 ## Definition of done
 
 The canonical production-readiness contract actually passes using its required live evidence, and

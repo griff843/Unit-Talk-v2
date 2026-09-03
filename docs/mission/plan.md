@@ -13,17 +13,16 @@ and what was learned.
 Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, and the
 `Direct Main Push Guard` run log. Not against docs or chat history.
 
-- `main` is `01a2d2d67` (UTV2-1789, PR #1474, merged 2026-09-03T04:53Z). The two commits ahead of
-  `72a4da762` are #1488 (UTV2-1824, 04:52Z) and #1474 (UTV2-1789, 04:53Z), both merged by Griff
-  while this plan was being written.
+- `main` is `5b5f7a3b8` (the UTV2-1825 lane-close commit). #1485 merged at `5ed005a6d`, behind
+  #1488 (UTV2-1824, `2ac23342`, 2026-09-03T04:52Z) and #1474 (UTV2-1789, `01a2d2d6`, 04:53Z).
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews.
 - 15 PRs are open. None is blocked on a failing test, a type error, or a real risk finding.
   They are blocked on `Merge Gate` in two distinct ways, and the distinction matters:
-  - **Missing a human approval artifact** (#1477, #1484, #1485) — a `pm-verdict/v1`
-    comment and/or the `t1-approved` label. #1474 and #1488 were in this group and merged
-    2026-09-03 (`01a2d2d6`, `2ac23342`). Measured the same day: `strict: true` did **not** block
+  - **Missing a human approval artifact** (#1477, #1484, #1501) — a `pm-verdict/v1`
+    comment and/or the `t1-approved` label. #1474, #1488 and #1485 were in this group and merged
+    2026-09-03 (`01a2d2d6`, `2ac23342`, `5ed005a6`). Measured the same day: `strict: true` did **not** block
     #1474 even though it was genuinely BEHIND `main`, so head-pinned verdicts do not serialize to
     one merge per cycle and an approved-but-BEHIND PR needs no re-verdict round trip.
   - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498) — opened
@@ -173,17 +172,21 @@ waiting on Griff" — at any moment most of the board is independent of every op
 | 1 | **Rewrite `ALLOWED_CAPPER_EMAILS` into the `<email>=<canonicalCapperId>` shape before the next deploy.** #1488 shipped the code; the secret still holds the pre-#1488 shape. | Secrets | The next deploy, and Milestone 1 step 2. Nothing else. |
 | 2 | Dispatch a `Deploy` run once item 1 is done | Production deploy | Milestone 1 steps 1–5. Nothing else. |
 | 3 | Decide **#1477** — standing verdict is `CHANGES_REQUIRED` | Production DDL | #1477 only. |
-| 4 | Approve **#1485** (`t1-approved` + `pm-verdict/v1`) | T1 merge authority | Post-merge proof rebinding repo-wide — see "`MERGE_SHA: pending merge`" below. |
+| 4 | Approve **#1501** (`t1-approved` + `pm-verdict/v1`) — UTV2-1823, authenticate `GET /api/picks/{id}/trace` | T1 merge authority | Milestone 1: the pilot creates exactly the record this route exposes to anonymous callers. |
 | 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
+
+Item 4 previously read "Approve #1485". That merged at `5ed005a6d` and its own lane closed cleanly
+afterwards, which is the mechanical evidence the fix works.
 
 Command Center secrets are **not** in this table. They are not a Milestone 1 prerequisite; see
 `intent.md` § "Step 7 — observation path".
 
 ### Wave 1 — Smart Form Track Only pilot (Milestone 1)
 
-#1488 (identity) is merged. What remains before the pilot can run is Wave 0 items 1 and 2, plus
-UTV2-1823 (authenticate `GET /api/picks/{id}/trace`, which today returns a pick's entire lifecycle
-aggregate to any anonymous caller and would expose the pilot's own pick).
+#1488 (identity) is merged. UTV2-1823 — authenticate `GET /api/picks/{id}/trace`, which today
+returns a pick's entire lifecycle aggregate to any anonymous caller and would expose the pilot's own
+pick — is implemented and green on **PR #1501**, awaiting only its T1 approval artifacts. What
+remains before the pilot can run is Wave 0 items 1, 2 and 4.
 
 Then **run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`, submit
 a real internal Track Only pick, assert persistence, observe the Track Only guards holding during
@@ -275,13 +278,24 @@ PR does the same, bounded to `docs/mission/**` and nothing else.
 agent. The bounded expansion is therefore authorized by a `scope-override/v1` comment authored by
 CODEOWNERS on this PR. Without that comment `File scope lock` fails on this file, and correctly so.
 
-### `MERGE_SHA: pending merge` needs a schema-v2 bundle
+### `MERGE_SHA: pending merge` — resolved on `main`
 
-Also observed here. Executor Result Validation rejects the ratified `pending merge` anchor under the
-legacy contract, which demands the row be a real commit — impossible before a merge exists. The
-escape is a schema-v2 `sha_binding` block in `evidence.json` (`merge_sha: null` plus
-`verified_source_sha`). `ops:proof-generate` does not emit one, so every lane hits this and authors
-it by hand. PR #1485 is the related fix and is itself blocked.
+Executor Result Validation rejected the ratified `pending merge` anchor under the legacy contract,
+which demanded the row be a real commit — impossible before a merge exists — while
+`PLACEHOLDER_VALUE_PATTERN` in `ops:proof-generate` did not match `pending merge` either, so a
+contract-conformant bundle was also unrebindable after the merge. Post-merge closeout was
+deadlocked repo-wide.
+
+**PR #1485 (UTV2-1825) merged at `5ed005a6d`.** Its own lane then closed cleanly through the normal
+post-merge path (`5b5f7a3b8`), which is the mechanical evidence the rebinder now accepts the anchor.
+
+Two lanes merged before the fix landed still carry the old failure and remain `in_review` on `main`:
+**UTV2-1824 (#1488)** and **UTV2-1789 (#1474)**. Their closeouts need a governed replay through
+`post-merge-lane-close.yml` now that the repaired rebinder is on `main`. This is lane bookkeeping,
+not a product gate — the code from both PRs is already shipped.
+
+The schema-v2 `sha_binding` block in `evidence.json` (`merge_sha: null` plus `verified_source_sha`)
+remains the correct authoring shape; it is what the repaired rebinder binds against.
 
 ---
 
@@ -295,9 +309,9 @@ Consolidated from Wave 0, in dependency order:
    belongs only in the secret store — it is not recorded in this repository.
 2. **Dispatch a `Deploy` run** once item 1 is done. Production is 23 commits behind `main` and does
    not yet carry #1488. Milestone 1 steps 1–5.
-3. **Approve #1485** (`t1-approved` + `pm-verdict/v1`). Post-merge proof rebinding is failing
-   repo-wide on the ratified `pending merge` anchor; both lanes merged 2026-09-03 are merged but
-   cannot truth-close until this lands.
+3. **Approve #1501** (`t1-approved` + `pm-verdict/v1`) — UTV2-1823. Every other check is green.
+   The pilot creates exactly the record this route exposes to anonymous callers, so this is a
+   Milestone 1 gate. (#1485, which previously sat at this position, merged at `5ed005a6d`.)
 4. **#1493** — the remaining Command Center authentication defect, still open. #1474 merged. Not a
    Milestone 1 gate.
 5. **#1477, #1451** — production DDL. Neither is a Milestone 1 gate.
