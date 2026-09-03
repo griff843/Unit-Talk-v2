@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "5ed005a6da848917a355c4c0ee5e7d8f5513713b",
     "verified_source_sha": "d8b1af9be76b01f86ecd57e82c149576aa36cf85",
     "evidence_commit_sha": "d8b1af9be76b01f86ecd57e82c149576aa36cf85",
-    "current_pr_head_sha": "set-by-ci",
+    "current_pr_head_sha": "542a9850d6760e4f645bc46709e2175e3f333d07",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
@@ -18,7 +18,9 @@
       "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
       "r_level_check": "PASS (no R-level artifacts required for this diff)",
       "automation_coverage": "PASS (fail=0, no new unwired tests or orphan capabilities)"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T05:43:09.630Z"
   },
   "static_proof": {
     "type_check": {

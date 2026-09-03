@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1825 — bind the pre-merge placeholder the pre-merge contract mandates
 
-MERGE_SHA: pending merge
+MERGE_SHA: 5ed005a6da848917a355c4c0ee5e7d8f5513713b
 
 Issue: UTV2-1825
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1485
