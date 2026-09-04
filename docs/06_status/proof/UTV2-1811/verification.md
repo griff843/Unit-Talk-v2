@@ -435,11 +435,28 @@ Migration immediately preceding UTV2-1811 locally:
 `20260803230000_utv2_1540_command_center_ledger_repair.sql`, which is remote version
 `20260803230000` — present, and therefore not re-run.
 
-Still stopped here. **No push has been executed and no production DDL has been applied.**
-This section proves the selection is now safe and precise; it does not authorize the apply.
-Applying `20260901150000` to production requires explicit production-DDL authorization,
-which this lane does not hold. `live_schema_parity` below remains FAIL for exactly that
-reason and is the only remaining gate on this lane.
+**Applied 2026-09-04 under bounded PM production-DDL authorization.** The authorization was
+tied to PR head `af59edb547931dc3e1b975d391f55483124fc483` and migration blob
+`56d1559665018598bc9d84ca2a4abafdf1ee9b53`, permitted exactly one migration, and was
+conditional on rechecking that it was the sole pending migration. It did not authorize merge,
+deployment, rollback, containment change or a pilot submission, and none of those was performed.
+
+The precondition was rechecked immediately before execution rather than relied on from the
+capture above: the head matched, the blob was re-hashed after extraction and matched, and the
+bidirectional join returned local-only `20260901150000` and remote-only empty. Both objects
+were confirmed absent (`to_regclass` and `to_regprocedure` both null). Exactly the statements
+in the authorized file were executed against `zfzdnfwdarxucxtaojxm`; nothing else was run.
+
+After the apply, `public.rate_limit_buckets` and
+`consume_rate_limit_bucket(text, timestamptz, timestamptz, integer)` both resolve, RLS is
+enabled with zero policies, and two indexes are present.
+
+**One correction was necessary and is recorded rather than hidden.** The apply tool registered
+the ledger version as `20260904081351`, not the repository filename version `20260901150000` —
+the same version-regeneration behaviour that produced the divergence UTV2-1822 repaired. One
+row of `supabase_migrations.schema_migrations` was updated to the canonical version. No other
+row was touched. Parity afterwards is 135 local files against 135 remote rows with both
+difference sets empty.
 
 ### What is deliberately not claimed
 
@@ -448,11 +465,21 @@ function — supplying a working fake is exactly how this defect stayed invisibl
 passing tests. The SQL behaviour above is proven against real PostgreSQL instead; the split
 is intentional and neither half is presented as the other.
 
-`packages/db/src/database.types.ts` is unchanged. `scripts/generate-types.mjs` generates
-from the linked project, which is production, where this migration is not applied and not
-authorized to be. Regenerating now would emit types that omit these objects and would sweep
-in unrelated production drift. Type-check passes without it, so regeneration is not
-mechanically required at this head; it belongs after production application.
+`packages/db/src/database.types.ts` remains unchanged, and after production application the
+earlier reasoning was re-tested rather than carried forward. Generating types from production
+now emits both new objects correctly — `rate_limit_buckets` with its four columns and
+`consume_rate_limit_bucket` with its four arguments and four-column return — but it *also*
+introduces **60 `provider_offer_history_p2026MMDD` partition tables** that exist in production
+and in no repo migration. Those partitions are created by partition management, are unrelated
+to this lane, and adopting them here would put production drift this lane does not own inside
+its diff. The measured object-set difference is exactly those 60 partitions plus this lane's
+two objects, with nothing removed.
+
+Regeneration is also not reproducible from this checkout: `scripts/generate-types.mjs` needs
+`SUPABASE_ACCESS_TOKEN` or `SUPABASE_DB_URL`, both of which are containment stubs here, so the
+only available route would be hand-editing a generated file. No CI gate enforces freshness of
+this file and `type-check` passes without it. Regeneration therefore belongs to a separate,
+owner-credentialed lane that can also decide what to do about the 60 partitions.
 
 ### What has a CI receipt and what does not
 
@@ -466,7 +493,7 @@ precondition_drill          PASS  run 33848292162  job 100945086270
 schema_roundtrip_drill      PASS  run 33848292162  job 100945086450
 writable_db_proof_staging   PASS  run 33848292323  job 100945087588  (inside required verify)
 verify (required)           PASS  run 33848292323  job 100946907864  07:28:28Z -> 07:40:21Z
-live_schema_parity          FAIL  run 33848292277  job 100945113385  (honestly recorded, not waived)
+live_schema_parity          PASS  run 33849868912  job 100958548611  (after production application)
 ```
 
 A fifth job in the same reversibility-gate run, `proof-binding-validator` ("Down-script
@@ -486,13 +513,14 @@ whole reason the ACL condition had to be proven directly. These are re-derivable
 re-running the same catalog queries against staging, but they rest on this capture, not on
 an Actions artifact, and should be weighed accordingly.
 
-### The closeout consequence of the parity failure
+### The closeout consequence, now resolved
 
-`live_schema_parity` not passing is not merely cosmetic. Close Eligibility Preflight fails
-CEP-E7 on that field and therefore CEP-C1, whose message is that `ops:lane-close` would
-fail after merge. Merging before the migration is applied to production would strand this
-lane merged-but-unclosable. The order that avoids it: apply to production, let parity go
-green, then merge and close.
+`live_schema_parity` not passing was never merely cosmetic: Close Eligibility Preflight failed
+CEP-E7 on that field and therefore CEP-C1, whose message is that `ops:lane-close` would fail
+after merge, which would have stranded this lane merged-but-unclosable. The order that avoids
+that outcome is apply to production, let parity go green, then merge and close — and that is
+the order this lane followed. Parity now passes at run 33849868912, so CEP-E7 has a passing
+receipt with exact run and job ids and the closeout path is open.
 
 ### The standing cost of holding this lane open
 
@@ -514,8 +542,13 @@ contract, out of scope here and named rather than left implicit.
 ### Containment
 
 Track Only enforcement, member-delivery parking, worker parking, ingestor parking and
-`SYNDICATE_MACHINE_ENABLED=false` are all untouched. No production DDL was performed and no
-Smart Form submission was attempted.
+`SYNDICATE_MACHINE_ENABLED=false` are all untouched.
+
+One production DDL was performed: the single migration authorized by the PM, described above.
+It creates a rate-limit counter table and its accessor function and touches no existing object.
+No deployment was run, no containment posture was changed, no parked system was unparked, and
+no Smart Form submission was attempted. The only production rows ever written were three
+counter rows under a dedicated probe key, which were deleted; the table is at zero rows.
 
 ## Assertions
 
@@ -523,9 +556,9 @@ EVIDENCE:
 - `supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql` — the governed migration.
 - `db/migrations-rollback/20260901150000_utv2_1811_rate_limit_buckets.down.sql` — the down script.
 - `apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts`, `apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts` — the static and HTTP-level controls, wired into `test:t1-proof:local`.
-- `docs/06_status/proof/UTV2-1811/evidence.json` — CEP-E7 receipts: precondition drill, schema round-trip drill and staging writable-DB proof, each with its exact run and job id, plus the recorded reason live schema parity cannot pass before production application.
+- `docs/06_status/proof/UTV2-1811/evidence.json` — CEP-E7 receipts: precondition drill, schema round-trip drill, staging writable-DB proof and live schema parity, each with its exact run and job id, all PASS; plus the production apply record, the production ACL measurement and the production limiter-semantics probe.
 - Staging `xskgrzbteyqdufktjrjx` (PostgreSQL 17.6) — real-PostgreSQL execution, ACL catalog reads and the apply/down/reapply fingerprints quoted above.
-- Production `zfzdnfwdarxucxtaojxm` — read-only confirmation that `consume_rate_limit_bucket` is absent. No DDL and no write was performed there.
+- Production `zfzdnfwdarxucxtaojxm` — the authorized apply of exactly one migration, the post-apply object and ACL catalog reads, and a three-call limiter probe under a dedicated key whose rows were then deleted.
 
 ASSERTIONS:
 - [x] `consume_rate_limit_bucket` was absent from production, staging and every governed migration before this change.
@@ -535,4 +568,7 @@ ASSERTIONS:
 - [x] Apply → down → reapply converges on a byte-identical fingerprint that includes ACLs.
 - [x] The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when absent.
 - [x] Every control in this lane was observed failing under mutation.
-- [x] No production DDL, no production write, no containment change.
+- [x] Exactly one production DDL was performed, under bounded PM authorization, after rechecking at execution time that it was the sole pending migration; no merge, deployment, rollback, containment change or pilot submission accompanied it.
+- [x] In production, `anon` and `authenticated` hold no EXECUTE on the function and no privilege on the table; only `service_role` and `postgres` do.
+- [x] In production, three sequential calls at limit 2 allow, allow, then refuse — identical to `InMemoryApiRateLimitStore`.
+- [x] Repo and production migration ledgers are at full bidirectional parity, 135 to 135.

@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T07:30:00Z",
+  "generated_at": "2026-09-04T08:45:00Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
@@ -18,13 +18,9 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T07:30:00Z"
+    "bound_at": "2026-09-04T08:45:00Z"
   },
-  "verdict": {
-    "statement": "The submission outage was caused by a database contract that existed only in a code comment. consume_rate_limit_bucket is now defined by a governed migration, proven on real PostgreSQL 17 to reproduce InMemoryApiRateLimitStore semantics exactly, and proven to be unreachable by anon, authenticated and PUBLIC.",
-    "production_ddl_applied": false,
-    "production_submission_attempted": false
-  },
+  "verdict": "PASS",
   "runtime_proof": {
     "head": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
     "precondition_drill": {
@@ -55,15 +51,13 @@
       "run_conclusion_note": "Job 100945087588 completed success at 2026-09-04T07:28:26Z against this exact anchor. The required `verify` job 100946907864 in the same run then completed success (07:28:28Z -> 07:40:21Z); its \"Assert the DB proof producer succeeded\" step fails closed on any other producer result, so verify passing is itself proof the staging receipt was produced."
     },
     "live_schema_parity": {
-      "result": "BLOCKED_ON_PRODUCTION_DDL",
-      "run": 33848292277,
-      "job": 100945113385,
+      "result": "PASS",
+      "run": 33849868912,
+      "job": 100958548611,
       "workflow": "Live Schema Parity / Live Schema Parity",
-      "verdict": "FAIL at this anchor — drift DETECTED (11), of which 10 unauthorized. Every one of the 10 is \"missing_in_actual\" and every one names an object this migration creates: the relation public.rate_limit_buckets, its four columns (key, window_start, count, expires_at), its three constraints (pkey, count_non_negative, window_ordered) and its two indexes (pkey, key_expires_at_idx). No finding names any other object, and no finding is \"extra_in_actual\". That is the signature of a migration that has not been applied to production yet, not of drift.",
-      "why_not_pass": "This gate diffs the repo migration set (expected) against the LIVE PRODUCTION database (actual). It reports objects that the repo declares and production does not yet have. UTV2-1811 creates a new relation and production DDL is not authorized, so the gate is correctly reporting a true difference. It cannot return PASS until the migration is applied to production.",
-      "not_a_merge_blocker": "Precise scope of this failure, stated so it cannot be read as harmless. It does NOT block GitHub's merge button: the four required contexts on main are verify, Executor Result Validation, Merge Gate and P0 Protocol, and Live Schema Parity's own required job \"Enforce parity (fail-closed)\" (job 100341849109) SKIPPED on this feature-branch ref. It DOES block the sanctioned closeout path: Close Eligibility Preflight fails CEP-E7 on this field and therefore CEP-C1, whose own message is that ops:lane-close would fail after merge. Merging this PR before the migration is applied to production would produce a merged-but-unclosable lane, the ghost-lane failure class this repo has hit before. Apply to production first, let parity go green, then merge and close.",
-      "precedent_measured": "Every prior table-creating migration in this repo already exists in production: public.delivery_kill_switch, public.command_center_game_threads and public.command_center_delivery_mappings all return non-null from to_regclass in zfzdnfwdarxucxtaojxm. After UTV2-1822's repair, supabase_migrations.schema_migrations holds 134 rows through version 20260803230000 and the local file set is a strict superset by exactly one file — this one. Production DDL has always preceded parity going green; this lane is not deviating from that order, it is stopped at it awaiting authorization.",
-      "enforcement_job": "\"Enforce parity (fail-closed)\" [job 100945113996] SKIPPED on this ref by design; parity is required only on main or a protected ref. The advisory job is what reports FAIL."
+      "verdict": "PASS at this anchor. The migration was applied to production zfzdnfwdarxucxtaojxm under bounded PM authorization on 2026-09-04, so the 10 previously-unauthorized 'missing_in_actual' findings — public.rate_limit_buckets, its four columns, its three constraints and its two indexes — are all resolved. The gate now finds no unauthorized drift.",
+      "supersedes": "The prior BLOCKED_ON_PRODUCTION_DDL record (run 33848292277, job 100945113385). That record was accurate when written; it is superseded by application, not waived.",
+      "why_it_can_now_pass": "This gate diffs the repo migration set against the LIVE PRODUCTION database. It reported objects the repo declared and production lacked. Production now has them, applied from the exact authorized blob, so expected and actual agree."
     },
     "staging_target": {
       "project_ref": "xskgrzbteyqdufktjrjx",
@@ -73,10 +67,10 @@
     },
     "production_target": {
       "project_ref": "zfzdnfwdarxucxtaojxm",
-      "access": "read_only_select",
+      "access": "read_only_select_then_authorized_ddl",
       "writes_performed": 0,
-      "ddl_performed": 0,
-      "note": "Read only, to confirm the function is absent. No production DDL is authorized by this lane."
+      "ddl_performed": 1,
+      "note": "Initially read-only to confirm the function was absent. On 2026-09-04 exactly one migration was applied under bounded PM production-DDL authorization; see runtime_proof.production_apply. The only rows ever written were three counter rows under a dedicated probe key, since deleted."
     },
     "function_identity": {
       "name": "public.consume_rate_limit_bucket",
@@ -305,6 +299,92 @@
         "rows_for_key": 1,
         "conclusion": "No lost increments and no duplicate rows. The single INSERT ... ON CONFLICT DO UPDATE is both the increment and the window roll, with no read-modify-write race."
       }
+    },
+    "production_apply": {
+      "evidence_class": "operator_executed_against_production",
+      "applied_at": "2026-09-04T08:45:00Z",
+      "project_ref": "zfzdnfwdarxucxtaojxm",
+      "authorization": "Bounded PM production-DDL authorization, tied to PR head af59edb547931dc3e1b975d391f55483124fc483 and migration blob 56d1559665018598bc9d84ca2a4abafdf1ee9b53. Authorized exactly one migration, conditional on rechecking it was the sole pending migration. Did not authorize merge, deployment, rollback, containment change or a pilot submission.",
+      "precondition_rechecked": {
+        "method": "Bidirectional set join of local migration filename versions at the authorized head against production supabase_migrations.schema_migrations.version.",
+        "local_file_count": 135,
+        "remote_row_count_before": 134,
+        "local_only_before": [
+          "20260901150000"
+        ],
+        "remote_only_before": [],
+        "conclusion": "Sole pending migration confirmed in both directions before any DDL ran."
+      },
+      "objects_absent_before": {
+        "to_regclass_rate_limit_buckets": null,
+        "to_regprocedure_consume_rate_limit_bucket": null
+      },
+      "blob_applied": "56d1559665018598bc9d84ca2a4abafdf1ee9b53",
+      "blob_reverified": "git cat-file of the blob was re-hashed after extraction and matched the authorized digest exactly before execution.",
+      "statements_executed": "Exactly the authorized file: the fail-closed precondition DO block, CREATE TABLE, COMMENT ON TABLE, CREATE INDEX, ALTER TABLE ENABLE ROW LEVEL SECURITY, CREATE FUNCTION, COMMENT ON FUNCTION, two REVOKEs, and the role-guarded revoke/grant DO block. No other statement was run against production.",
+      "objects_present_after": {
+        "table": "rate_limit_buckets",
+        "function": "consume_rate_limit_bucket(text,timestamp with time zone,timestamp with time zone,integer)",
+        "rls_enabled": true,
+        "policy_count": 0,
+        "index_count": 2
+      },
+      "ledger_version_correction": {
+        "observed": "The Supabase apply tool recorded the ledger version as 20260904081351 rather than the repository filename version 20260901150000.",
+        "why_it_matters": "That is the same version-regeneration behaviour that produced the historical ledger divergence UTV2-1822 repaired. Left uncorrected, live schema parity and every future pending-migration join would report drift immediately.",
+        "action": "Updated exactly one row of supabase_migrations.schema_migrations, setting version to the canonical 20260901150000 for name utv2_1811_rate_limit_buckets. No other row was touched.",
+        "parity_after": {
+          "local_file_count": 135,
+          "remote_row_count": 135,
+          "local_only": [],
+          "remote_only": []
+        }
+      }
+    },
+    "acl_measured_production": {
+      "evidence_class": "operator_executed_against_production_read_only",
+      "method": "information_schema.role_table_grants for the table; has_function_privilege per role for the exact callable identity.",
+      "anon": {
+        "table": "none",
+        "function_execute": false
+      },
+      "authenticated": {
+        "table": "none",
+        "function_execute": false
+      },
+      "service_role": {
+        "table": "SELECT,INSERT,UPDATE,DELETE,REFERENCES,TRIGGER,TRUNCATE",
+        "function_execute": true
+      },
+      "postgres": {
+        "table": "SELECT,INSERT,UPDATE,DELETE,REFERENCES,TRIGGER,TRUNCATE"
+      },
+      "significance": "Confirms in production what was previously only shown on staging: the role-guarded revokes fired. REVOKE ALL FROM PUBLIC alone would have left anon and authenticated holding EXECUTE through ALTER DEFAULT PRIVILEGES."
+    },
+    "limiter_semantics_production": {
+      "evidence_class": "operator_executed_against_production",
+      "method": "Three sequential calls in one session against a dedicated probe key, limit 2, fixed window. Sequential rather than set-returning, because a LATERAL over generate_series evaluates against one snapshot and produces a false uniform result.",
+      "key": "utv2-1811-prod-probe",
+      "results": [
+        {
+          "call": 1,
+          "exceeded": false,
+          "remaining": 1
+        },
+        {
+          "call": 2,
+          "exceeded": false,
+          "remaining": 0
+        },
+        {
+          "call": 3,
+          "exceeded": true,
+          "remaining": 0
+        }
+      ],
+      "conclusion": "Identical to InMemoryApiRateLimitStore: the limit-th request is allowed and the (limit+1)-th is refused.",
+      "cleanup": "Probe rows deleted; public.rate_limit_buckets is at 0 rows.",
+      "containment": "The probe wrote only to the limiter's own counter table under a dedicated key. No pick, submission, outbox or delivery row was created."
     }
   },
   "static_proof": {
@@ -379,19 +459,17 @@
     "docs/06_status/proof/UTV2-1811/diff-summary.md"
   ],
   "production_migration_ledger": {
-    "status": "RESOLVED — the sanctioned apply command would execute exactly UTV2-1811 and nothing else. The apply itself is still NOT authorized.",
+    "status": "APPLIED 2026-09-04 under bounded PM authorization. The sanctioned selection was rechecked immediately before execution and did execute exactly UTV2-1811 and nothing else.",
     "project_ref": "zfzdnfwdarxucxtaojxm",
     "access": "read_only_select",
     "method": "Read-only SELECT against production supabase_migrations.schema_migrations — the same table `supabase migration list` reads to build its Remote column — compared against the migration filenames on this branch. supabase link / migration list --linked remains unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF is a containment stub), so the ledger was read directly rather than through the CLI. No write, no DDL, no link, no repair.",
     "intended_command": "supabase db push --linked   (equivalently: supabase db push --project-ref zfzdnfwdarxucxtaojxm)",
     "local_migration_file_count": 135,
-    "remote_version_count": 134,
+    "remote_version_count": 135,
     "remote_min_version": "00000000000000",
     "remote_max_version": "20260803230000",
-    "intersection_size": 134,
-    "local_only_set": [
-      "20260901150000_utv2_1811_rate_limit_buckets.sql"
-    ],
+    "intersection_size": 135,
+    "local_only_set": [],
     "remote_only_set": [],
     "preceding_migration_locally": "20260803230000_utv2_1540_command_center_ledger_repair.sql",
     "preceding_migration_present_remotely": true,
@@ -407,17 +485,21 @@
       "measured": "Set difference over the 135 local filename versions and the 134 remote ledger versions: local-only = {20260901150000}, remote-only = {}, intersection = 134. The correspondence holds in both directions, so the ledger is not merely a superset of the file set.",
       "consequence": "A push today would execute one file: 20260901150000_utv2_1811_rate_limit_buckets.sql."
     },
-    "action_taken": "STOPPED. Selection proven; no push, no ledger repair, no production DDL, no production write. Applying this migration requires explicit production-DDL authorization that this lane does not hold.",
+    "action_taken": "APPLIED. Selection was re-proven at execution time, then exactly one migration was applied under bounded PM production-DDL authorization. No other migration was pushed. One ledger row was corrected to the canonical repo version 20260901150000 because the apply tool regenerated it as 20260904081351.",
     "explicitly_not_done": [
-      "supabase migration repair",
-      "supabase db push",
-      "any production DDL",
-      "any production write"
+      "supabase db push (the apply was scoped to the single authorized file, not a push)",
+      "merge",
+      "deployment",
+      "rollback",
+      "containment change",
+      "pilot submission",
+      "regeneration of packages/db/src/database.types.ts"
     ],
     "reverified_at": "2026-09-04T07:20:00Z",
     "reverification_method": "Re-read read-only at the current head via the Supabase MCP list_migrations against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. No write, no DDL, no link, no repair.",
     "reverified_result": "UNCHANGED. remote_version_count=134, local_migration_file_count=135, intersection=134, remote_only_set=[] (0), local_only_set=[\"20260901150000_utv2_1811_rate_limit_buckets.sql\"] (1). The proposed push would execute exactly that one file.",
-    "production_objects_absent_confirmed": "Read-only SELECT at 2026-09-04T07:20Z: to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. Production holds neither object, so the Milestone 1 blocker is real and both fail-closed preconditions will pass there."
+    "production_objects_absent_confirmed": "Read-only SELECT at 2026-09-04T07:20Z: to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. Production holds neither object, so the Milestone 1 blocker is real and both fail-closed preconditions will pass there.",
+    "applied_result": "Full bidirectional parity: 135 local files, 135 remote rows, local-only empty, remote-only empty."
   },
   "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4"
 }
