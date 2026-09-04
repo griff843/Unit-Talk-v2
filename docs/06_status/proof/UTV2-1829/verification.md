@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-03T19:47:57.000Z
+Generated at: 2026-09-04T00:15:50.000Z
 Issue: UTV2-1829
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: 31d09de7150791a81fc57e4e0f40d0149a185c85
+Head SHA: cb5a69668a135440d16dbe9212325a66e1b9b2a3
 result: pass
 
 ## ASSERTIONS:
@@ -175,7 +175,7 @@ result: pass
 
 ```
 $ git rev-parse HEAD
-31d09de7150791a81fc57e4e0f40d0149a185c85
+cb5a69668a135440d16dbe9212325a66e1b9b2a3
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -262,7 +262,7 @@ $ pnpm verify
 - [x] `pnpm type-check`: PASS (exit 0)
 - [x] `pnpm lint`: PASS (exit 0)
 - [x] `pnpm build`: PASS (exit 0)
-- [x] `pnpm test`: PASS (exit 0) — 5466 tests, 5466 pass, 0 fail (re-measured at the sync anchor; the earlier 5463 predates UTV2-1823 merging into main)
+- [x] `pnpm test`: PASS (exit 0) — 5466 tests, 5466 pass, 0 fail (re-measured at this anchor; unchanged by the second sync, which carried only the readiness ledger data file)
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no rules matched
 - [x] `pnpm verify`: **PASS in CI at this exact anchor.** It is still not obtainable locally —
       the chain reaches `test:live-db` and `ci:assert-staging` refuses a non-staging target
@@ -270,9 +270,9 @@ $ pnpm verify
       not a failure. Every stage before it (`env:check`, `lint`, `type-check`, `build`,
       `test`, `verify:commands`) passed locally. The authoritative receipt is the required
       `verify` check on PR #1499, which completed **success** at
-      `31d09de7150791a81fc57e4e0f40d0149a185c85` — run `33796694464`, job `100788217584`,
-      19:36:04Z to 19:40:26Z. That job is gated on the `Writable DB proof (staging only)`
-      producer job `100786016749`, which also succeeded; verify's "Assert the DB proof
+      `cb5a69668a135440d16dbe9212325a66e1b9b2a3` — run `33819591229`, job `100860876567`,
+      2026-09-04T00:02:55Z to 00:14:56Z. That job is gated on the `Writable DB proof (staging only)`
+      producer job `100859152189`, which also succeeded; verify's "Assert the DB proof
       producer succeeded" step fails closed on any other producer result.
 
       This box is checked because the run has completed. It was correctly unchecked while
@@ -290,4 +290,4 @@ and none should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: 31d09de7150791a81fc57e4e0f40d0149a185c85
+Execution SHA: cb5a69668a135440d16dbe9212325a66e1b9b2a3
