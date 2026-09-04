@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T23:40:10Z",
+  "generated_at": "2026-09-04T23:50:23Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "d04712fa2b878bc72fd6d4d0e0e43f320533c4a3",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T23:40:10Z"
+    "bound_at": "2026-09-04T23:50:23Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
@@ -134,7 +134,7 @@
     },
     "reversibility": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD \u2014 fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
+      "capture_method": "CAPTURE METHOD \u2014 fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, produced at head 16c15506f4a2132a885073226461b6f0517161af (an ancestor of this head), which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
       "fingerprint_applied": "206a7c91d518f0262e6da2dfd9dd69e8",
       "fingerprint_after_down": "ABSENT",
       "fingerprint_after_reapply": "206a7c91d518f0262e6da2dfd9dd69e8",
@@ -403,6 +403,7 @@
           "op": "DDL \u2014 apply migration 20260901150000_utv2_1811_rate_limit_buckets",
           "count": 1,
           "authorized": "the apply itself was authorized; the CHANNEL used was not",
+          "intrinsic_row_write": "The apply also INSERTed one row into supabase_migrations.schema_migrations, which is intrinsic to any migration apply rather than a separate decision. It is named here so this inventory is literally complete: that INSERT carried the tool-generated version 20260904081351, which is what the separately-listed ledger UPDATE then corrected.",
           "record": "runtime_proof.production_apply"
         },
         {
