@@ -12,7 +12,7 @@ The verified source SHA is the last non-proof commit on this branch. The precond
 schema round-trip drill and the staging writable-DB proof were captured against exactly this head.
 The live schema parity receipt was not, and saying otherwise would be false: parity could only be
 re-run after the production apply, so it was captured one proof-only commit later at `af59edb5`.
-It was then re-run independently at the final head `5425edbe0` (run 33853547721, job 100961574766)
+It was then re-run independently at the later head `5425edbe0` (run 33853547721, job 100961574766)
 and passed there too, so the parity claim does not rest on the intermediate receipt. Parity
 reflects live database state, which does not depend on which commit triggered the check. It supersedes `e0288a2a`, which the proof-binding validator
 correctly refused once `main` moved: two non-proof commits landed after it.
@@ -141,13 +141,15 @@ pnpm type-check                 # exit 0
 pnpm test                       # every suite green, including test:t1-proof:local
 pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1811
                                 # Verdict: PASS — no R-level artifacts required. The changed-file
-                                # count this prints rises with every proof-only commit, so it is
-                                # deliberately not quoted here: it was 9 at the anchor and any
-                                # later capture will differ without anything substantive changing.
-node scripts/lint-migrations.mjs # 7 migration files checked — no findings
+                                # count this prints rises with every proof-only commit, so no
+                                # value for it is quoted here at all: any number recorded would be
+                                # stale by the next commit without anything substantive changing.
+                                # Re-run it if you want the current count.
+node scripts/lint-migrations.mjs # 134 migration file(s) checked — no findings (the baseline
+                                # replay-root is skipped by design, so 134 of the 135 files)
 
 # the two suites this lane adds, inside test:t1-proof:local
-apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts   # tests 3  pass 3  fail 0
+apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts   # tests 8  pass 8  fail 0
 apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts   # tests 2  pass 2  fail 0
 ```
 
