@@ -464,8 +464,8 @@
   "production_migration_ledger": {
     "status": "APPLIED 2026-09-04 under bounded PM authorization. The sanctioned selection was rechecked immediately before execution and did execute exactly UTV2-1811 and nothing else.",
     "project_ref": "zfzdnfwdarxucxtaojxm",
-    "access": "read_only_select",
-    "method": "Read-only SELECT against production supabase_migrations.schema_migrations — the same table `supabase migration list` reads to build its Remote column — compared against the migration filenames on this branch. supabase link / migration list --linked remains unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF is a containment stub), so the ledger was read directly rather than through the CLI. No write, no DDL, no link, no repair.",
+    "access": "read_only_select_for_the_measurement_then_authorized_ddl_and_one_row_ledger_correction",
+    "method": "Two phases, stated separately so the read-only claim is not read as covering the whole lane. PHASE 1 (measurement, read-only): a SELECT against production supabase_migrations.schema_migrations — the same table `supabase migration list` reads to build its Remote column — joined bidirectionally against the migration filenames on this branch. `supabase link` / `migration list --linked` remain unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF a containment stub), so the ledger was read directly rather than through the CLI. That phase performed no write, no DDL, no link and no repair. PHASE 2 (authorized execution): after PM authorization and a re-check of the same join, exactly one migration was applied, and exactly one row of that same ledger table was UPDATEd to correct the version the apply tool regenerated. See production_apply.ledger_version_correction. Any reader or validator taking the phase-1 read-only description as a summary of the whole lane would be misled, which is why the two phases are named rather than merged.",
     "intended_command": "supabase db push --linked   (equivalently: supabase db push --project-ref zfzdnfwdarxucxtaojxm)",
     "local_migration_file_count": 135,
     "remote_version_count": 135,
@@ -499,9 +499,9 @@
       "regeneration of packages/db/src/database.types.ts"
     ],
     "reverified_at": "2026-09-04T07:20:00Z",
-    "reverification_method": "Re-read read-only at the current head via the Supabase MCP list_migrations against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. No write, no DDL, no link, no repair.",
+    "reverification_method": "Read-only re-read of the ledger at the current head via the Supabase MCP against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. That re-read itself performed no write, no DDL, no link and no repair. This describes the verification step only — it is NOT a statement about the lane as a whole, which did subsequently apply one migration and correct one ledger row under PM authorization.",
     "reverified_result": "UNCHANGED. remote_version_count=134, local_migration_file_count=135, intersection=134, remote_only_set=[] (0), local_only_set=[\"20260901150000_utv2_1811_rate_limit_buckets.sql\"] (1). The proposed push would execute exactly that one file.",
-    "production_objects_absent_confirmed": "Read-only SELECT at 2026-09-04T07:20Z: to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. Production holds neither object, so the Milestone 1 blocker is real and both fail-closed preconditions will pass there.",
+    "production_objects_absent_confirmed": "HISTORICAL, time-scoped: at 2026-09-04T07:20Z, before the authorized apply, a read-only SELECT returned to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. That established the Milestone 1 blocker was real and that both fail-closed preconditions would pass. It is no longer the current state: both objects were created by the authorized apply later the same day and are present now. See runtime_proof.production_apply.",
     "applied_result": "Full bidirectional parity: 135 local files, 135 remote rows, local-only empty, remote-only empty."
   },
   "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4"

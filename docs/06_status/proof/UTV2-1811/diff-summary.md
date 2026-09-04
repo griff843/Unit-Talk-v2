@@ -131,7 +131,7 @@ live_schema_parity          PASS  run 33849868912  job 100958548611  (after prod
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.
 - `docs/06_status/proof/UTV2-1811/evidence.json` — CEP-E7 receipts with exact run and job ids.
 - Staging `xskgrzbteyqdufktjrjx` (PostgreSQL 17.6) — where the migration was applied, exercised, rolled back and reapplied.
-- Production `zfzdnfwdarxucxtaojxm` — read-only confirmation of absence only.
+- Production `zfzdnfwdarxucxtaojxm` — read-only confirmation of absence first, then the authorized apply of exactly one migration, the post-apply object and ACL catalog reads, a three-call limiter probe under a dedicated key whose rows were deleted, and a one-row correction of the ledger version to the canonical `20260901150000`.
 
 ASSERTIONS:
 - [x] The missing function, not the limiter's policy, caused the submission outage.

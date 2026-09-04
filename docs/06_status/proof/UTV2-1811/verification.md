@@ -140,7 +140,10 @@ pnpm verify                     # lint, pnpm type-check, build and pnpm test all
 pnpm type-check                 # exit 0
 pnpm test                       # every suite green, including test:t1-proof:local
 pnpm exec tsx scripts/ci/r-level-check.ts --issue UTV2-1811
-                                # Verdict: PASS — 9 changed files, no R-level artifacts required
+                                # Verdict: PASS — no R-level artifacts required. The changed-file
+                                # count this prints rises with every proof-only commit, so it is
+                                # deliberately not quoted here: it was 9 at the anchor and any
+                                # later capture will differ without anything substantive changing.
 node scripts/lint-migrations.mjs # 7 migration files checked — no findings
 
 # the two suites this lane adds, inside test:t1-proof:local
@@ -415,7 +418,11 @@ describe the same history.
 
 Re-measured after that repair, read-only from production `zfzdnfwdarxucxtaojxm` over a
 `SELECT` against `supabase_migrations.schema_migrations` — the same table the CLI reads to
-build its Remote column. No write, no DDL, no link, no repair:
+build its Remote column. **This measurement step** performed no write, no DDL, no link and no
+repair. That is a statement about the measurement only, not about the lane: the authorized
+apply described below did write to this same table, and one row of it was subsequently
+corrected. The two are kept separate here so the read-only claim cannot be mistaken for a
+summary of everything that happened to production:
 
 ```
 local migration files (this branch)   135
