@@ -7,15 +7,15 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "cb5a69668a135440d16dbe9212325a66e1b9b2a3",
-    "evidence_commit_sha": "cb5a69668a135440d16dbe9212325a66e1b9b2a3",
+    "verified_source_sha": "77bbed4dd84329c5f678140d0e08d7b7d2882df2",
+    "evidence_commit_sha": "77bbed4dd84329c5f678140d0e08d7b7d2882df2",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
       "pnpm_build": "PASS",
       "pnpm_test": "PASS (5466 tests, 0 failures) — re-measured locally at this anchor; unchanged by the sync, which carried only the readiness ledger data file.",
-      "pnpm_verify": "PASS — required `verify` check completed success at cb5a69668a135440d16dbe9212325a66e1b9b2a3 (run 33819591229, job 100860876567, 2026-09-04T00:02:55Z→00:14:56Z), gated on the staging DB-proof producer job 100859152189 (success).",
+      "pnpm_verify": "PASS — required `verify` check completed success at 77bbed4dd84329c5f678140d0e08d7b7d2882df2 (run 33831437100, job 100895903560, 2026-09-04T03:02:08Z→03:16:03Z), gated on the staging DB-proof producer job 100895088846 (success).",
       "r_level_check": "PASS (no R-level artifacts required for this diff)"
     }
   },
@@ -133,9 +133,9 @@
       },
       {
         "assertion": "A15 — every sanctioned main sync on this branch changed none of this lane's own files; each imported only paths already merged to main",
-        "command": "git diff --name-only 8aadac7a8 cb5a69668 -- CLAUDE.md AGENTS.md docs/mission/ .lane/lanes/governance.yml docs/06_status/proof/UTV2-1829/ docs/06_status/lanes/UTV2-1829.json .ops/sync/UTV2-1829.yml; git diff --name-only 8aadac7a8 cb5a69668; git diff --name-only cb5a69668 origin/main -- docs/06_status/readiness/readiness-score.json",
+        "command": "git diff --name-only 7bd08a92c 77bbed4dd -- CLAUDE.md AGENTS.md docs/mission/ .lane/lanes/governance.yml docs/06_status/proof/UTV2-1829/ docs/06_status/lanes/UTV2-1829.json .ops/sync/UTV2-1829.yml; git diff --name-only 7bd08a92c 77bbed4dd; git diff --name-only HEAD origin/main -- docs/06_status/readiness/readiness-score.json",
         "expected": "first command no output; second lists only already-merged main paths; third no output",
-        "observed": "Two syncs were required because main advanced twice during review. The first (dd85e434d -> 31d09de71) imported only the eight already-merged trace-route lane paths. The second (8aadac7a8 -> cb5a69668) imported exactly one file, docs/06_status/readiness/readiness-score.json, a scheduled ledger refresh, and the third command confirms that file is byte-identical to main's version — the sync resolved to main's content and invented nothing. In both syncs the first command produced no output: no mission document, lane contract, proof artifact or manifest was touched. Both were run through `ops:merge-wrapper git-merge-main` under the merge mutex as non-rewriting `ort` merges.",
+        "observed": "Three syncs were required because main advanced three times during review, each time a scheduled `ops(readiness): refresh ledger [skip ci]` commit. Sync 1 (dd85e434d -> 31d09de71) imported the eight already-merged trace-route lane paths. Syncs 2 (8aadac7a8 -> cb5a69668) and 3 (7bd08a92c -> 77bbed4dd) each imported exactly one file, docs/06_status/readiness/readiness-score.json, and in each case the third command confirmed that file byte-identical to main's version — the merge resolved to main's content and invented nothing. In all three syncs the first command produced no output: no mission document, lane contract, proof artifact, workflow, branch-protection setting, runtime file or manifest was touched. All three ran through `ops:merge-wrapper git-merge-main` under the merge mutex as non-rewriting `ort` merges.",
         "status": "PASS"
       }
     ]

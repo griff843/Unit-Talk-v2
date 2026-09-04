@@ -6,13 +6,13 @@ MERGE_SHA: pending merge
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
 > authority only after GitHub supplies the merged-PR attestation.
 
-Generated at: 2026-09-04T00:15:50.000Z
+Generated at: 2026-09-04T03:17:02.000Z
 Issue: UTV2-1829
 Tier: T2
 Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
-Head SHA: cb5a69668a135440d16dbe9212325a66e1b9b2a3
+Head SHA: 77bbed4dd84329c5f678140d0e08d7b7d2882df2
 result: pass
 
 ## ASSERTIONS:
@@ -175,7 +175,7 @@ result: pass
 
 ```
 $ git rev-parse HEAD
-cb5a69668a135440d16dbe9212325a66e1b9b2a3
+77bbed4dd84329c5f678140d0e08d7b7d2882df2
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -270,9 +270,9 @@ $ pnpm verify
       not a failure. Every stage before it (`env:check`, `lint`, `type-check`, `build`,
       `test`, `verify:commands`) passed locally. The authoritative receipt is the required
       `verify` check on PR #1499, which completed **success** at
-      `cb5a69668a135440d16dbe9212325a66e1b9b2a3` — run `33819591229`, job `100860876567`,
-      2026-09-04T00:02:55Z to 00:14:56Z. That job is gated on the `Writable DB proof (staging only)`
-      producer job `100859152189`, which also succeeded; verify's "Assert the DB proof
+      `77bbed4dd84329c5f678140d0e08d7b7d2882df2` — run `33831437100`, job `100895903560`,
+      2026-09-04T03:02:08Z to 03:16:03Z. That job is gated on the `Writable DB proof (staging only)`
+      producer job `100895088846`, which also succeeded; verify's "Assert the DB proof
       producer succeeded" step fails closed on any other producer result.
 
       This box is checked because the run has completed. It was correctly unchecked while
@@ -290,4 +290,4 @@ and none should be accepted as satisfied for this bundle.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Approved PR head: pending merge
-Execution SHA: cb5a69668a135440d16dbe9212325a66e1b9b2a3
+Execution SHA: 77bbed4dd84329c5f678140d0e08d7b7d2882df2
