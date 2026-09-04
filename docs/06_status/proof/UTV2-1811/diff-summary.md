@@ -30,13 +30,27 @@ runtime path calls the RPC by name through the untyped `rpc()` surface), but thi
 deferral to schedule, not a step found unnecessary. `verification.md` records the measured
 reason — regenerating here would also import 60 unrelated production partition tables.
 
-`docs/06_status/lanes/UTV2-1811.json` is the one changed path that is **not** in
-`file_scope_lock`. The lock is pinned to the lane-start commit and cannot be widened, so this
-path is admitted only by a PM `scope-override/v1` comment pinned to the exact PR head. The
-`File scope lock` check fails until such an override exists at the current head; that is the
-sole reason it is red, and it is a governance artifact, not a code defect. The path changed
-because the manifest's `file_scope_lock` named two placeholder test paths this lane never
-created and omitted three it actually touches — the correction described in `verification.md`.
+Three changed paths are **not** admitted by the lane's effective `file_scope_lock`, verbatim
+from the `File scope lock` run log:
+
+```
+- apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts is not declared by UTV2-1811
+- apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts is not declared by UTV2-1811
+- package.json is not declared by UTV2-1811
+```
+
+An earlier revision of this file named `docs/06_status/lanes/UTV2-1811.json` as the out-of-lock
+path. That was wrong — lane manifests are self-scope exempt and the guard does not list it.
+
+The lane-start lock named two test paths this lane never created
+(`apps/api/src/rpc-contract-parity.test.ts`, `apps/api/src/server.test.ts`) and omitted
+`package.json`. The implementation created `t1-proof-utv2-1811-*.test.ts` instead and had to
+wire them in. A later manifest edit declared the real names, but `scripts/ci/file-scope-guard.ts`
+refuses exactly that — *"scope widening requires an authorized `scope-override/v1` comment, not
+a manifest edit"* — so the guard still judges the lane by the lane-start lock. The three paths
+are admitted only by a PM `scope-override/v1` comment pinned to the exact PR head. That is the
+sole reason the check is red. It is a lane-setup defect on the executor's part, not a code
+defect: the scope should have named the files the work would actually create.
 
 `apps/api/src/server.test.ts` is **not** in this lane's `file_scope_lock` (see
 `docs/06_status/lanes/UTV2-1811.json`, which is the sole authority for lane scope) and is
