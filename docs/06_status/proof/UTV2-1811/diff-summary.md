@@ -77,11 +77,20 @@ actually happened was an MCP `apply_migration`, a one-row UPDATE of
 grant's failure boundary, which required stopping on an unexpected result rather than repairing
 forward. These are disclosed as deviations for PM ruling, not presented as covered; the full
 reconciliation is `runtime_proof.production_writes_inventory` in `evidence.json`, and the
-narrative is in `verification.md`. The live submission failure is resolved by the apply, not
-by this merge. The build production is already running was configured with
-`UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc` and already called
-`consume_rate_limit_bucket`; the only thing missing was the function, so creating it restores
-that path with no deployment. **Merging this PR ships no runtime change to production** — the
+narrative is in `verification.md`. The live submission failure is **expected to be resolved by the
+apply rather than by this merge, and that is an inference, not a measurement.** What is
+measured is that the function is now present and callable in production
+(`runtime_proof.limiter_semantics_production`: three direct RPC calls, allow/allow/refuse at
+limit 2). What is not measured is the deployed API completing an authenticated submission
+end to end — the grant listed a Smart Form submission under *Not authorized*, so that
+measurement was prohibited and is deliberately absent rather than overlooked.
+
+The inference rests on repository facts rather than on an environment read: `readRateLimitStore`
+and `assertProductionRateLimitConfig` (`apps/api/src/server.ts`, both already on `main`) refuse to
+start a production-like runtime on the in-memory store, and the `supabase_rpc` store's
+`consume_rate_limit_bucket` call also already shipped. A running production API therefore must be
+on `supabase_rpc`, and the only missing piece was the function itself, so creating it restores that
+path with no deployment. **Merging this PR ships no runtime change to production** — the
 objects exist there already. What the merge adds is the governed migration, the reversible down
 script, the two T1 suites and this audit record. An earlier revision of this paragraph said the
 outage was "not yet addressed in the running service" until the merge; that was wrong and
