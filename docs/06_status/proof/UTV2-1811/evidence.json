@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T09:05:00Z",
+  "generated_at": "2026-09-04T09:27:56Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T09:05:00Z"
+    "bound_at": "2026-09-04T09:27:56Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
@@ -29,17 +29,17 @@
       "job": 100945086270,
       "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
       "cases": [
-        "refuses when public.rate_limit_buckets pre-exists — raised SQLSTATE 42P07",
-        "no DDL ran when public.rate_limit_buckets pre-exists — schema fingerprint identical before and after the attempt",
-        "scratch restored after public.rate_limit_buckets case — back to baseline",
-        "applies on an empty scratch schema — created all declared relations: public.rate_limit_buckets"
+        "refuses when public.rate_limit_buckets pre-exists \u2014 raised SQLSTATE 42P07",
+        "no DDL ran when public.rate_limit_buckets pre-exists \u2014 schema fingerprint identical before and after the attempt",
+        "scratch restored after public.rate_limit_buckets case \u2014 back to baseline",
+        "applies on an empty scratch schema \u2014 created all declared relations: public.rate_limit_buckets"
       ]
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
       "run": 33848292162,
       "job": 100945086450,
-      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
       "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
     },
     "writable_db_proof_staging": {
@@ -47,7 +47,7 @@
       "run": 33848292323,
       "job": 100945087588,
       "workflow": "ci / Writable DB proof (staging only)",
-      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head — so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from that job.",
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head \u2014 so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from that job.",
       "run_conclusion_note": "Job 100945087588 completed success at 2026-09-04T07:28:26Z against this exact anchor. The required `verify` job 100946907864 in the same run then completed success (07:28:28Z -> 07:40:21Z); its \"Assert the DB proof producer succeeded\" step fails closed on any other producer result, so verify passing is itself proof the staging receipt was produced."
     },
     "live_schema_parity": {
@@ -55,7 +55,7 @@
       "run": 33849868912,
       "job": 100958548611,
       "workflow": "Live Schema Parity / Live Schema Parity",
-      "verdict": "PASS at this anchor. The migration was applied to production zfzdnfwdarxucxtaojxm under bounded PM authorization on 2026-09-04, so the 10 previously-unauthorized 'missing_in_actual' findings — public.rate_limit_buckets, its four columns, its three constraints and its two indexes — are all resolved. The gate now finds no unauthorized drift.",
+      "verdict": "PASS at this anchor. The migration was applied to production zfzdnfwdarxucxtaojxm under bounded PM authorization on 2026-09-04, so the 10 previously-unauthorized 'missing_in_actual' findings \u2014 public.rate_limit_buckets, its four columns, its three constraints and its two indexes \u2014 are all resolved. The gate now finds no unauthorized drift.",
       "supersedes": "The prior BLOCKED_ON_PRODUCTION_DDL record (run 33848292277, job 100945113385). That record was accurate when written; it is superseded by application, not waived.",
       "why_it_can_now_pass": "This gate diffs the repo migration set against the LIVE PRODUCTION database. It reported objects the repo declared and production lacked. Production now has them, applied from the exact authorized blob, so expected and actual agree.",
       "receipt_provenance": "Produced at af59edb547931dc3e1b975d391f55483124fc483, one proof-only commit after the anchor, not at the anchor itself. Independently re-run at the later head 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8: run 33853547721, job 100961574766, PASS.",
@@ -116,7 +116,7 @@
     "rows_for_key_after_sweep": 1,
     "acl_proof": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD — read directly by the orchestrator from the staging catalog (pg_proc.proacl, pg_class.relacl, has_function_privilege, has_table_privilege) over the applied objects, plus a control object built in the same schema without the REVOKE block and then dropped. This block carries NO CI run or job id and is NOT reproducible from any GitHub Actions artifact: no CI job in this repo can produce it, because schema-roundtrip-hash.ts runs pg_dump --no-acl and the CI scratch Postgres has no anon/authenticated/service_role role to grant to. It is therefore weaker evidence than the four receipted fields and must not be read as a CI receipt. It is included because the ACL condition was required to be proven directly, and a pg_dump-based gate structurally cannot prove it. Re-derivable by re-running the same catalog queries against staging.",
+      "capture_method": "CAPTURE METHOD \u2014 read directly by the orchestrator from the staging catalog (pg_proc.proacl, pg_class.relacl, has_function_privilege, has_table_privilege) over the applied objects, plus a control object built in the same schema without the REVOKE block and then dropped. This block carries NO CI run or job id and is NOT reproducible from any GitHub Actions artifact: no CI job in this repo can produce it, because schema-roundtrip-hash.ts runs pg_dump --no-acl and the CI scratch Postgres has no anon/authenticated/service_role role to grant to. It is therefore weaker evidence than the four receipted fields and must not be read as a CI receipt. It is included because the ACL condition was required to be proven directly, and a pg_dump-based gate structurally cannot prove it. Re-derivable by re-running the same catalog queries against staging.",
       "function_proacl": "{postgres=X/postgres,service_role=X/postgres}",
       "table_relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
       "anon_can_execute_function": false,
@@ -135,20 +135,20 @@
     },
     "reversibility": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD — fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
+      "capture_method": "CAPTURE METHOD \u2014 fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
       "fingerprint_applied": "206a7c91d518f0262e6da2dfd9dd69e8",
       "fingerprint_after_down": "ABSENT",
       "fingerprint_after_reapply": "206a7c91d518f0262e6da2dfd9dd69e8",
       "reapply_converged": true,
       "down_actually_changed_schema": true,
-      "note": "Fingerprint covers relname, relacl, relrowsecurity, every column with type and nullability, every constraint definition, every index definition, and the function's proacl and prosrc md5. It includes relacl and proacl, which the CI round-trip drill cannot see because its scratch Postgres has no anon, authenticated or service_role role. Measured on the byte-exact file — see runtime_proof.staging_replay_fidelity."
+      "note": "Fingerprint covers relname, relacl, relrowsecurity, every column with type and nullability, every constraint definition, every index definition, and the function's proacl and prosrc md5. It includes relacl and proacl, which the CI round-trip drill cannot see because its scratch Postgres has no anon, authenticated or service_role role. Measured on the byte-exact file \u2014 see runtime_proof.staging_replay_fidelity."
     },
     "precondition_guard": {
       "sqlstate_on_reapply_over_existing_table": "42P07",
       "applies_when_absent": true,
       "sqlstate_on_reapply_over_existing_function": "42723"
     },
-    "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can — it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start — but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit.",
+    "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can \u2014 it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start \u2014 but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit.",
     "staging_replay_fidelity": {
       "byte_exact": true,
       "file_md5": "af2c42582dbde2ee7990a3ca15c1d3e8",
@@ -158,7 +158,7 @@
     },
     "preexisting_object_guards": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD — executed by the orchestrator against staging xskgrzbteyqdufktjrjx (PostgreSQL 17.6) through read/write SQL, each measurement issued as its own statement. Separate statements are required: two calls to a STABLE catalog-reading expression inside one SELECT share a snapshot and return identical, stale values across an intervening DDL, which silently fakes an 'unchanged' result. No CI job produces these numbers; the byte-exact file is separately exercised by the precondition and schema-roundtrip drills, which do have receipts.",
+      "capture_method": "CAPTURE METHOD \u2014 executed by the orchestrator against staging xskgrzbteyqdufktjrjx (PostgreSQL 17.6) through read/write SQL, each measurement issued as its own statement. Separate statements are required: two calls to a STABLE catalog-reading expression inside one SELECT share a snapshot and return identical, stale values across an intervening DDL, which silently fakes an 'unchanged' result. No CI job produces these numbers; the byte-exact file is separately exercised by the precondition and schema-roundtrip drills, which do have receipts.",
       "case_A_table_exists_function_absent": {
         "setup": "public.rate_limit_buckets created out of band as (id bigserial primary key, note text), commented DECOY-NOT-UTV2-1811; function absent",
         "result": "REFUSED",
@@ -195,8 +195,8 @@
       },
       "mutation_preexisting_function_guard": {
         "mutation": "Reverted the migration to its pre-review shape: table-only precondition, CREATE OR REPLACE FUNCTION.",
-        "setup": "identical to case B — decoy function present, prosrc md5 dcc284fdb3847d29bbca1f50749f09ea",
-        "result": "APPLIED — the guard did not fire",
+        "setup": "identical to case B \u2014 decoy function present, prosrc md5 dcc284fdb3847d29bbca1f50749f09ea",
+        "result": "APPLIED \u2014 the guard did not fire",
         "decoy_prosrc_md5_after_mutation": "dd954ffea251cf9990184048aa73a6ea",
         "decoy_comment_after_mutation": "DECOY-NOT-UTV2-1811",
         "interpretation": "The pre-fix migration destroyed an unrelated implementation and reported success, leaving the victim's own comment in place as the only trace. The md5 change is the destruction. This is what the new guard prevents, and it is proven by making the control absent rather than by observing the control present."
@@ -205,7 +205,7 @@
         "setup": "public.rate_limit_buckets present and carrying the UTV2-1811 marker; public.consume_rate_limit_bucket present but commented DECOY-NOT-UTV2-1811",
         "result": "REFUSED",
         "sqlstate": "42501",
-        "refused_on": "the function ownership marker, with the table marker already satisfied — so the function guard is exercised in isolation rather than shadowed by the table guard",
+        "refused_on": "the function ownership marker, with the table marker already satisfied \u2014 so the function guard is exercised in isolation rather than shadowed by the table guard",
         "decoy_prosrc_md5_after": "dcc284fdb3847d29bbca1f50749f09ea",
         "existing_function_survived": true,
         "positive_control": "The same script run against the genuinely UTV2-1811-marked pair dropped both objects successfully, so the guard admits what it should and refuses what it should not."
@@ -343,7 +343,7 @@
           "remote_only": []
         }
       },
-      "applied_at_provenance": "DERIVED FROM A MACHINE RECORD, not asserted. The Supabase apply tool stamped its own ledger version as 20260904081351, which decodes to 2026-09-04T08:13:51Z; that version string is the only machine-written timestamp of the event and is preserved in ledger_version_correction.observed. Corroborating bounds: the live_schema_parity run that reflects the post-apply state (33849868912) started 08:15:58Z, and the commit that first recorded the apply (5425edbe0) was authored 08:27:28Z — both after 08:13:51Z, and both before the 08:45:00Z value previously carried here. That earlier value was hand-written rather than measured and was impossible: it post-dated the commit asserting it. It was caught by independent audit and is corrected here rather than quietly overwritten."
+      "applied_at_provenance": "DERIVED FROM A MACHINE RECORD, not asserted. The Supabase apply tool stamped its own ledger version as 20260904081351, which decodes to 2026-09-04T08:13:51Z; that version string is the only machine-written timestamp of the event and is preserved in ledger_version_correction.observed. Corroborating bounds: the live_schema_parity run that reflects the post-apply state (33849868912) started 08:15:58Z, and the commit that first recorded the apply (5425edbe0) was authored 08:27:28Z \u2014 both after 08:13:51Z, and both before the 08:45:00Z value previously carried here. That earlier value was hand-written rather than measured and was impossible: it post-dated the commit asserting it. It was caught by independent audit and is corrected here rather than quietly overwritten."
     },
     "acl_measured_production": {
       "evidence_class": "operator_executed_against_production_read_only",
@@ -416,16 +416,16 @@
     ],
     "inversion_results": [
       {
-        "control": "RPC contract parity — SQL comments cannot satisfy the governed-function set",
+        "control": "RPC contract parity \u2014 SQL comments cannot satisfy the governed-function set",
         "mutation": "neutered stripSqlComments() to return its input unchanged, restoring the raw-text scan the reviewed revision used",
-        "observed": "not ok 4 (a commented-out CREATE FUNCTION does not make a function governed); not ok 6 (commenting out the real definition flips the same fixture from governed to missing) — 8 tests, 6 pass, 2 fail",
+        "observed": "not ok 4 (a commented-out CREATE FUNCTION does not make a function governed); not ok 6 (commenting out the real definition flips the same fixture from governed to missing) \u2014 8 tests, 6 pass, 2 fail",
         "verdict": "non-vacuous",
         "what_it_establishes": "The defect PM identified was real and is now caught. Under the old scan, a migration whose only mention of the function is `-- CREATE FUNCTION public.consume_rate_limit_bucket(...)` satisfied parity; the fixture tests assert it must be treated as missing, and they fail the moment the stripping is removed."
       },
       {
-        "control": "RPC contract parity — a real executable definition is required",
+        "control": "RPC contract parity \u2014 a real executable definition is required",
         "mutation": "deleted supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql",
-        "observed": "not ok 1 (every runtime client.rpc() dependency is defined by a governed migration); not ok 8 (the repository migration set defines consume_rate_limit_bucket in executable SQL) — 8 tests, 6 pass, 2 fail",
+        "observed": "not ok 1 (every runtime client.rpc() dependency is defined by a governed migration); not ok 8 (the repository migration set defines consume_rate_limit_bucket in executable SQL) \u2014 8 tests, 6 pass, 2 fail",
         "verdict": "non-vacuous"
       },
       {
@@ -466,7 +466,7 @@
     "status": "APPLIED 2026-09-04 under bounded PM authorization. The sanctioned selection was rechecked immediately before execution and did execute exactly UTV2-1811 and nothing else.",
     "project_ref": "zfzdnfwdarxucxtaojxm",
     "access": "read_only_select_for_the_measurement_then_authorized_ddl_and_one_row_ledger_correction",
-    "method": "Two phases, stated separately so the read-only claim is not read as covering the whole lane. PHASE 1 (measurement, read-only): a SELECT against production supabase_migrations.schema_migrations — the same table `supabase migration list` reads to build its Remote column — joined bidirectionally against the migration filenames on this branch. `supabase link` / `migration list --linked` remain unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF a containment stub), so the ledger was read directly rather than through the CLI. That phase performed no write, no DDL, no link and no repair. PHASE 2 (authorized execution): after PM authorization and a re-check of the same join, exactly one migration was applied, and exactly one row of that same ledger table was UPDATEd to correct the version the apply tool regenerated. See production_apply.ledger_version_correction. Any reader or validator taking the phase-1 read-only description as a summary of the whole lane would be misled, which is why the two phases are named rather than merged.",
+    "method": "Two phases, stated separately so the read-only claim is not read as covering the whole lane. PHASE 1 (measurement, read-only): a SELECT against production supabase_migrations.schema_migrations \u2014 the same table `supabase migration list` reads to build its Remote column \u2014 joined bidirectionally against the migration filenames on this branch. `supabase link` / `migration list --linked` remain unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF a containment stub), so the ledger was read directly rather than through the CLI. That phase performed no write, no DDL, no link and no repair. PHASE 2 (authorized execution): after PM authorization and a re-check of the same join, exactly one migration was applied, and exactly one row of that same ledger table was UPDATEd to correct the version the apply tool regenerated. See production_apply.ledger_version_correction. Any reader or validator taking the phase-1 read-only description as a summary of the whole lane would be misled, which is why the two phases are named rather than merged.",
     "intended_command": "supabase db push --linked   (equivalently: supabase db push --project-ref zfzdnfwdarxucxtaojxm)",
     "local_migration_file_count": 135,
     "remote_version_count": 135,
@@ -480,7 +480,7 @@
     "would_execute_only_utv2_1811": true,
     "would_also_execute": [],
     "supersedes": {
-      "prior_finding": "BLOCKER — 8 local files, 127 remote rows, intersection 0; a push would have re-run the baseline schema and six already-applied migrations.",
+      "prior_finding": "BLOCKER \u2014 8 local files, 127 remote rows, intersection 0; a push would have re-run the baseline schema and six already-applied migrations.",
       "what_changed": "UTV2-1822 restored the historical migration files under their production version numbers and archived their authoritative sources with per-file hash receipts under supabase/migrations_archive/. Local and remote now describe the same history.",
       "why_it_is_stated_rather_than_edited": "The earlier measurement was true when taken. It is recorded here so this bundle cannot be read as having silently replaced an inconvenient number."
     },
@@ -499,11 +499,12 @@
       "pilot submission",
       "regeneration of packages/db/src/database.types.ts"
     ],
-    "reverified_at": "2026-09-04T07:20:00Z (approximate — recorded to the minute by the operator, not from a machine record; treat as ~07:20Z)",
-    "reverification_method": "Read-only re-read of the ledger at the current head via the Supabase MCP against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. That re-read itself performed no write, no DDL, no link and no repair. This describes the verification step only — it is NOT a statement about the lane as a whole, which did subsequently apply one migration and correct one ledger row under PM authorization.",
+    "reverified_at": "2026-09-04T07:20:00Z (approximate \u2014 recorded to the minute by the operator, not from a machine record; treat as ~07:20Z)",
+    "reverification_method": "Read-only re-read of the ledger at the current head via the Supabase MCP against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. That re-read itself performed no write, no DDL, no link and no repair. This describes the verification step only \u2014 it is NOT a statement about the lane as a whole, which did subsequently apply one migration and correct one ledger row under PM authorization.",
     "reverified_result": "UNCHANGED. remote_version_count=134, local_migration_file_count=135, intersection=134, remote_only_set=[] (0), local_only_set=[\"20260901150000_utv2_1811_rate_limit_buckets.sql\"] (1). The proposed push would execute exactly that one file.",
     "production_objects_absent_confirmed": "HISTORICAL, time-scoped: at approximately 2026-09-04T07:20Z (operator-recorded, not machine-stamped), before the authorized apply, a read-only SELECT returned to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. That established the Milestone 1 blocker was real and that both fail-closed preconditions would pass. It is no longer the current state: both objects were created by the authorized apply later the same day and are present now. See runtime_proof.production_apply. An independent, machine-checked absence confirmation was taken immediately before the apply and is recorded separately at runtime_proof.production_apply.objects_absent_before; that one does not depend on this approximate timestamp.",
     "applied_result": "Full bidirectional parity: 135 local files, 135 remote rows, local-only empty, remote-only empty."
   },
-  "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4"
+  "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
+  "generated_at_provenance": "Generated, not hand-written. Both this field and sha_binding.bound_at carry the AUTHOR timestamp of the commit that last modified this file, written by a commit -> read author date -> rewrite -> commit --amend cycle (amend preserves the author date), so the value is exact rather than approximate. Verify with: git log -1 --format=%aI -- docs/06_status/proof/UTV2-1811/evidence.json. Later proof-only commits that touch verification.md or diff-summary.md but not this file do not change it."
 }
