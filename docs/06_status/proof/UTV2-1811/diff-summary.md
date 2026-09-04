@@ -23,10 +23,19 @@ merge-SHA binding is carried in `verification.md`.
 `packages/db/src/database.types.ts` is declared in scope but unchanged — see
 `verification.md` for why regeneration is not mechanically required at this head.
 
-`apps/api/src/server.test.ts` is declared in scope and is at its base content. The two HTTP
-regressions were originally appended to it; they moved to the lane's own `t1-proof-*` file
-so that the migration lane's path authority holds and so that both suites are wired into a
-script `pnpm test` actually runs.
+`docs/06_status/lanes/UTV2-1811.json` is the one changed path that is **not** in
+`file_scope_lock`. The lock is pinned to the lane-start commit and cannot be widened, so this
+path is admitted only by a PM `scope-override/v1` comment pinned to the exact PR head. The
+`File scope lock` check fails until such an override exists at the current head; that is the
+sole reason it is red, and it is a governance artifact, not a code defect. The path changed
+because the manifest's `file_scope_lock` named two placeholder test paths this lane never
+created and omitted three it actually touches — the correction described in `verification.md`.
+
+`apps/api/src/server.test.ts` is **not** in this lane's `file_scope_lock` (see
+`docs/06_status/lanes/UTV2-1811.json`, which is the sole authority for lane scope) and is
+unchanged from its base content. The two HTTP regressions were originally appended to it;
+they moved to the lane's own `t1-proof-*` files precisely because that path is outside this
+lane's authority, and the move also wired both suites into a script `pnpm test` actually runs.
 
 ## What changed in product terms
 
