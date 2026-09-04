@@ -10,7 +10,7 @@
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
-    "verified_source_note": "The last non-proof commit on this branch: the `ort` merge of origin/main 275d5fa0f339acfeb9e1675f7e75c34709e30fe2 performed under the merge mutex. Every CI receipt in this bundle was produced at this exact head. A merge commit is a valid anchor because it is a real commit that CI ran on; the proof commits that follow it touch only proof paths.",
+    "verified_source_note": "The last non-proof commit on this branch: the `ort` merge of origin/main 275d5fa0f339acfeb9e1675f7e75c34709e30fe2 performed under the merge mutex. A merge commit is a valid anchor because it is a real commit CI ran on, and every commit after it touches only proof paths. Receipt provenance stated precisely rather than uniformly: the precondition drill, the schema round-trip drill and the staging writable-DB proof were produced at this exact anchor. The live_schema_parity receipt was produced one proof-only commit later, at af59edb547931dc3e1b975d391f55483124fc483, because parity could only be re-run after the production apply. Parity was then re-run again at the final head 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8 (run 33853547721, job 100961574766) and passed there too, so the claim does not rest on the intermediate receipt. Parity reflects live database state, which does not depend on which commit triggered the check.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -57,7 +57,10 @@
       "workflow": "Live Schema Parity / Live Schema Parity",
       "verdict": "PASS at this anchor. The migration was applied to production zfzdnfwdarxucxtaojxm under bounded PM authorization on 2026-09-04, so the 10 previously-unauthorized 'missing_in_actual' findings — public.rate_limit_buckets, its four columns, its three constraints and its two indexes — are all resolved. The gate now finds no unauthorized drift.",
       "supersedes": "The prior BLOCKED_ON_PRODUCTION_DDL record (run 33848292277, job 100945113385). That record was accurate when written; it is superseded by application, not waived.",
-      "why_it_can_now_pass": "This gate diffs the repo migration set against the LIVE PRODUCTION database. It reported objects the repo declared and production lacked. Production now has them, applied from the exact authorized blob, so expected and actual agree."
+      "why_it_can_now_pass": "This gate diffs the repo migration set against the LIVE PRODUCTION database. It reported objects the repo declared and production lacked. Production now has them, applied from the exact authorized blob, so expected and actual agree.",
+      "receipt_provenance": "Produced at af59edb547931dc3e1b975d391f55483124fc483, one proof-only commit after the anchor, not at the anchor itself. Independently re-run at the final head 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8: run 33853547721, job 100961574766, PASS.",
+      "run_at_final_head": 33853547721,
+      "job_at_final_head": 100961574766
     },
     "staging_target": {
       "project_ref": "xskgrzbteyqdufktjrjx",

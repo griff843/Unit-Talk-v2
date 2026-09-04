@@ -8,8 +8,13 @@ Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1477
 Verified source SHA: 6c7d2a2aa8833ab30573700cf9457dde983483f4
 
-The verified source SHA is the last non-proof commit on this branch and the head every receipt
-below was captured against. It supersedes `e0288a2a`, which the proof-binding validator
+The verified source SHA is the last non-proof commit on this branch. The precondition drill, the
+schema round-trip drill and the staging writable-DB proof were captured against exactly this head.
+The live schema parity receipt was not, and saying otherwise would be false: parity could only be
+re-run after the production apply, so it was captured one proof-only commit later at `af59edb5`.
+It was then re-run independently at the final head `5425edbe0` (run 33853547721, job 100961574766)
+and passed there too, so the parity claim does not rest on the intermediate receipt. Parity
+reflects live database state, which does not depend on which commit triggered the check. It supersedes `e0288a2a`, which the proof-binding validator
 correctly refused once `main` moved: two non-proof commits landed after it.
 
 The first is the sanctioned `ops:merge-wrapper git-merge-main` that brought this branch level

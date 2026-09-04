@@ -36,8 +36,10 @@ function now exists in a governed migration, proven on real PostgreSQL. The limi
 is unchanged: still fail-closed, still no memory fallback, still refusing traffic in an
 environment that lacks the contract.
 
-Production still does not have the function. Nothing about the live failure changes until
-the migration is applied there, which is not authorized in this lane.
+Production now has the function. It was applied on 2026-09-04 under bounded PM production-DDL
+authorization, after re-proving at execution time that this was the sole pending migration. The
+live submission failure is therefore addressed at the database layer; it is not yet addressed in
+the running service, because this PR is unmerged and production is still serving an older build.
 
 EVIDENCE:
 
