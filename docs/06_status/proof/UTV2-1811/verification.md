@@ -6,7 +6,7 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1477
-Verified source SHA: e144a10b8743fb8766b371932701a11cc7b474c3
+Verified source SHA: 09c03715d14cc6128e36e125ded4b67ff638b3db
 
 The verified source SHA is the last non-proof commit on this branch. All four CEP-E7 receipts —
 the precondition drill, the schema round-trip drill, the staging writable-DB proof and the live
@@ -509,22 +509,22 @@ owner-credentialed lane that can also decide what to do about the 60 partitions.
 An independent audit at exact head correctly flagged that this bundle mixes two grades of
 evidence in the same schema position. Stated plainly:
 
-**Receipted — verifiable from GitHub Actions, all produced at the anchor `e144a10b`:**
+**Receipted — verifiable from GitHub Actions, all produced at the anchor `09c03715`:**
 
 ```
-precondition_drill          PASS  run 33885648147  job 101064628269
-schema_roundtrip_drill      PASS  run 33885648147  job 101064628349
-writable_db_proof_staging   PASS  run 33885648574  job 101064630552  (inside required verify)
-verify (required)           PASS  run 33885648574  job 101066280520  14:51:33Z -> 14:55:56Z
-live_schema_parity          PASS  run 33885648272  job 101064656760  (after production application)
+precondition_drill          PASS  run 33894785639  job 101094770045
+schema_roundtrip_drill      PASS  run 33894785639  job 101094770236
+writable_db_proof_staging   PASS  run 33894785886  job 101094770583  (inside required verify)
+verify (required)           PASS  run 33894785886  job 101096887043  16:29:45Z -> 16:34:02Z
+live_schema_parity          PASS  run 33894785656  job 101094797382  (after production application)
 ```
 
 A fifth job in the same reversibility-gate run, `proof-binding-validator` ("Down-script
 presence check (fail-closed)"), is not a CEP-E7 receipt slot but is worth naming so nobody has
 to rediscover it from the job list. It fails on any non-proof file that changed after the
 declared anchor, which is exactly what the main-sync and the manifest correction are. This
-proof-only commit re-anchors to `e144a10b` — the `--no-ff` merge of `origin/main`
-`7116561a` performed by the sanctioned `ops:merge-wrapper git-merge-main` under the merge
+proof-only commit re-anchors to `09c03715` — the `--no-ff` merge of `origin/main`
+`ac0bde52` performed by the sanctioned `ops:merge-wrapper git-merge-main` under the merge
 mutex, which is the last non-proof commit on this branch — for that reason, and the commits
 after it touch only proof paths. That merge commit was pushed ALONE, before any proof edit, so
 all four CEP-E7 receipts above were minted at exactly the declared anchor rather than at a
@@ -547,7 +547,7 @@ after merge, which would have stranded this lane merged-but-unclosable. The orde
 that outcome is apply to production, let parity go green, then merge and close. This lane has
 followed that order as far as it goes today: the apply is done and parity is green. Merge and
 close have NOT happened — PR #1477 is open and unmerged, and this bundle does not claim
-otherwise. Parity now passes at run 33885648272 (job 101064656760), produced at
+otherwise. Parity now passes at run 33894785656 (job 101094797382), produced at
 the current anchor, so CEP-E7 has a passing receipt with exact run and job ids and the closeout
 path is open.
 
