@@ -530,8 +530,10 @@ an Actions artifact, and should be weighed accordingly.
 `live_schema_parity` not passing was never merely cosmetic: Close Eligibility Preflight failed
 CEP-E7 on that field and therefore CEP-C1, whose message is that `ops:lane-close` would fail
 after merge, which would have stranded this lane merged-but-unclosable. The order that avoids
-that outcome is apply to production, let parity go green, then merge and close — and that is
-the order this lane followed. Parity now passes at run 33849868912, so CEP-E7 has a passing
+that outcome is apply to production, let parity go green, then merge and close. This lane has
+followed that order as far as it goes today: the apply is done and parity is green. Merge and
+close have NOT happened — PR #1477 is open and unmerged, and this bundle does not claim
+otherwise. Parity now passes at run 33849868912, so CEP-E7 has a passing
 receipt with exact run and job ids and the closeout path is open.
 
 ### The standing cost of holding this lane open

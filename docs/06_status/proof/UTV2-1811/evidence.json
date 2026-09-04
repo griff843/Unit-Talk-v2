@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T08:45:00Z",
+  "generated_at": "2026-09-04T09:05:00Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T08:45:00Z"
+    "bound_at": "2026-09-04T09:05:00Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
@@ -305,7 +305,7 @@
     },
     "production_apply": {
       "evidence_class": "operator_executed_against_production",
-      "applied_at": "2026-09-04T08:45:00Z",
+      "applied_at": "2026-09-04T08:13:51Z",
       "project_ref": "zfzdnfwdarxucxtaojxm",
       "authorization": "Bounded PM production-DDL authorization, tied to PR head af59edb547931dc3e1b975d391f55483124fc483 and migration blob 56d1559665018598bc9d84ca2a4abafdf1ee9b53. Authorized exactly one migration, conditional on rechecking it was the sole pending migration. Did not authorize merge, deployment, rollback, containment change or a pilot submission.",
       "precondition_rechecked": {
@@ -342,7 +342,8 @@
           "local_only": [],
           "remote_only": []
         }
-      }
+      },
+      "applied_at_provenance": "DERIVED FROM A MACHINE RECORD, not asserted. The Supabase apply tool stamped its own ledger version as 20260904081351, which decodes to 2026-09-04T08:13:51Z; that version string is the only machine-written timestamp of the event and is preserved in ledger_version_correction.observed. Corroborating bounds: the live_schema_parity run that reflects the post-apply state (33849868912) started 08:15:58Z, and the commit that first recorded the apply (5425edbe0) was authored 08:27:28Z — both after 08:13:51Z, and both before the 08:45:00Z value previously carried here. That earlier value was hand-written rather than measured and was impossible: it post-dated the commit asserting it. It was caught by independent audit and is corrected here rather than quietly overwritten."
     },
     "acl_measured_production": {
       "evidence_class": "operator_executed_against_production_read_only",
@@ -498,10 +499,10 @@
       "pilot submission",
       "regeneration of packages/db/src/database.types.ts"
     ],
-    "reverified_at": "2026-09-04T07:20:00Z",
+    "reverified_at": "2026-09-04T07:20:00Z (approximate — recorded to the minute by the operator, not from a machine record; treat as ~07:20Z)",
     "reverification_method": "Read-only re-read of the ledger at the current head via the Supabase MCP against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. That re-read itself performed no write, no DDL, no link and no repair. This describes the verification step only — it is NOT a statement about the lane as a whole, which did subsequently apply one migration and correct one ledger row under PM authorization.",
     "reverified_result": "UNCHANGED. remote_version_count=134, local_migration_file_count=135, intersection=134, remote_only_set=[] (0), local_only_set=[\"20260901150000_utv2_1811_rate_limit_buckets.sql\"] (1). The proposed push would execute exactly that one file.",
-    "production_objects_absent_confirmed": "HISTORICAL, time-scoped: at 2026-09-04T07:20Z, before the authorized apply, a read-only SELECT returned to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. That established the Milestone 1 blocker was real and that both fail-closed preconditions would pass. It is no longer the current state: both objects were created by the authorized apply later the same day and are present now. See runtime_proof.production_apply.",
+    "production_objects_absent_confirmed": "HISTORICAL, time-scoped: at approximately 2026-09-04T07:20Z (operator-recorded, not machine-stamped), before the authorized apply, a read-only SELECT returned to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. That established the Milestone 1 blocker was real and that both fail-closed preconditions would pass. It is no longer the current state: both objects were created by the authorized apply later the same day and are present now. See runtime_proof.production_apply. An independent, machine-checked absence confirmation was taken immediately before the apply and is recorded separately at runtime_proof.production_apply.objects_absent_before; that one does not depend on this approximate timestamp.",
     "applied_result": "Full bidirectional parity: 135 local files, 135 remote rows, local-only empty, remote-only empty."
   },
   "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4"
