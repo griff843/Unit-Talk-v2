@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "d70df07787002db02e007df9ae8b347c40bbb1a9",
     "verified_source_sha": "77bbed4dd84329c5f678140d0e08d7b7d2882df2",
     "evidence_commit_sha": "77bbed4dd84329c5f678140d0e08d7b7d2882df2",
-    "current_pr_head_sha": "set-by-ci",
+    "current_pr_head_sha": "3f2978717e90fd334e5796b7c31ca9bed4ad730c",
     "ci_sentinels": {
       "pnpm_type_check": "PASS",
       "pnpm_lint": "PASS",
@@ -17,7 +17,9 @@
       "pnpm_test": "PASS (5466 tests, 0 failures) — re-measured locally at this anchor; unchanged by the sync, which carried only the readiness ledger data file.",
       "pnpm_verify": "PASS — required `verify` check completed success at 77bbed4dd84329c5f678140d0e08d7b7d2882df2 (run 33831437100, job 100895903560, 2026-09-04T03:02:08Z→03:16:03Z), gated on the staging DB-proof producer job 100895088846 (success).",
       "r_level_check": "PASS (no R-level artifacts required for this diff)"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-04T03:55:21.486Z"
   },
   "static_proof": {
     "type_check": {

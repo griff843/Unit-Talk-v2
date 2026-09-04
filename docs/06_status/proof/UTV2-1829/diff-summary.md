@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1829-mission-context
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1499
 Head SHA: 77bbed4dd84329c5f678140d0e08d7b7d2882df2
-Merge SHA: N/A
+Merge SHA: d70df07787002db02e007df9ae8b347c40bbb1a9
 Diff base: fde8a491aee173c8b835e85f95e69448bc83cf46
 Diff target: 77bbed4dd84329c5f678140d0e08d7b7d2882df2
 
@@ -60,4 +60,4 @@ A	docs/mission/spec.md
 
 ## SHA Binding
 Head SHA: bc87a718701ef11a798511e0857a4aa29ed29076
-Merge SHA: N/A
+Merge SHA: d70df07787002db02e007df9ae8b347c40bbb1a9
