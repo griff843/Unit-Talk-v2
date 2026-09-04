@@ -77,9 +77,15 @@ actually happened was an MCP `apply_migration`, a one-row UPDATE of
 grant's failure boundary, which required stopping on an unexpected result rather than repairing
 forward. These are disclosed as deviations for PM ruling, not presented as covered; the full
 reconciliation is `runtime_proof.production_writes_inventory` in `evidence.json`, and the
-narrative is in `verification.md`. The live submission failure is therefore addressed at the
-database layer; it is not yet addressed in the running service, because this PR is unmerged and
-production is still serving an older build.
+narrative is in `verification.md`. The live submission failure is resolved by the apply, not
+by this merge. The build production is already running was configured with
+`UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc` and already called
+`consume_rate_limit_bucket`; the only thing missing was the function, so creating it restores
+that path with no deployment. **Merging this PR ships no runtime change to production** — the
+objects exist there already. What the merge adds is the governed migration, the reversible down
+script, the two T1 suites and this audit record. An earlier revision of this paragraph said the
+outage was "not yet addressed in the running service" until the merge; that was wrong and
+contradicted the PR description.
 
 EVIDENCE:
 

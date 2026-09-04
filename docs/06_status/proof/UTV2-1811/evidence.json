@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T23:50:23Z",
+  "generated_at": "2026-09-04T23:51:19Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "d04712fa2b878bc72fd6d4d0e0e43f320533c4a3",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T23:50:23Z"
+    "bound_at": "2026-09-04T23:51:19Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
