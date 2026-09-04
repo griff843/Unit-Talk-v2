@@ -114,16 +114,21 @@ The control objects were dropped after measurement.
 
 ### Reversibility on real PostgreSQL
 
-Schema fingerprint (including `relacl` and `proacl`, which the CI drill cannot see):
+Schema fingerprint (including `relacl` and `proacl`, which the CI drill cannot see).
+Values are generated from `evidence.json` `runtime_proof.reversibility`, which is the
+single source for them; they are measured against staging on the byte-exact migration
+file (see `runtime_proof.staging_replay_fidelity`):
 
 ```
-applied         dd6588d1831a7eba09921beb8854aeee
-after down      f77268e36e040e76d2d7e2c466a7c62c
-after reapply   dd6588d1831a7eba09921beb8854aeee
+applied         206a7c91d518f0262e6da2dfd9dd69e8
+after down      ABSENT
+after reapply   206a7c91d518f0262e6da2dfd9dd69e8
 ```
 
-`reapply_converged: true`, and `down_actually_changed_schema: true` — the down script does
-real work, so convergence is not the trivial result of a no-op.
+`after down` is `ABSENT` because the down script removes both objects outright, so there
+is no schema left to fingerprint. `reapply_converged: true`, and
+`down_actually_changed_schema: true` — the down script does real work, so
+convergence is not the trivial result of a no-op.
 
 ### Fail-closed precondition
 
