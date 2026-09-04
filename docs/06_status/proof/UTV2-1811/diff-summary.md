@@ -1,9 +1,9 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: 09c03715d14cc6128e36e125ded4b67ff638b3db
+MERGE_SHA: d04712fa2b878bc72fd6d4d0e0e43f320533c4a3
 
 The value above is the last non-proof commit on this branch — the `--no-ff` merge of
-`origin/main` at `ac0bde52` performed under the merge mutex via `ops:merge-wrapper
+`origin/main` at `b51f509e` performed under the merge mutex via `ops:merge-wrapper
 git-merge-main`, which carries implementation commit `4c3a71cf` — not this file's own commit,
 which cannot exist before the file does. It is an ancestor of PR HEAD. That merge is
 history-preserving, not a rebase: all 30 pre-sync commits remain ancestors, and it brought in
@@ -23,8 +23,12 @@ merge-SHA binding is carried in `verification.md`.
 | `docs/06_status/proof/UTV2-1811/*` | this proof bundle |
 | `docs/06_status/lanes/UTV2-1811.json`, `.ops/sync/UTV2-1811.yml` | lane control plane, written by `ops:lane-start` |
 
-`packages/db/src/database.types.ts` is declared in scope but unchanged — see
-`verification.md` for why regeneration is not mechanically required at this head.
+`packages/db/src/database.types.ts` is declared in scope and is deliberately left unchanged.
+It therefore does not describe the live production schema at this head: it omits
+`rate_limit_buckets` and `consume_rate_limit_bucket`. Nothing shipped breaks on that (the
+runtime path calls the RPC by name through the untyped `rpc()` surface), but this is an owned
+deferral to schedule, not a step found unnecessary. `verification.md` records the measured
+reason — regenerating here would also import 60 unrelated production partition tables.
 
 `docs/06_status/lanes/UTV2-1811.json` is the one changed path that is **not** in
 `file_scope_lock`. The lock is pinned to the lane-start commit and cannot be widened, so this
@@ -131,13 +135,13 @@ which UTV2-1822 resolved by restoring the historical migration files under their
 production version numbers with per-file hash receipts.
 ```
 
-CEP-E7 receipts, all produced at `09c03715` — the last non-proof commit:
+CEP-E7 receipts, all produced at `d04712fa` — the last non-proof commit:
 
 ```
-precondition_drill          PASS  run 33894785639  job 101094770045
-schema_roundtrip_drill      PASS  run 33894785639  job 101094770236
-writable_db_proof_staging   PASS  run 33894785886  job 101094770583  (inside required verify)
-live_schema_parity          PASS  run 33894785656  job 101094797382  (after production application)
+precondition_drill          PASS  run 33927369733  job 101198686975
+schema_roundtrip_drill      PASS  run 33927369733  job 101198687084
+writable_db_proof_staging   PASS  run 33927369846  job 101198687494  (inside required verify)
+live_schema_parity          PASS  run 33927369782  job 101198702190  (after production application)
 ```
 
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.
