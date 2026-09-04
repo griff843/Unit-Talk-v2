@@ -1,0 +1,83 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1825",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "5ed005a6da848917a355c4c0ee5e7d8f5513713b",
+    "verified_source_sha": "d8b1af9be76b01f86ecd57e82c149576aa36cf85",
+    "evidence_commit_sha": "d8b1af9be76b01f86ecd57e82c149576aa36cf85",
+    "current_pr_head_sha": "542a9850d6760e4f645bc46709e2175e3f333d07",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_lint": "PASS",
+      "pnpm_build": "PASS",
+      "pnpm_test": "PASS (5438 tests across 98 files, 0 failures)",
+      "pnpm_verify": "PENDING-CI - local run green through every verify:static step; the final test:live-db step is refused off-CI by the fail-closed assert-staging guard. Authoritative result is the required verify check on the PR head.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)",
+      "automation_coverage": "PASS (fail=0, no new unwired tests or orphan capabilities)"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T05:43:09.630Z"
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint"
+    },
+    "build": {
+      "status": "PASS",
+      "command": "pnpm build",
+      "detail": "executed as part of pnpm verify:static, which completed and handed off to test:live-db"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5438,
+      "failures": 0,
+      "files": 98
+    },
+    "targeted_suite": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/proof-generate.test.ts",
+      "tests": 105,
+      "failures": 0
+    },
+    "mutation_controls": [
+      {
+        "mutation": "remove the ratified placeholder from the accepted-value pattern (restore the shipped regex)",
+        "expected": "the placeholder-acceptance regressions fail",
+        "observed": "not ok 102, 103, 105 — 3 failures, 102 pass",
+        "status": "CAUGHT"
+      },
+      {
+        "mutation": "widen the accepted-value pattern to /^.*$/ so any value is treated as a placeholder",
+        "expected": "the refusal control fails and nothing else does",
+        "observed": "not ok 104 — 1 failure, 104 pass",
+        "status": "CAUGHT"
+      }
+    ],
+    "r_level_check": {
+      "status": "PASS",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "rules_matched": 0
+    },
+    "automation_coverage": {
+      "status": "PASS",
+      "command": "pnpm ops:automation-coverage-check",
+      "detail": "verdict=PASS fail=0 warn=1 classified=15; the single warning is the pre-existing baselined WIRING_GLOB_SHADOWED finding under apps/qa-agent, untouched by this lane"
+    },
+    "verify": {
+      "status": "PENDING-CI",
+      "command": "pnpm verify",
+      "detail": "every verify:static step passed locally; test:live-db refused on a host with no staging identity ([assert-staging] REFUSED: target identity could not be resolved from its URL, host=127.0.0.1). The authoritative green verify is the required check on the PR head."
+    }
+  },
+  "pr_number": 1485
+}

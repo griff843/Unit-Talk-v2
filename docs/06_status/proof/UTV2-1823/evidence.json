@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1823",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "b7d9fc07fca5a03d5cf0b343beb3161c58295aed",
+    "verified_source_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
+    "evidence_commit_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS",
+      "pnpm_test": "PASS (5462 tests, 0 failures)",
+      "pnpm_test_db": "PASS — 7/7 against staging in the required verify job at this exact anchor SHA (run 33785176215, producer job 100748085293, ci-db-proof-receipt/v2 sha256=157d9c7ef1113e76bdac47ebb64eca2fc0cbe7f4b0749cde264d2a81d0bcc1a7). This replaces the earlier PENDING-CI sentinel, which was accurate when written and is no longer.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)",
+      "pnpm_verify": "PASS — required `verify` check completed success at 38ef1fd97e1e57b55f4da1263a124905665996f8 (job 100750090391, 17:38:56Z→17:42:45Z)."
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-03T19:28:01.853Z"
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "tsc -b tsconfig.json, exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5462,
+      "failures": 0
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test apps/api/src/server.test.ts",
+      "tests": 53,
+      "failures": 0,
+      "detail": "50 pre-existing tests unchanged plus the three UTV2-1823 acceptance tests (AC1 anonymous 401, AC2 authenticated operator 200, AC3 authenticated unknown-id 404)"
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "command": "remove the `|| traceMatch` disjunct from the auth gate predicate at apps/api/src/server.ts:614, then pnpm exec tsx --test apps/api/src/server.test.ts",
+      "expected": "the anonymous-401 test fails on the condition it names",
+      "observed": "not ok 51 — AssertionError: 200 !== 401; # pass 52 / # fail 1. Source restored byte-for-byte; guarded suite returns # pass 53 / # fail 0.",
+      "detail": "Only test 51 is guard-sensitive; the authenticated 200 and 404 tests correctly pass under the mutation and are not claimed as guard-sensitive."
+    },
+    "r_level": {
+      "status": "PASS",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "observed": "Verdict: PASS; 5 changed files; rules matched: none"
+    },
+    "ci_verify": {
+      "status": "PASS",
+      "check": "verify",
+      "head_sha": "38ef1fd97e1e57b55f4da1263a124905665996f8",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215/job/100750090391",
+      "detail": "Completed exact-head CI. The bundle no longer represents any completed check as pending."
+    }
+  },
+  "runtime_proof": {
+    "kind": "app-runtime",
+    "harness": "The route is exercised through the real HTTP request handler built by createApiServer, with in-memory repositories. No live database is reached and none is claimed — local.env pins SUPABASE_URL to http://127.0.0.1:1 under containment. The change opens no connection, runs no query and alters no repository call, so the behaviour these probes measure is entirely in the request path.",
+    "queries": [
+      {
+        "name": "an anonymous GET /api/picks/{id}/trace for a seeded pick is refused and leaks nothing",
+        "method": "handler(new Request(`http://api.local/api/picks/${seededPickId}/trace`)) with no Authorization header, against a runtime seeded with one pick whose metadata carries submittedBy",
+        "result": "status 401; body.ok === false; body.error.code === 'UNAUTHORIZED'; body.data === undefined; the serialized response contains neither the seeded pick id nor its submittedBy value in any field",
+        "significance": "This is the exposure. Before the change this exact request returned 200 with the pick's full lifecycle aggregate — record metadata, submission events, promotion history, outbox entries, distribution receipts with delivery targets and external ids, settlement records, audit log entries and lifecycle events."
+      },
+      {
+        "name": "an authenticated operator still receives the unchanged aggregate",
+        "method": "the same request carrying an operator credential",
+        "result": "status 200 with all eight payload keys present — pick, submissionEvents, promotionHistory, outboxEntries, distributionReceipts, settlementRecords, auditLogEntries, lifecycleEvents — and the pick id round-tripping",
+        "significance": "The gate closes the route to anonymous callers without narrowing it for its intended users. The handler and controller are unchanged, so the authenticated response is produced by exactly the code path that produced the unauthenticated one."
+      },
+      {
+        "name": "authentication failure and not-found stay distinguishable",
+        "method": "an authenticated operator GET for a pick id that does not exist",
+        "result": "status 404 with error code PICK_NOT_FOUND, not 401",
+        "significance": "A gate that collapsed 404 into 401 would hide real not-found conditions from operators and make the route undebuggable."
+      },
+      {
+        "name": "the guard is load-bearing — mutation control",
+        "method": "remove the `|| traceMatch` disjunct from the gate predicate at apps/api/src/server.ts:614 and re-run the suite, then restore the file byte-for-byte",
+        "result": "not ok 51 — AssertionError: 200 !== 401. # pass 52 / # fail 1. After restoration the guarded suite returns # pass 53 / # fail 0.",
+        "significance": "The anonymous-401 assertion fails on exactly the condition it names, so it is proving the guard rather than passing alongside it. Only that test is guard-sensitive; the authenticated 200 and 404 correctly pass under the mutation and are not claimed otherwise."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "fields of the seeded pick appearing anywhere in the anonymous response body",
+        "value": 0
+      },
+      {
+        "probe": "payload keys present in the authenticated 200 aggregate",
+        "value": 8
+      },
+      {
+        "probe": "routes whose auth behaviour this diff changes",
+        "value": 1
+      },
+      {
+        "probe": "guard-sensitive tests that fail when the guard is removed",
+        "value": 1
+      },
+      {
+        "probe": "tests passing in apps/api/src/server.test.ts at this head",
+        "value": 53
+      },
+      {
+        "probe": "live database connections opened by this diff",
+        "value": 0
+      },
+      {
+        "probe": "pnpm test:db assertions passing against staging in the required verify job at this anchor",
+        "value": 7
+      }
+    ],
+    "live_db": {
+      "status": "PASS_IN_CI",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "target": "staging",
+      "detail": "pnpm test:db ran 7/7 green against staging inside the required verify job at this exact anchor. No local live-DB run exists and none is claimed — local.env pins SUPABASE_URL to http://127.0.0.1:1 under containment and ci:assert-staging fails closed off-CI. Receipt sha256=157d9c7ef1113e76bdac47ebb64eca2fc0cbe7f4b0749cde264d2a81d0bcc1a7, consumed by scripts/ci/verify-db-proof-receipt.ts.",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33785176215"
+    }
+  }
+}
