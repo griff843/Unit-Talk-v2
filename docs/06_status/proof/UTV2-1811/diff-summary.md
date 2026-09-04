@@ -1,11 +1,14 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: 6c7d2a2aa8833ab30573700cf9457dde983483f4
+MERGE_SHA: e144a10b8743fb8766b371932701a11cc7b474c3
 
-The value above is the last non-proof commit on this branch — the `ort` merge of
-`origin/main` at `275d5fa0` performed under the merge mutex via `ops:merge-wrapper
+The value above is the last non-proof commit on this branch — the `--no-ff` merge of
+`origin/main` at `7116561a` performed under the merge mutex via `ops:merge-wrapper
 git-merge-main`, which carries implementation commit `4c3a71cf` — not this file's own commit,
-which cannot exist before the file does. It is an ancestor of PR HEAD. The post-merge
+which cannot exist before the file does. It is an ancestor of PR HEAD. That merge is
+history-preserving, not a rebase: all 28 pre-sync commits remain ancestors, and it brought in
+exactly one file, `docs/06_status/readiness/readiness-score.json`, changing no file this lane
+owns. The post-merge
 merge-SHA binding is carried in `verification.md`.
 
 ## Changed files
@@ -128,13 +131,13 @@ which UTV2-1822 resolved by restoring the historical migration files under their
 production version numbers with per-file hash receipts.
 ```
 
-CEP-E7 receipts, bound to `6c7d2a2a` — the last non-proof commit:
+CEP-E7 receipts, all produced at `e144a10b` — the last non-proof commit:
 
 ```
-precondition_drill          PASS  run 33848292162  job 100945086270
-schema_roundtrip_drill      PASS  run 33848292162  job 100945086450
-writable_db_proof_staging   PASS  run 33848292323  job 100945087588  (inside required verify)
-live_schema_parity          PASS  run 33849868912  job 100958548611  (after production application)
+precondition_drill          PASS  run 33885648147  job 101064628269
+schema_roundtrip_drill      PASS  run 33885648147  job 101064628349
+writable_db_proof_staging   PASS  run 33885648574  job 101064630552  (inside required verify)
+live_schema_parity          PASS  run 33885648272  job 101064656760  (after production application)
 ```
 
 - `docs/06_status/proof/UTV2-1811/verification.md` — full narrative, the real-PostgreSQL semantics table, the ACL catalog reads and the control-object comparison, the apply/down/reapply fingerprints, and the mutation results for every control.

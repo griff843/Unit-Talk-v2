@@ -6,11 +6,11 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T09:27:56Z",
+  "generated_at": "2026-09-04T14:58:08Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
-    "verified_source_note": "The last non-proof commit on this branch: the `ort` merge of origin/main 275d5fa0f339acfeb9e1675f7e75c34709e30fe2 performed under the merge mutex. A merge commit is a valid anchor because it is a real commit CI ran on, and every commit after it touches only proof paths. Receipt provenance stated precisely rather than uniformly: the precondition drill, the schema round-trip drill and the staging writable-DB proof were produced at this exact anchor. The live_schema_parity receipt was produced one proof-only commit later, at af59edb547931dc3e1b975d391f55483124fc483, because parity could only be re-run after the production apply. Parity was then re-run again at the later head 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8 (run 33853547721, job 100961574766) and passed there too, so the claim does not rest on the intermediate receipt. Parity reflects live database state, which does not depend on which commit triggered the check.",
+    "verified_source_sha": "e144a10b8743fb8766b371932701a11cc7b474c3",
+    "verified_source_note": "The last non-proof commit on this branch: the --no-ff merge of origin/main 7116561ae4a9afdc587bcc9115457ede06413dd3, performed by the sanctioned ops:merge-wrapper git-merge-main under the merge mutex. History-preserving, not a rebase: all 28 pre-sync commits remain ancestors of this head and no earlier SHA in this bundle was rewritten. The sync brought in exactly one file, docs/06_status/readiness/readiness-score.json, and changed no file this lane owns \u2014 every substantive lane file (the migration, its down script, both t1-proof suites, package.json, the sync file and the lane manifest) is byte-identical across the sync, verified by md5 before and after. The migration file's md5 is still af2c42582dbde2ee7990a3ca15c1d3e8, so every staging fidelity, ACL, fingerprint and semantics claim below still describes the shipped bytes. This anchor supersedes 6c7d2a2aa8833ab30573700cf9457dde983483f4, which was itself a sanctioned merge commit; CI receipts captured at that earlier anchor are retained below and each is labelled with the exact head it was produced at, rather than being re-attributed to this one. merge_sha stays null pre-merge as the schema-v2 evidence contract requires (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,15 +18,15 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T09:27:56Z"
+    "bound_at": "2026-09-04T14:58:08Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
-    "head": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
+    "head": "e144a10b8743fb8766b371932701a11cc7b474c3",
     "precondition_drill": {
       "result": "PASS",
-      "run": 33848292162,
-      "job": 100945086270,
+      "run": 33885648147,
+      "job": 101064628269,
       "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
       "cases": [
         "refuses when public.rate_limit_buckets pre-exists \u2014 raised SQLSTATE 42P07",
@@ -37,29 +37,28 @@
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 33848292162,
-      "job": 100945086450,
+      "run": 33885648147,
+      "job": 101064628349,
       "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
       "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": 33848292323,
-      "job": 100945087588,
+      "run": 33885648574,
+      "job": 101064630552,
       "workflow": "ci / Writable DB proof (staging only)",
       "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head \u2014 so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from that job.",
-      "run_conclusion_note": "Job 100945087588 completed success at 2026-09-04T07:28:26Z against this exact anchor. The required `verify` job 100946907864 in the same run then completed success (07:28:28Z -> 07:40:21Z); its \"Assert the DB proof producer succeeded\" step fails closed on any other producer result, so verify passing is itself proof the staging receipt was produced."
+      "run_conclusion_note": "Job 101064630552 completed success at 2026-09-04T14:51:31Z against this exact anchor. The required `verify` job 101066280520 in the same run then completed success (14:51:33Z -> 14:55:56Z); its \"Assert the DB proof producer succeeded\" step fails closed on any other producer result, so verify passing is itself proof the staging receipt was produced."
     },
     "live_schema_parity": {
       "result": "PASS",
-      "run": 33849868912,
-      "job": 100958548611,
+      "run": 33885648272,
+      "job": 101064656760,
       "workflow": "Live Schema Parity / Live Schema Parity",
       "verdict": "PASS at this anchor. The migration was applied to production zfzdnfwdarxucxtaojxm under bounded PM authorization on 2026-09-04, so the 10 previously-unauthorized 'missing_in_actual' findings \u2014 public.rate_limit_buckets, its four columns, its three constraints and its two indexes \u2014 are all resolved. The gate now finds no unauthorized drift.",
       "supersedes": "The prior BLOCKED_ON_PRODUCTION_DDL record (run 33848292277, job 100945113385). That record was accurate when written; it is superseded by application, not waived.",
       "why_it_can_now_pass": "This gate diffs the repo migration set against the LIVE PRODUCTION database. It reported objects the repo declared and production lacked. Production now has them, applied from the exact authorized blob, so expected and actual agree.",
-      "receipt_provenance": "Produced at af59edb547931dc3e1b975d391f55483124fc483, one proof-only commit after the anchor, not at the anchor itself. Independently re-run at the later head 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8: run 33853547721, job 100961574766, PASS.",
-      "run_at_final_head": 33853547721,
+      "receipt_provenance": "Produced at the anchor e144a10b8743fb8766b371932701a11cc7b474c3 itself, not at a later proof-only commit: the merge commit was pushed alone, before any proof edit, so CI minted this receipt at exactly the declared verified_source_sha. Job started 2026-09-04T14:46:25Z. This supersedes the earlier PASS receipts (run 33849868912 job 100958548611 at af59edb547931dc3e1b975d391f55483124fc483, and run 33853547721 job 100961574766 at 5425edbe0ba2b8e827bbce384249d3ddcc53c6c8), which were produced one and two proof-only commits after the previous anchor respectively; those records were accurate when written and are retained here as history.",
       "job_at_final_head": 100961574766
     },
     "staging_target": {
@@ -389,7 +388,8 @@
       "conclusion": "Identical to InMemoryApiRateLimitStore: the limit-th request is allowed and the (limit+1)-th is refused.",
       "cleanup": "Probe rows deleted; public.rate_limit_buckets is at 0 rows.",
       "containment": "The probe wrote only to the limiter's own counter table under a dedicated key. No pick, submission, outbox or delivery row was created."
-    }
+    },
+    "reversibility_gate_run_note": "The two scratch-Postgres drill receipts above share run 33885648147, whose RUN-level conclusion reads `failure`. That is not a drill failure: both cited jobs are `success`. The run failed on its third job, proof-binding-validator (\"Down-script presence check (fail-closed)\"), because at the moment CI ran, the committed bundle still declared the superseded anchor 6c7d2a2aa8833ab30573700cf9457dde983483f4 while the main-sync merge commit had landed after it. The rebind in this same commit is exactly what resolves that, and the job passes on the following run. The receipts are the jobs, and each job's conclusion and head_sha are independently verifiable from the Actions API."
   },
   "static_proof": {
     "commands": [
@@ -505,6 +505,6 @@
     "production_objects_absent_confirmed": "HISTORICAL, time-scoped: at approximately 2026-09-04T07:20Z (operator-recorded, not machine-stamped), before the authorized apply, a read-only SELECT returned to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. That established the Milestone 1 blocker was real and that both fail-closed preconditions would pass. It is no longer the current state: both objects were created by the authorized apply later the same day and are present now. See runtime_proof.production_apply. An independent, machine-checked absence confirmation was taken immediately before the apply and is recorded separately at runtime_proof.production_apply.objects_absent_before; that one does not depend on this approximate timestamp.",
     "applied_result": "Full bidirectional parity: 135 local files, 135 remote rows, local-only empty, remote-only empty."
   },
-  "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
+  "verification_receipts_bound_to": "All four CEP-E7 receipts (precondition_drill, schema_roundtrip_drill, writable_db_proof_staging, live_schema_parity) were produced at exactly e144a10b8743fb8766b371932701a11cc7b474c3, the declared verified_source_sha, because the main-sync merge commit was pushed alone before any proof edit. Superseded receipts from earlier anchors are retained inside their own blocks and each is labelled with the head it was produced at, rather than re-attributed to this anchor. The manual, non-receipted measurements (acl_proof, reversibility, preexisting_object_guards, round3_reverification, production_apply) carry their own capture_method and target and are explicitly not CI receipts.",
   "generated_at_provenance": "Generated, not hand-written. Both this field and sha_binding.bound_at carry the AUTHOR timestamp of the commit that last modified this file, written by a commit -> read author date -> rewrite -> commit --amend cycle (amend preserves the author date), so the value is exact rather than approximate. Verify with: git log -1 --format=%aI -- docs/06_status/proof/UTV2-1811/evidence.json. Later proof-only commits that touch verification.md or diff-summary.md but not this file do not change it."
 }
