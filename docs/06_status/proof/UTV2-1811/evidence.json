@@ -6,11 +6,11 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-02T17:20:00Z",
+  "generated_at": "2026-09-04T07:30:00Z",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "f6b7f415ffb9098e7b49222d1194ac9d130694c1",
-    "verified_source_note": "The last non-proof commit on this branch, and the head every CI receipt in this bundle was captured against. It supersedes e0288a2a, which the proof-binding validator correctly refused once main moved: two non-proof commits landed after it. The first is the sanctioned ops:merge-wrapper git-merge-main that brought this branch level with main at 5fd7d299 \u2014 history-preserving, not a rebase, so no earlier SHA in this bundle was rewritten. What main introduced is dominated by UTV2-1822, which restored the historical migration files under their production version numbers and archived their authoritative sources with per-file hash receipts; that repair is what turned this lane's production_migration_ledger finding from BLOCKER to RESOLVED. The second is the lane manifest correction that replaced two placeholder test paths in file_scope_lock with the three paths this lane actually touches. The substantive migration commit remains 4c3a71cf and the migration file's bytes are unchanged (md5 af2c42582dbde2ee7990a3ca15c1d3e8), so every staging fidelity, ACL and fingerprint claim below still describes the shipped file. merge_sha is null pre-merge as the shared schema-v2 evidence contract requires (CEP-E7); post-merge-lane-close.yml binds it to the real merge commit.",
+    "verified_source_sha": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
+    "verified_source_note": "The last non-proof commit on this branch: the `ort` merge of origin/main 275d5fa0f339acfeb9e1675f7e75c34709e30fe2 performed under the merge mutex. Every CI receipt in this bundle was produced at this exact head. A merge commit is a valid anchor because it is a real commit that CI ran on; the proof commits that follow it touch only proof paths.",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-02T17:20:00Z"
+    "bound_at": "2026-09-04T07:30:00Z"
   },
   "verdict": {
     "statement": "The submission outage was caused by a database contract that existed only in a code comment. consume_rate_limit_bucket is now defined by a governed migration, proven on real PostgreSQL 17 to reproduce InMemoryApiRateLimitStore semantics exactly, and proven to be unreachable by anon, authenticated and PUBLIC.",
@@ -26,43 +26,44 @@
     "production_submission_attempted": false
   },
   "runtime_proof": {
-    "head": "f6b7f415ffb9098e7b49222d1194ac9d130694c1",
+    "head": "6c7d2a2aa8833ab30573700cf9457dde983483f4",
     "precondition_drill": {
       "result": "PASS",
-      "run": 33658161099,
-      "job": 100341823650,
+      "run": 33848292162,
+      "job": 100945086270,
       "workflow": "migration-reversibility-gate / Fail-closed precondition drill (scratch Postgres)",
       "cases": [
-        "refuses when public.rate_limit_buckets pre-exists \u2014 raised SQLSTATE 42P07",
-        "no DDL ran when public.rate_limit_buckets pre-exists \u2014 schema fingerprint identical before and after the attempt",
-        "scratch restored after public.rate_limit_buckets case \u2014 back to baseline",
-        "applies on an empty scratch schema \u2014 created all declared relations: public.rate_limit_buckets"
+        "refuses when public.rate_limit_buckets pre-exists — raised SQLSTATE 42P07",
+        "no DDL ran when public.rate_limit_buckets pre-exists — schema fingerprint identical before and after the attempt",
+        "scratch restored after public.rate_limit_buckets case — back to baseline",
+        "applies on an empty scratch schema — created all declared relations: public.rate_limit_buckets"
       ]
     },
     "schema_roundtrip_drill": {
       "result": "PASS",
-      "run": 33658161099,
-      "job": 100341824294,
-      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres \u2014 all new migrations)",
+      "run": 33848292162,
+      "job": 100945086450,
+      "workflow": "migration-reversibility-gate / Schema round-trip drill (scratch Postgres — all new migrations)",
       "detail": "apply -> rollback -> reapply convergence: post-down hash equals pre-up baseline and post-reup hash equals post-up."
     },
     "writable_db_proof_staging": {
       "result": "PASS",
-      "run": 33658161190,
-      "job": 100342098974,
+      "run": 33848292323,
+      "job": 100945087588,
       "workflow": "ci / Writable DB proof (staging only)",
-      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head \u2014 so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from that job.",
-      "run_conclusion_note": "Job 100342098974 completed success at 2026-09-02T17:03:40Z against this exact anchor. Its parent run 33658161190 later reads `cancelled`, because pushing the proof-only re-anchor commit superseded the in-flight run after this job had already finished. The receipt is the job, and the job's own conclusion and head_sha are verifiable from the Actions API; the run-level cancellation is named here rather than left for a reviewer to trip over."
+      "detail": "Run-scoped staging receipt produced in the staging-ci environment against xskgrzbteyqdufktjrjx, inside the REQUIRED verify workflow run at this exact head — so the receipt and the required check are the same run and cannot drift apart. No production credential is reachable from that job.",
+      "run_conclusion_note": "Job 100945087588 completed success at 2026-09-04T07:28:26Z against this exact anchor. The required `verify` job 100946907864 in the same run then completed success (07:28:28Z -> 07:40:21Z); its \"Assert the DB proof producer succeeded\" step fails closed on any other producer result, so verify passing is itself proof the staging receipt was produced."
     },
     "live_schema_parity": {
       "result": "BLOCKED_ON_PRODUCTION_DDL",
-      "run": 33658161186,
-      "job": 100341847669,
+      "run": 33848292277,
+      "job": 100945113385,
       "workflow": "Live Schema Parity / Live Schema Parity",
-      "verdict": "FAIL \u2014 11 findings, 10 of them unauthorized, and every unauthorized one is \"missing_in_actual\" for public.rate_limit_buckets: the relation, its four columns (key, window_start, expires_at, count), its three constraints (pkey, count_non_negative, window_ordered) and its two indexes.",
+      "verdict": "FAIL at this anchor — drift DETECTED (11), of which 10 unauthorized. Every one of the 10 is \"missing_in_actual\" and every one names an object this migration creates: the relation public.rate_limit_buckets, its four columns (key, window_start, count, expires_at), its three constraints (pkey, count_non_negative, window_ordered) and its two indexes (pkey, key_expires_at_idx). No finding names any other object, and no finding is \"extra_in_actual\". That is the signature of a migration that has not been applied to production yet, not of drift.",
       "why_not_pass": "This gate diffs the repo migration set (expected) against the LIVE PRODUCTION database (actual). It reports objects that the repo declares and production does not yet have. UTV2-1811 creates a new relation and production DDL is not authorized, so the gate is correctly reporting a true difference. It cannot return PASS until the migration is applied to production.",
       "not_a_merge_blocker": "Precise scope of this failure, stated so it cannot be read as harmless. It does NOT block GitHub's merge button: the four required contexts on main are verify, Executor Result Validation, Merge Gate and P0 Protocol, and Live Schema Parity's own required job \"Enforce parity (fail-closed)\" (job 100341849109) SKIPPED on this feature-branch ref. It DOES block the sanctioned closeout path: Close Eligibility Preflight fails CEP-E7 on this field and therefore CEP-C1, whose own message is that ops:lane-close would fail after merge. Merging this PR before the migration is applied to production would produce a merged-but-unclosable lane, the ghost-lane failure class this repo has hit before. Apply to production first, let parity go green, then merge and close.",
-      "precedent_measured": "Every prior table-creating migration in this repo already exists in production: public.delivery_kill_switch, public.command_center_game_threads and public.command_center_delivery_mappings all return non-null from to_regclass in zfzdnfwdarxucxtaojxm. After UTV2-1822's repair, supabase_migrations.schema_migrations holds 134 rows through version 20260803230000 and the local file set is a strict superset by exactly one file \u2014 this one. Production DDL has always preceded parity going green; this lane is not deviating from that order, it is stopped at it awaiting authorization."
+      "precedent_measured": "Every prior table-creating migration in this repo already exists in production: public.delivery_kill_switch, public.command_center_game_threads and public.command_center_delivery_mappings all return non-null from to_regclass in zfzdnfwdarxucxtaojxm. After UTV2-1822's repair, supabase_migrations.schema_migrations holds 134 rows through version 20260803230000 and the local file set is a strict superset by exactly one file — this one. Production DDL has always preceded parity going green; this lane is not deviating from that order, it is stopped at it awaiting authorization.",
+      "enforcement_job": "\"Enforce parity (fail-closed)\" [job 100945113996] SKIPPED on this ref by design; parity is required only on main or a protected ref. The advisory job is what reports FAIL."
     },
     "staging_target": {
       "project_ref": "xskgrzbteyqdufktjrjx",
@@ -118,7 +119,7 @@
     "rows_for_key_after_sweep": 1,
     "acl_proof": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD \u2014 read directly by the orchestrator from the staging catalog (pg_proc.proacl, pg_class.relacl, has_function_privilege, has_table_privilege) over the applied objects, plus a control object built in the same schema without the REVOKE block and then dropped. This block carries NO CI run or job id and is NOT reproducible from any GitHub Actions artifact: no CI job in this repo can produce it, because schema-roundtrip-hash.ts runs pg_dump --no-acl and the CI scratch Postgres has no anon/authenticated/service_role role to grant to. It is therefore weaker evidence than the four receipted fields and must not be read as a CI receipt. It is included because the ACL condition was required to be proven directly, and a pg_dump-based gate structurally cannot prove it. Re-derivable by re-running the same catalog queries against staging.",
+      "capture_method": "CAPTURE METHOD — read directly by the orchestrator from the staging catalog (pg_proc.proacl, pg_class.relacl, has_function_privilege, has_table_privilege) over the applied objects, plus a control object built in the same schema without the REVOKE block and then dropped. This block carries NO CI run or job id and is NOT reproducible from any GitHub Actions artifact: no CI job in this repo can produce it, because schema-roundtrip-hash.ts runs pg_dump --no-acl and the CI scratch Postgres has no anon/authenticated/service_role role to grant to. It is therefore weaker evidence than the four receipted fields and must not be read as a CI receipt. It is included because the ACL condition was required to be proven directly, and a pg_dump-based gate structurally cannot prove it. Re-derivable by re-running the same catalog queries against staging.",
       "function_proacl": "{postgres=X/postgres,service_role=X/postgres}",
       "table_relacl": "{postgres=arwdDxtm/postgres,service_role=arwdDxtm/postgres}",
       "anon_can_execute_function": false,
@@ -137,20 +138,20 @@
     },
     "reversibility": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD \u2014 fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
+      "capture_method": "CAPTURE METHOD — fingerprints computed by the orchestrator against staging, INCLUDING relacl and proacl, which the CI drill cannot see. This block carries NO CI run or job id. The ACL-blind equivalent IS receipted: schema_roundtrip_drill, run 33530973221 job 99933739000, which independently proves apply/rollback/reapply convergence on a pg_dump --no-acl basis. Treat this block as the ACL-aware supplement to that receipt, not as a receipt itself.",
       "fingerprint_applied": "206a7c91d518f0262e6da2dfd9dd69e8",
       "fingerprint_after_down": "ABSENT",
       "fingerprint_after_reapply": "206a7c91d518f0262e6da2dfd9dd69e8",
       "reapply_converged": true,
       "down_actually_changed_schema": true,
-      "note": "Fingerprint covers relname, relacl, relrowsecurity, every column with type and nullability, every constraint definition, every index definition, and the function's proacl and prosrc md5. It includes relacl and proacl, which the CI round-trip drill cannot see because its scratch Postgres has no anon, authenticated or service_role role. Measured on the byte-exact file \u2014 see runtime_proof.staging_replay_fidelity."
+      "note": "Fingerprint covers relname, relacl, relrowsecurity, every column with type and nullability, every constraint definition, every index definition, and the function's proacl and prosrc md5. It includes relacl and proacl, which the CI round-trip drill cannot see because its scratch Postgres has no anon, authenticated or service_role role. Measured on the byte-exact file — see runtime_proof.staging_replay_fidelity."
     },
     "precondition_guard": {
       "sqlstate_on_reapply_over_existing_table": "42P07",
       "applies_when_absent": true,
       "sqlstate_on_reapply_over_existing_function": "42723"
     },
-    "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can \u2014 it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start \u2014 but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit.",
+    "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can — it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start — but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit.",
     "staging_replay_fidelity": {
       "byte_exact": true,
       "file_md5": "af2c42582dbde2ee7990a3ca15c1d3e8",
@@ -160,7 +161,7 @@
     },
     "preexisting_object_guards": {
       "evidence_class": "manual_catalog_read_no_ci_receipt",
-      "capture_method": "CAPTURE METHOD \u2014 executed by the orchestrator against staging xskgrzbteyqdufktjrjx (PostgreSQL 17.6) through read/write SQL, each measurement issued as its own statement. Separate statements are required: two calls to a STABLE catalog-reading expression inside one SELECT share a snapshot and return identical, stale values across an intervening DDL, which silently fakes an 'unchanged' result. No CI job produces these numbers; the byte-exact file is separately exercised by the precondition and schema-roundtrip drills, which do have receipts.",
+      "capture_method": "CAPTURE METHOD — executed by the orchestrator against staging xskgrzbteyqdufktjrjx (PostgreSQL 17.6) through read/write SQL, each measurement issued as its own statement. Separate statements are required: two calls to a STABLE catalog-reading expression inside one SELECT share a snapshot and return identical, stale values across an intervening DDL, which silently fakes an 'unchanged' result. No CI job produces these numbers; the byte-exact file is separately exercised by the precondition and schema-roundtrip drills, which do have receipts.",
       "case_A_table_exists_function_absent": {
         "setup": "public.rate_limit_buckets created out of band as (id bigserial primary key, note text), commented DECOY-NOT-UTV2-1811; function absent",
         "result": "REFUSED",
@@ -197,8 +198,8 @@
       },
       "mutation_preexisting_function_guard": {
         "mutation": "Reverted the migration to its pre-review shape: table-only precondition, CREATE OR REPLACE FUNCTION.",
-        "setup": "identical to case B \u2014 decoy function present, prosrc md5 dcc284fdb3847d29bbca1f50749f09ea",
-        "result": "APPLIED \u2014 the guard did not fire",
+        "setup": "identical to case B — decoy function present, prosrc md5 dcc284fdb3847d29bbca1f50749f09ea",
+        "result": "APPLIED — the guard did not fire",
         "decoy_prosrc_md5_after_mutation": "dd954ffea251cf9990184048aa73a6ea",
         "decoy_comment_after_mutation": "DECOY-NOT-UTV2-1811",
         "interpretation": "The pre-fix migration destroyed an unrelated implementation and reported success, leaving the victim's own comment in place as the only trace. The md5 change is the destruction. This is what the new guard prevents, and it is proven by making the control absent rather than by observing the control present."
@@ -207,10 +208,102 @@
         "setup": "public.rate_limit_buckets present and carrying the UTV2-1811 marker; public.consume_rate_limit_bucket present but commented DECOY-NOT-UTV2-1811",
         "result": "REFUSED",
         "sqlstate": "42501",
-        "refused_on": "the function ownership marker, with the table marker already satisfied \u2014 so the function guard is exercised in isolation rather than shadowed by the table guard",
+        "refused_on": "the function ownership marker, with the table marker already satisfied — so the function guard is exercised in isolation rather than shadowed by the table guard",
         "decoy_prosrc_md5_after": "dcc284fdb3847d29bbca1f50749f09ea",
         "existing_function_survived": true,
         "positive_control": "The same script run against the genuinely UTV2-1811-marked pair dropped both objects successfully, so the guard admits what it should and refuses what it should not."
+      }
+    },
+    "round3_reverification": {
+      "why": "PM directive of 2026-09-04 required the two earlier findings to be reverified by MUTATION rather than by re-reading the code, at the current head. These measurements were taken at anchor 6c7d2a2aa8833ab30573700cf9457dde983483f4.",
+      "evidence_class": "manual_execution_no_ci_receipt",
+      "target": "Disposable local PostgreSQL 15.19 container (docker postgres:15), created and destroyed for this drill. Not staging, not production. Chosen so the guards could be executed against databases deliberately seeded into colliding states, which is not something staging may be put into.",
+      "finding_1_comment_stripping": {
+        "claim": "SQL comments cannot satisfy RPC parity detection.",
+        "method": "Reverted the single call site in governedFunctionNamesIn to the pre-fix readFileSync with no stripping, re-ran the suite, then restored the file and confirmed a clean git diff.",
+        "baseline_unmutated": "# tests 8 | pass 8 | fail 0",
+        "mutated": "# tests 8 | pass 6 | fail 2",
+        "mutated_failures": [
+          "not ok 4 - a commented-out CREATE FUNCTION does not make a function governed -- \"a line-commented definition was treated as governed; the parity check can be satisfied by the defect it detects\"",
+          "not ok 6 - commenting out the real definition flips the same fixture from governed to missing"
+        ],
+        "conclusion": "The prior false positive is reproduced exactly by removing the fix, and disappears when it is restored. The regression test is load-bearing rather than self-consistent."
+      },
+      "finding_2_function_guard": {
+        "claim": "The migration refuses before any DDL when the exact function signature already exists, and never overwrites an out-of-band function.",
+        "case_function_present_table_absent": {
+          "setup": "public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer) seeded out of band with an unrelated SQL body; no rate_limit_buckets table.",
+          "result": "REFUSED",
+          "sqlstate": "42723",
+          "error": "public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer) already exists; UTV2-1811 refuses to replace a function it did not create.",
+          "table_after": "ABSENT -- no DDL ran",
+          "index_count_after": 0,
+          "foreign_body_md5_before": "7d9d6da622819d369bd72cad02da3560",
+          "foreign_body_md5_after": "7d9d6da622819d369bd72cad02da3560",
+          "existing_function_unchanged": true
+        },
+        "case_table_present_function_absent": {
+          "setup": "public.rate_limit_buckets seeded out of band; function absent.",
+          "result": "REFUSED",
+          "sqlstate": "42P07",
+          "function_after": "ABSENT -- no DDL ran"
+        },
+        "mutation_control_guard_is_load_bearing": {
+          "method": "Removed ONLY the to_regprocedure IF block (617 characters) from the migration and re-ran it against the same seeded state.",
+          "observed": "CREATE TABLE, CREATE INDEX, then ERROR: function \"consume_rate_limit_bucket\" already exists with same argument types",
+          "table_after": "rate_limit_buckets PRESENT -- the database is left half-applied",
+          "conclusion": "Without the guard the migration really does damage: it creates the table and index before failing, leaving a split-brain schema. With the guard it refuses before touching anything. The guard is therefore doing work, not decorating."
+        },
+        "defence_in_depth": "The migration uses CREATE FUNCTION, not CREATE OR REPLACE, so even a bypassed guard cannot silently overwrite a body -- it would raise 42723 from PostgreSQL itself. The originally reported overwrite path is closed twice over."
+      },
+      "down_script_ownership_guard": {
+        "claim": "The rollback refuses to drop objects it did not create, rather than dropping whatever bears the name.",
+        "setup": "public.rate_limit_buckets and the exact function seeded out of band, table commented \"created out of band by someone else\" (no UTV2-1811 marker).",
+        "result": "REFUSED",
+        "sqlstate": "42501",
+        "error": "public.rate_limit_buckets does not carry the UTV2-1811 ownership marker; this rollback refuses to drop an object it did not create.",
+        "objects_after": "both survive"
+      },
+      "forward_rollback_reapply": {
+        "roles_present": "anon, authenticated and service_role were created in the scratch database first, so the role-guarded REVOKE/GRANT branches actually executed rather than being skipped.",
+        "forward": "APPLIED -- table, index, function created; RLS enabled with 0 policies (deny by default).",
+        "rollback": "APPLIED -- both objects absent afterwards.",
+        "reapply": "APPLIED -- both objects recreated and functional afterwards."
+      },
+      "acl_measured": {
+        "anon_table_privileges": "(none)",
+        "authenticated_table_privileges": "(none)",
+        "service_role_table_privileges": "SELECT, INSERT, UPDATE, DELETE",
+        "anon_function_execute": false,
+        "authenticated_function_execute": false,
+        "public_function_execute": false,
+        "service_role_function_execute": true,
+        "note": "Measured with has_table_privilege / has_function_privilege against real roles, not read off the migration text. Confirms the REVOKE-from-PUBLIC-is-insufficient handling: anon and authenticated end with nothing."
+      },
+      "limiter_semantics_sequential": {
+        "method": "Five sequential calls, each its own connection and statement, limit=3.",
+        "observed": [
+          "call 1 -> exceeded=f remaining=2",
+          "call 2 -> exceeded=f remaining=1",
+          "call 3 -> exceeded=f remaining=0",
+          "call 4 -> exceeded=t remaining=0",
+          "call 5 -> exceeded=t remaining=0"
+        ],
+        "stored_count": 5,
+        "conclusion": "The limit-th request is allowed and the (limit+1)-th is refused; remaining clamps at zero. Matches InMemoryApiRateLimitStore.",
+        "window_roll": "A call in the next window created a new row and swept the expired one: exactly one row remained for the key.",
+        "argument_validation": [
+          "p_limit=0 -> ERROR 22023 consume_rate_limit_bucket requires p_limit >= 1",
+          "p_key=NULL -> ERROR 22023 consume_rate_limit_bucket requires non-null p_key, p_window_start and p_window_expires_at"
+        ]
+      },
+      "concurrency": {
+        "method": "40 concurrent callers, 8-way parallel, all on the same (key, window_start), each a separate connection.",
+        "errors": 0,
+        "successful_calls": 40,
+        "stored_count": 40,
+        "rows_for_key": 1,
+        "conclusion": "No lost increments and no duplicate rows. The single INSERT ... ON CONFLICT DO UPDATE is both the increment and the window roll, with no read-modify-write race."
       }
     }
   },
@@ -239,16 +332,16 @@
     ],
     "inversion_results": [
       {
-        "control": "RPC contract parity \u2014 SQL comments cannot satisfy the governed-function set",
+        "control": "RPC contract parity — SQL comments cannot satisfy the governed-function set",
         "mutation": "neutered stripSqlComments() to return its input unchanged, restoring the raw-text scan the reviewed revision used",
-        "observed": "not ok 4 (a commented-out CREATE FUNCTION does not make a function governed); not ok 6 (commenting out the real definition flips the same fixture from governed to missing) \u2014 8 tests, 6 pass, 2 fail",
+        "observed": "not ok 4 (a commented-out CREATE FUNCTION does not make a function governed); not ok 6 (commenting out the real definition flips the same fixture from governed to missing) — 8 tests, 6 pass, 2 fail",
         "verdict": "non-vacuous",
         "what_it_establishes": "The defect PM identified was real and is now caught. Under the old scan, a migration whose only mention of the function is `-- CREATE FUNCTION public.consume_rate_limit_bucket(...)` satisfied parity; the fixture tests assert it must be treated as missing, and they fail the moment the stripping is removed."
       },
       {
-        "control": "RPC contract parity \u2014 a real executable definition is required",
+        "control": "RPC contract parity — a real executable definition is required",
         "mutation": "deleted supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql",
-        "observed": "not ok 1 (every runtime client.rpc() dependency is defined by a governed migration); not ok 8 (the repository migration set defines consume_rate_limit_bucket in executable SQL) \u2014 8 tests, 6 pass, 2 fail",
+        "observed": "not ok 1 (every runtime client.rpc() dependency is defined by a governed migration); not ok 8 (the repository migration set defines consume_rate_limit_bucket in executable SQL) — 8 tests, 6 pass, 2 fail",
         "verdict": "non-vacuous"
       },
       {
@@ -286,10 +379,10 @@
     "docs/06_status/proof/UTV2-1811/diff-summary.md"
   ],
   "production_migration_ledger": {
-    "status": "RESOLVED \u2014 the sanctioned apply command would execute exactly UTV2-1811 and nothing else. The apply itself is still NOT authorized.",
+    "status": "RESOLVED — the sanctioned apply command would execute exactly UTV2-1811 and nothing else. The apply itself is still NOT authorized.",
     "project_ref": "zfzdnfwdarxucxtaojxm",
     "access": "read_only_select",
-    "method": "Read-only SELECT against production supabase_migrations.schema_migrations \u2014 the same table `supabase migration list` reads to build its Remote column \u2014 compared against the migration filenames on this branch. supabase link / migration list --linked remains unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF is a containment stub), so the ledger was read directly rather than through the CLI. No write, no DDL, no link, no repair.",
+    "method": "Read-only SELECT against production supabase_migrations.schema_migrations — the same table `supabase migration list` reads to build its Remote column — compared against the migration filenames on this branch. supabase link / migration list --linked remains unavailable in this checkout (SUPABASE_ACCESS_TOKEN empty, SUPABASE_PROJECT_REF is a containment stub), so the ledger was read directly rather than through the CLI. No write, no DDL, no link, no repair.",
     "intended_command": "supabase db push --linked   (equivalently: supabase db push --project-ref zfzdnfwdarxucxtaojxm)",
     "local_migration_file_count": 135,
     "remote_version_count": 134,
@@ -305,7 +398,7 @@
     "would_execute_only_utv2_1811": true,
     "would_also_execute": [],
     "supersedes": {
-      "prior_finding": "BLOCKER \u2014 8 local files, 127 remote rows, intersection 0; a push would have re-run the baseline schema and six already-applied migrations.",
+      "prior_finding": "BLOCKER — 8 local files, 127 remote rows, intersection 0; a push would have re-run the baseline schema and six already-applied migrations.",
       "what_changed": "UTV2-1822 restored the historical migration files under their production version numbers and archived their authoritative sources with per-file hash receipts under supabase/migrations_archive/. Local and remote now describe the same history.",
       "why_it_is_stated_rather_than_edited": "The earlier measurement was true when taken. It is recorded here so this bundle cannot be read as having silently replaced an inconvenient number."
     },
@@ -320,6 +413,11 @@
       "supabase db push",
       "any production DDL",
       "any production write"
-    ]
-  }
+    ],
+    "reverified_at": "2026-09-04T07:20:00Z",
+    "reverification_method": "Re-read read-only at the current head via the Supabase MCP list_migrations against zfzdnfwdarxucxtaojxm, diffed against the 135 migration filenames on this branch. No write, no DDL, no link, no repair.",
+    "reverified_result": "UNCHANGED. remote_version_count=134, local_migration_file_count=135, intersection=134, remote_only_set=[] (0), local_only_set=[\"20260901150000_utv2_1811_rate_limit_buckets.sql\"] (1). The proposed push would execute exactly that one file.",
+    "production_objects_absent_confirmed": "Read-only SELECT at 2026-09-04T07:20Z: to_regclass('public.rate_limit_buckets') IS NULL and to_regprocedure('public.consume_rate_limit_bucket(text,timestamptz,timestamptz,integer)') IS NULL. Production holds neither object, so the Milestone 1 blocker is real and both fail-closed preconditions will pass there."
+  },
+  "verification_receipts_bound_to": "6c7d2a2aa8833ab30573700cf9457dde983483f4"
 }

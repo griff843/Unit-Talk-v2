@@ -6,7 +6,7 @@ MERGE_SHA: pending merge
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1477
-Verified source SHA: f6b7f415ffb9098e7b49222d1194ac9d130694c1
+Verified source SHA: 6c7d2a2aa8833ab30573700cf9457dde983483f4
 
 The verified source SHA is the last non-proof commit on this branch and the head every receipt
 below was captured against. It supersedes `e0288a2a`, which the proof-binding validator
@@ -287,6 +287,112 @@ unqualified — `IF EXISTS` was removed, because the guard has already establish
 objects exist and are this migration's, and `IF EXISTS` would only hide a disagreement
 between the guard and the drop.
 
+### PM review round 3 — both fixes reverified by mutation at the current head
+
+The PM directive of 2026-09-04 required that the two round-2 fixes be **reverified, not
+asserted**, at the head that would actually merge. They were re-executed at anchor
+`6c7d2a2a` against a disposable PostgreSQL 15.19 container created and destroyed for the
+drill. A scratch container rather than staging, because these controls can only be exercised
+by seeding a database into a deliberately colliding state, which staging may not be put into.
+
+**Fix 1 — SQL comments cannot satisfy RPC parity detection.** The mutation is what settles
+this, not re-reading `stripSqlComments`. Reverting the single call site in
+`governedFunctionNamesIn` to the pre-fix `readFileSync` with no stripping reproduces exactly
+the false positive the PM named:
+
+```
+# baseline, unmutated
+# tests 8   # pass 8   # fail 0
+
+# mutated: stripSqlComments no longer applied
+not ok 4 - a commented-out CREATE FUNCTION does not make a function governed
+    a line-commented definition was treated as governed; the parity check can be
+    satisfied by the defect it detects
+not ok 6 - commenting out the real definition flips the same fixture from governed to missing
+# tests 8   # pass 6   # fail 2
+```
+
+The file was then restored and `git diff` confirmed clean. The test fails on precisely the
+condition it names, so it is load-bearing rather than self-consistent.
+
+**Fix 2 — refusal before DDL on a pre-existing exact function.** Executed against a database
+holding an out-of-band implementation of this exact signature and no `rate_limit_buckets`
+table — the reviewer's scenario precisely:
+
+```
+ERROR:  42723: public.consume_rate_limit_bucket(text, timestamptz, timestamptz, integer)
+        already exists; UTV2-1811 refuses to replace a function it did not create.
+
+table after:            NONE — no DDL ran
+index count after:      0
+foreign body md5 before 7d9d6da622819d369bd72cad02da3560
+foreign body md5 after  7d9d6da622819d369bd72cad02da3560   (byte-identical)
+```
+
+The table guard was re-executed too: on a database holding only the table it raises `42P07`
+and no function is created.
+
+**The guard is load-bearing — mutation control.** Removing only the `to_regprocedure` block
+(617 characters) and re-running against the same seeded state:
+
+```
+CREATE TABLE
+CREATE INDEX
+ERROR:  function "consume_rate_limit_bucket" already exists with same argument types
+
+table after: rate_limit_buckets PRESENT — the database is left half-applied
+```
+
+So without the guard the migration genuinely does damage: it creates the table and index
+before dying, leaving a split-brain schema. With it, nothing is touched. Separately, the
+migration uses `CREATE FUNCTION` rather than `CREATE OR REPLACE`, so the reported overwrite
+path is closed twice over — a bypassed guard still cannot silently replace a body.
+
+**The down script refuses objects it did not create.** Against unmarked out-of-band objects:
+
+```
+ERROR:  42501: public.rate_limit_buckets does not carry the UTV2-1811 ownership marker;
+        this rollback refuses to drop an object it did not create.
+objects after: both survive
+```
+
+**Forward, rollback and reapply**, with `anon`, `authenticated` and `service_role` created
+first so the role-guarded REVOKE/GRANT branches actually executed instead of being skipped:
+apply → rollback → reapply all clean, and the function is functional after the reapply.
+
+**Privileges, measured rather than read off the migration text**, via
+`has_table_privilege` / `has_function_privilege`:
+
+```
+anon           table (none)     function EXECUTE false
+authenticated  table (none)     function EXECUTE false
+PUBLIC                          function EXECUTE false
+service_role   SELECT,INSERT,UPDATE,DELETE   function EXECUTE true
+RLS enabled: true          policies: 0   (deny by default)
+```
+
+**Limiter semantics, five sequential calls at limit=3** — each its own connection, because a
+single statement calling the function repeatedly shares a snapshot and is not the call
+pattern the store uses:
+
+```
+call 1 -> exceeded=f remaining=2
+call 2 -> exceeded=f remaining=1
+call 3 -> exceeded=f remaining=0
+call 4 -> exceeded=t remaining=0
+call 5 -> exceeded=t remaining=0     stored count: 5
+```
+
+The limit-th request is allowed and the (limit+1)-th refused; `remaining` clamps at zero. A
+call in the next window created a new row and swept the expired one, leaving exactly one row
+for the key. `p_limit=0` and `p_key=NULL` both raise `22023` — the limiter fails closed on
+misconfiguration rather than admitting traffic.
+
+**Concurrency.** 40 concurrent callers, 8-way parallel, all on the same `(key, window_start)`,
+each a separate connection: 0 errors, stored count exactly 40, exactly 1 row. No lost
+increments — the single `INSERT ... ON CONFLICT DO UPDATE` is both the increment and the
+window roll.
+
 ### Production migration ledger — RESOLVED; `db push` now selects exactly this migration
 
 The blocker this section previously recorded is gone, and it is worth stating plainly what
@@ -353,21 +459,23 @@ mechanically required at this head; it belongs after production application.
 An independent audit at exact head correctly flagged that this bundle mixes two grades of
 evidence in the same schema position. Stated plainly:
 
-**Receipted — verifiable from GitHub Actions, bound to `f6b7f415`:**
+**Receipted — verifiable from GitHub Actions, bound to `6c7d2a2a`:**
 
 ```
-precondition_drill          PASS  run 33658161099  job 100341823650
-schema_roundtrip_drill      PASS  run 33658161099  job 100341824294
-writable_db_proof_staging   PASS  run 33658161190  job 100342098974  (inside required verify)
-live_schema_parity          FAIL  run 33658161186  job 100341847669  (honestly recorded, not waived)
+precondition_drill          PASS  run 33848292162  job 100945086270
+schema_roundtrip_drill      PASS  run 33848292162  job 100945086450
+writable_db_proof_staging   PASS  run 33848292323  job 100945087588  (inside required verify)
+verify (required)           PASS  run 33848292323  job 100946907864  07:28:28Z -> 07:40:21Z
+live_schema_parity          FAIL  run 33848292277  job 100945113385  (honestly recorded, not waived)
 ```
 
 A fifth job in the same reversibility-gate run, `proof-binding-validator` ("Down-script
 presence check (fail-closed)"), is not a CEP-E7 receipt slot but is worth naming so nobody has
 to rediscover it from the job list. It fails on any non-proof file that changed after the
 declared anchor, which is exactly what the main-sync and the manifest correction are. This
-proof-only commit re-anchors to `f6b7f415` — the last of those non-proof commits — for that
-reason, and it is the only commit after `f6b7f415` on this branch.
+proof-only commit re-anchors to `6c7d2a2a` — the merge of `origin/main` performed under the
+merge mutex, which is the last non-proof commit on this branch — for that reason, and the
+commits after it touch only proof paths.
 
 **Not receipted — read by the orchestrator against staging, no run or job id:** the ACL
 catalog reads, the control-object comparison, the ACL-inclusive round-trip fingerprints,

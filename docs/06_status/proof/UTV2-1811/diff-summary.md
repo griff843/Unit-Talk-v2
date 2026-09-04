@@ -1,11 +1,12 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: f6b7f415ffb9098e7b49222d1194ac9d130694c1
+MERGE_SHA: 6c7d2a2aa8833ab30573700cf9457dde983483f4
 
-The value above is the last non-proof commit on this branch — the merge commit from the
-sanctioned Update-branch on PR #1477, which carries implementation commit `4c3a71cf` — not
-this file's own commit, which cannot exist before the file does. It is an ancestor of PR
-HEAD. The post-merge merge-SHA binding is carried in `verification.md`.
+The value above is the last non-proof commit on this branch — the `ort` merge of
+`origin/main` at `275d5fa0` performed under the merge mutex via `ops:merge-wrapper
+git-merge-main`, which carries implementation commit `4c3a71cf` — not this file's own commit,
+which cannot exist before the file does. It is an ancestor of PR HEAD. The post-merge
+merge-SHA binding is carried in `verification.md`.
 
 ## Changed files
 
