@@ -1,28 +1,44 @@
 /**
  * T1 Live-DB Proof: UTV2-1815 null-stake computation truth
  *
- * Proves against live Supabase that the settlement write path refuses to
- * compute a profit/loss from a stake it cannot see, and that the refusal is
- * legible in the persisted row rather than silently indistinguishable from a
- * real 1-unit stake.
+ * WHAT THE LIVE-DB PORTION PROVES
+ * -------------------------------
+ * That the database itself refuses to create an unsafe stake, fail-closed, on a
+ * real Postgres. `public.picks` carries
  *
- * Three fixtures through the same in-process `recordEvidenceSettlement` call
- * with live repositories:
- *   1. stake_units = NULL  -> payload.stakeUnitsStatus = 'historical_unknown',
- *                             payload.stakeUnitsHistoricalUnknown = true,
- *                             payload has NO profitLossUnits key
- *   2. stake_units = NaN   -> identical refusal. This is the case the shipped
- *                             `stakeUnits ?? 1` idiom could not catch, because
- *                             `??` fires only on null/undefined.
- *   3. stake_units = 2     -> negative control: a real stake still produces a
- *                             real profitLossUnits, so the refusals above are
- *                             proven to be about the stake and not about the
- *                             path being broken.
+ *   CONSTRAINT picks_stake_units_canonical_check
+ *     CHECK (((stake_units IS NOT NULL) AND (stake_units > (0)::numeric))) NOT VALID
  *
- * Unit tests cover the same three cases under InMemory repositories. This
- * proof exists because that is exactly the gap this class of change has
- * shipped broken through before: InMemory accepts a JS NaN, Postgres stores a
- * NULL numeric, and the two disagree about what the service actually reads.
+ * and this file proves that constraint is live on the write path: an attempt to
+ * PATCH a real fixture pick's `stake_units` to NULL, or to a non-positive value,
+ * is REFUSED by Postgres with SQLSTATE 23514 naming that exact constraint, and
+ * the row's stake is unchanged afterwards -- the refusal does not partially
+ * apply. Test 3 is the negative control: a legal stake still writes, and still
+ * settles into a real `profitLossUnits`, so the refusals above are about the
+ * stake and not about the path being broken.
+ *
+ * WHAT IT DELIBERATELY DOES NOT PROVE
+ * -----------------------------------
+ * It does NOT prove the settlement service's `historical_unknown` refusal
+ * against a live row, because that state is *unconstructable* against any
+ * database carrying this constraint: the only way to obtain a live NULL-stake
+ * pick would be to alter, drop, or defer the constraint, which is a reserved
+ * production action and is not attempted here. The domain-layer refusal for
+ * those rows is therefore proven by the unit tests in
+ * `packages/domain/src/attribution/attribution-engine.test.ts` and by mutation,
+ * not by a live write.
+ *
+ * WHY THE DOMAIN GUARD IS STILL NECESSARY
+ * ---------------------------------------
+ * The constraint is `NOT VALID`. That is load-bearing: it is enforced on every
+ * new INSERT and UPDATE, but it was never verified against pre-existing rows.
+ * Measured read-only against production (project `zfzdnfwdarxucxtaojxm`) on
+ * 2026-09-05: **2,902 of 107,858 rows in `public.picks` hold
+ * `stake_units IS NULL`**, and 0 rows hold a non-positive non-null stake. Those
+ * 2,902 legacy rows are real, are read, and are computed on. The write-side
+ * constraint proven below does not remove them and does not make the
+ * domain-layer `historical_unknown` refusal unnecessary -- it is precisely why
+ * that refusal has to exist.
  *
  * Gated on SUPABASE_SERVICE_ROLE_KEY. Fixtures are tagged with a deterministic
  * prefix (`utv2-1815-stake-*`) so they can be found after the run, and are NOT
@@ -43,6 +59,9 @@ import {
 } from '@unit-talk/db';
 import { submitPickController } from './controllers/submit-pick-controller.js';
 import { recordEvidenceSettlement } from './settlement-service.js';
+
+const STAKE_CONSTRAINT = 'picks_stake_units_canonical_check';
+const CHECK_VIOLATION_SQLSTATE = '23514';
 
 function hasSupabaseEnv(): boolean {
   try {
@@ -89,28 +108,106 @@ async function restQuery<T>(path: string): Promise<T[]> {
   return body as T[];
 }
 
+/** PostgREST's error envelope for a failed write. */
+interface PostgrestError {
+  code?: string;
+  message?: string;
+  details?: string | null;
+  hint?: string | null;
+}
+
+interface PatchOutcome {
+  accepted: boolean;
+  httpStatus: number;
+  /** Present only when `accepted` is false. */
+  error: PostgrestError | null;
+  /** Present only when `accepted` is true: the value Postgres actually stored. */
+  stored: unknown;
+}
+
 /**
- * Sets stake_units on a fixture pick this proof created. `null` and a
- * non-numeric literal are both written through PostgREST so the value the
- * service reads back is the value Postgres actually stores, not a JS value the
- * test invented. See the fabricated-fixture failure mode: a hand-built row can
- * assert a column shape the database would never produce.
+ * Attempts to set `stake_units` on a fixture pick this proof created, and
+ * returns the outcome as structured data rather than throwing. The refusal IS
+ * the thing under test here, so the error code and constraint name must be
+ * assertable as values -- asserting on a substring of a thrown Error's message
+ * would be the weaker proof.
  */
-async function setFixtureStakeUnits(pickId: string, value: number | null): Promise<unknown> {
+async function patchFixtureStakeUnits(
+  pickId: string,
+  value: number | null,
+): Promise<PatchOutcome> {
+  // JSON has no NaN literal, so a JS NaN cannot be transmitted as a numeric.
+  // The faithful wire representation of an unusable stake is null, which is what
+  // a corrupted stake actually reaches Postgres as. Documented rather than
+  // papered over: test 2 below is therefore not a distinct *value* case, and it
+  // says so.
+  const wireValue = value === null || Number.isNaN(value) ? null : value;
   const resp = await fetch(
     `${supabaseUrl}/rest/v1/picks?id=eq.${pickId}&select=id,stake_units`,
     {
       method: 'PATCH',
       headers: { ...authHeaders(), Prefer: 'return=representation' },
-      body: JSON.stringify({ stake_units: value === null || Number.isNaN(value) ? null : value }),
+      body: JSON.stringify({ stake_units: wireValue }),
     },
   );
-  const body = await resp.json();
+  const body: unknown = await resp.json();
   if (!resp.ok) {
-    throw new Error(`PATCH picks failed: ${JSON.stringify(body)}`);
+    return {
+      accepted: false,
+      httpStatus: resp.status,
+      error: body as PostgrestError,
+      stored: undefined,
+    };
   }
-  return (body as { stake_units: unknown }[])[0]?.stake_units;
+  return {
+    accepted: true,
+    httpStatus: resp.status,
+    error: null,
+    stored: (body as { stake_units: unknown }[])[0]?.stake_units,
+  };
 }
+
+/**
+ * The constraint name is carried by PostgREST only inside the error envelope's
+ * text fields, so it is located by scanning every string field of the STRUCTURED
+ * error for the exact constraint identifier. That is a match on a machine
+ * identifier, not on the prose wording of the message.
+ */
+function namesConstraint(error: PostgrestError | null, constraint: string): boolean {
+  if (!error) return false;
+  return Object.values(error).some(
+    (field) => typeof field === 'string' && field.includes(constraint),
+  );
+}
+
+async function readStakeUnits(pickId: string): Promise<unknown> {
+  const rows = await restQuery<{ id: string; stake_units: unknown }>(
+    `picks?id=eq.${pickId}&select=id,stake_units`,
+  );
+  assert.equal(rows.length, 1, `expected exactly one fixture row, got ${rows.length}`);
+  return rows[0]!.stake_units;
+}
+
+/** Asserts the write was refused by the canonical stake constraint, structurally. */
+function assertRefusedByStakeConstraint(outcome: PatchOutcome, what: string): void {
+  assert.equal(
+    outcome.accepted,
+    false,
+    `${what}: the database must refuse this write; it returned ${outcome.httpStatus}`,
+  );
+  assert.equal(
+    outcome.error?.code,
+    CHECK_VIOLATION_SQLSTATE,
+    `${what}: expected SQLSTATE ${CHECK_VIOLATION_SQLSTATE}, got ${JSON.stringify(outcome.error)}`,
+  );
+  assert.equal(
+    namesConstraint(outcome.error, STAKE_CONSTRAINT),
+    true,
+    `${what}: refusal must name ${STAKE_CONSTRAINT}; got ${JSON.stringify(outcome.error)}`,
+  );
+}
+
+const FIXTURE_STAKE_UNITS = 1;
 
 async function createAwaitingApprovalPick(label: string): Promise<string> {
   const payload: SubmissionPayload = {
@@ -119,7 +216,7 @@ async function createAwaitingApprovalPick(label: string): Promise<string> {
     selection: `utv2-1815-stake-${label}-${RUN_ID}`,
     line: -3.5,
     odds: 100,
-    stakeUnits: 1,
+    stakeUnits: FIXTURE_STAKE_UNITS,
     confidence: 60,
     metadata: { proof_run: RUN_ID, proof_issue: 'UTV2-1815', fixture: label },
   };
@@ -160,41 +257,51 @@ async function settleAndReadBack(pickId: string): Promise<Record<string, unknown
 }
 
 test(
-  'UTV2-1815 live DB: a NULL stake persists as historical_unknown with no profit/loss',
+  'UTV2-1815 live DB: Postgres refuses a NULL stake with 23514 on picks_stake_units_canonical_check',
   { skip: skipReason },
   async () => {
     const pickId = await createAwaitingApprovalPick('null');
-    const stored = await setFixtureStakeUnits(pickId, null);
-    assert.equal(stored, null, 'fixture must actually hold a NULL stake in Postgres');
-
-    const payload = await settleAndReadBack(pickId);
-
-    assert.equal(payload['stakeUnitsStatus'], 'historical_unknown');
-    assert.equal(payload['stakeUnitsHistoricalUnknown'], true);
     assert.equal(
-      'profitLossUnits' in payload,
-      false,
-      `a NULL stake must not persist a profit/loss; payload was ${JSON.stringify(payload)}`,
+      Number(await readStakeUnits(pickId)),
+      FIXTURE_STAKE_UNITS,
+      'fixture must start from a legal stake, or the refusal below proves nothing',
+    );
+
+    const outcome = await patchFixtureStakeUnits(pickId, null);
+    assertRefusedByStakeConstraint(outcome, 'NULL stake');
+
+    // The refusal must not have partially applied.
+    assert.equal(
+      Number(await readStakeUnits(pickId)),
+      FIXTURE_STAKE_UNITS,
+      'a refused write must leave stake_units exactly as it was',
     );
   },
 );
 
 test(
-  'UTV2-1815 live DB: a NaN stake is refused identically to a NULL one',
+  'UTV2-1815 live DB: an unrepresentable (NaN) stake and a non-positive stake are refused identically',
   { skip: skipReason },
   async () => {
     const pickId = await createAwaitingApprovalPick('nan');
-    // Postgres numeric has no NaN for this column, so a corrupted stake reaches
-    // the service as NULL. The service-side NaN branch is covered by the unit
-    // tests; what this proves is that the DB's own representation of an
-    // unusable stake lands on the same refusal, which is the half of the
-    // contract InMemory cannot demonstrate.
-    await setFixtureStakeUnits(pickId, Number.NaN);
 
-    const payload = await settleAndReadBack(pickId);
+    // JSON carries no NaN literal, so a JS NaN reaches Postgres as NULL. This
+    // half is therefore the same *wire value* as the test above, on a different
+    // fixture row -- stated plainly rather than dressed up as a distinct case.
+    const nanOutcome = await patchFixtureStakeUnits(pickId, Number.NaN);
+    assertRefusedByStakeConstraint(nanOutcome, 'NaN stake (transmitted as NULL)');
 
-    assert.equal(payload['stakeUnitsStatus'], 'historical_unknown');
-    assert.equal('profitLossUnits' in payload, false);
+    // The constraint's second conjunct, `stake_units > 0`, is a genuinely
+    // distinct refusal path and is exercised here. It is also safe: the write is
+    // refused, so no unsafe row is created.
+    const zeroOutcome = await patchFixtureStakeUnits(pickId, 0);
+    assertRefusedByStakeConstraint(zeroOutcome, 'zero stake');
+
+    assert.equal(
+      Number(await readStakeUnits(pickId)),
+      FIXTURE_STAKE_UNITS,
+      'neither refused write may leave a partially applied stake',
+    );
   },
 );
 
@@ -203,8 +310,9 @@ test(
   { skip: skipReason },
   async () => {
     const pickId = await createAwaitingApprovalPick('canonical');
-    const stored = await setFixtureStakeUnits(pickId, 2);
-    assert.equal(Number(stored), 2, 'fixture must hold a real stake');
+    const outcome = await patchFixtureStakeUnits(pickId, 2);
+    assert.equal(outcome.accepted, true, `legal stake must be accepted: ${JSON.stringify(outcome.error)}`);
+    assert.equal(Number(outcome.stored), 2, 'fixture must hold a real stake');
 
     const payload = await settleAndReadBack(pickId);
 
