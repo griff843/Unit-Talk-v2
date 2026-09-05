@@ -13,9 +13,9 @@
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (exit 0, full suite) measured locally in the lane worktree at this anchor",
-      "pnpm_lint": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993517660.",
-      "pnpm_build": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993517660.",
-      "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33993517660, head f1681e6e0, conclusion success. Not run locally.",
+      "pnpm_lint": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993972213 (head 91b56ad37, conclusion success).",
+      "pnpm_build": "Not run locally. A stage of `pnpm verify`, covered by CI run 33993972213 (head 91b56ad37, conclusion success).",
+      "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33993972213, head 91b56ad37, conclusion success. Not run locally. The earlier run at the execution SHA f1681e6e0 (33993517660) was superseded and its conclusion is `cancelled`; it is not cited. Only this lane's manifest and proof bundle differ between f1681e6e0 and 91b56ad37, so no implementation file is uncovered.",
       "r_level_check": "PASS (Verdict: PASS, 5 changed files, no R-level artifacts required for this diff)"
     },
     "sha_type": "verified_source_sha",

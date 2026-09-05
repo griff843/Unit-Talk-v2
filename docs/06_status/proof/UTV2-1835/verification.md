@@ -52,14 +52,21 @@ $ pnpm exec tsx --test scripts/ci/deploy-config-rollback.test.ts
 # fail 0
 
 $ pnpm verify
-Executed by the required CI `verify` context on this exact head, not locally.
-Run 33993517660, branch claude/utv2-1835-deploy-snapshot-retry, head f1681e6e0.
+Executed by the required CI `verify` context, not locally.
+Run 33993972213, head 91b56ad37, conclusion success.
+An earlier run at f1681e6e0 (33993517660) was superseded and its conclusion is
+`cancelled`, so it is not cited as evidence. The four files between f1681e6e0 and
+91b56ad37 are this lane's own manifest and proof bundle:
+  git diff --name-only f1681e6e0 91b56ad37
+  docs/06_status/lanes/UTV2-1835.json
+  docs/06_status/proof/UTV2-1835/{diff-summary.md,evidence.json,verification.md}
+No implementation file differs, so the green run covers the execution SHA.
 ```
 
 ## Verification
 - [x] `pnpm type-check`: exit 0
 - [x] `pnpm test`: exit 0, full suite
-- [x] `pnpm verify`: CI run 33993517660 at head `f1681e6e0`, job `verify`
+- [x] `pnpm verify`: CI run 33993972213 at head `91b56ad37`, job `verify`, conclusion `success` (no implementation file differs from the execution SHA `f1681e6e0`)
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no artifacts required
 
 ## Control mutations
