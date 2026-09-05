@@ -1,0 +1,39 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1818",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1818-approval-carry-forward",
+  "branch": "claude/utv2-1818-approval-carry-forward",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1508",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/schemas/approval-carry-forward-v1.md",
+    "package.json",
+    "scripts/ops/approval-carry-forward.test.ts",
+    "scripts/ops/approval-carry-forward.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1818/diff-summary.md",
+    "docs/06_status/proof/UTV2-1818/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-05T18:03:44.986Z",
+  "heartbeat_at": "2026-09-05T18:20:19.228Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1818-approval-carry-forward.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1818-approval-carry-forward",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

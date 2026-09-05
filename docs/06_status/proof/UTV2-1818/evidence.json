@@ -1,0 +1,122 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1818",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "evidence_commit_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "current_pr_head_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_test": "PASS (5520 tests, 5520 pass, 0 failures, 0 'not ok' lines across 100 sub-suites, exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_lint": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
+      "pnpm_build": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
+      "pnpm_verify": "Deferred to the required CI `verify` context on this branch.",
+      "r_level_check": "PASS (Verdict: PASS, 7 changed files, no R-level artifacts required for this diff)"
+    },
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-05T18:30:00.000Z"
+  },
+  "static_proof": {
+    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "test": { "status": "PASS", "command": "pnpm test", "tests": 5520, "failures": 0 },
+    "lint": {
+      "status": "DEFERRED",
+      "command": "pnpm lint",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "build": {
+      "status": "DEFERRED",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "scope_controls": [
+      {
+        "assertion": "A1 - no file changed outside the declared file_scope_lock and this lane's own control-plane paths",
+        "command": "git diff --name-only origin/main...HEAD",
+        "expected": "the four locked paths plus this lane's manifest, sync file and proof directory",
+        "observed": "docs/05_operations/schemas/approval-carry-forward-v1.md, package.json, scripts/ops/approval-carry-forward.ts, scripts/ops/approval-carry-forward.test.ts, docs/06_status/lanes/UTV2-1818.json, .ops/sync/UTV2-1818.yml, docs/06_status/proof/UTV2-1818/.gitkeep - 7 files, nothing else",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 - no workflow, hook, gate, CODEOWNERS or branch-protection surface is touched, so this PR changes no merge authority",
+        "command": "git diff --name-only origin/main...HEAD | grep -cE '^(\\.github/|\\.claude/|\\.lane/|\\.agents/|CODEOWNERS)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 - no workflow calls the new module, so no existing gate changes behaviour",
+        "command": "grep -rn \"approval-carry-forward\" .github/",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A4 - docs/** and .ops/** are not exempted wholesale by the allowlist, per the explicit PM instruction",
+        "command": "pnpm exec tsx --test scripts/ops/approval-carry-forward.test.ts (test: 'the deny list never exempts docs/ or .ops/ wholesale')",
+        "expected": "PASS",
+        "observed": "PASS",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 - no R-level artifact is required for this diff",
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; Changed files: 7; Rules matched: (none)",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A6 - the new suite is actually wired into the required test run, not merely present on disk",
+        "command": "pnpm test aggregate before and after wiring",
+        "expected": "the aggregate rises by exactly the new suite's 35 tests",
+        "observed": "5485 (UTV2-1834, previous lane on main) -> 5520 (this anchor); delta exactly 35",
+        "status": "PASS"
+      }
+    ],
+    "control_mutations": [
+      {
+        "id": "M1",
+        "mutation": "C3 evaluates the allowlist before the deny list",
+        "failing_test": "C3 evaluates deny before allow, so no allow pattern can widen into a denied path; C3 denies this issue's own lane manifest and proof, while admitting another lane's",
+        "observed": "33 pass / 2 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M2",
+        "mutation": "C4 treats an absent required context as green",
+        "failing_test": "C4 refuses an absent required context rather than treating it as green",
+        "observed": "34 pass / 1 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M3",
+        "mutation": "C1 stops rejecting newly authored commits on the first-parent chain",
+        "failing_test": "C1 refuses a newly authored commit on the first-parent chain",
+        "observed": "34 pass / 1 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M4",
+        "mutation": "C2 stops guarding the issue's own proof bundle",
+        "failing_test": "the C2 'refuses when the reviewed artifact ... changed' case for the lane's own evidence.json",
+        "observed": "34 pass / 1 fail",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M5",
+        "mutation": "C4 ignores a changes-requested decision that followed approval",
+        "failing_test": "C4 refuses when a pm-verdict CHANGES_REQUIRED followed the approval; C4 refuses when a GitHub review requested changes after the approval; a single failing condition refuses the whole carry-forward",
+        "observed": "32 pass / 3 fail",
+        "status": "CAUGHT"
+      }
+    ],
+    "control_corrected_by_mutation": "The first M4 attempt used a sed substitution whose s|...| delimiter collided with a || operator in the matched line. The substitution silently failed and the suite reported 35 pass / 0 fail - a pristine run misread as a passing mutant. Had it been recorded as-is, the bundle would have claimed a control was proven when nothing had been mutated. It was re-run with an anchored Python patch that asserts its anchor matches exactly once before writing. The green result from the failed attempt is not evidence and is not counted."
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "No runtime proof is claimed and none is possible within this lane's authority. The verifier has never run against a real pull request because nothing calls it, by design: the .github/workflows/merge-gate.yml call site is a reserved surface (docs/mission/intent.md, reserved decision 7) and is deliberately excluded from this PR. What is proven is that each of the four conditions refuses the exact case it names, under injected evidence modelled on the measured #1503 case. The module is pure and read-only - no network call, no file write, no mutation - and this diff ships no code path, query or configuration into any running container."
+}
