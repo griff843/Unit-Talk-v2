@@ -21,6 +21,20 @@ after the previous anchor at `af59edb5`, and again at `5425edbe0` (run 338535477
 triggered the check. This anchor supersedes `6c7d2a2a`, which the proof-binding validator
 correctly refused once `main` moved and a non-proof commit landed after it.
 
+The `MERGE_SHA:` line in `diff-summary.md` deliberately holds a different value from the one in
+this file, and an independent audit of this head flagged the difference as a contradiction. It is
+not one, but the reason is not self-evident, so it is recorded here. This file's `MERGE_SHA:` is
+the merge slot the pre-merge identity rule governs, and pre-merge it must be the literal
+`pending merge`; `evidence.json`'s `sha_binding.merge_sha` is correspondingly `null`. The line in
+`diff-summary.md` is the tolerant markdown rebind anchor that `lane-close`'s
+`rebindVerificationMdSha` rewrites to the real merge SHA after merge, so that truth-check P3 and
+C4 — which scan the whole proof directory, not just this file — find a merge SHA reference there;
+pre-merge it carries the execution anchor, and the line beneath it says so. The rule that once
+made these two mutually unsatisfiable was unified under UTV2-1783: both the proof-binding
+validator and required Executor Result Validation now call the single
+`validateProofMergeShaIdentity` in `proof-schema.ts`, and it reads THIS file's markdown, not
+`diff-summary.md`. Observation agrees with the reading: both gates pass at this arrangement.
+
 The first is `ops:merge-wrapper git-merge-main`, the sanctioned history-preserving sync. It has
 now been run four times as `main` advanced; the first brought this branch level with `main` at
 `5fd7d299` and the current anchor is the fourth, level with `main` at `b51f509e`. That verb preserves history rather than rewriting it, so no earlier
@@ -115,7 +129,9 @@ neither store dominates the other. An earlier revision of this paragraph claimed
 "never more restrictive"; that was wrong and was caught by independent review, which supplied
 that counterexample. Both witnesses are hand computations from the two shipped stores at
 `apps/api/src/server.ts:1119-1199` and the migration's per-`(key, window_start)` upsert, each
-independently reproduced value-by-value by two reviewers. A previous revision said they were
+independently reproduced value-by-value by two reviewers — history, not evidence: redo the
+arithmetic from the code rather than relying on that attestation, since one of the two reviewers
+is an automated subagent with no public artifact to cite. A previous revision said they were
 "produced by simulating the two shipped stores over a grid of request times" and added that
 permissive divergences occur "far more often than restrictive"; no such script or measurement is
 checked in, so both statements are retracted. The claim here is existential — divergence occurs
