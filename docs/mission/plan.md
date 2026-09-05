@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-05T03:00Z
+**Last reconciled against live truth:** 2026-09-05T15:30Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -209,7 +209,7 @@ waiting on Griff" — at any moment most of the board is independent of every op
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | **Dispatch a `Deploy` run.** `deploy.yml` is `workflow_dispatch`-only; nothing promotes on its own. | Production deploy | Milestone 1 steps 1–5. Nothing else. **This is now the only reserved item on the Milestone 1 path.** |
+| 1 | **Dispatch a `Deploy` run — after the one-command pre-dispatch check below.** `deploy.yml` is `workflow_dispatch`-only; nothing promotes on its own. | Production deploy | Milestone 1 steps 1–5. Nothing else. |
 | 2 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap, the one open PR whose sole remaining obstacle is a verdict | Merge authority | #1484 only. Not a Milestone 1 gate. |
 | 3 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
 | 4 | Decide the direct-`main` prevention control (`enforce_admins`, a ruleset, or a `pre-push` hook) | Branch protection | Nothing. The prohibition is already in force; what is reserved is the mechanical enforcement. |
@@ -227,6 +227,89 @@ Three items left this table on 2026-09-05 by being **done**, not by being deferr
 
 Command Center secrets are **not** in this table. They are not a Milestone 1 prerequisite; see
 `intent.md` § "Step 7 — observation path".
+
+### The deployment decision packet — reconciled 2026-09-05T15:30Z
+
+Measured against `origin/main`, the GitHub API, the deploy workflow, GHCR manifests, and live
+production Supabase (read-only). **This replaces the bare "only Deploy remains" framing, which was
+true but incomplete.**
+
+**Exact release.** `origin/main` is `058aab04b`. Production is `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
+The gap is 96 commits, of which **exactly three change code a running container executes**:
+
+| SHA | PR | Behaviour |
+|---|---|---|
+| `b7d9fc07f` | #1501 | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
+| `01a2d2d67` | #1474 | Command Center auth mode can no longer be downgraded to fail-open in deployed environments |
+| `2ac233424` | #1488 | Canonical capper identity from an explicit mapping; local-part derivation removed |
+
+The other 93 are readiness-ledger bot commits, lane manifests, proof bundles, merges, docs and
+test-only changes. No Dockerfile, no `docker-compose*`, no `packages/**` source, and no
+`apps/{worker,ingestor,discord-bot,web}` source changed.
+
+**No DDL prerequisite.** `deploy.yml` runs no migration step. UTV2-1811's `rate_limit_buckets` table
+and `consume_rate_limit_bucket(...)` RPC were verified to **already exist** in production, and the
+currently-running API already depends on the RPC (`UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc`
+shipped at `e48106fc`).
+
+**Rollback images are available** — all six service images resolve at the full 40-char tag
+`e48106fc9a5eb5904b322833d0968da5ae0b0665`. No retention or pruning workflow exists, so nothing
+deletes them. Note `web` and `smart-form` carry only two tags each; `e48106fc` is effectively the
+only viable Next.js rollback target.
+
+#### The one real risk, and it is not a code risk
+
+`ALLOWED_CAPPER_EMAILS` is validated **non-empty at three layers and shape-validated at none**:
+`deploy.yml:100`, `deploy.yml:486`/`:974`, and `deploy/production/nextjs-entrypoint.sh:28-31`.
+`scripts/deploy-check.ts` does not reference it at all. After #1488 the parser
+(`apps/smart-form/lib/auth-allowlist.ts:43-66`) **silently drops** any entry lacking `=` or failing
+`^[a-z0-9][a-z0-9_-]*$` — with no fallback and no log. An all-malformed value yields an empty
+allow-list and `signIn` returns `false` for everyone.
+
+Nothing in the deploy detects it. The `smart-form` healthcheck is `curl -fsS localhost:4400/login`
+(`deploy/production/docker-compose.yml:223`), which returns 200 regardless of allow-list contents,
+so the deploy reports `smart-form: healthy` with an allow-list that admits nobody. The `smoke` job
+only asserts `localhost:4000/health == 200` and never touches the smart-form container, the OAuth
+flow, or the allow-list. **The first real test of the value is Griff's own browser.**
+
+**Rollback does not cure this, and makes it worse.** `deploy/rollback.sh:66-74` rewrites
+`.unit-talk-release` and re-pulls images; it **touches no env file**. `deploy.yml` is the only writer
+of `.env.smart-form`. So after a deploy the host holds the new-shaped allow-list, and rolling images
+back to `e48106fc` restores the *old* parser against the *new* value — which reads
+`someone@example.com=griff843` as a single malformed email and admits nobody. Rollback is correct for
+a code defect and wrong for an allow-list-shape defect.
+
+There is also **no automatic rollback**. `ROLLBACK_TAG` comes from an optional, empty-by-default
+dispatch input (`deploy.yml:10-13`); left blank, a failed health loop just fails the job with
+production on the new tag (`deploy.yml:1073-1075`). The `smoke` job has no rollback branch at all.
+
+Recovery from a lockout is therefore: edit the secret, re-dispatch `Deploy` — ~10m22s of pipeline
+(measured from run `33513608611`) plus diagnosis, so **~15 minutes per attempt, each attempt itself a
+reserved production deploy**.
+
+#### Recommended action
+
+**Close one gap locally before dispatching — it costs one command and removes the only silent-failure
+path on the Milestone 1 identity fix.** Griff runs, in a local shell, with the real secret value:
+
+```
+ALLOWED_CAPPER_EMAILS='<value>' pnpm exec tsx -e "import {parseAllowedCapperEmails} from './apps/smart-form/lib/auth-allowlist.ts'; const r=parseAllowedCapperEmails(process.env.ALLOWED_CAPPER_EMAILS); console.log('entries:', r.length, 'ids:', r.map(x=>x.capperId).join(','))"
+```
+
+Success criterion, non-secret: prints `entries: N` with `N >= 1` and `ids:` containing `griff843`.
+No email address is printed and no value leaves the machine.
+
+**Then dispatch `Deploy`.** If the check fails, the fix is a secret edit *before* the deploy rather
+than a lockout plus a ~15-minute recovery loop afterwards.
+
+One further check is worth having but is not a blocker: whether the host's current
+`.env.smart-form` already holds the new shape against the old parser — which would mean production
+login is **already** broken today rather than merely stale. Non-secret criterion: count the `=` signs
+after the first in that line; `0` means old shape, `>=1` means already-broken.
+
+**Stale doc found:** `docs/05_operations/REQUIRED_SECRETS.md:541` still documents the pre-#1488
+shape ("comma-separated allow-list of capper email addresses"). It would mislead an operator
+reshaping the secret. Fixing it is ordinary docs work, not a gate.
 
 ### Wave 1 — Smart Form Track Only pilot (Milestone 1)
 
@@ -290,6 +373,133 @@ not consume this slot. The strongest current candidate when the slot is next spe
 `pre-proof-validator` classification repair recorded under Learned.
 
 ---
+
+## Tracker-independence cutover (ratified 2026-09-05)
+
+Ratified by Griff on 2026-09-05 and recorded in `intent.md` § "Execution must not depend on the
+tracker". **One supporting workstream, five exit conditions, then closed.** It is not a governance
+audit and not a replacement framework.
+
+The rule: an ordinary product task must run discovery → delegation → verification → PR → closeout
+**without Linear access and without an issue ID**. Auto-setting labels and states is insufficient;
+the test is what happens when Linear is unavailable, inconsistent, or at its cap.
+
+### Evidence already in hand, measured on this lane
+
+Recording this lane's own friction, because it is the cheapest available reproducer:
+
+- **A transient Linear network blip hard-blocks lane start.** `ops:lane-start UTV2-1833` failed with
+  `lane_start_failed: failed to capture Linear task contract for UTV2-1833: spawnSync curl
+  ETIMEDOUT`. Nothing about the work required the tracker; a timeout on a metadata fetch stopped it.
+  This is exit condition 2's failure mode, observed live.
+- **A failed lane-start leaves residue the sanctioned cleaner refuses to clean.** The ETIMEDOUT
+  attempt had already created the branch and worktree, so the retry failed with "Branch and worktree
+  already exist but no manifest exists for this issue". `ops:lane-clean --issue UTV2-1833 --dry-run`
+  returned `BLOCKED` with an empty `actions[]` and no reason — it is a post-merge cleaner, and an
+  aborted lane start is outside its model.
+- **A merged, truth-closed lane leaked its lease and blocked the next lane on the same files.**
+  UTV2-1830 merged as #1502 (`1cb31a43e`) and truth-closed at 03:10Z, but `.ops/leases/UTV2-1830.json`
+  stayed `active` with a 48-hour TTL and a dead owning PID (58934). `ops:lease-recover` refuses it —
+  reclaim is TTL-gated — so a lease that is provably finished cannot be reclaimed for two days.
+  `ops:lease release` was the working path.
+- **Proportional validation exists but excludes the mission docs.**
+  `scripts/ops/preflight.ts:1626-1631` admits only `docs/06_status/**` and `.claude/commands/*.md`
+  to `--docs-only-fast-path`. Editing `docs/mission/intent.md` — the most authority-bearing docs edit
+  in the repo — therefore requires the full application test suite (~4 min) to *begin*, while editing
+  a status file does not. Same defect class as the `docs/mission/**` lane-authority gap UTV2-1829
+  fixed: an allowlist that reads as if it covers a path it does not name.
+- **Linear writes are not read-your-writes.** A tier label and state written at 14:54:50Z were not
+  visible to a preflight Linear query started immediately after, costing one full ~4-minute run.
+
+None of these are risk controls. Every one is administrative.
+
+### Exit conditions
+
+Per `intent.md`, the cutover closes when all five hold, demonstrated rather than asserted:
+
+1. A representative ordinary task can complete without Linear.
+2. Optional tracker failures cannot block it.
+3. Reserved-risk changes still require appropriate approval.
+4. Fresh and compacted sessions recover the mission and current plan.
+5. Existing PRs can finish without administrative restarts.
+
+Then the capacity returns to product work.
+
+### Sequencing — reviewed against #1491 and #1492 on 2026-09-05
+
+**Structural finding that changes how both PRs read:** #1492 is stacked on a *stale* base of #1491
+(`git merge-base 73fb6b76e 77dea9c8d` = `2641d7cae`; #1491 has 7 commits after it). A naive
+`git diff 73fb6b76e 77dea9c8d` therefore *falsely* shows #1492 reverting #1491's security hardening
+in `merge-authority.cjs` and `RESERVED_RISK_SURFACES.json`. Those are stale-base artifacts. #1492's
+true diff is `2641d7cae..77dea9c8d` and touches none of those files.
+
+The split is cleaner than expected: **merge authority lives almost entirely in #1491; tracker
+independence lives almost entirely in #1492.** The one coupling to break is that #1492 sources its
+*risk semantics* from #1491's classifier.
+
+**PR A — the tracker-independence unblock.** Touches no reserved surface:
+
+- `scripts/ops/executor-result-validate.ts:133-158` — absent issue ID passes, malformed still fails,
+  and the load-bearing assertion (the executor attests to *this* head ref) is kept. Highest-value
+  hunk: without it no branch reaches a green `Executor Result Validation` without a `UTV2-###`.
+  **Do not** take the same file's `proofArtifactRequired(r, reservedSurface)` rewrite, which makes
+  the classifier the *sole* evidence bar — under this ratification it must be a floor: proof required
+  if `tier != T3` **or** the diff touches a reserved surface.
+- `scripts/ops/branch-discipline-guard.ts:11,132-158` — a branch with no issue ID passes, while a
+  branchless PR referencing two issues still fails and an ID-carrying branch must still bind to its
+  own. Not a required check.
+- `.github/workflows/tier-label-check.yml:41-53` — `core.setFailed` -> `core.notice`. This is what
+  produces the *"No issue ID found... Cannot resolve authoritative tier"* red on eight open PRs. Not
+  one of the four required checks, so it changes no merge authority, and it still mirrors the tier
+  for any branch that does carry an ID — remaining sync stays optional and non-blocking.
+- Hook and settings removals of mandatory tracker lookups: delete
+  `.claude/hooks/commit-msg-linear-check.sh` and `linear-sync-reminder.sh` and their
+  `.claude/settings.json` wiring; drop the `pnpm linear:issues` reminder in `artifact-drift-check.sh`
+  and the lane-heartbeat scan in `session-summary.sh`. All advisory. Take the *removals* verbatim;
+  **rewrite** `session-start.sh`'s replacement body, whose new text asserts RMA.
+- `scripts/ops/classify-diff.ts` — a read-only preview CLI that exits 0 for both verdicts, stating
+  outright it is not the gate. Take it, renaming its verdict labels away from `auto`/`human` so it
+  does not read as an authority claim.
+
+**PR B — the floor rework.** Where the real care is needed:
+
+- `scripts/ops/merge-authority.cjs` `classifyDiff`/`loadPolicy` are pure, read-only functions and are
+  reusable as the **mechanical risk floor**. Take `RESERVED_RISK_SURFACES.json` `surfaces[]` only.
+  **Leave behind** its `approval` block and `summary` (they *are* the merge-authority definition) and
+  its `scopeNote`, which declares `packages/domain`, `packages/contracts`, scoring and lifecycle
+  deliberately **not** reserved — that is precisely the risk-lowering this ratification forbids.
+  Never import `evaluateMergeAuthority`.
+- `.claude/hooks/tier-c-path-guard.sh` hard-denies writes to `packages/domain/**`,
+  `packages/contracts/**`, `apps/worker/**`, `apps/api/src/auth.ts` and `supabase/migrations/**`, and
+  **its only bypass is an active lane manifest's `file_scope_lock`**. Under a no-issue-ID model that
+  guard denies those edits with no way to authorize them, so execution stops at the keyboard. #1492's
+  `reserved-surface-guard.sh` fixes the unblock but **demotes the hard block to advisory**, justified
+  by "the merge gate blocks it instead" — a justification that does not hold here, because the merge
+  gate is not changing. Salvage the mechanism (one shared classification source for keyboard and
+  gate) and keep reserved paths blocking, authorized by a declared scope rather than a manifest.
+- `scripts/ops/codex-packet.ts` is the **repository-owned work identity**: a packet file with
+  required `Goal` / `Scope` / `Acceptance` / `Do not touch` sections that the runner refuses to
+  execute without, reading no Linear, no manifest and no tier label. Its `classifyScope` fails closed
+  on unclassifiable scope, and a broader scope must be at least as reserved as anything inside it —
+  floor semantics done correctly. Verify `resolveProfileForScope` only ever *tightens*.
+
+**Do not take** #1492's `CLAUDE.md`, `AGENTS.md`, command or agent rewrites. Beyond restating RMA as
+doctrine, #1492's `CLAUDE.md` **deletes `## Mission — mandatory context`** — the block that
+`@`-includes `intent.md`, `spec.md`, `plan.md` and `STANDING_GUARDRAILS.md`. Taking it wholesale
+would silently stop loading the very sections this lane adds. Re-derive by hand against `main`.
+
+**Dangling references to be aware of:** #1492 cites a `## Execution primitive` section of
+`intent.md` in roughly six load-bearing places (`RESERVED_RISK_SURFACES.json:4`,
+`reserved-surface-guard.sh:19`, `tier-label-check.yml:44-48`, `branch-discipline-guard.ts:126-131`).
+**No such section exists on `main`**, and `## Changes to the operating model` says the opposite.
+Every one of those citations is currently false.
+
+### Explicitly out of scope
+
+Merge authority, the merge gate, its policy inputs, CODEOWNERS, and branch protection are reserved
+and unchanged. #1491's diff-classified merge authority is **not** approved by this ratification and
+remains a separate architecture decision. Existing enforcement stays active until reviewed
+replacements land.
 
 ## Admissibility debt
 
