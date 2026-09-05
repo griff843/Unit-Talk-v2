@@ -15,6 +15,22 @@ There is no separate "Production Recovery" workstream and no separate "Factory O
 production waits on. The recovery itself establishes the minimum AI-native operating system
 required to finish the product.
 
+### Delivery order
+
+Ratified by Griff on 2026-09-05.
+
+**First**, complete the contained internal Smart Form "Track Only" pilot — Milestone 1.
+
+**Then**, establish ongoing internal pick submission, persistence, truthful grading/settlement, and
+statistics — Milestone 2 — *before* member-facing Discord launch.
+
+**In parallel throughout**, continue independent Command Center, pipeline, and other necessary
+production work. The ordering above is a dependency ordering for the delivery path, not a
+serialization of the whole board.
+
+This statement orders the work. It introduces no readiness threshold, and it authorizes no change
+to containment or to member-delivery activation — both remain reserved.
+
 ## Source of truth
 
 Current live `griff843/Unit-Talk-v2` only: current `main`, live PRs, actual runtime and database
@@ -30,10 +46,22 @@ overall production readiness. No competing readiness threshold may be invented a
 
 **Griff owns:** product intent, exit criteria, and the reserved decisions below.
 
-**Claude owns:** the evolving engineering plan, decomposition, sequencing, safe parallelism,
-repair, integration, and continuation. Claude does not ask Griff how to implement ordinary
-engineering work. When Claude discovers a defect necessary to this mission, it goes in the plan
-and gets solved.
+**Claude owns:** decomposition, sequencing, agent allocation, technical choices, implementation
+coordination, verification, review coordination, integration, routine administration, and
+continuation — the evolving engineering plan and its execution, including safe parallelism and
+repair. Claude does not ask Griff how to implement ordinary engineering work. When Claude discovers
+a defect necessary to this mission, it goes in the plan and gets solved.
+
+**Claude does not ask whether to continue ordinary authorized work.** Ratified 2026-09-05.
+
+### Where the work comes from
+
+Ratified by Griff on 2026-09-05. The required work is **discovered from this mission and from
+current code, runtime, and database evidence**. Claude maintains the engineering plan itself.
+
+Existing Linear issues are **useful historical context when relevant, and must be revalidated
+before being relied on**. They are a record of what was once understood — not a queue, not a
+priority ordering, and not current-state authority.
 
 Griff's stated intent is that agents should not stop for *administrative state* when the question
 in front of them is neither a product decision nor a real risk decision. Reducing that overhead is
@@ -54,8 +82,25 @@ adopt one unilaterally. See "Changes to the operating model" below.
 5. Pricing and tier authority
 6. Changes to production containment while containment is mandated
 7. Changes to merge authority itself — the merge gate, its policy inputs, CODEOWNERS, branch protection
+8. Dispatching a production deployment (re-stated explicitly 2026-09-05; `deploy.yml` is
+   `workflow_dispatch`-only and nothing promotes on its own)
 
 A human gate blocks *that change*, not the mission. Other safe work continues.
+
+### How a reserved decision is surfaced
+
+Ratified by Griff on 2026-09-05. A reserved decision is brought to Griff **with the preparation
+already complete and a concrete recommended action**: the dependent work staged and verified as far
+as existing authority allows, the evidence assembled and measured rather than recalled, the options
+narrowed, and one recommendation stated plainly with its consequences and its exact inputs.
+
+Where a specific check cannot be completed because Claude lacks the access, the hand-off names **the
+smallest operator action** that would close it and a **non-secret success criterion** for that
+action. Restating a blocker without having completed the checks that surround it is not an
+acceptable hand-off.
+
+A reserved decision blocks only the work that depends on it. Surfacing one is never a reason to stop
+the rest of the mission — see "Stop conditions" below.
 
 ## Changes to the operating model
 
@@ -66,6 +111,80 @@ a PR whose stated purpose is something else.
 
 Until such a change is ratified, the canonical execution and governance contracts indexed in
 `spec.md` are in force exactly as written.
+
+**One such change has now been ratified**: the tracker-independence correction recorded in
+"Execution must not depend on the tracker" below, ratified by Griff on 2026-09-05. It is bounded to
+what that section states. Everything in the execution and governance system that the section does
+not name — merge authority, the merge gate, tier risk semantics, proof bundles, lane isolation —
+remains controlling exactly as written, and existing enforcement stays active until a reviewed
+replacement lands.
+
+## Execution must not depend on the tracker
+
+Ratified by Griff on 2026-09-05, correcting a measured cost: Linear had become a precondition for
+execution rather than a record of it.
+
+**The rule.** An ordinary product task must be able to proceed from discovery through delegation,
+verification, PR, and closeout **without Linear access and without an issue ID**.
+
+**The test is availability, not automation.** Automatically setting Linear labels and states is
+*insufficient*. If execution still fails when Linear is unavailable, inconsistent, or at its issue
+cap, the dependency has not been removed. Any tracker synchronization that remains must be
+**optional and non-blocking**.
+
+**Remove from the execution path:** mandatory tracker lookups, mandatory issue creation, issue-ID
+naming requirements, and mandatory status transitions.
+
+**Preserve:** scope, ownership, dependencies, and traceability — carried by **repository-owned work
+identity** where an identifier is genuinely needed.
+
+**Risk classification.** Use mechanical classification as a **risk floor**, with additional
+assessment where needed. Actual risk classifications are never lowered merely to eliminate tier
+bookkeeping.
+
+### Simplify the process without losing protection
+
+These are kept, and a simplification that sacrifices one of them is not a simplification:
+
+- isolated concurrent work
+- meaningful verification
+- independent review where required
+- recoverable integration
+- genuinely reserved approvals
+
+**Validation is proportional to the changed files and their consequences.** An authorized intent
+edit must not require unrelated application tests merely to begin. A document that changes security
+or approval policy still requires substantive review — proportionality cuts both ways.
+
+**Remove redundant administrative transitions and Git naming constraints.** Coherent work is never
+split into extra issues or extra PRs solely to satisfy tracker bookkeeping.
+
+**Align the active system, not just the prose.** The instructions, commands, hooks, and CI that
+actually run must change together. Reuse the operating-model work already prepared, and coordinate
+with the mission-intent edit that carries this ratification. Inspect #1491 and #1492 for reusable
+changes — **their broader merge-authority changes are not automatically approved** by this
+ratification and remain a separate architecture decision.
+
+**Existing enforcement stays active until reviewed replacements land.** No guard is disabled, no
+required check is bypassed, and nothing is written directly to `main`.
+
+### Bounds on this correction
+
+This is **one supporting workstream**. It does not authorize another general governance audit, a
+backlog cleanup pass, or a replacement framework.
+
+### Exit conditions
+
+The cutover closes when all five hold, demonstrated rather than asserted:
+
+1. A representative ordinary task can complete without Linear.
+2. Optional tracker failures cannot block it.
+3. Reserved-risk changes still require appropriate approval.
+4. Fresh and compacted sessions recover the mission and current plan.
+5. Existing PRs can finish without administrative restarts.
+
+Once they hold, **close the cutover and return that capacity to product work.** Do not keep
+expanding it with optional improvements.
 
 ## Governance and tooling debt policy
 
@@ -166,11 +285,58 @@ identity, distribution mode, provenance and the absence of any delivery record s
 Deploying the Command Center remains desirable product work and is tracked on its own merits; it is
 not a Milestone 1 gate.
 
+**The pilot does not wait** for the tracker-independence cutover, for Command Center completion,
+or for the staging proof runner. Ratified 2026-09-05.
+
 Ratified by PM on 2026-09-03: **step 7 may be satisfied by a governed read-only production
 observation of the exact submitted pick and its non-delivery state.** A deployed Command Center is
 not required for the contained pilot. "Governed" and "read-only" are both load-bearing — the
 observation reads the one pick the pilot created and its delivery records, writes nothing, and
 changes no containment setting.
+
+## Milestone 2 — reliable internal operating history
+
+Ratified by Griff on 2026-09-05. Begins after Milestone 1, and completes *before* member-facing
+Discord launch.
+
+Milestone 1 proves the path works **once**, under containment, for a single pick. Milestone 2 makes
+it **routine**: internal picks are submitted and persisted reliably and repeatedly, they grade and
+settle truthfully without per-pick engineering intervention, and the resulting record is queryable
+as real statistics. The purpose is a genuine performance history — enough real, internally
+submitted, correctly graded and settled picks that whatever is later shown to members is *earned*
+rather than asserted.
+
+Milestone 2 is done when all of the following hold on the deployed system, against live data:
+
+1. Internal picks can be submitted through the intended surface repeatedly, by the intended
+   internal operators, without per-submission engineering intervention.
+2. Every submitted pick persists with canonical identity and truthful provenance — including honest
+   provenance where canonical coverage is absent.
+3. Grading and settlement run on their intended schedule against real results, and every settled
+   pick's outcome is traceable to its score provenance.
+4. Pick statistics — record, units/ROI, and CLV where the canonical contracts define it — are
+   computed from the persisted history rather than recomputed ad hoc, and reconcile against the
+   underlying rows.
+5. An operator can observe all of the above through a governed internal surface.
+6. None of the above was achieved by activating member-facing delivery.
+
+### Containment interaction
+
+Milestone 1 is defined to complete with containment intact. Milestone 2 is not: making submission,
+grading and settlement *ongoing* may require moving one or more currently parked runtime settings
+from `parked` toward `active`.
+
+**Every such change remains a reserved decision.** Milestone 2 therefore begins by *preparing* each
+one — the dependent work staged, the blast radius bounded and measured, a recommended action written
+— and Griff decides it, per "How a reserved decision is surfaced" above. An agent never unparks
+anything on its own initiative.
+
+**Member-delivery activation is separately reserved and is explicitly not part of Milestone 2.**
+Milestone 2 exists precisely so that delivery launches after a real history exists, not before it.
+
+Milestone 2 introduces no readiness threshold of its own.
+`docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` remains the sole definition of production
+readiness.
 
 ## Definition of done
 
