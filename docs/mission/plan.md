@@ -1,41 +1,43 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-03T17:05Z
+**Last reconciled against live truth:** 2026-09-05T03:00Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
 
 ---
 
-## Reconciled current truth (2026-09-03)
+## Reconciled current truth (2026-09-05)
 
-Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, and the
-`Direct Main Push Guard` run log. Not against docs or chat history.
+Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, the secret
+metadata listing and the current readiness ledger. Not against docs or chat history.
 
-- `main` is `d947a12aa`, an `ops(readiness): refresh ledger [skip ci]` commit. The last commit that
-  changed shipped behaviour is `b729447d2` — the UTV2-1824 lane-close. Behind it: the UTV2-1789
-  lane-close (`43a1bf0f4`), the UTV2-1825 lane-close (`5b5f7a3b8`), #1485 (`5ed005a6d`), #1474
-  (UTV2-1789, `01a2d2d6`, 2026-09-03T04:53Z) and #1488 (UTV2-1824, `2ac23342`, 04:52Z). All three
-  lanes that merged today are truth-closed; no lane manifest is left open behind a merged PR. The
-  readiness ledger writes directly to `main` on a schedule, so the tip moves without a PR and every
-  head-pinned artifact on an open lane ages against commits that changed no code.
+- `main` is `85f63c696`, an `ops(readiness): refresh ledger [skip ci]` commit. The last commit that
+  changed shipped behaviour is `1734bf201` — the #1477 merge (UTV2-1811, rate-limit bucket
+  contract), followed by its lane-close `9797bcbee`. That lane is truth-closed: manifest `done`,
+  Linear Done, `sha_binding.merge_sha` bound to `1734bf20`. **No lane manifest is `in_progress` on
+  `main`.** The readiness ledger still writes directly to `main` on a schedule, so the tip moves
+  without a PR and every head-pinned artifact on an open lane ages against commits that changed no
+  code.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
-  no rulesets, no required reviews.
-- 15 PRs are open. None is blocked on a failing test, a type error, or a real risk finding.
-  They are blocked on `Merge Gate` in two distinct ways, and the distinction matters:
-  - **Missing a human approval artifact** (#1477, #1484, #1501) — a `pm-verdict/v1`
-    comment and/or the `t1-approved` label. #1474, #1488 and #1485 were in this group and merged
-    2026-09-03 (`01a2d2d6`, `2ac23342`, `5ed005a6`). Measured the same day: `strict: true` did **not** block
-    #1474 even though it was genuinely BEHIND `main`, so head-pinned verdicts do not serialize to
-    one merge per cycle and an approved-but-BEHIND PR needs no re-verdict round trip.
-  - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498) — opened
-    with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
-    title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect.
-- Three separate Claude terminals produced commits against this repo within 12 hours, uncoordinated,
-  two of them concurrently against the same branches. Lane mechanics exist to prevent that and were
-  not in force, because none of the new branches were lanes.
+  no rulesets, no required reviews. Unchanged.
+- **11 PRs are open** (down from 15 on 2026-09-03; #1477, #1485, #1488, #1499 and #1501 merged and
+  #1497 was closed). Every one is blocked on `Merge Gate`, in three distinct ways:
+  - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498, #1429) —
+    eight PRs opened with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found
+    in PR branch or title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy
+    defect. Seven of the eight are green on `verify`; only #1429 is red.
+  - **Admissible, `verify` red** (#1479, #1451) — real repair work, not a gate problem.
+  - **Admissible, `verify` green, missing a human approval artifact** (#1484) — the only open PR
+    whose sole remaining obstacle is a verdict. #1477 and #1501 were in this group and merged
+    (`1734bf20` on 2026-09-05T01:43Z, `b7d9fc07` on 2026-09-03T19:26Z).
+- Measured 2026-09-03: `strict: true` did **not** block #1474 even though it was genuinely BEHIND
+  `main`, so head-pinned verdicts do not serialize to one merge per cycle and an approved-but-BEHIND
+  PR needs no re-verdict round trip.
+- The three-concurrent-terminal drift recorded on 2026-09-03 has not recurred. Every commit since
+  has come through a lane or the readiness bot.
 
 ### Production deployed and passed its smoke on 2026-09-01 — current readiness is RED
 
@@ -43,9 +45,9 @@ Two different claims live in this section and they must not be collapsed. The fi
 time deploy smoke*; the second is *current readiness*. Only the first was healthy.
 
 **Current readiness is RED.** `docs/06_status/readiness/readiness-score.json` on `main`, generated
-2026-09-03T15:40:56Z from run `33774007367`, records `"verdict": "RED"` and
-`"observability": "degraded"`, with `deployed_sha` `e48106fc` against `main_sha` `48b5f679` — the
-deployed commit is not `main`. Nothing below licenses a statement that production is *currently*
+2026-09-05T02:37:43Z from run `33939585555`, records `"verdict": "RED"` and
+`"observability": "degraded"`, with `deployed_sha` `e48106fc` against `main_sha` `9797bcbee` — the
+deployed commit is not `main`, and the gap has widened by four merges since 2026-09-03. Nothing below licenses a statement that production is *currently*
 healthy; the smoke below is evidence about 2026-09-01, not about today.
 
 Measured from the `Deploy` run of 2026-09-01 (`e48106fc`), which promoted and passed its
@@ -111,7 +113,7 @@ them.** Heads preserved:
 |---|---|---|
 | #1491 | `73fb6b76e` | Risk-Scoped Merge Authority (RMA/v1) — replaces manifest-tier merge authority with diff classification |
 | #1492 | `77dea9c8d` | Mission-native harness recalibration — 53 files; relocates dispatch/lane commands, rewrites `CLAUDE.md`/`AGENTS.md`, hooks, settings |
-| #1497 | `6d8029d03` | Mission plan update, stacked on #1491 |
+| ~~#1497~~ | `6d8029d03` | Mission plan update, stacked on #1491 — **closed 2026-09-04**, superseded by the reconciliations in this file |
 | #1495 | `429b0cff9` | verify-semaphore claim/release race (support work; head preserved) |
 
 The ideas in #1491/#1492 are **not ratified merely because they are implemented**: replacing
@@ -133,8 +135,8 @@ through a safe internal/operator path. Containment stays parked throughout; see 
 | Step | State |
 |---|---|
 | Reach the deployed form | **Infrastructure done.** `smart-form` is deployed, healthy, routed by Caddy at `UNIT_TALK_SMART_FORM_DOMAIN`. The hostname is a secret and is not in the repo. |
-| Authenticate | Deployed. Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`. Blocked only on the secret reshape (Wave 0 item 1). |
-| Resolve canonical identity as `griff843` | **Code merged (#1488, `2ac23342`), secret not yet reshaped — this is a live production hazard.** See below. |
+| Authenticate | Deployed. Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`. **The secret was reshaped by Griff on 2026-09-03T17:29Z**, after #1488 merged. Blocked only on the deploy that ships #1488's code (Wave 0 item 1). |
+| Resolve canonical identity as `griff843` | **Code merged (#1488, `2ac23342`) and the secret has been reshaped; neither is in production yet.** The last promote predates both. See below. |
 | Submit + persist a real internal Track Only pick | Deployed. `trackOnly` defaults to `true` in both `apps/smart-form/lib/form-schema.ts` and `BetForm.tsx`, so the form submits Track Only by default. `parked` stops provider ingestion and delivery; it does not stop capper submission. **Canonical reference-data coverage is not a precondition** — honest structured or manual `canonical-coverage-gap` provenance is acceptable for this contained pilot. |
 | Prove Track Only cannot create member delivery | **Built, mutation-tested, and deployed.** UTV2-1672 (`6a8eface9`) is an ancestor of the running `e48106fc`: the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
 | Observe through an internal/operator path | **Not blocked.** A safe read-only internal observation — the pick's persisted `capper_id`, `metadata->>'distributionMode'`, provenance and the absence of any outbox row — satisfies this step. Deploying the Command Center (#1496) is desirable product work tracked on its own merits and is **not** a Milestone 1 gate; no `COMMAND_CENTER_*` secret is a prerequisite. |
@@ -174,12 +176,23 @@ ALLOWED_CAPPER_EMAILS = <email>=<canonicalCapperId>[, <email>=<canonicalCapperId
 live only in the sanctioned secret store. Mission docs name the secret and its required shape; they
 never carry its value.
 
-**Measured 2026-09-03T05:00Z: `ALLOWED_CAPPER_EMAILS` was last updated 2026-09-01T13:26Z — before
-#1488 merged — and no `Deploy` run has fired since (latest is `e48106fc`, 2026-09-01T13:28Z).**
-Production therefore still runs the old derivation and still works. The next deploy ships the new
-code against the old secret shape, every entry is dropped, and nobody can sign in. This is the one
-open item where doing nothing is not safe: the secret must be updated before the next deploy, not
-before the next pilot.
+**Measured 2026-09-05T02:55Z: `ALLOWED_CAPPER_EMAILS` was last updated 2026-09-03T17:29:12Z — after
+#1488 merged at 04:52Z the same day.** Griff has reshaped it. The metadata listing carries the
+update timestamp only; the value is never read, printed or recorded by an agent, so this plan
+records *that* it was reshaped and *when*, and asserts nothing about its contents.
+
+The hazard this section previously described — new code deploying against an old secret shape and
+locking everyone out — is therefore closed at the secret end. What remains is that **no `Deploy` run
+has fired since `e48106fc` on 2026-09-01T13:28Z** (run `33513608611`). Production still runs the
+pre-#1488 derivation. Both halves of the identity fix now exist and neither is live; a single
+`Deploy` dispatch ships them together. That dispatch is Wave 0 item 1 and it is the only remaining
+reserved action on the Milestone 1 path.
+
+One consequence worth stating: because `deploy.yml` re-reads its own environment out of the running
+container and fails on disagreement, a malformed allow-list is caught by the deploy rather than
+discovered by a locked-out capper — but only for values `deploy.yml` actually validates.
+`ALLOWED_CAPPER_EMAILS` is only checked non-empty, so a wrongly *shaped* list still ships green.
+Milestone 1 step 2 is the first real test of the value.
 
 ---
 
@@ -196,24 +209,36 @@ waiting on Griff" — at any moment most of the board is independent of every op
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | **Rewrite `ALLOWED_CAPPER_EMAILS` into the `<email>=<canonicalCapperId>` shape before the next deploy.** #1488 shipped the code; the secret still holds the pre-#1488 shape. | Secrets | The next deploy, and Milestone 1 step 2. Nothing else. |
-| 2 | Dispatch a `Deploy` run once item 1 is done | Production deploy | Milestone 1 steps 1–5. Nothing else. |
-| 3 | Decide **#1477** — standing verdict is `CHANGES_REQUIRED` | Production DDL | #1477 only. |
-| 4 | Approve **#1501** (`t1-approved` + `pm-verdict/v1`) — UTV2-1823, authenticate `GET /api/picks/{id}/trace` | T1 merge authority | Milestone 1: the pilot creates exactly the record this route exposes to anonymous callers. |
-| 5 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
+| 1 | **Dispatch a `Deploy` run.** `deploy.yml` is `workflow_dispatch`-only; nothing promotes on its own. | Production deploy | Milestone 1 steps 1–5. Nothing else. **This is now the only reserved item on the Milestone 1 path.** |
+| 2 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap, the one open PR whose sole remaining obstacle is a verdict | Merge authority | #1484 only. Not a Milestone 1 gate. |
+| 3 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
+| 4 | Decide the direct-`main` prevention control (`enforce_admins`, a ruleset, or a `pre-push` hook) | Branch protection | Nothing. The prohibition is already in force; what is reserved is the mechanical enforcement. |
+| 5 | Any production containment change (`parked` → `active`) | Containment | Nothing in Milestone 1 — the milestone is explicitly defined to complete with containment intact. |
 
-Item 4 previously read "Approve #1485". That merged at `5ed005a6d` and its own lane closed cleanly
-afterwards, which is the mechanical evidence the fix works.
+Three items left this table on 2026-09-05 by being **done**, not by being deferred:
+
+- The former item 1 — reshape `ALLOWED_CAPPER_EMAILS` — was completed by Griff on 2026-09-03T17:29Z.
+- The former item 3 — decide #1477 — was resolved: the standing `CHANGES_REQUIRED` was answered by
+  correcting the proof bundle rather than the implementation, and #1477 merged at `1734bf20` on
+  2026-09-05T01:43Z.
+- The former item 4 — approve #1501 (UTV2-1823) — was approved and merged at `b7d9fc07` on
+  2026-09-03T19:26Z. The anonymous `GET /api/picks/{id}/trace` exposure that would have leaked the
+  pilot's own pick is closed in code, though not yet in production, which is downstream of item 1.
 
 Command Center secrets are **not** in this table. They are not a Milestone 1 prerequisite; see
 `intent.md` § "Step 7 — observation path".
 
 ### Wave 1 — Smart Form Track Only pilot (Milestone 1)
 
-#1488 (identity) is merged. UTV2-1823 — authenticate `GET /api/picks/{id}/trace`, which today
-returns a pick's entire lifecycle aggregate to any anonymous caller and would expose the pilot's own
-pick — is implemented and green on **PR #1501**, awaiting only its T1 approval artifacts. What
-remains before the pilot can run is Wave 0 items 1, 2 and 4.
+**Every code and secret prerequisite is now met, and none of them is deployed.** #1488 (canonical
+identity) merged at `2ac23342`; `ALLOWED_CAPPER_EMAILS` was reshaped on 2026-09-03T17:29Z; UTV2-1823
+(authenticate `GET /api/picks/{id}/trace`, which would otherwise return the pilot's own pick's
+entire lifecycle aggregate to any anonymous caller) merged at `b7d9fc07`. Production is still
+`e48106fc` from 2026-09-01 and carries none of them.
+
+**What remains before the pilot can run is exactly one action: Wave 0 item 1, the `Deploy`
+dispatch.** There is no longer any engineering step, approval artifact or secret between the current
+`main` and a runnable pilot.
 
 Then **run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`, submit
 a real internal Track Only pick, assert persistence, observe the Track Only guards holding during
@@ -229,15 +254,17 @@ own merits.
 |---|---|
 | #1479 null-stake computation truth | `verify` red — repair first |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
-| #1484 canonical reference bootstrap | `verify` green; needs a verdict |
+| #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 item 2) |
 | Closing-line truth | Not yet a branch |
 
 ### Wave 3 — Command Center
 
-#1493 (dotted-path auth bypass) and #1494 (arbitrary management SQL) first — both are live security
-defects with green `verify`, and neither depends on any reserved action. Then #1496 (deployment),
-which does need Command Center secrets and a hostname. All three need readmission as lanes; see
-"Admissibility debt" below.
+**This is the executable front while Wave 0 item 1 is outstanding.** #1493 (dotted-path auth
+bypass, canonical issue **UTV2-1812**) and #1494 (arbitrary management SQL, canonical issue
+**UTV2-1802**) first — both are live production security defects with green `verify`, and neither
+depends on any reserved action. Then #1496 (deployment), which does need Command Center secrets and
+a hostname. All three need readmission as lanes; see "Admissibility debt" below. Readmission runs
+through `ops:lane-start --readmit-existing-branch --executor <who>` under the canonical issue.
 
 Deployment is tracked here on its own product merits. It is **not** a Milestone 1 gate.
 
@@ -251,7 +278,9 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-The current one is this lane (UTV2-1829, mission context). RMA is an architecture review, not a
+The current one is this lane (**UTV2-1830**, recording the ratified continuous-orchestration
+correction in `intent.md` and its pointer in `CLAUDE.md`). UTV2-1829, which held the slot on
+2026-09-03, merged as #1499 at `d70df077` on 2026-09-04. RMA is an architecture review, not a
 governance lane.
 
 Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
@@ -264,10 +293,12 @@ not consume this slot. The strongest current candidate when the slot is next spe
 
 ## Admissibility debt
 
-Seven open PRs cannot be evaluated by `Merge Gate` because they were opened outside the lane system
-and carry no resolvable tier: #1491, #1492, #1493, #1494, #1495, #1496, #1498. All seven fail the
-identical set of checks — `Check issue references`, `Sync tier label`, `Executor Result Validation`,
-`Merge Gate` — every one of them downstream of the same single cause.
+**Eight** open PRs cannot be evaluated by `Merge Gate` because they were opened outside the lane
+system and carry no resolvable tier: #1429, #1491, #1492, #1493, #1494, #1495, #1496, #1498. All
+eight fail the identical set of checks — `Check issue references`, `Sync tier label`, `Executor
+Result Validation`, `Merge Gate` — every one of them downstream of the same single cause. (The count
+rose from seven not because a new PR was opened outside the system, but because #1429, an older
+model-de-pin branch, was checked and belongs to the same class.)
 
 **PM ruling 2026-09-03: `Merge Gate` is not changed to admit incorrectly-created branches.** The fix
 is readmission through `ops:lane-start` under the real issue. Renaming an open PR's head branch
@@ -282,7 +313,8 @@ exist, they were simply never joined:
 | #1494 (+503/-61) | the management token can no longer be handed arbitrary SQL | **UTV2-1802** (Backlog) |
 
 These are being re-homed onto those issues through normal governed lanes. They are production
-security work, not governance work, and do not consume the governance slot.
+security work, not governance work, and do not consume the governance slot. **They are the next
+executable work after this lane closes**, and neither waits on Griff.
 
 ### `Lane authority` rejects dotfiles inside its own allowed globs
 
@@ -308,7 +340,7 @@ micromatch default silently narrowing an allowlist that reads as if it covers th
 directory is affected. This lane removed the placeholder rather than widen its scope; the underlying
 defect is unfixed.
 
-### `docs/mission/**` lane registration — resolved in this PR
+### `docs/mission/**` lane registration — resolved on `main`
 
 `.lane/lanes/governance.yml` enumerates every docs subtree a governance lane may touch, and
 `docs/mission/**` was in none of them, so `Lane authority` and `Return review packet` failed this
@@ -316,13 +348,18 @@ PR on `docs/mission/intent.md`, `spec.md` and `plan.md`. `CLAUDE.md` and `AGENTS
 individually admitted — a governance lane could add the pointer but never the target.
 
 That file's own comments record this exact situation eight times (UTV2-1524, 1528, 1541, 1557,
-1199, 1384, 1253, 1629), each closed by the lane that hit it adding its path in the same PR. This
-PR does the same, bounded to `docs/mission/**` and nothing else.
+1199, 1384, 1253, 1629), each closed by the lane that hit it adding its path in the same PR.
+UTV2-1829 did the same, bounded to `docs/mission/**` and nothing else, and **#1499 merged at
+`d70df077` on 2026-09-04**. The glob is on `main`; this lane (UTV2-1830) touches
+`docs/mission/intent.md` and `docs/mission/plan.md` inside its own `file_scope_lock` and needs no
+scope override for them.
 
-`.lane/lanes/governance.yml` is outside this lane's `file_scope_lock` (`AGENTS.md`, `CLAUDE.md`,
-`docs/mission/**`), and the lock is pinned to the lane-start commit and cannot be widened by an
-agent. The bounded expansion is therefore authorized by a `scope-override/v1` comment authored by
-CODEOWNERS on this PR. Without that comment `File scope lock` fails on this file, and correctly so.
+The mechanism is worth keeping recorded: `.lane/lanes/governance.yml` was outside UTV2-1829's
+`file_scope_lock`, and a lock is pinned to the lane-start commit and cannot be widened by an agent,
+so the bounded expansion required a `scope-override/v1` comment authored by CODEOWNERS, pinned to an
+exact head SHA. Every commit that moves the head — including a sanctioned `main` resync —
+invalidates it. That is why a lane needing an override should be resynced and reconciled *before*
+the override is requested rather than after.
 
 ### `MERGE_SHA: pending merge` — resolved on `main`
 
@@ -337,7 +374,7 @@ post-merge path (`5b5f7a3b8`), which is the mechanical evidence the rebinder now
 
 The two lanes that merged before the fix landed have since been truth-closed through the governed
 post-merge path. **UTV2-1789 (#1474)** closed at `43a1bf0f4` on the push that followed the fix.
-**UTV2-1824 (#1488)** closed at `b729447d2`, the current `main` tip. Both manifests read `done` and
+**UTV2-1824 (#1488)** closed at `b729447d2`. Both manifests read `done` and
 both issues are `Done`. No lane is left carrying the old failure.
 
 UTV2-1824 needed one replay, and the rebinder was not what blocked it: every proof, merge and
@@ -354,39 +391,60 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 
 ## Requires Griff
 
-Consolidated from Wave 0, in dependency order:
+Consolidated from Wave 0, in dependency order. **This list is one item long on the Milestone 1
+path.** Everything below item 1 blocks only itself.
 
-1. **Rewrite `ALLOWED_CAPPER_EMAILS` into the `<email>=<canonicalCapperId>` shape** — urgent. #1488 merged at
-   2026-09-03T04:52Z; the secret still holds the pre-#1488 shape (last updated 2026-09-01T13:26Z).
-   The next deploy locks every capper out until this is set. Milestone 1 identity step. The value
-   belongs only in the secret store — it is not recorded in this repository.
-2. **Dispatch a `Deploy` run** once item 1 is done. The last promote was `e48106fc` on
-   2026-09-01T13:28Z, so production predates #1488 and does not carry the canonical-identity fix.
-   `deploy.yml` is `workflow_dispatch`-only; nothing promotes on its own. Milestone 1 steps 1–5.
-3. **Approve #1501** (`t1-approved` + `pm-verdict/v1`) — UTV2-1823. Every other check is green.
-   The pilot creates exactly the record this route exposes to anonymous callers, so this is a
-   Milestone 1 gate. (#1485, which previously sat at this position, merged at `5ed005a6d`.)
-4. **#1493** — the remaining Command Center authentication defect, still open. #1474 merged. Not a
-   Milestone 1 gate.
-5. **#1477, #1451** — production DDL. Neither is a Milestone 1 gate.
-6. **#1491 / #1492 architecture review** — merge authority and agent authority.
-7. **Direct-`main` prevention** — branch protection change, decided on its own merits and its own
+1. **Dispatch a `Deploy` run.** The last promote was `e48106fc` on 2026-09-01T13:28Z (run
+   `33513608611`), so production predates #1488 (canonical identity), #1501 (authenticated
+   `GET /api/picks/{id}/trace`) and #1477. `deploy.yml` is `workflow_dispatch`-only; nothing
+   promotes on its own. Milestone 1 steps 1–5. **Nothing else on the board waits on this.**
+   The `ALLOWED_CAPPER_EMAILS` reshape that used to sit ahead of this item was completed on
+   2026-09-03T17:29Z; its value belongs only in the secret store and is not recorded here.
+2. **Approve #1484** (`pm-verdict/v1`) — canonical reference bootstrap, `verify` green, the only
+   open PR whose sole remaining obstacle is a verdict. Not a Milestone 1 gate.
+3. **#1491 / #1492 architecture review** — merge authority and agent authority. Those two PRs only.
+4. **#1451** — production DDL, `verify` currently red. Not a Milestone 1 gate.
+5. **Direct-`main` prevention** — branch protection change, decided on its own merits and its own
    timeline. **Not sequenced behind the inadmissible-PR backlog:** the prohibition is already in
    force, and incorrectly created PRs do not earn a deferral of a safety control. Not changed in
    this lane.
-8. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
+6. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
    explicitly excluded from it. Command Center secrets are likewise not a Milestone 1 gate.
-9. **`scope-override/v1` comment on PR #1499** authorizing `.lane/lanes/governance.yml`, so the
-   bounded `docs/mission/**` registration in that PR is admitted. The glob is already written; only
-   the human-authored override artifact can admit the file, and an agent cannot author it. The
-   record is pinned to an exact head SHA, so every commit that moves the head — including a
-   sanctioned `main` resync — invalidates it and requires a fresh one. That is the control working,
-   and it is the reason a lane like this one should be resynced and reconciled *before* the override
-   is requested rather than after.
+7. **A `scope-override/v1` comment** on any future lane that must touch `.lane/lanes/governance.yml`
+   or another path outside its own `file_scope_lock`. None is outstanding right now — the
+   `docs/mission/**` registration it was last needed for merged in #1499.
+
+Items that left this list on 2026-09-05 by being done: the `ALLOWED_CAPPER_EMAILS` reshape; the
+#1477 decision (resolved by correcting the proof bundle, merged `1734bf20`); the #1501 approval
+(merged `b7d9fc07`); and the #1499 scope override (merged `d70df077`). #1493 also left it — it was
+never actually a Griff-reserved item, only an unadmitted PR, and it is now Wave 3 executable work.
 
 ---
 
 ## Learned
+
+- **The orchestrator was returning control at every seam, and every one of those seams was inside
+  the mission rather than at its edge.** Ratified by PM on 2026-09-05: waiting on CI, finishing a
+  lane or a PR, having a status worth reporting, and receiving a question or correction are all
+  *inside* a run, not the end of one. A reserved gate blocks only the work that depends on it. The
+  measurable cost of getting this wrong is not a wasted prompt — it is that the independent work
+  which never depended on the gate does not get done while the gate is open. This plan is the
+  evidence: on 2026-09-05 exactly one item required Griff on the Milestone 1 path, and two live
+  production security defects with green `verify` (#1493, #1494) sat unstaffed behind it. The
+  authoritative statement is `intent.md` § "Stop conditions"; `CLAUDE.md` carries only a pointer.
+  Recorded here, not filed, per the filing threshold.
+
+- **A correction round is where the next defect gets introduced.** Every one of the six adversarial
+  review rounds on UTV2-1811's proof bundle closed a defect and introduced at least one new one of
+  the same class — a claim about the work that the work did not support. Three were BLOCKING and
+  self-inflicted: "never more restrictive" (false in both directions; 26 restrictive divergences in
+  a grid of 1314), "cannot let an undefined RPC ship" (the exact inverse — over-marking is the
+  parity check's false-negative mode), and a cited "parity fake" that does not exist. **None of the
+  defects were ever in the engineering.** The implementation was correct from the first commit and
+  never changed; five commits and six rounds were spent making the bundle's *description* of it
+  true. The generalization, already filed as a memory: proof values must be generated from the
+  artifact, not written about it from recollection — including directional and methodology claims
+  wrapped around otherwise correct facts.
 
 - **The OS re-derives diagnoses it has already written down, and that is its dominant hidden cost.**
   On 2026-09-03 the closeout strand was diagnosed from scratch as "a lane can run end to end with
