@@ -3,7 +3,7 @@ import { ProviderHealthCard, Card } from '@/components/ui';
 import { getProviderHealth, getSnapshotData } from '@/lib/data';
 import { getProviderCycleLatencySamples } from '@/lib/data/provider-cycle-health';
 import { buildApiHealthPageData } from '@/lib/command-center-page-data';
-import { fetchRuntimeTruth } from '@/lib/server-api';
+import { getRuntimeTruth } from '@/lib/data/runtime-truth';
 import { describeOperatorFailure } from '@/lib/describe-error';
 import type { RuntimeTruthReport } from '@unit-talk/observability';
 
@@ -23,7 +23,7 @@ export default async function ApiHealthPage() {
     degrade(getProviderHealth(), 'provider health', null),
     degrade(getSnapshotData(), 'snapshot', null),
     degrade(getProviderCycleLatencySamples(), 'cycle latency', []),
-    fetchRuntimeTruth()
+    getRuntimeTruth()
       .then((runtimeTruth) => ({ runtimeTruth, error: null as string | null }))
       .catch((error: unknown) => ({
         runtimeTruth: null,

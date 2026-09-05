@@ -35,7 +35,7 @@ export interface DiscordOpsSnapshot {
 }
 
 export async function getDiscordOpsSnapshot(): Promise<DiscordOpsSnapshot> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const [receiptsResult, failedResult] = await Promise.all([
     client
@@ -111,7 +111,7 @@ export interface DeliveryKillSwitchStatus {
 }
 
 export async function getDeliveryKillSwitchStatuses(): Promise<DeliveryKillSwitchStatus[]> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client.from('delivery_kill_switch').select('*');
   if (error) throw error;
   return ((data ?? []) as Array<Record<string, unknown>>).map((row) => ({

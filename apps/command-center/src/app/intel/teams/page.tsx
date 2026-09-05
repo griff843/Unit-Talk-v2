@@ -28,7 +28,7 @@ interface TeamEvent {
 
 async function getTeamEvents(teamName: string): Promise<TeamEvent[] | null> {
   try {
-    const client = getDataClient();
+    const client = await getDataClient();
     const { data, error } = await client
       .from('events')
       .select('id, external_id, event_name, sport_id, event_date, status')

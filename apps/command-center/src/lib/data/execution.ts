@@ -138,7 +138,7 @@ function mapPick(row: JsonObject): ExecutionPickRow {
 // ── Discord preview reads ────────────────────────────────────────────────────
 
 export async function listPreviewablePicks(limit = 25): Promise<ExecutionPickRow[]> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client
     .from('picks_current_state')
     .select(PICK_SELECT)
@@ -153,7 +153,7 @@ export async function listPreviewablePicks(limit = 25): Promise<ExecutionPickRow
 }
 
 export async function getExecutionPick(pickId: string): Promise<ExecutionPickRow | null> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client
     .from('picks_current_state')
     .select(PICK_SELECT)
@@ -201,7 +201,7 @@ const OUTBOX_SELECT =
 
 export async function getScheduledDispatch(limit = 50): Promise<ScheduledDispatchData> {
   const observedAt = new Date().toISOString();
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const [queuedResult, retryingResult] = await Promise.all([
     client
@@ -255,7 +255,7 @@ export async function getScheduledDispatch(limit = 50): Promise<ScheduledDispatc
 
 export async function getResultsTracking(limit = 100): Promise<ResultsTrackingData> {
   const observedAt = new Date().toISOString();
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const { data, error } = await client
     .from('picks_current_state')

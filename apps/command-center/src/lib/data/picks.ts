@@ -148,7 +148,7 @@ function compareIsoDesc(left: string | null, right: string | null) {
 }
 
 export async function getExceptionQueues(filter?: { includeFixtures?: boolean }): Promise<{ ok: true; data: unknown }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const includeFixtures = filter?.includeFixtures ?? false;
 
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();

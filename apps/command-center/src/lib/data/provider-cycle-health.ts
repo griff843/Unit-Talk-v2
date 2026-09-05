@@ -152,7 +152,7 @@ export function summarizeProviderCycleHealth(
 export async function getProviderCycleHealth(
   providerHealth?: Pick<ProviderHealth, 'latestProviderOfferSnapshotAt'>,
 ): Promise<ProviderCycleHealthSummary> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client
     .from('provider_cycle_status')
     .select([
@@ -182,7 +182,7 @@ export async function getProviderCycleHealth(
 }
 
 export async function getProviderCycleLatencySamples(): Promise<ProviderCycleLatencySample[]> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const { data, error } = await client
     .from('provider_cycle_status')
     .select('provider_key,updated_at,metadata')
