@@ -1,0 +1,102 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1815",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1815-null-stake-computation-truth",
+  "branch": "claude/utv2-1815-null-stake-computation-truth",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1479",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1815.yml",
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/settlement-service.test.ts",
+    "apps/api/src/settlement-service.ts",
+    "docs/06_status/proof/UTV2-1815/diff-summary.md",
+    "docs/06_status/proof/UTV2-1815/evidence.json",
+    "docs/06_status/proof/UTV2-1815/model-evaluation.json",
+    "docs/06_status/proof/UTV2-1815/verification.md",
+    "packages/domain/src/attribution/attribution-engine.test.ts",
+    "packages/domain/src/attribution/attribution-engine.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1815/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-01T22:30:39.135Z",
+  "heartbeat_at": "2026-09-05T13:03:49.230Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1815-null-stake-computation-truth.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1815-null-stake-computation-truth",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  },
+  "scope_release_history": [
+    {
+      "released_at": "2026-09-05T11:20:27.310Z",
+      "actor": "claude-orchestrator",
+      "reason": "Prerequisite relocated to UTV2-1831: package.json is pinned by shadow-parity-required.yml and this branch trips that workflow's trigger paths, so the wiring and its test must land separately per that workflow's own inline guidance.",
+      "pr_number": 1479,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1479",
+      "head_sha": "5023b697dab9177ce46b539d074748c72f6afe7f",
+      "previous_lock_hash": "cd08569eae79bb12b82d2dea579a3b7c57e4c07bc6d0ec111a9caf1f3b4523bf",
+      "resulting_lock_hash": "bd6f47faf25140499c75500569c656bfa14d76b39f3f3cd1478af9892d8eb59f",
+      "released_paths": [
+        "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts"
+      ],
+      "verifications": [
+        {
+          "check": "lane_worktree",
+          "status": "pass",
+          "detail": "ran in /home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1815-null-stake-computation-truth on branch claude/utv2-1815-null-stake-computation-truth"
+        },
+        {
+          "check": "manifest_identity",
+          "status": "pass",
+          "detail": "issue UTV2-1815, pr_url https://github.com/griff843/Unit-Talk-v2/pull/1479"
+        },
+        {
+          "check": "pr_head",
+          "status": "pass",
+          "detail": "PR #1479 OPEN at 5023b697dab9177ce46b539d074748c72f6afe7f"
+        },
+        {
+          "check": "previous_lock_hash",
+          "status": "pass",
+          "detail": "cd08569eae79bb12b82d2dea579a3b7c57e4c07bc6d0ec111a9caf1f3b4523bf"
+        },
+        {
+          "check": "paths_absent_from_pr_diff",
+          "status": "pass",
+          "detail": "13 changed file(s) scanned"
+        },
+        {
+          "check": "paths_absent_from_local_work",
+          "status": "pass",
+          "detail": "staged=0 unstaged=0 untracked=0 unpushed=0"
+        },
+        {
+          "check": "no_concurrent_lane_dependency",
+          "status": "pass",
+          "detail": "735 other manifest(s) scanned"
+        },
+        {
+          "check": "resulting_lock_valid",
+          "status": "pass",
+          "detail": "11 entries remain"
+        }
+      ]
+    }
+  ]
+}
