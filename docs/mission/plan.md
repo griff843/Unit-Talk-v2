@@ -425,6 +425,76 @@ Per `intent.md`, the cutover closes when all five hold, demonstrated rather than
 
 Then the capacity returns to product work.
 
+### The dependency map — measured 2026-09-05
+
+Two dependencies are routinely conflated, and separating them is what makes this workstream small:
+
+**Linear the API hard-blocks in exactly two files** — `scripts/ops/preflight.ts` (which gates lane
+*open*) and `scripts/ops/truth-check-lib.ts` (which gates lane *close*). Everything else that touches
+Linear fails soft or is off the critical path. Remove the token and the first failure is
+`ops:preflight` at `preflight.ts:1128-1136` (PE2 + PL1-PL5 `infra_error` -> verdict `INFRA` -> no
+token written), which then cascades to `lane-start.ts:418` *"validated preflight token is
+unavailable"*.
+
+**The `UTV2-###` identifier is embedded far more deeply** — it is the primary key for the manifest
+filename, sync filename, proof directory, branch name, worktree path, preflight-token path,
+file-scope lifecycle grant, and the merge gate's tier lookup.
+
+**The decisive finding: no required CI check calls Linear.** Of the four required checks, `verify`
+and `P0 Protocol` pass on an ID-less branch; `Executor Result Validation` and `Merge Gate` fail — and
+both fail on the *name*, not on the tracker. `merge-gate.yml:250,419-424` resolves tier from
+`docs/06_status/lanes/<ID>.json`, never from Linear. **Linear is the authoring surface for tier, not
+the gate's input** — the risk decision is already repo-local by the time it matters.
+
+One inversion worth recording: `P0 Protocol` is the *only* required check that ever touches Linear
+(`p0-protocol.yml:75-78`, `exit 1` when the token is absent and an ID is present). So removing Linear
+would make correctly-named branches *worse off* than ID-less ones.
+
+Two administrative gates deserve naming:
+
+- **`truth-check` L4** (`truth-check-lib.ts:1033-1037`) requires `manifest.pr_url` to appear in the
+  issue's Linear attachments. **Nothing in this repository ever creates that attachment** — `grep -rn
+  "attachmentCreate" scripts .github` returns nothing. L4 is satisfied exclusively by Linear's native
+  GitHub integration, which keys off the `UTV2-###` in the branch name. A hard closeout gate depends
+  on a third-party integration the repo neither owns nor exercises.
+- **`truth-check` L2** (`:1012-1017`) does not merely check the tier label — it *overwrites* the
+  manifest tier from Linear. That is the risk-bearing half, and relocating it is the one item here
+  that needs PM sign-off on its own.
+
+**On the classifier as a floor:** `tier-classifier.ts:76-92` `classifyMechanicalMinimum(paths)` is
+pure — no Linear, no network, no git — and `classifyDerivedTier` at `:94-117` already computes
+`maxTier(declaredTier, mechanicalMinimum)`, i.e. exactly floor semantics. But it is **binary, not
+three-valued**: every match hard-codes `minimum_tier: 'T1'` and the reduce seeds `'T3'`, so **no path
+can ever produce T2**. It cannot express the middle tier at all, and it is blind to semantic risk,
+diff magnitude, and blast radius. It is a usable floor and an unusable replacement — which is exactly
+what the ratification says.
+
+**The change set, split by whether it touches reserved surface:**
+
+| # | Change | Reserved? |
+|---|---|---|
+| 1 | `preflight.ts:1119-1148,1161` — emit PL1-PL5 as `skip` (not `fail`/`infra_error`) when there is no tracker ref or token; take tier from `--tier` raised by the mechanical floor | No — highest leverage; unblocks the whole open->PR path |
+| 2 | Add `tracker_ref` to the manifest and widen `shared.ts:365,372,656` + the manifest schema so a repo-minted id is legal; `issue_id` becomes repo-owned identity and the Linear key becomes explicit and nullable | No for ops; **reserved** if `merge-gate.yml:243-245` must widen in lockstep — split that out |
+| 3 | `truth-check-lib.ts` L1/L3/L4/C1/C7 -> `skip` when `tracker_ref` is null | No — all purely administrative |
+| 5 | `lane-close.ts:2794-2803` and `lane-finalize.ts:948-953` — record `tracker_sync: skipped` instead of throwing out of closeout | No |
+| 6 | `execution-packet.ts:1316-1323` — a `--description`/file source for the task contract, so a first capture needs no API | No — unblocks delegation |
+| 7 | `lane-maximizer.ts` — document the existing queue-file/`--candidates` source as first-class | No — unblocks discovery |
+| 4 | `truth-check-lib.ts:1012-1017` — relocate L2's tier authority to the manifest raised by the floor | **Adjacent** — risk-bearing; PM sign-off; do not bundle |
+| 8-11 | `p0-protocol.yml`, `executor-result-validator.yml`, `merge-gate.yml`, classifier Phase 2 cutover | **RESERVED — not changed** |
+
+**Items 1, 3, 5, 6 and 7 together satisfy the ratified rule for the ops-script half of the lifecycle
+with zero merge-authority exposure.** Items 8-11 are where the remaining hard blocks live, and all
+four are reserved. That is the real shape of the decision: the tracker can be made optional for
+discovery, delegation, verification and closeout by an ordinary lane; making it optional for *merge*
+is a PM decision on branch protection and the merge gate.
+
+**Defect found in passing, worth reporting regardless of this workstream:**
+`executor-result-validator.yml:181-184` — on `pull_request` with no executor-result comment it logs
+*"No executor result comment found. Check stays pending."* and creates no check context. Because
+`Executor Result Validation` is a required check, the PR sits BLOCKED **with no red check to look
+at**. That is the mechanism behind the already-recorded "a PR can sit BLOCKED with everything green"
+class.
+
 ### Sequencing — reviewed against #1491 and #1492 on 2026-09-05
 
 **Structural finding that changes how both PRs read:** #1492 is stacked on a *stale* base of #1491
@@ -534,21 +604,25 @@ Observed on this lane (UTV2-1829, PR #1499). `ops:lane-start` creates and commit
 docs/06_status/proof/UTV2-1829/.gitkeep` — even though `.lane/lanes/governance.yml` lists
 `docs/06_status/proof/**` as an allowed glob.
 
-The cause is not a missing allowlist entry. `matchesAny()` in `scripts/lane-contract.ts` calls
-`micromatch.isMatch()` with no `dot` option, and micromatch does not match a leading dot against `*`
-or `**` by default:
+**Correction, 2026-09-05: the recorded micromatch diagnosis was wrong.** This plan previously stated
+that `matchesAny()` in `scripts/lane-contract.ts` calls `micromatch.isMatch()` with no `dot` option.
+It does not. `scripts/lane-contract.ts:214` reads:
 
-```
-micromatch.isMatch('docs/06_status/proof/UTV2-1829/.gitkeep', 'docs/06_status/proof/**')            // false
-micromatch.isMatch('docs/06_status/proof/UTV2-1829/.gitkeep', 'docs/06_status/proof/**', {dot:true}) // true
+```ts
+return micromatch.isMatch(file, patterns, { dot: true });
 ```
 
-This is the same defect class as the `nocase` bug that `.lane/lanes/governance.yml` documents inline
-under UTV2-1541 (`docs/06_status/incidents/**` never matching `docs/06_status/INCIDENTS/**`): a
-micromatch default silently narrowing an allowlist that reads as if it covers the path. Every
-`.gitkeep`, `.keep` or dot-prefixed control file a sanctioned lane command writes into an allowed
-directory is affected. This lane removed the placeholder rather than widen its scope; the underlying
-defect is unfixed.
+`{ dot: true }` is present, and was present in the original commit `8477d8dbb`. Every other call site
+passes it too — `ut-cli/lib/git.ts:82`, `ut-cli/lib/scope.ts:24/28/31`,
+`scripts/ci/direct-main-push-guard.ts:184`, `scripts/ops/pr-review-packet.ts:656/671/960`. Whatever
+rejected `docs/06_status/proof/UTV2-1829/.gitkeep` was **not** this option, and the fix this plan
+proposed would have been a no-op.
+
+The rejection itself was real and is still unexplained; the cause is not identified. Recorded here as
+an open question rather than a diagnosis, because writing down a wrong cause is worse than writing
+down none — the next agent to hit this would have "fixed" an option that was already set. This is an
+instance of the same class already recorded under Learned: a plausible reading of code, asserted from
+recollection rather than generated from the artifact.
 
 ### `docs/mission/**` lane registration — resolved on `main`
 
