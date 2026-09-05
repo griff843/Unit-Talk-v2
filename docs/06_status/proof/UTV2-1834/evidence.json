@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1d76b75e1296871346284c50032b706009416fc6",
     "verified_source_sha": "901bce784354ee4b2098611bc0278c04c13209da",
     "evidence_commit_sha": "901bce784354ee4b2098611bc0278c04c13209da",
     "current_pr_head_sha": "901bce784354ee4b2098611bc0278c04c13209da",
@@ -18,14 +18,30 @@
       "pnpm_verify": "Deferred to the required CI `verify` context on this branch.",
       "r_level_check": "PASS (no R-level artifacts required for this diff)"
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-05T17:55:00.000Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T17:53:28.948Z"
   },
   "static_proof": {
-    "type_check": { "status": "PASS", "command": "pnpm type-check" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5485, "failures": 0 },
-    "lint": { "status": "DEFERRED", "command": "pnpm lint", "detail": "executed as a stage of pnpm verify in the required CI context, not locally" },
-    "build": { "status": "DEFERRED", "command": "pnpm build", "detail": "executed as a stage of pnpm verify in the required CI context, not locally" },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5485,
+      "failures": 0
+    },
+    "lint": {
+      "status": "DEFERRED",
+      "command": "pnpm lint",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "build": {
+      "status": "DEFERRED",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
     "scope_controls": [
       {
         "assertion": "A1 — the snapshot step precedes the first env write in BOTH deploy jobs, measured by step index rather than presence",
@@ -78,12 +94,42 @@
       }
     ],
     "control_mutations": [
-      { "id": "M1", "mutation": "snapshot step moved after the promote job's first env write", "failing_test": "promote: snapshots the outgoing configuration before overwriting it", "status": "CAUGHT" },
-      { "id": "M2", "mutation": "keyed on $UNIT_TALK_IMAGE_TAG instead of $(cat .unit-talk-release)", "failing_test": "canary/promote: keys the snapshot on the outgoing release, not the incoming tag", "status": "CAUGHT" },
-      { "id": "M3", "mutation": ".env.smart-form dropped from the snapshot loop", "failing_test": "canary/promote: snapshots every configuration file the deploy overwrites", "status": "CAUGHT" },
-      { "id": "M4", "mutation": "restore loop deleted from deploy/rollback.sh", "failing_test": "rollback.sh restores the configuration snapshot for the tag it rolls back to", "status": "CAUGHT" },
-      { "id": "M5", "mutation": "WARNING: no configuration snapshot text downgraded", "failing_test": "rolling back to a tag with no snapshot warns and still rolls the code back", "status": "CAUGHT" },
-      { "id": "M6", "mutation": "snapshot step deleted from the canary job only", "failing_test": "both canary: tests; promote unaffected", "status": "CAUGHT" }
+      {
+        "id": "M1",
+        "mutation": "snapshot step moved after the promote job's first env write",
+        "failing_test": "promote: snapshots the outgoing configuration before overwriting it",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M2",
+        "mutation": "keyed on $UNIT_TALK_IMAGE_TAG instead of $(cat .unit-talk-release)",
+        "failing_test": "canary/promote: keys the snapshot on the outgoing release, not the incoming tag",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M3",
+        "mutation": ".env.smart-form dropped from the snapshot loop",
+        "failing_test": "canary/promote: snapshots every configuration file the deploy overwrites",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M4",
+        "mutation": "restore loop deleted from deploy/rollback.sh",
+        "failing_test": "rollback.sh restores the configuration snapshot for the tag it rolls back to",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M5",
+        "mutation": "WARNING: no configuration snapshot text downgraded",
+        "failing_test": "rolling back to a tag with no snapshot warns and still rolls the code back",
+        "status": "CAUGHT"
+      },
+      {
+        "id": "M6",
+        "mutation": "snapshot step deleted from the canary job only",
+        "failing_test": "both canary: tests; promote unaffected",
+        "status": "CAUGHT"
+      }
     ],
     "control_corrected_by_mutation": "M2 and M3 initially produced an identical failure set, because one test carried both the keying assertion and the file-coverage assertion and stopped at the first. The coverage assertion was split into its own test so the two defects are now distinguishable by name. The correction came out of executing the mutations, not out of reading the tests."
   },

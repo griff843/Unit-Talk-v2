@@ -1,6 +1,6 @@
 # PROOF: UTV2-1834
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1d76b75e1296871346284c50032b706009416fc6
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -160,6 +160,6 @@ Three ambient facts were measured rather than assumed:
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1d76b75e1296871346284c50032b706009416fc6
 PR: pending
 Execution SHA: 901bce784354ee4b2098611bc0278c04c13209da
