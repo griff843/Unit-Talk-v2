@@ -275,18 +275,23 @@ Advisory (PM-gated) artifacts missing:
 
 ### Hosted verification at this exact anchor
 
-Anchor: `7b9dcde2a19c23345a1a334590d07fb15be27d7a`. Bound by run and job id in `evidence.json`
+Anchor: `fb5962bc37bf554fc6d8deaafee0e6ad9ca00860`. Bound by run and job id in `evidence.json`
 under `hosted_verification`. The staging job is where the live-DB proof this lane cannot run locally
 actually executes, against `xskgrzbteyqdufktjrjx`.
 
 ### The staging receipt, and why it is bound to a head that is not the tip
 
 Run `33966879903`, job `101308512813` ("Writable DB proof (staging only)"), completed success at
-head `32bb89db896990827b3e583faf13f3ce6f352ea5`. That is a proof-only commit in this branch's
-proof-only range: `git diff --name-only 7b9dcde2a..HEAD` lists nothing outside
-`docs/06_status/proof/UTV2-1815/`, so the tree that run executed is the anchor tree for every file
-that can affect behaviour. The receipt is reported against the run head and attributed to the anchor
-on the strength of that diff — not on an assumption that they are interchangeable.
+head `32bb89db896990827b3e583faf13f3ce6f352ea5`, which is an ancestor of the anchor rather than a
+descendant, because the anchor moved when the branch was resynced with `origin/main` on 2026-09-05.
+The whole diff `32bb89db8..fb5962bc3` is eight paths: this bundle's own `evidence.json` and
+`verification.md`, this lane's manifest,
+`.ops/sync/UTV2-1831.yml` (deleted), `docs/06_status/lanes/UTV2-1831.json` and the three files of
+`docs/06_status/proof/UTV2-1831/` — the closeout artifacts of a different, already-merged lane. No
+source file, test file, workflow or `package.json` differs across that range, so the tree that run
+executed is the anchor tree for every file that can affect behaviour. The receipt is reported
+against the run head and attributed to the anchor on the strength of that enumerated diff — not on
+an assumption that the two trees are interchangeable.
 
 The suite's own numbers, quoted from that run's "Run the T1 live proof suites against staging" step:
 
@@ -401,4 +406,4 @@ No unpark.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1479
 Approved PR head: pending merge
-Execution SHA: 7b9dcde2a19c23345a1a334590d07fb15be27d7a
+Execution SHA: fb5962bc37bf554fc6d8deaafee0e6ad9ca00860

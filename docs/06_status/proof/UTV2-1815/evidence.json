@@ -5,7 +5,7 @@
   "lane_type": "modeling",
   "status": "pending_hosted_verification",
   "sha_binding": {
-    "verified_source_sha": "7b9dcde2a19c23345a1a334590d07fb15be27d7a",
+    "verified_source_sha": "fb5962bc37bf554fc6d8deaafee0e6ad9ca00860",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "merge_sha": null,
@@ -15,9 +15,9 @@
       "pnpm_test_db": "PASS - job 101308512813 \"Writable DB proof (staging only)\" completed success in run 33966879903. The UTV2-1815 live suite reported \"# tests 3 / # pass 3 / # fail 0 / # skipped 0\". https://github.com/griff843/Unit-Talk-v2/actions/runs/33966879903/job/101308512813",
       "note": "evidence_commit_sha and current_pr_head_sha are the CI-resolved sentinel rather than a literal SHA, deliberately: a bundle cannot know the SHA of the commit that contains it, and any literal written here goes false on the next proof commit. verified_source_sha is a real SHA because it names a commit that already exists and does not move."
     },
-    "note": "7b9dcde2a19c23345a1a334590d07fb15be27d7a is the last non-proof commit on this branch. Every commit after it touches only docs/06_status/proof/UTV2-1815/ — verifiable at any head with `git diff --name-only 7b9dcde2a..HEAD`, which lists that directory and nothing else. No source file, test file, lane manifest or package.json differs between the anchor and the head, so the tree the staging run executed is the anchor tree for every file that can affect behaviour. evidence_commit_sha and current_pr_head_sha are CI-resolved sentinels for the reason recorded in ci_sentinels.note. The runtime receipts below were produced by CI run 33966879903, whose head_sha is 32bb89db896990827b3e583faf13f3ce6f352ea5 — a proof-only commit in that same range; the receipts are reported against that run head and attributed to the anchor on the strength of the diff above, not on an assumption. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM.",
+    "note": "fb5962bc37bf554fc6d8deaafee0e6ad9ca00860 is the last non-proof commit on this branch: the sanctioned `ops:merge-wrapper git-merge-main` resync of origin/main performed on 2026-09-05. Every commit after it touches only docs/06_status/proof/UTV2-1815/ \u2014 verifiable at any head with `git diff --name-only fb5962bc3..HEAD`. The previous anchor was 7b9dcde2a19c23345a1a334590d07fb15be27d7a; the diff 7b9dcde2a..fb5962bc3 is six paths and no more: `.ops/sync/UTV2-1831.yml` (deleted), `docs/06_status/lanes/UTV2-1815.json`, `docs/06_status/lanes/UTV2-1831.json`, and the three files of `docs/06_status/proof/UTV2-1831/` \u2014 the closeout artifacts of a different, already-merged lane, plus this lane's own manifest. No source file, test file, workflow or package.json differs across that range, so the tree the staging receipts below executed is identical to the anchor tree for every file that can affect behaviour. That is why the receipts are still attributed to this anchor even though they were produced before the resync; the attribution rests on the enumerated diff, not on an assumption. evidence_commit_sha and current_pr_head_sha are CI-resolved sentinels for the reason recorded in ci_sentinels.note. The runtime receipts below were produced by CI run 33966879903, whose head_sha is 32bb89db896990827b3e583faf13f3ce6f352ea5 \u2014 a proof-only commit in the pre-resync range. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM.",
     "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-05T12:52:30Z"
+    "bound_at": "2026-09-05T13:35:00Z"
   },
   "static_proof": {
     "unit_tests": {
@@ -244,7 +244,7 @@
     "apps/api/src/settlement-service.test.ts"
   ],
   "hosted_verification": {
-    "anchor_sha": "7b9dcde2a19c23345a1a334590d07fb15be27d7a",
+    "anchor_sha": "fb5962bc37bf554fc6d8deaafee0e6ad9ca00860",
     "run_head_sha": "32bb89db896990827b3e583faf13f3ce6f352ea5",
     "run_id": "33966879903",
     "writable_db_proof": "PASS - job 101308512813 \"Writable DB proof (staging only)\" completed success. Steps \"Run writable DB proof against staging\" and \"Run the T1 live proof suites against staging\" both success, followed by \"Scrub credentials\". https://github.com/griff843/Unit-Talk-v2/actions/runs/33966879903/job/101308512813",
