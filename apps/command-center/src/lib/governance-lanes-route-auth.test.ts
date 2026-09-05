@@ -31,15 +31,18 @@ async function withAuthEnv(
   values: Record<string, string>,
   fn: () => Promise<void>,
 ): Promise<void> {
-  const previous = new Map(AUTH_ENV_KEYS.map((key) => [key, process.env[key]]));
-  for (const key of AUTH_ENV_KEYS) delete process.env[key];
-  Object.assign(process.env, values);
+  // `process.env.NODE_ENV` is typed read-only, so the save/restore goes through a
+  // mutable view of the same object rather than casting at each assignment.
+  const env = process.env as Record<string, string | undefined>;
+  const previous = new Map(AUTH_ENV_KEYS.map((key) => [key as string, env[key]]));
+  for (const key of AUTH_ENV_KEYS) delete env[key];
+  Object.assign(env, values);
   try {
     await fn();
   } finally {
     for (const [key, value] of previous) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
+      if (value === undefined) delete env[key];
+      else env[key] = value;
     }
   }
 }
