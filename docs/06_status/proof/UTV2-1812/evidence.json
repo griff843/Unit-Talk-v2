@@ -7,15 +7,15 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "1aab560ab42bd690846b5207428ad82575b0b098",
+    "verified_source_sha": "3d46af43633264c86f717851510a5cf86958f88c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 tsc -b exit 0, 0 diagnostics (measured locally at the anchor; also inside the required verify job)",
-      "pnpm_test": "PASS (5703 tests, 0 failures)",
-      "pnpm_test_db": "PASS \u2014 'Writable DB proof (staging only)' job 101240654939 succeeded against staging in run 33941814155 at this exact anchor SHA; steps 'Run writable DB proof against staging' and 'Run the T1 live proof suites against staging' both success, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33941814155/job/101240654939",
-      "r_level_check": "PASS \u2014 operator-ui matched; required artifact qa-experience-report present",
-      "pnpm_verify": "PASS \u2014 required `verify` check completed success at 1aab560ab42bd690846b5207428ad82575b0b098 (https://github.com/griff843/Unit-Talk-v2/actions/runs/33941814155/job/101241525078)"
+      "pnpm_type_check": "PASS — tsc -b exit 0, 0 diagnostics (measured locally at the anchor; also inside the required verify job)",
+      "pnpm_test": "PASS (5807 tests, 5807 pass, 0 failures, 0 skipped) — measured with SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY unset, i.e. under CI's environment rather than the checkout's",
+      "pnpm_test_db": "PASS — 'Writable DB proof (staging only)' job 101305997745 succeeded against staging in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c; steps 'Run writable DB proof against staging' and 'Run the T1 live proof suites against staging' both success, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101305997745",
+      "r_level_check": "PASS — operator-ui matched; required artifact qa-experience-report present",
+      "pnpm_verify": "PASS — required `verify` check completed success in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c (https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101306812905)"
     }
   },
   "static_proof": {
@@ -28,9 +28,9 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 5703,
+      "tests": 5807,
       "failures": 0,
-      "detail": "0 'not ok' lines across the whole run; 0 TypeScript errors"
+      "detail": "0 'not ok' lines across the whole run; 0 TypeScript errors. Run with the three SUPABASE_* variables unset, so the result does not depend on this checkout carrying credentials CI does not have."
     },
     "targeted_test": {
       "status": "PASS",
@@ -42,7 +42,7 @@
     "test_wiring": {
       "status": "PASS",
       "command": "executable-wiring check inside pnpm verify",
-      "observed": "verdict=PASS required_roots=verify; total=488 required-reachable=329 optional-reachable=40 unwired=119 (baselined=119 new=0)",
+      "observed": "verdict=PASS required_roots=verify; total=496 required-reachable=337 optional-reachable=40 unwired=119 (baselined=119 new=0)",
       "significance": "new=0 means all three new test files are required-reachable under verify rather than parked in the baselined-unwired set, where they would gate nothing."
     },
     "mutation_control": {
@@ -50,8 +50,8 @@
       "count": 7,
       "command": "apply each mutation, re-run the affected suite, restore source",
       "expected": "each control fails on the condition it names",
-      "observed": "M1 original matcher restored -> middleware-matcher 8/14 fail, route-surface 1/62 fail ('not ok 48 \u2014 a dot in a dynamic segment does not exempt /picks/[id]'). M2-M7 actor guard removed from board/execution/intervention/picks/review/settle in turn -> each fails exactly 1 test. M8 actor: 'operator' restored -> fails 1 test.",
-      "correction": "M5 initially did NOT fail: the guard suite matched resolveActorOrRefusal inside actions/picks.ts's own docblock, so deleting the real call left it green. Comments and string literals are now stripped before the guard is looked for, and M5 fails as it should. Recorded because it is the same defect class this bundle exists to rule out \u2014 a self-consistent artifact where no assertion constrains the code."
+      "observed": "M1 original matcher restored -> middleware-matcher 8/14 fail, route-surface 1/62 fail ('not ok 48 — a dot in a dynamic segment does not exempt /picks/[id]'). M2-M7 actor guard removed from board/execution/intervention/picks/review/settle in turn -> each fails exactly 1 test. M8 actor: 'operator' restored -> fails 1 test.",
+      "correction": "M5 initially did NOT fail: the guard suite matched resolveActorOrRefusal inside actions/picks.ts's own docblock, so deleting the real call left it green. Comments and string literals are now stripped before the guard is looked for, and M5 fails as it should. Recorded because it is the same defect class this bundle exists to rule out — a self-consistent artifact where no assertion constrains the code."
     },
     "r_level": {
       "status": "PASS",
@@ -67,9 +67,17 @@
     "ci_verify": {
       "status": "PASS",
       "check": "verify",
-      "head_sha": "1aab560ab42bd690846b5207428ad82575b0b098",
+      "head_sha": "3d46af43633264c86f717851510a5cf86958f88c",
       "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33941814155/job/101241525078",
       "detail": "Completed exact-head CI at the execution anchor. This bundle represents no completed check as pending."
+    },
+    "test_hermeticity": {
+      "status": "PASS",
+      "command": "env -u SUPABASE_URL -u SUPABASE_ANON_KEY -u SUPABASE_SERVICE_ROLE_KEY pnpm --filter @unit-talk/command-center test",
+      "observed": "480 tests, 480 pass, 0 fail, 0 skipped",
+      "defect": "Two pins this lane added (lib/data/client-cache-auth.test.ts and 'the authenticated forged-actor cases actually reach the backend' in lib/server-action-guard.test.ts) passed locally and failed the required verify. Both build the data client, which resolves SUPABASE_* before any request exists, so their verdict depended on the ambient checkout environment rather than on behaviour.",
+      "repair": "withLoopbackSupabaseTarget in lib/test-support/workspace-env.ts overrides the Supabase target with a literal loopback address rather than filling a gap, so CI and a credentialled checkout exercise the same target. decideTarget in packages/db/src/privileged-client-boundary.ts allows a literal loopback address explicitly as provably isolated, and globalThis.fetch is stubbed over the same window in the forged-actor harness.",
+      "limit": "The stubbed response means the forged-actor pin establishes only that each action issues an outbound request under an authenticated caller — what makes the forged-actor loops non-vacuous. It establishes nothing about how a real backend would treat that request."
     }
   },
   "runtime_proof": {
@@ -77,14 +85,14 @@
     "harness": "Two production builds of the Command Center, served by `next start` and probed over real HTTP with curl. The two arms differ in exactly one line of one file -- the middleware matcher -- and in nothing else; see runtime_proof.build_identities for the sha256 of each built source and the one-line diff between them. Probing a served build is the only way to observe this defect: Next's `config.matcher` decides whether middleware is invoked at all, so a test that calls `middleware()` directly cannot see it, and every such test passed while the bypass was live.",
     "build_identities": {
       "arm_a_fixed": {
-        "git_head": "1aab560ab42bd690846b5207428ad82575b0b098",
+        "git_head": "3d46af43633264c86f717851510a5cf86958f88c",
         "working_tree": "clean at git_head",
         "middleware_matcher": "['/((?!_next/static|_next/image).*)']",
         "middleware_sha256": "70008bf9782372c84d628297940893c409221cb9a427f1842322a5a86d2ce88c",
         "build": "pnpm exec next build -> Compiled successfully"
       },
       "arm_b_control": {
-        "git_head": "1aab560ab42bd690846b5207428ad82575b0b098",
+        "git_head": "3d46af43633264c86f717851510a5cf86958f88c",
         "working_tree": "git_head with exactly one line of apps/command-center/src/middleware.ts reverted; no other file differs",
         "middleware_matcher": "['/((?!.*\\\\..*).*)', '/icon.svg']",
         "middleware_sha256": "45541b041a1336fc712d6c518ad19acb3587203f2f1462fc14e587fc4fb7df2b",
@@ -194,5 +202,25 @@
       "status": "NOT_APPLICABLE",
       "detail": "This lane changes an HTTP authentication boundary in a Next.js app and touches no database code, no schema and no query. Neither probe arm was given database credentials, so neither read nor wrote any database. The required `verify` check on this PR still runs pnpm test:db against staging; its result is recorded in sha_binding.ci_sentinels.pnpm_test_db as the CI receipt at the anchor SHA."
     }
+  },
+  "independent_review": {
+    "reviewer": "separate Claude agent that did not author the implementation",
+    "range_reviewed": "870bbbafb70087c1bba1d814c20eca0861f9e16f..3d46af43633264c86f717851510a5cf86958f88c",
+    "implementation_commit": "870bbbafb70087c1bba1d814c20eca0861f9e16f",
+    "verdict": "CONFIRMED",
+    "scope": [
+      "no product code changed in the reviewed range — every non-test file is either byte-identical to origin/main (next-env.d.ts), a package.json `test` script line, an ops ledger artifact merged from main, or a test-support helper that no product module imports",
+      "the loopback target is allowed by decideTarget as provably isolated (packages/db/src/target-identity.ts isLoopbackTarget, privileged-client-boundary.ts kind==='loopback'), and no test can reach a real database: the helper overrides SUPABASE_URL unconditionally, server-action-guard stubs globalThis.fetch for the same window, and client-cache-auth issues no request",
+      "both env windows are finally-protected and restore prior values, deleting keys that were absent",
+      "no assertion was weakened — the change makes previously-unreachable assertions reachable; both named guards still fail under mutation (moving the auth call inside the client cache check; forwarding the caller-supplied actor header)",
+      "the package `test` script is a widening relative to origin/main, not a narrowing: main's script was src/lib/*.test.ts src/lib/data/*.test.ts, and the net change is + src/lib/*.test.tsx",
+      "the rewritten docblock overclaims nothing; its closing paragraph is a de-claim"
+    ],
+    "reviewer_measured": {
+      "command_center_suite_with_supabase_env_unset": "tsx --test src/lib/data/client-cache-auth.test.ts src/lib/server-action-guard.test.ts — pass 55, fail 0",
+      "command_center_package_suite": "# tests 480 / # pass 480 / # fail 0",
+      "automation_coverage_check": "verdict=PASS, unwired=119 (baselined=119, new=0)"
+    },
+    "reviewer_flag_non_blocking": "two docblocks say the src/app originals are 'not reachable from any package script'; true of origin/main and of the merged result, momentarily false at 870bbbaf on this branch alone"
   }
 }
