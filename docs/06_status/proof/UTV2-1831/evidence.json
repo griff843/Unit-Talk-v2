@@ -1,0 +1,57 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1831",
+  "tier": "T2",
+  "lane_type": "modeling",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "380e7854f36dc318421dee880d6ab1cbac22ce4a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS — required `verify` check completed success at 380e7854f36dc318421dee880d6ab1cbac22ce4a (https://github.com/griff843/Unit-Talk-v2/actions/runs/33964033493/job/101301745070)",
+      "pnpm_test_db": "PASS — 'Writable DB proof (staging only)' job 101300875256 succeeded against staging in run 33964033493 at this exact anchor SHA; the 'Run the T1 live proof suites against staging' step executed the new suite with '# tests 3 / # pass 3 / # fail 0 / # skipped 0', duration_ms 45258.859337, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33964033493/job/101300875256",
+      "r_level_check": "PASS — https://github.com/griff843/Unit-Talk-v2/actions/runs/33964033458/job/101300811950"
+    }
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI 'Writable DB proof (staging only)' job — never production",
+    "command": "pnpm test:t1-proof:live",
+    "receipt": {
+      "run_id": "33964033493",
+      "job_id": "101300875256",
+      "head_sha": "380e7854f36dc318421dee880d6ab1cbac22ce4a",
+      "suite": "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts",
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 45258.859337,
+      "per_test_duration_ms": [15256.857589, 14454.835163, 15070.505902],
+      "artifact": "utv2-1630-db-proof-receipt-33964033493-1"
+    },
+    "significance": "The suites in this chain are `{ skip: skipReason }`-gated on SUPABASE_SERVICE_ROLE_KEY, so a missing credential produces a passing job with every test skipped. `skipped: 0` — corroborated by ~15s per test — is therefore what establishes the suite actually executed against staging rather than short-circuiting.",
+    "reproduction": {
+      "run_id": "33964739189",
+      "job_id": "101302801007",
+      "head_sha": "a8f3259b92b52115a85c7b560e789177dfadc904",
+      "detail": "A later proof-only commit that changed no executable file produced the identical 3/3/0/0 receipt (duration_ms 45490.80927). Corroboration only; the binding receipt is the anchored one above."
+    }
+  },
+  "scope": {
+    "declared_file_scope": [
+      "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts",
+      "docs/05_operations/db-writer-classification.json",
+      "package.json"
+    ],
+    "detail": "Plus this lane's own artifacts: the manifest, the .ops/sync file, and this proof bundle. No pinned Shadow Parity path, no workflow, no merge control, no containment setting and no deploy path is touched."
+  },
+  "limits": [
+    "This lane proves behaviour at the database boundary only: that Postgres refuses NULL, NaN-as-NULL and non-positive `stake_units` with SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that a real stake still persists a real profit/loss.",
+    "It asserts nothing about the application's handling of *historical* invalid stakes. The constraint is NOT VALID and was never verified against existing rows. That distinction is the subject of the parent work on #1479 and is deliberately out of scope here."
+  ],
+  "generated_at": "2026-09-05T12:20:00Z"
+}
