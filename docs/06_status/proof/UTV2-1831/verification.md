@@ -94,8 +94,43 @@ bundle and issues no query. Execution happens in the `Writable DB proof (staging
 credential, so a missing credential yields a **passing** job with every test skipped.
 
 The receipt this PR must be read against is therefore that job's tap output for this suite showing
-`# pass 3 # fail 0 # skipped 0`. It is recorded under "Merge SHA Binding" below once the job for
-the final head completes.
+`# pass 3 # fail 0 # skipped 0`.
+
+**Captured. Run `33964739189`, job `101302801007`, 2026-09-05T12:05:32Z-12:06:18Z, at branch head
+`a8f3259b92b52115a85c7b560e789177dfadc904`.** The `Run the T1 live proof suites against staging`
+step's command line ends with `&& tsx --test apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`,
+which is the wiring this PR adds; the suite's own tap block is:
+
+```
+TAP version 13
+ok 1 - UTV2-1815 live DB: Postgres refuses a NULL stake with 23514 on picks_stake_units_canonical_check
+  duration_ms: 14969.792313
+ok 2 - UTV2-1815 live DB: an unrepresentable (NaN) stake and a non-positive stake are refused identically
+  duration_ms: 14772.398547
+ok 3 - UTV2-1815 live DB: a real stake still persists a real profit/loss (negative control)
+  duration_ms: 15283.602833
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 45490.80927
+```
+
+`# skipped 0` is the load-bearing line: it is what distinguishes a real run against staging from a
+passing job whose suites were skipped on an absent `SUPABASE_SERVICE_ROLE_KEY`. The per-test
+durations (~15s each) corroborate it — a skipped test does not spend fifteen seconds. The job then
+ran `Scrub credentials` (`rm -f local.env`) and uploaded `ci-db-proof-receipt.json` as
+`utv2-1630-db-proof-receipt-33964739189-1`.
+
+This receipt establishes only what the test asserts: that Postgres refuses NULL, NaN-as-NULL and
+non-positive `stake_units` with SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that
+a real stake still persists a real profit/loss. It says nothing about the application's handling of
+*historical* invalid stakes — the constraint is `NOT VALID` and was never verified against existing
+rows. That distinction is deliberate and is the subject of the parent work, not this PR.
 
 ## Merge SHA Binding
 
