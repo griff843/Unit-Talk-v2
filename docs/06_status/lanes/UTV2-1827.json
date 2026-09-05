@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1827-governed-staging-proof-runner",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1505",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/staging-proof-runner.yml",
@@ -25,9 +25,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1827/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-05T13:22:18.863Z",
-  "heartbeat_at": "2026-09-05T13:22:18.863Z",
+  "heartbeat_at": "2026-09-05T13:34:38.144Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1827-governed-staging-proof-runner.json",
