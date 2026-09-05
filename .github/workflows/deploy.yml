@@ -227,6 +227,10 @@ jobs:
             app_dir: apps/smart-form
             app_package: '@unit-talk/smart-form'
             app_port: '4400'
+          - service: command-center
+            app_dir: apps/command-center
+            app_package: '@unit-talk/command-center'
+            app_port: '4300'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -474,6 +478,12 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+          COMMAND_CENTER_DOMAIN: ${{ secrets.COMMAND_CENTER_DOMAIN }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -491,12 +501,41 @@ jobs:
             fi
           done
 
+          # The operator console is deployed on every release but is only
+          # REACHABLE once a hostname exists for it. Until then the edge gets
+          # `http://command-center.invalid`, which Caddy parses, never requests a
+          # certificate for (the http:// scheme suppresses automatic HTTPS) and
+          # no resolver can answer. Leaving the variable empty is not an option:
+          # an empty site address crash-loops Caddy and takes the API, the
+          # website and the intake form down with it.
+          #
+          # Exposure implies credentials. The moment a hostname IS provisioned,
+          # the console's own auth token and its privileged API key become
+          # required -- a reachable operator console with neither would answer
+          # 401 to Griff and 401 to everyone else, which looks like an outage
+          # rather than the misconfiguration it is.
+          if [ -n "${COMMAND_CENTER_DOMAIN:-}" ]; then
+            for name in COMMAND_CENTER_AUTH_TOKEN UNIT_TALK_CC_API_KEY; do
+              eval "value=\${$name:-}"
+              if [ -z "$value" ]; then
+                echo "::error::COMMAND_CENTER_DOMAIN is set but $name is empty. Refusing to publish an operator console that cannot authenticate anyone."
+                exit 1
+              fi
+            done
+            _command_center_site="$COMMAND_CENTER_DOMAIN"
+            echo "Operator console will be published at https://$COMMAND_CENTER_DOMAIN."
+          else
+            _command_center_site="http://command-center.invalid"
+            echo "COMMAND_CENTER_DOMAIN is unset: the operator console is deployed on the internal network only and is not routable."
+          fi
+
           # Hostnames are the single source of truth for the derived URLs, so the
           # Google callback URI cannot drift from the hostname Caddy serves.
           printf '%s\n' \
             "CADDY_DOMAIN=$CADDY_DOMAIN" \
             "UNIT_TALK_WEB_DOMAIN=$WEB_DOMAIN" \
             "UNIT_TALK_SMART_FORM_DOMAIN=$SMART_FORM_DOMAIN" \
+            "UNIT_TALK_COMMAND_CENTER_DOMAIN=$_command_center_site" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.edge' && chmod 600 '$DEPLOY_PATH/.env.edge' && echo 'env.edge written'"
 
@@ -529,6 +568,35 @@ jobs:
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.smart-form' && chmod 600 '$DEPLOY_PATH/.env.smart-form' && echo 'env.smart-form written'"
 
+          # UTV2 mission: the operator console authenticates every request that
+          # is not explicitly public, and `fail_closed` is stated here rather
+          # than inferred from NODE_ENV so that no other variable can quietly
+          # turn it off. SUPABASE_ACCESS_TOKEN is deliberately NOT written: that
+          # is an account-scoped management PAT that can run DDL and ignores
+          # RLS, and a browser-facing server is the wrong place to hold one.
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4300" \
+            "UNIT_TALK_APP_ENV=production" \
+            "COMMAND_CENTER_AUTH_MODE=fail_closed" \
+            "COMMAND_CENTER_AUTH_TOKEN=${COMMAND_CENTER_AUTH_TOKEN:-}" \
+            "UNIT_TALK_CC_API_KEY=${UNIT_TALK_CC_API_KEY:-}" \
+            "UNIT_TALK_API_URL=http://api:4000" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            "SUPABASE_URL=$SUPABASE_URL" \
+            "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
+
+          # A fail-open operator console is indistinguishable from no console at
+          # all, so assert the written file rather than trust the printf above.
+          if ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+               "grep -qiE '^(UNIT_TALK_)?(COMMAND_CENTER_AUTH_MODE|OPERATOR_RUNTIME_MODE)=(fail_open|disabled)' '$DEPLOY_PATH/.env.command-center'"; then
+            echo "::error::The operator console env file downgrades authentication to fail-open."
+            exit 1
+          fi
+
           # The QA authentication bypass is never enabled in production. Assert it
           # rather than assume it: a bypass name reaching the server would make the
           # allow-list decorative.
@@ -537,7 +605,7 @@ jobs:
             echo "::error::A QA auth bypass variable reached the production Smart Form env file."
             exit 1
           fi
-          echo "Next.js env files written; QA auth bypass absent."
+          echo "Next.js env files written; operator console fail-closed; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret. github.token is the
       # same ephemeral, repository-scoped credential `build` already uses to
@@ -553,12 +621,12 @@ jobs:
       # this stage (and the later promote stage) will need, at the exact
       # requested tag, BEFORE touching any running container. A stale/invalid
       # token or a tag that never got pushed must fail here, not mid-mutation.
-      - name: Preflight — verify registry auth and resolve all 6 image tags
+      - name: Preflight — verify registry auth and resolve all 7 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot web smart-form; do
+          for svc in api worker ingestor discord-bot web smart-form command-center; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -567,7 +635,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: all 7 images resolved for tag $IMAGE_TAG."
 
       - name: Release API canary
         env:
@@ -962,6 +1030,12 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           NEXTAUTH_SECRET: ${{ secrets.NEXTAUTH_SECRET }}
           ALLOWED_CAPPER_EMAILS: ${{ secrets.ALLOWED_CAPPER_EMAILS }}
+          COMMAND_CENTER_DOMAIN: ${{ secrets.COMMAND_CENTER_DOMAIN }}
+          COMMAND_CENTER_AUTH_TOKEN: ${{ secrets.COMMAND_CENTER_AUTH_TOKEN }}
+          UNIT_TALK_CC_API_KEY: ${{ secrets.UNIT_TALK_CC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           set -eu
           # Fail closed a second time at the point of use. The verify job checked
@@ -979,12 +1053,41 @@ jobs:
             fi
           done
 
+          # The operator console is deployed on every release but is only
+          # REACHABLE once a hostname exists for it. Until then the edge gets
+          # `http://command-center.invalid`, which Caddy parses, never requests a
+          # certificate for (the http:// scheme suppresses automatic HTTPS) and
+          # no resolver can answer. Leaving the variable empty is not an option:
+          # an empty site address crash-loops Caddy and takes the API, the
+          # website and the intake form down with it.
+          #
+          # Exposure implies credentials. The moment a hostname IS provisioned,
+          # the console's own auth token and its privileged API key become
+          # required -- a reachable operator console with neither would answer
+          # 401 to Griff and 401 to everyone else, which looks like an outage
+          # rather than the misconfiguration it is.
+          if [ -n "${COMMAND_CENTER_DOMAIN:-}" ]; then
+            for name in COMMAND_CENTER_AUTH_TOKEN UNIT_TALK_CC_API_KEY; do
+              eval "value=\${$name:-}"
+              if [ -z "$value" ]; then
+                echo "::error::COMMAND_CENTER_DOMAIN is set but $name is empty. Refusing to publish an operator console that cannot authenticate anyone."
+                exit 1
+              fi
+            done
+            _command_center_site="$COMMAND_CENTER_DOMAIN"
+            echo "Operator console will be published at https://$COMMAND_CENTER_DOMAIN."
+          else
+            _command_center_site="http://command-center.invalid"
+            echo "COMMAND_CENTER_DOMAIN is unset: the operator console is deployed on the internal network only and is not routable."
+          fi
+
           # Hostnames are the single source of truth for the derived URLs, so the
           # Google callback URI cannot drift from the hostname Caddy serves.
           printf '%s\n' \
             "CADDY_DOMAIN=$CADDY_DOMAIN" \
             "UNIT_TALK_WEB_DOMAIN=$WEB_DOMAIN" \
             "UNIT_TALK_SMART_FORM_DOMAIN=$SMART_FORM_DOMAIN" \
+            "UNIT_TALK_COMMAND_CENTER_DOMAIN=$_command_center_site" \
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.edge' && chmod 600 '$DEPLOY_PATH/.env.edge' && echo 'env.edge written'"
 
@@ -1017,6 +1120,35 @@ jobs:
             | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
                 "cat > '$DEPLOY_PATH/.env.smart-form' && chmod 600 '$DEPLOY_PATH/.env.smart-form' && echo 'env.smart-form written'"
 
+          # UTV2 mission: the operator console authenticates every request that
+          # is not explicitly public, and `fail_closed` is stated here rather
+          # than inferred from NODE_ENV so that no other variable can quietly
+          # turn it off. SUPABASE_ACCESS_TOKEN is deliberately NOT written: that
+          # is an account-scoped management PAT that can run DDL and ignores
+          # RLS, and a browser-facing server is the wrong place to hold one.
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "PORT=4300" \
+            "UNIT_TALK_APP_ENV=production" \
+            "COMMAND_CENTER_AUTH_MODE=fail_closed" \
+            "COMMAND_CENTER_AUTH_TOKEN=${COMMAND_CENTER_AUTH_TOKEN:-}" \
+            "UNIT_TALK_CC_API_KEY=${UNIT_TALK_CC_API_KEY:-}" \
+            "UNIT_TALK_API_URL=http://api:4000" \
+            "NEXT_PUBLIC_API_BASE_URL=https://$CADDY_DOMAIN" \
+            "SUPABASE_URL=$SUPABASE_URL" \
+            "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.command-center' && chmod 600 '$DEPLOY_PATH/.env.command-center' && echo 'env.command-center written'"
+
+          # A fail-open operator console is indistinguishable from no console at
+          # all, so assert the written file rather than trust the printf above.
+          if ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+               "grep -qiE '^(UNIT_TALK_)?(COMMAND_CENTER_AUTH_MODE|OPERATOR_RUNTIME_MODE)=(fail_open|disabled)' '$DEPLOY_PATH/.env.command-center'"; then
+            echo "::error::The operator console env file downgrades authentication to fail-open."
+            exit 1
+          fi
+
           # The QA authentication bypass is never enabled in production. Assert it
           # rather than assume it: a bypass name reaching the server would make the
           # allow-list decorative.
@@ -1025,7 +1157,7 @@ jobs:
             echo "::error::A QA auth bypass variable reached the production Smart Form env file."
             exit 1
           fi
-          echo "Next.js env files written; QA auth bypass absent."
+          echo "Next.js env files written; operator console fail-closed; QA auth bypass absent."
 
       # UTV2-1648: replaces the long-lived GHCR_PAT secret -- see the matching
       # canary-job comment for the full rationale.
@@ -1037,12 +1169,12 @@ jobs:
       # UTV2-1648: same pre-mutation registry preflight as the canary job --
       # this job runs on a fresh runner with its own auth, so it needs its own
       # check even though canary already verified moments earlier.
-      - name: Preflight — verify registry auth and resolve all 6 image tags
+      - name: Preflight — verify registry auth and resolve all 7 image tags
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           failed=""
-          for svc in api worker ingestor discord-bot web smart-form; do
+          for svc in api worker ingestor discord-bot web smart-form command-center; do
             if ! ssh "$DEPLOY_USER@$DEPLOY_HOST" "docker pull '$IMAGE_NAMESPACE/$svc:$IMAGE_TAG' >/dev/null 2>&1"; then
               failed="$failed $svc"
             fi
@@ -1051,7 +1183,7 @@ jobs:
             echo "::error::Registry preflight failed for tag $IMAGE_TAG -- could not authenticate or resolve:$failed. Aborting before any container mutation."
             exit 1
           fi
-          echo "Registry preflight passed: all 6 images resolved for tag $IMAGE_TAG."
+          echo "Registry preflight passed: all 7 images resolved for tag $IMAGE_TAG."
 
       - name: Promote all production containers
         env:
@@ -1075,19 +1207,19 @@ jobs:
           fi
           exit 1
 
-      # UTV2-1795: the API health loop above says nothing about the two Next.js
+      # UTV2-1795: the API health loop above says nothing about the Next.js
       # surfaces -- they listen on the Docker network only, so `curl localhost`
       # on the host cannot see them. Read each container's own compose
-      # healthcheck verdict instead, and fail the deploy if either surface is
-      # not healthy. Rolling one back is independent of the other and of the
+      # healthcheck verdict instead, and fail the deploy if any surface is
+      # not healthy. Rolling one back is independent of the others and of the
       # API: `UNIT_TALK_IMAGE_TAG=<previous> docker compose up -d --no-deps web`
-      # (or `smart-form`) replaces exactly that container.
+      # (or `smart-form`, or `command-center`) replaces exactly that container.
       - name: Verify Next.js surfaces are healthy
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
           set -eu
-          for svc in web smart-form; do
+          for svc in web smart-form command-center; do
             healthy=""
             for attempt in $(seq 1 30); do
               if status=$(ssh "$DEPLOY_USER@$DEPLOY_HOST" \
