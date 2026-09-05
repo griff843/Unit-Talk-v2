@@ -6,28 +6,28 @@
   "pr": 1505,
   "tier": "T1",
   "lane_type": "runtime",
-  "evaluated_at": "PENDING-CI",
-  "verified_source_sha": "00ed6f6edfae3042f8ad820c767a4f2effc9bcad",
+  "evaluated_at": "2026-09-05T14:25:00Z",
+  "verified_source_sha": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1",
   "provenance": {
     "note": "The verify and staging receipts below are read from the CI run at the branch head; none of it was produced locally. Local verification against staging is structurally unavailable here \u2014 local.env pins SUPABASE_URL to http://127.0.0.1:1 under production containment and ci:assert-staging fails closed rather than resolving a staging target off-CI. The type-check, lint and lane-suite results recorded in evidence.json under static_proof WERE run locally and are stated as such; the authoritative receipts for pnpm type-check and pnpm test are the CI ones named here.",
-    "workflow_run": "PENDING",
-    "run_id": "PENDING"
+    "workflow_run": null,
+    "run_id": null
   },
   "verify_result": {
-    "status": "PENDING",
-    "check_name": "verify",
-    "job_id": "PENDING",
-    "job_url": "PENDING",
-    "head_sha": "PENDING"
+    "status": "success",
+    "run_id": "33970181814",
+    "job_id": "101318289930",
+    "duration": "4m20s"
   },
   "test_db_result": {
-    "status": "PENDING",
-    "command": "pnpm test:db",
-    "target": "staging",
-    "producer_job": "Writable DB proof (staging only)",
-    "producer_job_id": "PENDING",
-    "producer_job_url": "PENDING",
-    "note": "This is the run-level staging receipt ci.yml produces for every PR at this head. It is evidence that this branch does not break the staging path. It is NOT evidence about the runner this PR adds: none of the code in this lane touches the database, and staging-proof-runner.yml cannot be dispatched until it is on the default branch."
+    "status": "success",
+    "job_id": "101317229404",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "skipped": 0,
+    "target": "staging Supabase xskgrzbteyqdufktjrjx",
+    "receipt_sha256": "98a56e45234a0116b599504e0e0478787b24276a2a91897209bb7bc7a8e1bd72"
   },
   "runtime_surface_touched": {
     "database": false,

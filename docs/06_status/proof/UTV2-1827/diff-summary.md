@@ -3,8 +3,8 @@
 **Issue:** UTV2-1827 — governed staging proof runner
 **Branch:** `claude/utv2-1827-governed-staging-proof-runner`
 **PR:** https://github.com/griff843/Unit-Talk-v2/pull/1505
-**Anchor (`verified_source_sha`):** `00ed6f6edfae3042f8ad820c767a4f2effc9bcad`
-**Merge SHA:** pending merge
+**Anchor (`verified_source_sha`):** `2d34269ffe6a74a934bf68ea4d6433ea68932bd1`
+MERGE_SHA: pending merge
 
 ## Files changed
 

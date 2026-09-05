@@ -1,12 +1,53 @@
-# UTV2-1827 — verification
+# PROOF: UTV2-1827
 
 MERGE_SHA: pending merge
 
-**Issue:** UTV2-1827 — governed staging proof runner
-**Tier:** T1 · **Lane type:** runtime · **Executor:** claude
-**Branch:** `claude/utv2-1827-governed-staging-proof-runner`
-**PR:** https://github.com/griff843/Unit-Talk-v2/pull/1505
-**Anchor (`verified_source_sha`):** `00ed6f6edfae3042f8ad820c767a4f2effc9bcad`
+> Pre-merge the merge row is intentionally the ratified placeholder; the Execution SHA row in
+> "Merge SHA Binding" below carries the verified implementation identity.
+> `post-merge-lane-close.yml` rebinds merge authority only after GitHub supplies the merged-PR
+> attestation.
+
+Issue: UTV2-1827 — governed staging proof runner
+Tier: T1
+Lane type: runtime
+Executor: claude
+Branch: claude/utv2-1827-governed-staging-proof-runner
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1505
+Anchor (`verified_source_sha`): `2d34269ffe6a74a934bf68ea4d6433ea68932bd1`
+result: PASS
+
+## ASSERTIONS:
+
+- [x] **A1 — A dispatcher chooses a key, never a command.** `run-staging-proof-command.ts` resolves
+  the dispatched key against `scripts/ci/staging-proof-commands.ts` and spawns that registry's fixed
+  argv with `shell: false`. Nothing a dispatcher types is interpolated into a command line. M2 and
+  M4 below are the mutations that prove the resolution is an exact match rather than a prefix,
+  a case-insensitive compare, or a fallback.
+- [x] **A2 — The target must be positively the approved staging project.** `admit()` calls
+  `assertStagingTarget(env)` and refuses unless the resolved project ref is
+  `xskgrzbteyqdufktjrjx`. Production is refused by identity, not by convention. M1 proves the
+  refusal is acted on rather than merely computed.
+- [x] **A3 — The executed commit must be reachable from the default branch.** The registry is only
+  as trustworthy as the commit it is read from: anyone able to push a branch could otherwise rewrite
+  `staging-proof-commands.ts` on that branch and dispatch it. M5, M6 and M7 prove the ancestry gate
+  exists, refuses on "cannot tell", and has the history it needs to answer.
+- [x] **A4 — An unrecorded run proves nothing.** A missing `--receipt` path is a refusal, and every
+  run writes both a `ci-db-proof-receipt/v2` and a `staging-proof-dispatch/v1` sidecar carrying the
+  dispatch identity the receipt schema does not itself hold.
+- [x] **A5 — A refusal is never readable as a failed proof command.** Every refusal exits 78
+  (EX_CONFIG); the proof command's own exit status is passed through verbatim.
+- [x] **A6 — The job releases staging credentials only.** It binds the `staging-ci` environment and
+  references no production Supabase secret; `local.env` is scrubbed with `if: always()`.
+
+## EVIDENCE:
+
+Three kinds, kept distinct rather than blended. **Command evidence** — the local `pnpm type-check`,
+`pnpm lint` and lane-suite runs — is in "## Verification" immediately below, and is stated as local.
+**Hosted receipts** — the authoritative `pnpm verify`, `P0 Protocol` and
+`Writable DB proof (staging only)` runs at the anchor — are in `evidence.json` under
+`hosted_verification` and `runtime_proof`, with run and job ids. **Control evidence** — the seven
+mutations that each make a named control fail — is in "## What the controls are, and the mutation
+that proves each one", with the verbatim `not ok` lines every mutation produced.
 
 ## Verification
 
@@ -20,9 +61,14 @@ Commands run on the branch at the anchor, in the lane worktree
 | `pnpm exec tsx --test scripts/ci/staging-proof-commands.test.ts scripts/ci/run-staging-proof-command.test.ts` | `# tests 44 / # pass 44 / # fail 0` |
 | `pnpm test` (full suite) | run in CI as part of the required `verify` check — see `evidence.json` → `hosted_verification` |
 
-`pnpm type-check` and `pnpm test` are both executed inside the required `verify` check on this PR,
-and that check is the authoritative receipt for them. The local runs above are stated as local runs
-and are not offered in place of it.
+`pnpm verify` is the required check on this PR and is the authoritative receipt for
+`pnpm type-check`, `pnpm lint` and `pnpm test`. The local runs above are stated as local runs and
+are not offered in place of it; the run ids for the hosted `pnpm verify` are recorded in
+`evidence.json` under `hosted_verification`.
+
+R-level compliance is evaluated by `scripts/ci/r-level-check.ts`, which runs as the
+`R-Level Compliance Check` job on this PR against `docs/05_operations/r1-r5-rules.json`. Its report
+is written to `.out/ops/pr-review-packet/r-level-report.json` by the `Return review packet` job.
 
 ## What the controls are, and the mutation that proves each one
 
@@ -222,4 +268,15 @@ unaffected.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1505
 Approved PR head: pending merge
-Execution SHA: 00ed6f6edfae3042f8ad820c767a4f2effc9bcad
+Execution SHA: 2d34269ffe6a74a934bf68ea4d6433ea68932bd1
+
+The mutation runs recorded above were executed locally at `00ed6f6edfae3042f8ad820c767a4f2effc9bcad`,
+which is an ancestor of the anchor rather than the anchor itself. The branch was then resynced with
+`origin/main` through `ops:merge-wrapper git-merge-main`, producing the merge commit that is now the
+anchor. The whole range `00ed6f6ed..2d34269ff` is this bundle's own four files plus what the merge
+brought in from `main`: `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`,
+`docs/05_operations/db-writer-classification.json`, one `package.json` line, and the lane manifest
+and proof bundle of an already-merged lane. None of the four files the mutations act on —
+`scripts/ci/run-staging-proof-command.ts`, `scripts/ci/staging-proof-commands.ts`,
+`scripts/ci/run-staging-proof-command.test.ts` and `.github/workflows/staging-proof-runner.yml` —
+differs across that range, so the mutation counts describe the code at the anchor.
