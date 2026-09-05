@@ -538,7 +538,7 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "used_by": [
         ".github/workflows/deploy.yml"
       ],
-      "purpose": "Server-authoritative comma-separated allow-list of capper email addresses. Empty admits nobody \u2014 which is the correct failure but a silent one, so both the deploy workflow and the container entrypoint refuse an empty value rather than standing up an intake surface nobody can enter."
+      "purpose": "Server-authoritative allow-list mapping each capper sign-in address to its canonical capper id. Since UTV2-1824 the required shape is a comma-separated list of `<email>=<canonicalCapperId>` pairs, where the id matches ^[a-z0-9][a-z0-9_-]*$. An entry without `=` is silently DROPPED and does NOT fall back to the email local part. Empty admits nobody \u2014 the correct failure but a silent one, so both the deploy workflow and the container entrypoint refuse an empty value. Neither validates the SHAPE, however, so an all-malformed value deploys green and admits nobody: verify it against apps/smart-form/lib/auth-allowlist.ts before dispatching a deploy."
     }
   ]
 }

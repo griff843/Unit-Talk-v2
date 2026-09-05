@@ -58,7 +58,10 @@ AUTH_TRUST_HOST=true     # deployment constant, not a secret; see below
 NEXTAUTH_SECRET=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-ALLOWED_CAPPER_EMAILS=   # server-authoritative, comma-separated; empty admits nobody
+ALLOWED_CAPPER_EMAILS=   # server-authoritative; comma-separated <email>=<canonicalCapperId>
+                         # pairs (UTV2-1824). An entry without `=` is dropped, NOT
+                         # derived from the local part. Empty admits nobody, and
+                         # only emptiness is checked - a malformed value ships green.
 UNIT_TALK_API_URL=http://api:4000
 NEXT_PUBLIC_API_BASE_URL=
 ```
