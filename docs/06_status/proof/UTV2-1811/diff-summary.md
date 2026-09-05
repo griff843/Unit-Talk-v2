@@ -1,6 +1,6 @@
 # PROOF: UTV2-1811 — shared rate-limit DB contract
 
-MERGE_SHA: d04712fa2b878bc72fd6d4d0e0e43f320533c4a3
+MERGE_SHA: 1734bf2017eb0fe5e00d93a4cff3d074d7be4546
 
 The value above is the last non-proof commit on this branch — the `--no-ff` merge of
 `origin/main` at `b51f509e` performed under the merge mutex via `ops:merge-wrapper

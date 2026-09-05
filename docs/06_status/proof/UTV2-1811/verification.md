@@ -1,10 +1,10 @@
 # PROOF: UTV2-1811 — Shared rate-limit DB contract
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1734bf2017eb0fe5e00d93a4cff3d074d7be4546
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1734bf2017eb0fe5e00d93a4cff3d074d7be4546
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1477
 Verified source SHA: d04712fa2b878bc72fd6d4d0e0e43f320533c4a3
 

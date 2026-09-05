@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1811-rate-limit-bucket-contract",
   "branch": "claude/utv2-1811-rate-limit-bucket-contract",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1734bf2017eb0fe5e00d93a4cff3d074d7be4546",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1477",
   "files_changed": [],
   "file_scope_lock": [
@@ -25,14 +25,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1811/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-01T15:46:45.557Z",
-  "heartbeat_at": "2026-09-04T23:41:09.076Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-05T01:43:43.149Z",
+  "closed_at": "2026-09-05T01:43:43.149Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1811-rate-limit-bucket-contract.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T01:43:41.113Z",
+      "verdict": "pass",
+      "merge_sha": "1734bf2017eb0fe5e00d93a4cff3d074d7be4546",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
