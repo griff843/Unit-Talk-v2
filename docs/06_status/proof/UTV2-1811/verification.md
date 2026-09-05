@@ -113,8 +113,13 @@ path. The divergence runs **both ways**: at limit 1 with requests at 59,000 / 61
 the in-memory store gives allow, refuse, allow while the RPC path gives allow, allow, refuse, so
 neither store dominates the other. An earlier revision of this paragraph claimed the RPC path is
 "never more restrictive"; that was wrong and was caught by independent review, which supplied
-that counterexample. Both witnesses above were produced by simulating the two shipped stores over
-a grid of request times, not reasoned by hand.
+that counterexample. Both witnesses are hand computations from the two shipped stores at
+`apps/api/src/server.ts:1119-1199` and the migration's per-`(key, window_start)` upsert, each
+independently reproduced value-by-value by two reviewers. A previous revision said they were
+"produced by simulating the two shipped stores over a grid of request times" and added that
+permissive divergences occur "far more often than restrictive"; no such script or measurement is
+checked in, so both statements are retracted. The claim here is existential — divergence occurs
+in both directions, and here are two cases — not a claim about how often.
 
 Neither T1 suite can detect this. `t1-proof-utv2-1811-rpc-contract-parity.test.ts` is pure static
 analysis — it computes no window and never calls `consume()`. Only
