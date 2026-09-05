@@ -230,3 +230,170 @@ test('rolling back to a tag with no snapshot warns and still rolls the code back
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// UTV2-1835 — the snapshot is keyed on .unit-talk-release, which only advances
+// after the env writes. That leaves a window: a deploy that fails between the
+// two has already replaced the configuration on disk while the release record
+// still names the previous, still-running release.
+//
+// Two behaviours have to hold at once, and they pull in opposite directions:
+//
+//   - A RETRY after a failed attempt must not overwrite the snapshot, because
+//     what is on disk is the failed attempt's configuration.
+//   - A REDEPLOY of the same tag (a secret rotation with no code change — the
+//     documented recovery from a bad configuration) must refresh it, or the
+//     stored copy silently diverges from what is running.
+//
+// The in-flight marker is the only thing that distinguishes them, so it is
+// tested in both directions and its lifecycle is asserted structurally.
+const RELEASE_ADVANCE_STEP: Record<(typeof DEPLOY_JOBS)[number], string> = {
+  canary: 'Release API canary',
+  promote: 'Promote all production containers',
+};
+const INFLIGHT = '.unit-talk-deploy-inflight';
+
+function seedHost(dir: string, tag: string, config: Record<string, string>): void {
+  writeFileSync(join(dir, '.unit-talk-release'), `${tag}\n`);
+  for (const [name, body] of Object.entries(config)) {
+    writeFileSync(join(dir, name), body);
+    chmodSync(join(dir, name), 0o600);
+  }
+}
+
+function runSnapshot(jobId: (typeof DEPLOY_JOBS)[number], dir: string) {
+  return spawnSync('bash', ['-s', '--', dir, 'test-run-id'], {
+    input: snapshotRemoteBody(jobId),
+    encoding: 'utf8',
+    cwd: dir,
+  });
+}
+
+for (const jobId of DEPLOY_JOBS) {
+  // Establishes that the window this defect lives in actually exists. If the
+  // release record were advanced before the env writes there would be no
+  // window, and the tests below would be guarding nothing.
+  test(`${jobId}: the release record advances only after the configuration is written`, () => {
+    const writeAt = stepIndex(jobId, ENV_WRITE_STEP);
+    const advanceAt = stepIndex(jobId, RELEASE_ADVANCE_STEP[jobId]);
+    assert.notEqual(advanceAt, -1, `"${jobId}" must contain "${RELEASE_ADVANCE_STEP[jobId]}"`);
+    assert.ok(
+      writeAt < advanceAt,
+      `"${ENV_WRITE_STEP}" (${writeAt}) must precede "${RELEASE_ADVANCE_STEP[jobId]}" (${advanceAt})`,
+    );
+  });
+
+  // The marker is only meaningful if it is raised before the writes and cleared
+  // at the exact moment the configuration on disk becomes the release's own.
+  // A marker that is never cleared would freeze every future snapshot; one that
+  // is never raised restores the original defect.
+  test(`${jobId}: the in-flight marker is raised by the snapshot and cleared at the release record`, () => {
+    assert.match(
+      snapshotRemoteBody(jobId),
+      new RegExp(`> ${INFLIGHT.replace(/\./g, '\\.')}`),
+      `"${SNAPSHOT_STEP}" in "${jobId}" must raise the in-flight marker before the env writes`,
+    );
+    const advance = jobSteps(jobId).find((s) => s && s['name'] === RELEASE_ADVANCE_STEP[jobId]);
+    const run = (advance as WorkflowStep)['run'] as string;
+    const releaseAt = run.indexOf('> .unit-talk-release');
+    const clearAt = run.indexOf(`rm -f ${INFLIGHT}`);
+    assert.ok(clearAt !== -1, `"${RELEASE_ADVANCE_STEP[jobId]}" must clear the in-flight marker`);
+    assert.ok(
+      releaseAt !== -1 && releaseAt < clearAt,
+      'the marker must be cleared only after the release record has advanced',
+    );
+  });
+
+  test(`${jobId}: a retry after a failed deploy does not overwrite the running release's snapshot`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'utv2-1835-retry-'));
+    const runningTag = 'e48106fc9a5eb5904b322833d0968da5ae0b0665';
+    const original: Record<string, string> = {
+      '.env.production': 'RUNTIME_MODE=fail_closed\n',
+      '.env.web': 'NEXT_PUBLIC_API_BASE_URL=https://old.example\n',
+      '.env.smart-form': 'ALLOWED_CAPPER_EMAILS=old-shape-that-admits-the-operator\n',
+    };
+    try {
+      seedHost(dir, runningTag, original);
+
+      // Deploy #1: snapshot (which raises the marker), then write the new
+      // configuration, then die — before the release record advances. The
+      // marker is left behind, exactly as the real job would leave it.
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'first snapshot must succeed');
+      assert.ok(statSync(join(dir, INFLIGHT)).isFile(), 'the snapshot step must raise the marker');
+      for (const name of CONFIG_FILES) {
+        writeFileSync(join(dir, name), 'REPLACED_BY_FAILED_DEPLOY=1\n');
+      }
+
+      // Deploy #2: the operator retries the same dispatch.
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'retry snapshot must succeed');
+
+      for (const name of CONFIG_FILES) {
+        assert.equal(
+          readFileSync(join(dir, `${name}.${runningTag}`), 'utf8'),
+          original[name],
+          `${name}.${runningTag} must still hold the configuration that ran with ${runningTag}, ` +
+            'not what a failed deploy left behind',
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // The counterpart. Without this, "never overwrite" would be indistinguishable
+  // from a correct fix while quietly breaking the documented recovery path:
+  // edit the secret, re-dispatch the same release.
+  test(`${jobId}: redeploying the same tag after a completed deploy refreshes the snapshot`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'utv2-1835-resnap-'));
+    const tag = 'e48106fc9a5eb5904b322833d0968da5ae0b0665';
+    try {
+      seedHost(dir, tag, { '.env.smart-form': 'ALLOWED_CAPPER_EMAILS=admits-nobody\n' });
+
+      // A completed deploy: snapshot ran, and the release step cleared the
+      // marker. What is on disk genuinely is this release's configuration.
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'first snapshot must succeed');
+      rmSync(join(dir, INFLIGHT));
+
+      // The operator corrects the secret and re-dispatches the same release.
+      writeFileSync(join(dir, '.env.smart-form'), 'ALLOWED_CAPPER_EMAILS=corrected\n');
+      chmodSync(join(dir, '.env.smart-form'), 0o600);
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'redeploy snapshot must succeed');
+
+      assert.equal(
+        readFileSync(join(dir, `.env.smart-form.${tag}`), 'utf8'),
+        'ALLOWED_CAPPER_EMAILS=corrected\n',
+        'a completed deploy of the same tag must refresh the snapshot, or the stored ' +
+          'copy diverges from the configuration actually running',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test(`${jobId}: pruning never evicts the snapshot for the release on the host`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'utv2-1835-prune-'));
+    const runningTag = 'e48106fc9a5eb5904b322833d0968da5ae0b0665';
+    const original = 'ALLOWED_CAPPER_EMAILS=old-shape-that-admits-the-operator\n';
+    try {
+      seedHost(dir, runningTag, { '.env.smart-form': original });
+
+      // Snapshot first, so it is the OLDEST by mtime — the position a
+      // mtime-ordered prune evicts from. The marker is left in place so the
+      // second run cannot refresh it and mask the eviction.
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'snapshot must succeed');
+
+      // Eight newer snapshots, as a run of failed retries at other tags leaves.
+      for (let i = 0; i < 8; i += 1) {
+        writeFileSync(join(dir, `.env.smart-form.${String(i).repeat(40)}`), `NEWER=${i}\n`);
+      }
+
+      assert.equal(runSnapshot(jobId, dir).status, 0, 'second snapshot must succeed');
+      assert.equal(
+        readFileSync(join(dir, `.env.smart-form.${runningTag}`), 'utf8'),
+        original,
+        'the snapshot for the release on the host must survive the prune',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
