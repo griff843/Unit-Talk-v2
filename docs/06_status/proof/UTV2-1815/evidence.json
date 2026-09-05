@@ -5,17 +5,19 @@
   "lane_type": "modeling",
   "status": "pending_hosted_verification",
   "sha_binding": {
-    "verified_source_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
-    "evidence_commit_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
-    "current_pr_head_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
+    "verified_source_sha": "7b9dcde2a19c23345a1a334590d07fb15be27d7a",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
     "merge_sha": null,
     "ci_sentinels": {
-      "evidence_commit_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
-      "current_pr_head_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1"
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci",
+      "pnpm_test_db": "PASS - job 101308512813 \"Writable DB proof (staging only)\" completed success in run 33966879903. The UTV2-1815 live suite reported \"# tests 3 / # pass 3 / # fail 0 / # skipped 0\". https://github.com/griff843/Unit-Talk-v2/actions/runs/33966879903/job/101308512813",
+      "note": "evidence_commit_sha and current_pr_head_sha are the CI-resolved sentinel rather than a literal SHA, deliberately: a bundle cannot know the SHA of the commit that contains it, and any literal written here goes false on the next proof commit. verified_source_sha is a real SHA because it names a commit that already exists and does not move."
     },
-    "note": "c96c9922cd411304488c6f63a6f7a5f26374ffa1 is the last non-proof commit on this branch: the implementation and its regressions, plus the automated chore(lanes) commit that bound the lane manifest to PR #1479. That chore commit touches docs/06_status/lanes/UTV2-1815.json only and no source file, so the tree under test is identical to the implementation commit's; every local receipt in this bundle was re-executed against this exact anchor after it landed, not carried over. This bundle is a proof-only commit on top of it. merge_sha is null because the bundle is authored pre-merge; T1 merge authority is the PM.",
+    "note": "7b9dcde2a19c23345a1a334590d07fb15be27d7a is the last non-proof commit on this branch. Every commit after it touches only docs/06_status/proof/UTV2-1815/ — verifiable at any head with `git diff --name-only 7b9dcde2a..HEAD`, which lists that directory and nothing else. No source file, test file, lane manifest or package.json differs between the anchor and the head, so the tree the staging run executed is the anchor tree for every file that can affect behaviour. evidence_commit_sha and current_pr_head_sha are CI-resolved sentinels for the reason recorded in ci_sentinels.note. The runtime receipts below were produced by CI run 33966879903, whose head_sha is 32bb89db896990827b3e583faf13f3ce6f352ea5 — a proof-only commit in that same range; the receipts are reported against that run head and attributed to the anchor on the strength of the diff above, not on an assumption. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM.",
     "sha_type": "branch_head_sha",
-    "bound_at": "2026-09-01T00:00:00Z"
+    "bound_at": "2026-09-05T12:52:30Z"
   },
   "static_proof": {
     "unit_tests": {
@@ -62,8 +64,84 @@
   },
   "runtime_proof": {
     "profile": "hosted_live_db",
+    "executed_at": "2026-09-05T12:51:37Z/2026-09-05T12:52:30Z",
+    "target": "staging Supabase project xskgrzbteyqdufktjrjx, via the run-scoped staging credentials materialized by ci.yml. Never production.",
+    "command": "pnpm test:t1-proof:live -> tsx --test apps/api/src/t1-proof-utv2-1815-stake-units.test.ts (last suite in the chain)",
+    "receipt": "\"Run the T1 live proof suites against staging\" step, job 101308512813 (\"Writable DB proof (staging only)\"), run 33966879903: completed/success. TAP for this suite: \"1..3\", \"# tests 3\", \"# pass 3\", \"# fail 0\", \"# skipped 0\", \"# todo 0\", \"# duration_ms 52582.370415\". https://github.com/griff843/Unit-Talk-v2/actions/runs/33966879903/job/101308512813",
+    "skipped": 0,
+    "note": "This suite skips itself when staging credentials are absent, so \"0 skipped\" is the load-bearing number: it is the evidence that the three assertions below actually reached a database rather than being silently elided. A workstation run of the same file reports 3 skipped; see static_proof.verify.",
+    "queries": [
+      {
+        "op": "submitPickController(payload, repositories) -> canonical submission write path",
+        "purpose": "create three isolated fixture picks (labels null / nan / canonical), each with a legal stake_units = 1",
+        "observed": "HTTP 201 and lifecycleState \"awaiting_approval\" asserted for each of the 3 calls; all three assertions passed",
+        "rows_affected": 3
+      },
+      {
+        "op": "PATCH /rest/v1/picks?id=eq.<pickId>&select=id,stake_units  body {\"stake_units\": null}",
+        "purpose": "test 1 - the NULL stake the constraint exists to refuse",
+        "observed": "refused: resp.ok false, PostgREST error code 23514 (check_violation), and the error envelope names picks_stake_units_canonical_check. Asserted structurally on the code and the constraint identifier, not on message prose.",
+        "rows_affected": 0
+      },
+      {
+        "op": "PATCH /rest/v1/picks?id=eq.<pickId>&select=id,stake_units  body {\"stake_units\": null}  (JS NaN; JSON carries no NaN literal, so the faithful wire value is null)",
+        "purpose": "test 2, first half - an unrepresentable stake as it actually reaches Postgres",
+        "observed": "refused: 23514, names picks_stake_units_canonical_check. Same wire value as test 1 on a different fixture row; the bundle states this rather than presenting it as a distinct value case.",
+        "rows_affected": 0
+      },
+      {
+        "op": "PATCH /rest/v1/picks?id=eq.<pickId>&select=id,stake_units  body {\"stake_units\": 0}",
+        "purpose": "test 2, second half - the constraint's genuinely distinct second conjunct, stake_units > 0",
+        "observed": "refused: 23514, names picks_stake_units_canonical_check",
+        "rows_affected": 0
+      },
+      {
+        "op": "PATCH /rest/v1/picks?id=eq.<pickId>&select=id,stake_units  body {\"stake_units\": 2}  Prefer: return=representation",
+        "purpose": "negative control - a legal stake must still be accepted, or the three refusals above prove only that writes fail",
+        "observed": "accepted; the returned representation carries stake_units = 2",
+        "rows_affected": 1
+      },
+      {
+        "op": "GET /rest/v1/picks?id=eq.<pickId>&select=id,stake_units",
+        "purpose": "read back after each refusal - a refused write must not have partially applied",
+        "observed": "3 reads across tests 1 and 2; each asserted exactly one row, and each returned the original stake_units = 1",
+        "rows_affected": 3
+      },
+      {
+        "op": "recordEvidenceSettlement(pickId, \"win\", gradingContext, repositories) then GET /rest/v1/settlement_records?pick_id=eq.<pickId>&select=id,pick_id,payload",
+        "purpose": "test 3 - a real stake must persist a real profit/loss, not a historical_unknown",
+        "observed": "exactly one settlement row; payload.stakeUnitsStatus = \"canonical\", payload.stakeUnitsHistoricalUnknown = undefined, payload.profitLossUnits = 2 (a win at +100 on a 2-unit stake)",
+        "rows_affected": 1
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "scope": "fixture picks created by this run (proof_run tag in metadata)",
+        "count": 3,
+        "basis": "three createAwaitingApprovalPick calls, each asserting HTTP 201"
+      },
+      {
+        "table": "picks",
+        "scope": "rows returned per post-refusal read-back",
+        "count": 1,
+        "basis": "assert.equal(rows.length, 1) at apps/api/src/t1-proof-utv2-1815-stake-units.test.ts:187, evaluated on 3 reads"
+      },
+      {
+        "table": "picks",
+        "scope": "rows mutated by the three refused PATCHes",
+        "count": 0,
+        "basis": "each refused with SQLSTATE 23514; the subsequent read-back still returned the original stake_units = 1"
+      },
+      {
+        "table": "settlement_records",
+        "scope": "rows persisted for the negative-control pick",
+        "count": 1,
+        "basis": "assert.equal(rows.length, 1) at apps/api/src/t1-proof-utv2-1815-stake-units.test.ts:255"
+      }
+    ],
     "live_db": {
-      "note": "Provided by hosted_verification below, against staging xskgrzbteyqdufktjrjx. Not obtainable on a workstation; see static_proof.verify."
+      "note": "Executed against staging xskgrzbteyqdufktjrjx inside CI, which is the only place the writable staging credentials exist. Not obtainable on a workstation; see static_proof.verify, which records the honest local REFUSED_AT_LIVE_DB outcome rather than a pass."
     }
   },
   "mutation_proof": {
@@ -166,7 +244,10 @@
     "apps/api/src/settlement-service.test.ts"
   ],
   "hosted_verification": {
-    "anchor_sha": "c96c9922cd411304488c6f63a6f7a5f26374ffa1",
-    "note": "To be bound once CI settles at this anchor. Conclusions are as reported by the GitHub checks API."
+    "anchor_sha": "7b9dcde2a19c23345a1a334590d07fb15be27d7a",
+    "run_head_sha": "32bb89db896990827b3e583faf13f3ce6f352ea5",
+    "run_id": "33966879903",
+    "writable_db_proof": "PASS - job 101308512813 \"Writable DB proof (staging only)\" completed success. Steps \"Run writable DB proof against staging\" and \"Run the T1 live proof suites against staging\" both success, followed by \"Scrub credentials\". https://github.com/griff843/Unit-Talk-v2/actions/runs/33966879903/job/101308512813",
+    "note": "Conclusions are as reported by the GitHub checks API for this run. The verify conclusion at this head is recorded by the required check on PR #1479 and is not restated here."
   }
 }
