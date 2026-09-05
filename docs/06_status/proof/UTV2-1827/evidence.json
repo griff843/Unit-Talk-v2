@@ -1,0 +1,307 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1827",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "status": "pre-merge",
+  "sha_binding": {
+    "verified_source_sha": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "merge_sha": null,
+    "ci_sentinels": {
+      "evidence_commit_sha": "set-by-ci",
+      "current_pr_head_sha": "set-by-ci",
+      "note": "Both fields are CI-resolved sentinels. An evidence commit cannot name its own SHA before it exists, and the PR head moves with every push, so hand-authored values here would be stale the moment they were written. The proof-binding validator resolves both from the checkout it is running in."
+    },
+    "note": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1 is the last non-proof commit on this branch: the merge commit produced by `ops:merge-wrapper git-merge-main` when the branch was resynced with origin/main on 2026-09-05. Every commit after it touches only docs/06_status/proof/UTV2-1827/ \u2014 verifiable at any head with `git diff --name-only 2d34269ff..HEAD`. merge_sha is null because this bundle is authored pre-merge; T1 merge authority is the PM.",
+    "sha_type": "branch_head_sha",
+    "bound_at": "2026-09-05T14:25:00Z"
+  },
+  "static_proof": {
+    "unit_tests": {
+      "command": "pnpm exec tsx --test scripts/ci/staging-proof-commands.test.ts scripts/ci/run-staging-proof-command.test.ts",
+      "exit_code": 0,
+      "row_counts": {
+        "tests": 44,
+        "pass": 44,
+        "fail": 0,
+        "skipped": 0
+      },
+      "note": "Lane-owned suites only. The full repository suite runs inside the required verify check; see hosted_verification."
+    },
+    "type_check": {
+      "command": "pnpm type-check",
+      "exit_code": 0
+    },
+    "lint": {
+      "command": "pnpm lint",
+      "exit_code": 0
+    },
+    "wiring": {
+      "command": "pnpm ops:automation-coverage-check",
+      "verdict": "PASS",
+      "required_roots": "verify",
+      "required_reachable": 327,
+      "new_unwired": 0,
+      "note": "Before the package.json wiring commit this check failed verify with WIRING_TEST_UNWIRED_NEW for both lane suites (required-reachable 326, new-unwired 2). The wiring is what makes the tests reachable from verify rather than only from a command someone remembers to type."
+    }
+  },
+  "mutation_proof": {
+    "method": "Each control was removed or weakened in place, the two lane suites re-run, and the file restored from a backup outside the repository. Every count below was read off the run the mutation produced.",
+    "results": [
+      {
+        "id": "M1",
+        "control": "admit() refuses when assertStagingTarget is not ok",
+        "mutation": "deleted the `if (!assertion.ok)` refusal block, keeping the call",
+        "counts": {
+          "tests": 44,
+          "pass": 41,
+          "fail": 3
+        },
+        "failing_tests": [
+          "refuses the canonical PRODUCTION project even with a valid key",
+          "refuses a target whose identity cannot be resolved from its URL",
+          "refuses when no target is configured at all"
+        ]
+      },
+      {
+        "id": "M2",
+        "control": "the command key is resolved against the repository-owned registry",
+        "mutation": "replaced resolveStagingProofCommand() with a constructor building argv from the supplied key",
+        "counts": {
+          "tests": 44,
+          "pass": 41,
+          "fail": 3
+        },
+        "failing_tests": [
+          "refuses an unknown command key before any spawn decision is reached",
+          "refuses a free-form command line supplied in place of a key",
+          "refuses an arbitrary path supplied in place of a key"
+        ]
+      },
+      {
+        "id": "M3",
+        "control": "the dispatch input is a closed choice list, not free text",
+        "mutation": "changed the workflow input from `type: choice` plus options to `type: string`",
+        "counts": {
+          "tests": 44,
+          "pass": 43,
+          "fail": 1
+        },
+        "failing_tests": [
+          "the dispatch input is a closed choice list matching the registry exactly"
+        ],
+        "note": "The runner still refuses a free-form value at M2's boundary, so this mutation opens no hole on its own. It is asserted because the closed list is what stops an unadmitted key from being offered, and because a property that lives only in YAML is the kind that gets edited away unnoticed."
+      },
+      {
+        "id": "M4",
+        "control": "the registry match is exact",
+        "mutation": "replaced `command.key === requestedKey` with a lowercased 8-character prefix comparison",
+        "counts": {
+          "tests": 44,
+          "pass": 37,
+          "fail": 7
+        },
+        "failing_tests": [
+          "every admitted key resolves to its own fixed argv",
+          "refuses trailing whitespace",
+          "refuses different case",
+          "refuses truncated prefix",
+          "refuses key with a suffix appended",
+          "refuses a shell chain appended to a real key",
+          "refuses a shell conjunction"
+        ],
+        "note": "Six of the fourteen rejected-key entries plus the fixed-argv test. The other eight entries \u2014 empty string, whitespace, a path in place of a key, ../../etc/passwd, /bin/sh, $(curl evil.example), backticks, a free-form command line \u2014 are still refused under the loosened comparison because none shares the admitted key's opening characters. The mutation shows exactness is load-bearing for the near-miss, case-variant and appended-suffix cases specifically, not for every entry."
+      },
+      {
+        "id": "M5",
+        "control": "admitRef() refuses when ancestry cannot be determined",
+        "mutation": "removed the `isAncestorOfDefault === null` branch so \"cannot tell\" falls through",
+        "counts": {
+          "tests": 44,
+          "pass": 43,
+          "fail": 1
+        },
+        "failing_tests": [
+          "refuses when ancestry cannot be determined, rather than assuming it"
+        ]
+      },
+      {
+        "id": "M6",
+        "control": "the executed commit must be reachable from the default branch",
+        "mutation": "removed both refusal branches, admitting any dispatched ref",
+        "counts": {
+          "tests": 44,
+          "pass": 42,
+          "fail": 2
+        },
+        "failing_tests": [
+          "refuses an unapproved ref \u2014 a commit not reachable from the default branch",
+          "refuses when ancestry cannot be determined, rather than assuming it"
+        ]
+      },
+      {
+        "id": "M7",
+        "control": "the checkout carries the history the ancestry check needs",
+        "mutation": "changed fetch-depth: 0 to fetch-depth: 1 in the workflow",
+        "counts": {
+          "tests": 44,
+          "pass": 43,
+          "fail": 1
+        },
+        "failing_tests": [
+          "the checkout has the history the ancestry check needs"
+        ],
+        "note": "merge-base --is-ancestor cannot answer on a depth-1 clone, and M5 shows the runner refuses on \"cannot tell\". A shallow checkout therefore fails every dispatch closed rather than admitting one; the assertion exists so that is caught at review."
+      },
+      {
+        "id": "restore",
+        "counts": {
+          "tests": 44,
+          "pass": 44,
+          "fail": 0
+        },
+        "note": "git status --porcelain reported no modification to any mutated file after restoration."
+      }
+    ]
+  },
+  "known_limitations": [
+    "The runner has never executed end to end against staging. workflow_dispatch workflows are only dispatchable once they are on the default branch, so staging-proof-runner.yml cannot be triggered from this PR. Proven here: the admission boundary and the workflow's declared isolation. Not proven: a successful spawn, a real receipt, or the exit-status pass-through.",
+    "The first dispatch after merge is the real acceptance test. canonical-reference-bootstrap-report (writes:false) is the right first dispatch \u2014 it exercises environment binding, staging assertion, spawn, receipt and artifact upload without writing anything.",
+    "The workflow-shape assertions read the YAML as text. They confirm what the file says; they do not confirm the Actions runtime honours it. That property is evidenced by staging-db-proof.yml behaving this way in production CI, not by anything this PR measures.",
+    "The ancestry gate binds the registry to reviewed code, not the reviewer to good judgement. It guarantees the staging-proof-commands.ts that admits a key reached main through the normal PR path. It does nothing about a command admitted INTO main by a review that should have refused it, and nothing about someone who can write to main directly.",
+    "writes:true is a declaration, not an enforcement. The registry records whether a command writes so a reviewer can see it; nothing here stops a command declared writes:false from writing. The containment that actually holds is the credential boundary \u2014 the job releases only project-scoped staging keys, and a Supabase API key is a project-scoped JWT.",
+    "No live-DB proof is claimed for this lane's own code, because none of it touches the database. The staging receipt cited under hosted_verification is the run-level receipt ci.yml produces for every PR at this head; it is evidence that the branch does not break the staging path, not evidence about the runner."
+  ],
+  "files_changed": [
+    "scripts/ci/staging-proof-commands.ts",
+    "scripts/ci/run-staging-proof-command.ts",
+    "scripts/ci/staging-proof-commands.test.ts",
+    "scripts/ci/run-staging-proof-command.test.ts",
+    ".github/workflows/staging-proof-runner.yml",
+    "docs/06_status/lanes/UTV2-1827.json",
+    ".ops/sync/UTV2-1827.yml",
+    "package.json"
+  ],
+  "hosted_verification": {
+    "anchor_sha": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1",
+    "run_head_sha": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1",
+    "run_id": "33970181814",
+    "verify": "success \u2014 job 101318289930, 4m20s",
+    "writable_db_proof": "success \u2014 job 101317229404",
+    "p0_protocol": "success \u2014 run 33970181774, job 101317179546",
+    "note": "Read from the GitHub checks API at the anchor head after the required verify check settled."
+  },
+  "scope": {
+    "override_required": true,
+    "paths": [
+      "package.json"
+    ],
+    "reason": "package.json is outside this lane's file_scope_lock, which is pinned to the lane-start commit and cannot be widened by an agent. The wiring commit is landed before the override is requested so one human action binds a head that will not move."
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI \"Writable DB proof (staging only)\" job \u2014 never production",
+    "command": "pnpm test:db",
+    "receipt": {
+      "run_id": "33970181814",
+      "job_id": "101317229404",
+      "tests": 7,
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "duration_ms": 115792.264508,
+      "receipt_sha256": "98a56e45234a0116b599504e0e0478787b24276a2a91897209bb7bc7a8e1bd72",
+      "fixture_run_id": "utv2-1630-33970181814-1",
+      "tap_names": [
+        "database repository bundle persists a submission and settlement when Supabase is configured",
+        "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes",
+        "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row",
+        "UTV2-883: no duplicate participants for the same external_id and sport",
+        "UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows",
+        "UTV2-996: correction chain is additive \u2014 original settlement row is not mutated"
+      ],
+      "pr_head_sha": "2d34269ffe6a74a934bf68ea4d6433ea68932bd1",
+      "receipt_github_sha": "16c592f57b88f6757acc4e2f9be9193505636599",
+      "receipt_github_sha_note": "The receipt records GITHUB_SHA, which for a pull_request event is the synthetic merge ref GitHub builds from the PR head and the base \u2014 not the PR head itself. GitHub reports it as this PR's merge_commit_sha, and the PR head at that run was 2d34269ff. Both are recorded rather than collapsing them, because a bundle that claimed the receipt names the head would be false.",
+      "observed_project_ref": "xskgrzbteyqdufktjrjx"
+    },
+    "significance": "The suites in this chain are `{ skip: skipReason }`-gated on SUPABASE_SERVICE_ROLE_KEY, so a missing credential produces a passing job with every test skipped. `skipped: 0` \u2014 corroborated by 17-21s per test against a total of 115.8s \u2014 is what establishes the suite actually executed against staging rather than short-circuiting.",
+    "what_this_is_and_is_not": "This is the run-level staging receipt for the required `Writable DB proof (staging only)` job at this lane's anchor. It is NOT evidence about the runner this PR adds. The runner is a workflow_dispatch entry point that has never been dispatched \u2014 it cannot be, because workflow_dispatch reads the workflow definition from the default branch and this workflow is not on main yet, and because the runner refuses any ref not reachable from the default branch. The controls this PR actually adds are proven by the seven mutations in mutation_proof, not by this receipt. The receipt is recorded because the lane_type is `runtime`, which forces the `app-runtime` proof profile, and because it is honest evidence that the anchor passes the live-DB gate \u2014 not because it exercises the new code.",
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 21132.11ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 17681.85ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 20120.85ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 17894.55ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 130.98ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction \u2014 no true duplicate base rows (ok 6, 20049.03ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive \u2014 original settlement row is not mutated (ok 7, 18094.98ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 0,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "derivation": "queries and row_counts were not hand-written. They were produced by the repository's own harvester \u2014 buildRuntimeProofQueries() and buildRuntimeProofRowCounts() in scripts/ops/ci-db-proof-harvest.ts \u2014 run against the ci-db-proof-receipt/v2 artifact downloaded from run 33970181814 (utv2-1630-db-proof-receipt-33970181814-1) and that job's own log. queries come from the passing TAP lines in the receipt's captured_output, with table names grepped from apps/api/src/database-smoke.test.ts at this commit; row_counts come from the verbatim \"[seed-staging] ...\" lines the seeding step printed. Nothing here is recalled or reconstructed by hand."
+  }
+}
