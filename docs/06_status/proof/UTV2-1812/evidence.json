@@ -14,7 +14,7 @@
       "pnpm_type_check": "PASS — tsc -b exit 0, 0 diagnostics (measured locally at the anchor; also inside the required verify job)",
       "pnpm_test": "PASS (5807 tests, 5807 pass, 0 failures, 0 skipped) — measured with SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY unset, i.e. under CI's environment rather than the checkout's",
       "pnpm_test_db": "PASS — 'Writable DB proof (staging only)' job 101305997745 succeeded against staging in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c; steps 'Run writable DB proof against staging' and 'Run the T1 live proof suites against staging' both success, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101305997745",
-      "r_level_check": "PASS — operator-ui matched; required artifact qa-experience-report present",
+      "r_level_check": "PASS — operator-ui matched; required artifact qa-experience-report present. The artifact that satisfied this rule is dated 2026-05-13 and predates this lane; it satisfies the gate mechanically and is not verification of this change. The QA Experience Regression (Advisory) check is red at this head for net::ERR_CONNECTION_REFUSED at http://localhost:4300/ — no Command Center process — reproduced locally at the same head; see verification.md \"The QA Experience advisory fails for lack of a server, not for a regression\".",
       "pnpm_verify": "PASS — required `verify` check completed success in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c (https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101306812905)"
     }
   },
@@ -56,7 +56,7 @@
     "r_level": {
       "status": "PASS",
       "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
-      "observed": "Verdict: PASS; rules matched: operator-ui; artifact qa-experience-report found at apps/qa-agent/artifacts/unit-talk-command_center-research_lines-operator/2026-05-13T14-30-59-lopam7/result.json"
+      "observed": "Verdict: PASS; rules matched: operator-ui; artifact qa-experience-report found at apps/qa-agent/artifacts/unit-talk-command_center-research_lines-operator/2026-05-13T14-30-59-lopam7/result.json. The artifact that satisfied this rule is dated 2026-05-13 and predates this lane; it satisfies the gate mechanically and is not verification of this change. The QA Experience Regression (Advisory) check is red at this head for net::ERR_CONNECTION_REFUSED at http://localhost:4300/ — no Command Center process — reproduced locally at the same head; see verification.md \"The QA Experience advisory fails for lack of a server, not for a regression\"."
     },
     "local_verify_limitation": {
       "status": "EXPECTED",

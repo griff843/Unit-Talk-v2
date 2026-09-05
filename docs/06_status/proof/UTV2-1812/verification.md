@@ -376,6 +376,43 @@ originals are "not reachable from any package script". That is true of `origin/m
 merged result, but it was momentarily false at `870bbbaf`, where this branch's own wide glob reached
 them. Read as a statement about the shipped state it is correct.
 
+### The QA Experience advisory fails for lack of a server, not for a regression
+
+`QA Experience Regression (Advisory)` is red on this PR, and the cause is stated here rather than
+left as an unexamined red or waved off as "advisory". It re-runs on every head; the measurement
+below was taken at head `96c913c9` and the cause is not head-dependent.
+
+Re-run locally at the same head (`pnpm qa:experience --regression --mode fast --skip-preflight`,
+artifact `apps/qa-agent/artifacts/unit-talk-command_center-daily_ops-operator/2026-09-05T12-56-34-fl38sw/`,
+recorded `Head SHA: 96c913c9b`), it reproduces exactly:
+
+```
+1. x Navigate to dashboard
+   > page.goto: net::ERR_CONNECTION_REFUSED at http://localhost:4300/
+FAILED command_center_dashboard_shell_renders (critical): Missing dashboard shell selectors:
+        lifecycleCard, apiStatus, workerStatus.
+```
+
+No Command Center process is listening. The two expectations that can be evaluated without a
+rendered page both passed — `command_center_no_broken_lifecycle_signals` and
+`command_center_no_5xx_network_responses` — and all three preflights report
+`SKIPPED ... Skipped by --skip-preflight`. So the single critical failure is the one expectation
+that requires a running server, and its network log names the connection refusal as the reason.
+The check's own note says the same thing: *"apps are not running in CI."*
+
+That makes this an infrastructure absence reported as a behavioural verdict — the same
+aggregate-conflation shape recorded elsewhere in this repo — and **not** evidence of a regression
+introduced by this change. It is also not evidence that no regression exists; it is evidence of
+nothing at all about behaviour, which is precisely why it is written down instead of counted.
+
+One related honesty note: the `qa-experience-report` artifact that satisfied the R-level check is
+`unit-talk-command_center-research_lines-operator/2026-05-13T14-30-59-lopam7/result.json`, dated
+2026-05-13. It predates this lane by months and says nothing about this change. It satisfies the
+gate mechanically; it is not verification of this repair. The verification that *is* evidence about
+this change is the built-app run recorded under **Runtime Verification** above, where the middleware
+was bypassed in an isolated environment and missing, invalid, forged and valid credentials were each
+exercised against the running application.
+
 ### Limitations of these controls, stated rather than implied
 
 Two things the guard suite cannot see, recorded so a later reader does not mistake its scope:
