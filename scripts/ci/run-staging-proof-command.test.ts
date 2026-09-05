@@ -20,7 +20,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { admit, parseArgs, REFUSAL_EXIT_CODE } from './run-staging-proof-command.js';
+import { admit, admitRef, parseArgs, REFUSAL_EXIT_CODE } from './run-staging-proof-command.js';
 import { STAGING_PROOF_COMMAND_KEYS } from './staging-proof-commands.js';
 
 const APPROVED_STAGING_URL = 'https://xskgrzbteyqdufktjrjx.supabase.co';
@@ -121,6 +121,40 @@ test('the refusal exit code is distinct from a plausible command exit code', () 
 });
 
 // ---------------------------------------------------------------------------
+// Ref admission
+// ---------------------------------------------------------------------------
+//
+// The registry is only as trustworthy as the commit it is read from: anyone who
+// can push a branch can rewrite staging-proof-commands.ts on that branch. These
+// tests fail if the ancestry requirement is dropped or made permissive.
+
+const HEAD = 'a'.repeat(40);
+
+test('admits a commit that is reachable from the default branch', () => {
+  const decision = admitRef({ headSha: HEAD, isAncestorOfDefault: true });
+  assert.equal(decision.ok, true);
+});
+
+test('refuses an unapproved ref — a commit not reachable from the default branch', () => {
+  const decision = admitRef({ headSha: HEAD, isAncestorOfDefault: false });
+  assert.equal(decision.ok, false);
+  assert.match(decision.reason, /not reachable from the default branch/u);
+});
+
+test('refuses when ancestry cannot be determined, rather than assuming it', () => {
+  // Shallow clone, missing remote ref, git failure. "Cannot tell" is a refusal:
+  // the value of this gate is that it is not guessable.
+  const decision = admitRef({ headSha: HEAD, isAncestorOfDefault: null });
+  assert.equal(decision.ok, false);
+  assert.match(decision.reason, /could not determine/u);
+});
+
+test('refuses when the checked-out commit cannot be resolved at all', () => {
+  const decision = admitRef({ headSha: null, isAncestorOfDefault: true });
+  assert.equal(decision.ok, false);
+});
+
+// ---------------------------------------------------------------------------
 // Workflow shape
 // ---------------------------------------------------------------------------
 
@@ -167,6 +201,15 @@ test('the receipt is uploaded under a run-scoped artifact name', () => {
   // substituted for this one.
   assert.match(workflow, /github\.run_id\s*\}\}-\$\{\{\s*github\.run_attempt/u);
   assert.match(workflow, /if-no-files-found:\s*error/u);
+});
+
+test('the checkout has the history the ancestry check needs', () => {
+  // `merge-base --is-ancestor` on a depth-1 clone cannot answer, and the runner
+  // refuses on "cannot tell" — so a shallow checkout would make every dispatch
+  // fail closed. Full history plus an explicit fetch of the default branch is
+  // what makes the gate answerable.
+  assert.match(workflow, /fetch-depth:\s*0/u);
+  assert.match(workflow, /git fetch origin main/u);
 });
 
 test('credentials are scrubbed even when the proof command fails', () => {

@@ -28,6 +28,10 @@
 #     rather than merely forbidden.
 #   * `assertStagingTarget` refuses unless the resolved target is positively
 #     xskgrzbteyqdufktjrjx, before the proof command is spawned.
+#   * The checked-out commit must be reachable from the default branch. The
+#     registry is only as trustworthy as the commit it is read from: anyone who
+#     can push a branch could otherwise rewrite staging-proof-commands.ts on
+#     that branch and dispatch it. "Cannot tell" is refused, not assumed.
 #   * Credentials are never echoed and never reach the receipt.
 name: Staging Proof Runner
 
@@ -72,6 +76,15 @@ jobs:
           # Execution is pinned to the requested commit, not to the default
           # branch, so the receipt describes the code that actually ran.
           ref: ${{ inputs.ref }}
+          # Full history: the runner refuses unless the checked-out commit is
+          # reachable from the default branch, and `merge-base --is-ancestor`
+          # cannot answer that on a shallow clone. The runner treats "cannot
+          # tell" as a refusal, so a depth-1 checkout would fail every dispatch
+          # closed rather than silently admit one.
+          fetch-depth: 0
+
+      - name: Fetch the default branch for the ancestry check
+        run: git fetch origin main --no-tags
 
       - name: Record execution identity
         run: |
@@ -80,6 +93,7 @@ jobs:
           echo "requested ref: ${{ inputs.ref }}"
           echo "resolved sha: $(git rev-parse HEAD)"
           echo "actor: ${{ github.actor }}"
+          echo "reachable from main: $(git merge-base --is-ancestor HEAD origin/main && echo yes || echo NO)"
           echo "run: ${{ github.run_id }} attempt ${{ github.run_attempt }}"
 
       - uses: pnpm/action-setup@v4
@@ -183,6 +197,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: utv2-1827-staging-proof-receipt-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .out/staging-proof-receipt.json
+          path: |
+            .out/staging-proof-receipt.json
+            .out/staging-proof-dispatch.json
           if-no-files-found: error
           retention-days: 30

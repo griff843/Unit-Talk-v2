@@ -103,6 +103,72 @@ export function admit(
   return { refused: false, command, receiptPath: options.receiptPath, assertion };
 }
 
+/**
+ * Ref admission — the control the registry cannot provide on its own.
+ *
+ * The registry is only as trustworthy as the commit it is read from. A
+ * dispatcher who can push a branch can also rewrite
+ * `staging-proof-commands.ts` on that branch and then dispatch it, which would
+ * hand staging credentials to an argv nobody reviewed. So the executed commit
+ * must be reachable from the default branch: the registry that admits the
+ * command is then, necessarily, the reviewed one.
+ *
+ * Fails closed on "cannot tell". An indeterminate ancestry check — shallow
+ * clone, missing remote ref, git failure — is refused rather than assumed
+ * benign, because the whole value of this gate is that it is not guessable.
+ */
+export interface RefAdmission {
+  ok: boolean;
+  reason: string;
+}
+
+export function admitRef(input: {
+  headSha: string | null;
+  isAncestorOfDefault: boolean | null;
+}): RefAdmission {
+  if (!input.headSha) {
+    return { ok: false, reason: 'could not resolve the checked-out commit' };
+  }
+  if (input.isAncestorOfDefault === null) {
+    return {
+      ok: false,
+      reason:
+        `could not determine whether ${input.headSha} is reachable from the default branch; `
+        + 'refusing rather than assuming it is',
+    };
+  }
+  if (!input.isAncestorOfDefault) {
+    return {
+      ok: false,
+      reason:
+        `${input.headSha} is not reachable from the default branch, so the command registry at `
+        + 'this ref is unreviewed. Merge the ref first, or dispatch a ref that is already on main.',
+    };
+  }
+  return { ok: true, reason: `${input.headSha} is reachable from the default branch` };
+}
+
+/** Resolve the two facts `admitRef` needs, from git. Never throws. */
+export function readRefFacts(defaultBranchRef: string): {
+  headSha: string | null;
+  isAncestorOfDefault: boolean | null;
+} {
+  const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' });
+  const headSha = head.status === 0 ? (head.stdout ?? '').trim() || null : null;
+  if (!headSha) return { headSha: null, isAncestorOfDefault: null };
+
+  const ancestry = spawnSync(
+    'git',
+    ['merge-base', '--is-ancestor', headSha, defaultBranchRef],
+    { encoding: 'utf8' },
+  );
+  // git exits 0 for "is an ancestor", 1 for "is not", and anything else for a
+  // real failure (unknown ref, shallow clone). Only 0 and 1 are answers.
+  if (ancestry.status === 0) return { headSha, isAncestorOfDefault: true };
+  if (ancestry.status === 1) return { headSha, isAncestorOfDefault: false };
+  return { headSha, isAncestorOfDefault: null };
+}
+
 function main(): void {
   const options = parseArgs(process.argv.slice(2));
   const env = collectEffectiveEnv();
@@ -114,6 +180,16 @@ function main(): void {
   }
 
   const { command, receiptPath, assertion } = decision;
+
+  const defaultBranchRef = process.env['STAGING_PROOF_DEFAULT_BRANCH_REF'] ?? 'origin/main';
+  const refFacts = readRefFacts(defaultBranchRef);
+  const refDecision = admitRef(refFacts);
+  if (!refDecision.ok) {
+    console.error(`[staging-proof-runner] REFUSED: ${refDecision.reason}`);
+    process.exit(REFUSAL_EXIT_CODE);
+  }
+  console.log(`[staging-proof-runner] ref admitted: ${refDecision.reason}`);
+
   // Identity only — never a credential.
   console.log(
     `[staging-proof-runner] key=${command.key} issue=${command.issue} `
@@ -152,6 +228,41 @@ function main(): void {
   writeFileSync(receiptPath, serializeReceipt(receipt), 'utf8');
   console.log(`[staging-proof-runner] receipt written: ${receiptPath}`);
   console.log(`[staging-proof-runner] receipt_sha256=${receipt.receipt_sha256}`);
+
+  // The shared receipt schema carries run, job, sha, command, target and exit
+  // status but no actor, so the dispatch identity is written beside it rather
+  // than by widening a structure four other workflows already verify. The
+  // receipt's own hash is carried here, which is what ties the two together.
+  const dispatchPath = path.join(path.dirname(receiptPath), 'staging-proof-dispatch.json');
+  writeFileSync(
+    dispatchPath,
+    `${JSON.stringify(
+      {
+        schema: 'staging-proof-dispatch/v1',
+        command_key: command.key,
+        command_issue: command.issue,
+        command_argv: command.argv,
+        declares_writes: command.writes,
+        requested_ref: process.env['GITHUB_REF_NAME'] ?? null,
+        executed_sha: refFacts.headSha,
+        reachable_from_default_branch: refFacts.isAncestorOfDefault,
+        actor: process.env['GITHUB_ACTOR'] ?? null,
+        triggering_actor: process.env['GITHUB_TRIGGERING_ACTOR'] ?? null,
+        run_id: process.env['GITHUB_RUN_ID'] ?? null,
+        run_attempt: process.env['GITHUB_RUN_ATTEMPT'] ?? null,
+        observed_project_ref: assertion.observedRef,
+        started_at: startedAt,
+        finished_at: finishedAt,
+        exit_code: exitCode,
+        receipt_path: receiptPath,
+        receipt_sha256: receipt.receipt_sha256 ?? null,
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+  console.log(`[staging-proof-runner] dispatch identity written: ${dispatchPath}`);
 
   if (result.error) {
     console.error(`[staging-proof-runner] spawn failed: ${result.error.message}`);
