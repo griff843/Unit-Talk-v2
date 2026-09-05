@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "125aa50d3d37690bee51d4b15ffa6c92c032f11a",
     "verified_source_sha": "1256c3a7d20ace4453a89fe93a5c47eef892284a",
     "evidence_commit_sha": "1256c3a7d20ace4453a89fe93a5c47eef892284a",
-    "current_pr_head_sha": "6aef700d2c11eac99aff6e95953b385a60bc6359",
+    "current_pr_head_sha": "7f3ab6a3c23de8613e1f011942f37ac5232f3e31",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (5476 tests, 0 failures, exit 0) measured locally in the lane worktree at this anchor",
