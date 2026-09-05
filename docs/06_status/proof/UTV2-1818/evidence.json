@@ -7,9 +7,9 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
-    "evidence_commit_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
-    "current_pr_head_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "verified_source_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
+    "evidence_commit_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
+    "current_pr_head_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (5520 tests, 5520 pass, 0 failures, 0 'not ok' lines across 100 sub-suites, exit 0) measured locally in the lane worktree at this anchor",
@@ -19,7 +19,8 @@
       "r_level_check": "PASS (Verdict: PASS, 7 changed files, no R-level artifacts required for this diff)"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-05T18:30:00.000Z"
+    "bound_at": "2026-09-05T18:30:00.000Z",
+    "anchor_note": "Measurements were taken at edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3 on the lane branch. #1508 was squash merged, so that commit is not an ancestor of main. 3f3a7bda845950fe826f0ac710f3e574901117bb is the squash-merge commit carrying the identical reviewed content - all four reviewed artifacts resolve to the same git blob at both commits - and is the addressable anchor. No measurement was re-run or re-attributed."
   },
   "static_proof": {
     "type_check": {
