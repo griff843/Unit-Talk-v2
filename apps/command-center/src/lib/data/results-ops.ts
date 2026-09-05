@@ -67,7 +67,7 @@ function mapSettlementRow(row: Record<string, unknown>): SettlementOpsRow {
 }
 
 export async function getResultsOpsSnapshot(): Promise<ResultsOpsSnapshot> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const nowMs = Date.now();
   const dayAgo = new Date(nowMs - 24 * 60 * 60 * 1000).toISOString();
 

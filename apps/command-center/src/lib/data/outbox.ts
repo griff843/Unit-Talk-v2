@@ -52,7 +52,7 @@ function isRetryEligible(status: string, attemptCount: number): boolean {
 }
 
 export async function getOutboxOverview(filter: OutboxFilter = {}): Promise<OutboxOverview> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const countQueries = OUTBOX_STATUSES.map((status) =>
     client.from('distribution_outbox').select('id', { count: 'exact', head: true }).eq('status', status),

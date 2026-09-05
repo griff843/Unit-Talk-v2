@@ -7,6 +7,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { assertPrivilegedRequestAuthenticated } from '../request-auth';
+
 // ---------------------------------------------------------------------------
 // Types (mirrored from apps/api/src/model-performance-service.ts)
 // We re-declare here to avoid cross-app imports.
@@ -100,6 +102,7 @@ export async function getModelPerformance(
   apiBaseUrl: string,
   filters?: ModelPerformanceFilters,
 ): Promise<ModelPerformanceReport | null> {
+  await assertPrivilegedRequestAuthenticated();
   try {
     const url = buildApiUrl(apiBaseUrl, filters);
     const res = await fetch(url, {
