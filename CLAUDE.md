@@ -199,6 +199,10 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
 - PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.
 - Prefer code over docs for truth. If uncertain, say "check actual implementation" and check.
+- The mission runs continuously. Waiting on CI, finishing a lane or PR, and having a status to report are
+  not stop conditions; a reserved gate blocks only the work that depends on it, so surface it and continue
+  every other safe executable path. The authoritative list of what does and does not end a session is
+  `docs/mission/intent.md` § "Stop conditions" — read it there rather than inferring from this line.
 
 ---
 

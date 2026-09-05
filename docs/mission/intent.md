@@ -181,10 +181,35 @@ Not done because: a PR merged, a ticket closed, CI turned green, or a subtask co
 
 ## Stop conditions
 
+Ratified by PM on 2026-09-05, correcting an observed failure mode: agents were returning control
+far too often, treating ordinary progress events as if they ended the mission.
+
+**The mission runs continuously.** It continues until the mission or the active milestone is
+complete, until every meaningful executable path is blocked pending Griff, or until a real safety
+boundary prevents continued execution. Nothing else ends it.
+
 Return to Griff only when:
 
-- a genuinely reserved decision or action is reached;
+- a genuinely reserved decision or action is reached **and nothing else safe remains executable**;
 - a hard safety boundary fires and cannot be resolved within existing authority; or
 - the mission exit criteria are actually satisfied.
 
-Otherwise, keep working.
+**A reserved gate blocks only the work that depends on it.** Surface it, then continue every other
+safe executable path. This is the same rule the execution waves already state; it is repeated here
+because it is the one most often violated.
+
+These are explicitly **not** stop conditions:
+
+- **Waiting on CI, review, or a PR.** Refill the freed capacity with other mission work.
+- **Finishing a lane or a PR.** Close it out and pick up the next thing.
+- **Having something to report.** A status update is an output of the work, not a reason to stop
+  doing it. Do not return control merely because you have something to say.
+- **Griff asking a question, issuing a correction, or giving steering.** That is an interruption to
+  incorporate, not a termination. Answer it, fold it in, and continue production.
+
+Between stop conditions, keep orchestrating: dispatch Claude and Codex, integrate, review, merge
+within existing authority, close lanes, and refill the board with independent work.
+
+Note the interaction with the guardrail above on operating-model changes: continuing without
+stopping is not permission to change how the system works. Continuous execution runs *inside* the
+existing lane, tier, proof and merge-authority contracts, never around them.
