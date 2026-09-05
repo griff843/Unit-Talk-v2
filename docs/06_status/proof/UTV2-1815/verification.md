@@ -1,6 +1,6 @@
 # PROOF: UTV2-1815
 
-MERGE_SHA: c96c9922cd411304488c6f63a6f7a5f26374ffa1
+MERGE_SHA: pending merge
 
 Lane: claude / `claude/utv2-1815-null-stake-computation-truth`
 Tier: T1 (modeling lane — settlement, grading and attribution computation)
@@ -275,7 +275,7 @@ Advisory (PM-gated) artifacts missing:
 
 ### Hosted verification at this exact anchor
 
-Anchor: `c96c9922cd411304488c6f63a6f7a5f26374ffa1`. Bound by run and job id in `evidence.json`
+Anchor: `7b9dcde2a19c23345a1a334590d07fb15be27d7a`. Bound by run and job id in `evidence.json`
 under `hosted_verification`. The staging job is where the live-DB proof this lane cannot run locally
 actually executes, against `xskgrzbteyqdufktjrjx`.
 
