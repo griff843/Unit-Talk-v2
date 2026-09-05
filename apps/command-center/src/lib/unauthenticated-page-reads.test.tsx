@@ -27,14 +27,14 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // Page modules are compiled with the classic JSX runtime and carry no React
 // import of their own; render them the way Next does, with React in scope.
 (globalThis as unknown as { React: typeof React }).React = React;
-import { withRequestContext, FORGED_IDENTITY_HEADERS } from '../lib/test-support/request-context';
-import { serializeElementTree } from '../lib/test-support/element-tree';
+import { withRequestContext, FORGED_IDENTITY_HEADERS } from './test-support/request-context';
+import { serializeElementTree } from './test-support/element-tree';
 import {
   PAGE_FILES,
   dynamicSegments,
   hasDirective,
   routeOf,
-} from '../lib/test-support/source-walk';
+} from './test-support/source-walk';
 
 const API_KEY = 'unauthenticated-page-read-test-key';
 
