@@ -1,0 +1,200 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1829
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1829
+  objective: "Mission context: make intent/spec/plan standing context for Claude,
+    subagents, and Codex"
+  acceptance_criteria:
+    - >-
+      ## Problem
+
+
+      The Unit Talk mission (Production Recovery, Milestone 1, reserved
+      boundaries, production goal) lives only in chat. Every new session,
+      subagent, and Codex packet requires Griff to restate it. There is no
+      durable, automatically-loaded mission layer.
+
+
+      Mission documents were drafted inside the frozen governance branches
+      (#1491 `claude/rma-v1-risk-scoped-merge-authority`, #1492
+      `harness/mission-native-recalibration`). Those branches are frozen pending
+      PM architecture review, so the mission layer is currently unreachable — it
+      can only land by ratifying governance changes that are a separate
+      decision.
+
+
+      ## Outcome
+
+
+      One small governed PR from current `main` that separates the mission layer
+      from the frozen governance work, containing only:
+
+
+      * `CLAUDE.md` — mandatory mission-context section (Claude-facing)
+
+      * `AGENTS.md` — mission-context section (Codex-facing)
+
+      * `docs/mission/intent.md` — Griff-owned durable mission, priorities,
+      boundaries, Milestone 1, production goal
+
+      * `docs/mission/spec.md` — durable required outcomes + pointers to
+      existing canonical contracts
+
+      * `docs/mission/plan.md` — Claude-owned execution plan, reconciled against
+      live `main`/runtime/PR truth
+
+
+      ## Explicitly out of scope
+
+
+      No RMA, no merge-authority change, no Linear removal, no dispatch changes,
+      no lane changes, no hooks, no CI changes, and nothing else from
+      #1491/#1492. The current canonical execution/governance system is
+      preserved unchanged.
+
+
+      ## Constraint
+
+
+      `spec.md` must not invent competing readiness rules.
+      `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` remains the
+      authoritative definition of production readiness.
+
+
+      ## Purpose
+
+
+      Make the Unit Talk mission automatically available to Claude, Claude
+      subagents, and Codex without Griff having to re-explain it.
+  guardrails: []
+  non_goals:
+    - "No RMA, no merge-authority change, no Linear removal, no dispatch
+      changes, no lane changes, no hooks, no CI changes, and nothing else from
+      #1491/#1492. The current canonical execution/governance system is
+      preserved unchanged."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Problem
+
+      The Unit Talk mission (Production Recovery, Milestone 1, reserved
+      boundaries, production goal) lives only in chat. Every new session,
+      subagent, and Codex packet requires Griff to restate it. There is no
+      durable, automatically-loaded mission layer.
+
+
+      Mission documents were drafted inside the frozen governance branches
+      (#1491 `claude/rma-v1-risk-scoped-merge-authority`, #1492
+      `harness/mission-native-recalibration`). Those branches are frozen pending
+      PM architecture review, so the mission layer is currently unreachable — it
+      can only land by ratifying governance changes that are a separate
+      decision.
+    - >-
+      Outcome
+
+      One small governed PR from current `main` that separates the mission layer
+      from the frozen governance work, containing only:
+
+
+      * `CLAUDE.md` — mandatory mission-context section (Claude-facing)
+
+      * `AGENTS.md` — mission-context section (Codex-facing)
+
+      * `docs/mission/intent.md` — Griff-owned durable mission, priorities,
+      boundaries, Milestone 1, production goal
+
+      * `docs/mission/spec.md` — durable required outcomes + pointers to
+      existing canonical contracts
+
+      * `docs/mission/plan.md` — Claude-owned execution plan, reconciled against
+      live `main`/runtime/PR truth
+    - >-
+      Constraint
+
+      `spec.md` must not invent competing readiness rules.
+      `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` remains the
+      authoritative definition of production readiness.
+    - >-
+      Purpose
+
+      Make the Unit Talk mission automatically available to Claude, Claude
+      subagents, and Codex without Griff having to re-explain it.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude
+    title: "Mission context: make intent/spec/plan standing context for Claude,
+      subagents, and Codex"
+    description: >-
+      ## Problem
+
+
+      The Unit Talk mission (Production Recovery, Milestone 1, reserved
+      boundaries, production goal) lives only in chat. Every new session,
+      subagent, and Codex packet requires Griff to restate it. There is no
+      durable, automatically-loaded mission layer.
+
+
+      Mission documents were drafted inside the frozen governance branches
+      (#1491 `claude/rma-v1-risk-scoped-merge-authority`, #1492
+      `harness/mission-native-recalibration`). Those branches are frozen pending
+      PM architecture review, so the mission layer is currently unreachable — it
+      can only land by ratifying governance changes that are a separate
+      decision.
+
+
+      ## Outcome
+
+
+      One small governed PR from current `main` that separates the mission layer
+      from the frozen governance work, containing only:
+
+
+      * `CLAUDE.md` — mandatory mission-context section (Claude-facing)
+
+      * `AGENTS.md` — mission-context section (Codex-facing)
+
+      * `docs/mission/intent.md` — Griff-owned durable mission, priorities,
+      boundaries, Milestone 1, production goal
+
+      * `docs/mission/spec.md` — durable required outcomes + pointers to
+      existing canonical contracts
+
+      * `docs/mission/plan.md` — Claude-owned execution plan, reconciled against
+      live `main`/runtime/PR truth
+
+
+      ## Explicitly out of scope
+
+
+      No RMA, no merge-authority change, no Linear removal, no dispatch changes,
+      no lane changes, no hooks, no CI changes, and nothing else from
+      #1491/#1492. The current canonical execution/governance system is
+      preserved unchanged.
+
+
+      ## Constraint
+
+
+      `spec.md` must not invent competing readiness rules.
+      `docs/05_operations/T1_PRODUCTION_READINESS_CONTRACT.md` remains the
+      authoritative definition of production readiness.
+
+
+      ## Purpose
+
+
+      Make the Unit Talk mission automatically available to Claude, Claude
+      subagents, and Codex without Griff having to re-explain it.
+    captured_at: 2026-09-03T04:26:27.604Z
+    description_sha256: 991faa2c786f44d822113b316e13979dfd2bfda1d3e2f1569aa8a96bd6139850
+  contract_hash: 431b56f54ed6357ade549502b3d603fa904a3c52596b47edaa5f0deb25c04a05
