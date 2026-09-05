@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1818-approval-carry-forward",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1508",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/schemas/approval-carry-forward-v1.md",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/UTV2-1818/diff-summary.md",
     "docs/06_status/proof/UTV2-1818/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-05T18:03:44.986Z",
-  "heartbeat_at": "2026-09-05T18:03:44.986Z",
+  "heartbeat_at": "2026-09-05T18:20:19.228Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1818-approval-carry-forward.json",
