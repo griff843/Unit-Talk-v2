@@ -125,8 +125,9 @@ writing. The green result from the failed attempt is not evidence and is not cou
 - [x] `pnpm test`: PASS, 5520 tests, 0 failures, exit 0
 - [x] `pnpm exec tsx --test scripts/ops/approval-carry-forward.test.ts`: PASS, 35 tests, 0 failures
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS
-- [ ] `pnpm lint`: deferred to the required CI `verify` context; not measured locally and not restated as a local run
-- [ ] `pnpm build`: deferred to the required CI `verify` context; not measured locally and not restated as a local run
+- [x] `pnpm verify`: PASS — executed by the required CI `verify` context on this branch, run `33983756252`, job `verify`, conclusion `success`. Not run locally, and not restated here as a local run.
+- [ ] `pnpm lint`: not run locally. It is a stage of `pnpm verify`, and is covered by the CI run named above rather than by any local measurement.
+- [ ] `pnpm build`: not run locally. It is a stage of `pnpm verify`, and is covered by the CI run named above rather than by any local measurement.
 
 ## Runtime Verification
 
@@ -160,4 +161,30 @@ outside the normal PR path.
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
+Execution SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb
+
+### Why the execution anchor moved, and what makes the move truthful
+
+The measurements in this bundle were taken locally at `edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3`, a commit on
+`claude/utv2-1818-approval-carry-forward`. **#1508 was squash merged**, so that commit is not an
+ancestor of `main` and not an ancestor of this repair PR — `git merge-base --is-ancestor` returns
+false and GitHub's compare status is `diverged`. An anchor no gate can reach is not a usable anchor.
+
+`3f3a7bda845950fe826f0ac710f3e574901117bb` is the squash-merge commit that carries the identical reviewed content
+and *is* an ancestor of this PR's head. That equivalence was measured, not assumed — every one of
+the four reviewed artifacts resolves to the same git blob at both commits:
+
+```
+$ for p in scripts/ops/approval-carry-forward.ts scripts/ops/approval-carry-forward.test.ts \
+           docs/05_operations/schemas/approval-carry-forward-v1.md package.json; do
+    [ "$(git rev-parse edf6554a6:$p)" = "$(git rev-parse 3f3a7bda8:$p)" ] && echo "SAME  $p" || echo "DIFF  $p"
+  done
+SAME  scripts/ops/approval-carry-forward.ts
+SAME  scripts/ops/approval-carry-forward.test.ts
+SAME  docs/05_operations/schemas/approval-carry-forward-v1.md
+SAME  package.json
+```
+
+No measurement in this bundle was re-run, re-attributed or strengthened. The commands were executed
+against the tree named above; only the name by which that tree is addressable has changed, because
+the squash merge is what changed it.
