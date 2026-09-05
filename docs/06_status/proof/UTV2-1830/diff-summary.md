@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1830-mission-stop-conditions
 PR URL: N/A
 Head SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
-Merge SHA: N/A
+Merge SHA: 1cb31a43e8764a1e0df5f0c271f55f3b0f6d2229
 Diff base: 85f63c696dc6efcaffe4b5a01f6b09bec4c745fd
 Diff target: 77b4709f6fa01d9b208243c91e41cf8735da0a48
 
@@ -37,4 +37,4 @@ M	docs/mission/plan.md
 
 ## SHA Binding
 Head SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
-Merge SHA: N/A
+Merge SHA: 1cb31a43e8764a1e0df5f0c271f55f3b0f6d2229

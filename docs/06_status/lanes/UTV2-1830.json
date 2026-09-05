@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1830-mission-stop-conditions",
   "branch": "claude/utv2-1830-mission-stop-conditions",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1cb31a43e8764a1e0df5f0c271f55f3b0f6d2229",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1502",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/UTV2-1830/evidence.json",
     "docs/06_status/proof/UTV2-1830/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-05T02:35:54.292Z",
-  "heartbeat_at": "2026-09-05T02:50:30.775Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-05T03:10:21.932Z",
+  "closed_at": "2026-09-05T03:10:21.932Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1830-mission-stop-conditions.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T03:10:18.035Z",
+      "verdict": "pass",
+      "merge_sha": "1cb31a43e8764a1e0df5f0c271f55f3b0f6d2229",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
