@@ -1,0 +1,38 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1831",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1831-stake-units-proof-wiring",
+  "branch": "claude/utv2-1831-stake-units-proof-wiring",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1831/diff-summary.md",
+    "docs/06_status/proof/UTV2-1831/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-09-05T11:35:46.276Z",
+  "heartbeat_at": "2026-09-05T11:35:46.276Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1831-stake-units-proof-wiring.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1831-stake-units-proof-wiring",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
