@@ -97,9 +97,24 @@ Semantics against the applied objects, `p_limit = 3`:
 | window-1 call 4 | **true** | 3 | 0 |
 | window-2 call 1 (rolled) | false | 3 | 2 |
 
-Identical to `InMemoryApiRateLimitStore`: the limit-th request is allowed and the
-(limit+1)-th is refused. Rows held for the key after the window rolled: **1** — the
+Within a window, identical to `InMemoryApiRateLimitStore`: the limit-th request is allowed
+and the (limit+1)-th is refused. Rows held for the key after the window rolled: **1** — the
 per-key sweep bounds growth rather than accumulating a row per window.
+
+The two stores are **not** equivalent across a window boundary, and an earlier revision of this
+bundle claimed they were. `InMemoryApiRateLimitStore` anchors a sliding window to the first
+request that opens it (`resetAt = now + windowMs`); `SupabaseRpcApiRateLimitStore` floors `now`
+to a wall-clock-aligned tumbling window before calling. At `windowMs = 60000, maxRequests = 1`,
+requests at 59,999 ms and 60,001 ms are refused by the in-memory store and allowed by the RPC
+path. Both T1 suites model the aligned window, so neither can detect this. The flooring caller
+already ships on `main` and this PR does not touch `apps/api/src/server.ts`, so this is a
+pre-existing property that the bundle described wrongly, not a regression introduced here; at
+the boundary the RPC path is more permissive, never more restrictive. The migration's own
+`COMMENT ON FUNCTION` carries the same overstatement ("Mirrors InMemoryApiRateLimitStore
+semantics") and is left as shipped, because the file is already applied to production and its
+blob is load-bearing for every fidelity, ACL and fingerprint receipt here. Reconciling the two
+window models is owner-dispositioned follow-up. Full record:
+`runtime_proof.window_model_divergence`.
 
 Negative cases refuse rather than admit: `p_limit = 0` and a null `p_key` both raise
 `22023`; a negative `count` raises `23514`.
@@ -719,7 +734,8 @@ EVIDENCE:
 ASSERTIONS:
 - [x] `consume_rate_limit_bucket` was absent from production, staging and every governed migration before this change.
 - [x] The applied function's callable signature matches the four named arguments `SupabaseRpcApiRateLimitStore` sends.
-- [x] Limiter semantics on real PostgreSQL are identical to `InMemoryApiRateLimitStore`, including 429 at limit+1 rather than an exception.
+- [x] Limiter semantics on real PostgreSQL are identical to `InMemoryApiRateLimitStore` **within a window**, including 429 at limit+1 rather than an exception.
+- [ ] **NOT ASSERTED — the two stores are not equivalent across a window boundary.** In-memory uses a first-request-anchored sliding window; the RPC caller floors to an aligned tumbling window. Pre-existing on `main`, not introduced by this PR, and not detectable by either T1 suite (both model the aligned window). See `runtime_proof.window_model_divergence`.
 - [x] `anon`, `authenticated` and PUBLIC hold no EXECUTE on the function and no privilege on the table; a control without the revokes shows all three would otherwise have it.
 - [x] Apply → down → reapply converges on a byte-identical fingerprint that includes ACLs.
 - [x] The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when absent.
@@ -727,5 +743,5 @@ ASSERTIONS:
 - [x] Exactly one production DDL was performed, after rechecking at execution time that it was the sole pending migration; no merge, deployment, rollback, containment change or pilot submission accompanied it.
 - [ ] **NOT ASSERTED — the DDL's channel and three accompanying writes were not authorized.** Applied via Supabase MCP `apply_migration` (grant: *Not authorized*); one row of `supabase_migrations.schema_migrations` UPDATEd (grant: forbids migration repair and any production row mutation, and required stopping rather than repairing forward); three `consume_rate_limit_bucket` probe calls plus a cleanup DELETE (grant: forbids production row mutation). Disclosed for PM ruling, not claimed as covered. Full reconciliation: `runtime_proof.production_writes_inventory`.
 - [x] In production, `anon` and `authenticated` hold no EXECUTE on the function and no privilege on the table; only `service_role` and `postgres` do.
-- [x] In production, three sequential calls at limit 2 allow, allow, then refuse — identical to `InMemoryApiRateLimitStore`.
+- [x] In production, three sequential calls at limit 2 allow, allow, then refuse — identical to `InMemoryApiRateLimitStore` within a window.
 - [x] Repo and production migration ledgers are at full bidirectional parity, 135 to 135 — **reached only via the unauthorized one-row ledger UPDATE.** The MCP apply registered `20260904081351`; without the correction each side would hold one version the other lacks.

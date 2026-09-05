@@ -193,7 +193,8 @@ live_schema_parity          PASS  run 33927369782  job 101198702190  (after prod
 ASSERTIONS:
 - [x] The missing function, not the limiter's policy, caused the submission outage.
 - [x] The migration supplies the contract without weakening, bypassing or replacing the fail-closed store.
-- [x] Limiter semantics on real PostgreSQL match `InMemoryApiRateLimitStore`, including 429 at limit+1 rather than an exception.
+- [x] Limiter semantics on real PostgreSQL match `InMemoryApiRateLimitStore` **within a window**, including 429 at limit+1 rather than an exception.
+- [ ] **NOT ASSERTED — equivalence across a window boundary.** `InMemoryApiRateLimitStore` uses a first-request-anchored sliding window; `SupabaseRpcApiRateLimitStore` floors `now` to an aligned tumbling window, so at `windowMs = 60000, maxRequests = 1` requests at 59,999 ms and 60,001 ms are refused by one store and allowed by the other. The flooring caller already ships on `main` and this PR does not touch `apps/api/src/server.ts`; both T1 suites model the aligned window and so cannot detect it. Disclosed, not closed — see `runtime_proof.window_model_divergence`.
 - [x] `anon`, `authenticated` and PUBLIC hold no EXECUTE on the function and no privilege on the table, proven from `pg_proc.proacl` and `pg_class.relacl` rather than from a `pg_dump --no-acl` round trip.
 - [x] A control object created without the REVOKE block shows `anon` and `authenticated` would otherwise both hold EXECUTE, so the revokes are load-bearing.
 - [x] Apply, down and reapply converge on a byte-identical fingerprint that includes ACLs, and the down script demonstrably changes the schema.

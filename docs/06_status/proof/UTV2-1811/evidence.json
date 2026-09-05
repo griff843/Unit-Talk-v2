@@ -6,7 +6,7 @@
   "proof_profile": "migration",
   "title": "Shared rate-limit DB contract: rate_limit_buckets + consume_rate_limit_bucket",
   "status": "READY_FOR_REVIEW",
-  "generated_at": "2026-09-04T23:54:36Z",
+  "generated_at": "2026-09-05T00:53:54Z",
   "sha_binding": {
     "merge_sha": null,
     "verified_source_sha": "d04712fa2b878bc72fd6d4d0e0e43f320533c4a3",
@@ -18,7 +18,7 @@
       "current_pr_head_sha": "set-by-ci"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-04T23:54:36Z"
+    "bound_at": "2026-09-05T00:53:54Z"
   },
   "verdict": "PASS",
   "runtime_proof": {
@@ -148,6 +148,18 @@
       "sqlstate_on_reapply_over_existing_function": "42723"
     },
     "caller_supplied_window_boundaries": "Assumption this migration does not and cannot enforce: p_window_start and p_window_expires_at are supplied by the caller, not computed inside the function. Correct windowing depends on the API server consistently flooring now to the window boundary before calling. The function defends what it can \u2014 it rejects null boundaries and p_limit < 1 with 22023, and the table CHECK requires expires_at > window_start \u2014 but a caller that passes inconsistent boundaries would get inconsistent windows. That is an API-side contract, out of scope for this migration, and is named here rather than left implicit.",
+    "window_model_divergence": {
+      "finding": "The bundle's \"identical to InMemoryApiRateLimitStore\" claims, and the migration's own COMMENT ON FUNCTION (\"Mirrors InMemoryApiRateLimitStore semantics\"), are true within a window and false across a window boundary. Raised by an independent Codex review of this PR and confirmed by reading both stores in apps/api/src/server.ts.",
+      "two_models": {
+        "in_memory": "First-request-anchored SLIDING window. InMemoryApiRateLimitStore reuses a bucket while existing.resetAt > now, and otherwise creates one with resetAt = now + limit.windowMs. The window therefore starts at the first request that opened it.",
+        "supabase_rpc": "Wall-clock-aligned TUMBLING window. SupabaseRpcApiRateLimitStore computes windowStartMs = Math.floor(now / limit.windowMs) * limit.windowMs and passes that to the function, so windows are fixed [k*windowMs, (k+1)*windowMs) slices."
+      },
+      "worked_divergence": "limit.maxRequests = 1, limit.windowMs = 60000, one key. Request A at t = 59,999 ms, request B at t = 60,001 ms. In-memory: A opens a bucket with resetAt = 119,999; B falls inside it, count becomes 2, B is REFUSED. RPC path: A floors to window 0, B floors to window 60,000 \u2014 a different bucket \u2014 count 1, B is ALLOWED. The stores disagree on the same input.",
+      "why_the_tests_do_not_catch_it": "Both T1 suites model the aligned window. apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts:45 and the parity fake both compute Math.floor(now / limit.windowMs) * limit.windowMs, so they validate the RPC store against a fake that already shares its model. Nothing in this lane compares the two production stores against each other. That is a genuine gap in this bundle's equivalence claim, disclosed rather than closed.",
+      "scope_and_direction": "This is a pre-existing property of shipped code, not a regression introduced here. The flooring caller (SupabaseRpcApiRateLimitStore) is already on origin/main and this PR does not touch apps/api/src/server.ts; the PR's non-documentation diff is exactly the migration, its down script, the two T1 proof suites and one package.json line. The divergence is therefore mis-DESCRIBED by this bundle, not caused by it. Direction of error at the boundary: the RPC path is more permissive than the in-memory path (it can admit one extra request in the window straddling a boundary); it is never more restrictive.",
+      "disposition": "Corrected in this bundle by narrowing every equivalence claim to \"within a window\" and recording the divergence here. NOT corrected in code: supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql is already applied to production, its blob (56d1559665018598bc9d84ca2a4abafdf1ee9b53, md5 af2c42582dbde2ee7990a3ca15c1d3e8) is load-bearing across every fidelity, ACL and fingerprint receipt in this bundle, and editing it would move the proof anchor and invalidate all four CEP-E7 receipts. The standing instruction on this lane is to correct the bundle in one pass and preserve implementation, with no refactor and no new lane. So the stale COMMENT ON FUNCTION text stays as shipped and is named here; reconciling the two window models \u2014 and the function comment \u2014 is owner-dispositioned follow-up work, alongside generated_types_disposition.",
+      "reference": "See also caller_supplied_window_boundaries, which already recorded that windowing correctness is an API-side contract this migration cannot enforce. This entry is the specific, demonstrated instance of that risk."
+    },
     "staging_replay_fidelity": {
       "byte_exact": true,
       "file_md5": "af2c42582dbde2ee7990a3ca15c1d3e8",
@@ -286,7 +298,7 @@
           "call 5 -> exceeded=t remaining=0"
         ],
         "stored_count": 5,
-        "conclusion": "The limit-th request is allowed and the (limit+1)-th is refused; remaining clamps at zero. Matches InMemoryApiRateLimitStore.",
+        "conclusion": "The limit-th request is allowed and the (limit+1)-th is refused; remaining clamps at zero. Matches InMemoryApiRateLimitStore WITHIN A WINDOW. The two stores do not agree across a window boundary \u2014 see window_model_divergence.",
         "window_roll": "A call in the next window created a new row and swept the expired one: exactly one row remained for the key.",
         "argument_validation": [
           "p_limit=0 -> ERROR 22023 consume_rate_limit_bucket requires p_limit >= 1",
@@ -390,7 +402,7 @@
           "remaining": 0
         }
       ],
-      "conclusion": "Identical to InMemoryApiRateLimitStore: the limit-th request is allowed and the (limit+1)-th is refused.",
+      "conclusion": "Within a window, identical to InMemoryApiRateLimitStore: the limit-th request is allowed and the (limit+1)-th is refused. Across a window boundary the two stores differ \u2014 see window_model_divergence.",
       "cleanup": "Probe rows deleted (one DELETE; rows affected not captured). public.rate_limit_buckets observed at 0 rows remaining afterwards. The delete is itself an unauthorized production row mutation and is counted in runtime_proof.production_writes_inventory.",
       "containment": "The probe wrote only to the limiter's own counter table under a dedicated key. No pick, submission, outbox or delivery row was created.",
       "authorization_status": "NOT AUTHORIZED. Running the limiter against production wrote rows to public.rate_limit_buckets, and the grant forbids 'any additional migration or production row mutation'. The probe used a dedicated key and touched no application table, and the rows were deleted afterwards \u2014 but a narrow blast radius and a tidy cleanup do not make an unauthorized write authorized. Equivalent evidence was available from staging."
@@ -492,7 +504,7 @@
         "verdict": "non-vacuous"
       }
     ],
-    "comment_stripping_scope": "Bounded deliberately. stripSqlComments() blanks line comments, block comments (depth-counted, because PostgreSQL nests them), and skips over single-quoted strings, double-quoted identifiers and dollar-quoted bodies so that a `--` inside a function body or a `/*` inside a literal is not mistaken for a comment. It is not a SQL parser and does not attempt to be one; the fixture set includes each of those four shapes, and the CREATE FUNCTION regex then runs over executable text only."
+    "comment_stripping_scope": "Bounded deliberately. stripSqlComments() blanks line comments, block comments (depth-counted, because PostgreSQL nests them), and skips over single-quoted strings, double-quoted identifiers and dollar-quoted bodies so that a `--` inside a function body or a `/*` inside a literal is not mistaken for a comment. It is not a SQL parser and does not attempt to be one; the fixture set includes each of those four shapes, and the CREATE FUNCTION regex then runs over executable text only. KNOWN, DELIBERATE LIMITATION (raised by independent Codex review, documented in the walker's own header): literal regions are SKIPPED but not blanked, so their contents survive into the stripped text. A `-- CREATE FUNCTION public.foo(...)` or a `RAISE NOTICE 'CREATE FUNCTION ...'` inside a dollar-quoted body therefore still registers `foo` as governed. The error direction is deliberate and one-way: it can only treat a name as governed that is not, never the reverse, so it cannot let an undefined RPC ship unnoticed \u2014 it can only fail to raise an alarm the strictest reading would raise. Distinguishing executable DDL from DDL-shaped text inside a function body needs a real SQL parser, which is out of proportion to this check; comment stripping is the part that closes the demonstrated hole."
   },
   "containment": {
     "track_only_enforcement": "untouched",
@@ -500,7 +512,16 @@
     "worker_autorun": "parked, untouched",
     "ingestor_autorun": "parked, untouched",
     "syndicate_machine_enabled": "false, untouched",
-    "files_touched_outside_scope": 0
+    "files_touched_outside_scope": {
+      "outside_containment_boundary": 0,
+      "outside_declared_file_scope_lock": 3,
+      "paths_outside_declared_file_scope_lock": [
+        "apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts",
+        "apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts",
+        "package.json"
+      ],
+      "note": "Two different senses of \"scope\" were previously conflated into one zero. Nothing in this lane touched a containment-relevant path \u2014 that count is genuinely 0, and it is what the four fields above it are about. But scripts/ci/file-scope-guard.ts rejects three paths against the lane-start file_scope_lock, and reporting 0 here contradicted that run log and this bundle's own disclosures in verification.md and diff-summary.md. All three are genuine lane work (the two T1 proof suites and the one-line package.json wiring that makes required verify execute them); they are admitted only by a PM scope-override/v1 comment pinned to the exact PR head. See verification.md for the guard's verbatim output."
+    }
   },
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1811/evidence.json",
@@ -523,7 +544,7 @@
     "why": {
       "mechanism": "supabase db push keys on the version prefix of the filename against schema_migrations.version. A local file whose version string is absent from that column is pending.",
       "measured": "Set difference over the 135 local filename versions and the 134 remote ledger versions: local-only = {20260901150000}, remote-only = {}, intersection = 134. The correspondence holds in both directions, so the ledger is not merely a superset of the file set.",
-      "consequence": "A push today would execute one file: 20260901150000_utv2_1811_rate_limit_buckets.sql."
+      "consequence": "HISTORICAL, pre-apply. At the time of the measurement above a push would have executed one file: 20260901150000_utv2_1811_rate_limit_buckets.sql. That is no longer true: the migration has since been applied, the remote ledger holds 135 versions, and a push today would execute nothing. See post_apply_state. The pre-apply figure is retained because it was the grant's stop-gate condition, not because it describes the present."
     },
     "action_taken": "APPLIED. The stop-gate selection was re-proven at execution time and exactly one migration was applied \u2014 that apply was authorized. It was executed through Supabase MCP apply_migration, a channel the grant explicitly forbids. One ledger row was then UPDATEd to the canonical repo version 20260901150000 because the apply tool regenerated it as 20260904081351; that UPDATE was NOT authorized \u2014 it is a prohibited production row mutation and a breach of the grant's stop-on-unexpected-result boundary. Limiter probe writes and a cleanup delete were also run against production and were likewise not authorized. Full inventory: runtime_proof.production_writes_inventory.",
     "explicitly_not_done": [
