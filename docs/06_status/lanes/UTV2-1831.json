@@ -7,9 +7,16 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1831-stake-units-proof-wiring",
   "branch": "claude/utv2-1831-stake-units-proof-wiring",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "775f4ac60e6614404beee4615e694d98fef9f5d1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1504",
-  "files_changed": [],
+  "files_changed": [
+    "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "docs/06_status/proof/UTV2-1831/diff-summary.md",
+    "docs/06_status/proof/UTV2-1831/evidence.json",
+    "docs/06_status/proof/UTV2-1831/verification.md",
+    "package.json"
+  ],
   "file_scope_lock": [
     "apps/api/src/t1-proof-utv2-1815-stake-units.test.ts",
     "docs/05_operations/db-writer-classification.json",
@@ -20,14 +27,22 @@
     "docs/06_status/proof/UTV2-1831/evidence.json",
     "docs/06_status/proof/UTV2-1831/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-05T11:35:46.276Z",
-  "heartbeat_at": "2026-09-05T11:41:57.663Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-05T12:45:22.009Z",
+  "closed_at": "2026-09-05T12:45:22.009Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1831-stake-units-proof-wiring.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T12:45:19.955Z",
+      "verdict": "pass",
+      "merge_sha": "775f4ac60e6614404beee4615e694d98fef9f5d1",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
