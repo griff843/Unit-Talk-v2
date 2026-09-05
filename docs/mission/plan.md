@@ -304,7 +304,7 @@ back, and it warns explicitly when no snapshot exists rather than rolling code b
 a mismatched configuration. **A rollback after a bad allow-list now restores the old-shaped value
 alongside the old parser**, which is the pairing the previous text said was impossible.
 
-One real gap remained in that repair and is closed by UTV2-1835 (#1511): the snapshot step
+One real gap remained in that repair and is closed by UTV2-1835 (#1511, merged `ce3b87bf8`): the snapshot step
 overwrote unconditionally, so a *retry* after a deploy that died between the env writes and the
 release-record advance captured the failed attempt's configuration over the running release's — and
 the mtime-ordered prune could evict the surviving snapshot outright. Both were reproduced by

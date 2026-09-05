@@ -65,16 +65,18 @@ EXIT=0
 
 $ pnpm verify
 Executed by the required CI `verify` context, not locally.
-Run 33994945082, head f81cf471d, job `verify`, conclusion success.
-The only file between the execution SHA 3c3abd311 and f81cf471d is this lane's
-own manifest (docs/06_status/lanes/UTV2-1836.json), so no implementation file
-is uncovered by that run.
+Run 33996599211, head 2578c9926, job `verify`, conclusion success.
+2578c9926 is the sanctioned `main` resync. Between the execution SHA 3c3abd311
+and it lie this lane's own manifest and the incoming `origin/main` commits; no
+implementation file of this lane differs, so the run covers the execution SHA
+against the base the PR will actually merge into. The earlier run 33994945082 at
+f81cf471d is superseded and is not cited, because it predates the resync.
 ```
 
 ## Verification
 - [x] `pnpm type-check`: exit 0
 - [x] `pnpm test`: exit 0, full suite
-- [x] `pnpm verify`: CI run 33994945082 at head `f81cf471d`, job `verify`, conclusion `success` (no implementation file differs from the execution SHA `3c3abd311`)
+- [x] `pnpm verify`: CI run 33996599211 at head `2578c9926` (the resynced head), job `verify`, conclusion `success` — no implementation file of this lane differs from the execution SHA `3c3abd311`
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS, no artifacts required
 
 ## Demonstration against real GitHub evidence
