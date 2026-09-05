@@ -13,17 +13,26 @@
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (5520 tests, 5520 pass, 0 failures, 0 'not ok' lines across 100 sub-suites, exit 0) measured locally in the lane worktree at this anchor",
-      "pnpm_lint": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
-      "pnpm_build": "Deferred to the required CI `verify` context. Not measured locally and not restated as a local run.",
-      "pnpm_verify": "Deferred to the required CI `verify` context on this branch.",
+      "pnpm_lint": "Not run locally. A stage of `pnpm verify`, covered by CI run 33983756252.",
+      "pnpm_build": "Not run locally. A stage of `pnpm verify`, covered by CI run 33983756252.",
+      "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33983756252, job `verify`, conclusion success. Not run locally.",
       "r_level_check": "PASS (Verdict: PASS, 7 changed files, no R-level artifacts required for this diff)"
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-05T18:30:00.000Z"
+    "bound_at": "2026-09-05T18:30:00.000Z",
+    "anchor_note": "Evidence ran at edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3 on claude/utv2-1818-approval-carry-forward. #1508 was squash merged, so that commit is not reachable from main; a repair branch cut from main cannot reference it. This branch is cut from the lane branch itself and merges main in, so the anchor is an ancestor of both this PR head and the approved head 7276775dd79ecc0c9ff38eec9adf3cd78ccd6a02. No measurement was re-run or re-attributed."
   },
   "static_proof": {
-    "type_check": { "status": "PASS", "command": "pnpm type-check" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5520, "failures": 0 },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5520,
+      "failures": 0
+    },
     "lint": {
       "status": "DEFERRED",
       "command": "pnpm lint",

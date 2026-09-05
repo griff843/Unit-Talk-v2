@@ -125,8 +125,9 @@ writing. The green result from the failed attempt is not evidence and is not cou
 - [x] `pnpm test`: PASS, 5520 tests, 0 failures, exit 0
 - [x] `pnpm exec tsx --test scripts/ops/approval-carry-forward.test.ts`: PASS, 35 tests, 0 failures
 - [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS
-- [ ] `pnpm lint`: deferred to the required CI `verify` context; not measured locally and not restated as a local run
-- [ ] `pnpm build`: deferred to the required CI `verify` context; not measured locally and not restated as a local run
+- [x] `pnpm verify`: PASS — executed by the required CI `verify` context on this branch, run `33983756252`, job `verify`, conclusion `success`. Not run locally, and not restated here as a local run.
+- [ ] `pnpm lint`: not run locally. It is a stage of `pnpm verify`, and is covered by the CI run named above rather than by any local measurement.
+- [ ] `pnpm build`: not run locally. It is a stage of `pnpm verify`, and is covered by the CI run named above rather than by any local measurement.
 
 ## Runtime Verification
 
@@ -161,3 +162,29 @@ Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
 Execution SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
+
+### Why the execution anchor is the lane-branch commit
+
+The measurements in this bundle were taken at `edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3`, a commit on
+`claude/utv2-1818-approval-carry-forward`. That is the anchor recorded above, unchanged, because it
+is where the evidence actually ran.
+
+**#1508 was squash merged**, so `edf6554a6` never entered `main`'s history. That severs the anchor
+from any branch cut from `main`: a first repair attempt (#1509) was cut from `main`, and
+`Executor Result Validation` refused the bundle because `compareCommits(base=edf6554a6, head=<PR
+head>)` returned `diverged`. Re-anchoring to the squash-merge commit satisfied that check but then
+failed closeout, because `proof-rebind.ts:1122` requires the execution SHA to be an ancestor of the
+**approved head** `7276775dd79ecc0c9ff38eec9adf3cd78ccd6a02`, which the squash-merge commit is not.
+The two gates cannot both be satisfied by any single value on a branch cut from `main`.
+
+This branch is therefore cut from the lane branch itself and merges `origin/main` in, rather than the
+reverse. `edf6554a6` is consequently an ancestor of *both* this PR's head and the approved head, so
+both gates are satisfied by the commit where the evidence genuinely ran, and no SHA in this bundle
+names anything other than what it actually is.
+
+```
+$ git merge-base --is-ancestor edf6554a6 7276775dd && echo "ancestor of approved head: YES"
+ancestor of approved head: YES
+```
+
+No measurement in this bundle was re-run, re-attributed or strengthened.
