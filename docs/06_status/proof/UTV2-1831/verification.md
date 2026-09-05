@@ -13,7 +13,7 @@ Branch: claude/utv2-1831-stake-units-proof-wiring
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1504
 result: PASS
 
-## ASSERTIONS
+## ASSERTIONS:
 
 - [x] **A1 — The proof suite can now actually execute.** Before this change it was reachable from
   no script. It is now the last entry in `test:t1-proof:live`, which is the chain the
@@ -37,7 +37,7 @@ result: PASS
 - [x] **A6 — This PR is independently shippable.** It asserts nothing about the change that
   consumes it and leaves `main` in a state where the proof runs on every subsequent PR.
 
-## EVIDENCE
+## EVIDENCE:
 
 Measured locally at execution anchor `380e7854f36dc318421dee880d6ab1cbac22ce4a` — the
 last commit that is not part of this proof bundle:
