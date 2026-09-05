@@ -6,10 +6,10 @@ Tier: T3
 Lane type: governance
 Branch: claude/utv2-1830-mission-stop-conditions
 PR URL: N/A
-Head SHA: 1485f4bc2083dd1c523d377ccee1ae7b6e981456
+Head SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
 Merge SHA: N/A
 Diff base: 85f63c696dc6efcaffe4b5a01f6b09bec4c745fd
-Diff target: 1485f4bc2083dd1c523d377ccee1ae7b6e981456
+Diff target: 77b4709f6fa01d9b208243c91e41cf8735da0a48
 
 ## Git Diff Stat
 ```
@@ -36,5 +36,5 @@ M	docs/mission/plan.md
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: 1485f4bc2083dd1c523d377ccee1ae7b6e981456
+Head SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
 Merge SHA: N/A

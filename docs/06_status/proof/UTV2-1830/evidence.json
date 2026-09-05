@@ -7,9 +7,9 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "1485f4bc2083dd1c523d377ccee1ae7b6e981456",
-    "evidence_commit_sha": "1485f4bc2083dd1c523d377ccee1ae7b6e981456",
-    "current_pr_head_sha": "1485f4bc2083dd1c523d377ccee1ae7b6e981456",
+    "verified_source_sha": "77b4709f6fa01d9b208243c91e41cf8735da0a48",
+    "evidence_commit_sha": "77b4709f6fa01d9b208243c91e41cf8735da0a48",
+    "current_pr_head_sha": "77b4709f6fa01d9b208243c91e41cf8735da0a48",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0)",
       "pnpm_lint": "PASS (exit 0)",

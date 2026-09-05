@@ -12,7 +12,7 @@ Tier: T3
 Lane type: governance
 Branch: claude/utv2-1830-mission-stop-conditions
 PR URL: pending
-Head SHA: 1485f4bc2083dd1c523d377ccee1ae7b6e981456
+Head SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
 result: pass
 
 ## ASSERTIONS:
@@ -74,7 +74,7 @@ result: pass
 
 ```
 $ git rev-parse HEAD
-1485f4bc2083dd1c523d377ccee1ae7b6e981456
+77b4709f6fa01d9b208243c91e41cf8735da0a48
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -161,7 +161,7 @@ $ grep -l '"status": *"in_progress"' docs/06_status/lanes/*.json
 
 $ pnpm ops:merge-wrapper git-rebase-main --issue UTV2-1830 --branch claude/utv2-1830-mission-stop-conditions
 Successfully rebased and updated refs/heads/claude/utv2-1830-mission-stop-conditions.
-[ops-merge-wrapper] the sync moved the head SHA 841fefb2946d306e397057cedc33c14b4d7a27ef -> 1485f4bc2083dd1c523d377ccee1ae7b6e981456,
+[ops-merge-wrapper] the sync moved the head SHA 841fefb2946d306e397057cedc33c14b4d7a27ef -> 77b4709f6fa01d9b208243c91e41cf8735da0a48,
 which invalidates every head-pinned governance artifact on this branch: [...]
 (No such artifact existed at that moment — no PR, no bundle, no EXECUTOR_RESULT, no verdict.
 The warning is unconditional, not a measurement.)
@@ -216,4 +216,4 @@ for this bundle.
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 1485f4bc2083dd1c523d377ccee1ae7b6e981456
+Execution SHA: 77b4709f6fa01d9b208243c91e41cf8735da0a48
