@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { RequestStore } from 'next/dist/server/app-render/work-unit-async-storage.external';
 import type { WorkStore } from 'next/dist/server/app-render/work-async-storage.external';
-import { withWorkspaceEnvDefaults } from '../test-support/workspace-env';
+import { withLoopbackSupabaseTarget, withWorkspaceEnvDefaults } from '../test-support/workspace-env';
 
 test('cached service-role client reauthenticates every request', async () => {
   const runtime = globalThis as typeof globalThis & {
@@ -20,6 +20,7 @@ test('cached service-role client reauthenticates every request', async () => {
   ]);
 
   const restoreWorkspaceEnv = withWorkspaceEnvDefaults();
+  const restoreSupabaseTarget = withLoopbackSupabaseTarget();
   const previousAppEnv = process.env.UNIT_TALK_APP_ENV;
   const previousToken = process.env.COMMAND_CENTER_AUTH_TOKEN;
   process.env.UNIT_TALK_APP_ENV = 'production';
@@ -57,6 +58,7 @@ test('cached service-role client reauthenticates every request', async () => {
       },
     );
   } finally {
+    restoreSupabaseTarget();
     restoreWorkspaceEnv();
     if (previousAppEnv === undefined) delete process.env.UNIT_TALK_APP_ENV;
     else process.env.UNIT_TALK_APP_ENV = previousAppEnv;

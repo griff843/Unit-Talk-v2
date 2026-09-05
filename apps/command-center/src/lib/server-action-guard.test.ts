@@ -23,7 +23,7 @@ import {
   isTestFile,
   walkSource as walk,
 } from './test-support/source-walk';
-import { withWorkspaceEnvDefaults } from './test-support/workspace-env';
+import { withLoopbackSupabaseTarget, withWorkspaceEnvDefaults } from './test-support/workspace-env';
 
 /** These test files transpile to CJS, so module discovery has to be synchronous. */
 const requireModule = createRequire(import.meta.url);
@@ -514,6 +514,7 @@ async function invokeAuthenticatedWithForgedActor(
   ] as const;
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
   const restoreWorkspaceEnv = withWorkspaceEnvDefaults();
+  const restoreSupabaseTarget = withLoopbackSupabaseTarget();
 
   process.env.UNIT_TALK_APP_ENV = 'production';
   process.env.COMMAND_CENTER_AUTH_TOKEN = AUTHENTICATED_TEST_TOKEN;
@@ -553,6 +554,7 @@ async function invokeAuthenticatedWithForgedActor(
     return { outcome, outbound };
   } finally {
     globalThis.fetch = originalFetch;
+    restoreSupabaseTarget();
     restoreWorkspaceEnv();
     for (const key of keys) {
       const value = previous[key];
@@ -599,13 +601,21 @@ for (const action of BEHAVIOURAL_ACTIONS) {
  * reach the backend under them. An action that silently stopped issuing any
  * outbound request would pass every loop above vacuously.
  *
- * Known residue: this pin is not hermetic. `loadPickDetail` reaches the backend
- * through `getDataClient`, which calls `loadEnvironment` and throws on missing
- * `SUPABASE_*` before any request is built, so in an environment without them
- * this test fails rather than passing vacuously. That is the right direction —
- * it fails loudly — but a green run here depends on the ambient checkout
- * environment. `withWorkspaceEnvDefaults` deliberately does not fill the
- * Supabase keys; see its docblock for why a placeholder there would not help.
+ * Hermeticity: `loadPickDetail` reaches the backend through `getDataClient`,
+ * which resolves `SUPABASE_*` before any request is built, so this test used to
+ * depend on the ambient checkout environment — green locally, red in CI, on
+ * environment alone rather than on behaviour. `invokeAuthenticatedWithForgedActor`
+ * now calls `withLoopbackSupabaseTarget`, which *overrides* the Supabase target
+ * with a literal loopback address for the duration of the call. `decideTarget`
+ * in `packages/db/src/privileged-client-boundary.ts` allows loopback explicitly
+ * as provably isolated, and `globalThis.fetch` is stubbed for the same window,
+ * so the request is built and captured without leaving the process and without
+ * any real database being reachable in either direction.
+ *
+ * What this test does and does not establish: it establishes that each action
+ * issues an outbound request under an authenticated caller, which is what makes
+ * the forged-actor loops above non-vacuous. It establishes nothing about what a
+ * real backend would do with that request — the response is a stub.
  */
 test('the authenticated forged-actor cases actually reach the backend', async () => {
   const silent: string[] = [];
