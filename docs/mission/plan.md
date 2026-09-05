@@ -235,18 +235,22 @@ production Supabase (read-only). **This replaces the bare "only Deploy remains" 
 true but incomplete.**
 
 **Exact release.** `origin/main` is `175f07c10`. Production is `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
-The gap is 105 commits, of which **six change code a running container executes**:
+The gap is 105 commits. Six touch `apps/**`, `packages/**` or `deploy/**`, but only **three change
+code a running container executes** — the distinction matters, because it is what makes this a small
+release rather than a large one:
 
-| SHA | PR | Behaviour |
-|---|---|---|
-| `b7d9fc07f` | #1501 | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
-| `01a2d2d67` | #1474 | Command Center auth mode can no longer be downgraded to fail-open in deployed environments |
-| `2ac233424` | #1488 | Canonical capper identity from an explicit mapping; local-part derivation removed |
-| `1d76b75e1` | #1507 | Deploy snapshots the outgoing configuration; `rollback.sh` restores it |
-| `775f4ac60` | #1504 | Stake-units live proof wired into `test:t1-proof:live` (test wiring only) |
-| `1734bf201` | #1477 | Rate-limit bucket contract |
+| SHA | PR | Changes container code? | Behaviour |
+|---|---|---|---|
+| `2ac233424` | #1488 | **yes** | Canonical capper identity from an explicit mapping; local-part derivation removed |
+| `b7d9fc07f` | #1501 | **yes** | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
+| `01a2d2d67` | #1474 | **yes** | Command Center auth mode can no longer be downgraded to fail-open in deployed environments |
+| `1d76b75e1` | #1507 | no | Changes the deploy pipeline itself: `deploy.yml` snapshots the outgoing configuration and `rollback.sh` restores it. Already on `main`, so it governs the next deploy rather than shipping into a container |
+| `1734bf201` | #1477 | no | Two test files and one migration (`rate_limit_buckets`), and the migration is already applied in production |
+| `775f4ac60` | #1504 | no | Test wiring only — one test file plus its `package.json` script |
 
-Measured with `git log --first-parent e48106fc..origin/main -- 'apps/**' 'packages/**' 'deploy/**'`.
+Measured with `git log --first-parent e48106fc..origin/main -- 'apps/**' 'packages/**' 'deploy/**'`,
+then each commit's file list inspected rather than inferred from the path filter. An earlier draft of
+this section said "six change code a running container executes", which its own table contradicted.
 The eight non-test files that differ are `apps/api/src/server.ts`,
 `apps/command-center/{.env.example,src/lib/server-api.ts,src/middleware.ts}`,
 `apps/smart-form/{.env.example,lib/auth-allowlist.ts}`, `deploy/production/ENV_FILES.md` and
