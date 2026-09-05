@@ -130,11 +130,18 @@ async function createAwaitingApprovalPick(label: string): Promise<string> {
   return data.pickId;
 }
 
+// events.id and game_results.id are uuid columns, so a readable slug is not a
+// legal value -- PostgREST rejects it with `invalid input syntax for type uuid`
+// before any assertion in this file runs. These UUIDs deliberately do not exist:
+// EventRepository.findById returns null for an absent row (it only throws on a
+// query error), buildCLVContextFromGradingEvent then returns null, and CLV is
+// not what this proof is about. RUN_ID stays in `metadata.proof_run` for
+// traceability.
 const gradingContext = {
   actualValue: 1,
   marketKey: 'nba-spread',
-  eventId: `utv2-1815-event-${RUN_ID}`,
-  gameResultId: `utv2-1815-result-${RUN_ID}`,
+  eventId: randomUUID(),
+  gameResultId: randomUUID(),
 };
 
 interface SettlementRow {
