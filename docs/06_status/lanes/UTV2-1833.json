@@ -16,7 +16,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1833/verification.md",
-    "docs/06_status/proof/UTV2-1833/diff-summary.md"
+    "docs/06_status/proof/UTV2-1833/diff-summary.md",
+    "docs/06_status/proof/UTV2-1833/evidence.json"
   ],
   "status": "in_review",
   "started_at": "2026-09-05T15:16:57.639Z",
