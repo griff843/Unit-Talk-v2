@@ -334,6 +334,20 @@ jobs:
 
           for f in .env.production .env.web .env.smart-form; do
             [ -f "$f" ] || continue
+
+            # First writer wins, deliberately. .unit-talk-release only advances
+            # AFTER the env writes, so a deploy that fails between the two leaves
+            # the PREVIOUS release named here while its configuration has already
+            # been replaced on disk. An unconditional copy on the retry would
+            # then overwrite the good snapshot with the configuration that broke
+            # the deploy, and a rollback to the running release would restore
+            # exactly what it is supposed to undo. The snapshot is immutable
+            # history of the configuration that actually ran as $OUTGOING.
+            if [ -e "$f.$OUTGOING" ]; then
+              echo "snapshot $f.$OUTGOING already exists; preserving it"
+              continue
+            fi
+
             cp -p "$f" "$f.$OUTGOING"
             chmod 600 "$f.$OUTGOING"
             echo "snapshot $f -> $f.$OUTGOING"
@@ -342,8 +356,13 @@ jobs:
           # These snapshots contain secrets, so they are pruned rather than kept
           # forever. Five is deeper than any rollback target we would choose by
           # hand and still bounds the number of copies of a leaked credential.
+          #
+          # The snapshot for the release currently on the host is excluded from
+          # the prune. It is the one a rollback from a failed deploy depends on,
+          # and the prune is mtime-ordered, so a run of failed retries would
+          # otherwise age out the only snapshot worth keeping.
           for f in .env.production .env.web .env.smart-form; do
-            ls -1t "$f".* 2>/dev/null | tail -n +6 | while read -r stale; do
+            ls -1t "$f".* 2>/dev/null | grep -vxF "$f.$OUTGOING" | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
             done
@@ -870,6 +889,20 @@ jobs:
 
           for f in .env.production .env.web .env.smart-form; do
             [ -f "$f" ] || continue
+
+            # First writer wins, deliberately. .unit-talk-release only advances
+            # AFTER the env writes, so a deploy that fails between the two leaves
+            # the PREVIOUS release named here while its configuration has already
+            # been replaced on disk. An unconditional copy on the retry would
+            # then overwrite the good snapshot with the configuration that broke
+            # the deploy, and a rollback to the running release would restore
+            # exactly what it is supposed to undo. The snapshot is immutable
+            # history of the configuration that actually ran as $OUTGOING.
+            if [ -e "$f.$OUTGOING" ]; then
+              echo "snapshot $f.$OUTGOING already exists; preserving it"
+              continue
+            fi
+
             cp -p "$f" "$f.$OUTGOING"
             chmod 600 "$f.$OUTGOING"
             echo "snapshot $f -> $f.$OUTGOING"
@@ -878,8 +911,13 @@ jobs:
           # These snapshots contain secrets, so they are pruned rather than kept
           # forever. Five is deeper than any rollback target we would choose by
           # hand and still bounds the number of copies of a leaked credential.
+          #
+          # The snapshot for the release currently on the host is excluded from
+          # the prune. It is the one a rollback from a failed deploy depends on,
+          # and the prune is mtime-ordered, so a run of failed retries would
+          # otherwise age out the only snapshot worth keeping.
           for f in .env.production .env.web .env.smart-form; do
-            ls -1t "$f".* 2>/dev/null | tail -n +6 | while read -r stale; do
+            ls -1t "$f".* 2>/dev/null | grep -vxF "$f.$OUTGOING" | tail -n +6 | while read -r stale; do
               rm -f "$stale"
               echo "pruned $stale"
             done

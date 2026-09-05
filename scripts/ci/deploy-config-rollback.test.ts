@@ -230,3 +230,123 @@ test('rolling back to a tag with no snapshot warns and still rolls the code back
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// UTV2-1835 — the snapshot step is keyed on .unit-talk-release, which only
+// advances after the env writes. That leaves a real window: a deploy that fails
+// between the two has already replaced the configuration on disk while the
+// release record still names the previous, still-running release. Under an
+// unconditional copy the retry overwrote that release's snapshot with the
+// configuration that broke it, so rolling back restored the breakage. These
+// tests execute the real snapshot body twice across that window.
+const RELEASE_ADVANCE_STEP: Record<(typeof DEPLOY_JOBS)[number], string> = {
+  canary: 'Release API canary',
+  promote: 'Promote all production containers',
+};
+
+for (const jobId of DEPLOY_JOBS) {
+  // Establishes that the failure window this defect lives in actually exists.
+  // If the release record were advanced before the env writes there would be no
+  // window and the retry tests below would be guarding nothing.
+  test(`${jobId}: the release record advances only after the configuration is written`, () => {
+    const writeAt = stepIndex(jobId, ENV_WRITE_STEP);
+    const advanceAt = stepIndex(jobId, RELEASE_ADVANCE_STEP[jobId]);
+    assert.notEqual(advanceAt, -1, `"${jobId}" must contain "${RELEASE_ADVANCE_STEP[jobId]}"`);
+    assert.ok(
+      writeAt < advanceAt,
+      `"${ENV_WRITE_STEP}" (${writeAt}) must precede "${RELEASE_ADVANCE_STEP[jobId]}" (${advanceAt}) in "${jobId}"`,
+    );
+  });
+
+  test(`${jobId}: a retry after a failed deploy does not overwrite the running release's snapshot`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'utv2-1835-retry-'));
+    const runningTag = 'e48106fc9a5eb5904b322833d0968da5ae0b0665';
+    const original: Record<string, string> = {
+      '.env.production': 'RUNTIME_MODE=fail_closed\n',
+      '.env.web': 'NEXT_PUBLIC_API_BASE_URL=https://old.example\n',
+      '.env.smart-form': 'ALLOWED_CAPPER_EMAILS=old-shape-that-admits-the-operator\n',
+    };
+    const runSnapshot = () =>
+      spawnSync('bash', ['-s', '--', dir], {
+        input: snapshotRemoteBody(jobId),
+        encoding: 'utf8',
+        cwd: dir,
+      });
+
+    try {
+      writeFileSync(join(dir, '.unit-talk-release'), `${runningTag}\n`);
+      for (const [name, body] of Object.entries(original)) {
+        writeFileSync(join(dir, name), body);
+        chmodSync(join(dir, name), 0o600);
+      }
+
+      // Deploy #1: snapshot, then write the new configuration...
+      assert.equal(runSnapshot().status, 0, 'first snapshot must succeed');
+      for (const name of CONFIG_FILES) {
+        writeFileSync(join(dir, name), 'REPLACED_BY_FAILED_DEPLOY=1\n');
+      }
+      // ...and then fail, before the release record advances. .unit-talk-release
+      // deliberately still names runningTag here — that is the whole defect.
+
+      // Deploy #2: the operator retries the same dispatch.
+      assert.equal(runSnapshot().status, 0, 'retry snapshot must succeed');
+
+      for (const name of CONFIG_FILES) {
+        assert.equal(
+          readFileSync(join(dir, `${name}.${runningTag}`), 'utf8'),
+          original[name],
+          `${name}.${runningTag} must still hold the configuration that ran with ${runningTag}, ` +
+            'not the configuration a failed deploy left behind',
+        );
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test(`${jobId}: pruning never evicts the snapshot for the release on the host`, () => {
+    const dir = mkdtempSync(join(tmpdir(), 'utv2-1835-prune-'));
+    const runningTag = 'e48106fc9a5eb5904b322833d0968da5ae0b0665';
+    const original = 'ALLOWED_CAPPER_EMAILS=old-shape-that-admits-the-operator\n';
+    try {
+      writeFileSync(join(dir, '.unit-talk-release'), `${runningTag}\n`);
+      writeFileSync(join(dir, '.env.smart-form'), original);
+      chmodSync(join(dir, '.env.smart-form'), 0o600);
+
+      // Take the real snapshot first, so it is the OLDEST by mtime — exactly the
+      // position a mtime-ordered prune evicts from.
+      assert.equal(
+        spawnSync('bash', ['-s', '--', dir], {
+          input: snapshotRemoteBody(jobId),
+          encoding: 'utf8',
+          cwd: dir,
+        }).status,
+        0,
+        'snapshot must succeed',
+      );
+
+      // Then eight newer snapshots, as a run of failed retries at other tags
+      // would leave behind.
+      for (let i = 0; i < 8; i += 1) {
+        writeFileSync(join(dir, `.env.smart-form.${String(i).repeat(40)}`), `NEWER=${i}\n`);
+      }
+
+      assert.equal(
+        spawnSync('bash', ['-s', '--', dir], {
+          input: snapshotRemoteBody(jobId),
+          encoding: 'utf8',
+          cwd: dir,
+        }).status,
+        0,
+        'second snapshot must succeed',
+      );
+
+      assert.equal(
+        readFileSync(join(dir, `.env.smart-form.${runningTag}`), 'utf8'),
+        original,
+        'the snapshot for the release on the host must survive the prune',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+}
