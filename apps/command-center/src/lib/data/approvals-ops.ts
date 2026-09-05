@@ -21,7 +21,7 @@ export interface AwaitingApprovalPick {
 }
 
 export async function getAwaitingApprovalPicks(limit = 100): Promise<AwaitingApprovalPick[]> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const result = await client
     .from('picks_current_state')
     .select('id, source, market, selection, status, approval_status, promotion_score, sport_display_name, capper_display_name, created_at')

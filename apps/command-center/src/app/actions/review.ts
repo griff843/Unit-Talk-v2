@@ -63,6 +63,7 @@ export async function reviewPick(
 export interface BulkReviewResult {
   succeeded: string[];
   failed: string[];
+  error?: string;
 }
 
 export async function bulkReviewPicks(
@@ -70,6 +71,11 @@ export async function bulkReviewPicks(
   decision: ReviewDecision,
   reason: string,
 ): Promise<BulkReviewResult> {
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    return { succeeded: [], failed: [...pickIds], error: actorResolution.error };
+  }
+
   const succeeded: string[] = [];
   const failed: string[] = [];
 

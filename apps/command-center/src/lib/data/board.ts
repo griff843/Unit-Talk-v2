@@ -31,7 +31,7 @@ function roundPct(n: number, d: number): number {
 }
 
 export async function getBoardState(target = 'best-bets'): Promise<{ ok: true; data: unknown }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: rows, error } = await client
@@ -189,7 +189,7 @@ export interface BoardQueueData {
 }
 
 export async function getBoardQueue(): Promise<{ ok: true; data: BoardQueueData }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   const { data: latestRunRows, error: runError } = await client
     .from('syndicate_board')
@@ -306,7 +306,7 @@ export interface GovernedPickPerformanceRow {
 }
 
 export async function getBoardPerformance(boardRunId?: string | null): Promise<{ ok: true; data: GovernedPickPerformanceRow[] }> {
-  const client: Client = getDataClient();
+  const client: Client = await getDataClient();
 
   let query = client
     .from('v_governed_pick_performance')

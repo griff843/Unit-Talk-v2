@@ -21,13 +21,13 @@ export type SubmitPickResult =
  * approval queue; this action never posts directly to members.
  */
 export async function submitBuiltPick(draft: SubmissionDraft): Promise<SubmitPickResult> {
-  const apiUrl = resolveApiBaseUrl();
-  const headers = resolveCommandCenterApiHeaders();
   const actorResolution = await resolveActorOrRefusal();
   if (!actorResolution.ok) {
     return { ok: false, error: actorResolution.error };
   }
   const operatorActor = actorResolution.actor;
+  const apiUrl = resolveApiBaseUrl();
+  const headers = resolveCommandCenterApiHeaders();
 
   try {
     const res = await fetch(`${apiUrl}/api/submissions`, {

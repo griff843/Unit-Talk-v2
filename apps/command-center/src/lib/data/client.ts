@@ -10,6 +10,7 @@ import {
   type DatabaseClientOptions as SharedDatabaseClientOptions,
 } from '../../../../../packages/db/dist/client.js';
 import { assertCommandCenterAuthConfig } from '../server-api';
+import { assertPrivilegedRequestAuthenticated } from '../request-auth';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -71,7 +72,8 @@ export function createDatabaseClientFromConnection(
   return createSharedClientFromConnection(connection);
 }
 
-export function getDataClient(): SupabaseClient {
+export async function getDataClient(): Promise<SupabaseClient> {
+  await assertPrivilegedRequestAuthenticated();
   if (!_client) {
     const env = loadEnvironment(resolveWorkspaceRoot());
     const connection = createServiceRoleDatabaseConnectionConfig(env);

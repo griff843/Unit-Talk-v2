@@ -1,12 +1,10 @@
-import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
-
 export const metadata = { title: 'Model Health — Unit Talk Command Center' };
 import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
 } from '@/lib/server-api';
-import { resolveActorOrRefusal } from '@/lib/require-actor';
+import { assertPrivilegedRequestAuthenticated } from '@/lib/request-auth';
+import { submitModelHealthDecision } from '@/app/actions/model-health';
 
 type ModelHealthAction = 'acknowledge' | 'demote' | 'retire';
 
@@ -29,6 +27,7 @@ const API_BASE = resolveApiBaseUrl();
 const DECISION_ACTIONS: ModelHealthAction[] = ['acknowledge', 'demote', 'retire'];
 
 async function fetchModelHealthAlerts(): Promise<ModelHealthFetchResult> {
+  await assertPrivilegedRequestAuthenticated();
   try {
     const res = await fetch(`${API_BASE}/api/model-health/alerts`, {
       cache: 'no-store',
@@ -56,40 +55,6 @@ async function fetchModelHealthAlerts(): Promise<ModelHealthFetchResult> {
       error: error instanceof Error ? error.message : 'Model health fetch failed.',
     };
   }
-}
-
-async function submitModelHealthDecision(formData: FormData) {
-  'use server';
-
-  // An inline server action is still independently addressable: a POST carrying
-  // the `Next-Action` header reaches this function directly, without rendering
-  // the page or its layout, so neither of those gates protects it.
-  const actorResolution = await resolveActorOrRefusal();
-  if (!actorResolution.ok) {
-    redirect(`/model-health?error=${encodeURIComponent(actorResolution.error)}`);
-  }
-
-  const modelId = String(formData.get('modelId') ?? '').trim();
-  const action = String(formData.get('action') ?? '').trim();
-  const reason = String(formData.get('reason') ?? '').trim();
-
-  if (!modelId || !isModelHealthAction(action) || !reason) {
-    redirect('/model-health?error=Model%20ID%2C%20action%2C%20and%20reason%20are%20required.');
-  }
-
-  const res = await fetch(`${API_BASE}/api/model-health/decision`, {
-    method: 'POST',
-    headers: resolveCommandCenterApiHeaders(),
-    body: JSON.stringify({ modelId, action, reason, actor: actorResolution.actor }),
-  });
-  const body = await res.json().catch(() => null) as unknown;
-  if (!res.ok) {
-    const message = readErrorMessage(body) ?? `Model health decision failed: ${res.status}`;
-    redirect(`/model-health?error=${encodeURIComponent(message)}`);
-  }
-
-  revalidatePath('/model-health');
-  redirect('/model-health?decision=recorded');
 }
 
 export default async function ModelHealthPage({
@@ -234,10 +199,6 @@ function readRecord(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return {};
-}
-
-function isModelHealthAction(action: string): action is ModelHealthAction {
-  return DECISION_ACTIONS.includes(action as ModelHealthAction);
 }
 
 function formatTimestamp(value: string): string {

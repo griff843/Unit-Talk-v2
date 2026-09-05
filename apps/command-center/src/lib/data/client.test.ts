@@ -4,8 +4,14 @@ import type { AppEnv } from '../../../../../packages/config/dist/env.js';
 import {
   createDatabaseConnectionConfig,
   createServiceRoleDatabaseConnectionConfig,
+  getDataClient,
   isTestFixturePick,
 } from './client';
+import { PrivilegedAccessDeniedError } from '../request-auth';
+
+test('service-role data client refuses access outside an authenticated request', async () => {
+  await assert.rejects(() => getDataClient(), PrivilegedAccessDeniedError);
+});
 
 test('service-role data client fails closed in production without Command Center auth', () => {
   withCleanCommandCenterEnv(() => {

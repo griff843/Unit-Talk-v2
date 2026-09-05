@@ -301,7 +301,7 @@ function namedInsightFromMap(
 
 export async function getPerformanceData(): Promise<PerformanceData | null> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     // Fetch canonical settled records joined with picks (last 30 days is the widest window)
     // We always fetch the widest window and filter in-memory for sub-windows.
@@ -504,7 +504,7 @@ export interface LeaderboardResult {
 
 export async function getLeaderboard(days: number): Promise<LeaderboardResult> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
     const cutoff = daysAgoIso(days);
 
     const settlementResult = await client
@@ -612,7 +612,7 @@ export async function getReviewHistory(
   decision?: string,
 ): Promise<{ reviews: ReviewRow[]; total: number }> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     const validActions = ['review.approve', 'review.deny', 'review.hold', 'review.return'];
     const targetAction = decision ? DECISION_ACTION_MAP[decision] : undefined;
@@ -763,7 +763,7 @@ const SCORE_BANDS = [
 
 export async function getIntelligenceData(): Promise<IntelligenceData | null> {
   try {
-    const client: Client = getDataClient();
+    const client: Client = await getDataClient();
 
     // Fetch last 200 settled records (canonical) ordered by settled_at desc for form windows
     const [settlementResult, holdsResult] = await Promise.all([
