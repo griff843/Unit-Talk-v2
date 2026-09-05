@@ -50,7 +50,10 @@ lane-start lock. The three paths it rejects, verbatim from its run log, are:
 
 All three are genuine lane work — the two T1 proof suites and the one-line wiring that makes
 required `verify` execute them. They are admitted only by a PM `scope-override/v1` comment
-pinned to the exact PR head. This is a lane-setup defect: the scope should have named the files
+pinned to the exact PR head, and **no such comment is pinned to this head** — the two
+`scope-override/v1` comments on the PR name `c273fbdd` and `af59edb5`, and
+`resolveApplicableOverride` requires an exact match, so `File Scope Lock Check` is red at
+this head and stays red until a fresh override is posted. This is a lane-setup defect: the scope should have named the files
 the work would actually create.
 
 The substantive migration commit is still `4c3a71cf`, which landed the two fixes returned by PM
@@ -106,10 +109,21 @@ bundle claimed they were. `InMemoryApiRateLimitStore` anchors a sliding window t
 request that opens it (`resetAt = now + windowMs`); `SupabaseRpcApiRateLimitStore` floors `now`
 to a wall-clock-aligned tumbling window before calling. At `windowMs = 60000, maxRequests = 1`,
 requests at 59,999 ms and 60,001 ms are refused by the in-memory store and allowed by the RPC
-path. Both T1 suites model the aligned window, so neither can detect this. The flooring caller
+path. The divergence runs **both ways**: at limit 1 with requests at 59,000 / 61,000 / 119,000 ms
+the in-memory store gives allow, refuse, allow while the RPC path gives allow, allow, refuse, so
+neither store dominates the other. An earlier revision of this paragraph claimed the RPC path is
+"never more restrictive"; that was wrong and was caught by independent review, which supplied
+that counterexample. Both witnesses above were produced by simulating the two shipped stores over
+a grid of request times, not reasoned by hand.
+
+Neither T1 suite can detect this. `t1-proof-utv2-1811-rpc-contract-parity.test.ts` is pure static
+analysis — it computes no window and never calls `consume()`. Only
+`t1-proof-utv2-1811-rate-limit-contract.test.ts` models a window, and its fake at line 45 computes
+the same floored, aligned window the RPC caller uses, so it validates the RPC store against a fake
+that already shares its model. An earlier revision of this paragraph said "both T1 suites model the
+aligned window" and cited a "parity fake" that does not exist; that is retracted. The flooring caller
 already ships on `main` and this PR does not touch `apps/api/src/server.ts`, so this is a
-pre-existing property that the bundle described wrongly, not a regression introduced here; at
-the boundary the RPC path is more permissive, never more restrictive. The migration's own
+pre-existing property that the bundle described wrongly, not a regression introduced here. The migration's own
 `COMMENT ON FUNCTION` carries the same overstatement ("Mirrors InMemoryApiRateLimitStore
 semantics") and is left as shipped, because the file is already applied to production and its
 blob is load-bearing for every fidelity, ACL and fingerprint receipt here. Reconciling the two
@@ -735,7 +749,7 @@ ASSERTIONS:
 - [x] `consume_rate_limit_bucket` was absent from production, staging and every governed migration before this change.
 - [x] The applied function's callable signature matches the four named arguments `SupabaseRpcApiRateLimitStore` sends.
 - [x] Limiter semantics on real PostgreSQL are identical to `InMemoryApiRateLimitStore` **within a window**, including 429 at limit+1 rather than an exception.
-- [ ] **NOT ASSERTED — the two stores are not equivalent across a window boundary.** In-memory uses a first-request-anchored sliding window; the RPC caller floors to an aligned tumbling window. Pre-existing on `main`, not introduced by this PR, and not detectable by either T1 suite (both model the aligned window). See `runtime_proof.window_model_divergence`.
+- [ ] **NOT ASSERTED — the two stores are not equivalent across a window boundary, in either direction.** In-memory uses a first-request-anchored sliding window; the RPC caller floors to an aligned tumbling window, and each refuses requests the other allows. Pre-existing on `main`, not introduced by this PR, and not detectable by either T1 suite — one is static analysis with no window model, the other's fake already shares the aligned model. See `runtime_proof.window_model_divergence`.
 - [x] `anon`, `authenticated` and PUBLIC hold no EXECUTE on the function and no privilege on the table; a control without the revokes shows all three would otherwise have it.
 - [x] Apply → down → reapply converges on a byte-identical fingerprint that includes ACLs.
 - [x] The fail-closed precondition raises `42P07` over an existing relation and applies cleanly when absent.
