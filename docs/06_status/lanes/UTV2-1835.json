@@ -20,7 +20,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-05T21:23:22.169Z",
-  "heartbeat_at": "2026-09-05T21:24:55.555Z",
+  "heartbeat_at": "2026-09-05T21:45:06.897Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1835-deploy-snapshot-retry.json",
