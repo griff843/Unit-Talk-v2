@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1812-cc-middleware-dotted-path-bypass",
   "branch": "claude/utv2-1812-cc-middleware-dotted-path-bypass",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "9ac4694d918546bbd8da80ff8ac926577e46a178",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1503",
   "files_changed": [],
   "file_scope_lock": [
@@ -18,14 +18,22 @@
     "docs/06_status/proof/UTV2-1812/evidence.json",
     "docs/06_status/proof/UTV2-1812/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-03T17:27:35.757Z",
-  "heartbeat_at": "2026-09-05T03:24:32.611Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-05T23:50:01.242Z",
+  "closed_at": "2026-09-05T23:50:01.242Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1812-cc-middleware-dotted-path-bypass.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T23:49:59.061Z",
+      "verdict": "pass",
+      "merge_sha": "9ac4694d918546bbd8da80ff8ac926577e46a178",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

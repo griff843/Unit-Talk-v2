@@ -7,7 +7,7 @@ Lane type: delivery-ui
 Branch: claude/utv2-1812-cc-middleware-dotted-path-bypass
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1503
 Head SHA: 1aab560ab42bd690846b5207428ad82575b0b098
-Merge SHA: N/A
+Merge SHA: 9ac4694d918546bbd8da80ff8ac926577e46a178
 Diff base: ddea5ddf254afc40675d07373861b406b124d328
 Diff target: 1aab560ab42bd690846b5207428ad82575b0b098
 
@@ -59,4 +59,4 @@ A	docs/06_status/lanes/UTV2-1812.json
 
 ## SHA Binding
 Head SHA: 1aab560ab42bd690846b5207428ad82575b0b098
-Merge SHA: N/A
+Merge SHA: 9ac4694d918546bbd8da80ff8ac926577e46a178

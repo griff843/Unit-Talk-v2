@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "9ac4694d918546bbd8da80ff8ac926577e46a178",
     "verified_source_sha": "3d46af43633264c86f717851510a5cf86958f88c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,7 +16,9 @@
       "pnpm_test_db": "PASS — 'Writable DB proof (staging only)' job 101305997745 succeeded against staging in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c; steps 'Run writable DB proof against staging' and 'Run the T1 live proof suites against staging' both success, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101305997745",
       "r_level_check": "PASS — operator-ui matched; required artifact qa-experience-report present. The artifact that satisfied this rule is dated 2026-05-13 and predates this lane; it satisfies the gate mechanically and is not verification of this change. The QA Experience Regression (Advisory) check is red at this head for net::ERR_CONNECTION_REFUSED at http://localhost:4300/ — no Command Center process — reproduced locally at the same head; see verification.md \"The QA Experience advisory fails for lack of a server, not for a regression\".",
       "pnpm_verify": "PASS — required `verify` check completed success in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c (https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101306812905)"
-    }
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T23:49:58.131Z"
   },
   "static_proof": {
     "status": "PASS",
