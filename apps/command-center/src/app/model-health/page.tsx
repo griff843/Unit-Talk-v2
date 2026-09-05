@@ -6,6 +6,7 @@ import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
 } from '@/lib/server-api';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
 
 type ModelHealthAction = 'acknowledge' | 'demote' | 'retire';
 
@@ -60,6 +61,14 @@ async function fetchModelHealthAlerts(): Promise<ModelHealthFetchResult> {
 async function submitModelHealthDecision(formData: FormData) {
   'use server';
 
+  // An inline server action is still independently addressable: a POST carrying
+  // the `Next-Action` header reaches this function directly, without rendering
+  // the page or its layout, so neither of those gates protects it.
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    redirect(`/model-health?error=${encodeURIComponent(actorResolution.error)}`);
+  }
+
   const modelId = String(formData.get('modelId') ?? '').trim();
   const action = String(formData.get('action') ?? '').trim();
   const reason = String(formData.get('reason') ?? '').trim();
@@ -71,7 +80,7 @@ async function submitModelHealthDecision(formData: FormData) {
   const res = await fetch(`${API_BASE}/api/model-health/decision`, {
     method: 'POST',
     headers: resolveCommandCenterApiHeaders(),
-    body: JSON.stringify({ modelId, action, reason, actor: 'operator' }),
+    body: JSON.stringify({ modelId, action, reason, actor: actorResolution.actor }),
   });
   const body = await res.json().catch(() => null) as unknown;
   if (!res.ok) {

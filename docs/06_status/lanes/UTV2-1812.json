@@ -14,7 +14,9 @@
     "apps/command-center/**"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1812/evidence.json"
+    "docs/06_status/proof/UTV2-1812/diff-summary.md",
+    "docs/06_status/proof/UTV2-1812/evidence.json",
+    "docs/06_status/proof/UTV2-1812/verification.md"
   ],
   "status": "started",
   "started_at": "2026-09-03T17:27:35.757Z",
