@@ -96,19 +96,20 @@ credential, so a missing credential yields a **passing** job with every test ski
 The receipt this PR must be read against is therefore that job's tap output for this suite showing
 `# pass 3 # fail 0 # skipped 0`.
 
-**Captured. Run `33964739189`, job `101302801007`, 2026-09-05T12:05:32Z-12:06:18Z, at branch head
-`a8f3259b92b52115a85c7b560e789177dfadc904`.** The `Run the T1 live proof suites against staging`
-step's command line ends with `&& tsx --test apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`,
-which is the wiring this PR adds; the suite's own tap block is:
+**Captured at the execution anchor. Run `33964033493`, job `101300875256`,
+2026-09-05T11:49:13Z-11:49:58Z, at `380e7854f36dc318421dee880d6ab1cbac22ce4a` — the same SHA this
+bundle names as its Execution SHA and as `sha_binding.verified_source_sha` in `evidence.json`.** The
+`Run the T1 live proof suites against staging` step's command line ends with
+`&& tsx --test apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`, which is the wiring this PR
+adds; the suite's own tap block is:
 
 ```
-TAP version 13
 ok 1 - UTV2-1815 live DB: Postgres refuses a NULL stake with 23514 on picks_stake_units_canonical_check
-  duration_ms: 14969.792313
+  duration_ms: 15256.857589
 ok 2 - UTV2-1815 live DB: an unrepresentable (NaN) stake and a non-positive stake are refused identically
-  duration_ms: 14772.398547
+  duration_ms: 14454.835163
 ok 3 - UTV2-1815 live DB: a real stake still persists a real profit/loss (negative control)
-  duration_ms: 15283.602833
+  duration_ms: 15070.505902
 1..3
 # tests 3
 # suites 0
@@ -117,14 +118,20 @@ ok 3 - UTV2-1815 live DB: a real stake still persists a real profit/loss (negati
 # cancelled 0
 # skipped 0
 # todo 0
-# duration_ms 45490.80927
+# duration_ms 45258.859337
 ```
 
 `# skipped 0` is the load-bearing line: it is what distinguishes a real run against staging from a
 passing job whose suites were skipped on an absent `SUPABASE_SERVICE_ROLE_KEY`. The per-test
 durations (~15s each) corroborate it — a skipped test does not spend fifteen seconds. The job then
 ran `Scrub credentials` (`rm -f local.env`) and uploaded `ci-db-proof-receipt.json` as
-`utv2-1630-db-proof-receipt-33964739189-1`.
+`utv2-1630-db-proof-receipt-33964033493-1`.
+
+**Reproduced once more after the anchor.** Run `33964739189`, job `101302801007`, at
+`a8f3259b92b52115a85c7b560e789177dfadc904` — a proof-only commit that changed no executable file —
+produced the identical `# tests 3 / # pass 3 / # fail 0 / # skipped 0`, `# duration_ms 45490.80927`.
+That second run is corroboration, not the binding receipt; the binding receipt is the anchored one
+above.
 
 This receipt establishes only what the test asserts: that Postgres refuses NULL, NaN-as-NULL and
 non-positive `stake_units` with SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that
@@ -133,6 +140,13 @@ a real stake still persists a real profit/loss. It says nothing about the applic
 rows. That distinction is deliberate and is the subject of the parent work, not this PR.
 
 ## Merge SHA Binding
+
+This bundle binds under the schema-v2 contract. `evidence.json` carries the authoritative
+`sha_binding` block: `merge_sha` is `null` pre-merge (a branch SHA is never merge authority), and
+`verified_source_sha` is `380e7854f36dc318421dee880d6ab1cbac22ce4a` — the last non-proof commit on
+this branch, and the exact SHA the staging receipt above was produced at. The row below is the
+ratified pre-merge anchor token; the post-merge rebinder replaces it from GitHub's recorded merge
+state.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1504
