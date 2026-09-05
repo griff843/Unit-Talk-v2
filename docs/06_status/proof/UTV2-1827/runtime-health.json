@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1827",
+  "merge_sha": null,
+  "branch": "claude/utv2-1827-governed-staging-proof-runner",
+  "pr": 1505,
+  "tier": "T1",
+  "lane_type": "runtime",
+  "evaluated_at": "PENDING-CI",
+  "verified_source_sha": "00ed6f6edfae3042f8ad820c767a4f2effc9bcad",
+  "provenance": {
+    "note": "The verify and staging receipts below are read from the CI run at the branch head; none of it was produced locally. Local verification against staging is structurally unavailable here \u2014 local.env pins SUPABASE_URL to http://127.0.0.1:1 under production containment and ci:assert-staging fails closed rather than resolving a staging target off-CI. The type-check, lint and lane-suite results recorded in evidence.json under static_proof WERE run locally and are stated as such; the authoritative receipts for pnpm type-check and pnpm test are the CI ones named here.",
+    "workflow_run": "PENDING",
+    "run_id": "PENDING"
+  },
+  "verify_result": {
+    "status": "PENDING",
+    "check_name": "verify",
+    "job_id": "PENDING",
+    "job_url": "PENDING",
+    "head_sha": "PENDING"
+  },
+  "test_db_result": {
+    "status": "PENDING",
+    "command": "pnpm test:db",
+    "target": "staging",
+    "producer_job": "Writable DB proof (staging only)",
+    "producer_job_id": "PENDING",
+    "producer_job_url": "PENDING",
+    "note": "This is the run-level staging receipt ci.yml produces for every PR at this head. It is evidence that this branch does not break the staging path. It is NOT evidence about the runner this PR adds: none of the code in this lane touches the database, and staging-proof-runner.yml cannot be dispatched until it is on the default branch."
+  },
+  "runtime_surface_touched": {
+    "database": false,
+    "delivery": false,
+    "containment_settings": false,
+    "production_credentials": false,
+    "existing_workflows": false,
+    "note": "All seven paths in the diff are new files. ci.yml, staging-db-proof.yml, proof-gate.yml and t1-proof-gate.yml are untouched, and the new workflow is workflow_dispatch-only, so no existing trigger reaches it."
+  }
+}
