@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1835-deploy-snapshot-retry
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1511
 Head SHA: f1681e6e0849c04db6d107cc594b71bfb12c0aae
-Merge SHA: N/A
+Merge SHA: ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c
 Diff base: 175f07c10f79ec01f5dd307cb4224dcb2863746e
 Diff target: f1681e6e0849c04db6d107cc594b71bfb12c0aae
 
@@ -35,4 +35,4 @@ M	scripts/ci/deploy-config-rollback.test.ts
 
 ## SHA Binding
 Head SHA: f1681e6e0849c04db6d107cc594b71bfb12c0aae
-Merge SHA: N/A
+Merge SHA: ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c

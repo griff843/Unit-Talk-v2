@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "ce3b87bf8e2a53f4e025a2c5fd0db7f38c676c4c",
     "verified_source_sha": "f1681e6e0849c04db6d107cc594b71bfb12c0aae",
     "evidence_commit_sha": "f1681e6e0849c04db6d107cc594b71bfb12c0aae",
-    "current_pr_head_sha": null,
+    "current_pr_head_sha": "dc293de7661272890adf6541e47c0cfc7805c2c9",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (exit 0, full suite) measured locally in the lane worktree at this anchor",
@@ -18,13 +18,20 @@
       "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33993972213, head 91b56ad37, conclusion success. Not run locally. The earlier run at the execution SHA f1681e6e0 (33993517660) was superseded and its conclusion is `cancelled`; it is not cited. Only this lane's manifest and proof bundle differ between f1681e6e0 and 91b56ad37, so no implementation file is uncovered.",
       "r_level_check": "PASS (Verdict: PASS, 5 changed files, no R-level artifacts required for this diff)"
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-05T21:45:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T22:39:04.989Z",
     "anchor_note": "All measurement ran at f1681e6e0849c04db6d107cc594b71bfb12c0aae, the implementation commit on claude/utv2-1835-deploy-snapshot-retry. Later commits on this branch add only the proof bundle and change no implementation file, so the anchor remains the correct execution identity and is an ancestor of the PR head. merge_sha is null because no merge exists yet; post-merge-lane-close.yml rebinds it."
   },
   "static_proof": {
-    "type_check": { "status": "PASS", "command": "pnpm type-check" },
-    "test": { "status": "PASS", "command": "pnpm test", "failures": 0 },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "failures": 0
+    },
     "targeted_test": {
       "status": "PASS",
       "command": "pnpm exec tsx --test scripts/ci/deploy-config-rollback.test.ts",
