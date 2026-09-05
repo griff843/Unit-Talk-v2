@@ -1,0 +1,176 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1834
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1834
+  objective: >-
+    `deploy.yml` snapshots the outgoing `.env.production`, `.env.web`,
+    `.env.smart-form` as `<file>.<outgoing-release-tag>` (mode 0600) before the
+    first env write, in **both** the canary and production jobs. First-ever
+    deploy (no `.unit-talk-release`) exits 0.
+
+    `deploy/rollback.sh` restores `<file>.$TAG` for all three files when
+    present, and emits an explicit `WARNING: no configuration snapshot for <tag>
+    — code rolled back, configuration did not` when absent. It must never fail
+    closed on a missing snapshot; a code-only rollback is still better than
+    none.
+
+    `scripts/ci/deploy-config-rollback.test.ts` asserts the snapshot step exists
+    in both jobs, that its step index is lower than that job's first
+    `.env.production` write, that it keys on `.unit-talk-release` rather than
+    the incoming `IMAGE_TAG`, and that [rollback.sh](<http://rollback.sh>)
+    restores all three files and warns on absence. Wired into required `verify`
+    via `test:ops`.
+  acceptance_criteria:
+    - |-
+      ## Measured defect
+
+      `deploy/rollback.sh` rolls the container image tag back and nothing else. Its entire remote command is:
+
+      ```sh
+      cd '$DEPLOY_PATH'
+      if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.failed; fi
+      printf '%s\n' '$TAG' > .unit-talk-release
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
+      ```
+
+      There is no `cp`, no backup, and no restore of any env file.
+
+      `.github/workflows/deploy.yml` overwrites `.env.production`, `.env.web` and `.env.smart-form` in place on every deploy (canary job lines 450/509/530, production job lines 945/1018). The previous contents are destroyed. A rollback therefore restores the **old image running against the new configuration** — a combination that was never deployed and never tested.
+
+      This is the failure mode the contained Smart Form pilot is most exposed to: `ALLOWED_CAPPER_EMAILS` changed shape under [UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id), so the next deploy is the first that ships the new shape. If it locks everyone out, rolling the image back does not restore the working allow-list.
+
+      ## Why the fix is cheap
+
+      `deploy.yml` updates `.unit-talk-release` **after** the env writes (canary 579-580, production 1064), so at env-write time the host still holds the **outgoing** release tag — exactly the key a later `rollback.sh --tag <outgoing>` looks up. Precedent already exists one line away at 579: `cp .unit-talk-release .unit-talk-release.previous`.
+
+      ## Required outcome
+
+      1. `deploy.yml` snapshots the outgoing `.env.production`, `.env.web`, `.env.smart-form` as `<file>.<outgoing-release-tag>` (mode 0600) before the first env write, in **both** the canary and production jobs. First-ever deploy (no `.unit-talk-release`) exits 0.
+      2. `deploy/rollback.sh` restores `<file>.$TAG` for all three files when present, and emits an explicit `WARNING: no configuration snapshot for <tag> — code rolled back, configuration did not` when absent. It must never fail closed on a missing snapshot; a code-only rollback is still better than none.
+      3. `scripts/ci/deploy-config-rollback.test.ts` asserts the snapshot step exists in both jobs, that its step index is lower than that job's first `.env.production` write, that it keys on `.unit-talk-release` rather than the incoming `IMAGE_TAG`, and that [rollback.sh](<http://rollback.sh>) restores all three files and warns on absence. Wired into required `verify` via `test:ops`.
+
+      ## In scope alongside (same operator surface, same coherent change)
+
+      Two operator docs still describe the pre-[UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id) `ALLOWED_CAPPER_EMAILS` shape and would lead an operator to write a value that silently admits nobody:
+
+      * `docs/05_operations/REQUIRED_SECRETS.md:541` — "comma-separated allow-list of capper email addresses"
+      * `deploy/production/ENV_FILES.md:61` — same
+
+      Both must state the required `<email>=<canonicalCapperId>` pair shape, that an entry without `=` is dropped rather than derived from the local part, and that neither `deploy.yml` nor `nextjs-entrypoint.sh` validates the shape — only non-emptiness.
+
+      ## Out of scope
+
+      No containment change, no deploy dispatch, no secret read or write. This lane changes the rollback path and its documentation only.
+
+      ## Notes for the executor
+
+      `package.json` must be declared in `file_scope_lock` **at lane-start** — the lock is pinned to the lane-start commit and cannot be widened afterwards.
+  guardrails: []
+  non_goals:
+    - No containment change, no deploy dispatch, no secret read or write. This
+      lane changes the rollback path and its documentation only.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Measured defect
+      `deploy/rollback.sh` rolls the container image tag back and nothing else. Its entire remote command is:
+
+      ```sh
+      cd '$DEPLOY_PATH'
+      if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.failed; fi
+      printf '%s\n' '$TAG' > .unit-talk-release
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
+      ```
+
+      There is no `cp`, no backup, and no restore of any env file.
+
+      `.github/workflows/deploy.yml` overwrites `.env.production`, `.env.web` and `.env.smart-form` in place on every deploy (canary job lines 450/509/530, production job lines 945/1018). The previous contents are destroyed. A rollback therefore restores the **old image running against the new configuration** — a combination that was never deployed and never tested.
+
+      This is the failure mode the contained Smart Form pilot is most exposed to: `ALLOWED_CAPPER_EMAILS` changed shape under [UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id), so the next deploy is the first that ships the new shape. If it locks everyone out, rolling the image back does not restore the working allow-list.
+    - >-
+      Why the fix is cheap
+
+      `deploy.yml` updates `.unit-talk-release` **after** the env writes (canary
+      579-580, production 1064), so at env-write time the host still holds the
+      **outgoing** release tag — exactly the key a later `rollback.sh --tag
+      <outgoing>` looks up. Precedent already exists one line away at 579: `cp
+      .unit-talk-release .unit-talk-release.previous`.
+    - |-
+      In scope alongside (same operator surface, same coherent change)
+      Two operator docs still describe the pre-[UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id) `ALLOWED_CAPPER_EMAILS` shape and would lead an operator to write a value that silently admits nobody:
+
+      * `docs/05_operations/REQUIRED_SECRETS.md:541` — "comma-separated allow-list of capper email addresses"
+      * `deploy/production/ENV_FILES.md:61` — same
+
+      Both must state the required `<email>=<canonicalCapperId>` pair shape, that an entry without `=` is dropped rather than derived from the local part, and that neither `deploy.yml` nor `nextjs-entrypoint.sh` validates the shape — only non-emptiness.
+    - >-
+      Notes for the executor
+
+      `package.json` must be declared in `file_scope_lock` **at lane-start** —
+      the lock is pinned to the lane-start commit and cannot be widened
+      afterwards.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1834/deployrollbacksh-rolls-back-code-but-not-configuration-no-env-snapshot
+    title: deploy/rollback.sh rolls back code but not configuration — no env
+      snapshot exists to restore
+    description: |-
+      ## Measured defect
+
+      `deploy/rollback.sh` rolls the container image tag back and nothing else. Its entire remote command is:
+
+      ```sh
+      cd '$DEPLOY_PATH'
+      if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.failed; fi
+      printf '%s\n' '$TAG' > .unit-talk-release
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
+      UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
+      ```
+
+      There is no `cp`, no backup, and no restore of any env file.
+
+      `.github/workflows/deploy.yml` overwrites `.env.production`, `.env.web` and `.env.smart-form` in place on every deploy (canary job lines 450/509/530, production job lines 945/1018). The previous contents are destroyed. A rollback therefore restores the **old image running against the new configuration** — a combination that was never deployed and never tested.
+
+      This is the failure mode the contained Smart Form pilot is most exposed to: `ALLOWED_CAPPER_EMAILS` changed shape under [UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id), so the next deploy is the first that ships the new shape. If it locks everyone out, rolling the image back does not restore the working allow-list.
+
+      ## Why the fix is cheap
+
+      `deploy.yml` updates `.unit-talk-release` **after** the env writes (canary 579-580, production 1064), so at env-write time the host still holds the **outgoing** release tag — exactly the key a later `rollback.sh --tag <outgoing>` looks up. Precedent already exists one line away at 579: `cp .unit-talk-release .unit-talk-release.previous`.
+
+      ## Required outcome
+
+      1. `deploy.yml` snapshots the outgoing `.env.production`, `.env.web`, `.env.smart-form` as `<file>.<outgoing-release-tag>` (mode 0600) before the first env write, in **both** the canary and production jobs. First-ever deploy (no `.unit-talk-release`) exits 0.
+      2. `deploy/rollback.sh` restores `<file>.$TAG` for all three files when present, and emits an explicit `WARNING: no configuration snapshot for <tag> — code rolled back, configuration did not` when absent. It must never fail closed on a missing snapshot; a code-only rollback is still better than none.
+      3. `scripts/ci/deploy-config-rollback.test.ts` asserts the snapshot step exists in both jobs, that its step index is lower than that job's first `.env.production` write, that it keys on `.unit-talk-release` rather than the incoming `IMAGE_TAG`, and that [rollback.sh](<http://rollback.sh>) restores all three files and warns on absence. Wired into required `verify` via `test:ops`.
+
+      ## In scope alongside (same operator surface, same coherent change)
+
+      Two operator docs still describe the pre-[UTV2-1824](https://linear.app/unit-talk-v2/issue/UTV2-1824/smart-form-identity-resolve-authorized-login-to-a-canonical-capper-id) `ALLOWED_CAPPER_EMAILS` shape and would lead an operator to write a value that silently admits nobody:
+
+      * `docs/05_operations/REQUIRED_SECRETS.md:541` — "comma-separated allow-list of capper email addresses"
+      * `deploy/production/ENV_FILES.md:61` — same
+
+      Both must state the required `<email>=<canonicalCapperId>` pair shape, that an entry without `=` is dropped rather than derived from the local part, and that neither `deploy.yml` nor `nextjs-entrypoint.sh` validates the shape — only non-emptiness.
+
+      ## Out of scope
+
+      No containment change, no deploy dispatch, no secret read or write. This lane changes the rollback path and its documentation only.
+
+      ## Notes for the executor
+
+      `package.json` must be declared in `file_scope_lock` **at lane-start** — the lock is pinned to the lane-start commit and cannot be widened afterwards.
+    captured_at: 2026-09-05T17:23:35.112Z
+    description_sha256: f06e0099a3af62d45a3adfd628044a21c96d5e90e84c9eab8f43102db14a70cf
+  contract_hash: 209fd2db0fb46398c24697e9e8a7a0cf66fd18bba298b6cc93f29423ab9e6b57
