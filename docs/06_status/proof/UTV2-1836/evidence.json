@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1836",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "3c3abd3117d4af8f53bcc4a69c868e72965b4c37",
+    "evidence_commit_sha": "3c3abd3117d4af8f53bcc4a69c868e72965b4c37",
+    "current_pr_head_sha": null,
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_test": "PASS (exit 0) measured locally in the lane worktree at this anchor: 129 suites, 5540 tests, 5540 pass, 0 fail",
+      "pnpm_lint": "Not run locally. A stage of `pnpm verify`, covered by CI run 33996599211 (head 2578c9926, conclusion success).",
+      "pnpm_build": "Not run locally. A stage of `pnpm verify`, covered by CI run 33996599211 (head 2578c9926, conclusion success).",
+      "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33996599211, head 2578c9926, job `verify`, conclusion success. Not run locally. 2578c9926 is the sanctioned main resync; no implementation file of this lane differs from the execution SHA 3c3abd311. The earlier run 33994945082 at f81cf471d is superseded by the resync and is not cited.",
+      "r_level_check": "PASS (Verdict: PASS, no R-level artifacts required for this diff)"
+    },
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-05T23:00:00.000Z",
+    "anchor_note": "All measurement ran at 3c3abd3117d4af8f53bcc4a69c868e72965b4c37, the implementation commit on claude/utv2-1836-carry-forward-collector. Later commits on this branch change only this lane's manifest, sync file and proof bundle, so the anchor remains the correct execution identity and is an ancestor of the PR head. merge_sha is null because no merge exists yet; post-merge-lane-close.yml rebinds it."
+  },
+  "static_proof": {
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "suites": 129,
+      "tests": 5540,
+      "failures": 0
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/carry-forward-collect.test.ts",
+      "tests": 20,
+      "failures": 0
+    },
+    "lint": {
+      "status": "DEFERRED",
+      "command": "pnpm lint",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "build": {
+      "status": "DEFERRED",
+      "command": "pnpm build",
+      "detail": "executed as a stage of pnpm verify in the required CI context, not locally"
+    },
+    "operational_demonstration": [
+      {
+        "id": "D1",
+        "claim": "the collector refuses the reference case PM corrected",
+        "command": "pnpm exec tsx scripts/ops/carry-forward-collect.ts --pr 1503 --issue UTV2-1812 --at 6bfc5875a --from b06593e94",
+        "observed": "REFUSED - C2: deploy/production/ENV_FILES.md, deploy/rollback.sh, package.json, scripts/ci/deploy-config-rollback.test.ts changed since approval; C3: .github/workflows/deploy.yml (denied by .github/**), deploy/production/ENV_FILES.md, deploy/rollback.sh and package.json (no permitted bookkeeping rule), docs/05_operations/REQUIRED_SECRETS.md (denied by docs/05_operations/**), scripts/ci/deploy-config-rollback.test.ts (denied by scripts/**). This is #1507's deployment changes and package test wiring, exactly as PM stated.",
+        "status": "PASS"
+      },
+      {
+        "id": "D2",
+        "claim": "the collector refuses PR #1503's current head change on real GitHub evidence",
+        "command": "pnpm exec tsx scripts/ops/carry-forward-collect.ts --pr 1503 --issue UTV2-1812",
+        "observed": "REFUSED - C2 (package.json, scripts/ops/approval-carry-forward.test.ts changed since approval); C3 (four denied paths); C4 (required context \"Executor Result Validation\" pending). C1 passed: 1 commit since the approved SHA, all merges from origin/main",
+        "status": "PASS"
+      },
+      {
+        "id": "D3",
+        "claim": "this is not an always-refuse control - the accept direction was measured on real history",
+        "command": "C3 evaluated over 199 real first-parent windows on origin/main",
+        "observed": "ADMIT 150, REFUSE 49. Admitted windows are readiness-ledger and other lanes' bookkeeping",
+        "status": "PASS"
+      }
+    ],
+    "scope_controls": [
+      {
+        "assertion": "A1 - nothing calls the collector; no gate changes behaviour",
+        "command": "grep -rl 'carry-forward-collect' .github/ | wc -l",
+        "expected": "0 - no workflow, and therefore no gate, references the collector",
+        "observed": "0",
+        "status": "PASS",
+        "note": "The load-bearing claim is deliberately anchored on .github/ rather than on a whole-repo grep. A whole-repo grep is self-referential: this evidence.json quotes the command, so the file matches its own search and the match count changes when the bundle is written. For completeness the non-workflow references are scripts/ops/carry-forward-collect.ts, its own test, the test-runner wiring in package.json, this lane's sync file and manifest, and this evidence.json itself - none of which is an execution path."
+      },
+      {
+        "assertion": "A2 - no merge-authority, branch-protection, CODEOWNERS or lane-contract surface is touched",
+        "command": "git diff --name-only origin/main...HEAD | grep -cE '^(\\.github/workflows/merge-gate|\\.github/CODEOWNERS|\\.lane/|\\.agents/)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 - no posted receipt is ever read back as evidence",
+        "command": "grep -n 'approval-carry-forward/v1' scripts/ops/carry-forward-collect.ts",
+        "expected": "no match - the collector never parses a receipt; renderReceipt is imported for output only",
+        "observed": "no match",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "claimed": false,
+    "reason": "This diff ships no code path, query or configuration into any running container, and nothing invokes the collector. Operational behaviour is instead demonstrated by running it against real GitHub evidence on PR #1503 and against real origin/main history, recorded under operational_demonstration - injected-input unit tests alone would not establish operational completion."
+  }
+}

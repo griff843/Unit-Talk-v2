@@ -1,0 +1,196 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1836
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1836
+  objective: "Carry-forward: trusted evidence collector, Merge Gate integration
+    diff, and plan reconciliation"
+  acceptance_criteria:
+    - |-
+      Completes the approval carry-forward workstream opened by [UTV2-1818](https://linear.app/unit-talk-v2/issue/UTV2-1818/automated-main-mutations-can-indefinitely-invalidate-exact-head-t1) (#1508), which shipped the pure verifier with all evidence injected. That module has never run against a real pull request, by design — nothing calls it.
+
+      ## What this adds
+
+      **1.** `scripts/ops/carry-forward-collect.ts` **— the trusted evidence collector.**
+
+      The verifier is pure so each condition is testable; this is the other half, and its entire job is to produce those facts from sources a PR author cannot write:
+
+      * commit graph, ancestry and changed paths from `git`, after a fresh `git fetch origin` — never a local ref, never the PR payload
+      * required-check conclusions from the check-runs API at the exact head
+      * approvals and withdrawals from the issue-comments and reviews APIs, accepted only from a CODEOWNERS login with `user.type === 'User'`
+      * the only comment-derived value is the approval's own `Head SHA:`, and it is re-verified as a real commit and a real ancestor via `git merge-base --is-ancestor` rather than trusted as an assertion
+
+      Recognition of a `pm-verdict/v1` comment reuses `scripts/ops/merge-gate-verdict.cjs` `parseVerdict`, so the collector and the gate cannot drift apart on what counts as an approval. No posted receipt is ever read as input.
+
+      **2. The Merge Gate integration diff — RESERVED, presented for review, not applied.**
+
+      Merge authority is reserved under `docs/mission/intent.md` decision 7. The concrete hunk is brought for architecture review and is deliberately not merged by this lane. It is narrow: it applies only when `validateT1Verdicts` returns errors that are *all* staleness, and every other T1 error still blocks.
+
+      **3. Plan reconciliation, bounded to statements measured false.**
+
+      Not a general cleanup pass. Two are materially misleading about deploy safety:
+
+      * `plan.md` states `deploy/rollback.sh:66-74` "touches no env file" and that rollback "makes it worse". False since #1507 — `deploy/rollback.sh:71-77` restores `.env.production`, `.env.web` and `.env.smart-form` from the snapshot and warns explicitly when none exists.
+      * `plan.md` states `REQUIRED_SECRETS.md:541` still documents the pre-#1488 shape. False — the entry documents the `<email>=<canonicalCapperId>` shape, the silent-drop behaviour, and the absence of shape validation.
+
+      Plus stale mechanical facts: `main` SHA, the production-to-`main` gap, open PR count, `#1479`'s `verify` is green not red, and the closed Wave 6 lane.
+
+      ## Demonstrated against real GitHub evidence
+
+      Not injected inputs. Measured on PR #1503 and on real `main` history — see the PR body.
+
+      ## Scope
+
+      * `scripts/ops/carry-forward-collect.ts` (new)
+      * `scripts/ops/carry-forward-collect.test.ts` (new)
+      * `package.json` (test wiring)
+      * `docs/mission/plan.md`
+
+      No merge-authority, branch-protection, CODEOWNERS or containment surface is changed. Existing protection stays exactly as it is until the reserved review lands.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Completes the approval carry-forward workstream opened by [UTV2-1818](https://linear.app/unit-talk-v2/issue/UTV2-1818/automated-main-mutations-can-indefinitely-invalidate-exact-head-t1) (#1508), which shipped the pure verifier with all evidence injected. That module has never run against a real pull request, by design — nothing calls it.
+    - >-
+      What this adds
+
+      **1.** `scripts/ops/carry-forward-collect.ts` **— the trusted evidence
+      collector.**
+
+
+      The verifier is pure so each condition is testable; this is the other
+      half, and its entire job is to produce those facts from sources a PR
+      author cannot write:
+
+
+      * commit graph, ancestry and changed paths from `git`, after a fresh `git
+      fetch origin` — never a local ref, never the PR payload
+
+      * required-check conclusions from the check-runs API at the exact head
+
+      * approvals and withdrawals from the issue-comments and reviews APIs,
+      accepted only from a CODEOWNERS login with `user.type === 'User'`
+
+      * the only comment-derived value is the approval's own `Head SHA:`, and it
+      is re-verified as a real commit and a real ancestor via `git merge-base
+      --is-ancestor` rather than trusted as an assertion
+
+
+      Recognition of a `pm-verdict/v1` comment reuses
+      `scripts/ops/merge-gate-verdict.cjs` `parseVerdict`, so the collector and
+      the gate cannot drift apart on what counts as an approval. No posted
+      receipt is ever read as input.
+
+
+      **2. The Merge Gate integration diff — RESERVED, presented for review, not
+      applied.**
+
+
+      Merge authority is reserved under `docs/mission/intent.md` decision 7. The
+      concrete hunk is brought for architecture review and is deliberately not
+      merged by this lane. It is narrow: it applies only when
+      `validateT1Verdicts` returns errors that are *all* staleness, and every
+      other T1 error still blocks.
+
+
+      **3. Plan reconciliation, bounded to statements measured false.**
+
+
+      Not a general cleanup pass. Two are materially misleading about deploy
+      safety:
+
+
+      * `plan.md` states `deploy/rollback.sh:66-74` "touches no env file" and
+      that rollback "makes it worse". False since #1507 —
+      `deploy/rollback.sh:71-77` restores `.env.production`, `.env.web` and
+      `.env.smart-form` from the snapshot and warns explicitly when none exists.
+
+      * `plan.md` states `REQUIRED_SECRETS.md:541` still documents the pre-#1488
+      shape. False — the entry documents the `<email>=<canonicalCapperId>`
+      shape, the silent-drop behaviour, and the absence of shape validation.
+
+
+      Plus stale mechanical facts: `main` SHA, the production-to-`main` gap,
+      open PR count, `#1479`'s `verify` is green not red, and the closed Wave 6
+      lane.
+    - >-
+      Demonstrated against real GitHub evidence
+
+      Not injected inputs. Measured on PR #1503 and on real `main` history — see
+      the PR body.
+    - >-
+      Scope
+
+      * `scripts/ops/carry-forward-collect.ts` (new)
+
+      * `scripts/ops/carry-forward-collect.test.ts` (new)
+
+      * `package.json` (test wiring)
+
+      * `docs/mission/plan.md`
+
+
+      No merge-authority, branch-protection, CODEOWNERS or containment surface
+      is changed. Existing protection stays exactly as it is until the reserved
+      review lands.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1836/carry-forward-trusted-evidence-collector-merge-gate-integration-diff
+    title: "Carry-forward: trusted evidence collector, Merge Gate integration diff,
+      and plan reconciliation"
+    description: |-
+      Completes the approval carry-forward workstream opened by [UTV2-1818](https://linear.app/unit-talk-v2/issue/UTV2-1818/automated-main-mutations-can-indefinitely-invalidate-exact-head-t1) (#1508), which shipped the pure verifier with all evidence injected. That module has never run against a real pull request, by design — nothing calls it.
+
+      ## What this adds
+
+      **1.** `scripts/ops/carry-forward-collect.ts` **— the trusted evidence collector.**
+
+      The verifier is pure so each condition is testable; this is the other half, and its entire job is to produce those facts from sources a PR author cannot write:
+
+      * commit graph, ancestry and changed paths from `git`, after a fresh `git fetch origin` — never a local ref, never the PR payload
+      * required-check conclusions from the check-runs API at the exact head
+      * approvals and withdrawals from the issue-comments and reviews APIs, accepted only from a CODEOWNERS login with `user.type === 'User'`
+      * the only comment-derived value is the approval's own `Head SHA:`, and it is re-verified as a real commit and a real ancestor via `git merge-base --is-ancestor` rather than trusted as an assertion
+
+      Recognition of a `pm-verdict/v1` comment reuses `scripts/ops/merge-gate-verdict.cjs` `parseVerdict`, so the collector and the gate cannot drift apart on what counts as an approval. No posted receipt is ever read as input.
+
+      **2. The Merge Gate integration diff — RESERVED, presented for review, not applied.**
+
+      Merge authority is reserved under `docs/mission/intent.md` decision 7. The concrete hunk is brought for architecture review and is deliberately not merged by this lane. It is narrow: it applies only when `validateT1Verdicts` returns errors that are *all* staleness, and every other T1 error still blocks.
+
+      **3. Plan reconciliation, bounded to statements measured false.**
+
+      Not a general cleanup pass. Two are materially misleading about deploy safety:
+
+      * `plan.md` states `deploy/rollback.sh:66-74` "touches no env file" and that rollback "makes it worse". False since #1507 — `deploy/rollback.sh:71-77` restores `.env.production`, `.env.web` and `.env.smart-form` from the snapshot and warns explicitly when none exists.
+      * `plan.md` states `REQUIRED_SECRETS.md:541` still documents the pre-#1488 shape. False — the entry documents the `<email>=<canonicalCapperId>` shape, the silent-drop behaviour, and the absence of shape validation.
+
+      Plus stale mechanical facts: `main` SHA, the production-to-`main` gap, open PR count, `#1479`'s `verify` is green not red, and the closed Wave 6 lane.
+
+      ## Demonstrated against real GitHub evidence
+
+      Not injected inputs. Measured on PR #1503 and on real `main` history — see the PR body.
+
+      ## Scope
+
+      * `scripts/ops/carry-forward-collect.ts` (new)
+      * `scripts/ops/carry-forward-collect.test.ts` (new)
+      * `package.json` (test wiring)
+      * `docs/mission/plan.md`
+
+      No merge-authority, branch-protection, CODEOWNERS or containment surface is changed. Existing protection stays exactly as it is until the reserved review lands.
+    captured_at: 2026-09-05T21:53:43.360Z
+    description_sha256: b9a10996fea73ea943a4a1798f9bd157dbb0ea9007eee04c488a5510fcb6e89d
+  contract_hash: 1399880a75fc1404ca7141caf99fa21d74f4b530deaac06f06db50ddbafad0b1
