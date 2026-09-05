@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1818-approval-carry-forward
 PR URL: N/A
 Head SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
-Merge SHA: N/A
+Merge SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb
 Diff base: 1faf29c35c1b2c13ed99adf836d2d0f11ac6f52e
 Diff target: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
 
@@ -39,4 +39,4 @@ A	scripts/ops/approval-carry-forward.ts
 
 ## SHA Binding
 Head SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
-Merge SHA: N/A
+Merge SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1818
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb
 
 > Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
 > the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -158,9 +158,9 @@ outside the normal PR path.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
-PR: pending
-Approved PR head: pending merge
+Merge SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1508
+Approved PR head: 7276775dd79ecc0c9ff38eec9adf3cd78ccd6a02
 Execution SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
 
 ### Why the execution anchor is the lane-branch commit
