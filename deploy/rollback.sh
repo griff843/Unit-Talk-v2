@@ -68,6 +68,15 @@ set -eu
 cd '$DEPLOY_PATH'
 if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.failed; fi
 printf '%s\n' '$TAG' > .unit-talk-release
+for f in .env.production .env.web .env.smart-form; do
+  if [ -f "\$f.$TAG" ]; then
+    cp -p "\$f.$TAG" "\$f"
+    chmod 600 "\$f"
+    echo "restored \$f from configuration snapshot $TAG"
+  else
+    echo "WARNING: no configuration snapshot for $TAG at \$f.$TAG - code rolled back, configuration did not" >&2
+  fi
+done
 UNIT_TALK_IMAGE_TAG='$TAG' docker compose pull
 UNIT_TALK_IMAGE_TAG='$TAG' docker compose up -d --remove-orphans
 EOF

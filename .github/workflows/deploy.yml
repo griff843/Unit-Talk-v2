@@ -309,6 +309,47 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      # UTV2-1834: every env write below overwrites its file in place, and
+      # .unit-talk-release is only advanced AFTER those writes, so at this point
+      # the host still holds the OUTGOING release tag. Snapshotting under that
+      # tag is what lets `deploy/rollback.sh --tag <outgoing>` restore the exact
+      # configuration that actually ran with the image it restores. Without it a
+      # rollback produces old image + new config, a pairing never deployed.
+      - name: Snapshot outgoing configuration for rollback
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH'" <<'SNAPSHOT_REMOTE'
+          set -eu
+          cd "$1"
+
+          if [ ! -f .unit-talk-release ]; then
+            echo "no .unit-talk-release on the host: first deploy, nothing to snapshot"
+            exit 0
+          fi
+
+          OUTGOING="$(cat .unit-talk-release)"
+          if [ -z "$OUTGOING" ]; then
+            echo "WARNING: .unit-talk-release is empty; skipping configuration snapshot" >&2
+            exit 0
+          fi
+
+          for f in .env.production .env.web .env.smart-form; do
+            [ -f "$f" ] || continue
+            cp -p "$f" "$f.$OUTGOING"
+            chmod 600 "$f.$OUTGOING"
+            echo "snapshot $f -> $f.$OUTGOING"
+          done
+
+          # These snapshots contain secrets, so they are pruned rather than kept
+          # forever. Five is deeper than any rollback target we would choose by
+          # hand and still bounds the number of copies of a leaked credential.
+          for f in .env.production .env.web .env.smart-form; do
+            ls -1t "$f".* 2>/dev/null | tail -n +6 | while read -r stale; do
+              rm -f "$stale"
+              echo "pruned $stale"
+            done
+          done
+          SNAPSHOT_REMOTE
+
       - name: Write .env.production to server
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -803,6 +844,47 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      # UTV2-1834: every env write below overwrites its file in place, and
+      # .unit-talk-release is only advanced AFTER those writes, so at this point
+      # the host still holds the OUTGOING release tag. Snapshotting under that
+      # tag is what lets `deploy/rollback.sh --tag <outgoing>` restore the exact
+      # configuration that actually ran with the image it restores. Without it a
+      # rollback produces old image + new config, a pairing never deployed.
+      - name: Snapshot outgoing configuration for rollback
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH'" <<'SNAPSHOT_REMOTE'
+          set -eu
+          cd "$1"
+
+          if [ ! -f .unit-talk-release ]; then
+            echo "no .unit-talk-release on the host: first deploy, nothing to snapshot"
+            exit 0
+          fi
+
+          OUTGOING="$(cat .unit-talk-release)"
+          if [ -z "$OUTGOING" ]; then
+            echo "WARNING: .unit-talk-release is empty; skipping configuration snapshot" >&2
+            exit 0
+          fi
+
+          for f in .env.production .env.web .env.smart-form; do
+            [ -f "$f" ] || continue
+            cp -p "$f" "$f.$OUTGOING"
+            chmod 600 "$f.$OUTGOING"
+            echo "snapshot $f -> $f.$OUTGOING"
+          done
+
+          # These snapshots contain secrets, so they are pruned rather than kept
+          # forever. Five is deeper than any rollback target we would choose by
+          # hand and still bounds the number of copies of a leaked credential.
+          for f in .env.production .env.web .env.smart-form; do
+            ls -1t "$f".* 2>/dev/null | tail -n +6 | while read -r stale; do
+              rm -f "$stale"
+              echo "pruned $stale"
+            done
+          done
+          SNAPSHOT_REMOTE
 
       - name: Write .env.production to server
         env:
