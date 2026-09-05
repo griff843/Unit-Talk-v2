@@ -205,6 +205,62 @@ test('decomposePerformance — by_confidence counts match', () => {
   assert.equal(d.by_confidence.insufficient_data, 1);
 });
 
+test('UTV2-1815 canonical decomposition is reproducible with pinned components', () => {
+  const records = [FULL_INPUT, LOSS_INPUT, PUSH_INPUT].map(toRecord);
+  const d = decomposePerformance(records);
+
+  assert.equal(d.is_reproducible, true);
+  assert.deepEqual(d.by_stake_units_status, {
+    canonical: 3,
+    assumed_flat: 0,
+    historical_unknown: 0,
+  });
+  assert.deepEqual(d.attributed_by_stake_units_status, {
+    canonical: 3,
+    assumed_flat: 0,
+    historical_unknown: 0,
+  });
+  assert.deepEqual(d.components, {
+    model_alpha_bps: 1560,
+    execution_edge_bps: 360,
+    luck_bps: -1920,
+    sum_check_bps: 0,
+  });
+});
+
+test('UTV2-1815 attributed assumed-flat stake makes decomposition non-reproducible', () => {
+  const { stake_units: _omittedStake, ...assumedFlatInput } = FULL_INPUT;
+  const records = [toRecord(FULL_INPUT), toRecord(assumedFlatInput)];
+  const d = decomposePerformance(records);
+
+  assert.equal(d.is_reproducible, false);
+  assert.deepEqual(d.attributed_by_stake_units_status, {
+    canonical: 1,
+    assumed_flat: 1,
+    historical_unknown: 0,
+  });
+});
+
+test('UTV2-1815 excluded historical-unknown stake does not contaminate attributed provenance', () => {
+  const historicalUnknown: AttributionRecord = {
+    ...toRecord(NO_SNAPSHOT_INPUT),
+    stake_units_status: 'historical_unknown',
+  };
+  const d = decomposePerformance([toRecord(FULL_INPUT), historicalUnknown]);
+
+  assert.deepEqual(d.by_stake_units_status, {
+    canonical: 1,
+    assumed_flat: 0,
+    historical_unknown: 1,
+  });
+  assert.deepEqual(d.attributed_by_stake_units_status, {
+    canonical: 1,
+    assumed_flat: 0,
+    historical_unknown: 0,
+  });
+  assert.equal(d.is_reproducible, true);
+});
+
 // ── UTV2-1815: null-stake computation truth ─────────────────────────────────
 // `attributePick` used to do `input.stake_units ?? 1`. `??` fires only on
 // null/undefined, so a NULL stake became a silent flat 1 and a NaN stake was

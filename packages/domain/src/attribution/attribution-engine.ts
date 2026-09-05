@@ -69,6 +69,14 @@ export interface AttributionRecord {
   readonly stake_units_status?: StakeUnitsStatus;
 }
 
+/** Counts records by the stake provenance carried on each attribution. */
+export interface StakeUnitsStatusCounts {
+  readonly canonical: number;
+  readonly assumed_flat: number;
+  /** Includes legacy records with no provenance tag so they remain fail-closed. */
+  readonly historical_unknown: number;
+}
+
 /** Aggregate decomposition across a set of attribution records. */
 export interface AttributionDecomposition {
   readonly total_records: number;
@@ -82,6 +90,18 @@ export interface AttributionDecomposition {
     readonly sum_check_bps: number;
   };
   readonly by_confidence: Readonly<Record<AttributionConfidence, number>>;
+  /**
+   * Counts every input record so stake assumptions cannot disappear in aggregate output.
+   * Optional only for decompositions constructed before this field existed;
+   * `decomposePerformance` always populates it.
+   */
+  readonly by_stake_units_status?: Readonly<StakeUnitsStatusCounts>;
+  /**
+   * Counts only component-contributing records; these determine reproducibility.
+   * Optional only for decompositions constructed before this field existed;
+   * `decomposePerformance` always populates it.
+   */
+  readonly attributed_by_stake_units_status?: Readonly<StakeUnitsStatusCounts>;
   readonly is_reproducible: boolean;
   readonly version: string;
 }
@@ -251,6 +271,8 @@ export function decomposePerformance(
     by_confidence[r.confidence]++;
   }
 
+  const by_stake_units_status = countStakeUnitsStatuses(records);
+  const attributed_by_stake_units_status = countStakeUnitsStatuses(attributed);
   const total_realized_pnl_bps = sum(records.map((r) => r.realized_pnl_bps));
   const model_alpha_bps = sum(attributed.map((r) => r.model_component_bps));
   const execution_edge_bps = sum(attributed.map((r) => r.execution_component_bps));
@@ -268,7 +290,11 @@ export function decomposePerformance(
       sum_check_bps: round4(model_alpha_bps + execution_edge_bps + luck_bps),
     },
     by_confidence,
-    is_reproducible: attributed.length > 0,
+    by_stake_units_status,
+    attributed_by_stake_units_status,
+    is_reproducible:
+      attributed.length > 0 &&
+      attributed_by_stake_units_status.canonical === attributed.length,
     version: ATTRIBUTION_VERSION,
   };
 }
@@ -332,6 +358,26 @@ function deriveConfidence(input: AttributionInput): AttributionConfidence {
 
 function sum(values: number[]): number {
   return values.reduce((acc, v) => acc + v, 0);
+}
+
+function countStakeUnitsStatuses(
+  records: readonly AttributionRecord[],
+): StakeUnitsStatusCounts {
+  const counts: Record<keyof StakeUnitsStatusCounts, number> = {
+    canonical: 0,
+    assumed_flat: 0,
+    historical_unknown: 0,
+  };
+
+  for (const record of records) {
+    if (record.stake_units_status === undefined) {
+      counts.historical_unknown++;
+    } else {
+      counts[record.stake_units_status]++;
+    }
+  }
+
+  return counts;
 }
 
 function round4(n: number): number {
