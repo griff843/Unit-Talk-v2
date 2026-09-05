@@ -1,5 +1,7 @@
 # UTV2-1827 — verification
 
+MERGE_SHA: pending merge
+
 **Issue:** UTV2-1827 — governed staging proof runner
 **Tier:** T1 · **Lane type:** runtime · **Executor:** claude
 **Branch:** `claude/utv2-1827-governed-staging-proof-runner`
