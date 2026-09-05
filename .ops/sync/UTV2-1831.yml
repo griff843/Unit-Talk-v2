@@ -1,0 +1,226 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1831
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1831
+  objective: Land the UTV2-1815 stake-units T1 proof test and its
+    test:t1-proof:live wiring as an independently shippable PR
+  acceptance_criteria:
+    - |-
+      Bounded execution child of [UTV2-1764](https://linear.app/unit-talk-v2/issue/UTV2-1764/executable-wiring-gate-makes-a-new-test-file-unshippable-inside-a). The parent epic stays dormant; this child staffs exactly one instance of the defect the parent names, because it currently blocks #1479 ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)).
+
+      ## Why this exists
+
+      #1479 adds `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`. To make that test actually execute it must be wired into `test:t1-proof:live` in `package.json` — the exact "new test file needs package.json, which is outside the frozen file_scope_lock" situation this epic describes.
+
+      On #1479 that wiring is blocked by a *second*, independent control. `package.json` is one of five paths pinned by `scripts/ci/assert-unmodified-vs-base.ts` in `.github/workflows/shadow-parity-required.yml` ("Refuse to run PR-modified code against production"), because `pnpm install` runs PR-supplied dependency and lifecycle scripts before the shadow runner executes against production. #1479 touches `apps/api/src/settlement-service.ts` and `packages/domain/src/**`, which are that workflow's trigger paths, so the workflow fires and the pin refuses the PR.
+
+      That workflow states its own remedy inline (`shadow-parity-required.yml:80-81`):
+
+      > None of these are in this workflow's trigger paths, so pinning them costs the check nothing: a PR touching both must land them separately.
+
+      This child is that separate landing. It is not a workaround for the control — it is the sequencing the control was designed to require.
+
+      ## Scope — exactly three files
+
+      * `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts` (new)
+      * `package.json` — append the test file to the `test:t1-proof:live` chain
+      * `docs/05_operations/db-writer-classification.json` — classify the new writer (5-line addition)
+
+      None of these match any trigger path in `shadow-parity-required.yml`, so that workflow does not run on this PR at all. `Live Schema Parity` does trigger (it watches `package.json`), but its own refusal step pins only `scripts/ops/compare-databases.ts`, `scripts/ci/schema-drift-gate.ts` and `scripts/ci/assert-unmodified-vs-base.ts` — none of which this PR touches.
+
+      ## Independently shippable — verified against origin/main
+
+      The test asserts database-constraint behavior plus one negative control, and every symbol it needs already exists on `main`:
+
+      * `recordEvidenceSettlement` — exported at `apps/api/src/settlement-service.ts:295`
+      * `submitPickController` — exported at `apps/api/src/controllers/submit-pick-controller.ts:26`
+      * `stakeUnitsStatus: 'canonical'` — already emitted and asserted in `apps/api/src/golden-regression.test.ts`
+
+      The negative control reads `payload['stakeUnitsHistoricalUnknown']` by index and asserts it is `undefined`, which is true both before and after #1479 lands. So this PR carries no dependency on #1479, and #1479 does not have to merge first.
+
+      ## What the test proves, and what it does not
+
+      It proves Postgres refuses a NULL, NaN-as-NULL, or zero `stake_units` with SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that the row is unchanged on re-read.
+
+      It does **not** prove the application's handling of *historical* invalid stakes. That distinction is load-bearing and must be preserved in the evidence: the constraint is `NOT VALID`, so it is enforced on new writes and was never verified against existing rows — 2,902 of 107,858 production rows have `stake_units IS NULL`. The live `historical_unknown` path is therefore unconstructable through the write path, which is why the test states that limitation rather than faking a fixture for it. Application handling of those historical rows is #1479's subject, not this PR's.
+
+      ## Definition of done
+
+      1. The three files land on `main` via a governed lane PR.
+      2. `Writable DB proof (staging only)` shows the new test executing against staging with `# pass 3 # fail 0 # skipped 0` — not a passing job with the suite skipped on a missing `SUPABASE_SERVICE_ROLE_KEY`.
+      3. No production credential is introduced, and no pinned path in either parity workflow is modified.
+
+      ## Non-goals
+
+      Does not implement #1479's grading/settlement/attribution changes. Does not resolve the parent's item 3 (whether `executable-wiring.ts` should follow import chains, or `test:ops` become a glob) — that decision stays with the dormant epic.
+  guardrails: []
+  non_goals:
+    - "Does not implement #1479's grading/settlement/attribution changes. Does
+      not resolve the parent's item 3 (whether `executable-wiring.ts` should
+      follow import chains, or `test:ops` become a glob) — that decision stays
+      with the dormant epic."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Bounded execution child of [UTV2-1764](https://linear.app/unit-talk-v2/issue/UTV2-1764/executable-wiring-gate-makes-a-new-test-file-unshippable-inside-a). The parent epic stays dormant; this child staffs exactly one instance of the defect the parent names, because it currently blocks #1479 ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)).
+    - >-
+      Why this exists
+
+      #1479 adds `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`. To make
+      that test actually execute it must be wired into `test:t1-proof:live` in
+      `package.json` — the exact "new test file needs package.json, which is
+      outside the frozen file_scope_lock" situation this epic describes.
+
+
+      On #1479 that wiring is blocked by a *second*, independent control.
+      `package.json` is one of five paths pinned by
+      `scripts/ci/assert-unmodified-vs-base.ts` in
+      `.github/workflows/shadow-parity-required.yml` ("Refuse to run PR-modified
+      code against production"), because `pnpm install` runs PR-supplied
+      dependency and lifecycle scripts before the shadow runner executes against
+      production. #1479 touches `apps/api/src/settlement-service.ts` and
+      `packages/domain/src/**`, which are that workflow's trigger paths, so the
+      workflow fires and the pin refuses the PR.
+
+
+      That workflow states its own remedy inline
+      (`shadow-parity-required.yml:80-81`):
+
+
+      > None of these are in this workflow's trigger paths, so pinning them
+      costs the check nothing: a PR touching both must land them separately.
+
+
+      This child is that separate landing. It is not a workaround for the
+      control — it is the sequencing the control was designed to require.
+    - >-
+      Scope — exactly three files
+
+      * `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts` (new)
+
+      * `package.json` — append the test file to the `test:t1-proof:live` chain
+
+      * `docs/05_operations/db-writer-classification.json` — classify the new
+      writer (5-line addition)
+
+
+      None of these match any trigger path in `shadow-parity-required.yml`, so
+      that workflow does not run on this PR at all. `Live Schema Parity` does
+      trigger (it watches `package.json`), but its own refusal step pins only
+      `scripts/ops/compare-databases.ts`, `scripts/ci/schema-drift-gate.ts` and
+      `scripts/ci/assert-unmodified-vs-base.ts` — none of which this PR touches.
+    - >-
+      Independently shippable — verified against origin/main
+
+      The test asserts database-constraint behavior plus one negative control,
+      and every symbol it needs already exists on `main`:
+
+
+      * `recordEvidenceSettlement` — exported at
+      `apps/api/src/settlement-service.ts:295`
+
+      * `submitPickController` — exported at
+      `apps/api/src/controllers/submit-pick-controller.ts:26`
+
+      * `stakeUnitsStatus: 'canonical'` — already emitted and asserted in
+      `apps/api/src/golden-regression.test.ts`
+
+
+      The negative control reads `payload['stakeUnitsHistoricalUnknown']` by
+      index and asserts it is `undefined`, which is true both before and after
+      #1479 lands. So this PR carries no dependency on #1479, and #1479 does not
+      have to merge first.
+    - >-
+      What the test proves, and what it does not
+
+      It proves Postgres refuses a NULL, NaN-as-NULL, or zero `stake_units` with
+      SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that the
+      row is unchanged on re-read.
+
+
+      It does **not** prove the application's handling of *historical* invalid
+      stakes. That distinction is load-bearing and must be preserved in the
+      evidence: the constraint is `NOT VALID`, so it is enforced on new writes
+      and was never verified against existing rows — 2,902 of 107,858 production
+      rows have `stake_units IS NULL`. The live `historical_unknown` path is
+      therefore unconstructable through the write path, which is why the test
+      states that limitation rather than faking a fixture for it. Application
+      handling of those historical rows is #1479's subject, not this PR's.
+    - >-
+      Definition of done
+
+      1. The three files land on `main` via a governed lane PR.
+
+      2. `Writable DB proof (staging only)` shows the new test executing against
+      staging with `# pass 3 # fail 0 # skipped 0` — not a passing job with the
+      suite skipped on a missing `SUPABASE_SERVICE_ROLE_KEY`.
+
+      3. No production credential is introduced, and no pinned path in either
+      parity workflow is modified.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1831/land-the-utv2-1815-stake-units-t1-proof-test-and-its-testt1-prooflive
+    title: Land the UTV2-1815 stake-units T1 proof test and its test:t1-proof:live
+      wiring as an independently shippable PR
+    description: |-
+      Bounded execution child of [UTV2-1764](https://linear.app/unit-talk-v2/issue/UTV2-1764/executable-wiring-gate-makes-a-new-test-file-unshippable-inside-a). The parent epic stays dormant; this child staffs exactly one instance of the defect the parent names, because it currently blocks #1479 ([UTV2-1815](https://linear.app/unit-talk-v2/issue/UTV2-1815/null-stake-computation-truth-settlement-grading-and-attribution-must)).
+
+      ## Why this exists
+
+      #1479 adds `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`. To make that test actually execute it must be wired into `test:t1-proof:live` in `package.json` — the exact "new test file needs package.json, which is outside the frozen file_scope_lock" situation this epic describes.
+
+      On #1479 that wiring is blocked by a *second*, independent control. `package.json` is one of five paths pinned by `scripts/ci/assert-unmodified-vs-base.ts` in `.github/workflows/shadow-parity-required.yml` ("Refuse to run PR-modified code against production"), because `pnpm install` runs PR-supplied dependency and lifecycle scripts before the shadow runner executes against production. #1479 touches `apps/api/src/settlement-service.ts` and `packages/domain/src/**`, which are that workflow's trigger paths, so the workflow fires and the pin refuses the PR.
+
+      That workflow states its own remedy inline (`shadow-parity-required.yml:80-81`):
+
+      > None of these are in this workflow's trigger paths, so pinning them costs the check nothing: a PR touching both must land them separately.
+
+      This child is that separate landing. It is not a workaround for the control — it is the sequencing the control was designed to require.
+
+      ## Scope — exactly three files
+
+      * `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts` (new)
+      * `package.json` — append the test file to the `test:t1-proof:live` chain
+      * `docs/05_operations/db-writer-classification.json` — classify the new writer (5-line addition)
+
+      None of these match any trigger path in `shadow-parity-required.yml`, so that workflow does not run on this PR at all. `Live Schema Parity` does trigger (it watches `package.json`), but its own refusal step pins only `scripts/ops/compare-databases.ts`, `scripts/ci/schema-drift-gate.ts` and `scripts/ci/assert-unmodified-vs-base.ts` — none of which this PR touches.
+
+      ## Independently shippable — verified against origin/main
+
+      The test asserts database-constraint behavior plus one negative control, and every symbol it needs already exists on `main`:
+
+      * `recordEvidenceSettlement` — exported at `apps/api/src/settlement-service.ts:295`
+      * `submitPickController` — exported at `apps/api/src/controllers/submit-pick-controller.ts:26`
+      * `stakeUnitsStatus: 'canonical'` — already emitted and asserted in `apps/api/src/golden-regression.test.ts`
+
+      The negative control reads `payload['stakeUnitsHistoricalUnknown']` by index and asserts it is `undefined`, which is true both before and after #1479 lands. So this PR carries no dependency on #1479, and #1479 does not have to merge first.
+
+      ## What the test proves, and what it does not
+
+      It proves Postgres refuses a NULL, NaN-as-NULL, or zero `stake_units` with SQLSTATE 23514 naming `picks_stake_units_canonical_check`, and that the row is unchanged on re-read.
+
+      It does **not** prove the application's handling of *historical* invalid stakes. That distinction is load-bearing and must be preserved in the evidence: the constraint is `NOT VALID`, so it is enforced on new writes and was never verified against existing rows — 2,902 of 107,858 production rows have `stake_units IS NULL`. The live `historical_unknown` path is therefore unconstructable through the write path, which is why the test states that limitation rather than faking a fixture for it. Application handling of those historical rows is #1479's subject, not this PR's.
+
+      ## Definition of done
+
+      1. The three files land on `main` via a governed lane PR.
+      2. `Writable DB proof (staging only)` shows the new test executing against staging with `# pass 3 # fail 0 # skipped 0` — not a passing job with the suite skipped on a missing `SUPABASE_SERVICE_ROLE_KEY`.
+      3. No production credential is introduced, and no pinned path in either parity workflow is modified.
+
+      ## Non-goals
+
+      Does not implement #1479's grading/settlement/attribution changes. Does not resolve the parent's item 3 (whether `executable-wiring.ts` should follow import chains, or `test:ops` become a glob) — that decision stays with the dormant epic.
+    captured_at: 2026-09-05T11:35:35.490Z
+    description_sha256: c140553809e87b8892408baa08ed70c3a624d50df0b65c45bec1d550b560cc48
+  contract_hash: c7b6a0adc450579e47c4c210c41744b06de0351793ae7ced4fd7a4d1d2770e88
