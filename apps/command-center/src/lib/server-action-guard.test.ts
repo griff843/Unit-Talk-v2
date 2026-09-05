@@ -36,6 +36,22 @@ function walk(dir: string): string[] {
 
 const GUARD = /resolveActorOrRefusal|requireAuthenticatedActor|assertAuthenticatedActor/;
 
+/**
+ * Strip comments and string literals before looking for the guard.
+ *
+ * Mutation testing caught this: removing the real `resolveActorOrRefusal()`
+ * call from `actions/picks.ts` left the suite green, because the file's own
+ * docblock names the function and the raw-source regex matched the prose. A
+ * check that a comment can satisfy constrains nothing. Only executable code
+ * counts.
+ */
+function code(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, "''");
+}
+
 interface ActionFile {
   readonly path: string;
   /** Names of exported async functions — the addressable server actions. */
@@ -54,7 +70,7 @@ const ACTION_FILES: ActionFile[] = walk(APP)
     inline: [...source.matchAll(/^async function (\w+)\([^)]*\)\s*\{\n\s*['"]use server['"]/gm)].map(
       (m) => m[1],
     ),
-    guarded: GUARD.test(source),
+    guarded: GUARD.test(code(source)),
   }));
 
 test('the walk actually found the server actions', () => {
@@ -93,7 +109,9 @@ test('no server action records a hard-coded operator identity', () => {
   // auditor could not tell them apart. The authenticated actor is the only
   // acceptable value.
   const offenders = ACTION_FILES.filter(({ path }) =>
-    /actor:\s*['"](operator|unknown|system|anonymous)['"]/.test(readFileSync(join(SRC, path), 'utf8')),
+    /actor:\s*['"](operator|unknown|system|anonymous)['"]/.test(
+      readFileSync(join(SRC, path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' '),
+    ),
   ).map((f) => f.path);
 
   assert.deepEqual(offenders, [], `hard-coded acting identity in: ${offenders.join(', ')}`);
