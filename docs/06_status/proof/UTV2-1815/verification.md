@@ -279,6 +279,85 @@ Anchor: `7b9dcde2a19c23345a1a334590d07fb15be27d7a`. Bound by run and job id in `
 under `hosted_verification`. The staging job is where the live-DB proof this lane cannot run locally
 actually executes, against `xskgrzbteyqdufktjrjx`.
 
+### The staging receipt, and why it is bound to a head that is not the tip
+
+Run `33966879903`, job `101308512813` ("Writable DB proof (staging only)"), completed success at
+head `32bb89db896990827b3e583faf13f3ce6f352ea5`. That is a proof-only commit in this branch's
+proof-only range: `git diff --name-only 7b9dcde2a..HEAD` lists nothing outside
+`docs/06_status/proof/UTV2-1815/`, so the tree that run executed is the anchor tree for every file
+that can affect behaviour. The receipt is reported against the run head and attributed to the anchor
+on the strength of that diff — not on an assumption that they are interchangeable.
+
+The suite's own numbers, quoted from that run's "Run the T1 live proof suites against staging" step:
+
+```text
+1..3
+# tests 3
+# pass 3
+# fail 0
+# skipped 0
+```
+
+`# skipped 0` is the load-bearing figure, and it is the number a reader should check first. This
+suite skips itself when staging credentials are absent, and a skipped test still reports `ok`.
+Measured on this workstation at this head, with no service-role key present:
+
+```text
+$ UNIT_TALK_APP_ENV=local pnpm exec tsx --test apps/api/src/t1-proof-utv2-1815-stake-units.test.ts
+ok 3 - UTV2-1815 live DB: a real stake still persists a real profit/loss (negative control) # SKIP SUPABASE_SERVICE_ROLE_KEY not configured — skipping live DB proof
+1..3
+# tests 3
+# pass 0
+# fail 0
+# skipped 3
+exit 0
+```
+
+Three `ok` lines and a zero exit code, having touched no database at all. `exit 0` is therefore
+satisfied by both runs and distinguishes nothing, which is why the CI receipt is quoted with its
+counts rather than with a pass/fail verdict. On this runner `# pass 0 / # skipped 3`; in CI
+`# pass 3 / # skipped 0`. Either half of that pair separates the two, and the bundle quotes both so
+a reader does not have to take the distinction on trust.
+
+## Three non-required checks are red on this PR, each for a different reason
+
+None of the three is a required check (branch protection requires exactly `verify`,
+`Executor Result Validation`, `Merge Gate`, `P0 Protocol`), and `Merge Gate` does not cite any of
+them — it reports only the two T1 approval artifacts. They are recorded here with their measured
+causes rather than left for a reviewer to rediscover or to read as unexplained noise.
+
+**1. `Require live-DB proof for runtime changes` — the guard's substance is met; its detection
+cannot see it.** The guard fires because the diff touches `apps/api/src/settlement-service.ts`, a
+sensitive runtime path, and contains no file matching its proof patterns. That is accurate about the
+diff and misleading about the state of the work. The live-DB proof for exactly this change —
+`apps/api/src/t1-proof-utv2-1815-stake-units.test.ts` — exists, is wired into
+`test:t1-proof:live`, and executed against staging at this branch's anchor in the run quoted above,
+3 passed / 0 skipped. It is not in this diff because PM directed that the prerequisite be landed
+independently first, and it merged in #1504 (`775f4ac6`). The guard compares
+`base...head`, so a proof that landed one PR earlier is invisible to it. This is a mechanism
+narrower than the rule it encodes, and the rule itself is satisfied.
+
+The guard has an escape hatch, `skip-proof-coverage`, and it is deliberately **not** requested: its
+own documentation reserves it for "pure infrastructure PRs that do not touch runtime semantics", and
+this PR does touch runtime semantics. Claiming otherwise to clear a red would be false. The
+alternative that would satisfy the guard mechanically is to change the proof test file in this PR,
+which is outside this lane's `file_scope_lock` and would need a `scope-override/v1`.
+
+**2. `Check issue references` — one commit message cites the contract it is obeying.** The check
+requires every issue reference in the PR to equal the branch issue, and reports
+`found UTV2-1783, UTV2-1815`. The single reference is in commit `32bb89db8`'s message, which names
+UTV2-1783 as the ratification under which `MERGE_SHA` must read `pending merge` before a merge
+exists. It is a citation of the governing contract, not a cross-issue code dependency. It is left
+uncorrected on purpose: rewriting that message changes its SHA, and `32bb89db` is the head the
+staging receipt above is bound to. Trading a verifiable receipt for a green non-required check would
+make the bundle weaker, not stronger.
+
+**3. `Shadow Parity Check` — no credential exists for it to use.** It reports
+`No mechanically read-only production credential is provisioned`, and refuses service-role
+credentials by design. Provisioning one is a reserved action (secrets). This is an infrastructure
+absence, not a parity finding: the check did not compare anything and reached no conclusion about
+this change.
+
 ## Scope boundary
 
 `git diff --stat` against the lane's own base commit, confined to the three authorized source files
