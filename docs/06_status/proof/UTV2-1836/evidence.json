@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "c875e91af4f907658c31b08aac6b49a59e48844e",
     "verified_source_sha": "3c3abd3117d4af8f53bcc4a69c868e72965b4c37",
     "evidence_commit_sha": "3c3abd3117d4af8f53bcc4a69c868e72965b4c37",
-    "current_pr_head_sha": null,
+    "current_pr_head_sha": "00dc19ec80224d683c1b8bafb2161e3e9c664823",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (exit 0) measured locally in the lane worktree at this anchor: 129 suites, 5540 tests, 5540 pass, 0 fail",
@@ -18,8 +18,8 @@
       "pnpm_verify": "PASS - executed by the required CI `verify` context on this branch, run 33996599211, head 2578c9926, job `verify`, conclusion success. Not run locally. 2578c9926 is the sanctioned main resync; no implementation file of this lane differs from the execution SHA 3c3abd311. The earlier run 33994945082 at f81cf471d is superseded by the resync and is not cited.",
       "r_level_check": "PASS (Verdict: PASS, no R-level artifacts required for this diff)"
     },
-    "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-05T23:00:00.000Z",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T23:09:06.347Z",
     "anchor_note": "All measurement ran at 3c3abd3117d4af8f53bcc4a69c868e72965b4c37, the implementation commit on claude/utv2-1836-carry-forward-collector. Later commits on this branch change only this lane's manifest, sync file and proof bundle, so the anchor remains the correct execution identity and is an ancestor of the PR head. merge_sha is null because no merge exists yet; post-merge-lane-close.yml rebinds it."
   },
   "static_proof": {

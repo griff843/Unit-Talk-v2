@@ -7,7 +7,7 @@ Lane type: governance
 Branch: claude/utv2-1836-carry-forward-collector
 PR URL: N/A
 Head SHA: 67a2795cb89bccf2147a412e2ea46d37e933458d
-Merge SHA: N/A
+Merge SHA: c875e91af4f907658c31b08aac6b49a59e48844e
 Diff base: 175f07c10f79ec01f5dd307cb4224dcb2863746e
 Diff target: 67a2795cb89bccf2147a412e2ea46d37e933458d
 
@@ -39,4 +39,4 @@ A	scripts/ops/carry-forward-collect.ts
 
 ## SHA Binding
 Head SHA: 67a2795cb89bccf2147a412e2ea46d37e933458d
-Merge SHA: N/A
+Merge SHA: c875e91af4f907658c31b08aac6b49a59e48844e
