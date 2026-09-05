@@ -1,0 +1,187 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1830
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1830
+  objective: "Mission intent: record the continuous-orchestration correction in
+    intent.md and CLAUDE.md"
+  acceptance_criteria:
+    - >-
+      ## Ratification
+
+
+      Griff issued a durable operating-model correction on 2026-09-05: Claude is
+      stopping orchestration too frequently. This issue records that ratified
+      clarification in the existing mission instructions. It creates no new
+      contract, no governance program and no issue family, and changes no gate,
+      tier, merge authority, lane mechanic or routing rule.
+
+
+      ## The correction, as stated
+
+
+      The active mission continues until the mission/milestone is complete, all
+      meaningful executable work is blocked pending Griff, or a real safety
+      boundary prevents continued execution.
+
+
+      * A Griff-reserved decision or action blocks only the work that depends on
+      it. Surface it, then continue all other safe executable work.
+
+      * CI/review/waiting on a PR is not a stop condition. Refill capacity with
+      other mission work.
+
+      * Finishing a lane or PR is not a stop condition.
+
+      * Giving Griff a status update is not a stop condition.
+
+      * Griff asking a question, giving a correction, or giving steering is an
+      interruption to incorporate, not termination of the production mission.
+      Answer/incorporate it and continue production.
+
+      * Do not return control merely because you have something to report.
+
+      * Continue orchestrating Claude/Codex, integrating, reviewing, merging
+      within authority, and refilling independent work until an actual stop
+      condition is reached.
+
+
+      ## Scope
+
+
+      * `docs/mission/intent.md` — replace the terse "Stop conditions" section
+      with the ratified text above. intent.md is Griff-owned; this edit records
+      a change Griff ratified, which is the one sanctioned reason to touch it.
+
+      * `CLAUDE.md` — one minimal stable pointer/rule under session discipline,
+      pointing at intent.md rather than restating it.
+
+
+      ## Explicitly out of scope
+
+
+      No change to reserved decisions, merge authority, tiering, lane mechanics,
+      dispatch, routing, hooks or CI. No new doc. No new contract. Docs only.
+  guardrails: []
+  non_goals:
+    - No change to reserved decisions, merge authority, tiering, lane mechanics,
+      dispatch, routing, hooks or CI. No new doc. No new contract. Docs only.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Ratification
+
+      Griff issued a durable operating-model correction on 2026-09-05: Claude is
+      stopping orchestration too frequently. This issue records that ratified
+      clarification in the existing mission instructions. It creates no new
+      contract, no governance program and no issue family, and changes no gate,
+      tier, merge authority, lane mechanic or routing rule.
+    - >-
+      The correction, as stated
+
+      The active mission continues until the mission/milestone is complete, all
+      meaningful executable work is blocked pending Griff, or a real safety
+      boundary prevents continued execution.
+
+
+      * A Griff-reserved decision or action blocks only the work that depends on
+      it. Surface it, then continue all other safe executable work.
+
+      * CI/review/waiting on a PR is not a stop condition. Refill capacity with
+      other mission work.
+
+      * Finishing a lane or PR is not a stop condition.
+
+      * Giving Griff a status update is not a stop condition.
+
+      * Griff asking a question, giving a correction, or giving steering is an
+      interruption to incorporate, not termination of the production mission.
+      Answer/incorporate it and continue production.
+
+      * Do not return control merely because you have something to report.
+
+      * Continue orchestrating Claude/Codex, integrating, reviewing, merging
+      within authority, and refilling independent work until an actual stop
+      condition is reached.
+    - >-
+      Scope
+
+      * `docs/mission/intent.md` — replace the terse "Stop conditions" section
+      with the ratified text above. intent.md is Griff-owned; this edit records
+      a change Griff ratified, which is the one sanctioned reason to touch it.
+
+      * `CLAUDE.md` — one minimal stable pointer/rule under session discipline,
+      pointing at intent.md rather than restating it.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1830/mission-intent-record-the-continuous-orchestration-correction-in
+    title: "Mission intent: record the continuous-orchestration correction in
+      intent.md and CLAUDE.md"
+    description: >-
+      ## Ratification
+
+
+      Griff issued a durable operating-model correction on 2026-09-05: Claude is
+      stopping orchestration too frequently. This issue records that ratified
+      clarification in the existing mission instructions. It creates no new
+      contract, no governance program and no issue family, and changes no gate,
+      tier, merge authority, lane mechanic or routing rule.
+
+
+      ## The correction, as stated
+
+
+      The active mission continues until the mission/milestone is complete, all
+      meaningful executable work is blocked pending Griff, or a real safety
+      boundary prevents continued execution.
+
+
+      * A Griff-reserved decision or action blocks only the work that depends on
+      it. Surface it, then continue all other safe executable work.
+
+      * CI/review/waiting on a PR is not a stop condition. Refill capacity with
+      other mission work.
+
+      * Finishing a lane or PR is not a stop condition.
+
+      * Giving Griff a status update is not a stop condition.
+
+      * Griff asking a question, giving a correction, or giving steering is an
+      interruption to incorporate, not termination of the production mission.
+      Answer/incorporate it and continue production.
+
+      * Do not return control merely because you have something to report.
+
+      * Continue orchestrating Claude/Codex, integrating, reviewing, merging
+      within authority, and refilling independent work until an actual stop
+      condition is reached.
+
+
+      ## Scope
+
+
+      * `docs/mission/intent.md` — replace the terse "Stop conditions" section
+      with the ratified text above. intent.md is Griff-owned; this edit records
+      a change Griff ratified, which is the one sanctioned reason to touch it.
+
+      * `CLAUDE.md` — one minimal stable pointer/rule under session discipline,
+      pointing at intent.md rather than restating it.
+
+
+      ## Explicitly out of scope
+
+
+      No change to reserved decisions, merge authority, tiering, lane mechanics,
+      dispatch, routing, hooks or CI. No new doc. No new contract. Docs only.
+    captured_at: 2026-09-05T02:35:44.540Z
+    description_sha256: 676e265290cd9a6d471e0e1f267d7e37cd1f60b69c6f369d83ff26c819105b48
+  contract_hash: c67f251c408911867a261ecbaa78f0c44c1a1dac21402da84ad7e85f670b7d85
