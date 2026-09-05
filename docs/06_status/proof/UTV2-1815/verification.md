@@ -346,7 +346,7 @@ which is outside this lane's `file_scope_lock` and would need a `scope-override/
 **2. `Check issue references` — one commit message cites the contract it is obeying.** The check
 requires every issue reference in the PR to equal the branch issue, and reports
 `found UTV2-1783, UTV2-1815`. The single reference is in commit `32bb89db8`'s message, which names
-UTV2-1783 as the ratification under which `MERGE_SHA` must read `pending merge` before a merge
+UTV2-1783 as the ratification governing what the merge-SHA anchor row must contain before a merge
 exists. It is a citation of the governing contract, not a cross-issue code dependency. It is left
 uncorrected on purpose: rewriting that message changes its SHA, and `32bb89db` is the head the
 staging receipt above is bound to. Trading a verifiable receipt for a green non-required check would
@@ -395,3 +395,10 @@ No unpark.
 - **`resolveStakeUnits` rejects a stake of exactly 0 as `historical_unknown`.** A deliberate
   zero-unit "paper" pick, if such a thing is ever introduced, would be refused rather than computed
   at zero. No such concept exists in the codebase today.
+
+## Merge SHA Binding
+
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1479
+Approved PR head: pending merge
+Execution SHA: 7b9dcde2a19c23345a1a334590d07fb15be27d7a
