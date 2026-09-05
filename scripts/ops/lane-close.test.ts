@@ -846,7 +846,7 @@ test('repair mode rebinds proof from the repair PR SHA to the implementation PR 
       { repoRoot, now: new Date('2026-05-26T04:00:00.000Z') },
     );
 
-    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated']);
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'missing']);
     const evidence = fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8');
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
     assert.match(evidence, /implementation-pr-merge-sha/);
@@ -1026,7 +1026,7 @@ test('rebindRepairedLaneProof keeps profileless evidence on the tolerant ordinar
     );
 
     assert.strictEqual(attestationPathUsed, false, 'profileless evidence must not enter structural re-attestation');
-    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated']);
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'missing']);
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
     assert.strictEqual(evidence.sha_binding.merge_sha, mergeSha);
   });
@@ -1052,7 +1052,7 @@ test('rebindRepairedLaneProof tolerates a lane with no canonical evidence bundle
       },
     );
 
-    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['missing', 'missing']);
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['missing', 'missing', 'missing']);
   });
 });
 
@@ -1111,7 +1111,7 @@ test('rebindRepairedLaneProof binds a declared model-routing.json sidecar in add
       { repoRoot, now: new Date('2026-07-25T12:00:00.000Z') },
     );
 
-    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'missing', 'updated']);
     const routing = JSON.parse(fs.readFileSync(routingPath, 'utf8'));
     assert.deepStrictEqual(routing.closeout_binding, {
       sha_type: 'merge_sha',
@@ -1439,7 +1439,7 @@ test('rebindRepairedLaneProof is unaffected for a lane with no required model-ro
     // it 'missing' (not an error) exactly as it did before this change; only
     // evidence.json exists and is rebound. No model-routing outcome is present at
     // all since expected_proof_paths declares no such sidecar.
-    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'missing']);
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'missing', 'missing']);
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
     assert.strictEqual(evidence.sha_binding.verified_source_sha, 'stale');
     assert.strictEqual(evidence.sha_binding.merge_sha, 'ordinary-merge-sha');
@@ -4094,5 +4094,148 @@ test('UTV2-1745: the original both-omissions generator shape still repairs', () 
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
     assert.strictEqual(evidence.sha_binding.merge_sha, UTV2_1745_MERGE_SHA);
     assert.match(fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8'), /^## Merge SHA Binding$/mu);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1828: the merge-SHA rebinders covered evidence.json and verification.md
+// only, while ops:truth-check P3 ("proof files missing merge SHA reference")
+// and C4 ("proof artifacts missing required SHA binding") scan the whole proof
+// directory. A bundle shipping a diff-summary.md merged with a correct manifest,
+// passed every other gate, and then could not close -- and post-merge-lane-close.yml
+// skips ops:proof-generate entirely on workflow_dispatch, delegating binding to
+// rebindRepairedLaneProof, so the sanctioned replay never reached the code that
+// would have fixed the file.
+// ---------------------------------------------------------------------------
+
+const UTV2_1828_STALE_SHA = 'cf3adef13a3f32ca841cbdc259961c4698149dfe';
+
+function writeDiffSummary(proofDir: string, issueId: string, anchorValue: string): string {
+  const diffSummaryPath = path.join(proofDir, 'diff-summary.md');
+  fs.writeFileSync(
+    diffSummaryPath,
+    [
+      `# DIFF SUMMARY: ${issueId}`,
+      '',
+      `MERGE_SHA: ${anchorValue}`,
+      '',
+      `Issue: ${issueId}`,
+      '',
+      '## Files',
+      '',
+      '- scripts/ops/lane-close.ts',
+      '',
+    ].join('\n'),
+  );
+  return diffSummaryPath;
+}
+
+test('UTV2-1828: the attested recovery rebinds diff-summary.md, not just evidence.json and verification.md', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1745';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId);
+    const diffSummaryPath = writeDiffSummary(proofDir, issueId, UTV2_1828_STALE_SHA);
+    const manifest = utv2_1745Manifest(issueId);
+
+    // Precondition: the file really does carry a stale anchor and does not name
+    // the authoritative merge SHA. Without this the assertion below could pass
+    // on a file that was already correct.
+    const before = fs.readFileSync(diffSummaryPath, 'utf8');
+    assert.match(before, new RegExp(`^MERGE_SHA: ${UTV2_1828_STALE_SHA}$`, 'mu'));
+    assert.ok(!before.includes(UTV2_1745_MERGE_SHA));
+
+    const outcomes = rebindRepairedLaneProof(manifest, {
+      repoRoot,
+      now: new Date('2026-09-02T21:00:00.000Z'),
+      ...utv2_1745RebindDeps(manifest),
+    });
+
+    // evidence.json, verification.md, diff-summary.md, model-routing.json.
+    // Before this fix the third entry did not exist and the file was untouched.
+    assert.deepStrictEqual(
+      outcomes.map((outcome) => outcome.status),
+      ['updated', 'updated', 'updated', 'updated'],
+    );
+    assert.ok(
+      outcomes.some((outcome) => outcome.path.endsWith('diff-summary.md') && outcome.status === 'updated'),
+      'the receipt must name diff-summary.md, so a partial rebind is never reported as a complete one',
+    );
+
+    const after = fs.readFileSync(diffSummaryPath, 'utf8');
+    assert.match(after, new RegExp(`^MERGE_SHA: ${UTV2_1745_MERGE_SHA}$`, 'mu'));
+    assert.ok(!after.includes(UTV2_1828_STALE_SHA), 'the stale anchor must not survive the rebind');
+    // Surrounding content is authored evidence and is never regenerated.
+    assert.match(after, /^- scripts\/ops\/lane-close\.ts$/mu);
+  });
+});
+
+test('UTV2-1828: a diff-summary.md with no bindable anchor refuses instead of closing on a partial rebind', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const issueId = 'UTV2-1745';
+    const proofDir = writeLegacySectionOnlyBundle(repoRoot, issueId);
+    // UTV2-1825 made `pending merge` -- the pre-merge placeholder the UTV2-1783
+    // contract mandates -- a BINDABLE anchor, so it can no longer stand for the
+    // unbindable case this test names. The anchor below is deliberately neither
+    // a full SHA nor any value PLACEHOLDER_VALUE_PATTERN accepts, so the file
+    // genuinely carries nothing to bind. The honest outcome is still a refusal
+    // that names the file, rather than a closeout that reports success and then
+    // fails at truth-check P3/C4.
+    writeDiffSummary(proofDir, issueId, 'unbound');
+    const manifest = utv2_1745Manifest(issueId);
+
+    assert.throws(
+      () => rebindRepairedLaneProof(manifest, {
+        repoRoot,
+        now: new Date('2026-09-02T21:00:00.000Z'),
+        ...utv2_1745RebindDeps(manifest),
+      }),
+      (error: Error) => /diff-summary\.md still does not reference the merge SHA/.test(error.message),
+    );
+  });
+});
+
+test('UTV2-1828: the tolerant ordinary path also offers diff-summary.md, and its absence stays legal', () => {
+  withTempRepairState(({ repoRoot }) => {
+    const proofDir = path.join(repoRoot, 'docs', '06_status', 'proof', 'UTV2-1001');
+    fs.mkdirSync(proofDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proofDir, 'evidence.json'),
+      `${JSON.stringify({ status: 'merged', sha_binding: { merge_sha: UTV2_1828_STALE_SHA } }, null, 2)}\n`,
+    );
+    fs.writeFileSync(
+      path.join(proofDir, 'verification.md'),
+      ['## Merge SHA Binding', '', `Merge SHA: \`${UTV2_1828_STALE_SHA}\``, 'PR: N/A', ''].join('\n'),
+    );
+    const diffSummaryPath = writeDiffSummary(proofDir, 'UTV2-1001', UTV2_1828_STALE_SHA);
+
+    const outcomes = rebindRepairedLaneProof(
+      createManifest({
+        commit_sha: UTV2_1745_MERGE_SHA,
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1291',
+      }),
+      { repoRoot, now: new Date('2026-09-02T21:00:00.000Z') },
+    );
+
+    assert.deepStrictEqual(outcomes.map((outcome) => outcome.status), ['updated', 'updated', 'updated']);
+    assert.match(
+      fs.readFileSync(diffSummaryPath, 'utf8'),
+      new RegExp(`^MERGE_SHA: ${UTV2_1745_MERGE_SHA}$`, 'mu'),
+    );
+
+    // Absence is not a defect: the same lane with the file removed rebinds
+    // exactly as it did before this change, reporting `missing` rather than
+    // refusing or inventing an artifact.
+    fs.rmSync(diffSummaryPath);
+    const withoutDiffSummary = rebindRepairedLaneProof(
+      createManifest({
+        commit_sha: UTV2_1745_MERGE_SHA,
+        pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1291',
+      }),
+      { repoRoot, now: new Date('2026-09-02T21:00:00.000Z') },
+    );
+    assert.deepStrictEqual(
+      withoutDiffSummary.map((outcome) => outcome.status),
+      ['unchanged', 'unchanged', 'missing'],
+    );
   });
 });

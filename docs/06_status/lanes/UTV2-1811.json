@@ -1,0 +1,52 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1811",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1811-rate-limit-bucket-contract",
+  "branch": "claude/utv2-1811-rate-limit-bucket-contract",
+  "base_branch": "main",
+  "commit_sha": "1734bf2017eb0fe5e00d93a4cff3d074d7be4546",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1477",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1811.yml",
+    "apps/api/src/t1-proof-utv2-1811-rate-limit-contract.test.ts",
+    "apps/api/src/t1-proof-utv2-1811-rpc-contract-parity.test.ts",
+    "db/migrations-rollback/20260901150000_utv2_1811_rate_limit_buckets.down.sql",
+    "docs/06_status/proof/UTV2-1811/diff-summary.md",
+    "docs/06_status/proof/UTV2-1811/evidence.json",
+    "docs/06_status/proof/UTV2-1811/verification.md",
+    "package.json",
+    "packages/db/src/database.types.ts",
+    "supabase/migrations/20260901150000_utv2_1811_rate_limit_buckets.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1811/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-09-01T15:46:45.557Z",
+  "heartbeat_at": "2026-09-05T01:43:43.149Z",
+  "closed_at": "2026-09-05T01:43:43.149Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-05T01:43:41.113Z",
+      "verdict": "pass",
+      "merge_sha": "1734bf2017eb0fe5e00d93a4cff3d074d7be4546",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1811-rate-limit-bucket-contract",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

@@ -17,6 +17,7 @@ import {
   normalizePreMergeEvidenceJson,
   normalizePreMergeVerificationMarkdown,
   rebindEvidenceJsonSha,
+  rebindMergeShaAnchorsInMarkdown,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
   rebindVerificationMdSha,
@@ -25,6 +26,7 @@ import {
   ProofPreservationError,
   type ProofGitTruth,
 } from './proof-generate.js';
+import { MERGE_AUTHORITY_PLACEHOLDER } from './proof-schema.js';
 import { ROOT } from './shared.js';
 import type { LaneManifest } from './shared.js';
 
@@ -167,17 +169,26 @@ test('generated verification.md carries a 40-hex SHA anchor, never a placeholder
   assert.doesNotMatch(content, /^MERGE_SHA:\s*N\/A\s*$/m, 'MERGE_SHA must not be a placeholder');
 });
 
-test('pre-merge, the gate-read anchor is the execution SHA while merge identity stays unclaimed', () => {
+/**
+ * UTV2-1783 rewrote this assertion. It previously required the top-level row to
+ * be the execution SHA, which is one half of the contradiction this lane
+ * removed: proof-binding-validator required the placeholder in the same row.
+ * The row now presents merge authority only, and execution identity has its own
+ * row, so both consumers can read the same file.
+ */
+test('pre-merge, the merge row stays unclaimed while the execution SHA is recorded separately', () => {
   const preMerge = { ...input(), gitTruth: gitTruth({ merge_sha: null }) };
   const content = buildRuntimeVerification(preMerge);
-  // The top-level row is the legacy-named anchor the Executor Result Validator
-  // reads; it must be a real SHA that is an ancestor of the PR head.
-  assert.match(content, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
-  assert.doesNotMatch(content, /^MERGE_SHA: pending merge$/m);
+  // Merge authority does not exist yet, so the row says so rather than
+  // borrowing a branch SHA that was never a merge.
+  assert.match(content, /^MERGE_SHA: pending merge$/m);
+  assert.doesNotMatch(content, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
   assert.doesNotMatch(content, /^MERGE_SHA:\s*N\/A\s*$/m);
   assert.match(content, /^## Merge SHA Binding$/m);
-  // The narrative binding row still reports true merge identity, which is unknown.
   assert.match(content, /^Merge SHA: pending merge$/m);
+  // Execution identity is still present and still a real commit — it is what
+  // Executor Result Validation ancestry-checks and what runtime-verifier-gate
+  // needs a 40-hex token for.
   assert.match(content, /^Execution SHA: 1111111111111111111111111111111111111111$/m);
 });
 
@@ -259,7 +270,9 @@ test('pre-merge artifacts keep merge authority empty while recording the executi
   assert.match(diffContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
   assert.match(diffContent, /Merge SHA: N\/A/);
   assert.match(verificationContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
-  assert.match(verificationContent, new RegExp(`^MERGE_SHA: ${HEAD_SHA}$`, 'm'));
+  // UTV2-1783: the merge row presents merge authority, which is still unclaimed;
+  // the execution head is recorded in its own row below.
+  assert.match(verificationContent, /^MERGE_SHA: pending merge$/m);
   assert.match(verificationContent, /^Merge SHA: pending merge$/m);
   assert.match(verificationContent, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'm'));
 });
@@ -310,7 +323,9 @@ test('UTV2-1729: pre-merge generation makes a broken #1435-shaped bundle bindabl
     assert.strictEqual(evidence.sha_binding.merge_sha, null);
     assert.strictEqual(evidence.sha_binding.verified_source_sha, HEAD_SHA);
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
-    assert.match(verification, new RegExp(`^MERGE_SHA: ${HEAD_SHA}$`, 'm'));
+    // UTV2-1783: normalization no longer writes the execution SHA into the
+    // merge row. It writes the placeholder there and the execution SHA below.
+    assert.match(verification, /^MERGE_SHA: pending merge$/m);
     assert.match(verification, /## Merge SHA Binding/);
     assert.match(verification, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'm'));
     assert.match(verification, /Narrative is preserved\./);
@@ -402,9 +417,11 @@ test('UTV2-1729: verification normalization ignores fenced MERGE_SHA rows and pr
     '',
   ].join('\n');
   const after = normalizePreMergeVerificationMarkdown(before, 'verification.md', HEAD_SHA, null);
-  assert.match(after, new RegExp(`^MERGE_SHA: ${HEAD_SHA}$`, 'mu'));
+  assert.match(after, /^MERGE_SHA: pending merge$/mu);
+  // The fenced row is evidence text, not a binding row, and survives byte-for-byte.
   assert.match(after, new RegExp(`^MERGE_SHA: ${MERGE_SHA}$`, 'mu'));
   assert.match(after, /## Merge SHA Binding/u);
+  assert.match(after, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'mu'));
 });
 
 test('manifest overrides bind proof artifacts to the current branch and PR', () => {
@@ -2085,7 +2102,7 @@ test('pre-merge generation upgrades authored Markdown to the bindable contract w
     const result = generateProofArtifacts(preMergeInput, { root });
 
     const after = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
-    assert.match(after, /^MERGE_SHA: 1111111111111111111111111111111111111111$/m);
+    assert.match(after, /^MERGE_SHA: pending merge$/m);
     assert.match(after, /^## Merge SHA Binding$/m);
     assert.match(after, /^Execution SHA: 1111111111111111111111111111111111111111$/m);
     assert.ok(after.includes('1390221'));
@@ -2672,18 +2689,20 @@ test('autoPopulateStaticProofFromVerifyRun: write:false persists nothing', () =>
   }
 });
 
-// --- UTV2-1729: the generated pre-merge bundle must actually pass the gates ---
+// --- UTV2-1729/UTV2-1783: the generated pre-merge bundle must pass the gates ---
 //
-// The top-level `MERGE_SHA:` row is a legacy-named PRE-MERGE ANCHOR that the
-// required Executor Result Validator reads. It is NOT authoritative merge
-// identity — that lives only at `sha_binding.merge_sha` and stays null until
-// the GitHub-attested post-merge rebind. Before this contract existed the
-// generator emitted `pending merge` there, which made every freshly generated
-// bundle structurally incapable of passing required Executor Result Validation.
+// UTV2-1729 established that a generated bundle must satisfy the required
+// Executor Result Validator, and made the top-level `MERGE_SHA:` row carry the
+// execution SHA to achieve it. That worked against ERV and broke
+// proof-binding-validator, which required the placeholder in the same row —
+// the contradiction UTV2-1783 removed.
 //
-// These regressions exercise the canonical generator, not a hand-edited file.
+// The requirement survives; only its carrier moved. ERV now ancestry-checks
+// `sha_binding.verified_source_sha`, surfaced in the `Execution SHA:` row, and
+// the merge row is free to say the true thing before merge. These regressions
+// exercise the canonical generator, not a hand-edited file.
 
-/** The exact rule executor-result-validator.yml:274 applies to the anchor row. */
+/** The exact rule Executor Result Validation applies to the execution SHA. */
 const ERV_ANCHOR_RE = /^[0-9a-f]{7,40}$/i;
 
 function anchorRowOf(verification: string): string | null {
@@ -2691,7 +2710,12 @@ function anchorRowOf(verification: string): string | null {
   return m ? m[1]!.trim() : null;
 }
 
-test('UTV2-1729: canonical pre-merge generation emits an ERV-valid anchor while merge identity stays null', () => {
+function executionRowOf(verification: string): string | null {
+  const m = verification.match(/^Execution SHA:\s*(.+)$/m);
+  return m ? m[1]!.trim() : null;
+}
+
+test('UTV2-1783: canonical pre-merge generation emits an ERV-valid execution SHA while merge identity stays null', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1729-anchor-'));
   try {
     const result = generateProofArtifacts(
@@ -2709,34 +2733,34 @@ test('UTV2-1729: canonical pre-merge generation emits an ERV-valid anchor while 
     const verification = fs.readFileSync(path.join(proofDir, 'verification.md'), 'utf8');
     const evidence = JSON.parse(fs.readFileSync(path.join(proofDir, 'evidence.json'), 'utf8'));
 
-    // 1. A real top-level anchor that satisfies the Executor Result Validator.
-    const anchor = anchorRowOf(verification);
-    assert.ok(anchor, 'verification.md must carry a top-level MERGE_SHA: row');
-    assert.match(anchor!, ERV_ANCHOR_RE);
-    assert.strictEqual(anchor, HEAD_SHA, 'pre-merge the anchor is the execution SHA');
-
-    // 2. Authoritative merge identity is still unclaimed.
-    assert.strictEqual(evidence.sha_binding.merge_sha, null);
-
-    // 3. The execution SHA is recorded as execution identity, and the narrative
-    //    binding row does not present it as a merge that happened.
+    // 1. A real execution SHA that satisfies the Executor Result Validator.
+    const execution = executionRowOf(verification);
+    assert.ok(execution, 'verification.md must carry an Execution SHA: row');
+    assert.match(execution!, ERV_ANCHOR_RE);
+    assert.strictEqual(execution, HEAD_SHA);
     assert.strictEqual(evidence.sha_binding.verified_source_sha, HEAD_SHA);
-    assert.match(verification, new RegExp(`^Execution SHA: ${HEAD_SHA}$`, 'm'));
+
+    // 2. Authoritative merge identity is still unclaimed, in both carriers.
+    assert.strictEqual(evidence.sha_binding.merge_sha, null);
+    assert.strictEqual(anchorRowOf(verification), 'pending merge');
     assert.match(verification, /^Merge SHA: pending merge$/m);
+
+    // 3. And the branch SHA is never presented as a merge that happened.
+    assert.doesNotMatch(verification, new RegExp(`^MERGE_SHA: ${HEAD_SHA}$`, 'm'));
     assert.doesNotMatch(verification, new RegExp(`^Merge SHA: ${HEAD_SHA}$`, 'm'));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
 
-test('UTV2-1729: placeholder anchors are rejected by the rule the validator actually applies', () => {
-  // 4. Guards the regression directly: the tokens the generator used to emit
-  //    are exactly the ones the required validator refuses.
+test('UTV2-1783: placeholders are rejected by the rule the validator applies to execution identity', () => {
+  // 4. Guards the regression directly: a placeholder can never stand in for
+  //    execution identity, which is the fact ERV ancestry-checks.
   for (const placeholder of ['pending merge', 'N/A', 'pending', '', 'TBD']) {
     assert.doesNotMatch(
       placeholder,
       ERV_ANCHOR_RE,
-      `"${placeholder}" must not satisfy the Executor Result Validator anchor rule`,
+      `"${placeholder}" must not satisfy the Executor Result Validator execution-SHA rule`,
     );
   }
   // And a real SHA does.
@@ -2775,18 +2799,21 @@ test('UTV2-1729: pre-merge normalization refuses a placeholder execution SHA ins
       `normalization must refuse execution SHA ${JSON.stringify(bad)}`,
     );
   }
-  // A real execution SHA re-anchors the row.
+  // A real execution SHA is recorded as execution identity, and the merge row
+  // is released back to the placeholder — a stale merge SHA left over from a
+  // previous bundle must not survive as a claim that this branch merged.
   const ok = normalizePreMergeVerificationMarkdown(before, 'verification.md', HEAD_SHA, null);
-  assert.strictEqual(anchorRowOf(ok), HEAD_SHA);
-  assert.match(anchorRowOf(ok)!, ERV_ANCHOR_RE);
+  assert.strictEqual(executionRowOf(ok), HEAD_SHA);
+  assert.match(executionRowOf(ok)!, ERV_ANCHOR_RE);
+  assert.strictEqual(anchorRowOf(ok), 'pending merge');
 });
 
-test('UTV2-1729: a non-ancestor anchor is what the validator ancestry rule exists to catch', () => {
-  // 5. The generator can only ever anchor to the execution SHA it was given,
-  //    so a non-ancestor anchor cannot be produced by construction — the
-  //    generated anchor is always the head being validated. This pins that
-  //    property: the anchor equals the execution SHA and never an unrelated
-  //    SHA such as a foreign merge commit.
+test('UTV2-1729: a non-ancestor execution SHA is what the validator ancestry rule exists to catch', () => {
+  // 5. The generator can only ever record the execution SHA it was given, so a
+  //    non-ancestor anchor cannot be produced by construction — the recorded
+  //    SHA is always the head being validated. This pins that property: it
+  //    equals the execution SHA and never an unrelated SHA such as a foreign
+  //    merge commit.
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1729-ancestor-'));
   try {
     generateProofArtifacts(
@@ -2796,10 +2823,128 @@ test('UTV2-1729: a non-ancestor anchor is what the validator ancestry rule exist
     const verification = fs.readFileSync(
       path.join(root, 'docs/06_status/proof/UTV2-1170/verification.md'), 'utf8',
     );
-    const anchor = anchorRowOf(verification);
-    assert.strictEqual(anchor, HEAD_SHA);
-    assert.notStrictEqual(anchor, MERGE_SHA, 'the anchor must never be an unrelated/foreign SHA');
+    const execution = executionRowOf(verification);
+    assert.strictEqual(execution, HEAD_SHA);
+    assert.notStrictEqual(execution, MERGE_SHA, 'it must never be an unrelated/foreign SHA');
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1825 — the post-merge rebinder must bind the pre-merge placeholder the
+// pre-merge contract mandates.
+//
+// UTV2-1822 merged and could not be closed: its proof carried the ratified
+// placeholder, and the rebinder's accepted-value pattern listed only the bare
+// word `pending`, which does not match `pending merge`. The lane was stranded
+// after merge, with the branch already gone.
+//
+// Every fixture below is produced by normalizePreMergeVerificationMarkdown
+// rather than hand-typed, so the test is anchored to the string the pre-merge
+// path actually writes. A hand-typed copy would keep passing if the two drifted.
+// ---------------------------------------------------------------------------
+
+const UTV2_1825_EXECUTION_SHA = 'b5414f8c0679e8292df65dcbdc80d80e8f66dfc7';
+const UTV2_1825_MERGE_SHA = '1817eddc17ae4954cdd5876372763e1524e427fd';
+
+function preMergeProof(body: string): string {
+  return normalizePreMergeVerificationMarkdown(
+    body,
+    'docs/06_status/proof/UTV2-1825/verification.md',
+    UTV2_1825_EXECUTION_SHA,
+    'https://github.com/griff843/Unit-Talk-v2/pull/1482',
+  );
+}
+
+test('UTV2-1825: the placeholder the pre-merge path writes is the one the rebinder binds', () => {
+  const preMerge = preMergeProof('# PROOF: UTV2-1825\n\nMERGE_SHA: pending\n');
+
+  // Guard the premise: if the pre-merge writer ever stops emitting this row,
+  // the rest of this test would pass vacuously.
+  assert.ok(
+    preMerge.includes(`MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'pre-merge normalization must write the ratified placeholder into the top-level row',
+  );
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(preMerge, UTV2_1825_MERGE_SHA, null);
+
+  assert.ok(
+    rebound.includes(`MERGE_SHA: ${UTV2_1825_MERGE_SHA}`),
+    'the top-level row must carry the merge SHA after rebinding',
+  );
+  // `Approved PR head:` is deliberately NOT rebound here. It is a different
+  // fact from merge authority, this function is never given it, and writing the
+  // merge SHA into it would be a fabricated value rather than a stale one.
+  // `ops:proof-rebind` owns that row (BINDING_ROW_LABELS) and receives
+  // --approved-head explicitly.
+  assert.ok(
+    rebound.includes(`Approved PR head: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the approved-head row is out of this rebinder\'s authority and must be left alone',
+  );
+  assert.equal(
+    rebound.split('\n').filter((line) => /^MERGE_SHA:/u.test(line))
+      .some((line) => line.includes(MERGE_AUTHORITY_PLACEHOLDER)),
+    false,
+    'no merge-authority row may still read as pending after a post-merge rebind',
+  );
+});
+
+test('UTV2-1825: the Merge SHA Binding section body rebinds along with the top-level row', () => {
+  const preMerge = preMergeProof('# PROOF: UTV2-1825\n\nMERGE_SHA: pending\n');
+
+  assert.ok(
+    preMerge.includes(`Merge SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the generated binding section must carry the placeholder',
+  );
+  assert.ok(
+    preMerge.includes(`Approved PR head: ${MERGE_AUTHORITY_PLACEHOLDER}`),
+    'the generated binding section must carry the placeholder on the approved-head row too',
+  );
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(preMerge, UTV2_1825_MERGE_SHA, null);
+
+  assert.ok(rebound.includes(`Merge SHA: ${UTV2_1825_MERGE_SHA}`));
+  assert.ok(
+    rebound.includes(`Execution SHA: ${UTV2_1825_EXECUTION_SHA}`),
+    'execution identity is a separate fact and must survive the rebind unchanged',
+  );
+});
+
+test('UTV2-1825: an authored non-placeholder value is still refused, not overwritten', () => {
+  // This is what makes planExistingProofArtifact throw unbindable_proof_artifact
+  // rather than clobber measured evidence. Widening the placeholder alternation
+  // must not widen this.
+  const authored = '# PROOF: UTV2-1825\n\nMERGE_SHA: see the release ticket\n';
+
+  assert.equal(
+    rebindMergeShaAnchorsInMarkdown(authored, UTV2_1825_MERGE_SHA, null),
+    authored,
+    'an authored value is not a placeholder and must be left byte-identical',
+  );
+});
+
+test('UTV2-1825: a placeholder inside a fenced evidence block is left untouched', () => {
+  const fenced = [
+    '# PROOF: UTV2-1825',
+    '',
+    `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`,
+    '',
+    '## EVIDENCE:',
+    '',
+    '```',
+    `$ grep MERGE_SHA verification.md`,
+    `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`,
+    '```',
+    '',
+  ].join('\n');
+
+  const rebound = rebindMergeShaAnchorsInMarkdown(fenced, UTV2_1825_MERGE_SHA, null);
+
+  assert.equal(
+    rebound.split('\n').filter((line) => line === `MERGE_SHA: ${MERGE_AUTHORITY_PLACEHOLDER}`).length,
+    1,
+    'the quoted command output inside the fence is a measurement and must survive verbatim',
+  );
+  assert.ok(rebound.includes(`MERGE_SHA: ${UTV2_1825_MERGE_SHA}`));
 });

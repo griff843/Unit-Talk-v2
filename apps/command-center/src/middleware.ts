@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import {
   authenticateCommandCenterRequest,
   logCommandCenterAuthFailure,
+  logCommandCenterDevBypass,
   logCommandCenterPrivilegedAction,
 } from './lib/server-api';
 
@@ -50,13 +51,28 @@ export function middleware(request: NextRequest) {
     );
   }
 
-  logCommandCenterPrivilegedAction({
-    route,
-    method: request.method,
-    actor: auth.auth.actor,
-    role: auth.auth.role,
-    requestId,
-  });
+  if (auth.auth.method === 'dev_bypass') {
+    // An unauthenticated local-development request is not a privileged action by
+    // an operator, and recording it as one puts a fabricated actor
+    // ("command-center:dev-bypass") into the same audit stream that real
+    // operator writes land in. Anyone auditing who changed what would read it as
+    // a genuine identity. Log it as what it is -- an unauthenticated request
+    // that a development-only bypass let through -- so the two can never be
+    // confused after the fact.
+    logCommandCenterDevBypass({
+      route,
+      method: request.method,
+      requestId,
+    });
+  } else {
+    logCommandCenterPrivilegedAction({
+      route,
+      method: request.method,
+      actor: auth.auth.actor,
+      role: auth.auth.role,
+      requestId,
+    });
+  }
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-command-center-actor', auth.auth.actor);
