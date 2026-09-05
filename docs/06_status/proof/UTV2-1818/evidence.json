@@ -7,9 +7,9 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
-    "evidence_commit_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
-    "current_pr_head_sha": "3f3a7bda845950fe826f0ac710f3e574901117bb",
+    "verified_source_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "evidence_commit_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
+    "current_pr_head_sha": "edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3",
     "ci_sentinels": {
       "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
       "pnpm_test": "PASS (5520 tests, 5520 pass, 0 failures, 0 'not ok' lines across 100 sub-suites, exit 0) measured locally in the lane worktree at this anchor",
@@ -20,7 +20,7 @@
     },
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-05T18:30:00.000Z",
-    "anchor_note": "Measurements were taken at edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3 on the lane branch. #1508 was squash merged, so that commit is not an ancestor of main. 3f3a7bda845950fe826f0ac710f3e574901117bb is the squash-merge commit carrying the identical reviewed content - all four reviewed artifacts resolve to the same git blob at both commits - and is the addressable anchor. No measurement was re-run or re-attributed."
+    "anchor_note": "Evidence ran at edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3 on claude/utv2-1818-approval-carry-forward. #1508 was squash merged, so that commit is not reachable from main; a repair branch cut from main cannot reference it. This branch is cut from the lane branch itself and merges main in, so the anchor is an ancestor of both this PR head and the approved head 7276775dd79ecc0c9ff38eec9adf3cd78ccd6a02. No measurement was re-run or re-attributed."
   },
   "static_proof": {
     "type_check": {

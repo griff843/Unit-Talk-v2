@@ -161,30 +161,30 @@ outside the normal PR path.
 Merge SHA: pending merge
 PR: pending
 Approved PR head: pending merge
-Execution SHA: 3f3a7bda845950fe826f0ac710f3e574901117bb
+Execution SHA: edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3
 
-### Why the execution anchor moved, and what makes the move truthful
+### Why the execution anchor is the lane-branch commit
 
-The measurements in this bundle were taken locally at `edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3`, a commit on
-`claude/utv2-1818-approval-carry-forward`. **#1508 was squash merged**, so that commit is not an
-ancestor of `main` and not an ancestor of this repair PR — `git merge-base --is-ancestor` returns
-false and GitHub's compare status is `diverged`. An anchor no gate can reach is not a usable anchor.
+The measurements in this bundle were taken at `edf6554a6d2b4bf4f9dd5277fe05aad48d7193f3`, a commit on
+`claude/utv2-1818-approval-carry-forward`. That is the anchor recorded above, unchanged, because it
+is where the evidence actually ran.
 
-`3f3a7bda845950fe826f0ac710f3e574901117bb` is the squash-merge commit that carries the identical reviewed content
-and *is* an ancestor of this PR's head. That equivalence was measured, not assumed — every one of
-the four reviewed artifacts resolves to the same git blob at both commits:
+**#1508 was squash merged**, so `edf6554a6` never entered `main`'s history. That severs the anchor
+from any branch cut from `main`: a first repair attempt (#1509) was cut from `main`, and
+`Executor Result Validation` refused the bundle because `compareCommits(base=edf6554a6, head=<PR
+head>)` returned `diverged`. Re-anchoring to the squash-merge commit satisfied that check but then
+failed closeout, because `proof-rebind.ts:1122` requires the execution SHA to be an ancestor of the
+**approved head** `7276775dd79ecc0c9ff38eec9adf3cd78ccd6a02`, which the squash-merge commit is not.
+The two gates cannot both be satisfied by any single value on a branch cut from `main`.
+
+This branch is therefore cut from the lane branch itself and merges `origin/main` in, rather than the
+reverse. `edf6554a6` is consequently an ancestor of *both* this PR's head and the approved head, so
+both gates are satisfied by the commit where the evidence genuinely ran, and no SHA in this bundle
+names anything other than what it actually is.
 
 ```
-$ for p in scripts/ops/approval-carry-forward.ts scripts/ops/approval-carry-forward.test.ts \
-           docs/05_operations/schemas/approval-carry-forward-v1.md package.json; do
-    [ "$(git rev-parse edf6554a6:$p)" = "$(git rev-parse 3f3a7bda8:$p)" ] && echo "SAME  $p" || echo "DIFF  $p"
-  done
-SAME  scripts/ops/approval-carry-forward.ts
-SAME  scripts/ops/approval-carry-forward.test.ts
-SAME  docs/05_operations/schemas/approval-carry-forward-v1.md
-SAME  package.json
+$ git merge-base --is-ancestor edf6554a6 7276775dd && echo "ancestor of approved head: YES"
+ancestor of approved head: YES
 ```
 
-No measurement in this bundle was re-run, re-attributed or strengthened. The commands were executed
-against the tree named above; only the name by which that tree is addressable has changed, because
-the squash merge is what changed it.
+No measurement in this bundle was re-run, re-attributed or strengthened.
