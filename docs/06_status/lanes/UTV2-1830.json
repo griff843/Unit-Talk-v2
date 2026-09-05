@@ -18,7 +18,11 @@
     "docs/mission/intent.md",
     "docs/mission/plan.md"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1830/diff-summary.md",
+    "docs/06_status/proof/UTV2-1830/evidence.json",
+    "docs/06_status/proof/UTV2-1830/verification.md"
+  ],
   "status": "in_review",
   "started_at": "2026-09-05T02:35:54.292Z",
   "heartbeat_at": "2026-09-05T02:50:30.775Z",
