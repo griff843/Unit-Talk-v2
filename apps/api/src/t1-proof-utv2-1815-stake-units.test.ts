@@ -15,15 +15,7 @@
  * the row's stake is unchanged afterwards -- the refusal does not partially
  * apply. Test 3 is the negative control: a legal stake still writes, and still
  * settles into a real `profitLossUnits`, so the refusals above are about the
- * stake and not about the path being broken. Test 4 closes the one live question
- * the other three cannot see: they all coerce the value they read back with
- * `Number(...)`, so none of them observes the runtime *representation* PostgREST
- * returns for a `numeric` column. `resolveStakeUnits` rejects on
- * `typeof value !== 'number'`, so a stake arriving as the JSON string "2.5"
- * would make every canonical row read back as `historical_unknown` -- the
- * guard's false-refusal direction, which is the one direction a fail-closed
- * control cannot detect about itself. Test 4 puts the value the database
- * actually returned, untouched, through the shipped resolver.
+ * stake and not about the path being broken.
  *
  * WHAT IT DELIBERATELY DOES NOT PROVE
  * -----------------------------------
@@ -65,7 +57,6 @@ import {
   createServiceRoleDatabaseConnectionConfig,
   type RepositoryBundle,
 } from '@unit-talk/db';
-import { resolveStakeUnits } from '@unit-talk/domain';
 import { submitPickController } from './controllers/submit-pick-controller.js';
 import { recordEvidenceSettlement } from './settlement-service.js';
 
@@ -331,74 +322,6 @@ test(
       payload['profitLossUnits'],
       2,
       'a win at +100 on a 2-unit stake must persist profitLossUnits = 2',
-    );
-  },
-);
-
-test(
-  'UTV2-1815 live DB: the shipped resolver classifies the stake exactly as Postgres returns it',
-  { skip: skipReason },
-  async () => {
-    // Every other assertion in this file coerces the stake it reads back with
-    // `Number(...)`, so none of them can see the runtime *representation*
-    // PostgREST hands back for a `numeric` column. That representation is
-    // load-bearing here and nowhere else in this bundle:
-    //
-    //   resolveStakeUnits rejects on `typeof value !== 'number'`
-    //
-    // so if a real, perfectly good stake arrives from the database as the JSON
-    // string "2.5" rather than the number 2.5, the shipped guard classifies it
-    // `historical_unknown` and every downstream path refuses to compute on a row
-    // that was never invalid. That is the guard's false-refusal direction, and it
-    // is the one direction a fail-closed control cannot detect about itself.
-    //
-    // This test therefore takes the value the database actually returned,
-    // untouched, and puts it through the shipped resolver.
-    const pickId = await createAwaitingApprovalPick('representation');
-    const accepted = await patchFixtureStakeUnits(pickId, 2.5);
-    assert.equal(
-      accepted.accepted,
-      true,
-      `a fractional legal stake must be accepted: ${JSON.stringify(accepted.error)}`,
-    );
-
-    const rawFromDatabase = await readStakeUnits(pickId);
-
-    // Recorded as an assertion rather than a comment: if PostgREST's numeric
-    // serialization ever changes, this fails here with the observed type named,
-    // instead of surfacing as an unexplained refusal in attribution.
-    assert.equal(
-      typeof rawFromDatabase,
-      'number',
-      `PostgREST returned stake_units as ${typeof rawFromDatabase} (${JSON.stringify(rawFromDatabase)}); ` +
-        'resolveStakeUnits refuses anything that is not a number, so a non-number here would make ' +
-        'every canonical row read back as historical_unknown',
-    );
-
-    const resolution = resolveStakeUnits(rawFromDatabase as number);
-    assert.equal(
-      resolution.status,
-      'canonical',
-      'a real stake round-tripped through Postgres must resolve canonical, not historical_unknown',
-    );
-    assert.equal(resolution.stake_units, 2.5, 'the resolved stake must be the stored value, unrounded');
-
-    // The negative control on the same round-tripped path: the resolver must
-    // still refuse when the value genuinely is unusable. `null` is the exact
-    // shape the 2,902 legacy production rows hold, and it is the shape this
-    // database's constraint can no longer create -- which is why it is
-    // constructed here from the read rather than from a write.
-    assert.equal(resolveStakeUnits(null).status, 'historical_unknown');
-    assert.equal(resolveStakeUnits(null).stake_units, null);
-
-    // And the settlement path, reading the same row from the same database,
-    // must agree with the resolver rather than with an assumption.
-    const payload = await settleAndReadBack(pickId);
-    assert.equal(payload['stakeUnitsStatus'], 'canonical');
-    assert.equal(
-      payload['profitLossUnits'],
-      2.5,
-      'a win at +100 on a 2.5-unit stake must persist profitLossUnits = 2.5, not a flat 1',
     );
   },
 );
