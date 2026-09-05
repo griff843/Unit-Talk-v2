@@ -1,6 +1,6 @@
 # PROOF: UTV2-1831
 
-MERGE_SHA: pending merge
+MERGE_SHA: 775f4ac60e6614404beee4615e694d98fef9f5d1
 
 > Pre-merge the merge row is intentionally the ratified placeholder; the Execution SHA row
 > carries the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
@@ -148,7 +148,7 @@ this branch, and the exact SHA the staging receipt above was produced at. The ro
 ratified pre-merge anchor token; the post-merge rebinder replaces it from GitHub's recorded merge
 state.
 
-Merge SHA: pending merge
+Merge SHA: 775f4ac60e6614404beee4615e694d98fef9f5d1
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1504
 Approved PR head: pending merge
 Execution SHA: 380e7854f36dc318421dee880d6ab1cbac22ce4a
