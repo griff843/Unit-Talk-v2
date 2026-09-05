@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-05T15:30Z
+**Last reconciled against live truth:** 2026-09-05T22:10Z
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -13,7 +13,7 @@ and what was learned.
 Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, the secret
 metadata listing and the current readiness ledger. Not against docs or chat history.
 
-- `main` is `85f63c696`, an `ops(readiness): refresh ledger [skip ci]` commit. The last commit that
+- `main` is `175f07c10`. (This bullet read `85f63c696` until 2026-09-05T22:10Z.) The last commit that
   changed shipped behaviour is `1734bf201` — the #1477 merge (UTV2-1811, rate-limit bucket
   contract), followed by its lane-close `9797bcbee`. That lane is truth-closed: manifest `done`,
   Linear Done, `sha_binding.merge_sha` bound to `1734bf20`. **No lane manifest is `in_progress` on
@@ -23,7 +23,7 @@ metadata listing and the current readiness ledger. Not against docs or chat hist
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **11 PRs are open** (down from 15 on 2026-09-03; #1477, #1485, #1488, #1499 and #1501 merged and
+- **13 PRs are open** (measured 2026-09-05T22:10Z; was 11 earlier the same day; #1477, #1485, #1488, #1499 and #1501 merged and
   #1497 was closed). Every one is blocked on `Merge Gate`, in three distinct ways:
   - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498, #1429) —
     eight PRs opened with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found
@@ -234,17 +234,24 @@ Measured against `origin/main`, the GitHub API, the deploy workflow, GHCR manife
 production Supabase (read-only). **This replaces the bare "only Deploy remains" framing, which was
 true but incomplete.**
 
-**Exact release.** `origin/main` is `058aab04b`. Production is `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
-The gap is 96 commits, of which **exactly three change code a running container executes**:
+**Exact release.** `origin/main` is `175f07c10`. Production is `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
+The gap is 105 commits, of which **six change code a running container executes**:
 
 | SHA | PR | Behaviour |
 |---|---|---|
 | `b7d9fc07f` | #1501 | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
 | `01a2d2d67` | #1474 | Command Center auth mode can no longer be downgraded to fail-open in deployed environments |
 | `2ac233424` | #1488 | Canonical capper identity from an explicit mapping; local-part derivation removed |
+| `1d76b75e1` | #1507 | Deploy snapshots the outgoing configuration; `rollback.sh` restores it |
+| `775f4ac60` | #1504 | Stake-units live proof wired into `test:t1-proof:live` (test wiring only) |
+| `1734bf201` | #1477 | Rate-limit bucket contract |
 
-The other 93 are readiness-ledger bot commits, lane manifests, proof bundles, merges, docs and
-test-only changes. No Dockerfile, no `docker-compose*`, no `packages/**` source, and no
+Measured with `git log --first-parent e48106fc..origin/main -- 'apps/**' 'packages/**' 'deploy/**'`.
+The eight non-test files that differ are `apps/api/src/server.ts`,
+`apps/command-center/{.env.example,src/lib/server-api.ts,src/middleware.ts}`,
+`apps/smart-form/{.env.example,lib/auth-allowlist.ts}`, `deploy/production/ENV_FILES.md` and
+`deploy/rollback.sh`. The remaining 99 commits are readiness-ledger bot commits, lane manifests,
+proof bundles, merges, docs and test-only changes. No Dockerfile, no `docker-compose*`, no `packages/**` source, and no
 `apps/{worker,ingestor,discord-bot,web}` source changed.
 
 **No DDL prerequisite.** `deploy.yml` runs no migration step. UTV2-1811's `rate_limit_buckets` table
@@ -272,12 +279,38 @@ so the deploy reports `smart-form: healthy` with an allow-list that admits nobod
 only asserts `localhost:4000/health == 200` and never touches the smart-form container, the OAuth
 flow, or the allow-list. **The first real test of the value is Griff's own browser.**
 
-**Rollback does not cure this, and makes it worse.** `deploy/rollback.sh:66-74` rewrites
-`.unit-talk-release` and re-pulls images; it **touches no env file**. `deploy.yml` is the only writer
-of `.env.smart-form`. So after a deploy the host holds the new-shaped allow-list, and rolling images
-back to `e48106fc` restores the *old* parser against the *new* value — which reads
-`someone@example.com=griff843` as a single malformed email and admits nobody. Rollback is correct for
-a code defect and wrong for an allow-list-shape defect.
+**Corrected 2026-09-05: rollback now restores configuration, and the claim below it was false.**
+This plan previously stated that `deploy/rollback.sh` "rewrites `.unit-talk-release` and re-pulls
+images; it **touches no env file**", and concluded that rollback "makes it worse". That was true when
+written and is false on current `main`. `deploy/rollback.sh:71-79` reads:
+
+```sh
+for f in .env.production .env.web .env.smart-form; do
+  if [ -f "$f.$TAG" ]; then
+    cp -p "$f.$TAG" "$f"; chmod 600 "$f"
+    echo "restored $f from configuration snapshot $TAG"
+  else
+    echo "WARNING: no configuration snapshot for $TAG at $f.$TAG - code rolled back, configuration did not" >&2
+  fi
+done
+```
+
+UTV2-1834 (#1507, `1d76b75e1`) added both the snapshot on the way out and this restore on the way
+back, and it warns explicitly when no snapshot exists rather than rolling code back silently against
+a mismatched configuration. **A rollback after a bad allow-list now restores the old-shaped value
+alongside the old parser**, which is the pairing the previous text said was impossible.
+
+One real gap remained in that repair and is closed by UTV2-1835 (#1511): the snapshot step
+overwrote unconditionally, so a *retry* after a deploy that died between the env writes and the
+release-record advance captured the failed attempt's configuration over the running release's — and
+the mtime-ordered prune could evict the surviving snapshot outright. Both were reproduced by
+executing the workflow's own remote body, and the repair distinguishes a failed retry from a
+legitimate same-tag redeploy via a `.unit-talk-deploy-inflight` marker. That distinction matters
+precisely because the documented recovery from a bad allow-list *is* a same-tag redeploy.
+
+What remains true is the part that was never about rollback: `ALLOWED_CAPPER_EMAILS` is validated
+non-empty at three layers and shape-validated at none, and no deploy check can see a syntactically
+valid list that admits nobody.
 
 There is also **no automatic rollback**. `ROLLBACK_TAG` comes from an optional, empty-by-default
 dispatch input (`deploy.yml:10-13`); left blank, a failed health loop just fails the job with
@@ -307,9 +340,13 @@ One further check is worth having but is not a blocker: whether the host's curre
 login is **already** broken today rather than merely stale. Non-secret criterion: count the `=` signs
 after the first in that line; `0` means old shape, `>=1` means already-broken.
 
-**Stale doc found:** `docs/05_operations/REQUIRED_SECRETS.md:541` still documents the pre-#1488
-shape ("comma-separated allow-list of capper email addresses"). It would mislead an operator
-reshaping the secret. Fixing it is ordinary docs work, not a gate.
+**Corrected 2026-09-05: the "stale doc" finding was itself stale.** This plan previously recorded
+that `docs/05_operations/REQUIRED_SECRETS.md:541` still documented the pre-#1488 shape. It does not.
+The `ALLOWED_CAPPER_EMAILS` entry on `main` now states the `<email>=<canonicalCapperId>` shape, the
+`^[a-z0-9][a-z0-9_-]*$` id rule, that an entry without `=` is *silently dropped* with no local-part
+fallback, and — explicitly — that neither the deploy workflow nor the container entrypoint validates
+the shape, so an all-malformed value deploys green and admits nobody. No docs work is outstanding
+here.
 
 ### Wave 1 — Smart Form Track Only pilot (Milestone 1)
 
@@ -335,7 +372,7 @@ own merits.
 
 | PR / work | State |
 |---|---|
-| #1479 null-stake computation truth | `verify` red — repair first |
+| #1479 null-stake computation truth | **`verify` is green** (re-measured 2026-09-05T22:10Z; the earlier "red" is stale). Only `Merge Gate` fails, so what it needs is an approval artifact, not a repair. This plan states no verdict on it. |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
 | #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 item 2) |
 | Closing-line truth | Not yet a branch |
@@ -361,9 +398,9 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-The current one is this lane (**UTV2-1830**, recording the ratified continuous-orchestration
-correction in `intent.md` and its pointer in `CLAUDE.md`). UTV2-1829, which held the slot on
-2026-09-03, merged as #1499 at `d70df077` on 2026-09-04. RMA is an architecture review, not a
+The current one is **UTV2-1836** — the carry-forward evidence collector, the reserved Merge Gate
+integration diff, and this reconciliation. UTV2-1830 held the slot before it and merged as #1502
+(`1cb31a43e`); UTV2-1829 before that, as #1499 at `d70df077`. RMA is an architecture review, not a
 governance lane.
 
 Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
@@ -618,11 +655,44 @@ passes it too — `ut-cli/lib/git.ts:82`, `ut-cli/lib/scope.ts:24/28/31`,
 rejected `docs/06_status/proof/UTV2-1829/.gitkeep` was **not** this option, and the fix this plan
 proposed would have been a no-op.
 
-The rejection itself was real and is still unexplained; the cause is not identified. Recorded here as
-an open question rather than a diagnosis, because writing down a wrong cause is worse than writing
-down none — the next agent to hit this would have "fixed" an option that was already set. This is an
-instance of the same class already recorded under Learned: a plausible reading of code, asserted from
-recollection rather than generated from the artifact.
+**Cause identified 2026-09-05 (UTV2-1836), and it is not about dotfiles at all.** The same check
+rejected `docs/06_status/proof/UTV2-1835/evidence.json` on PR #1511 — an ordinary filename. That
+ruled out every dot-related explanation and pointed at the scope construction itself.
+
+`scripts/ops/pr-review-packet.ts:487-491` builds the allowed scope as:
+
+```ts
+const allowedFileScope = normalizePaths([
+  ...scopeLock,
+  ...sameIssueLaneMetadataPaths(issueId),   // .ops/sync/<ID>.yml and docs/06_status/lanes/<ID>.json only
+  ...expectedProofPaths,                    // an EXACT list, not a glob
+]);
+```
+
+`sameIssueLaneMetadataPaths` (`:662-668`) covers the sync file and the manifest and **no proof
+glob**. So the lane's own proof directory is admitted only by literal `expected_proof_paths`
+entries, and any other file inside it is scope bleed. `.lane/lanes/governance.yml`'s
+`docs/06_status/proof/**` glob governs `Lane authority`, not this packet.
+
+The system contradicts itself here in two directions, and both were hit on one lane:
+
+- **`ops:lane-start` itself creates `docs/06_status/proof/<ID>/.gitkeep`** and commits it, then the
+  review packet rejects it.
+- **`Executor Result Validation` selects the narrow legacy proof contract unless
+  `docs/06_status/proof/<ID>/evidence.json` exists** — and that contract requires a real merge SHA
+  pre-merge, which is impossible. So a lane must add `evidence.json` to pass ERV, and adding it
+  fails the review packet.
+- **`ops:lane-manifest update` cannot add either one.** It supports `--pr-url`, `--commit-sha` and
+  `--files-changed`; `expected_proof_paths` is settable only at `create` (`lane-manifest.ts:128`).
+
+`Return review packet` is not one of the four required checks, so this blocks no merge — it emits a
+`FAIL` verdict on a correctly-constructed bundle. The repair is one of: give the packet a
+`docs/06_status/proof/<ID>/**` glob the way `sameIssueLaneMetadataPaths` already does for the sync
+file and manifest, or teach `ops:lane-manifest update` to extend `expected_proof_paths`. Recorded
+here rather than filed, per the filing threshold.
+
+The earlier micromatch reading above stands corrected on its own terms as well: `{ dot: true }` was
+always present, and the fix this plan once proposed would have been a no-op.
 
 ### `docs/mission/**` lane registration — resolved on `main`
 
@@ -694,7 +764,14 @@ path.** Everything below item 1 blocks only itself.
    this lane.
 6. **Any production containment change (`parked` → `active`)** — not needed for Milestone 1, and
    explicitly excluded from it. Command Center secrets are likewise not a Milestone 1 gate.
-7. **A `scope-override/v1` comment** on any future lane that must touch `.lane/lanes/governance.yml`
+7. **Review the approval carry-forward Merge Gate integration** (UTV2-1836) — merge authority,
+   reserved decision 7. The verifier (`scripts/ops/approval-carry-forward.ts`, #1508) and its
+   trusted evidence collector (`scripts/ops/carry-forward-collect.ts`, UTV2-1836) are both on
+   `main`/in review and **nothing calls them**; the workflow hunk that would is presented as a diff
+   and deliberately not applied. It is narrow: it fires only when every `validateT1Verdicts` error
+   is staleness, and every other T1 error still blocks. Blocks nothing — head-pinned verdicts keep
+   working exactly as they do today until this is decided.
+8. **A `scope-override/v1` comment** on any future lane that must touch `.lane/lanes/governance.yml`
    or another path outside its own `file_scope_lock`. None is outstanding right now — the
    `docs/mission/**` registration it was last needed for merged in #1499.
 
