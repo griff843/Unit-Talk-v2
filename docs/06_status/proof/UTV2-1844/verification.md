@@ -1,6 +1,6 @@
 # PROOF: UTV2-1844 — signed odds and line entry, and a three-valued participant identity mode
 
-MERGE_SHA: pending merge
+MERGE_SHA: b5ee99e17c5053c42cfe29dd95973d59ade6761f
 Execution SHA: 65ebfd24b84b3ef2667e8a15f351ade704674bb8
 
 ## ASSERTIONS:
@@ -126,7 +126,7 @@ no `package.json`, no migration, no schema, no API or worker source.
 | Verified source SHA: | 65ebfd24b84b3ef2667e8a15f351ade704674bb8 |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1523
-Merge SHA: pending merge
+Merge SHA: b5ee99e17c5053c42cfe29dd95973d59ade6761f
 Verified source SHA: 65ebfd24b84b3ef2667e8a15f351ade704674bb8
 
 `65ebfd24b84b3ef2667e8a15f351ade704674bb8` is the last commit on this branch that changes any file

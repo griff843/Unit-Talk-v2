@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "b5ee99e17c5053c42cfe29dd95973d59ade6761f",
     "verified_source_sha": "65ebfd24b84b3ef2667e8a15f351ade704674bb8",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,9 +16,9 @@
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
       "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844: Changed files 16, rules matched operator-ui, every triggered required[] artifact present."
     },
-    "sha_type": "pending_merge",
+    "sha_type": "merge_sha",
     "anchor_note": "65ebfd24b84b3ef2667e8a15f351ade704674bb8 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1844/, and it is the tree every command above was run against. It is the commit that resynced this branch onto origin/main after #1522 (UTV2-1845, 9a233bd90) merged and made this PR BEHIND under strict:true; that resync carries non-proof files, so rule 4 of scripts/ci/proof-binding-validator.ts (a two-dot git diff verified_source_sha..HEAD) forces the anchor onto it. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES.",
-    "bound_at": "2026-09-06T21:05:00.000Z"
+    "bound_at": "2026-09-06T21:00:14.047Z"
   },
   "static_proof": {
     "status": "PASS",

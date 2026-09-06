@@ -2,7 +2,7 @@
 
 **Branch:** codex/utv2-1844-smart-form-ui-signed-odds-db-selectors
 **Tier:** T2 · **Lane type:** delivery-ui
-MERGE_SHA: pending merge
+MERGE_SHA: b5ee99e17c5053c42cfe29dd95973d59ade6761f
 
 Smart Form frontend only. No API, worker, package, schema, migration or workflow change, and no
 containment change.
