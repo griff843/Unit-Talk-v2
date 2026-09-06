@@ -1,7 +1,7 @@
 # PROOF: UTV2-1845 — classify the containment placeholder distinctly in preflight PT1
 
 MERGE_SHA: pending merge
-Execution SHA: 20d36d73b6a2ba1d9ba0d1e77c00e30b0fbdbfa9
+Execution SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
 
 Preflight PT1 reported a deliberate, documented containment state as an infrastructure fault, which
 made every T1 lane unopenable on a contained workstation. This lane corrects the classification and
@@ -11,10 +11,10 @@ does not change what any lane is admitted without.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1522
-Verified source SHA: 20d36d73b6a2ba1d9ba0d1e77c00e30b0fbdbfa9
+Verified source SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
-`20d36d73b6a2ba1d9ba0d1e77c00e30b0fbdbfa9`, the last commit on this branch changing any file outside
+`b7274edd3b1665a5074c4edd176d87d0790063b4`, the last commit on this branch changing any file outside
 `docs/06_status/proof/UTV2-1845/`. The binding is written after merge by
 `ops:proof-generate --merge-sha`; no manual append is made here.
 
@@ -79,20 +79,38 @@ against this branch and reverted.
 
 | Mutation | Command | Result |
 |---|---|---|
-| `isContainmentPlaceholderSupabaseUrl` returns `false` unconditionally | `pnpm exec tsx --test scripts/ops/preflight.test.ts` | `# pass 36 / # fail 3` — the exact-recognition test, the `local.env`-bound test and the `runT1Checks` classification test |
+| `isContainmentPlaceholderSupabaseUrl` returns `false` unconditionally | `pnpm exec tsx --test scripts/ops/preflight.test.ts` | `# pass 36 / # fail 3` — the exact-recognition test, the agreement test bound to the repo's own `SUPABASE_URL`, and the `runT1Checks` classification test |
 | `resolveVerdict` stops considering `blocked_by_containment` | same | `# pass 38 / # fail 1` — the assertion that the new outcome still resolves to `INFRA` |
 
 The second mutation is the one that matters: without it, a future change could silently make
 `blocked_by_containment` admit a lane and nothing in the repository would notice.
 
+### Correction after CI — a test that encoded one environment's value as the contract
+
+`verify` was red on `98a08827e` with one failure: *"UTV2-1845: the repository's own containment
+placeholder is classified as containment"*, reported as `got ` — an empty value.
+
+The cause was in the test, not the predicate. It read `SUPABASE_URL` out of `local.env` and asserted
+the answer is `true` unconditionally. That holds where this repository runs under containment; it
+does not hold in CI, where `local.env` is written from the `staging-ci` environment. The test had
+encoded one environment's value as if it were the contract — the same defect class this bundle's
+own §"What this lane does not claim" warns about, committed one file away from it.
+
+It now computes the expected answer independently of the function under test — parsing the host and
+applying the loopback rule inline — and asserts the two agree. That is a real assertion in both
+environments rather than a true one in exactly one. The verdict-bearing controls are untouched:
+tests 33 and 34 still assert exact recognition and the real-host inversion, including the lookalike
+`https://127.0.0.1.example.com`, and both mutations below were re-executed after the change with
+identical results.
+
 ### Diff scope
 
 ```
  .../PT1_CONTAINMENT_ADMISSION_DECISION.md          | 263 +++++++++++++++++++++
- scripts/ops/preflight.test.ts                      | 117 +++++++++
+ scripts/ops/preflight.test.ts                      | 137 +++++++++
  scripts/ops/preflight.ts                           |  57 ++++-
  scripts/ops/shared.ts                              |   6 +-
- 4 files changed, 439 insertions(+), 4 deletions(-)
+ 4 files changed, 459 insertions(+), 4 deletions(-)
 ```
 
 Measured with `git diff --stat origin/main...HEAD` excluding this lane's own manifest, sync file and
