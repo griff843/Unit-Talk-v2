@@ -1,6 +1,6 @@
 # PROOF: UTV2-1688 diff summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: 949459feaaadf2a54bd7eeee0a8755a9dca3415b
 Execution SHA: b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4
 
 Widen the executor-result validator to recognize the `bootstrap/` branch namespace in **both**

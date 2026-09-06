@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "pending_merge",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "949459feaaadf2a54bd7eeee0a8755a9dca3415b",
     "verified_source_sha": "b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -18,7 +18,7 @@
     },
     "sha_type": "merge_sha",
     "anchor_note": "b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4 is the last non-proof commit on the branch. Everything after it touches only docs/06_status/proof/UTV2-1688/ and docs/06_status/lanes/UTV2-1688.json, which are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
-    "bound_at": "2026-09-06T07:07:13.000Z"
+    "bound_at": "2026-09-06T07:28:05.027Z"
   },
   "static_proof": {
     "defect_reproduction": {

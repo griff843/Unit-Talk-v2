@@ -1,6 +1,6 @@
 # PROOF: UTV2-1688
 
-MERGE_SHA: pending merge
+MERGE_SHA: 949459feaaadf2a54bd7eeee0a8755a9dca3415b
 Execution SHA: b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4
 
 Recognize the `bootstrap/` branch namespace in the executor-result validator, in both copies of its
@@ -8,7 +8,7 @@ field-validation rules, and make the duplication self-policing.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 949459feaaadf2a54bd7eeee0a8755a9dca3415b
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1519
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is the last non-proof commit on
