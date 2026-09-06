@@ -1,9 +1,55 @@
-# UTV2-1837 — Verification
+# PROOF: UTV2-1837
 
-ISSUE: UTV2-1837
-TIER: T2
-LANE_TYPE: governance
 MERGE_SHA: pending merge
+
+> Pre-merge the merge row is intentionally the placeholder; the Execution SHA row carries
+> the verified implementation identity. `post-merge-lane-close.yml` rebinds merge
+> authority only after GitHub supplies the merged-PR attestation.
+
+Issue: UTV2-1837
+Tier: T2
+Lane type: governance
+Branch: claude/utv2-1837-tracker-independence
+PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1516
+Execution SHA: 4873899a72f0ac6235ef18af5b82db7ff5fcff86
+result: static
+
+## ASSERTIONS:
+
+- [x] AC1 — with no tracker credential, preflight reports PE2/PL1-PL5 as `skip`, not `fail`/`infra_error`.
+- [x] AC2 — the declared `--tier` is floored by `classifyMechanicalMinimum()`; a tier below the floor is a hard `fail`.
+- [x] AC3 — the manifest carries repo-owned identity (`WORK-###`) and a separate, explicitly nullable `tracker_ref`; absent is never read as `null`.
+- [x] AC4 — the closeout gate skips tracker-only checks and keeps every check computable from the repo and GitHub alone.
+- [x] AC5 — `lane-close` / `lane-finalize` record `tracker_sync` instead of throwing out of closeout; a working tracker still transitions.
+- [x] AC6 — a first task-contract capture and candidate discovery both succeed with no tracker API.
+- [x] No reserved surface changed: `git diff origin/main --name-only -- .github/` is empty.
+
+## EVIDENCE:
+
+```
+$ pnpm type-check
+tsc -b tsconfig.json — exit 0, no diagnostics
+
+$ pnpm lint
+eslint . --cache — exit 0, no findings
+
+$ pnpm test
+5938 tests, 5938 pass, 0 fail — exit 0
+
+$ pnpm verify
+reached test:live-db, then:
+[assert-staging] host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx
+[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1).
+(verify is a && chain, so reaching this stage establishes verify:static exited 0.
+ This lane is T2 and requires no live-DB proof; CI's `verify` in staging-ci is authoritative.)
+
+$ pnpm exec tsx --test scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close,lane-finalize}.test.ts
+preflight 32/32 · shared 93/93 · truth-check-lib 132/132 · execution-packet 103/103
+lane-maximizer 91/91 · lane-close 180/180 · lane-finalize 27/27
+
+$ git diff origin/main --name-only -- .github/
+(empty)
+```
 
 ## Summary
 
