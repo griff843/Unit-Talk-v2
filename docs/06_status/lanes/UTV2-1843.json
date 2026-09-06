@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1843-smart-form-product-intent",
   "branch": "claude/utv2-1843-smart-form-product-intent",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "79bab4d2267061427b48f7a521a8c61acb72436f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1521",
   "files_changed": [],
   "file_scope_lock": [
