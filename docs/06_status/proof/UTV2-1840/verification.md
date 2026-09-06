@@ -8,7 +8,7 @@
 | Field | Value |
 |---|---|
 | Issue | UTV2-1840 |
-| PR: | https://github.com/griff843/Unit-Talk-v2/pull/PR_NUMBER |
+| PR: | https://github.com/griff843/Unit-Talk-v2/pull/1518 |
 | Execution SHA: | 0f78f3284bba06fd672f0d04fa9dec24c5d05f4f |
 | Base branch | main |
 | MERGE_SHA: | pending merge |
