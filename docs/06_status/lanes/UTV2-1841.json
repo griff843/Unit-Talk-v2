@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1841-deploy-node-runtime-alignment",
   "branch": "claude/utv2-1841-deploy-node-runtime-alignment",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d3f69b804df755e0392e71c018fba9585b7e8185",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1520",
   "files_changed": [],
   "file_scope_lock": [
@@ -17,14 +17,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1841/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-06T12:28:22.919Z",
-  "heartbeat_at": "2026-09-06T12:50:10.426Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-06T15:12:41.383Z",
+  "closed_at": "2026-09-06T15:12:41.383Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1841-deploy-node-runtime-alignment.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-06T15:12:39.145Z",
+      "verdict": "pass",
+      "merge_sha": "d3f69b804df755e0392e71c018fba9585b7e8185",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

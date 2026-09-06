@@ -1,6 +1,6 @@
 # PROOF: UTV2-1841
 
-MERGE_SHA: pending merge
+MERGE_SHA: d3f69b804df755e0392e71c018fba9585b7e8185
 Execution SHA: c7b170b1ecd10548e6bfcad38f895a3f1b3ffa5e
 
 Align the `Deploy` workflow's verification runtime with the Node version the repository declares
@@ -8,7 +8,7 @@ and production actually runs, unblocking the Smart Form deployment candidate.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d3f69b804df755e0392e71c018fba9585b7e8185
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1520
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
