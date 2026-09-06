@@ -4,43 +4,54 @@ MERGE_SHA: pending merge
 
 ## ASSERTIONS:
 
-1. `docs/03_product/smart-form/intent.md` exists and covers the complete operator journey —
-   authentication and canonical identity, sport-aware selections, database-backed participants,
-   automatically derived matchups, honest fallback on missing event or participant coverage, signed
-   odds, bet-slip review, submission, receipt, persisted Track Only truth, and observation — with
-   each behaviour tied to an implementation citation and to a named form of verification.
-2. The contained pilot and a finished, repeatably usable Smart Form are distinguished explicitly,
-   and the document states that a merge or a unit-test count cannot establish deployed usability.
-3. Both signed-field `Input mode` prescriptions in
-   `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` are corrected **in the
-   contract**, with the reason recorded inline. The intent document points at the corrections and
-   does not restate them.
-4. Acceptance Criterion 11 of the same contract is corrected in place to the rule the two later
-   ratified confidence contracts require and the code implements.
-5. `apps/smart-form/CLAUDE.md` no longer describes the app as public-facing or unauthenticated.
-6. Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and `apps/api/CLAUDE.md`
-   including for backend work; `docs/03_product/*/intent.md` is registered in the docs authority
-   map; `/dispatch` packets quote applicable acceptance criteria inline.
-7. No gate, required check, workflow, label, approval artifact or lane type is added.
-8. Every `file:line` citation in the new document was re-measured against the branch head.
+- [x] **A1 —** `docs/03_product/smart-form/intent.md` exists and covers the complete operator journey —
+      authentication and canonical identity, sport-aware selections, database-backed participants,
+      automatically derived matchups, honest fallback on missing event or participant coverage, signed
+      odds, bet-slip review, submission, receipt, persisted Track Only truth, and observation — with
+      each behaviour tied to an implementation citation and to a named form of verification.
+- [x] **A2 —** The contained pilot and a finished, repeatably usable Smart Form are distinguished explicitly,
+      and the document states that a merge or a unit-test count cannot establish deployed usability.
+- [x] **A3 —** Both signed-field `Input mode` prescriptions in
+      `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` are corrected **in the
+      contract**, with the reason recorded inline. The intent document points at the corrections and
+      does not restate them.
+- [x] **A4 —** Acceptance Criterion 11 of the same contract is corrected in place to the rule the two later
+      ratified confidence contracts require and the code implements.
+- [x] **A5 —** `apps/smart-form/CLAUDE.md` no longer describes the app as public-facing or unauthenticated.
+- [x] **A6 —** Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and `apps/api/CLAUDE.md`
+      including for backend work; `docs/03_product/*/intent.md` is registered in the docs authority
+      map; `/dispatch` packets quote applicable acceptance criteria inline.
+- [x] **A7 —** No gate, required check, workflow, label, approval artifact or lane type is added.
+- [x] **A8 —** Every `file:line` citation in the new document was re-measured against the branch head.
+
+- [x] **A9 —** Section 4.1 no longer claims that reference-data seeding requires unparking provider
+      ingestion. It separates an authorized static team/league/market seed (governed static seed by
+      migration; reserved item 1, production data) from provider activation (reserved items 3 and 6),
+      states that neither needs the other, and states that neither is a Milestone 1 prerequisite. The
+      earlier claim is named and withdrawn in the document itself.
+- [x] **A10 —** Section 8 states an explicit state vocabulary and applies it to every row. Submission
+      reads "Implemented; blocked in the deployed flow", not "Done"; event-bound participants read
+      "Implemented; unreachable today". Five rows would have read Done on merged code and green tests,
+      and an operator can perform none of the five today.
 
 ## EVIDENCE:
 
 | Assertion | Evidence |
 |---|---|
-| 1, 2 | `docs/03_product/smart-form/intent.md` in this diff — §3 (journey, per-step implementation and verification), §5 (pilot vs finished table), §7 (what counts as verification), §8 (state table with gaps marked) |
-| 3, 4 | `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` in this diff — the two `Input mode` rows and Acceptance Criterion 11, each with an inline "Corrected 2026-09-06" note |
-| 5 | `apps/smart-form/CLAUDE.md` in this diff |
-| 6 | `CLAUDE.md`, `AGENTS.md`, `apps/api/CLAUDE.md`, `docs/05_operations/docs_authority_map.md`, `.claude/commands/dispatch.md` in this diff |
-| 7 | `git diff --stat` below: no `.github/workflows/**` path, no `package.json`, no schema |
-| 8 | The citation re-measurement table in §2 below, and the printed source lines beneath it |
+| A1, A2 | `docs/03_product/smart-form/intent.md` in this diff — §3 (journey, per-step implementation and verification), §5 (pilot vs finished table), §7 (what counts as verification), §8 (state table with gaps marked) |
+| A3, A4 | `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` in this diff — the two `Input mode` rows and Acceptance Criterion 11, each with an inline "Corrected 2026-09-06" note |
+| A5 | `apps/smart-form/CLAUDE.md` in this diff |
+| A6 | `CLAUDE.md`, `AGENTS.md`, `apps/api/CLAUDE.md`, `docs/05_operations/docs_authority_map.md`, `.claude/commands/dispatch.md` in this diff |
+| A7 | `git diff --stat` below: no `.github/workflows/**` path, no `package.json`, no schema |
+| A8 | The citation re-measurement table in §2 below, and the printed source lines beneath it |
+| A9 | `docs/03_product/smart-form/intent.md` §4.1 in this diff — the two-column comparison table separating authorized static seeding from provider activation, with a "Needs the other? No" row; and `docs/05_operations/T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` (RATIFIED 2026-04-02), which classifies sports, leagues, teams, sportsbooks, market families, market types and stat types as governed static seed with provider contribution "Nothing" |
+| A10 | `docs/03_product/smart-form/intent.md` §8 in this diff — the state vocabulary table and the row-by-row application; and §9 standing criterion 5, rewritten to the same distinction |
 
 ### Commands run
 
 ```
 pnpm lint                              # exit 0
 pnpm type-check                        # exit 0
-pnpm build                             # exit 0
 pnpm test                              # exit 0 — tests 5962, pass 5962, fail 0
 pnpm verify                            # refused locally at test:live-db under containment, see below
 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
@@ -50,6 +61,12 @@ npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
 `scripts/ci/r-level-check.ts` matched the `operator-ui` rule and returned PASS with every triggered
 `required[]` artifact present.
 
+**Re-run 2026-09-06 against `25cff67f5`, after the owner-review corrections.** The block above is
+that re-run, not the earlier one: an anchor may not be moved to a newer commit while the receipts
+under it were taken at an older tree. `pnpm build` was dropped from the list rather than restated,
+because it was not re-run — this diff adds no compiled source. `verify` is green on this head in
+CI, which is the binding receipt.
+
 ### Diff scope
 
 ```
@@ -57,12 +74,16 @@ npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
  AGENTS.md                                          |  17 +
  CLAUDE.md                                          |  17 +
  apps/api/CLAUDE.md                                 |  21 +
- apps/smart-form/CLAUDE.md                          |  78 +++-
- docs/03_product/smart-form/intent.md               | 485 +++++++++++++++++++++
+ apps/smart-form/CLAUDE.md                          |  78 ++-
+ docs/03_product/smart-form/intent.md               | 537 +++++++++++++++++++++
  .../SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md  |  31 +-
  docs/05_operations/docs_authority_map.md           |   1 +
- docs/06_status/proof/UTV2-1843/.gitkeep            |   0
+ 8 files changed, 698 insertions(+), 13 deletions(-)
 ```
+
+Measured with `git diff --stat origin/main...HEAD` excluding this lane's own manifest, sync file and
+proof directory. `docs/06_status/proof/UTV2-1843/.gitkeep` appeared in an earlier version of this
+block and has since been deleted from the branch.
 
 No `.github/workflows/**` file, no `package.json`, no migration, no schema, no source code.
 
@@ -84,15 +105,16 @@ workflow, no check, no label, no gate.
 |---|---|
 | PR: | https://github.com/griff843/Unit-Talk-v2/pull/1521 |
 | MERGE_SHA: | pending merge |
-| Verified source SHA: | 79bab4d2267061427b48f7a521a8c61acb72436f |
+| Verified source SHA: | 25cff67f5a275e1837422eb90ff9884c408f8dbd |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1521
-MERGE_SHA: pending merge
-Verified source SHA: 79bab4d2267061427b48f7a521a8c61acb72436f
+Merge SHA: pending merge
+Verified source SHA: 25cff67f5a275e1837422eb90ff9884c408f8dbd
 
-`79bab4d2267061427b48f7a521a8c61acb72436f` is the commit carrying every content change in this
-lane, and it is the tree the commands below were run against. The commits after it on this branch
-touch only `docs/06_status/lanes/UTV2-1843.json` and this file, so no verified content moved.
+`25cff67f5a275e1837422eb90ff9884c408f8dbd` is the last commit on this branch that changes any file outside
+`docs/06_status/proof/UTV2-1843/`, and it is the tree the commands below were run against. It
+carries the three owner-review corrections recorded under "Corrections made on owner review".
+Every commit after it touches this proof bundle only, so no verified content moved.
 
 ## What was verified, and how
 
@@ -267,6 +289,30 @@ contract in `.lane/lanes/` admits (`grep -l 03_product .lane/lanes/*.yml` return
 adds the bounded glob in the same PR. `.lane/lanes/governance.yml` is outside this lane's pinned
 `file_scope_lock`, so that edit requires a CODEOWNERS `scope-override/v1` pinned to the head. That
 request is stated exactly in the PR body rather than routed around.
+
+### Fourth correction — the bundle itself, after Executor Result Validation rejected it
+
+ERV failed on head `25cff67f5` with two defects, both real and both in this file:
+
+* *"verification.md must contain exactly one top-level MERGE_SHA: row (found 2)"* — the
+  `## Merge SHA Binding` section repeated the top-level `MERGE_SHA:` label. It now uses
+  `Merge SHA:`, matching the shape of every recently merged bundle on `main`.
+* *"Proof file has no assertions"* — the ASSERTIONS section was a numbered list. The gate requires
+  `- [ ]` / `- [x]` items. Converted, and the EVIDENCE table renumbered to match.
+
+A third defect the gate did not catch was found while fixing those two, and it is the one that
+mattered: **`verified_source_sha` still named `79bab4d22`**, the original content commit, even
+though the three corrections above landed later at `25cff67f5`. The anchor is defined as the last
+commit changing any file outside this proof directory, so it was stale, and the local command
+receipts beneath it had been taken at the older tree. Both were repaired together — the anchor
+rebound *and* `pnpm lint`, `pnpm type-check`, `pnpm test` and the R-level check re-run against
+`25cff67f5` — because moving the anchor without re-running the receipts would have produced exactly
+the self-consistent-but-false artifact this bundle is supposed to refuse. `pnpm build` was removed
+from the list rather than restated, since it was not re-run.
+
+Two assertions were added rather than only fixing the format: A9 and A10 state the reference-data
+seeding correction and the state-vocabulary correction, so the checklist asserts the corrections
+instead of merely containing them.
 
 ## What this lane does not claim
 
