@@ -13,7 +13,7 @@ Lane type: runtime
 Executor: claude
 Branch: claude/utv2-1827-governed-staging-proof-runner
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1505
-Anchor (`verified_source_sha`): `2d34269ffe6a74a934bf68ea4d6433ea68932bd1`
+Anchor (`verified_source_sha`): `1d850aa7082f96b87d9b58b3ff11dbf84c62b9c3`
 result: PASS
 
 ## ASSERTIONS:
@@ -268,15 +268,44 @@ unaffected.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1505
 Approved PR head: pending merge
-Execution SHA: 2d34269ffe6a74a934bf68ea4d6433ea68932bd1
+Execution SHA: 1d850aa7082f96b87d9b58b3ff11dbf84c62b9c3
 
 The mutation runs recorded above were executed locally at `00ed6f6edfae3042f8ad820c767a4f2effc9bcad`,
 which is an ancestor of the anchor rather than the anchor itself. The branch was then resynced with
 `origin/main` through `ops:merge-wrapper git-merge-main`, producing the merge commit that is now the
-anchor. The whole range `00ed6f6ed..2d34269ff` is this bundle's own four files plus what the merge
-brought in from `main`: `apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`,
-`docs/05_operations/db-writer-classification.json`, one `package.json` line, and the lane manifest
-and proof bundle of an already-merged lane. None of the four files the mutations act on —
-`scripts/ci/run-staging-proof-command.ts`, `scripts/ci/staging-proof-commands.ts`,
-`scripts/ci/run-staging-proof-command.test.ts` and `.github/workflows/staging-proof-runner.yml` —
-differs across that range, so the mutation counts describe the code at the anchor.
+anchor. The range has since been extended by a second resync: the branch was 17 commits BEHIND `origin/main` and was merged forward again with `ops:merge-wrapper git-merge-main`, moving the anchor to `1d850aa70`. The mutation claim was **re-verified against the new range rather than carried forward**: `git diff --name-only 00ed6f6ed..1d850aa70` restricted to the five files the mutations act on — `scripts/ci/run-staging-proof-command.ts`, `scripts/ci/staging-proof-commands.ts`, `scripts/ci/run-staging-proof-command.test.ts`, `scripts/ci/staging-proof-commands.test.ts` and `.github/workflows/staging-proof-runner.yml` — is empty. All five are byte-identical across the whole range, so the mutation counts describe the code at the current anchor.
+
+## Re-anchor after the second origin/main resync, and a pre-existing mis-anchor it exposed
+
+This PR was 17 commits BEHIND `origin/main`. Under `strict: true` it cannot merge in that
+state, so `origin/main` was merged forward with `pnpm ops:merge-wrapper git-merge-main`
+(head `c1b4ede6c` → `1d850aa70`). Receipts re-executed at the new anchor:
+
+- `pnpm type-check` — exit 0, no diagnostics.
+- `pnpm test` — tests 6021, pass 6021, fail 0, exit 0 (100 suite blocks, `tests == pass`,
+  `fail 0` throughout).
+- `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head 1d850aa70` — `Verdict: PASS`,
+  `Changed files: 12`, `Rules matched: (none)`. No R-level artifact is required for this
+  diff and none is claimed.
+
+**The anchor was chosen by applying the validator's rule to each candidate, not by reading
+commit subjects** — merge commits report no files under `git show --name-only`, so that
+probe is unreliable on exactly the commits that matter here. Filtering
+`git diff --name-only <candidate>..HEAD` against `PROOF_ONLY_PREFIXES`:
+
+| Candidate | Non-proof paths after it |
+|---|---|
+| `2d34269ff` (previously declared) | 128 |
+| `c1b4ede6c` | 35 |
+| `1d850aa70` | **0** |
+
+**Recording a defect this exposed rather than quietly correcting it.** The previously
+declared anchor `2d34269ff` was already stale *before* this resync. The commit immediately
+after it, `c1b4ede6c`, changed `package.json` — a non-proof path — so the bundle was
+mis-anchored by one commit at the time it was written, independently of anything the
+resync did. It surfaced only because each candidate was tested rather than the declared
+value trusted.
+
+`pnpm test:db` and `pnpm verify` are deliberately not claimed locally. This is a T1 lane;
+the required `Writable DB proof (staging only)` and `verify` checks re-run on this head and
+are the authoritative results.
