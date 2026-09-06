@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1802",
   "tier": "T1",
   "lane_type": "delivery-ui",
-  "proof_profile": "static",
+  "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
@@ -65,7 +65,7 @@
     }
   },
   "runtime_proof": {
-    "kind": "static",
+    "kind": "app-runtime",
     "harness": "The change is confined to apps/command-center's data layer. It opens no database connection, runs no migration, changes no schema and alters no repository call; its entire runtime effect is on outbound HTTPS requests to https://api.supabase.com/. getStorageHealth is a privileged boundary whose first statement is `await assertPrivilegedRequestAuthenticated()`, which resolves the current Next request through headers() and fails closed outside a request scope, so a unit test cannot drive its body end to end. next/headers cannot be module-mocked here either: node:test's mock.module requires --experimental-test-module-mocks, which this runner does not set \u2014 measured, not assumed ('import_node_test.mock.module is not a function'). Rather than add an unauthenticated export purely to make the boundary testable \u2014 a real security regression bought for a convenience \u2014 the property is established behaviourally on a globalThis.fetch recorder and structurally per chokepoint, in the idiom privileged-boundary-guard.test.ts already uses. No live-database observation is offered and none is claimed.",
     "queries": [
       {
@@ -154,7 +154,8 @@
       "target": "staging",
       "detail": "The required staging DB proof job succeeded (job 101399919279, receipt artifact 9979596161), and `verify` consumed that receipt in-run via its 'Verify staging DB proof receipt' step. The suites it runs are the repository's existing live-DB proofs and are unrelated to this diff; this lane adds no live-DB assertion because it opens no connection. Recorded as the tier's receipt, explicitly not as evidence about this change.",
       "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34001056027"
-    }
+    },
+    "profile_note": "Declared app-runtime because the manifest lane_type is delivery-ui, and the schema derives the required profile from lane_type (proof-schema.ts:198,214). The word does not upgrade the evidence: the queries below are in-process probes of the running Node runtime against a fetch recorder and the module source, not observations of a deployed server or a live database. That limitation is stated in `harness` above and is not withdrawn by the profile name."
   },
   "scope_note": {
     "observation": "There is no System Health render site on main. storageDomains, provisionedGiB, usedPct and daysToFull appear nowhere under apps/command-center/src/app or src/components; the only consumer of getStorageHealth is getDashboardRuntimeData, whose db field feeds the overview model.",

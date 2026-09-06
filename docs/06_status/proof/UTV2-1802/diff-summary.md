@@ -1,5 +1,11 @@
 # Diff summary — UTV2-1802
 
+MERGE_SHA: pending merge
+
+> Pre-merge the merge row is the ratified `pending merge` anchor; the Execution SHA row
+> below carries the verified implementation identity. `post-merge-lane-close.yml` rebinds
+> it once GitHub supplies the merged-PR attestation.
+
 Issue: UTV2-1802
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1513
 Branch: `claude/utv2-1802-cc-management-sql-readonly`
