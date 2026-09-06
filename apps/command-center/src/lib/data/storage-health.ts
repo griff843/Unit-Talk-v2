@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
+import { defineReadOnlyQueries } from './management-sql';
 import type { DbRuntimeHealth, StorageDomainHealth, StorageGrowthSource } from '../types.js';
-import { assertPrivilegedRequestAuthenticated } from '../request-auth';
 
 interface DiskConfigResponse {
   attributes?: {
@@ -143,7 +143,91 @@ async function fetchManagementJson<T>(route: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function runSqlQuery<T>(query: string): Promise<T[]> {
+const RELATION_SIZES_SQL = `
+      with table_sizes as (
+        select * from (values
+          ('provider_offers','ingestion'),
+          ('provider_offer_history','ingestion'),
+          ('provider_cycle_status','ingestion'),
+          ('system_runs','ingestion'),
+          ('picks','app'),
+          ('distribution_outbox','app'),
+          ('distribution_receipts','app'),
+          ('settlement_records','app'),
+          ('audit_log','app')
+        ) as t(table_name, domain)
+      )
+      select
+        ts.domain,
+        ts.table_name,
+        coalesce(pg_total_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as total_bytes,
+        coalesce(pg_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as table_bytes,
+        coalesce(pg_indexes_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as index_bytes
+      from table_sizes ts
+      order by total_bytes desc;
+`;
+
+const RELATION_GROWTH_SQL = `
+      select 'provider_offers' as table_name, count(*)::bigint as rows_last_day from provider_offers where created_at >= now() - interval '1 day'
+      union all
+      select 'provider_offer_history', 0::bigint
+      union all
+      select 'provider_cycle_status', count(*)::bigint from provider_cycle_status where updated_at >= now() - interval '1 day'
+      union all
+      select 'system_runs', count(*)::bigint from system_runs where created_at >= now() - interval '1 day'
+      union all
+      select 'picks', count(*)::bigint from picks where created_at >= now() - interval '1 day'
+      union all
+      select 'distribution_outbox', count(*)::bigint from distribution_outbox where created_at >= now() - interval '1 day'
+      union all
+      select 'distribution_receipts', count(*)::bigint from distribution_receipts where recorded_at >= now() - interval '1 day'
+      union all
+      select 'settlement_records', count(*)::bigint from settlement_records where created_at >= now() - interval '1 day'
+      union all
+      select 'audit_log', count(*)::bigint from audit_log where created_at >= now() - interval '1 day';
+`;
+
+const DB_PRESSURE_SQL = `
+      select
+        (select setting::int from pg_settings where name = 'max_connections') as max_connections,
+        (select count(*)::int from pg_stat_activity) as used_connections,
+        (select count(*)::int from pg_stat_activity where wait_event_type = 'Lock') as waiting_connections,
+        (select count(*)::int from pg_locks where not granted) as waiting_locks,
+        (select coalesce(max(extract(epoch from now() - xact_start)), 0)::int from pg_stat_activity where xact_start is not null and state <> 'idle') as max_tx_age_seconds,
+        (select count(*)::int from pg_stat_activity where xact_start is not null and now() - xact_start > interval '5 minutes' and state <> 'idle') as long_tx_count,
+        (select coalesce(max(extract(epoch from now() - query_start)), 0)::int from pg_stat_activity where state = 'active') as max_query_age_seconds,
+        (select count(*)::int from pg_stat_activity where state = 'active' and now() - query_start > interval '30 seconds') as slow_query_count,
+        (select coalesce(sum(size), 0)::bigint from pg_ls_waldir()) as wal_bytes,
+        (select wal_bytes::numeric from pg_stat_wal) as wal_written_bytes,
+        (select stats_reset from pg_stat_wal) as wal_stats_reset,
+        current_setting('archive_mode', true) as archive_mode,
+        current_setting('archive_command', true) as archive_command;
+`;
+
+/**
+ * Every statement this module can send, and the only ones it can send.
+ *
+ * `defineReadOnlyQueries` parses each one at import time and throws on anything
+ * that is not a single read-only statement, so a mutating query added here
+ * fails the build rather than reaching the management API. See
+ * `./management-sql` for why the capability is shaped this way.
+ */
+const MANAGEMENT_QUERIES = defineReadOnlyQueries({
+  relationSizes: RELATION_SIZES_SQL,
+  relationGrowth: RELATION_GROWTH_SQL,
+  dbPressure: DB_PRESSURE_SQL,
+});
+
+type ManagementQueryName = keyof typeof MANAGEMENT_QUERIES;
+
+/**
+ * Runs one registered statement.
+ *
+ * This takes a registry key, never SQL. A caller cannot compose a statement,
+ * so there is no path from a request — or from a future refactor — to
+ * arbitrary SQL under the management token.
+ */
+async function runManagementQuery<T>(name: ManagementQueryName): Promise<T[]> {
   const { accessToken, projectRef } = resolveManagementEnv();
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
     method: 'POST',
@@ -151,12 +235,16 @@ async function runSqlQuery<T>(query: string): Promise<T[]> {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    // `read_only` asks the remote to refuse a write as well. It is belt and
+    // braces: this repository cannot verify how the Management API handles the
+    // flag, so the registry above — not this line — is the control being
+    // relied on.
+    body: JSON.stringify({ query: MANAGEMENT_QUERIES[name], read_only: true }),
     cache: 'no-store',
   });
 
   if (!response.ok) {
-    throw new Error(`Supabase SQL request failed: ${response.status}`);
+    throw new Error(`Supabase SQL request failed for ${name}: ${response.status}`);
   }
 
   return (await response.json()) as T[];
@@ -289,7 +377,6 @@ function summarizeDomain(
 }
 
 export async function getStorageHealth(): Promise<DbRuntimeHealth> {
-  await assertPrivilegedRequestAuthenticated();
   const now = new Date();
   const [
     diskConfig,
@@ -304,64 +391,9 @@ export async function getStorageHealth(): Promise<DbRuntimeHealth> {
     fetchManagementJson<DiskUtilResponse>('config/disk/util'),
     fetchManagementJson<BackupsResponse>('database/backups'),
     fetchManagementJson<RestoreResponse>('restore').catch(() => ({ available_versions: [] })),
-    runSqlQuery<RelationSizeRow>(`
-      with table_sizes as (
-        select * from (values
-          ('provider_offers','ingestion'),
-          ('provider_offer_history','ingestion'),
-          ('provider_cycle_status','ingestion'),
-          ('system_runs','ingestion'),
-          ('picks','app'),
-          ('distribution_outbox','app'),
-          ('distribution_receipts','app'),
-          ('settlement_records','app'),
-          ('audit_log','app')
-        ) as t(table_name, domain)
-      )
-      select
-        ts.domain,
-        ts.table_name,
-        coalesce(pg_total_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as total_bytes,
-        coalesce(pg_relation_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as table_bytes,
-        coalesce(pg_indexes_size(to_regclass(format('public.%I', ts.table_name))), 0)::bigint as index_bytes
-      from table_sizes ts
-      order by total_bytes desc;
-    `),
-    runSqlQuery<RelationGrowthRow>(`
-      select 'provider_offers' as table_name, count(*)::bigint as rows_last_day from provider_offers where created_at >= now() - interval '1 day'
-      union all
-      select 'provider_offer_history', 0::bigint
-      union all
-      select 'provider_cycle_status', count(*)::bigint from provider_cycle_status where updated_at >= now() - interval '1 day'
-      union all
-      select 'system_runs', count(*)::bigint from system_runs where created_at >= now() - interval '1 day'
-      union all
-      select 'picks', count(*)::bigint from picks where created_at >= now() - interval '1 day'
-      union all
-      select 'distribution_outbox', count(*)::bigint from distribution_outbox where created_at >= now() - interval '1 day'
-      union all
-      select 'distribution_receipts', count(*)::bigint from distribution_receipts where recorded_at >= now() - interval '1 day'
-      union all
-      select 'settlement_records', count(*)::bigint from settlement_records where created_at >= now() - interval '1 day'
-      union all
-      select 'audit_log', count(*)::bigint from audit_log where created_at >= now() - interval '1 day';
-    `),
-    runSqlQuery<DbPressureRow>(`
-      select
-        (select setting::int from pg_settings where name = 'max_connections') as max_connections,
-        (select count(*)::int from pg_stat_activity) as used_connections,
-        (select count(*)::int from pg_stat_activity where wait_event_type = 'Lock') as waiting_connections,
-        (select count(*)::int from pg_locks where not granted) as waiting_locks,
-        (select coalesce(max(extract(epoch from now() - xact_start)), 0)::int from pg_stat_activity where xact_start is not null and state <> 'idle') as max_tx_age_seconds,
-        (select count(*)::int from pg_stat_activity where xact_start is not null and now() - xact_start > interval '5 minutes' and state <> 'idle') as long_tx_count,
-        (select coalesce(max(extract(epoch from now() - query_start)), 0)::int from pg_stat_activity where state = 'active') as max_query_age_seconds,
-        (select count(*)::int from pg_stat_activity where state = 'active' and now() - query_start > interval '30 seconds') as slow_query_count,
-        (select coalesce(sum(size), 0)::bigint from pg_ls_waldir()) as wal_bytes,
-        (select wal_bytes::numeric from pg_stat_wal) as wal_written_bytes,
-        (select stats_reset from pg_stat_wal) as wal_stats_reset,
-        current_setting('archive_mode', true) as archive_mode,
-        current_setting('archive_command', true) as archive_command;
-    `),
+    runManagementQuery<RelationSizeRow>('relationSizes'),
+    runManagementQuery<RelationGrowthRow>('relationGrowth'),
+    runManagementQuery<DbPressureRow>('dbPressure'),
   ]);
 
   const pressure = pressureRows[0];
