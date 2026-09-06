@@ -157,10 +157,38 @@ complete with it intact. It is an argument against reading this ledger's verdict
 about whether the product works. The ledger measures a system running at full autonomy; the system
 is deliberately not running at full autonomy.
 
-**The one row that is not containment is the `true_failure` dead-letter row.** It is a delivery
-record, and any Track Only non-delivery claim rests on that table, so it is named here as an open
-item rather than folded into the 1953. It has not been read yet. Reading it is ordinary work and is
-listed under "What is executable" rather than reserved.
+**The one row that is not containment is the `true_failure` dead-letter row — and it was read, and
+it is not a delivery failure either.** Measured read-only against production Supabase on
+2026-09-06:
+
+```
+id           c60ec49b-c1b0-4b60-aea8-640a5daa07b7
+target       discord:canary
+attempt_count 1
+created_at   2026-07-14T12:59:44Z    updated_at 2026-07-15T19:00:30Z
+last_error   proof-pick-blocked: source 't1-proof' is not a live source
+```
+
+That string is emitted by `apps/worker/src/distribution-worker.ts:212-213`, which blocks any pick
+whose `source` is not in `LIVE_SOURCES` from delivery. **The guard fired and won.** It marked the
+row dead-letter, recorded its own run as `status: 'succeeded'`, and wrote a `distribution.blocked`
+audit entry (`:214-236`). All 1 of 1 `true_failure` rows carry that error.
+
+Two things follow, and they matter in opposite directions:
+
+- **This strengthens the Milestone 1 step 6 position rather than weakening it.** The only
+  real-looking delivery failure in production is the delivery guard refusing a T1 proof fixture. It
+  is direct evidence of a non-delivery control working against live data, from before this mission
+  began. It does not by itself prove Track Only non-delivery — that guard is a different one — but
+  the table holds no unexplained delivery failure that a non-delivery claim would have to account
+  for.
+- **`dead_letter_count` misclassifies it.** `readiness-refresh.ts:517-532` buckets purely on
+  `attempt_count`: `= 0` is `governance_hold`, `> 0` is `true_failure`. A guard that refuses on the
+  first attempt increments the counter, so **a successful policy refusal is counted as a true
+  delivery failure** and fails a blocking readiness dimension. This is the third recorded instance
+  of the aggregate-conflation class — after `UTV2-1730`/`UTV2-1724` and PT1's `infra_error`
+  reporting of a documented containment state. Recorded here rather than filed, per the filing
+  threshold; the bucketing needs a reason predicate, not an attempt count.
 
 Three non-blocking dimensions also fail: `pnpm_verify` (main HEAD has no completed CI result of its
 own — an artefact of the ledger bot committing to `main`), `scheduled_observer_health` (four
@@ -434,7 +462,7 @@ own merits.
 | #1479 null-stake computation truth | **`verify` is green** (re-measured 2026-09-05T22:10Z; the earlier "red" is stale). Only `Merge Gate` fails, so what it needs is an approval artifact, not a repair. This plan states no verdict on it. |
 | #1451 June offer-history partitions | `verify` red; production DDL; PM-gated |
 | #1484 canonical reference bootstrap | `verify` green; needs a verdict (Wave 0 item 2) |
-| **The one `true_failure` dead-letter row** | **Executable now, unstaffed.** 1953 of the 1954 dead-letter rows are `bucket:governance_hold` with `attempt_count=0` and do not fail readiness. Exactly one is a real delivery failure and has not been read. It matters out of proportion to its count: it is a delivery record, and Milestone 1 step 6 asserts Track Only *cannot* create member delivery. A non-delivery claim that has not looked at the one true delivery failure in the table is weaker than it needs to be. Read-only work; no reserved action. |
+| **The one `true_failure` dead-letter row** | **Read 2026-09-06 — done, and it was not a delivery failure.** It is the `proof-pick-blocked` guard refusing a `t1-proof` fixture to `discord:canary`, with its own run recorded `succeeded`. See the readiness section above. What remains is the *bucketing* defect it exposed in `readiness-refresh.ts:517-532`, recorded rather than filed. |
 | Closing-line truth | Not yet a branch |
 
 ### Wave 3 — Command Center
