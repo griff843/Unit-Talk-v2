@@ -1,0 +1,288 @@
+diff --git a/.github/workflows/merge-gate.yml b/.github/workflows/merge-gate.yml
+index 6cc622b01..117bcae84 100644
+--- a/.github/workflows/merge-gate.yml
++++ b/.github/workflows/merge-gate.yml
+@@ -89,6 +89,32 @@ jobs:
+         uses: actions/checkout@v4
+         with:
+           ref: ${{ (github.event_name == 'pull_request' || github.event_name == 'pull_request_review') && github.event.pull_request.base.sha || github.sha }}
++          # UTV2-1836: the carry-forward collector compares the approved SHA,
++          # the current head and the base anchor, so it needs real history
++          # rather than a depth-1 cone. The CHECKED-OUT and EXECUTED tree is
++          # still base.sha -- unchanged, and still never PR-supplied. What
++          # changes is that PR-head commits are FETCHABLE as data. The step
++          # below fetches them without checking them out; nothing from the head
++          # is ever executed, which is the boundary the comment above draws.
++          fetch-depth: 0
++
++      # UTV2-1836: the evaluator shells out to scripts/ops/carry-forward-collect.ts
++      # and that script needs a toolchain the gate job did not previously have.
++      # This makes Merge Gate depend on a pnpm install, lengthening a REQUIRED
++      # check -- an explicit cost, called out here rather than buried.
++      - name: Setup pnpm
++        uses: pnpm/action-setup@v4
++      - name: Setup Node
++        uses: actions/setup-node@v4
++        with:
++          node-version: 22
++          cache: pnpm
++      - name: Install dependencies
++        run: pnpm install --frozen-lockfile
++
++      - name: Fetch PR head as data
++        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_review'
++        run: git fetch --no-tags origin "${{ github.event.pull_request.head.sha }}"
+ 
+       # UTV2-1554 landed the final scripts/ops/merge-gate-verdict.cjs on main
+       # ahead of this lane specifically so this job never needs to fetch or
+@@ -560,11 +586,67 @@ jobs:
+                   // UTV2-1543: also requires PR: and Head SHA: to match this
+                   // exact PR/head, fail-closed on stale/mismatched verdicts —
+                   // see scripts/ops/merge-gate-verdict.cjs and its test suite.
+-                  errors.push(...validateT1Verdicts(verdicts, {
++                  const t1Errors = validateT1Verdicts(verdicts, {
+                     prNumber,
+                     headSha,
+                     authorizedReviewers: AUTHORIZED_REVIEWERS,
+-                  }));
++                  });
++
++                  // ── Approval carry-forward (approval-carry-forward/v1) ──
++                  //
++                  // Fires ONLY when every remaining T1 error is staleness. If a
++                  // verdict is missing, unauthorized, CHANGES_REQUIRED, bound to
++                  // the wrong PR, or missing its Head SHA field, that error is
++                  // untouched and still blocks. The narrowness is the control:
++                  // this can only ever answer "did the reviewed content survive
++                  // the head move?", never "should this merge?".
++                  //
++                  // `codes` is a non-enumerable property attached on every
++                  // return path of validateT1Verdicts. It is read WITHOUT a
++                  // `|| []` fallback on purpose: an absent list must not be
++                  // read as "every code matched", which `[].every()` would make
++                  // vacuously true and turn this fail-closed check fail-open.
++                  const t1Codes = Array.isArray(t1Errors.codes) ? t1Errors.codes : null;
++                  const onlyStaleness =
++                    t1Errors.length > 0 &&
++                    t1Codes !== null &&
++                    t1Codes.length === t1Errors.length &&
++                    t1Codes.every(c => c === 'stale_head');
++
++                  let carried = null;
++                  if (onlyStaleness) {
++                    const run = require('child_process').spawnSync(
++                      'pnpm',
++                      ['exec', 'tsx', 'scripts/ops/carry-forward-collect.ts',
++                       '--pr', String(prNumber), '--issue', issueId],
++                      { encoding: 'utf8', timeout: 120000 },
++                    );
++                    // Fail closed on any collector failure: a crashed, timed-out
++                    // or unparseable collector is NOT a carry-forward.
++                    try {
++                      const parsed = JSON.parse(run.stdout || '{}');
++                      if (run.status === 0 &&
++                          parsed.schema === 'approval-carry-forward/v1' &&
++                          parsed.verdict === 'VERIFIED' &&
++                          parsed.current_head_sha === headSha &&
++                          parsed.issue_id === issueId) {
++                        carried = parsed;
++                      }
++                    } catch { carried = null; }
++                  }
++
++                  if (carried) {
++                    // The original pm-verdict/v1 comment is never edited and
++                    // never re-authored. This records a SEPARATE, mechanically
++                    // computed receipt beside it.
++                    notes.push(
++                      `Approval carried forward from ${carried.original_verdict_sha.slice(0, 12)} ` +
++                      `to ${headSha.slice(0, 12)}: C1-C7 all pass. ` +
++                      `Receipt: ${carried.original_verdict_url}`,
++                    );
++                  } else {
++                    errors.push(...t1Errors);
++                  }
+ 
+                   if (!labels.includes('t1-approved')) {
+                     errors.push(
+diff --git a/scripts/ops/merge-gate-verdict.cjs b/scripts/ops/merge-gate-verdict.cjs
+index aaca7bbbc..7a0d51fa4 100644
+--- a/scripts/ops/merge-gate-verdict.cjs
++++ b/scripts/ops/merge-gate-verdict.cjs
+@@ -59,12 +59,48 @@ function parseVerdict(body) {
+  *   comments (parsed === null) before calling this.
+  * @param {{prNumber: number, headSha: string, authorizedReviewers: Set<string>}} ctx
+  */
++// UTV2-1836: every T1 verdict error carries a machine-readable code alongside
++// its message. The approval carry-forward integration must be able to tell
++// "the reviewed content is unchanged, only the head moved" apart from every
++// other reason a verdict fails, and string-matching the prose would couple
++// merge authority to message wording. Message text is byte-identical to
++// before, so every existing consumer and every existing test reads exactly
++// what it read.
++const STALE_HEAD = 'stale_head';
++
++/**
++ * Attach the parallel code list to the returned error array.
++ *
++ * `codes` is attached on EVERY return path, including the two early ones. A
++ * caller that reads `errors.codes || []` and then calls `.every(...)` would
++ * read an absent list as "every code matches" -- vacuously true on an empty
++ * array -- turning a fail-closed gate fail-open at exactly the paths that
++ * matter most: no verdict at all, and an unauthorized author. The length
++ * assertion makes a desynchronised list a crash rather than a silent mismatch.
++ */
++function withCodes(errors, codes) {
++  if (errors.length !== codes.length) {
++    throw new Error(
++      `validateT1Verdicts: ${errors.length} errors but ${codes.length} codes -- refusing to return a desynchronised result`,
++    );
++  }
++  Object.defineProperty(errors, 'codes', { value: codes, enumerable: false });
++  return errors;
++}
++
+ function validateT1Verdicts(verdicts, ctx) {
+   const errors = [];
++  const codes = [];
++  // Written without `.push` so that the mechanical rewrite of every
++  // `errors.push(` call site in this function cannot recurse into this helper.
++  const push = (message, code = null) => {
++    errors[errors.length] = message;
++    codes[codes.length] = code;
++  };
+ 
+   if (verdicts.length === 0) {
+-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+-    return errors;
++    push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
++    return withCodes(errors, codes);
+   }
+ 
+   // UTV2-1554: authorization filtering happens BEFORE latest-verdict
+@@ -83,38 +119,39 @@ function validateT1Verdicts(verdicts, ctx) {
+     // closed exactly as the no-comments-at-all case above.
+     const rawLatest = verdicts[verdicts.length - 1];
+     if (rawLatest.userType === 'Bot') {
+-      errors.push(
++      push(
+         `PM verdict from bot account "${rawLatest.user}" is not authorized. Must be a human CODEOWNERS member.`,
+       );
+     } else {
+-      errors.push(
++      push(
+         `PM verdict author "${rawLatest.user}" is not in CODEOWNERS. Authorized: ${[...ctx.authorizedReviewers].join(', ')}.`,
+       );
+     }
+-    errors.push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
+-    return errors;
++    push('T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.');
++    return withCodes(errors, codes);
+   }
+ 
+   const latest = authorized[authorized.length - 1];
+ 
+   if (latest.parsed.verdict !== 'APPROVED') {
+-    errors.push(`Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`);
++    push(`Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`);
+   } else {
+     // PR/head-SHA freshness only gates verdicts intended to approve the
+     // merge -- a CHANGES_REQUIRED verdict already blocks above regardless.
+     if (!latest.parsed.prNumber) {
+-      errors.push('T1 pm-verdict/v1 comment is missing a "PR:" field. PM must bind the verdict to this exact PR.');
++      push('T1 pm-verdict/v1 comment is missing a "PR:" field. PM must bind the verdict to this exact PR.');
+     } else if (latest.parsed.prNumber !== ctx.prNumber) {
+-      errors.push(`PM verdict PR mismatch: comment declares PR #${latest.parsed.prNumber}, actual is #${ctx.prNumber}.`);
++      push(`PM verdict PR mismatch: comment declares PR #${latest.parsed.prNumber}, actual is #${ctx.prNumber}.`);
+     }
+ 
+     if (!latest.parsed.headSha) {
+-      errors.push(
++      push(
+         'T1 pm-verdict/v1 comment is missing a "Head SHA:" field. PM must bind approval to the exact reviewed head.',
+       );
+     } else if (latest.parsed.headSha.toLowerCase() !== ctx.headSha.toLowerCase()) {
+-      errors.push(
++      push(
+         `PM verdict is stale: comment approved head SHA "${latest.parsed.headSha}", current PR head is "${ctx.headSha}". A fresh verdict bound to the new head is required.`,
++        STALE_HEAD,
+       );
+     }
+   }
+@@ -124,12 +161,12 @@ function validateT1Verdicts(verdicts, ctx) {
+   // force a false bounce-limit trip, the same trust boundary as above.
+   const changesRequested = authorized.filter((v) => v.parsed.verdict === 'CHANGES_REQUIRED');
+   if (changesRequested.length >= 3) {
+-    errors.push(
++    push(
+       `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`,
+     );
+   }
+ 
+-  return errors;
++  return withCodes(errors, codes);
+ }
+ 
+-module.exports = { parseVerdict, validateT1Verdicts };
++module.exports = { parseVerdict, validateT1Verdicts, STALE_HEAD };
+diff --git a/scripts/ops/workflow-hardening.test.ts b/scripts/ops/workflow-hardening.test.ts
+index 689b39940..740e4804a 100644
+--- a/scripts/ops/workflow-hardening.test.ts
++++ b/scripts/ops/workflow-hardening.test.ts
+@@ -187,8 +187,22 @@ async function createMergeGateHarness(tier: 'T1' | 'T2' | 'T3', initialChecks: M
+         evaluatorFailure = message;
+       },
+     };
++    // UTV2-1836: the evaluator now also requires 'child_process' to shell out
++    // to the carry-forward collector. The assertion is WIDENED to an explicit
++    // allowlist rather than dropped: the property being protected is that the
++    // gate never requires anything PR-supplied, and an allowlist still proves
++    // that, whereas removing the check would prove nothing.
++    const ALLOWED_REQUIRES = new Set(['./scripts/ops/merge-gate-verdict.cjs', 'child_process']);
+     const requireModule = (specifier: unknown) => {
+-      assert.strictEqual(specifier, './scripts/ops/merge-gate-verdict.cjs');
++      assert.ok(
++        typeof specifier === 'string' && ALLOWED_REQUIRES.has(specifier),
++        `merge-gate.yml required an unexpected module: ${String(specifier)}`,
++      );
++      if (specifier === 'child_process') {
++        // No collector in the harness: spawnSync reports a non-zero status, so
++        // the evaluator takes its fail-closed branch and the T1 errors stand.
++        return { spawnSync: () => ({ status: 1, stdout: '', stderr: 'no collector in harness' }) };
++      }
+       return verdictModule;
+     };
+ 
+@@ -1163,11 +1177,31 @@ test('UTV2-1554/UTV2-1543: merge-gate.yml gate job never fetches or executes con
+     //    before this privileged job requires it.
+     if (typeof step.run === 'string') {
+       const referencesHeadSha = /pull_request\.head\.sha/.test(step.run);
+-      const materializesContent = /git\s+(fetch|show|checkout)|curl\s|wget\s|>\s*scripts\//.test(step.run);
++      // UTV2-1836: `git fetch` is separated out from the other verbs. The
++      // property this assertion protects is that a PR cannot overwrite the
++      // trusted verdict module in the WORKING TREE before the privileged job
++      // requires it. `git fetch` writes only to the object store and moves no
++      // ref this job reads; `git show`/`git checkout`/`curl`/`wget`/a redirect
++      // into `scripts/` all materialize head bytes as files and remain
++      // forbidden. Widening this is a deliberate, reviewed policy change --
++      // the carry-forward collector must be able to READ head blobs to prove
++      // the reviewed content is unchanged, and it cannot do that from a
++      // depth-1 base-only cone.
++      const materializesContent = /git\s+(show|checkout)|curl\s|wget\s|>\s*scripts\//.test(step.run);
+       assert.ok(
+         !(referencesHeadSha && materializesContent),
+         `${stepName}: run step must not fetch/materialize content keyed on pull_request.head.sha -- found a bootstrap-style fallback:\n${step.run}`,
+       );
++      // A fetch is admitted only when it is JUST a fetch. A step that fetches
++      // and then does anything else in the same script is the bootstrap shape
++      // under another name.
++      if (referencesHeadSha && /git\s+fetch/.test(step.run)) {
++        assert.match(
++          step.run.trim(),
++          /^git fetch --no-tags origin "\$\{\{ github\.event\.pull_request\.head\.sha \}\}"$/,
++          `${stepName}: a head-sha fetch is admitted only as a bare, single-command \`git fetch --no-tags origin <head sha>\` that materializes nothing:\n${step.run}`,
++        );
++      }
+     }
+ 
+     // 3. The github-script step's require() must resolve the committed,

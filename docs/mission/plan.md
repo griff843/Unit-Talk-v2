@@ -1,7 +1,7 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-05T22:10Z
+**Last reconciled against live truth:** 2026-09-06
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
@@ -23,16 +23,19 @@ metadata listing and the current readiness ledger. Not against docs or chat hist
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **13 PRs are open** (measured 2026-09-05T22:10Z; was 11 earlier the same day; #1477, #1485, #1488, #1499 and #1501 merged and
-  #1497 was closed). Every one is blocked on `Merge Gate`, in three distinct ways:
-  - **Not admissible as a lane at all** (#1491, #1492, #1493, #1494, #1495, #1496, #1498, #1429) —
-    eight PRs opened with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found
-    in PR branch or title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy
-    defect. Seven of the eight are green on `verify`; only #1429 is red.
-  - **Admissible, `verify` red** (#1479, #1451) — real repair work, not a gate problem.
-  - **Admissible, `verify` green, missing a human approval artifact** (#1484) — the only open PR
-    whose sole remaining obstacle is a verdict. #1477 and #1501 were in this group and merged
-    (`1734bf20` on 2026-09-05T01:43Z, `b7d9fc07` on 2026-09-03T19:26Z).
+- **11 PRs are open** (measured 2026-09-06). Every one is blocked on `Merge Gate`, in three
+  distinct ways:
+  - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six PRs opened
+    with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
+    title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect. The
+    count fell from eight because **#1493 and #1494 were re-homed and closed**, exactly as the
+    readmission ruling prescribes: #1493's diff landed as **#1503 (UTV2-1812), merged
+    `9ac4694d9`**, and #1494's is open as **#1513 (UTV2-1802)**.
+  - **Admissible, awaiting a T1 verdict** (#1513, #1479, #1505) — all three green on `verify`;
+    what each needs is an approval artifact, not a repair. #1513 and #1479 are `BEHIND` and should
+    be resynced before a head-pinned verdict is bound to them.
+  - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
+  - #1484 remains open awaiting a verdict.
 - Measured 2026-09-03: `strict: true` did **not** block #1474 even though it was genuinely BEHIND
   `main`, so head-pinned verdicts do not serialize to one merge per cycle and an approved-but-BEHIND
   PR needs no re-verdict round trip.
@@ -234,29 +237,46 @@ Measured against `origin/main`, the GitHub API, the deploy workflow, GHCR manife
 production Supabase (read-only). **This replaces the bare "only Deploy remains" framing, which was
 true but incomplete.**
 
-**Exact release.** `origin/main` is `175f07c10`. Production is `e48106fc9a5eb5904b322833d0968da5ae0b0665`.
-The gap is 105 commits. Six touch `apps/**`, `packages/**` or `deploy/**`, but only **three change
-code a running container executes** — the distinction matters, because it is what makes this a small
-release rather than a large one:
+**Exact release, re-measured 2026-09-06.** `origin/main` is `7231dc9c7`. Production is
+`e48106fc9a5eb5904b322833d0968da5ae0b0665`. The gap is 117 commits, and exactly **two** of them
+change code a running container executes:
 
-| SHA | PR | Changes container code? | Behaviour |
+| File | PR | SHA | Behaviour |
 |---|---|---|---|
-| `2ac233424` | #1488 | **yes** | Canonical capper identity from an explicit mapping; local-part derivation removed |
-| `b7d9fc07f` | #1501 | **yes** | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
-| `01a2d2d67` | #1474 | **yes** | Command Center auth mode can no longer be downgraded to fail-open in deployed environments |
-| `1d76b75e1` | #1507 | no | Changes the deploy pipeline itself: `deploy.yml` snapshots the outgoing configuration and `rollback.sh` restores it. Already on `main`, so it governs the next deploy rather than shipping into a container |
-| `1734bf201` | #1477 | no | Two test files and one migration (`rate_limit_buckets`), and the migration is already applied in production |
-| `775f4ac60` | #1504 | no | Test wiring only — one test file plus its `package.json` script |
+| `apps/api/src/server.ts` | #1501 | `b7d9fc07f` | `GET /api/picks/:id/trace` moved below the auth gate — the pilot's own pick's lifecycle aggregate is no longer anonymously readable |
+| `apps/smart-form/lib/auth-allowlist.ts` | #1488 | `2ac233424` | Canonical capper identity from an explicit mapping; local-part derivation removed |
 
-Measured with `git log --first-parent e48106fc..origin/main -- 'apps/**' 'packages/**' 'deploy/**'`,
-then each commit's file list inspected rather than inferred from the path filter. An earlier draft of
-this section said "six change code a running container executes", which its own table contradicted.
-The eight non-test files that differ are `apps/api/src/server.ts`,
-`apps/command-center/{.env.example,src/lib/server-api.ts,src/middleware.ts}`,
-`apps/smart-form/{.env.example,lib/auth-allowlist.ts}`, `deploy/production/ENV_FILES.md` and
-`deploy/rollback.sh`. The remaining 99 commits are readiness-ledger bot commits, lane manifests,
-proof bundles, merges, docs and test-only changes. No Dockerfile, no `docker-compose*`, no `packages/**` source, and no
+**Corrected 2026-09-06: the previous table listed `01a2d2d67` (#1474, Command Center auth mode) as
+changing container code. It does not, and neither does any other `apps/command-center/**` commit —
+see "The Command Center is not deployed" below.** That correction is what reduces the release from
+three container-code changes to two.
+
+Two further non-test files differ and ship into no container: `deploy/rollback.sh` and
+`deploy/production/ENV_FILES.md` (#1507) change the deploy pipeline itself, so they govern the next
+deploy rather than being carried into an image.
+
+Measured with `git diff --name-only e48106fc origin/main -- 'apps/**' 'packages/**' 'deploy/**' |
+grep -v '\.test\.'`, which returns 60 files: the two above, the two deploy files, 55 under
+`apps/command-center/**`, and one `.env.example`. The remaining commits in the gap are
+readiness-ledger bot commits, lane manifests, proof bundles, merges, docs and test-only changes. No
+Dockerfile, no `docker-compose*`, no `packages/**` source, and no
 `apps/{worker,ingestor,discord-bot,web}` source changed.
+
+#### The Command Center is not deployed, so its defects are not live
+
+Measured 2026-09-06, and it corrects a framing this plan repeated in three places.
+`deploy/production/docker-compose.yml` declares `api`, `worker`, `ingestor`, `discord-bot`,
+`grading-cron`, `web`, `smart-form`, `caddy`, `loki` and `grafana` — **there is no
+`command-center` service**. `deploy/production/Caddyfile` publishes exactly three site addresses
+(`{$CADDY_DOMAIN}` → `api:4000`, `{$UNIT_TALK_WEB_DOMAIN}` → `web:4200`,
+`{$UNIT_TALK_SMART_FORM_DOMAIN}` → `smart-form:4400`) — no command-center route. `grep -rn
+"command-center" deploy/` returns nothing at all.
+
+So the Command Center auth defects (UTV2-1812 dotted-path bypass, UTV2-1802 arbitrary management
+SQL) are **real defects in an application production does not run or expose**. They are
+pre-deployment hardening for #1496, not remediation of anything an attacker can reach today. This
+does not lower their priority — #1496 is precisely what would ship the exposure, so they must land
+before it — but the plan must not describe an unreachable surface as live, and it did.
 
 **No DDL prerequisite.** `deploy.yml` runs no migration step. UTV2-1811's `rate_limit_buckets` table
 and `consume_rate_limit_bucket(...)` RPC were verified to **already exist** in production, and the
@@ -385,8 +405,11 @@ own merits.
 
 **This is the executable front while Wave 0 item 1 is outstanding.** #1493 (dotted-path auth
 bypass, canonical issue **UTV2-1812**) and #1494 (arbitrary management SQL, canonical issue
-**UTV2-1802**) first — both are live production security defects with green `verify`, and neither
-depends on any reserved action. Then #1496 (deployment), which does need Command Center secrets and
+**UTV2-1802**) first — both are Command Center auth defects with green `verify`, and neither
+depends on any reserved action. They are **pre-deployment hardening, not live exposure**: the
+Command Center is in no production compose service and behind no Caddy route (measured 2026-09-06,
+see "The Command Center is not deployed" above). They must land before #1496 because #1496 is what
+would expose them. Then #1496 (deployment), which does need Command Center secrets and
 a hostname. All three need readmission as lanes; see "Admissibility debt" below. Readmission runs
 through `ops:lane-start --readmit-existing-branch --executor <who>` under the canonical issue.
 
@@ -633,8 +656,10 @@ exist, they were simply never joined:
 | #1493 (+121/-1) | a dot in the path no longer skips Command Center authentication | **UTV2-1812** (Backlog) |
 | #1494 (+503/-61) | the management token can no longer be handed arbitrary SQL | **UTV2-1802** (Backlog) |
 
-These are being re-homed onto those issues through normal governed lanes. They are production
-security work, not governance work, and do not consume the governance slot. **They are the next
+These are being re-homed onto those issues through normal governed lanes. They are product security
+work, not governance work, and do not consume the governance slot. Note the correction above: the
+Command Center is not deployed, so these harden a surface #1496 would create rather than close a
+reachable one. **They are the next
 executable work after this lane closes**, and neither waits on Griff.
 
 ### `Lane authority` rejects dotfiles inside its own allowed globs
@@ -697,6 +722,56 @@ here rather than filed, per the filing threshold.
 
 The earlier micromatch reading above stands corrected on its own terms as well: `{ dot: true }` was
 always present, and the fix this plan once proposed would have been a no-op.
+
+### Closeout repeatability — UTV2-1838, and what it deliberately left undone
+
+The failure this lane exists for was observed twice (UTV2-1835, UTV2-1836): `ops:lane-finalize
+<ID> --pr <n>` halts at `generate_t2_proof_bundle`. `lane-finalize.ts` passes
+`--verification-log docs/06_status/proof/<ID>/runtime-verification.md`, but `ops:proof-generate`
+writes only `diff-summary.md` and `verification.md` (`proof-generate.ts:197`
+`STANDARD_PROOF_FILES`). `readOptionalFile` called `fs.readFileSync` unguarded, *as a function
+argument*, so a static-proof lane threw ENOENT before the generator ran — and that step is
+`required: true`.
+
+**That crash was the only thing preventing a data-loss bug, which is why the two repairs had to
+land together.** `lane-finalize.ts` always passes `--force`, and with `--force` the writer put the
+same Markdown blob into **every** entry of `expected_proof_paths`. 27 T2-eligible manifests on
+`main` declare a structured sidecar there (`evidence.json`, `model-routing.json`). Repairing the
+ENOENT alone would have unmasked an overwrite that destroys machine-read proof artifacts. The
+overwrite guard (`isMarkdownProofPath`, refusing before the `force` check) landed first, and the
+inversion test asserts the sidecar's **content** is byte-identical after a forced run, not merely
+that an exit code changed.
+
+Two other repairs landed with them:
+
+- **`lane-close.ts` — the plain close path was unguarded on `main`.**
+  `guardRepairAgainstMainCheckout` (UTV2-1542) sits inside `if (repairMerged)`, so a plain
+  `pnpm ops:lane-close <ID>` from the root checkout while on `main` reached `runTruthCheck`
+  (history append + heartbeat write) and `finalizeLaneCloseManifest` (`status: done`) with no
+  main-checkout guard at all. `guardCloseAgainstMainCheckout` now refuses it; `--repair-merged`
+  keeps the richer guard that emits a governed repair packet, and the trusted post-merge
+  automation is exempt from both.
+- **Replay evidence parity.** `autoHarvestCiDbProofIntoEvidence` and
+  `autoPopulateStaticProofFromVerifyRun` lived only in `proof-generate`'s `main()`.
+  `post-merge-lane-close.yml:332-335` short-circuits the proof step on `workflow_dispatch` and
+  delegates to `rebindRepairedLaneProof`, which called neither — so a dispatch replay bound its
+  SHAs correctly but left `static_proof`/`runtime_proof` unpopulated and failed P7/R1/R2 on a
+  replay that would have passed on a push. Both are now called from `rebindRepairedLaneProof`
+  under the same best-effort, never-fatal contract they carry in `proof-generate`.
+
+**Two scoped items were deliberately not done, and this is the record of why.** A lane's
+`file_scope_lock` is pinned at lane-start and cannot be widened by an agent, and UTV2-1838's lock
+covers `lane-close.ts`, `lane-finalize.ts` and `t2-proof-bundle.ts` — not these two files:
+
+| Not done | File | What it needs |
+|---|---|---|
+| `truth_check_history` grows on every non-`done` run; the guard at `truth-check-lib.ts:1860-1864` covers only `done`, so an infra-error early return (`:986`, `:1045`, `:1062`) permanently records a `fail` for what was a token blip | `scripts/ops/truth-check-lib.ts` | do not append a history entry on an infra-error exit |
+| A provably terminal lane's lease cannot be reclaimed for 48h — reclaim is purely TTL-gated (`lease-registry.ts:523-531`, `claude` TTL at `:133`). Observed live on UTV2-1830: merged `1cb31a43e`, truth-closed, lease still `active` with a dead owning PID. `ops:lease release` is the working escape, but reclaim should not require knowing that | `scripts/ops/lease-registry.ts` | gate reclaim on lane terminality, reusing `findLeasesHeldByTerminalLanes` (`:769-800`) rather than the clock |
+
+Both are survivable by hand today and neither blocks production, so per the ratified filing
+threshold they are recorded here rather than filed. They are the natural content of the next
+governance lane if the slot is spent, alongside the `pre-proof-validator` classification repair
+under Learned.
 
 ### `docs/mission/**` lane registration — resolved on `main`
 
@@ -787,6 +862,40 @@ never actually a Griff-reserved item, only an unadmitted PR, and it is now Wave 
 ---
 
 ## Learned
+
+- **A crash can be the only thing preventing a data-loss bug, and repairing it alone is a
+  regression.** `ops:lane-finalize` halted on every static-proof lane because `readOptionalFile`
+  threw ENOENT on a file `ops:proof-generate` never writes. That crash was thrown while evaluating
+  a *function argument*, so it fired before the writer ran — and the writer, always invoked with
+  `--force`, would otherwise have put a Markdown bundle over every entry in
+  `expected_proof_paths`, including the 27 T2-eligible manifests that declare `evidence.json` or
+  `model-routing.json` there. The generalisation: before fixing a fail-closed error, establish what
+  currently *cannot happen because of it*. UTV2-1838 landed the overwrite guard first and the
+  ENOENT repair second, and the inversion test asserts the sidecar's bytes rather than an exit code.
+
+- **A vacuous `.every()` is a fail-open, and enumerating the inputs is what finds it.** The first
+  draft of the carry-forward Merge Gate integration read `(t1Errors.codes || []).every(c => c ===
+  'stale_head')`. On an absent list that is `[].every(...)` — true — so `onlyStaleness` would have
+  been true for *every* early-return path, including **no verdict at all** and **unauthorized
+  author**, and the gate would have carried an approval forward onto PRs that were never approved.
+  It was found by enumerating the seven verdict shapes and reading what each returns, not by
+  reading the predicate. The repair attaches a code on every return path and throws on a
+  length mismatch, so a desynchronised result cannot be produced rather than merely being unlikely.
+  The measured integration effects belong to the reserved packet
+  (`docs/05_operations/CARRY_FORWARD_MERGE_GATE_INTEGRATION.md`), and three of them are the real
+  decision: the Merge Gate job has no Node/pnpm toolchain today, so enabling the collector makes a
+  **required** check depend on a `pnpm install`; `require('child_process')` collides with
+  `workflow-hardening.test.ts:191`; and `workflow-hardening.test.ts:1150` forbids the gate job from
+  fetching anything keyed on `pull_request.head.sha`, which is exactly what content equivalence
+  needs to read.
+
+- **A `file_scope_lock` is pinned at lane-start, so the scope decision is made before the work is
+  understood.** UTV2-1838's declared scope covers three of the five files its own issue names;
+  `truth-check-lib.ts` and `lease-registry.ts` are outside it and a lock cannot be widened by an
+  agent. Both remaining items are recorded above under "Closeout repeatability" rather than
+  smuggled in through an override. This is the routine cost of the lock, not a defect in it — but
+  it argues for declaring scope from the issue's own file list at lane-start, which is what
+  `ops:scope-suggest` exists for.
 
 - **The orchestrator was returning control at every seam, and every one of those seams was inside
   the mission rather than at its edge.** Ratified by PM on 2026-09-05: waiting on CI, finishing a

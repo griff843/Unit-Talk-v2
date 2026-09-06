@@ -11,6 +11,7 @@ import {
   ensureAttestedPrHeadAvailable,
   ensureCloseoutMergeLock,
   finalizeLaneCloseManifest,
+  guardCloseAgainstMainCheckout,
   guardRepairAgainstMainCheckout,
   implementationFilesFromTrustedRepair,
   manifestForFailedRepairClose,
@@ -4332,4 +4333,53 @@ test('UTV2-1837 AC4 inversion: a working tracker still transitions and reports s
   } finally {
     fs.rmSync(repoRoot, { recursive: true, force: true });
   }
+});
+
+// UTV2-1838 -- the plain close path was unguarded on `main`.
+//
+// `guardRepairAgainstMainCheckout` (UTV2-1542) sits inside `if (repairMerged)`.
+// A plain `pnpm ops:lane-close <ID>` from the root checkout while on `main`
+// therefore reached `runTruthCheck` (truth_check_history append + heartbeat
+// write) and `finalizeLaneCloseManifest` (`status: done`) with no main-checkout
+// guard at all, leaving tracked files dirty on `main` -- the exact
+// shared-checkout condition behind the direct-main-push incidents.
+test('guardCloseAgainstMainCheckout refuses a plain close from a checkout on main', () => {
+  const blocked = guardCloseAgainstMainCheckout({
+    issueId: 'UTV2-1838',
+    currentBranch: 'main',
+  });
+
+  assert.ok(blocked, 'a close from main must be refused');
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.code, 'close_refused_on_main_checkout');
+  assert.equal(blocked.outcome, 'blocked');
+  assert.equal(blocked.issue_id, 'UTV2-1838');
+  assert.equal(blocked.current_branch, 'main');
+  assert.match(blocked.remediation, /worktree/);
+});
+
+test('guardCloseAgainstMainCheckout permits a lane worktree and trusted automation', () => {
+  assert.equal(
+    guardCloseAgainstMainCheckout({
+      issueId: 'UTV2-1838',
+      currentBranch: 'claude/utv2-1838-closeout-safe-to-repeat',
+    }),
+    null,
+  );
+  // The trusted post-merge workflow runs on `main` by design; it is exempt from
+  // this guard exactly as it is exempt from the repair guard.
+  assert.equal(
+    guardCloseAgainstMainCheckout({
+      issueId: 'UTV2-1838',
+      currentBranch: 'main',
+      trustedPostMerge: true,
+    }),
+    null,
+  );
+});
+
+test('close_refused_on_main_checkout carries actionable remediation', () => {
+  const remediation = remediationForCode('close_refused_on_main_checkout');
+  assert.match(remediation, /DIRECT_MAIN_BYPASS_POLICY\.md/);
+  assert.match(remediation, /\.out\/worktrees\//);
 });
