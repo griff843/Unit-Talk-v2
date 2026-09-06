@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1838-closeout-safe-to-repeat",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1517",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/**",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/UTV2-1838/diff-summary.md",
     "docs/06_status/proof/UTV2-1838/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-06T03:54:17.456Z",
-  "heartbeat_at": "2026-09-06T03:54:17.456Z",
+  "heartbeat_at": "2026-09-06T04:15:03.596Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1838-closeout-safe-to-repeat.json",
