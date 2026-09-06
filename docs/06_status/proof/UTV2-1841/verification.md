@@ -9,7 +9,7 @@ and production actually runs, unblocking the Smart Form deployment candidate.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: PR_URL_PLACEHOLDER
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1520
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
 `c7b170b1ecd10548e6bfcad38f895a3f1b3ffa5e`, the last non-proof commit on the branch; everything
