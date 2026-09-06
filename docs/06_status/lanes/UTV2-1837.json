@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1837",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1837-tracker-independence",
+  "branch": "claude/utv2-1837-tracker-independence",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1516",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/LANE_MANIFEST_SPEC.md",
+    "docs/05_operations/PREFLIGHT_SPEC.md",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/05_operations/TRUTH_CHECK_SPEC.md",
+    "docs/06_status/proof/UTV2-1837/**",
+    "scripts/ops/**"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1837/diff-summary.md",
+    "docs/06_status/proof/UTV2-1837/evidence.json",
+    "docs/06_status/proof/UTV2-1837/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-06T01:37:06.343Z",
+  "heartbeat_at": "2026-09-06T02:11:42.808Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1837-tracker-independence.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1837-tracker-independence",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

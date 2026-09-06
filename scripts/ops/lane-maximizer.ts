@@ -1621,17 +1621,61 @@ export interface MaximizerCliOutcome {
  * `--candidates` / `--from-stdin` remain available for a caller that genuinely
  * wants to supply the population itself, but they must now say so explicitly.
  */
-export function resolveCandidateSource(argv: string[]): CandidateSource {
+export function resolveCandidateSource(
+  argv: string[],
+  hasTrackerCredential: boolean = Boolean(
+    readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY'),
+  ),
+): CandidateSource {
   if (hasFlag(argv, '--from-queue')) return 'queue';
   if (hasFlag(argv, '--candidates') || hasFlag(argv, '--from-stdin')) return 'explicit';
+  // An EXPLICIT --from-linear is an operator declaration and outranks the
+  // credential probe in both directions. The credential-based choice below is a
+  // default, never an override: silently reading the queue when the operator
+  // asked for the tracker would answer a different question than the one asked,
+  // and the resulting failure ('no candidates') would name neither the tracker
+  // nor the missing credential.
+  if (hasFlag(argv, '--from-linear')) return 'linear';
+  // Tracker independence (ratified 2026-09-05). The queue file is a FIRST-CLASS
+  // discovery source, not a fallback for tests: it is repo-owned, reviewable in
+  // a PR, and available when the tracker is not. A bare invocation still
+  // prefers the tracker when a credential exists -- the tracker remains the
+  // richer source and nothing here makes it optional to CONSULT -- but with no
+  // credential the previous behaviour was to throw
+  // 'LINEAR_API_TOKEN or LINEAR_API_KEY not set' out of discovery, which made
+  // the very first step of an ordinary task depend on the tracker.
+  //
+  // This is a source selection, not a silent degradation: `candidate_source` is
+  // already reported on every outcome, so a caller can always see which
+  // population it actually got.
+  if (!hasTrackerCredential) return 'queue';
   return 'linear';
+}
+
+/**
+ * Whether a tracker candidate source is reachable at all.
+ *
+ * UTV2-1837: injected Linear deps ARE a tracker, and are what a test supplies
+ * in place of the wire. Probing only the process environment here made the
+ * source selection depend on whether the machine running the code happened to
+ * hold a credential -- the CLI picked `linear` locally and `queue` in CI, so
+ * sixteen pre-existing tests that inject a fake tracker silently stopped
+ * exercising it. The decision is therefore computed ONCE, from the deps the
+ * caller actually supplied, and threaded down.
+ */
+export function hasTrackerSource(deps: MaximizerCliDeps = {}): boolean {
+  if (deps.linear) return true;
+  return Boolean(
+    readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY'),
+  );
 }
 
 async function defaultFetchCandidates(
   argv: string[],
   linearDeps: LinearCandidateFetchDeps | undefined,
+  hasTracker: boolean,
 ): Promise<CandidateLane[]> {
-  switch (resolveCandidateSource(argv)) {
+  switch (resolveCandidateSource(argv, hasTracker)) {
     case 'queue':
       return parseQueueCandidates(
         getFlagValue(argv, '--queue-file') ?? path.join(ROOT, 'docs', '06_status', 'ISSUE_QUEUE.md'),
@@ -1676,13 +1720,14 @@ export async function runMaximizerCli(
   argv: string[],
   deps: MaximizerCliDeps = {},
 ): Promise<MaximizerCliOutcome> {
-  const source = resolveCandidateSource(argv);
+  const hasTracker = hasTrackerSource(deps);
+  const source = resolveCandidateSource(argv, hasTracker);
 
   let candidates: CandidateLane[];
   try {
     candidates = deps.fetchCandidates
       ? await deps.fetchCandidates(argv)
-      : await defaultFetchCandidates(argv, deps.linear);
+      : await defaultFetchCandidates(argv, deps.linear, hasTracker);
   } catch (error) {
     return errorOutcome(
       'candidate_discovery_failed',

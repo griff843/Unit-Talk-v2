@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   createManifest,
+  requireIssueId,
+  resolveTrackerRef,
   defaultProofPaths,
   deriveDeliveryUiApp,
   mergeVerifierIdentity,
@@ -1516,4 +1518,43 @@ test('UTV2-1756 RESTART: the exception is exactly done->started and nothing wide
     'the restart exception must not bypass the identity arm',
   );
   assert.strictEqual(fs.readFileSync(foreign, 'utf8'), foreignBytes);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence: `issue_id` is repo-owned identity and
+// `tracker_ref` is the explicit, nullable tracker key.
+//
+// The distinction that carries the risk is ABSENT vs `null`. Absent means "this
+// manifest predates the field" and must keep the behaviour it had; `null` means
+// "this lane deliberately has no tracker" and is the only value that turns
+// tracker checks into skips. Reading absent as null would silently relax every
+// historical lane at once.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1837: an ABSENT tracker_ref falls back to issue_id, so historical lanes are unchanged', () => {
+  assert.equal(resolveTrackerRef({ issue_id: 'UTV2-1837' }), 'UTV2-1837');
+  assert.equal(resolveTrackerRef({ issue_id: 'UNI-42' }), 'UNI-42');
+});
+
+test('UTV2-1837: an EXPLICIT null tracker_ref resolves to null even when issue_id looks like a key', () => {
+  assert.equal(resolveTrackerRef({ issue_id: 'UTV2-1837', tracker_ref: null }), null);
+});
+
+test('UTV2-1837: an explicit tracker_ref overrides issue_id', () => {
+  assert.equal(
+    resolveTrackerRef({ issue_id: 'WORK-7', tracker_ref: 'UTV2-1837' }),
+    'UTV2-1837',
+  );
+});
+
+test('UTV2-1837: a repo-minted WORK-### identity is not a tracker key', () => {
+  // There is no Linear issue named WORK-7. Resolving one would produce a lookup
+  // that always fails rather than a check that correctly skips.
+  assert.equal(resolveTrackerRef({ issue_id: 'WORK-7' }), null);
+});
+
+test('UTV2-1837: WORK-### is a legal repo-owned work identity', () => {
+  assert.equal(requireIssueId('work-7'), 'WORK-7');
+  assert.equal(requireIssueId('UTV2-1837'), 'UTV2-1837');
+  assert.throws(() => requireIssueId('NOPE-1'), /Invalid issue id/u);
 });

@@ -1,0 +1,68 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1837",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor",
+      "pnpm_test": "PASS — exit 0. Aggregated across the per-package tsx --test invocations: 5941 tests, 5941 pass, 0 fail.",
+      "pnpm_verify": "set-by-ci — not obtainable locally. `verify` is `pnpm verify:static && pnpm test:live-db`; the local run reached test:live-db, which mechanically establishes verify:static exited 0, then refused with '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)'. That stage refuses a non-staging target by design. The required `verify` check on this PR at this head is the authoritative result.",
+      "r_level_check": "PASS — run inside `pnpm verify`; no R-level artifact beyond the diff summary and verification log is required for this diff, and none is claimed."
+    },
+    "sha_type": "source_sha",
+    "anchor_note": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c is the last commit on the branch that is not proof-only — the candidate-source repair made after the first CI run. The proof commit that follows is inside PROOF_ONLY_PREFIXES and does not move the anchor.",
+    "bound_at": "2026-09-06T02:10:50.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "tsc -b tsconfig.json, exit 0, no diagnostics" },
+    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "eslint . --cache, exit 0, no findings" },
+    "test": { "status": "PASS", "command": "pnpm test", "tests": 5941, "failures": 0, "detail": "exit 0; totals summed across the per-package TAP outputs" },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close,lane-finalize}.test.ts",
+      "detail": "preflight 32/32, shared 93/93, truth-check-lib 132/132, execution-packet 103/103, lane-maximizer 94/94, lane-close 180/180, lane-finalize 27/27. +34 tests added by this lane."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 7,
+      "command": "apply each mutation to the real source, run the owning suite, restore byte-for-byte and confirm a clean tree",
+      "observed": "M1 preflight floor comparison dropped -> 31 pass / 1 fail. M2 C1 reports pass instead of skip -> 129 pass / 3 fail. M2b C7 skips wholesale -> 131 pass / 1 fail. M3 tracker write failure escapes closeout -> 179 pass / 1 fail. M4 resolveTrackerRef reads absent as null -> 92 pass / 1 fail. M5 lane-maximizer ignores the missing credential -> 90 pass / 1 fail. M6 captureOrReadTaskContract ignores the local work order -> 102 pass / 1 fail.",
+      "honest_reading": "Two further mutations were attempted and did NOT discriminate, and are reported rather than dropped. Mutating the L1/L3 skip branch in truth-check-lib's runner path left the suite fully green, because the unit suite drives the pure closeout gate and not the network-dependent runner; the covered equivalent is C1/C7, which is where the closeout verdict is actually computed. Mutating resolveTaskContractAcrossRoots' local fallback also left the suite green, because the new tests reach that behaviour through captureOrReadTaskContract (M6). Both gaps are stated in verification.md under 'Not covered' rather than implied to be covered."
+    },
+    "reserved_surface_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow changed. merge-gate.yml, p0-protocol.yml, executor-result-validator.yml and tier-label-check.yml still resolve a lane by UTV2-###, so a WORK-### lane is usable through closeout and is NOT yet mergeable. That is a recorded bound, not a closed gap; closing it is a PM decision on merge authority (intent.md reserved decision 7)."
+    },
+    "tier_is_floored_not_waived": {
+      "status": "PASS",
+      "detail": "With no tracker to author a tier label, the tier is --tier raised by classifyMechanicalMinimum(). A --tier below that floor is a hard PE2 fail naming the offending paths. The classifier is used only as a floor and never as a tier source: it is binary — every match hard-codes T1 and the reduce seeds T3 — so it can never emit T2 and cannot replace a declared tier."
+    },
+    "skip_is_never_pass": {
+      "status": "PASS",
+      "detail": "Every relaxed check reports 'skip'. A 'pass' would assert a requirement was satisfied that was never evaluated — the aggregate-conflation failure class already recorded against UTV2-1730/UTV2-1724. Mutation M2 is the control for this specific property."
+    },
+    "local_verify_limitation": {
+      "status": "EXPECTED",
+      "command": "pnpm verify",
+      "observed": "reached test:live-db, then '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.'",
+      "significance": "Not a failure of this change. verify is a && chain, so reaching its final stage establishes that verify:static — env check, lint, type-check, build, test, command manifest, migration lint — exited 0. This lane is T2 and requires no live-DB proof; the CI receipt is authoritative for the stage that cannot run here."
+    }
+  },
+  "known_gaps": [
+    "A WORK-### lane is not yet mergeable: merge-gate.yml, p0-protocol.yml and executor-result-validator.yml resolve by UTV2-### and are reserved surfaces left unchanged. This lane is itself UTV2-1837 for that reason.",
+    "truth-check-lib's L1-L4 skip branch lives in the network-dependent runner path and has no mutation control; the covered equivalent is C1/C7 in the pure gate.",
+    "resolveTaskContractAcrossRoots' local-work-order fallback is exercised only indirectly, through captureOrReadTaskContract.",
+    "No CLI flag was added to lane-start for --description / --description-file. The repo-owned work order at .ops/work/<ID>.md is the shipped mechanism and needs no flag; the flags exist on readLocalTaskSource for programmatic callers.",
+    "Return review packet will report this lane's own proof artifacts as out-of-scope — the recorded defect at scripts/ops/pr-review-packet.ts:487-491. It is not one of the four required checks and blocks no merge."
+  ]
+}
