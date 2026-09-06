@@ -176,6 +176,7 @@ artifacts for this lane are the diff summary and this verification log, both pre
 ## Merge SHA Binding
 
 Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1516
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `5ffc0a688b3f1d3a5045faa9d703292c525e6d1c`,
 the last non-proof commit on the branch. The binding is written after merge by
