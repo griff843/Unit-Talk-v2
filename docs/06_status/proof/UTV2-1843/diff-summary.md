@@ -2,7 +2,7 @@
 
 **Branch:** claude/utv2-1843-smart-form-product-intent
 **Tier:** T2 · **Lane type:** governance
-**MERGE_SHA:** pending merge
+MERGE_SHA: pending merge
 
 Documentation and agent-instruction consolidation. No runtime code, no schema, no workflow, no
 required check, no label, no gate, no new lane type.
@@ -20,7 +20,8 @@ required check, no label, no gate, no new lane type.
 | `docs/06_status/proof/UTV2-1843/.gitkeep` | Deleted — the review packet requires it be declared and CEP-E2 refuses it once declared. |
 
 **Verification:** `pnpm lint`, `pnpm type-check`, `pnpm build` and `pnpm test` (5962 pass, 0 fail)
-all exit 0 on the branch. `pnpm verify` is refused locally at `test:live-db` by
+all exit 0 on the branch. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843` returns
+Verdict: PASS (rules matched: operator-ui). `pnpm verify` is refused locally at `test:live-db` by
 `ci:assert-staging` under containment; CI is the authoritative receipt. Every `file:line` citation
 in the new document was re-measured against the branch head and two were corrected. Details and the
 expected non-required `Lane authority` failure are in `verification.md`.

@@ -1,4 +1,73 @@
-# UTV2-1843 — Verification
+# PROOF: UTV2-1843 — Smart Form product intent consolidation
+
+MERGE_SHA: pending merge
+
+## ASSERTIONS:
+
+1. `docs/03_product/smart-form/intent.md` exists and covers the complete operator journey —
+   authentication and canonical identity, sport-aware selections, database-backed participants,
+   automatically derived matchups, honest fallback on missing event or participant coverage, signed
+   odds, bet-slip review, submission, receipt, persisted Track Only truth, and observation — with
+   each behaviour tied to an implementation citation and to a named form of verification.
+2. The contained pilot and a finished, repeatably usable Smart Form are distinguished explicitly,
+   and the document states that a merge or a unit-test count cannot establish deployed usability.
+3. Both signed-field `Input mode` prescriptions in
+   `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` are corrected **in the
+   contract**, with the reason recorded inline. The intent document points at the corrections and
+   does not restate them.
+4. Acceptance Criterion 11 of the same contract is corrected in place to the rule the two later
+   ratified confidence contracts require and the code implements.
+5. `apps/smart-form/CLAUDE.md` no longer describes the app as public-facing or unauthenticated.
+6. Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and `apps/api/CLAUDE.md`
+   including for backend work; `docs/03_product/*/intent.md` is registered in the docs authority
+   map; `/dispatch` packets quote applicable acceptance criteria inline.
+7. No gate, required check, workflow, label, approval artifact or lane type is added.
+8. Every `file:line` citation in the new document was re-measured against the branch head.
+
+## EVIDENCE:
+
+| Assertion | Evidence |
+|---|---|
+| 1, 2 | `docs/03_product/smart-form/intent.md` in this diff — §3 (journey, per-step implementation and verification), §5 (pilot vs finished table), §7 (what counts as verification), §8 (state table with gaps marked) |
+| 3, 4 | `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` in this diff — the two `Input mode` rows and Acceptance Criterion 11, each with an inline "Corrected 2026-09-06" note |
+| 5 | `apps/smart-form/CLAUDE.md` in this diff |
+| 6 | `CLAUDE.md`, `AGENTS.md`, `apps/api/CLAUDE.md`, `docs/05_operations/docs_authority_map.md`, `.claude/commands/dispatch.md` in this diff |
+| 7 | `git diff --stat` below: no `.github/workflows/**` path, no `package.json`, no schema |
+| 8 | The citation re-measurement table in §2 below, and the printed source lines beneath it |
+
+### Commands run
+
+```
+pnpm lint                              # exit 0
+pnpm type-check                        # exit 0
+pnpm build                             # exit 0
+pnpm test                              # exit 0 — tests 5962, pass 5962, fail 0
+pnpm verify                            # refused locally at test:live-db under containment, see below
+npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
+                                       # Verdict: PASS · Changed files: 12 · Rules matched: operator-ui
+```
+
+`scripts/ci/r-level-check.ts` matched the `operator-ui` rule and returned PASS with every triggered
+`required[]` artifact present.
+
+### Diff scope
+
+```
+ .claude/commands/dispatch.md                       |   9 +
+ AGENTS.md                                          |  17 +
+ CLAUDE.md                                          |  17 +
+ apps/api/CLAUDE.md                                 |  21 +
+ apps/smart-form/CLAUDE.md                          |  78 +++-
+ docs/03_product/smart-form/intent.md               | 485 +++++++++++++++++++++
+ .../SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md  |  31 +-
+ docs/05_operations/docs_authority_map.md           |   1 +
+ docs/06_status/proof/UTV2-1843/.gitkeep            |   0
+```
+
+No `.github/workflows/**` file, no `package.json`, no migration, no schema, no source code.
+
+---
+
 
 ## Verification
 
