@@ -1,6 +1,6 @@
 # PROOF: UTV2-1839
 
-MERGE_SHA: pending merge
+MERGE_SHA: d35b82217aabc5efeac6b27e47b21f8029d19967
 
 > Pre-merge the merge row is intentionally the ratified `pending merge` anchor; the
 > Execution SHA row carries the verified implementation identity.
@@ -260,7 +260,7 @@ remains pure and read-only; the collector still performs no write.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: d35b82217aabc5efeac6b27e47b21f8029d19967
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1514
 
 `sha_binding.merge_sha` is `null` pre-merge and `verified_source_sha` is the last

@@ -6,18 +6,19 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "d35b82217aabc5efeac6b27e47b21f8029d19967",
     "verified_source_sha": "5046a095ecd5b87635dff6da75f4b4055a64f33a",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor",
-      "pnpm_test": "PASS \u2014 exit 0. The repo-wide script is a sequence of per-package `tsx --test` invocations and prints no single aggregate; the exit status is the receipt. The two suites this lane changes were counted exactly: 81 tests, 81 pass, 0 fail.",
-      "pnpm_verify": "set-by-ci \u2014 not obtainable locally. `verify` is `pnpm verify:static && pnpm test:live-db`; the local run reached test:live-db, which mechanically establishes verify:static exited 0, then refused with '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)'. That stage refuses a non-staging target by design. The required `verify` check on this PR at this head is the authoritative result.",
-      "r_level_check": "PASS \u2014 `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, changed files 7, rules matched (none). No R-level artifact is required for this diff and none is claimed."
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor",
+      "pnpm_test": "PASS — exit 0. The repo-wide script is a sequence of per-package `tsx --test` invocations and prints no single aggregate; the exit status is the receipt. The two suites this lane changes were counted exactly: 81 tests, 81 pass, 0 fail.",
+      "pnpm_verify": "set-by-ci — not obtainable locally. `verify` is `pnpm verify:static && pnpm test:live-db`; the local run reached test:live-db, which mechanically establishes verify:static exited 0, then refused with '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)'. That stage refuses a non-staging target by design. The required `verify` check on this PR at this head is the authoritative result.",
+      "r_level_check": "PASS — `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: Verdict PASS, changed files 7, rules matched (none). No R-level artifact is required for this diff and none is claimed."
     },
-    "sha_type": "verified_source_sha",
-    "anchor_note": "5046a095e is the last commit that changes source. The lane-manifest and proof commits that follow it are inside PROOF_ONLY_PREFIXES and do not move the anchor."
+    "sha_type": "merge_sha",
+    "anchor_note": "5046a095e is the last commit that changes source. The lane-manifest and proof commits that follow it are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T01:49:14.548Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -36,7 +37,7 @@
       "command": "npx tsx --test scripts/ops/approval-carry-forward.test.ts scripts/ops/carry-forward-collect.test.ts",
       "tests": 81,
       "failures": 0,
-      "detail": "approval-carry-forward.test.ts 52 (35 on origin/main), carry-forward-collect.test.ts 29 (20 on origin/main). Four of the 29 build a real git repository \u2014 a bare origin, a clone, a main branch, a feature branch and real merges \u2014 and drive collect() with the real git binary rooted there, so diff-tree --cc, rev-parse <ref>:<path>, rev-list --not and patch-id --stable are exercised as themselves rather than as stubs."
+      "detail": "approval-carry-forward.test.ts 52 (35 on origin/main), carry-forward-collect.test.ts 29 (20 on origin/main). Four of the 29 build a real git repository — a bare origin, a clone, a main branch, a feature branch and real merges — and drive collect() with the real git binary rooted there, so diff-tree --cc, rev-parse <ref>:<path>, rev-list --not and patch-id --stable are exercised as themselves rather than as stubs."
     },
     "lint": {
       "status": "PASS",
@@ -51,7 +52,7 @@
     "measured_gap": {
       "status": "PASS",
       "command": "for s in $(git rev-list --first-parent --merges -20 origin/main); do git diff-tree --cc -r --name-only $s; done",
-      "observed": "19 of the 20 most recent first-parent merges on origin/main report no paths. c31b8ee191e1704a5ebca70e60e178b97a433d99 reports docs/06_status/lanes/UTV2-1514.json \u2014 content present in neither parent, at a path that is ALLOW_PATTERNS[0].",
+      "observed": "19 of the 20 most recent first-parent merges on origin/main report no paths. c31b8ee191e1704a5ebca70e60e178b97a433d99 reports docs/06_status/lanes/UTV2-1514.json — content present in neither parent, at a path that is ALLOW_PATTERNS[0].",
       "significance": "This is the gap the lane closes, measured on the real branch rather than constructed. The shipped C1-C4 set classifies an incoming merge by the paths it touches and never looks at the content now at those paths, so it admits this merge."
     },
     "mutation_control": {
@@ -60,7 +61,7 @@
       "command": "apply each mutation to the real source, run the affected suites, restore byte-for-byte",
       "expected": "the decisive inversion is that the shipped condition set verifies a real evil merge",
       "observed": "M1 C5 removed -> still REFUSED (C6, C7 catch it). M2 C6 removed -> still REFUSED (C5, C7 catch it). M3 C5+C6+C7 removed, i.e. the set UTV2-1836 shipped -> VERIFIED on a real branch-side evil merge built in a real git repository. M4 C1's rev-list --not cross-check disabled -> 29/29 collector tests still pass. M5 C1's per-parent walk reverted to parents[1] only -> 2 tests fail, including the real-git octopus case.",
-      "honest_reading": "M1 and M2 did not individually flip the verdict, because on a branch-side evil merge all three new conditions fire and removing one leaves two. The inversion that demonstrates the gap is M3, and it is recorded as it came out rather than as it would read better. M4 shows the rev-list cross-check is redundant: the premise it was written against \u2014 that a two-parent merge whose second parent is on main can carry off-main commits through that parent's ancestry \u2014 is false, since everything reachable from an ancestor of main is an ancestor of main. It is kept as a second independently computed answer and its source comment says exactly that. The load-bearing half of the C1 change is the per-parent walk, which M5 proves."
+      "honest_reading": "M1 and M2 did not individually flip the verdict, because on a branch-side evil merge all three new conditions fire and removing one leaves two. The inversion that demonstrates the gap is M3, and it is recorded as it came out rather than as it would read better. M4 shows the rev-list cross-check is redundant: the premise it was written against — that a two-parent merge whose second parent is on main can carry off-main commits through that parent's ancestry — is false, since everything reachable from an ancestor of main is an ancestor of main. It is kept as a second independently computed answer and its source comment says exactly that. The load-bearing half of the C1 change is the per-parent walk, which M5 proves."
     },
     "reserved_surface_untouched": {
       "status": "PASS",
@@ -79,7 +80,7 @@
       "status": "EXPECTED",
       "command": "pnpm verify",
       "observed": "reached test:live-db, then '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx. Run it through the staging-ci GitHub environment with CI_SUPABASE_* credentials.'",
-      "significance": "Not a failure of this change. `verify` is a && chain, so reaching its final stage establishes that verify:static \u2014 env check, lint, type-check, build, test, command manifest, migration lint \u2014 exited 0. The CI receipt is authoritative for the stage that cannot run here."
+      "significance": "Not a failure of this change. `verify` is a && chain, so reaching its final stage establishes that verify:static — env check, lint, type-check, build, test, command manifest, migration lint — exited 0. The CI receipt is authoritative for the stage that cannot run here."
     }
   },
   "known_gaps": [
