@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1843-smart-form-product-intent",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1521",
   "files_changed": [],
   "file_scope_lock": [
     ".claude/commands/dispatch.md",
@@ -24,9 +24,9 @@
     "docs/06_status/proof/UTV2-1843/diff-summary.md",
     "docs/06_status/proof/UTV2-1843/verification.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-06T17:48:36.823Z",
-  "heartbeat_at": "2026-09-06T17:48:36.823Z",
+  "heartbeat_at": "2026-09-06T18:06:37.802Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1843-smart-form-product-intent.json",
