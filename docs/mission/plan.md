@@ -457,10 +457,12 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-The current one is **UTV2-1836** — the carry-forward evidence collector, the reserved Merge Gate
-integration diff, and this reconciliation. UTV2-1830 held the slot before it and merged as #1502
-(`1cb31a43e`); UTV2-1829 before that, as #1499 at `d70df077`. RMA is an architecture review, not a
-governance lane.
+The current one is **UTV2-1840** — the work-identifier repair below, which is the first exit
+condition of the ratified tracker-independence cutover measured rather than asserted. UTV2-1838
+held the slot before it and merged as #1517 (`3eea8f258`, closeout made safe to repeat); UTV2-1836
+before that (the carry-forward evidence collector and the reserved Merge Gate integration diff);
+UTV2-1830 as #1502 (`1cb31a43e`); UTV2-1829 as #1499 (`d70df077`). RMA is an architecture review,
+not a governance lane.
 
 Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
 empty.** After this lane closes it is deliberately left unstaffed: the closeout defects below are
@@ -506,6 +508,26 @@ Recording this lane's own friction, because it is the cheapest available reprodu
   fixed: an allowlist that reads as if it covers a path it does not name.
 - **Linear writes are not read-your-writes.** A tier label and state written at 14:54:50Z were not
   visible to a preflight Linear query started immediately after, costing one full ~4-minute run.
+- **A lane can run start → merge with its Linear state never moving, and only closeout notices.**
+  `truth-check` L3 refuses a lane whose issue is in an `unstarted` state. Nothing earlier checks
+  it — preflight, `verify`, ERV, Merge Gate and the merge itself all pass — so the first signal is
+  `post-merge-lane-close.yml` going red *after* the code is on `main`. Observed on UTV2-1838
+  (`Ready for Claude`) and previously on UTV2-1824 (`Backlog`). Recovery is a state change plus a
+  replay, ~4 minutes, no code change. This is also a precise measurement of the cutover's shape:
+  L1/L3/L4/C1/C7 skip when `tracker_ref` is **null**, not when the tracker is merely *stale*, so a
+  present-but-unmoved tracker remains a hard closeout dependency.
+- **A merged, truth-closed lane leaked its lease for the third recorded time.** UTV2-1838 closed at
+  `3eea8f258` with its `.ops/leases/UTV2-1838.json` still `active`, `owner_pid: null`, TTL to
+  2026-09-08, which refused the next lane on the same files with `lease_conflict`.
+  `pnpm ops:lease release --issue <ID> --actor claude --reason "<why>"` is the working path; both
+  flags are required and their absence reports `lease_missing_required_fields` rather than usage.
+  Reclaim stays TTL-gated, so a provably finished lease is still unreclaimable for 48 hours.
+- **`--files` and `PG2` deadlock on any file the lane will create.** `ops:lane-start --files`
+  refuses a path that does not exist yet; pre-creating it then fails preflight `PG2` (*working tree
+  is not clean*). Only a **trailing** `/**` glob is legal in a scope declaration, so the only way
+  out is to widen the lock to the whole directory — `scripts/ops/**` on this lane, where the actual
+  change was three files. `file_scope_lock` is pinned at lane-start and an agent cannot narrow it
+  afterwards either, so the cost is paid as permanently looser scope than the work needed.
 
 None of these are risk controls. Every one is administrative.
 
@@ -520,6 +542,54 @@ Per `intent.md`, the cutover closes when all five hold, demonstrated rather than
 5. Existing PRs can finish without administrative restarts.
 
 Then the capacity returns to product work.
+
+**Measured 2026-09-06 — where the five actually stand.** The workstream is *not* complete, and it
+is not complete for reasons that are now specific rather than general:
+
+| # | State | Evidence |
+|---|---|---|
+| 1 | **Advanced, not closed** | A repo-minted `WORK-###` task could not *open* a lane: a credential-free `ops:preflight WORK-902` reported `PE2 skip` and `PL1 skip` — every tracker check correctly optional — and then **`PX2 fail`**, because `branch-discipline-guard.ts` kept a private copy of the identifier alternation never widened when `WORK-###` was minted, and `lane-start` refuses without a validated preflight token. UTV2-1840 repairs that; the same probe now reports `PX2 pass`. **It does not make the rest of the lifecycle `WORK-###`-clean** — see the enumeration below. |
+| 2 | **Holds** | The credential-free probe reaches a verdict at all: `PE2`/`PL1`-`PL5` degrade to `skip`, not `fail`. |
+| 3 | **Holds, unchanged** | Nothing in this workstream has touched merge authority, the merge gate, CODEOWNERS or branch protection. Items 8–11 of the change set remain RESERVED and unimplemented. |
+| 4 | **Demonstrated but not yet proven mechanically** | This session recovered mission and plan across a compaction, but no test asserts it. |
+| 5 | **Not yet demonstrated** | No existing PR has been carried to closeout without an administrative restart since the ratification. |
+
+**Where `WORK-###` still fails, enumerated rather than assumed.** `grep -rn "UTV2|UNI" scripts/
+.github/` returns **22 sites** carrying the narrow alternation. They are not equivalent, and the
+distinction is what says how much of exit condition 1 is left:
+
+- **Deliberately narrow, correct as written (1).** `shared.ts:415` `TRACKER_REF_PATTERN`, with the
+  comment *"A tracker key is a Linear issue identifier. `WORK-###` is deliberately NOT one."* This
+  one must stay.
+- **Hard refusals that would block a `WORK-###` lane after it opens (2).**
+  `executor-result-validate.ts:109` pushes `Invalid Issue ID … Must match UTV2-NNN or UNI-NNN` — and
+  ERV is a *required* check. `proof-rebind.ts:1652` refuses with `proof_rebind_refused`; that one is
+  a path-traversal guard on a value used as a directory segment, so it must be widened carefully
+  rather than relaxed.
+- **Soft degradations (2).** `proof-schema.ts:326` returns `unverified` and
+  `proof-binding-validator.ts:150` returns a null binding context. Neither hard-fails; both quietly
+  stop verifying, which is its own problem.
+- **Discovery and reconciliation, non-blocking (5).** `queue-lib.mjs`, `lane-maximizer.ts`,
+  `orchestration-reconciler.ts`, `truth-check-lib.ts:2613` (cross-issue commit scanning, which
+  simply would not see a `WORK-###` reference).
+- **Reserved surfaces, deliberately untouched (7).** `merge-gate.yml:244`,
+  `executor-result-validator.yml:206`, `p0-protocol.yml:53`, `tier-label-check.yml:38,119`,
+  `tier-label-apply.yml:90`, `merge-gate-verdict.cjs:30`. These are cutover items 8–11 and remain a
+  PM decision on merge authority.
+
+So exit condition 1 moves from *"a `WORK-###` task cannot start"* to *"a `WORK-###` task cannot
+finish"*. **The cutover does not close because a helper merged** — 4 and 5 still require
+demonstration, the two hard refusals above are the next non-reserved step, and the tracker remains a
+hard dependency at closeout (`truth-check` L3, above) for any lane that *has* a tracker ref at all.
+
+**A new test file cannot be added without editing `package.json`, and that is a scope trap.**
+`pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on any `*.test.ts` not reachable from a
+package script or workflow command, and the only wiring point is the `test:ops` script in
+`package.json`. A lane that did not declare `package.json` at lane-start therefore cannot add a test
+file at all: `file_scope_lock` is pinned and an agent cannot widen it. UTV2-1840 hit this and
+resolved it by putting the eight tests in the already-wired `scripts/ops/shared.test.ts` — defensible
+here, since the contract under test *is* that module's exported namespace list, but it is not a
+general answer. **Declare `package.json` in the scope of any lane that may add a test file.**
 
 ### The dependency map — measured 2026-09-05
 

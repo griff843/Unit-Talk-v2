@@ -391,7 +391,19 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 // ratification and still resolve a lane by `UTV2-###`. A `WORK-###` lane is
 // therefore fully usable for discovery, delegation, verification, PR and
 // closeout, and is NOT yet mergeable. Do not widen those workflows here.
-const ISSUE_PATTERN = /^(?:UTV2|UNI|WORK)-\d+$/;
+// The single source of truth for which identifier namespaces name a unit of work.
+// `branch-discipline-guard.ts` kept its own copy of this alternation and was not
+// widened when `WORK-###` was minted, which silently made an issue-ID-free task
+// unable to pass preflight PX2. Derive both patterns here so they cannot drift again.
+export const ISSUE_ID_NAMESPACES = ['UTV2', 'UNI', 'WORK'] as const;
+const ISSUE_NAMESPACE_ALTERNATION = ISSUE_ID_NAMESPACES.join('|');
+
+/** Scans free text for every work identifier it contains. Global and case-insensitive. */
+export function issueIdScanPattern(): RegExp {
+  return new RegExp(`\\b(?:${ISSUE_NAMESPACE_ALTERNATION})-\\d+\\b`, 'gi');
+}
+
+const ISSUE_PATTERN = new RegExp(`^(?:${ISSUE_NAMESPACE_ALTERNATION})-\\d+$`);
 // verification_target is intentionally narrower than the general ISSUE_PATTERN above (which
 // also accepts UNI-###): the manifest schema (lane_manifest_v1.schema.json) and
 // LANE_MANIFEST_SPEC.md §16 both document verification_target as UTV2-### only, and

@@ -4,6 +4,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  evaluateBranchDiscipline,
+  evaluateIssueReferences,
+  extractIssueIds,
+} from './branch-discipline-guard.js';
+import {
+  ISSUE_ID_NAMESPACES,
+  issueIdScanPattern,
   createManifest,
   requireIssueId,
   resolveTrackerRef,
@@ -1557,4 +1564,91 @@ test('UTV2-1837: WORK-### is a legal repo-owned work identity', () => {
   assert.equal(requireIssueId('work-7'), 'WORK-7');
   assert.equal(requireIssueId('UTV2-1837'), 'UTV2-1837');
   assert.throws(() => requireIssueId('NOPE-1'), /Invalid issue id/u);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1840 — the work-identifier namespace list is a contract between this
+// module and `branch-discipline-guard.ts`.
+//
+// The guard kept its own private copy of the alternation and was never widened
+// when `WORK-###` was minted, so `ops:preflight` PX2 refused a repo-minted
+// identifier while every tracker check correctly skipped. These tests live here
+// rather than in a `branch-discipline-guard.test.ts` because a new test file
+// cannot be reached by `pnpm test` without editing `package.json`, which is
+// outside this lane's file scope; the contract under test is this module's
+// exported namespace list, so this is also its natural home.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1840: the guard scans for exactly the namespaces shared.ts mints', () => {
+  for (const namespace of ISSUE_ID_NAMESPACES) {
+    assert.deepEqual(
+      extractIssueIds(`touching ${namespace}-901 here`),
+      [`${namespace}-901`],
+      `${namespace}-### must be recognised as a work identifier`,
+    );
+  }
+});
+
+test('UTV2-1840: WORK-### is admitted end to end, the case tracker independence exists for', () => {
+  const result = evaluateBranchDiscipline({
+    branch: 'claude/work-901-demo',
+    title: 'WORK-901: demo',
+    commits: 'WORK-901: demo',
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.code, 'single_issue_reference');
+  assert.deepEqual(result.branch_issue_ids, ['WORK-901']);
+});
+
+// Controls. Widening the namespace must not weaken any protection the guard
+// actually provides -- a green result above is only meaningful if these stay red.
+
+test('UTV2-1840: a branch with no work identifier is still refused', () => {
+  const result = evaluateBranchDiscipline({
+    branch: 'claude/no-id-here',
+    title: 'no id',
+    commits: 'no id',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'missing_branch_issue_reference');
+});
+
+test('UTV2-1840: a cross-issue reference is still refused on a WORK-### branch', () => {
+  const result = evaluateBranchDiscipline({
+    branch: 'claude/work-901-demo',
+    title: 'WORK-901: demo',
+    commits: 'WORK-901: demo\nrefs UTV2-1224',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'multiple_issue_references');
+  assert.deepEqual(result.issue_ids, ['UTV2-1224', 'WORK-901']);
+});
+
+test('UTV2-1840: a branch naming two work identifiers is still refused', () => {
+  const result = evaluateBranchDiscipline({
+    branch: 'claude/work-901-and-utv2-1838',
+    title: 'both',
+    commits: 'both',
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'missing_branch_issue_reference');
+  assert.deepEqual(result.branch_issue_ids, ['UTV2-1838', 'WORK-901']);
+});
+
+test('UTV2-1840: exempt automation branches still bypass the guard', () => {
+  const result = evaluateBranchDiscipline({ branch: 'dependabot/npm_and_yarn/foo-1.2.3' });
+  assert.equal(result.ok, true);
+  assert.equal(result.code, 'exempt_branch');
+});
+
+test('UTV2-1840: evaluateIssueReferences still rejects text naming two issues', () => {
+  const result = evaluateIssueReferences('UTV2-1838 and WORK-901');
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'multiple_issue_references');
+});
+
+test('UTV2-1840: the scan pattern is global, so matchAll cannot silently return one hit', () => {
+  const pattern = issueIdScanPattern();
+  assert.equal(pattern.global, true);
+  assert.equal(pattern.lastIndex, 0, 'a fresh pattern must not carry state between callers');
 });
