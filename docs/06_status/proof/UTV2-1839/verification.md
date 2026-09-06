@@ -263,3 +263,34 @@ remains pure and read-only; the collector still performs no write.
 `sha_binding.merge_sha` is `null` pre-merge and `verified_source_sha` is the last
 commit that changed source. `post-merge-lane-close.yml` runs
 `ops:proof-generate --merge-sha` after the merge; no manual append is made here.
+
+## Addendum — the review packet's scope contradiction, closed by hand on this lane
+
+`Return review packet` failed at head `5050048fa` with:
+
+```
+"detail": "out-of-scope files: docs/06_status/proof/UTV2-1839/.gitkeep,
+           docs/06_status/proof/UTV2-1839/evidence.json"
+```
+
+Both files are required by the system that rejected them. `ops:lane-start`
+**creates and commits** the `.gitkeep`. `Executor Result Validation` selects the
+narrow legacy proof contract — which demands a real merge SHA pre-merge, and so
+cannot pass — unless `evidence.json` exists. Yet
+`scripts/ops/pr-review-packet.ts:487-491` builds the allowed scope from
+`scopeLock + sameIssueLaneMetadataPaths(issueId) + expectedProofPaths`, and
+`sameIssueLaneMetadataPaths` (`:662-668`) covers only the sync file and the
+manifest — no proof glob. So the lane's own proof directory is admitted **only**
+by literal `expected_proof_paths` entries, and `ops:lane-manifest update` cannot
+extend that list (`lane-manifest.ts:128` sets it at `create` only).
+
+This lane closed it by listing the four proof files that actually exist in
+`expected_proof_paths`. That is a **truthful widening**, not a fabrication: each
+listed path is a real file this lane produced. It is recorded here because the
+underlying repair is one of the two named in `plan.md` — give the packet a
+`docs/06_status/proof/<ID>/**` glob the way `sameIssueLaneMetadataPaths` already
+does for the sync file and the manifest, or teach `ops:lane-manifest update` to
+extend the list — and neither is in this lane's scope.
+
+`Return review packet` is not one of the four required checks, so this blocked no
+merge. This is its second measured occurrence.

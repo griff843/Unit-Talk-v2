@@ -14,7 +14,9 @@
     "scripts/ops/**"
   ],
   "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1839/.gitkeep",
     "docs/06_status/proof/UTV2-1839/diff-summary.md",
+    "docs/06_status/proof/UTV2-1839/evidence.json",
     "docs/06_status/proof/UTV2-1839/verification.md"
   ],
   "status": "in_review",
