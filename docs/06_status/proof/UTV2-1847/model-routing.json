@@ -1,0 +1,15 @@
+{
+  "issue_id": "UTV2-1847",
+  "manifest_schema_version": 2,
+  "model_profile": "codex-sol-high",
+  "model": "gpt-5.6-sol",
+  "reasoning_effort": "high",
+  "policy_version": "1.0.0",
+  "codex_cli_version": "codex-cli 0.153.3",
+  "legacy_compatibility_used": false,
+  "override_used": false,
+  "override_authorized_by": null,
+  "codex_exit_code": 0,
+  "execution_sha": "3518fef1c120187c1acf3be38fc01a8c109eed14",
+  "generated_at": "2026-09-06T22:52:12.792Z"
+}
