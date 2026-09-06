@@ -1,0 +1,268 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1844
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1844
+  objective: "Smart Form UI: signed odds and line enterable on mobile; DB-backed
+    away/home selectors with auto-derived matchup in the fallback tier"
+  acceptance_criteria:
+    - |-
+      The `apps/smart-form/**` half of the Smart Form repair, split out of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) so it can proceed while that issue's server half waits on a T1 preflight decision under containment.
+
+      **This does not by itself unblock submission.** A structured-fallback submission still 422s on the event-existence gate until [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server change lands. What this issue delivers is the operator-facing half: the controls Griff actually hit during the pilot, and the payload shape the server already accepts but the client has never produced.
+
+      ## Declared file scope (lane)
+
+      The lane is declared on five globs, deliberately **not** `apps/smart-form/**`:
+
+      ```
+      apps/smart-form/app/**
+      apps/smart-form/lib/**
+      apps/smart-form/components/**
+      apps/smart-form/e2e/**
+      apps/smart-form/test/**
+      ```
+
+      The reason is mechanical, not stylistic: `apps/smart-form/**` overlaps `apps/smart-form/CLAUDE.md`, which is inside [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)'s active `file_scope_lock`, and `ops:lane-start` refuses the overlap with `lease_conflict`. The five globs cover every file this issue changes and remove the conflict, so this work does not wait on [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) closing. Do not edit `apps/smart-form/CLAUDE.md` on this lane.
+
+      ## Where to look
+
+      * `apps/smart-form/app/submit/components/BetForm.tsx` — `ParticipantAutocompleteField` (:371), `applyStructuredSideSelection` (:1775, derives `${away} @ ${home}` at :1799), submit guards (:1894, :1902, :1906), the line input (:3148), the odds input (:3922)
+      * `apps/smart-form/lib/form-utils.ts` — `evaluateSubmissionGuards` (:608), `buildSubmissionPayload`
+      * `apps/smart-form/e2e/` — Playwright specs; note **no CI workflow runs these**
+      * Product intent: `docs/03_product/smart-form/intent.md` §3.4, §3.5, §4, §6.1
+      * Contract: `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — both signed-field `Input mode` rows were corrected in [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds); this issue makes the controls match the corrected contract.
+
+      ## D — signed odds and signed line enterable on mobile
+
+      `inputMode="numeric"` (odds, :3922) and `inputMode="decimal"` (line, :3148) both render keypads with **no minus key**, so `-110` and `-3.5` are unenterable on a phone. Griff hit the odds one during the pilot: "I'm unable to put - 110."
+
+      Both become `inputMode="text"` with a signed pattern. The validation ranges do not change — the schema always accepted `-110`; only the keyboard hint was wrong.
+
+      ## B — database-backed participants in the fallback tier
+
+      Today the manual toggle drops straight to two plain text inputs, skipping a tier the server already supports. Replace the binary `manualIdentityOverride` with a three-value `identityMode`:
+
+      * `canonical` — matchup selected from browse. Unchanged.
+      * `structured-fallback` — DB-backed sport-filtered away/home autocompletes, **real canonical participant IDs**, `eventId: null`. This is exactly what `validateStructuredTeamFallback` (`apps/api/src/smart-form-validation.ts:186-193`) already accepts and the client has never sent. Team sports only.
+      * `manual` — free text, `canonical-coverage-gap` provenance, participant IDs `null`.
+
+      Additionally:
+
+      * The matchup name is derived automatically from the two selections and is not hand-typed. `applyStructuredSideSelection:1799` already does this; route the structured tier through it and re-derive on change and on clear.
+      * The same participant cannot occupy both sides. The refusal at `:1902` is prefixed `!manualIdentityOverride`; it must run in every tier.
+      * **Free text is reachable only where coverage is genuinely absent.** A participant search that *failed* is retryable and must never become permanent `canonical-coverage-gap` provenance. `ParticipantAutocompleteField` already distinguishes `searchError` from `hasSearched && suggestions.length === 0` internally but never lifts it — lift it as per-side resolution state. (The server-side per-side availability endpoint is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s `reference-data.ts` change and is not required for this; deriving the state from the side's own search is the stronger signal anyway.)
+      * User-facing language, ratified: "Select a matchup, or build one from away and home teams — the matchup name is generated automatically."
+
+      ## Definition of done
+
+      1. The odds and line inputs accept a leading `-` on a mobile keyboard: neither carries `inputMode="numeric"` or `inputMode="decimal"`, and a signed value round-trips into the submitted payload.
+      2. In the fallback tier, away and home participants are chosen from sport-filtered database-backed selectors wherever coverage exists, and their canonical participant IDs reach the payload with `eventId: null`.
+      3. The matchup name is derived from the two selections in that tier and is never hand-typed.
+      4. Selecting the same participant on both sides is refused in the browser, in every tier.
+      5. Free text is reachable only when that side's search succeeded and returned nothing. On a search failure the UI reports a retryable error and does not offer the coverage-gap path.
+      6. Provenance is truthful in every tier: real IDs with `eventId: null` in the structured tier, IDs `null` with `canonical-coverage-gap` in the manual tier — never mixed.
+
+      ## Verification / self-check
+
+      * `pnpm verify` green on the branch.
+      * Unit assertions on the rendered input attributes, not on the schema — the schema always accepted `-110`, which is exactly why every test passed while the control was unusable.
+      * Playwright assertions in `apps/smart-form/e2e/` on the rendered controls and on the submitted payload. **State honestly that no CI workflow runs these**, and claim only what the run shows: the keypad-determining attribute is gone and a signed value round-trips. A browser test does not exercise a physical on-screen keyboard and must not be described as if it did.
+      * An inversion check on criterion 5: force a search failure and assert the coverage-gap path is not offered.
+
+      ## Out of scope
+
+      * The event-existence gate and the server-side classification ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+      * The `reference-data.ts` per-side availability endpoint ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+      * Reference-data population — reserved, and never the fix for a form defect.
+      * The `listUpcoming` symmetric-window defect.
+  guardrails: []
+  non_goals:
+    - The event-existence gate and the server-side classification
+      ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+    - The `reference-data.ts` per-side availability endpoint
+      ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+    - Reference-data population — reserved, and never the fix for a form defect.
+    - The `listUpcoming` symmetric-window defect.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      The `apps/smart-form/**` half of the Smart Form repair, split out of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) so it can proceed while that issue's server half waits on a T1 preflight decision under containment.
+
+      **This does not by itself unblock submission.** A structured-fallback submission still 422s on the event-existence gate until [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server change lands. What this issue delivers is the operator-facing half: the controls Griff actually hit during the pilot, and the payload shape the server already accepts but the client has never produced.
+    - |-
+      Declared file scope (lane)
+      The lane is declared on five globs, deliberately **not** `apps/smart-form/**`:
+
+      ```
+      apps/smart-form/app/**
+      apps/smart-form/lib/**
+      apps/smart-form/components/**
+      apps/smart-form/e2e/**
+      apps/smart-form/test/**
+      ```
+
+      The reason is mechanical, not stylistic: `apps/smart-form/**` overlaps `apps/smart-form/CLAUDE.md`, which is inside [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)'s active `file_scope_lock`, and `ops:lane-start` refuses the overlap with `lease_conflict`. The five globs cover every file this issue changes and remove the conflict, so this work does not wait on [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) closing. Do not edit `apps/smart-form/CLAUDE.md` on this lane.
+    - |-
+      Where to look
+      * `apps/smart-form/app/submit/components/BetForm.tsx` — `ParticipantAutocompleteField` (:371), `applyStructuredSideSelection` (:1775, derives `${away} @ ${home}` at :1799), submit guards (:1894, :1902, :1906), the line input (:3148), the odds input (:3922)
+      * `apps/smart-form/lib/form-utils.ts` — `evaluateSubmissionGuards` (:608), `buildSubmissionPayload`
+      * `apps/smart-form/e2e/` — Playwright specs; note **no CI workflow runs these**
+      * Product intent: `docs/03_product/smart-form/intent.md` §3.4, §3.5, §4, §6.1
+      * Contract: `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — both signed-field `Input mode` rows were corrected in [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds); this issue makes the controls match the corrected contract.
+    - >-
+      D — signed odds and signed line enterable on mobile
+
+      `inputMode="numeric"` (odds, :3922) and `inputMode="decimal"` (line,
+      :3148) both render keypads with **no minus key**, so `-110` and `-3.5` are
+      unenterable on a phone. Griff hit the odds one during the pilot: "I'm
+      unable to put - 110."
+
+
+      Both become `inputMode="text"` with a signed pattern. The validation
+      ranges do not change — the schema always accepted `-110`; only the
+      keyboard hint was wrong.
+    - |-
+      B — database-backed participants in the fallback tier
+      Today the manual toggle drops straight to two plain text inputs, skipping a tier the server already supports. Replace the binary `manualIdentityOverride` with a three-value `identityMode`:
+
+      * `canonical` — matchup selected from browse. Unchanged.
+      * `structured-fallback` — DB-backed sport-filtered away/home autocompletes, **real canonical participant IDs**, `eventId: null`. This is exactly what `validateStructuredTeamFallback` (`apps/api/src/smart-form-validation.ts:186-193`) already accepts and the client has never sent. Team sports only.
+      * `manual` — free text, `canonical-coverage-gap` provenance, participant IDs `null`.
+
+      Additionally:
+
+      * The matchup name is derived automatically from the two selections and is not hand-typed. `applyStructuredSideSelection:1799` already does this; route the structured tier through it and re-derive on change and on clear.
+      * The same participant cannot occupy both sides. The refusal at `:1902` is prefixed `!manualIdentityOverride`; it must run in every tier.
+      * **Free text is reachable only where coverage is genuinely absent.** A participant search that *failed* is retryable and must never become permanent `canonical-coverage-gap` provenance. `ParticipantAutocompleteField` already distinguishes `searchError` from `hasSearched && suggestions.length === 0` internally but never lifts it — lift it as per-side resolution state. (The server-side per-side availability endpoint is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s `reference-data.ts` change and is not required for this; deriving the state from the side's own search is the stronger signal anyway.)
+      * User-facing language, ratified: "Select a matchup, or build one from away and home teams — the matchup name is generated automatically."
+    - >-
+      Definition of done
+
+      1. The odds and line inputs accept a leading `-` on a mobile keyboard:
+      neither carries `inputMode="numeric"` or `inputMode="decimal"`, and a
+      signed value round-trips into the submitted payload.
+
+      2. In the fallback tier, away and home participants are chosen from
+      sport-filtered database-backed selectors wherever coverage exists, and
+      their canonical participant IDs reach the payload with `eventId: null`.
+
+      3. The matchup name is derived from the two selections in that tier and is
+      never hand-typed.
+
+      4. Selecting the same participant on both sides is refused in the browser,
+      in every tier.
+
+      5. Free text is reachable only when that side's search succeeded and
+      returned nothing. On a search failure the UI reports a retryable error and
+      does not offer the coverage-gap path.
+
+      6. Provenance is truthful in every tier: real IDs with `eventId: null` in
+      the structured tier, IDs `null` with `canonical-coverage-gap` in the
+      manual tier — never mixed.
+    - >-
+      Verification / self-check
+
+      * `pnpm verify` green on the branch.
+
+      * Unit assertions on the rendered input attributes, not on the schema —
+      the schema always accepted `-110`, which is exactly why every test passed
+      while the control was unusable.
+
+      * Playwright assertions in `apps/smart-form/e2e/` on the rendered controls
+      and on the submitted payload. **State honestly that no CI workflow runs
+      these**, and claim only what the run shows: the keypad-determining
+      attribute is gone and a signed value round-trips. A browser test does not
+      exercise a physical on-screen keyboard and must not be described as if it
+      did.
+
+      * An inversion check on criterion 5: force a search failure and assert the
+      coverage-gap path is not offered.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed
+    title: "Smart Form UI: signed odds and line enterable on mobile; DB-backed
+      away/home selectors with auto-derived matchup in the fallback tier"
+    description: |-
+      The `apps/smart-form/**` half of the Smart Form repair, split out of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) so it can proceed while that issue's server half waits on a T1 preflight decision under containment.
+
+      **This does not by itself unblock submission.** A structured-fallback submission still 422s on the event-existence gate until [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server change lands. What this issue delivers is the operator-facing half: the controls Griff actually hit during the pilot, and the payload shape the server already accepts but the client has never produced.
+
+      ## Declared file scope (lane)
+
+      The lane is declared on five globs, deliberately **not** `apps/smart-form/**`:
+
+      ```
+      apps/smart-form/app/**
+      apps/smart-form/lib/**
+      apps/smart-form/components/**
+      apps/smart-form/e2e/**
+      apps/smart-form/test/**
+      ```
+
+      The reason is mechanical, not stylistic: `apps/smart-form/**` overlaps `apps/smart-form/CLAUDE.md`, which is inside [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds)'s active `file_scope_lock`, and `ops:lane-start` refuses the overlap with `lease_conflict`. The five globs cover every file this issue changes and remove the conflict, so this work does not wait on [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) closing. Do not edit `apps/smart-form/CLAUDE.md` on this lane.
+
+      ## Where to look
+
+      * `apps/smart-form/app/submit/components/BetForm.tsx` — `ParticipantAutocompleteField` (:371), `applyStructuredSideSelection` (:1775, derives `${away} @ ${home}` at :1799), submit guards (:1894, :1902, :1906), the line input (:3148), the odds input (:3922)
+      * `apps/smart-form/lib/form-utils.ts` — `evaluateSubmissionGuards` (:608), `buildSubmissionPayload`
+      * `apps/smart-form/e2e/` — Playwright specs; note **no CI workflow runs these**
+      * Product intent: `docs/03_product/smart-form/intent.md` §3.4, §3.5, §4, §6.1
+      * Contract: `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — both signed-field `Input mode` rows were corrected in [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds); this issue makes the controls match the corrected contract.
+
+      ## D — signed odds and signed line enterable on mobile
+
+      `inputMode="numeric"` (odds, :3922) and `inputMode="decimal"` (line, :3148) both render keypads with **no minus key**, so `-110` and `-3.5` are unenterable on a phone. Griff hit the odds one during the pilot: "I'm unable to put - 110."
+
+      Both become `inputMode="text"` with a signed pattern. The validation ranges do not change — the schema always accepted `-110`; only the keyboard hint was wrong.
+
+      ## B — database-backed participants in the fallback tier
+
+      Today the manual toggle drops straight to two plain text inputs, skipping a tier the server already supports. Replace the binary `manualIdentityOverride` with a three-value `identityMode`:
+
+      * `canonical` — matchup selected from browse. Unchanged.
+      * `structured-fallback` — DB-backed sport-filtered away/home autocompletes, **real canonical participant IDs**, `eventId: null`. This is exactly what `validateStructuredTeamFallback` (`apps/api/src/smart-form-validation.ts:186-193`) already accepts and the client has never sent. Team sports only.
+      * `manual` — free text, `canonical-coverage-gap` provenance, participant IDs `null`.
+
+      Additionally:
+
+      * The matchup name is derived automatically from the two selections and is not hand-typed. `applyStructuredSideSelection:1799` already does this; route the structured tier through it and re-derive on change and on clear.
+      * The same participant cannot occupy both sides. The refusal at `:1902` is prefixed `!manualIdentityOverride`; it must run in every tier.
+      * **Free text is reachable only where coverage is genuinely absent.** A participant search that *failed* is retryable and must never become permanent `canonical-coverage-gap` provenance. `ParticipantAutocompleteField` already distinguishes `searchError` from `hasSearched && suggestions.length === 0` internally but never lifts it — lift it as per-side resolution state. (The server-side per-side availability endpoint is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s `reference-data.ts` change and is not required for this; deriving the state from the side's own search is the stronger signal anyway.)
+      * User-facing language, ratified: "Select a matchup, or build one from away and home teams — the matchup name is generated automatically."
+
+      ## Definition of done
+
+      1. The odds and line inputs accept a leading `-` on a mobile keyboard: neither carries `inputMode="numeric"` or `inputMode="decimal"`, and a signed value round-trips into the submitted payload.
+      2. In the fallback tier, away and home participants are chosen from sport-filtered database-backed selectors wherever coverage exists, and their canonical participant IDs reach the payload with `eventId: null`.
+      3. The matchup name is derived from the two selections in that tier and is never hand-typed.
+      4. Selecting the same participant on both sides is refused in the browser, in every tier.
+      5. Free text is reachable only when that side's search succeeded and returned nothing. On a search failure the UI reports a retryable error and does not offer the coverage-gap path.
+      6. Provenance is truthful in every tier: real IDs with `eventId: null` in the structured tier, IDs `null` with `canonical-coverage-gap` in the manual tier — never mixed.
+
+      ## Verification / self-check
+
+      * `pnpm verify` green on the branch.
+      * Unit assertions on the rendered input attributes, not on the schema — the schema always accepted `-110`, which is exactly why every test passed while the control was unusable.
+      * Playwright assertions in `apps/smart-form/e2e/` on the rendered controls and on the submitted payload. **State honestly that no CI workflow runs these**, and claim only what the run shows: the keypad-determining attribute is gone and a signed value round-trips. A browser test does not exercise a physical on-screen keyboard and must not be described as if it did.
+      * An inversion check on criterion 5: force a search failure and assert the coverage-gap path is not offered.
+
+      ## Out of scope
+
+      * The event-existence gate and the server-side classification ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+      * The `reference-data.ts` per-side availability endpoint ([UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)).
+      * Reference-data population — reserved, and never the fix for a form defect.
+      * The `listUpcoming` symmetric-window defect.
+    captured_at: 2026-09-06T18:39:38.956Z
+    description_sha256: 09f9c3e5f8acb9174f22775a29da4f510e21e3c5bfc8b3ff69b610deff11e301
+  contract_hash: 9856d3287b19980d8f5633e925088c7dd1db3938ded7350a7263cab22c551c0b

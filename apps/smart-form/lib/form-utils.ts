@@ -582,15 +582,18 @@ export interface SubmissionGuardFailure {
   code:
     | 'manual-team-sport-requires-both-sides'
     | 'manual-requires-a-participant'
+    | 'canonical-requires-event'
     | 'canonical-player-requires-event'
     | 'canonical-without-event-requires-team-sport';
   title: string;
   description: string;
 }
 
+export type SmartFormIdentityMode = 'canonical' | 'structured-fallback' | 'manual';
+
 export interface SubmissionGuardInput {
   sportId: string;
-  manualOverride: boolean;
+  identityMode: SmartFormIdentityMode;
   awayParticipantName?: string | null;
   homeParticipantName?: string | null;
   team?: string | null;
@@ -610,7 +613,7 @@ export function evaluateSubmissionGuards(
 ): SubmissionGuardFailure | null {
   const teamSport = isTeamSportId(input.sportId);
 
-  if (input.manualOverride) {
+  if (input.identityMode === 'manual') {
     const participants = buildManualEnteredParticipants(input);
 
     // smart-form-validation.ts:126 — at least one entered participant.
@@ -638,6 +641,18 @@ export function evaluateSubmissionGuards(
     return null;
   }
 
+  if (input.identityMode === 'canonical') {
+    if (input.canonicalEventId) {
+      return null;
+    }
+
+    return {
+      code: 'canonical-requires-event',
+      title: 'Select a canonical matchup',
+      description: 'Canonical mode requires a matchup selected from the browse results.',
+    };
+  }
+
   if (input.canonicalEventId) {
     return null;
   }
@@ -650,7 +665,7 @@ export function evaluateSubmissionGuards(
       code: 'canonical-player-requires-event',
       title: 'Select a canonical matchup',
       description:
-        'A canonical player prop needs the matchup it belongs to. Select a matchup, or use manual participant override.',
+        'A canonical player prop needs the matchup it belongs to. Select a matchup, or use the verified coverage-gap path.',
     };
   }
 
@@ -661,7 +676,7 @@ export function evaluateSubmissionGuards(
       code: 'canonical-without-event-requires-team-sport',
       title: 'Select a canonical matchup',
       description:
-        'This sport has no structured fallback. Select a matchup, or use manual participant override.',
+        'This sport has no structured fallback. Select a matchup, or use the verified coverage-gap path.',
     };
   }
 
