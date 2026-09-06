@@ -127,7 +127,55 @@ function resolveManagementEnv(): ResolvedManagementEnv {
   return { accessToken, projectRef };
 }
 
+/**
+ * The single environment variable that permits any Supabase **Management API**
+ * request from this app.
+ *
+ * The management token is account-scoped: it is not the service-role key, it is
+ * not constrained by RLS, and it can run DDL. `management-sql.ts` narrows *what*
+ * may be sent; this gate decides *whether anything is sent at all*.
+ */
+export const MANAGEMENT_PLANE_GATE_ENV = 'UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED';
+
+export const MANAGEMENT_PLANE_DISABLED_REASON =
+  `Supabase Management API access is disabled: ${MANAGEMENT_PLANE_GATE_ENV} is not set to "true".`;
+
+export class ManagementPlaneDisabledError extends Error {
+  constructor() {
+    super(MANAGEMENT_PLANE_DISABLED_REASON);
+    this.name = 'ManagementPlaneDisabledError';
+  }
+}
+
+/**
+ * Fail-closed by construction: the gate is open only for the exact string
+ * `true` (case-insensitive, trimmed). Absent, empty, `false`, `1`, `yes` and
+ * every other value leave it shut, so a typo or a half-configured environment
+ * cannot switch the capability on by accident.
+ */
+export function isManagementPlaneEnabled(
+  env: NodeJS.ProcessEnv | Record<string, string | undefined> = process.env,
+): boolean {
+  return (env[MANAGEMENT_PLANE_GATE_ENV] ?? '').trim().toLowerCase() === 'true';
+}
+
+/**
+ * Throws before any network call when the gate is shut.
+ *
+ * This is asserted inside each request function rather than only at
+ * `getStorageHealth`, so a future caller that reaches the management plane by
+ * another route is refused too. `assertManagementPlaneEnabled` runs before
+ * `resolveManagementEnv`, so a shut gate is reported as a policy refusal and
+ * never as a missing credential.
+ */
+function assertManagementPlaneEnabled(): void {
+  if (!isManagementPlaneEnabled()) {
+    throw new ManagementPlaneDisabledError();
+  }
+}
+
 async function fetchManagementJson<T>(route: string): Promise<T> {
+  assertManagementPlaneEnabled();
   const { accessToken, projectRef } = resolveManagementEnv();
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/${route}`, {
     headers: {
@@ -228,6 +276,7 @@ type ManagementQueryName = keyof typeof MANAGEMENT_QUERIES;
  * arbitrary SQL under the management token.
  */
 async function runManagementQuery<T>(name: ManagementQueryName): Promise<T[]> {
+  assertManagementPlaneEnabled();
   const { accessToken, projectRef } = resolveManagementEnv();
   const response = await fetch(`https://api.supabase.com/v1/projects/${projectRef}/database/query`, {
     method: 'POST',
@@ -376,8 +425,75 @@ function summarizeDomain(
   };
 }
 
+/**
+ * The reading returned when the management plane is switched off.
+ *
+ * Every numeric field is a placeholder and is labelled as one: each
+ * `alertStatus` is `unavailable`, never `stable`, and `managementPlane.available`
+ * is false with a reason. The storage domains are still present as rows — the
+ * issue this closes explicitly forbids omitting them, because an omitted row
+ * renders as nothing and nothing reads as healthy.
+ */
+export function unavailableStorageHealth(
+  reason: string,
+  observedAt: string = new Date().toISOString(),
+): DbRuntimeHealth {
+  const domain = (name: 'app' | 'ingestion'): StorageDomainHealth => ({
+    name,
+    totalBytes: 0,
+    totalGiB: 0,
+    estimatedGrowthBytesPerDay: 0,
+    estimatedGrowthGiBPerDay: 0,
+    daysToFull: null,
+    alertStatus: 'unavailable',
+    topGrowthSources: [],
+  });
+
+  return {
+    disk: {
+      provisionedGiB: 0,
+      usedGiB: 0,
+      availableGiB: 0,
+      usedPct: 0,
+      iops: 0,
+      throughputMiBps: 0,
+      diskType: 'unavailable',
+      observedAt,
+      projectedDaysToFull: null,
+      alertStatus: 'unavailable',
+    },
+    connections: { used: 0, max: 0, waiting: 0 },
+    locks: { waiting: 0 },
+    longTransactions: { count: 0, maxAgeSeconds: 0 },
+    slowQueries: { count: 0, maxAgeSeconds: 0 },
+    wal: {
+      sizeGiB: 0,
+      estimatedGrowthGiBPerDay: 0,
+      archiveMode: 'unavailable',
+      archiveConfigured: false,
+    },
+    backups: {
+      pitrEnabled: false,
+      walGEnabled: false,
+      lastBackupAt: null,
+      lastBackupStatus: null,
+      restorePointCount: 0,
+    },
+    storageDomains: [domain('ingestion'), domain('app')],
+    topGrowthSources: [],
+    managementPlane: { available: false, reason },
+  };
+}
+
 export async function getStorageHealth(): Promise<DbRuntimeHealth> {
   const now = new Date();
+
+  // Checked before the Promise.all below, so a shut gate issues no request at
+  // all rather than issuing seven and discarding the results.
+  if (!isManagementPlaneEnabled()) {
+    return unavailableStorageHealth(MANAGEMENT_PLANE_DISABLED_REASON, now.toISOString());
+  }
+
   const [
     diskConfig,
     diskUtil,
@@ -509,6 +625,7 @@ export async function getStorageHealth(): Promise<DbRuntimeHealth> {
     },
     storageDomains,
     topGrowthSources,
+    managementPlane: { available: true, reason: 'Supabase Management API consulted.' },
   };
 }
 
