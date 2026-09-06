@@ -25,6 +25,15 @@ async function readRows(
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { name: 'Griff Test' },
+      capperId: 'griff843',
+      expires: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+  }));
   await installCapperSession(page);
 });
 
