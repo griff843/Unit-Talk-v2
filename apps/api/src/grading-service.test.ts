@@ -3,7 +3,12 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
-import { runGradingPass, readEventStartTime, type GradingRetryState } from './grading-service.js';
+import {
+  runGradingPass,
+  readEventStartTime,
+  postSettlementRecapIfPossible,
+  type GradingRetryState,
+} from './grading-service.js';
 import { recordGradedSettlement } from './settlement-service.js';
 
 async function createPostedPickFixture(
@@ -2450,4 +2455,103 @@ test('runGradingPass processes both posted and awaiting_approval picks in same p
 
   const evidenceAfter = await posted.repositories.picks.findPickById(evidenceCreated.pick.id);
   assert.equal(evidenceAfter?.status, 'awaiting_approval', 'evidence pick stays awaiting_approval');
+});
+
+// ── UTV2-1815: null-stake computation truth ─────────────────────────────────
+// The recap embed renders a profit/loss figure and takes a non-nullable
+// `profitLossUnits`. Grading used to compute it with `stakeUnits ?? 1`, so a
+// pick with no recorded stake was published to Discord with a number a reader
+// could not tell apart from a real one. There is no way to render "unknown"
+// inside this lane's scope, so the only honest outcome is to not publish.
+
+function recapHarness(stakeUnits: unknown) {
+  const pick = {
+    id: 'pick-1815',
+    market: 'points-all-game-ou',
+    selection: 'Over 24.5',
+    odds: 100,
+    stake_units: stakeUnits,
+    metadata: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[0];
+
+  const settlementRecord = {
+    id: 'settlement-1815',
+    result: 'win',
+    payload: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[1];
+
+  const repositories = {
+    outbox: {
+      findLatestByPick: async () => ({ id: 'outbox-1', target: '123456789012345678' }),
+    },
+    receipts: { findLatestByOutboxId: async () => null },
+    runs: {},
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[2];
+
+  const warnings: string[] = [];
+  const posted: unknown[] = [];
+  const options = {
+    logger: { warn: (message: string) => warnings.push(message) },
+  } as unknown as Parameters<typeof postSettlementRecapIfPossible>[3];
+
+  return { pick, settlementRecord, repositories, options, warnings, posted };
+}
+
+async function runRecap(stakeUnits: unknown) {
+  const h = recapHarness(stakeUnits);
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = (async (_url: unknown, init: { body?: string } = {}) => {
+    h.posted.push(JSON.parse(init.body ?? '{}'));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'message-1' }),
+      text: async () => '',
+    };
+  }) as unknown as typeof globalThis.fetch;
+
+  try {
+    await postSettlementRecapIfPossible(
+      h.pick,
+      h.settlementRecord,
+      h.repositories,
+      h.options,
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+
+  return h;
+}
+
+test('UTV2-1815 grading refuses to publish a recap for a NULL stake', async () => {
+  const { posted, warnings } = await runRecap(null);
+  assert.equal(posted.length, 0, 'no recap may be published against an unknown stake');
+  assert.ok(
+    warnings.some((w) => w.includes('historical_unknown')),
+    `expected a historical_unknown refusal, got ${JSON.stringify(warnings)}`,
+  );
+});
+
+test('UTV2-1815 grading refuses to publish a recap for a NaN stake', async () => {
+  const { posted, warnings } = await runRecap(Number.NaN);
+  assert.equal(posted.length, 0, 'no recap may be published against a NaN stake');
+  assert.ok(
+    warnings.some((w) => w.includes('historical_unknown')),
+    `expected a historical_unknown refusal, got ${JSON.stringify(warnings)}`,
+  );
+});
+
+test('UTV2-1815 grading still publishes a recap for a real stake (negative control)', async () => {
+  const { posted, warnings } = await runRecap(2);
+  assert.equal(posted.length, 1, `expected one recap post, warnings: ${JSON.stringify(warnings)}`);
+  const body = posted[0] as { embeds: unknown[] };
+  assert.equal(body.embeds.length, 1);
 });
