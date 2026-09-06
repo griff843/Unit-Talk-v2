@@ -1,7 +1,39 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 
-// Fixture-backed UI behavior tests. Canonical reference rows below are test fixtures,
-// not evidence that the connected API environment is populated.
+// Reference-data behavior remains fixture-backed. Connected submission cases below
+// exercise the real local API and read back its isolated in-memory repository.
+
+const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
+
+async function assertIsolatedApiReady(request: APIRequestContext) {
+  const response = await request.get(`${apiBaseUrl}/api/health/runtime`);
+  expect(response.status(), 'The local API runtime endpoint must be reachable').toBe(200);
+  expect(await response.json()).toMatchObject({
+    service: 'api',
+    persistenceMode: 'in_memory',
+    runtimeMode: 'fail_open',
+  });
+}
+
+async function readPersistedPick(request: APIRequestContext, pickId: string) {
+  const response = await request.get(`${apiBaseUrl}/api/picks?status=validated&limit=200`);
+  expect(response.status(), 'Persisted-pick lookup must return HTTP 200').toBe(200);
+  const payload = await response.json() as { picks?: Array<Record<string, unknown>> };
+  const pick = payload.picks?.find((candidate) => candidate['id'] === pickId);
+  expect(pick, `Pick ${pickId} must be readable from the API repository after submission`).toBeTruthy();
+  return pick as Record<string, unknown>;
+}
+
+async function assertTrackOnlyHasNoOutbox(request: APIRequestContext, pickId: string) {
+  const response = await request.get(`${apiBaseUrl}/api/qa/pick-status/${pickId}`);
+  expect(response.status(), 'Track Only delivery-state lookup must return HTTP 200').toBe(200);
+  expect(await response.json()).toMatchObject({
+    pickId,
+    status: 'validated',
+    outboxId: null,
+    outboxStatus: null,
+  });
+}
 
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/session', (route) => route.fulfill({
@@ -34,6 +66,7 @@ test.beforeEach(async ({ page }) => {
 const catalog = {
   data: {
     sports: [
+      { id: 'NBA', name: 'NBA', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Points', 'Assists'], teams: [] },
       { id: 'NCAAF', name: 'NCAAF', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'], teams: [] },
       { id: 'MLB', name: 'MLB', marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], statTypes: ['Hits', 'Total Bases', 'Pitching Strikeouts'], teams: [] },
     ],
@@ -78,7 +111,13 @@ async function routeNcaaf(page: Page, submitted: { value: Record<string, unknown
       body: JSON.stringify({ data: sport === 'NCAAF' ? [ncaafMatchup] : [] }),
     });
   });
-  await page.route('**/api/reference-data/events/event-ncaaf/browse', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: ncaafBrowse }) }));
+  await page.route('**/api/reference-data/events/event-ncaaf/browse*', (route) => {
+    expect(
+      new URL(route.request().url()).searchParams.get('recentSince'),
+      'A past-start scheduled event must request only recent offers instead of silently using stale prices',
+    ).toBeTruthy();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: ncaafBrowse }) });
+  });
   await page.route('**/api/submissions', async (route) => {
     submitted.value = route.request().postDataJSON() as Record<string, unknown>;
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-ncaaf', pickId: 'pick-ncaaf', lifecycleState: 'validated' } }) });
@@ -187,7 +226,7 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   };
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
   await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [mlbMatchup] }) }));
-  await page.route('**/api/reference-data/events/event-mlb/browse', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...mlbMatchup, participants: [
+  await page.route('**/api/reference-data/events/event-mlb/browse*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { ...mlbMatchup, participants: [
     { participantId: 'team-yankees', canonicalId: 'team-yankees', participantType: 'team', displayName: 'Yankees', role: 'away', teamId: 'team-yankees', teamName: 'Yankees' },
     { participantId: 'team-red-sox', canonicalId: 'team-red-sox', participantType: 'team', displayName: 'Red Sox', role: 'home', teamId: 'team-red-sox', teamName: 'Red Sox' },
   ], offers: [] } }) }));
@@ -223,8 +262,8 @@ test('desktop MLB structured canonical event entry remains available', async ({ 
   });
 });
 
-test('structured fallback derives matchup and submits canonical side IDs with signed values', async ({ page }) => {
-  let submittedPayload: Record<string, unknown> | null = null;
+test('structured fallback persists canonical side IDs with signed spread values and no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -239,8 +278,8 @@ test('structured fallback derives matchup and submits canonical side IDs with si
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify({ data: [
-      { participantId: 'team-tcu', displayName: 'TCU', participantType: 'team' },
-      { participantId: 'team-unc', displayName: 'UNC', participantType: 'team' },
+      { participantId: 'team:NBA:Celtics', displayName: 'Celtics', participantType: 'team' },
+      { participantId: 'team:NBA:Knicks', displayName: 'Knicks', participantType: 'team' },
     ] }),
   }));
   await page.route('**/api/reference-data/search?**', (route) => route.fulfill({
@@ -248,31 +287,23 @@ test('structured fallback derives matchup and submits canonical side IDs with si
     contentType: 'application/json',
     body: JSON.stringify({ data: [] }),
   }));
-  await page.route('**/api/submissions', async (route) => {
-    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ data: { submissionId: 'sub-structured', pickId: 'pick-structured', lifecycleState: 'validated' } }),
-    });
-  });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/submit');
-  await page.getByRole('button', { name: 'NCAAF' }).click();
+  await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByRole('button', { name: 'Manual fallback' }).click();
   await expect(page.getByText('Select a matchup, or build one from away and home teams — the matchup name is generated automatically.')).toBeVisible();
-  await page.getByLabel('Away Team').fill('TCU');
-  await page.getByRole('button', { name: /TCU\s+team/i }).click();
-  await page.getByLabel('Home Team').fill('UNC');
-  await page.getByRole('button', { name: /UNC\s+team/i }).click();
-  await expect(page.getByText('TCU @ UNC', { exact: true })).toBeVisible();
+  await page.getByLabel('Away Team').fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).click();
+  await page.getByLabel('Home Team').fill('Knicks');
+  await page.getByRole('button', { name: /Knicks\s+team/i }).click();
+  await expect(page.getByText('Celtics @ Knicks', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: /Spread/i }).first().click();
-  await expect(page.getByLabel('Matchup')).toHaveValue('TCU @ UNC');
+  await expect(page.getByLabel('Matchup')).toHaveValue('Celtics @ Knicks');
   await expect(page.getByLabel('Matchup')).toHaveAttribute('readonly', '');
-  await page.getByLabel('Team', { exact: true }).fill('TCU');
-  await page.getByRole('button', { name: /TCU\s+team/i }).last().click();
+  await page.getByLabel('Team', { exact: true }).fill('Celtics');
+  await page.getByRole('button', { name: /Celtics\s+team/i }).last().click();
 
   const lineInput = page.locator('input[name="line"]');
   const oddsInput = page.locator('input[name="odds"]');
@@ -281,40 +312,47 @@ test('structured fallback derives matchup and submits canonical side IDs with si
   await expect(oddsInput).toHaveAttribute('inputmode', 'text');
   await expect(oddsInput).toHaveAttribute('pattern');
   await lineInput.fill('-3.5');
-  await oddsInput.fill('-110');
+  await oddsInput.fill('+105');
   await page.getByRole('button', { name: '8', exact: true }).click();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
   await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
   await expect(page.getByText('Pick Submitted')).toBeVisible();
 
-  expect(submittedPayload?.['line']).toBe(-3.5);
-  expect(submittedPayload?.['odds']).toBe(-110);
-  const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  expect(persistedPick['line']).toBe(-3.5);
+  expect(persistedPick['odds']).toBe(105);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
   expect(metadata).toMatchObject({
+    distributionMode: 'track-only',
     eventId: null,
-    teamId: 'team-tcu',
+    teamId: 'team:NBA:Celtics',
     playerId: null,
     participantResolution: {
       resolution: 'canonical',
-      sportId: 'NCAAF',
+      sportId: 'NBA',
       eventId: null,
-      eventName: 'TCU @ UNC',
-      away: { participantId: 'team-tcu', displayName: 'TCU' },
-      home: { participantId: 'team-unc', displayName: 'UNC' },
-      team: { participantId: 'team-tcu', displayName: 'TCU' },
+      eventName: 'Celtics @ Knicks',
+      away: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
+      home: { participantId: 'team:NBA:Knicks', displayName: 'Knicks' },
+      team: { participantId: 'team:NBA:Celtics', displayName: 'Celtics' },
       player: null,
     },
   });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
 });
 
-test('manual participant override submits unresolved provenance without canonical IDs', async ({ page }) => {
-  let submittedPayload: Record<string, unknown> | null = null;
+test('manual participant override persists honest unresolved provenance without canonical IDs', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
   await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
   await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
   await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
-  await page.route('**/api/submissions', async (route) => {
-    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { submissionId: 'sub-manual', pickId: 'pick-manual', lifecycleState: 'validated' } }) });
-  });
   await page.goto('/submit');
   await page.getByRole('button', { name: 'NCAAF' }).click();
   await page.getByRole('button', { name: 'Manual fallback' }).click();
@@ -332,10 +370,19 @@ test('manual participant override submits unresolved provenance without canonica
   await page.getByLabel('Team to Win').fill('Navy');
   await page.locator('input[name="odds"]').fill('-120');
   await page.getByRole('button', { name: '8', exact: true }).click();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
   await page.getByTestId('smart-form-submit-button').first().click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
   await expect(page.getByText('Pick Submitted')).toBeVisible();
 
-  const metadata = submittedPayload?.['metadata'] as Record<string, unknown>;
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
   expect(metadata['distributionMode']).toBe('track-only');
   expect(metadata['eventId']).toBeNull();
   expect(metadata['teamId']).toBeNull();
@@ -348,6 +395,7 @@ test('manual participant override submits unresolved provenance without canonica
     reason: 'canonical-coverage-gap',
     enteredEventName: 'Temple @ Navy',
   });
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
 });
 
 test('failed participant search is retryable and never offers coverage-gap entry', async ({ page }) => {

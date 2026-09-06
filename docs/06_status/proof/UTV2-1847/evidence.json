@@ -1,0 +1,100 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1847",
+  "tier": "T2",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "d692e92c09b5d664b0428ef746ed59fba466c916",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, re-executed at this anchor.",
+      "pnpm_test": "PASS \u2014 tests 5977, pass 5977, fail 0, exit 0, re-executed at this anchor. 100 suite blocks with tests == pass and fail 0 throughout. The count is unchanged from the previous anchor, which is the expected result: the only commit between them renames a test and adds a comment, and adds no test.",
+      "pnpm_verify": "Not claimed locally. pnpm verify includes a live-DB stage that refuses to run outside the staging-ci GitHub environment, which this lane does not have. The required `verify` check on this PR is the authoritative result; no local PASS is asserted.",
+      "r_level_check": "PASS \u2014 `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head d692e92c0` reports Verdict: PASS, Changed files: 10, Rules matched: operator-ui. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane."
+    },
+    "sha_type": "pending_merge",
+    "anchor_note": "d692e92c09b5d664b0428ef746ed59fba466c916 is the last commit on this branch outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), verified by the validator's own two-dot rule rather than by reading commit subjects: filtering `git diff --name-only d692e92c0..HEAD` against docs/06_status/proof/ and docs/06_status/lanes/ is empty, while the same test against the previous anchor 89e2ef767 yields 1 path. The anchor moved because the T2 diff review found the spec titled 'reports the connected environment honestly without route interception' fulfils **/api/auth/session in its own beforeEach. The substantive property held -- every reference-data read goes to the real API un-intercepted, which is what the skip messages claim -- but the title claimed more than the test delivers, so it was scoped to reference-data routes and a comment now forbids adding a handler for any /api/reference-data/** path. Correcting it was preferred over recording it because an over-claiming title is the same defect class this bundle exists to avoid. Earlier history, kept because it is load-bearing: the executing agent originally recorded 3518fef1c120187c1acf3be38fc01a8c109eed14, an orphaned pre-rebase copy of the test commit that is NOT reachable from this branch. Its receipts were carried forward only because `git diff --name-only 3518fef1 89e2ef767 -- apps/ packages/` is empty; every receipt has since been re-executed at the current anchor regardless.",
+    "bound_at": "2026-09-06T23:28:06.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5977,
+      "failures": 0,
+      "detail": "tests 5977, pass 5977, fail 0, exit 0"
+    },
+    "targeted_e2e": {
+      "status": "PASS",
+      "command": "CI=1 pnpm --dir apps/smart-form exec playwright test -c playwright.config.ts e2e/phase-one.spec.ts --grep \"mobile NCAAF moneyline|structured fallback persists|manual participant override persists\"",
+      "tests": 3,
+      "failures": 0,
+      "detail": "3 passed (18.0s). The two connected cases received HTTP 201 from POST /api/submissions, read their exact pick IDs back through GET /api/picks, and read a null outbox through GET /api/qa/pick-status/:id."
+    },
+    "full_e2e": {
+      "status": "PASS",
+      "command": "CI=1 pnpm --dir apps/smart-form test:e2e",
+      "detail": "29 passed, 0 failed, 1 explicit skip (real-reference.spec.ts, which skips loudly when connected canonical reference data is absent rather than passing vacuously)."
+    },
+    "fail_loud_inversion": {
+      "status": "PASS",
+      "count": 1,
+      "command": "occupy port 4000 with an HTTP 503 listener so the configured API process cannot start, then run the suite",
+      "observed": "Playwright exited 1 with `Error: Process from config.webServer was not able to start. Exit code: 1`.",
+      "honest_reading": "This is the control that matters for this lane. The specs assert against a real API rather than a route mock, so the failure mode to exclude is the suite going green because the API never came up. It does not."
+    },
+    "connected_not_mocked": {
+      "status": "PASS",
+      "detail": "phase-one.spec.ts asserts /api/health/runtime reports persistenceMode=in_memory and runtimeMode=fail_open before submitting, then reads the submitted pick back out of the API's own repository. Reference-data responses remain fixture-backed route mocks; the submission path is not mocked.",
+      "significance": "Before this lane the submission cases fulfilled POST /api/submissions from a page.route handler and inspected the captured payload, so nothing downstream of the browser was exercised."
+    },
+    "track_only_non_delivery": {
+      "status": "PASS",
+      "detail": "Both connected submissions are asserted to remain status=validated with outboxId=null and outboxStatus=null through GET /api/qa/pick-status/:id.",
+      "scope_honesty": "This is asserted against the local isolated in-memory API, not against staging or production. It demonstrates the browser-to-API contract; it is not the Milestone 1 non-delivery observation, which must be made against the deployed system."
+    },
+    "stale_offer_boundary": {
+      "status": "PASS",
+      "detail": "The past-start NCAAF event's browse route asserts a non-empty recentSince search parameter, so a scheduled event whose start has passed cannot silently consume stale offer prices."
+    },
+    "signed_values_round_trip": {
+      "status": "PASS",
+      "detail": "A browser-entered spread of -3.5 and American odds of +105 reach the real API and are read back from its repository as numbers, preserving sign."
+    },
+    "honest_missing_coverage": {
+      "status": "PASS",
+      "detail": "The manual-override case persists null canonical IDs together with explicit canonical-coverage-gap manual provenance, rather than fabricating a canonical resolution it did not have."
+    },
+    "no_production_credentials": {
+      "status": "PASS",
+      "command": "read apps/smart-form/playwright.config.ts",
+      "observed": "The API webServer env blanks SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY, sets UNIT_TALK_API_RATE_LIMIT_STORE=memory and UNIT_TALK_APP_ENV=local, and both servers bind 127.0.0.1.",
+      "significance": "No live delivery target and no production credential is reachable from this suite."
+    },
+    "reserved_surface_untouched": {
+      "status": "PASS",
+      "command": "git diff --name-only origin/main...HEAD -- .github/ supabase/ packages/",
+      "observed": "empty",
+      "significance": "No workflow, no migration, and no package source changed. The diff is four Smart Form e2e/test-config files plus this lane's own metadata and proof."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof delivery-ui lane. The runtime it exercises is deliberately local and contained \u2014 Chromium to a Next dev server to an API HTTP route to an isolated in-memory repository and back. It contacts no production system and claims no writable staging or database evidence."
+  },
+  "known_gaps": [
+    "CI invocation is deliberately not part of this slice. The suite added here is not yet run by any workflow: .github/workflows/qa-fast.yml and the root package.json wiring are assigned to a separate singleton-approved hygiene lane, because qa-fast.yml currently converts a SKIP into a green check (exit code 1 is swallowed; only exit 2 propagates) and that defect must be repaired in the same change that starts depending on it, not inherited.",
+    "The Track Only non-delivery and persisted-pick assertions here run against a local in-memory API. They demonstrate the browser-to-API contract. They are not, and must not be read as, the Milestone 1 step-6 and step-7 observations, which require the deployed system.",
+    "real-reference.spec.ts still skips when connected canonical reference data is absent. It skips loudly with a named reason rather than passing, but a skip is not evidence, and this lane does not populate reference data."
+  ]
+}
