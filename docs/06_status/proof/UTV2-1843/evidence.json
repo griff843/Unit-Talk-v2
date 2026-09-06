@@ -7,24 +7,38 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "49eb75f1b0dc133f5c2ee77415ff4dfacee93957",
+    "verified_source_sha": "9c5dbb07a3599be21ff613f83895e7772c0613bb",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
       "pnpm_test": "PASS — tests 5962, pass 5962, fail 0, exit 0, measured locally at this anchor.",
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
-      "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Changed files 13, rules matched operator-ui, every triggered required[] artifact present."
+      "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Changed files 14, rules matched operator-ui, every triggered required[] artifact present. The count is 14 rather than the 13 recorded at the previous anchor because the resync onto origin/main carries docs/06_status/readiness/readiness-score.json into the changed set."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "49eb75f1b0dc133f5c2ee77415ff4dfacee93957 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1843/, and it is the tree every command above was run against. The anchor moved twice on this lane -- once for the owner-review corrections and once for the scope registration -- and the receipts were re-taken at each move rather than carried forward. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES, so they do not move the anchor.",
-    "bound_at": "2026-09-06T19:45:00.000Z"
+    "anchor_note": "9c5dbb07a3599be21ff613f83895e7772c0613bb is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND. It is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1843/, and it is the tree every command above was run against. Rule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD` (:129-135, :267), so the resync's own content — docs/06_status/readiness/readiness-score.json, not a PROOF_ONLY_PREFIX — enters that diff and the previous anchor 49eb75f1b could not be kept. The anchor has now moved three times on this lane: for the owner-review corrections, for the scope registration, and for this resync. Receipts were re-executed at each move rather than carried forward. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES, so they do not move the anchor.",
+    "bound_at": "2026-09-06T20:17:55.000Z"
   },
   "static_proof": {
     "status": "PASS",
-    "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "exit 0, no diagnostics" },
-    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "exit 0, no findings" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5962, "failures": 0, "detail": "tests 5962, pass 5962, fail 0, exit 0" },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5962,
+      "failures": 0,
+      "detail": "tests 5962, pass 5962, fail 0, exit 0"
+    },
     "citation_remeasurement": {
       "status": "PASS",
       "detail": "Every file:line citation carried into docs/03_product/smart-form/intent.md was re-read against the branch head rather than copied from the source audits. Recorded in full under 'Every file:line citation re-measured against the branch head' in verification.md."

@@ -60,7 +60,7 @@ pnpm type-check                        # exit 0
 pnpm test                              # exit 0 — tests 5962, pass 5962, fail 0
 pnpm verify                            # refused locally at test:live-db under containment, see below
 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
-                                       # Verdict: PASS · Changed files: 13 · Rules matched: operator-ui
+                                       # Verdict: PASS · Changed files: 14 · Rules matched: operator-ui
 ```
 
 `scripts/ci/r-level-check.ts` matched the `operator-ui` rule and returned PASS with every triggered
@@ -113,17 +113,30 @@ workflow, no check, no label, no gate.
 |---|---|
 | PR: | https://github.com/griff843/Unit-Talk-v2/pull/1521 |
 | MERGE_SHA: | pending merge |
-| Verified source SHA: | 49eb75f1b0dc133f5c2ee77415ff4dfacee93957 |
+| Verified source SHA: | 9c5dbb07a3599be21ff613f83895e7772c0613bb |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1521
 Merge SHA: pending merge
-Verified source SHA: 49eb75f1b0dc133f5c2ee77415ff4dfacee93957
+Verified source SHA: 9c5dbb07a3599be21ff613f83895e7772c0613bb
 
-`49eb75f1b0dc133f5c2ee77415ff4dfacee93957` is the last commit on this branch that changes any file outside
+`9c5dbb07a3599be21ff613f83895e7772c0613bb` is the last commit on this branch that changes any file outside
 `docs/06_status/proof/UTV2-1843/`, and it is the tree the commands below were run against. It
-carries the scope registration recorded under "Fifth correction" below; the three owner-review
-corrections it sits on top of are recorded under "Corrections made on owner review".
-Every commit after it touches this proof bundle only, so no verified content moved.
+is the merge of `origin/main` into this branch, taken to satisfy strict branch-protection freshness
+rather than merge while `BEHIND`. It sits on top of the scope registration recorded under "Fifth
+correction" below and the three owner-review corrections recorded under "Corrections made on owner
+review". Every commit after it touches this proof bundle only, so no verified content moved.
+
+**Why the anchor moved a third time.** Rule 4 of `scripts/ci/proof-binding-validator.ts` is a
+two-dot `git diff verified_source_sha..HEAD` (`:129-135`, `:267`), so the resync's own content —
+`docs/06_status/readiness/readiness-score.json`, which is not one of `PROOF_ONLY_PREFIXES` — enters
+that diff and the previous anchor `49eb75f1b0dc133f5c2ee77415ff4dfacee93957` could not be kept by
+rewording. **Every receipt below was re-executed at `9c5dbb07a`**, not carried forward.
+
+One receipt changed, and it is recorded rather than smoothed over: `r-level-check` now reports
+**Changed files: 14** where the previous anchor reported 13. The extra file is the readiness ledger
+the resync carried in. The verdict and the matched rule are unchanged (`PASS`, `operator-ui`), and
+the test, lint, type-check and build counts are identical because the merge changed no source, test
+or configuration.
 
 ## What was verified, and how
 
