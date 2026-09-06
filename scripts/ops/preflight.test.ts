@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import type { CheckResult } from './shared.js';
 import {
   ROOT,
   PREFLIGHT_RESULT_SCHEMA_PATH,
@@ -18,6 +19,8 @@ import {
   isContinuationEligibleLinearState,
   isTerminalLinearState,
   parseAheadBehind,
+  resolveVerdict,
+  runLinearChecks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
 
@@ -322,5 +325,136 @@ test('readmission invalidates a prior token after terminal or infrastructure pre
   assert.ok(
     cleanupCall > nonPassReadmissionCleanup && cleanupCall < finalReturn,
     'a stale readmission token must be removed before NOT_APPLICABLE or INFRA returns',
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence. Ratified 2026-09-05, `docs/mission/intent.md`
+// "Execution must not depend on the tracker".
+//
+// The measured cascade these tests pin: no credential -> PL1-PL5 `infra_error`
+// -> `resolveVerdict` returns INFRA -> no preflight token is written -> every
+// `ops:lane-start` fails with "validated preflight token is unavailable".
+// Each step is asserted separately so a future regression names which link
+// broke rather than only that the chain broke.
+// ---------------------------------------------------------------------------
+
+const collectChecks = (): {
+  checks: CheckResult[];
+  addCheck: (id: string, status: CheckResult['status'], detail: string) => void;
+  byId: (id: string) => CheckResult | undefined;
+} => {
+  const checks: CheckResult[] = [];
+  return {
+    checks,
+    addCheck: (id, status, detail) => {
+      checks.push({ id, status, detail });
+    },
+    byId: (id) => checks.find((check) => check.id === id),
+  };
+};
+
+test('UTV2-1837 AC1: with no tracker credential, PL1-PL5 skip instead of infra_error', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    const state = await runLinearChecks(
+      'UTV2-1837',
+      'T2',
+      null,
+      ['docs/06_status/CURRENT_STATE.md'],
+      false,
+      sink.addCheck,
+    );
+    assert.deepEqual(state, { labels: [], stateName: '' });
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+
+  for (const id of ['PL1', 'PL2', 'PL3', 'PL4', 'PL5', 'PL6']) {
+    assert.equal(sink.byId(id)?.status, 'skip', `${id} must skip without a tracker credential`);
+  }
+  assert.equal(sink.byId('PE2')?.status, 'skip');
+  assert.equal(
+    sink.checks.some((check) => check.status === 'infra_error'),
+    false,
+    'an absent optional tracker is not an infrastructure error',
+  );
+});
+
+test('UTV2-1837 AC1: those skips produce verdict PASS, which is what writes the token', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    await runLinearChecks('UTV2-1837', 'T2', null, ['README.md'], false, sink.addCheck);
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  assert.equal(resolveVerdict(sink.checks), 'PASS');
+});
+
+test('UTV2-1837 AC5: a declared tier BELOW the mechanical floor is refused, not skipped', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    // packages/domain is a Tier C path: its mechanical minimum is T1, so a
+    // declared T3 is below the floor and must fail rather than pass through.
+    await runLinearChecks(
+      'UTV2-1837',
+      'T3',
+      null,
+      ['packages/domain/src/scoring.ts'],
+      false,
+      sink.addCheck,
+    );
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  const pe2 = sink.byId('PE2');
+  assert.equal(pe2?.status, 'fail');
+  assert.match(pe2?.detail ?? '', /below the mechanical floor T1/u);
+  assert.equal(resolveVerdict(sink.checks), 'FAIL');
+});
+
+test('UTV2-1837 AC5: a declared tier AT OR ABOVE the floor is accepted', async () => {
+  const sink = collectChecks();
+  const previous = process.env.LINEAR_API_KEY;
+  delete process.env.LINEAR_API_KEY;
+  try {
+    await runLinearChecks(
+      'UTV2-1837',
+      'T1',
+      null,
+      ['packages/domain/src/scoring.ts'],
+      false,
+      sink.addCheck,
+    );
+  } finally {
+    if (previous !== undefined) process.env.LINEAR_API_KEY = previous;
+  }
+  assert.equal(sink.byId('PE2')?.status, 'skip');
+  assert.equal(resolveVerdict(sink.checks), 'PASS');
+});
+
+test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never unconditional', async () => {
+  const sink = collectChecks();
+  // A present-but-invalid credential must NOT take the skip path. If it did,
+  // supplying a token would silently disable every tracker check -- the exact
+  // unconditional-skip failure mode acceptance criterion 4 exists to refuse.
+  await runLinearChecks(
+    'UTV2-1837',
+    'T2',
+    { LINEAR_API_TOKEN: 'lin_api_not_a_real_token' } as never,
+    ['README.md'],
+    false,
+    sink.addCheck,
+  );
+  assert.notEqual(
+    sink.byId('PL1')?.status,
+    'skip',
+    'PL1 must not skip when a credential IS present',
   );
 });

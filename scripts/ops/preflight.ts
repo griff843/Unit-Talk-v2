@@ -5,6 +5,7 @@ import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
 import { requireDelegationActive } from './delegation-state.js';
 import { readAllLeases } from './lease-registry.js';
+import { classifyMechanicalMinimum, maxTier } from './tier-classifier.js';
 import { readMergeLock } from './merge-mutex.js';
 import {
   type CheckResult,
@@ -1115,7 +1116,7 @@ function runGateEquivalentChecks(
   void headSha;
 }
 
-async function runLinearChecks(
+export async function runLinearChecks(
   issueId: string,
   tier: LaneTier,
   env: ReturnType<typeof loadEnvironment> | null,
@@ -1127,12 +1128,52 @@ async function runLinearChecks(
 ): Promise<{ labels: string[]; stateName: string }> {
   const token = env?.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim();
   if (!token) {
-    addCheck('PE2', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY must be present and non-empty');
-    addCheck('PL1', 'infra_error', 'Linear credentials missing');
-    addCheck('PL2', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL3', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL4', 'infra_error', 'Linear issue unavailable');
-    addCheck('PL5', 'infra_error', 'Linear issue unavailable');
+    // Tracker independence (ratified 2026-09-05, `docs/mission/intent.md`
+    // "Execution must not depend on the tracker"). An absent tracker
+    // credential is not an infrastructure failure and not a policy refusal --
+    // it is the tracker being optional. Reporting it as `infra_error` made
+    // `resolveVerdict` return INFRA, which wrote no token, which made
+    // `ops:lane-start` fail with "validated preflight token is unavailable".
+    // That cascade is the single hard block on the whole open->PR path.
+    //
+    // What must NOT be lost with the tracker is the tier decision PL2
+    // otherwise carries. Without Linear there is no label to read, so the
+    // declared `--tier` stands -- but only when it is at or above the
+    // MECHANICAL FLOOR computed from the declared file scope. The floor is a
+    // floor in both directions: it can raise a declared tier's requirement
+    // and refuse, and it can never lower one. `classifyMechanicalMinimum` is
+    // pure -- no Linear, no network, no git -- so it is computable in exactly
+    // the situation this branch exists for.
+    //
+    // The floor is binary (T1 or T3) and blind to semantic risk, so it is
+    // used ONLY to refuse a declared tier beneath it, never to set a tier.
+    const { mechanicalMinimum, matches } = classifyMechanicalMinimum(candidateFiles);
+    const declaredMeetsFloor = maxTier(tier, mechanicalMinimum) === tier;
+    if (!declaredMeetsFloor) {
+      const offending = matches
+        .map((match) => match.path)
+        .slice(0, 5)
+        .join(', ');
+      addCheck(
+        'PE2',
+        'fail',
+        `no tracker credential, and declared --tier ${tier} is below the mechanical floor ` +
+          `${mechanicalMinimum} implied by the declared file scope (${offending}). ` +
+          'A tier is never lowered to avoid tracker bookkeeping.',
+      );
+    } else {
+      addCheck(
+        'PE2',
+        'skip',
+        'no tracker credential; tracker checks are optional and non-blocking. ' +
+          `Declared --tier ${tier} satisfies the mechanical floor ${mechanicalMinimum}.`,
+      );
+    }
+    addCheck('PL1', 'skip', 'PL1 skipped: no tracker credential');
+    addCheck('PL2', 'skip', `PL2 skipped: no tracker credential; --tier ${tier} stands above floor ${mechanicalMinimum}`);
+    addCheck('PL3', 'skip', 'PL3 skipped: no tracker credential');
+    addCheck('PL4', 'skip', 'PL4 skipped: no tracker credential');
+    addCheck('PL5', 'skip', 'PL5 skipped: no tracker credential');
     addCheck('PL6', 'skip', 'PL6 skipped without issue context');
     return { labels: [], stateName: '' };
   }
@@ -1409,7 +1450,7 @@ function applyWaivers(
   }
 }
 
-function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
+export function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
   if (checks.some((check) => check.status === 'infra_error')) {
     return 'INFRA';
   }

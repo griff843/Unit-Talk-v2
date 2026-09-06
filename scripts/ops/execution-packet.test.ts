@@ -10,6 +10,9 @@ import {
   assertTaskContract,
   buildSyncYmlWithTaskContract,
   buildTaskContract,
+  captureOrReadTaskContract,
+  localTaskSourcePath,
+  readLocalTaskSource,
   deriveSkillRouting,
   fetchLinearTaskSource,
   generateExecutionPacket as generateExecutionPacketRaw,
@@ -2843,4 +2846,146 @@ test('UTV2-1736 fixture does not falsely trigger any of the four operational ski
     `a routine (if high-stakes) migration lane must not falsely route; got ${JSON.stringify(routing.selected_skills)}`,
   );
   assert.match(routing.note, /No operational skill trigger matched/u);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence in delegation.
+//
+// The observed live failure this closes: `ops:lane-start UTV2-1833` aborted with
+// `failed to capture Linear task contract: spawnSync curl ETIMEDOUT`. Nothing
+// about that work needed the tracker; a timeout on a metadata fetch stopped it.
+// A repo-authored work order is now a first-class source with the SAME required
+// shape, so a first capture needs no API and no credential.
+// ---------------------------------------------------------------------------
+
+const workOrderFixture = `# Make the widget idempotent
+
+## Objective
+- Re-running the widget must not double-apply.
+
+## Acceptance Criteria
+- A second run is a no-op.
+- The no-op is observable in the result payload.
+
+## Guardrails
+- Do not change the widget's public signature.
+
+## Non-Goals
+- Performance work.
+
+## Required Evidence
+- A test that fails before the change.
+
+## Exit Criteria
+- pnpm test green.
+`;
+
+test('UTV2-1837: readLocalTaskSource returns null when there is no local work order', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-none-'));
+  try {
+    assert.equal(readLocalTaskSource('WORK-1', { root }), null);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1837: a conventional .ops/work/<ID>.md is read as the task source', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-conv-'));
+  try {
+    fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+    fs.writeFileSync(localTaskSourcePath('WORK-1', root), workOrderFixture, 'utf8');
+    const source = readLocalTaskSource('WORK-1', { root });
+    assert.ok(source);
+    assert.equal(source.identifier, 'WORK-1');
+    assert.equal(source.title, 'Make the widget idempotent');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1837: an explicit --description outranks the conventional file', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-prec-'));
+  try {
+    fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+    fs.writeFileSync(localTaskSourcePath('WORK-1', root), workOrderFixture, 'utf8');
+    const source = readLocalTaskSource('WORK-1', {
+      root,
+      description: '# Explicit wins\n\n## Objective\n- Explicit.\n',
+    });
+    assert.equal(source?.title, 'Explicit wins');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1837: a local contract parses into the SAME required shape as a captured one', () => {
+  const source = readLocalTaskSource('WORK-1', {
+    root: os.tmpdir(),
+    description: workOrderFixture,
+  });
+  assert.ok(source);
+  const contract = buildTaskContract(source, '2026-09-06T00:00:00.000Z', 'local-description');
+  assert.equal(contract.source.kind, 'local-description');
+  assert.equal(contract.objective, 'Re-running the widget must not double-apply.');
+  assert.equal(contract.acceptance_criteria.length, 2);
+  assert.equal(contract.guardrails.length, 1);
+  assert.equal(contract.exit_criteria.length, 1);
+});
+
+test('UTV2-1837: assertTaskContract accepts local-description and still verifies the hash', () => {
+  const source = readLocalTaskSource('WORK-1', {
+    root: os.tmpdir(),
+    description: workOrderFixture,
+  });
+  const contract = buildTaskContract(source!, '2026-09-06T00:00:00.000Z', 'local-description');
+  assert.doesNotThrow(() => assertTaskContract(contract, 'WORK-1'));
+
+  // The integrity bar is unchanged: tampering with the description without
+  // re-hashing must still be refused for a local contract, exactly as for a
+  // captured one.
+  const tampered = {
+    ...contract,
+    source: { ...contract.source, description: `${contract.source.description}\nextra` },
+  };
+  assert.throws(() => assertTaskContract(tampered, 'WORK-1'), /source hash verification failed/u);
+});
+
+test('UTV2-1837 AC4 inversion: an unknown source kind is still refused', () => {
+  const source = readLocalTaskSource('WORK-1', {
+    root: os.tmpdir(),
+    description: workOrderFixture,
+  });
+  const contract = buildTaskContract(source!, '2026-09-06T00:00:00.000Z', 'local-description');
+  const bogus = { ...contract, source: { ...contract.source, kind: 'invented-kind' } };
+  assert.throws(() => assertTaskContract(bogus, 'WORK-1'), /valid source snapshot/u);
+});
+
+test('UTV2-1837: captureOrReadTaskContract needs neither a credential nor the network', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-cap-'));
+  try {
+    fs.mkdirSync(path.join(root, '.ops', 'work'), { recursive: true });
+    fs.writeFileSync(localTaskSourcePath('WORK-1', root), workOrderFixture, 'utf8');
+    const runner = (): never => {
+      throw new Error('the tracker must not be contacted when a local work order exists');
+    };
+    const contract = captureOrReadTaskContract('WORK-1', '', root, runner as never);
+    assert.equal(contract.source.kind, 'local-description');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('UTV2-1837 AC4 inversion: with no local work order the tracker is still consulted', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-1837-fall-'));
+  try {
+    let contacted = false;
+    const runner = ((): never => {
+      contacted = true;
+      throw new Error('contacted');
+    }) as never;
+    assert.throws(() => captureOrReadTaskContract('UTV2-1837', 'tok', root, runner));
+    assert.equal(contacted, true, 'the local source must not silently replace the tracker');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });

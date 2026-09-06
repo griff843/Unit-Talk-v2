@@ -1621,9 +1621,27 @@ export interface MaximizerCliOutcome {
  * `--candidates` / `--from-stdin` remain available for a caller that genuinely
  * wants to supply the population itself, but they must now say so explicitly.
  */
-export function resolveCandidateSource(argv: string[]): CandidateSource {
+export function resolveCandidateSource(
+  argv: string[],
+  hasTrackerCredential: boolean = Boolean(
+    readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY'),
+  ),
+): CandidateSource {
   if (hasFlag(argv, '--from-queue')) return 'queue';
   if (hasFlag(argv, '--candidates') || hasFlag(argv, '--from-stdin')) return 'explicit';
+  // Tracker independence (ratified 2026-09-05). The queue file is a FIRST-CLASS
+  // discovery source, not a fallback for tests: it is repo-owned, reviewable in
+  // a PR, and available when the tracker is not. A bare invocation still
+  // prefers the tracker when a credential exists -- the tracker remains the
+  // richer source and nothing here makes it optional to CONSULT -- but with no
+  // credential the previous behaviour was to throw
+  // 'LINEAR_API_TOKEN or LINEAR_API_KEY not set' out of discovery, which made
+  // the very first step of an ordinary task depend on the tracker.
+  //
+  // This is a source selection, not a silent degradation: `candidate_source` is
+  // already reported on every outcome, so a caller can always see which
+  // population it actually got.
+  if (!hasTrackerCredential) return 'queue';
   return 'linear';
 }
 

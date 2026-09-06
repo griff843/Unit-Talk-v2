@@ -1468,14 +1468,19 @@ test('UTV2-1699 AC1: a bare invocation queries the canonical Linear candidate so
   // parseCandidatesArg() does a blocking read of fd 0, so a test that only
   // observed the resulting empty board would hang rather than fail. The source
   // selection is the control, so it is checked directly.
+  //
+  // UTV2-1837: the tracker-credential argument is passed EXPLICITLY here. It
+  // defaults to probing the environment, so leaving it implicit would make this
+  // assertion depend on whether the machine running the tests happens to have a
+  // credential configured -- passing locally and flipping to 'queue' in CI.
   assert.equal(
-    resolveCandidateSource([]),
+    resolveCandidateSource([], true),
     'linear',
     'a bare argv must select the canonical Linear candidate source, never an argv/stdin parse',
   );
-  assert.equal(resolveCandidateSource(['--from-queue']), 'queue');
-  assert.equal(resolveCandidateSource(['--candidates', '[]']), 'explicit');
-  assert.equal(resolveCandidateSource(['--from-linear']), 'linear');
+  assert.equal(resolveCandidateSource(['--from-queue'], true), 'queue');
+  assert.equal(resolveCandidateSource(['--candidates', '[]'], true), 'explicit');
+  assert.equal(resolveCandidateSource(['--from-linear'], true), 'linear');
 
   const outcome = await runMaximizerCli([], {
     linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]),
@@ -2427,4 +2432,30 @@ test('UTV2-1820: the shipped query requests the inverse edge', () => {
     /inverseRelations\s*\{\s*nodes\s*\{\s*type\s*issue\s*\{\s*identifier\s*\}/,
     'the prerequisite edge must be in the real query text, not just in the mapper',
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence in discovery.
+//
+// `fetchLinearCandidates` throws 'LINEAR_API_TOKEN or LINEAR_API_KEY not set'
+// with no credential, so the FIRST step of an ordinary task depended on the
+// tracker. The queue file is a repo-owned, PR-reviewable population and is now
+// selected when no credential exists. This is a source selection, not a silent
+// degradation: `candidate_source` is already reported on every outcome.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1837: a bare invocation with no tracker credential selects the repo-owned queue', () => {
+  assert.equal(resolveCandidateSource([], false), 'queue');
+});
+
+test('UTV2-1837 AC4 inversion: with a credential the tracker is still preferred', () => {
+  assert.equal(resolveCandidateSource([], true), 'linear');
+});
+
+test('UTV2-1837: an explicit source always outranks the credential probe', () => {
+  for (const hasCredential of [true, false]) {
+    assert.equal(resolveCandidateSource(['--from-queue'], hasCredential), 'queue');
+    assert.equal(resolveCandidateSource(['--candidates', '[]'], hasCredential), 'explicit');
+    assert.equal(resolveCandidateSource(['--from-stdin'], hasCredential), 'explicit');
+  }
 });

@@ -2863,3 +2863,94 @@ test('UTV2-1776: P10 fails closed when the GitHub merged-PR attestation is missi
   assert.equal(result.status, 'fail');
   assert.match(result.detail, /verifier_merge_attestation_unverified/);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1837 — tracker independence in the closeout gate.
+//
+// Two of C7's three failure modes are about the tracker; the third compares the
+// repo's own manifest to GitHub and is NOT relaxed. C1's entire subject is the
+// tracker's Done state, so it skips outright. The pairs below are written as
+// inversions: the same input with `tracker_available` flipped must produce
+// different verdicts, which is what proves the relaxation is conditional rather
+// than a blanket disable.
+// ---------------------------------------------------------------------------
+
+const closeoutStatusFor = (
+  input: Parameters<typeof evaluateCloseoutTruthGate>[0],
+  id: string,
+): string | undefined => evaluateCloseoutTruthGate(input).find((check) => check.id === id)?.status;
+
+test('UTV2-1837: C1 fails on tracker Done without a merge SHA when a tracker IS available', () => {
+  assert.equal(closeoutStatusFor(closeoutInput({ pr_merge_sha: null }), 'C1'), 'fail');
+});
+
+test('UTV2-1837: C1 SKIPS the same input when the lane has no tracker', () => {
+  assert.equal(
+    closeoutStatusFor(closeoutInput({ pr_merge_sha: null, tracker_available: false }), 'C1'),
+    'skip',
+  );
+});
+
+test('UTV2-1837: C1 skips rather than passes — a pass would assert an unevaluated requirement', () => {
+  assert.notEqual(
+    closeoutStatusFor(closeoutInput({ tracker_available: false }), 'C1'),
+    'pass',
+  );
+});
+
+test('UTV2-1837: C7 fails on a tracker/PR transition mismatch when a tracker IS available', () => {
+  assert.equal(
+    closeoutStatusFor(
+      closeoutInput({ linear_state: 'Done', pr_merged: false, pr_merge_sha: null }),
+      'C7',
+    ),
+    'fail',
+  );
+});
+
+test('UTV2-1837: C7 KEEPS the manifest/PR mode with no tracker — real protection is not lost', () => {
+  const input = closeoutInput({ pr_merged: false, pr_merge_sha: null, tracker_available: false });
+  input.manifest = { ...input.manifest, status: 'done' };
+  assert.equal(
+    closeoutStatusFor(input, 'C7'),
+    'fail',
+    'manifest Done with an unmerged PR is computable without a tracker and must still fail',
+  );
+});
+
+test('UTV2-1837: C7 skips only the tracker-transition modes with no tracker', () => {
+  assert.equal(
+    closeoutStatusFor(
+      closeoutInput({ linear_state: '', pr_merged: true, tracker_available: false }),
+      'C7',
+    ),
+    'skip',
+  );
+});
+
+test('UTV2-1837 AC4 inversion: tracker_available defaults to true, so every existing caller is unchanged', () => {
+  const input = closeoutInput({ pr_merge_sha: null });
+  assert.equal(Object.hasOwn(input, 'tracker_available'), false);
+  assert.equal(closeoutStatusFor(input, 'C1'), 'fail');
+});
+
+test('UTV2-1837: an EMPTY tracker state is not the same as an absent tracker', () => {
+  // `linear_state: ''` read FROM a tracker is a real finding. Collapsing it into
+  // "no tracker" would turn a genuine failure into a silent skip.
+  const asRead = closeoutInput({ linear_state: '', pr_merged: false, pr_merge_sha: null });
+  const asAbsent = closeoutInput({
+    linear_state: '',
+    pr_merged: false,
+    pr_merge_sha: null,
+    tracker_available: false,
+  });
+  // Same empty state, different meaning. Read from a tracker, C1 is EVALUATED
+  // and passes on its merits. With no tracker, C1 is not evaluated at all.
+  assert.equal(closeoutStatusFor(asRead, 'C1'), 'pass');
+  assert.equal(closeoutStatusFor(asAbsent, 'C1'), 'skip');
+  assert.notEqual(
+    closeoutStatusFor(asRead, 'C1'),
+    closeoutStatusFor(asAbsent, 'C1'),
+    'an empty tracker state must not be collapsed into an absent tracker',
+  );
+});

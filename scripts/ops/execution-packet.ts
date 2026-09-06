@@ -58,6 +58,8 @@ export interface ExecutionPacket {
   generated_at: string;
 }
 
+export type TaskContractSourceKind = 'linear-issue-snapshot' | 'local-description';
+
 export interface LinearTaskSource {
   identifier: string;
   title: string;
@@ -80,7 +82,21 @@ export interface TaskContract {
    */
   unmapped_sections: string[];
   source: {
-    kind: 'linear-issue-snapshot';
+    /**
+     * Where the task contract's text came from (tracker independence, ratified
+     * 2026-09-05).
+     *
+     *   'linear-issue-snapshot' -- captured from the tracker API
+     *   'local-description'     -- authored in the repository, as a
+     *                              `--description` / `--description-file`
+     *                              value or `.ops/work/<ID>.md`
+     *
+     * Both are equally valid work orders. The KIND is recorded rather than
+     * assumed so an executor and a reviewer can always tell which one they are
+     * reading, and so the tracker-captured shape is never claimed for text that
+     * never came from a tracker.
+     */
+    kind: TaskContractSourceKind;
     issue_url: string;
     title: string;
     description: string;
@@ -1057,6 +1073,7 @@ function taskContractHash(
 export function buildTaskContract(
   source: LinearTaskSource,
   capturedAt = packetTimestamp(),
+  kind: TaskContractSourceKind = 'linear-issue-snapshot',
 ): TaskContract {
   const issueId = source.identifier.trim().toUpperCase();
   const title = source.title.trim();
@@ -1104,7 +1121,17 @@ export function buildTaskContract(
         ? [description]
         : [];
 
-  if (!/^UTV2-\d+$/u.test(issueId)) {
+  // Tracker independence (ratified 2026-09-05). A fourth, independent copy of
+  // the identity rule lived here. `WORK-###` is a legal repo-owned work
+  // identity, so a local work order must be admitted -- otherwise the local
+  // source added below can never actually produce a contract.
+  //
+  // This is still a CLOSED set: an arbitrary identifier is refused exactly as
+  // before. `shared.ts`'s ISSUE_PATTERN is the authority for what a work
+  // identity may be; this mirrors it deliberately rather than importing it,
+  // because execution-packet is consumed in contexts that do not load shared's
+  // path constants.
+  if (!/^(?:UTV2|WORK)-\d+$/u.test(issueId)) {
     throw new Error(
       `task contract has an invalid issue identity: ${source.identifier}`,
     );
@@ -1164,7 +1191,7 @@ export function buildTaskContract(
       return body ? `${entry.heading}\n${body}` : entry.heading;
     }),
     source: {
-      kind: 'linear-issue-snapshot',
+      kind,
       issue_url: source.url.trim(),
       title,
       description,
@@ -1251,9 +1278,14 @@ export function assertTaskContract(
       );
     }
   }
+  // Tracker independence: a repo-authored work order is a first-class source.
+  // The rest of the assertion is UNCHANGED -- title, description, capture time
+  // and the description hash are still all required, so a local contract is
+  // held to the same integrity bar as a captured one.
   if (
     !value.source ||
-    value.source.kind !== 'linear-issue-snapshot' ||
+    (value.source.kind !== 'linear-issue-snapshot' &&
+      value.source.kind !== 'local-description') ||
     typeof value.source.issue_url !== 'string' ||
     typeof value.source.title !== 'string' ||
     typeof value.source.description !== 'string' ||
@@ -1261,7 +1293,8 @@ export function assertTaskContract(
     typeof value.source.description_sha256 !== 'string'
   ) {
     throw new Error(
-      `task contract for ${issueId} is missing its Linear source snapshot`,
+      `task contract for ${issueId} is missing a valid source snapshot ` +
+        '(kind must be linear-issue-snapshot or local-description)',
     );
   }
   if (
@@ -1379,11 +1412,84 @@ export function fetchLinearTaskSource(
   };
 }
 
+
+/**
+ * The repository-owned work-order location for a lane with no tracker issue
+ * (tracker independence, ratified 2026-09-05).
+ *
+ * A file here is the SAME artifact a tracker description would have been: a
+ * markdown body whose sections `buildTaskContract` already knows how to parse.
+ * Nothing about the contract's required shape is relaxed -- objective,
+ * acceptance criteria, guardrails, non-goals, required evidence and exit
+ * criteria are still all extracted and still all required downstream.
+ */
+export function localTaskSourcePath(issueId: string, root: string = ROOT): string {
+  return path.join(root, '.ops', 'work', `${issueId}.md`);
+}
+
+/**
+ * Build a task source from repo-authored text instead of the tracker API.
+ *
+ * `description` wins over `descriptionFile`, which wins over the conventional
+ * `.ops/work/<ID>.md`. Returns `null` when none of the three is present, so a
+ * caller can fall through to the tracker rather than being forced into one
+ * source or the other.
+ */
+export function readLocalTaskSource(
+  issueId: string,
+  options: { description?: string; descriptionFile?: string; root?: string } = {},
+): LinearTaskSource | null {
+  const root = options.root ?? ROOT;
+  let description: string | null = null;
+  let origin = '';
+
+  if (options.description && options.description.trim()) {
+    description = options.description;
+    origin = 'flag:--description';
+  } else if (options.descriptionFile && options.descriptionFile.trim()) {
+    const filePath = path.isAbsolute(options.descriptionFile)
+      ? options.descriptionFile
+      : path.join(root, options.descriptionFile);
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`--description-file does not exist: ${options.descriptionFile}`);
+    }
+    description = fs.readFileSync(filePath, 'utf8');
+    origin = `file:${options.descriptionFile}`;
+  } else {
+    const conventional = localTaskSourcePath(issueId, root);
+    if (fs.existsSync(conventional)) {
+      description = fs.readFileSync(conventional, 'utf8');
+      origin = `file:${relativeWorkPath(issueId)}`;
+    }
+  }
+
+  if (description === null) return null;
+  if (!description.trim()) {
+    throw new Error(`local task contract for ${issueId} is empty (${origin})`);
+  }
+
+  // The first `# ` heading, when present, is the title -- the same role the
+  // tracker's title field plays. Absent one, the identifier stands in, exactly
+  // as `buildTaskContract` already falls back to the title for the objective.
+  const titleMatch = description.match(/^#\s+(.+)$/mu);
+  return {
+    identifier: issueId.toUpperCase(),
+    title: titleMatch ? titleMatch[1].trim() : issueId.toUpperCase(),
+    url: origin,
+    description,
+  };
+}
+
+function relativeWorkPath(issueId: string): string {
+  return path.join('.ops', 'work', `${issueId}.md`);
+}
+
 export function captureOrReadTaskContract(
   issueId: string,
   token: string,
   root: string = ROOT,
   runner: LinearFetchRunner = spawnSync,
+  localSource: { description?: string; descriptionFile?: string } = {},
 ): TaskContract {
   const syncPath = path.join(root, '.ops', 'sync', `${issueId}.yml`);
   if (fs.existsSync(syncPath)) {
@@ -1391,6 +1497,19 @@ export function captureOrReadTaskContract(
     if (/(?:^|\n)task_contract:\s*(?:\n|\{)/u.test(existing)) {
       return readTaskContract(issueId, root);
     }
+  }
+  // Tracker independence (ratified 2026-09-05). A repo-authored work order is
+  // preferred over the tracker when one is explicitly supplied, and is the only
+  // source available when there is no credential -- which is what previously
+  // made a FIRST capture impossible without Linear and stranded delegation on a
+  // transient `curl ETIMEDOUT`.
+  //
+  // Precedence is deliberate: explicit flags beat the conventional file, and
+  // both beat the tracker. Falling back to the tracker AFTER an explicit local
+  // source was given would silently ignore what the operator authored.
+  const local = readLocalTaskSource(issueId, { ...localSource, root });
+  if (local) {
+    return buildTaskContract(local, packetTimestamp(), 'local-description');
   }
   return buildTaskContract(fetchLinearTaskSource(issueId, token, runner));
 }
@@ -1497,6 +1616,22 @@ export function resolveTaskContractAcrossRoots(
   const winner = found[0];
   if (winner) {
     return { contract: winner.contract, fetched: false, rootIndex: winner.index };
+  }
+  // Tracker independence (ratified 2026-09-05). Before reaching for the tracker,
+  // look for a repo-authored work order in each root, in the SAME precedence
+  // order the roots were given. This is what lets a first capture succeed with
+  // no credential and no network -- the observed live failure mode was a
+  // transient `curl ETIMEDOUT` on a metadata fetch aborting a lane start whose
+  // work needed nothing from the tracker at all.
+  for (const [index, root] of roots.entries()) {
+    const local = readLocalTaskSource(issueId, { root });
+    if (local) {
+      return {
+        contract: buildTaskContract(local, packetTimestamp(), 'local-description'),
+        fetched: false,
+        rootIndex: index,
+      };
+    }
   }
   return {
     contract: buildTaskContract(fetchLinearTaskSource(issueId, token, runner)),

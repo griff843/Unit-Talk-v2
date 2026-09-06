@@ -8,6 +8,7 @@ import {
   parseArgs,
   type LaneManifest,
   readConfiguredEnvValue,
+  resolveTrackerRef,
   readManifest,
   requireIssueId,
   validatePreflightTokenPathValue,
@@ -1732,6 +1733,8 @@ export function createRepairRollbackTransaction(
   };
 }
 
+export type LaneCloseTrackerSync = 'synced' | 'skipped' | 'not_eligible';
+
 export type LaneWorktreeCleanup = 'not_requested' | 'already_absent' | 'removed';
 
 export interface SuccessfulLaneCloseResult {
@@ -1746,6 +1749,22 @@ export interface SuccessfulLaneCloseResult {
    */
   issue_completed: boolean;
   issue_completion: IssueCompletionEligibility;
+  /**
+   * Outcome of the OPTIONAL tracker transition (tracker independence, ratified
+   * 2026-09-05).
+   *
+   *   'synced'       -- the tracker issue was transitioned to Done
+   *   'skipped'      -- the lane has no tracker reference, or the tracker write
+   *                     failed; the lane is closed regardless
+   *   'not_eligible' -- issue completion was not eligible, so no transition was
+   *                     attempted in the first place
+   *
+   * 'skipped' and 'not_eligible' are deliberately distinct: one means the
+   * tracker was not reachable, the other means the lane was never going to
+   * complete the issue. Collapsing them would hide a failed tracker write
+   * behind a legitimate no-op.
+   */
+  tracker_sync: LaneCloseTrackerSync;
 }
 
 /**
@@ -1795,6 +1814,7 @@ export function completeAlreadyClosedLaneCleanup(
     // that was ALREADY closed. It completes nothing and must never be read as a
     // statement about the issue.
     issue_completed: false,
+    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2000,8 +2020,33 @@ export async function completeSuccessfulLaneClose(
     truthCheck: authorizedTruthCheck,
     completionIntent: options.completionIntent,
   });
+  // Tracker independence (ratified 2026-09-05). The tracker transition is the
+  // LAST thing closeout does and it is optional. Before this it threw, and the
+  // throw landed AFTER `leaseTransition.commit()` above -- so a missing
+  // credential or an unreachable tracker left the lane half-closed: leases
+  // released, manifest written, closeout aborted. Tracker sync is now recorded
+  // rather than raised.
+  //
+  // This never suppresses a failure of the close itself. Everything that
+  // establishes the lane is closeable already ran and already passed; what is
+  // being tolerated here is a write to a system the repo does not own.
+  let trackerSync: LaneCloseTrackerSync = 'not_eligible';
   if (completionEligibility.eligible) {
-    await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+    const trackerRef = resolveTrackerRef(manifest);
+    if (!trackerRef) {
+      trackerSync = 'skipped';
+    } else {
+      try {
+        await (options.transitionLinear ?? transitionLinearIssueToDone)(trackerRef);
+        trackerSync = 'synced';
+      } catch (error) {
+        trackerSync = 'skipped';
+        leaseTransition.warnings.push(
+          `tracker_sync: skipped -- ${error instanceof Error ? error.message : String(error)}. ` +
+            'The lane is closed; the tracker issue was not transitioned and may need a manual update.',
+        );
+      }
+    }
   }
 
   let syncRemoved = false;
@@ -2040,6 +2085,7 @@ export async function completeSuccessfulLaneClose(
     worktree_cleanup: worktreeCleanup,
     issue_completed: completionEligibility.eligible,
     issue_completion: completionEligibility,
+    tracker_sync: trackerSync,
   };
 }
 
@@ -2151,6 +2197,7 @@ export function completeIdempotentReclose(
     sync_removed: syncRemoved,
     worktree_cleanup: 'not_requested',
     issue_completed: false,
+    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2356,6 +2403,7 @@ async function main(): Promise<void> {
           sync_removed: false,
           worktree_cleanup: 'not_requested',
           issue_completed: false,
+          tracker_sync: 'not_eligible',
           issue_completion: {
             eligible: false,
             satisfied: [],
