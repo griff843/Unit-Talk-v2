@@ -1,0 +1,44 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1843",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1843-smart-form-product-intent",
+  "branch": "claude/utv2-1843-smart-form-product-intent",
+  "base_branch": "main",
+  "commit_sha": "79bab4d2267061427b48f7a521a8c61acb72436f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1521",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/commands/dispatch.md",
+    "AGENTS.md",
+    "apps/api/CLAUDE.md",
+    "apps/smart-form/CLAUDE.md",
+    "CLAUDE.md",
+    "docs/03_product/smart-form/**",
+    "docs/05_operations/docs_authority_map.md",
+    "docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1843/diff-summary.md",
+    "docs/06_status/proof/UTV2-1843/evidence.json",
+    "docs/06_status/proof/UTV2-1843/verification.md"
+  ],
+  "status": "parked",
+  "started_at": "2026-09-06T17:48:36.823Z",
+  "heartbeat_at": "2026-09-06T23:43:47.784Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1843-smart-form-product-intent.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1843-smart-form-product-intent",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

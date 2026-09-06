@@ -1,0 +1,71 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1843",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS - exit 0, no diagnostics, measured locally at this anchor (pnpm type-check).",
+      "pnpm_test": "PASS - tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor (pnpm test).",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 14, Rules matched operator-ui, every triggered required[] artifact present. The count is 14 here, having read 20 at the previous anchor d0f0ca00e: this resync brings docs/mission/plan.md into agreement with origin/main, so it leaves the branch diff entirely. The number is regenerated at each anchor rather than carried forward precisely because it moves in both directions."
+    },
+    "sha_type": "pending_merge",
+    "anchor_note": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8 is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND -- merging BEHIND would be an admin exemption, not permission. It is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43 -- docs/06_status/proof/ and docs/06_status/lanes/), and it is the tree every command above was run against. Rule 4 is a two-dot git diff verified_source_sha..HEAD (:129-135, :267), so commits after this one touch only the proof bundle and the lane manifest and do not move the anchor. The anchor has moved five times on this lane; the receipts were re-executed at every move rather than carried forward, and both the test count and the r-level file count changed across those moves.",
+    "bound_at": "2026-09-06T22:10:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5962,
+      "failures": 0,
+      "detail": "tests 5962, pass 5962, fail 0, exit 0"
+    },
+    "citation_remeasurement": {
+      "status": "PASS",
+      "detail": "Every file:line citation carried into docs/03_product/smart-form/intent.md was re-read against the branch head rather than copied from the source audits. Recorded in full under 'Every file:line citation re-measured against the branch head' in verification.md."
+    },
+    "contradictions_reconciled": {
+      "status": "PASS",
+      "count": 3,
+      "detail": "The mobile signed-odds prescription in SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md, acceptance criterion 11 on confidence against apps/smart-form/lib/form-utils.ts, and the stale runtime instructions in apps/smart-form/CLAUDE.md. Each contradiction was confirmed to exist on the branch before it was corrected, not assumed from the audit that reported it."
+    },
+    "no_new_gate": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow, check, label or lane type is added by this diff. verify, Executor Result Validation, Merge Gate and P0 Protocol are unchanged."
+    },
+    "state_vocabulary_applied": {
+      "status": "PASS",
+      "detail": "Section 8 states an explicit state vocabulary and applies it to every row. Submission reads 'Implemented; blocked in the deployed flow', not 'Done'. Five rows would have read Done on merged code and green tests, and an operator can perform none of the five today."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof governance lane. It changes documents and agent instruction files; it adds no runtime code path and no database access, so there is no runtime behaviour for a live-DB run to observe."
+  },
+  "known_gaps": [
+    "File scope lock and Return review packet are red. .lane/lanes/governance.yml is outside this lane's pinned file_scope_lock, and the supported remedy under existing policy is a CODEOWNERS scope-override/v1 pinned to this head, requested in the PR description. That these are not required checks is not authorization to merge past them: without the override this PR is parked, not merged.",
+    "QA Experience Regression (Advisory) fails on a 403 while posting its PR comment -- a permissions defect in that workflow, unrelated to this diff. Its own verdict was advisory NEEDS_REVIEW.",
+    "Command Center and pipeline product-intent documents are deliberately not written here. Section 10 records the approach to be applied when those products are worked, written then rather than ahead of them."
+  ]
+}

@@ -10,6 +10,27 @@ The canonical write authority for the database. HTTP server (port 4000) handling
 
 All writes to the database go through this server. No other app writes directly.
 
+## Product intent — required reading for product-affecting backend work
+
+Much of what this server does *is* a product surface, reached only through another app. Before
+changing submission validation, the Smart Form relationship guard, the event-existence gate, the
+reference-data endpoints, or any Track Only / distribution guard, read
+**`docs/03_product/smart-form/intent.md`** and the canonical contracts it indexes.
+
+Three rules from it bind this app directly:
+
+- **Track Only is enforced here, not in the form.** `handlers/submit-pick.ts:93-106` pins
+  `metadata.distributionMode = 'track-only'` for an authenticated capper and refuses a contrary
+  value; `:119-123` refuses a Smart Form submission declaring none. Every UTV2-1672 guard is
+  mutation-tested — any change keeps a check that fails when the guard is removed.
+- **Provenance must be truthful.** `smart-form-validation.ts` verifies a claimed
+  `canonical-coverage-gap` against the catalog and refuses a false one; manual resolution is
+  deliberately all-or-nothing so a coverage gap cannot carry real canonical IDs. A transient search
+  failure is never recorded as a coverage gap.
+- **Reference-data population is never the fix.** Seeding the catalog requires unparking provider
+  ingestion, which is a reserved decision. A validation gate that only passes with a populated
+  catalog is a defect in the gate.
+
 ## Role in Dependency Graph
 
 **Imports:** `@unit-talk/config`, `@unit-talk/contracts`, `@unit-talk/db`, `@unit-talk/domain`, `@unit-talk/observability`, `@unit-talk/events`, `@unit-talk/intelligence`, `@unit-talk/verification`
