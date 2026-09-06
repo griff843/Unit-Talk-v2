@@ -457,18 +457,26 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-The current one is **UTV2-1840** — the work-identifier repair below, which is the first exit
-condition of the ratified tracker-independence cutover measured rather than asserted. UTV2-1838
-held the slot before it and merged as #1517 (`3eea8f258`, closeout made safe to repeat); UTV2-1836
-before that (the carry-forward evidence collector and the reserved Merge Gate integration diff);
-UTV2-1830 as #1502 (`1cb31a43e`); UTV2-1829 as #1499 (`d70df077`). RMA is an architecture review,
-not a governance lane.
+The current one is **UTV2-1688** — the executor-result namespace repair described under the
+`WORK-###` correction above. It was chosen over the candidates below for a reason worth recording:
+it is not new debt. It was filed 2026-08-09, is PM-authored and already tier-labelled, and until it
+landed it made every `bootstrap/` lane permanently unmergeable without an admin bypass. Staffing an
+existing canonical issue that blocks merges outranks opening a fresh one.
+
+**UTV2-1840** held the slot before it and merged as #1518 (`e4dcb59ee`), moving a repo-minted
+`WORK-###` task from *cannot start* to *cannot finish*; UTV2-1838 as #1517 (`3eea8f258`, closeout
+made safe to repeat); UTV2-1836 before that (the carry-forward evidence collector and the reserved
+Merge Gate integration diff); UTV2-1830 as #1502 (`1cb31a43e`); UTV2-1829 as #1499 (`d70df077`).
+RMA is an architecture review, not a governance lane.
 
 Per the ratified debt policy in `intent.md`, **the slot is a ceiling, not a quota, and may stand
 empty.** After this lane closes it is deliberately left unstaffed: the closeout defects below are
 survivable by hand, the Command Center auth exposures are not, and production security work does
-not consume this slot. The strongest current candidate when the slot is next spent is the
-`pre-proof-validator` classification repair recorded under Learned.
+not consume this slot. The strongest current candidates when the slot is next spent are the
+`pre-proof-validator` classification repair recorded under Learned, and the lease-reclaim
+terminality gate — now at **four** recorded occurrences, UTV2-1830, UTV2-1835, UTV2-1838 and
+UTV2-1840, the last of which refused UTV2-1688's lane start from a lease whose lane was already
+`done` on `main`.
 
 ---
 
@@ -522,6 +530,15 @@ Recording this lane's own friction, because it is the cheapest available reprodu
   `pnpm ops:lease release --issue <ID> --actor claude --reason "<why>"` is the working path; both
   flags are required and their absence reports `lease_missing_required_fields` rather than usage.
   Reclaim stays TTL-gated, so a provably finished lease is still unreclaimable for 48 hours.
+- **`preflight` PL3 and `truth-check` L3 are inverses, and only `lane-start` may cross between
+  them.** PL3 refuses to issue a token when the issue is in a *started* state (`issue state In
+  Claude is not startable`); L3 refuses closeout when it is in an *unstarted* one. So the obvious
+  defence against the L3 failure recorded above — set the state before opening the lane — makes the
+  lane unopenable, and `lane-start` will not run without a validated token. Measured on UTV2-1688,
+  2026-09-06: two full ~4-minute preflight runs, one to discover it and one to undo it. The tracker
+  is a hard dependency at *both* ends of an ordinary lane, and the two ends disagree about what it
+  must say.
+
 - **`--files` and `PG2` deadlock on any file the lane will create.** `ops:lane-start --files`
   refuses a path that does not exist yet; pre-creating it then fails preflight `PG2` (*working tree
   is not clean*). Only a **trailing** `/**` glob is legal in a scope declaration, so the only way
@@ -562,10 +579,12 @@ distinction is what says how much of exit condition 1 is left:
   comment *"A tracker key is a Linear issue identifier. `WORK-###` is deliberately NOT one."* This
   one must stay.
 - **Hard refusals that would block a `WORK-###` lane after it opens (2).**
-  `executor-result-validate.ts:109` pushes `Invalid Issue ID … Must match UTV2-NNN or UNI-NNN` — and
-  ERV is a *required* check. `proof-rebind.ts:1652` refuses with `proof_rebind_refused`; that one is
-  a path-traversal guard on a value used as a directory segment, so it must be widened carefully
-  rather than relaxed.
+  `executor-result-validate.ts:109` pushes `Invalid Issue ID … Must match UTV2-NNN or UNI-NNN`.
+  `proof-rebind.ts:1652` refuses with `proof_rebind_refused`; that one is a path-traversal guard on
+  a value used as a directory segment, so it must be widened carefully rather than relaxed.
+  **Corrected 2026-09-06 (UTV2-1688): the first of those two is not the required check, and the
+  parenthetical "and ERV is a *required* check" made it read as though it were.** See the
+  correction below — `executor-result-validate.ts` is reached by nothing but its own test file.
 - **Soft degradations (2).** `proof-schema.ts:326` returns `unverified` and
   `proof-binding-validator.ts:150` returns a null binding context. Neither hard-fails; both quietly
   stop verifying, which is its own problem.
@@ -579,8 +598,48 @@ distinction is what says how much of exit condition 1 is left:
 
 So exit condition 1 moves from *"a `WORK-###` task cannot start"* to *"a `WORK-###` task cannot
 finish"*. **The cutover does not close because a helper merged** — 4 and 5 still require
-demonstration, the two hard refusals above are the next non-reserved step, and the tracker remains a
-hard dependency at closeout (`truth-check` L3, above) for any lane that *has* a tracker ref at all.
+demonstration, and the tracker remains a hard dependency at closeout (`truth-check` L3, above) for
+any lane that *has* a tracker ref at all.
+
+**Corrected 2026-09-06 (UTV2-1688): "the two hard refusals above are the next non-reserved step"
+was wrong about the first of them, and the error matters because it mislocates the whole exit
+condition.** PR A below names `scripts/ops/executor-result-validate.ts:133-158` as its
+*"highest-value hunk: without it no branch reaches a green `Executor Result Validation` without a
+`UTV2-###`."* Measured on `main` `66fb0d6a2`, `grep -rn "validateExecutorResultFields"` across the
+repository returns exactly two consumers — its own definition and
+`scripts/ops/executor-result-validate.test.ts`. The script's only CLI command is
+`resolve-check-name`, which is all `executor-result-validator.yml:103` invokes it for.
+
+**The required check validates fields from an inline duplicate**, at
+`.github/workflows/executor-result-validator.yml:206-223`, inside an `actions/github-script` block
+that cannot import a TypeScript module. Taking PR A's script hunk would change what the unit tests
+assert and nothing whatsoever about what can merge.
+
+This was diagnosed and filed on 2026-08-09 as **UTV2-1688**, which states it in as many words:
+*"The copy that actually gates merges is the one inline in the workflow. Fixing only the script
+would make the tests pass while the gate stayed broken."* Re-deriving it here cost a repository
+sweep that reading the issue would have answered — the cost `Learned` already names, paid again.
+
+Two consequences, and they point in opposite directions:
+
+- **Exit condition 1 cannot be closed by ops-script work.** The identifier the required check
+  admits is defined inside a required-check workflow, so widening it for a repo-minted `WORK-###`
+  identity is a change to what a required check requires, and stays reserved with items 8–11.
+- **The `bootstrap/` half of the same defect was never reserved and was never staffed.** UTV2-1688
+  is PM-authored, already `tier:T2`, and its acceptance criteria explicitly exclude any change to
+  required-check configuration, branch protection or bypasses. It widens which namespaces are
+  legal while leaving every binding rule — `Branch:` equals the PR head ref, the declared PR equals
+  the actual PR, the declared head SHA equals the current head — untouched. Until it landed, every
+  `bootstrap/` lane was permanently unmergeable without an admin bypass, because the required
+  context is created only by an EXECUTOR_RESULT comment and no valid one could be written.
+
+  The lane also closes the drift itself rather than only its current symptom:
+  `EXECUTOR_RESULT_ISSUE_ID_RE` and `EXECUTOR_RESULT_BRANCH_RE` are exported from the script, and
+  the test suite now reads `executor-result-validator.yml` and asserts both inline literals are
+  byte-identical to them. Mutation-checked three ways — reverting the script copy alone, reverting
+  the workflow copy alone, and deleting the `Branch: == head ref` binding each turn a distinct
+  assertion red. The second of those is the one that matters: before this lane, reverting only the
+  copy that gates merges was invisible to every test in the repository.
 
 **A new test file cannot be added without editing `package.json`, and that is a scope trap.**
 `pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on any `*.test.ts` not reachable from a
@@ -729,6 +788,53 @@ would silently stop loading the very sections this lane adds. Re-derive by hand 
 `reserved-surface-guard.sh:19`, `tier-label-check.yml:44-48`, `branch-discipline-guard.ts:126-131`).
 **No such section exists on `main`**, and `## Changes to the operating model` says the opposite.
 Every one of those citations is currently false.
+
+### The reserved `WORK-###` executor-result diff — prepared, not applied (UTV2-1688)
+
+Per `intent.md` § "How a reserved decision is surfaced": the dependent work is staged and verified
+as far as existing authority allows, and one recommendation is stated with its exact inputs.
+
+**What is already done and needs no decision.** UTV2-1688 widened both copies of the
+executor-result field validation to recognize `bootstrap/`, and made the duplication self-policing:
+`EXECUTOR_RESULT_ISSUE_ID_RE` and `EXECUTOR_RESULT_BRANCH_RE` are exported from
+`scripts/ops/executor-result-validate.ts`, and two tests read
+`.github/workflows/executor-result-validator.yml` and assert its inline literals are byte-identical
+to them. Reverting **only** the workflow copy now fails the suite; before, nothing caught it.
+
+**What is reserved.** Admitting a repo-minted `WORK-###` identity into a *required* check changes
+what that check requires. That is reserved decision 7, and it is cutover items 8–11. The change is
+two words:
+
+```diff
+-export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI)-\d+$/i;
+-export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
++export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI|WORK)-\d+$/i;
++export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni|work)-\d+/i;
+```
+
+plus the byte-identical edit to the inline copy at `executor-result-validator.yml:216,223`, which
+the drift tests already force to happen together. The error strings widen to name `WORK-NNN`.
+
+**What it does and does not do.**
+
+- It does **not** make an absent issue ID pass. Every executor result still declares an identifier,
+  and the `Branch:` value must still equal the PR head ref, the declared PR must still equal the
+  actual PR, and the declared head SHA must still equal the current head. This is the specific line
+  #1492 crosses and this diff does not: #1492 makes an ID-less branch legal, which is a different
+  and larger decision.
+- It does **not** touch required-check configuration, branch protection, CODEOWNERS, the merge gate,
+  tier semantics or approval policy.
+- It admits an identifier the repository *already mints* — `shared.ts` `BRANCH_PATTERN` has accepted
+  `work-\d+` since UTV2-1837, and `ISSUE_ID_NAMESPACES` since UTV2-1840.
+
+**What it still would not close.** Exit condition 1 also needs `proof-rebind.ts:1652`
+(non-reserved; a path-traversal guard, widen carefully) and the closeout gates. This diff removes
+the *required-check* blocker, not the last blocker.
+
+**Recommendation:** approve it as a bounded namespace widening. Non-secret success criterion — after
+it lands, a `WORK-###` lane's EXECUTOR_RESULT comment produces a green `Executor Result Validation`,
+and the three controls in `executor-result-validate.test.ts` (head-ref mismatch, PR mismatch, stale
+head SHA) still fail on the conditions they name. Both are mechanical and already written.
 
 ### Explicitly out of scope
 
@@ -979,6 +1085,13 @@ path.** Everything below item 1 blocks only itself.
 8. **A `scope-override/v1` comment** on any future lane that must touch `.lane/lanes/governance.yml`
    or another path outside its own `file_scope_lock`. None is outstanding right now — the
    `docs/mission/**` registration it was last needed for merged in #1499.
+
+9. **The `WORK-###` executor-result namespace diff** (UTV2-1688) — reserved decision 7. Two words
+   in two byte-identical regex literals, one of them inside a required-check workflow. Blocks
+   nothing that is running today; it blocks cutover exit condition 1. Prepared in full above under
+   "The reserved `WORK-###` executor-result diff", with its controls already written and its
+   non-secret success criterion stated. The `bootstrap/` half of the same defect needed no
+   decision and has landed.
 
 Items that left this list on 2026-09-05 by being done: the `ALLOWED_CAPPER_EMAILS` reshape; the
 #1477 decision (resolved by correcting the proof bundle, merged `1734bf20`); the #1501 approval
