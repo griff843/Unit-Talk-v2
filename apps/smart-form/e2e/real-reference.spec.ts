@@ -74,10 +74,9 @@ test('real-reference UI reports the connected environment honestly without route
   await expect(page.getByLabel('Player', { exact: true })).toBeDisabled();
   await page.screenshot({ path: `${proofDirectory}/real-06-team-player-dependency.png`, fullPage: true });
 
-  await page.getByRole('button', { name: "Can't find participants? Add manually" }).click();
-  await expect(page.getByText('Manual participant override', { exact: true })).toBeVisible();
-  await expect(page.getByText(/explicitly tagged unresolved/i)).toBeVisible();
-  await page.screenshot({ path: `${proofDirectory}/real-07-manual-unresolved.png`, fullPage: true });
+  await expect(page.getByTestId('coverage-gap-manual-entry')).toHaveCount(0);
+  await expect(page.getByText('Manual participant override', { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: `${proofDirectory}/real-07-coverage-gap-gated.png`, fullPage: true });
 
   await expect(page.getByText('Internal Tracking · Track Only', { exact: true })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-08-track-only.png`, fullPage: true });

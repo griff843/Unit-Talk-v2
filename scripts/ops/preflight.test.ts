@@ -18,9 +18,11 @@ import {
   configuredFullVerifyConcurrency,
   isContinuationEligibleLinearState,
   isTerminalLinearState,
+  isContainmentPlaceholderSupabaseUrl,
   parseAheadBehind,
   resolveVerdict,
   runLinearChecks,
+  runT1Checks,
 } from './preflight.js';
 import { DEFAULT_HARD_DEADLINE_MS, DEFAULT_VERIFY_SEMAPHORE_DIR } from './verify-semaphore.js';
 
@@ -456,5 +458,140 @@ test('UTV2-1837 AC4 inversion: the skip is conditional on absence, never uncondi
     sink.byId('PL1')?.status,
     'skip',
     'PL1 must not skip when a credential IS present',
+  );
+});
+
+
+// UTV2-1845: PT1 pinged live Supabase and could only answer `pass` or `infra_error`. Under
+// containment the ping is *designed* to fail -- `local.env` declares itself a containment
+// placeholder and points SUPABASE_URL at an unroutable address -- so a deliberate policy state was
+// reported as a broken database. resolveVerdict maps infra_error to INFRA, which writes no token,
+// which makes ops:lane-start refuse. PT1 runs only at T1 and is waivable at no tier, so every T1
+// lane was unopenable on a contained workstation. These tests lock the classification. They do NOT
+// lock any admission change: `blocked_by_containment` still resolves to INFRA.
+
+test('UTV2-1845: the containment placeholder is recognised exactly, not heuristically', () => {
+  for (const url of [
+    'http://127.0.0.1:1',
+    'http://127.0.0.1:54321',
+    'http://127.1.2.3:1',
+    'http://localhost:54321',
+    'http://[::1]:1',
+    'http://0.0.0.0:1',
+  ]) {
+    assert.equal(isContainmentPlaceholderSupabaseUrl(url), true, url);
+  }
+});
+
+test('UTV2-1845 inversion: a real host is never mistaken for the containment placeholder', () => {
+  // If any of these returned true, a genuinely broken production or staging database would be
+  // reported as containment -- the exact false negative this predicate must not introduce.
+  for (const url of [
+    'https://zfzdnfwdarxucxtaojxm.supabase.co',
+    'https://xskgrzbteyqdufktjrjx.supabase.co',
+    'https://db.example.com',
+    'https://127.0.0.1.example.com',
+    'not-a-url',
+    '',
+  ]) {
+    assert.equal(isContainmentPlaceholderSupabaseUrl(url), false, url);
+  }
+});
+
+test("UTV2-1845: the predicate agrees with an independent reading of the repo's own SUPABASE_URL", () => {
+  // Binds the predicate to the actual value this repository runs with rather than to a value
+  // invented here. It asserts agreement, not a fixed verdict: under local containment that value is
+  // the loopback placeholder and the expected answer is true, while in CI `local.env` is written
+  // from the staging-ci environment and the expected answer is false. An earlier version of this
+  // test asserted `true` unconditionally and was red in CI for exactly that reason -- it had
+  // encoded one environment's value as if it were the contract.
+  const localEnvPath = path.join(ROOT, 'local.env');
+  if (!fs.existsSync(localEnvPath)) {
+    return;
+  }
+  const line = fs
+    .readFileSync(localEnvPath, 'utf8')
+    .split('\n')
+    .find((entry) => entry.startsWith('SUPABASE_URL='));
+  if (!line) {
+    return;
+  }
+  const value = line.slice('SUPABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
+
+  // Computed here without calling the function under test, so the two can disagree.
+  let expected = false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    expected =
+      bare === 'localhost' ||
+      bare === '::1' ||
+      bare === '::' ||
+      bare === '0.0.0.0' ||
+      /^127(?:\.\d{1,3}){3}$/.test(bare);
+  } catch {
+    expected = false;
+  }
+
+  assert.equal(
+    isContainmentPlaceholderSupabaseUrl(value),
+    expected,
+    `predicate disagrees with an independent loopback reading of local.env SUPABASE_URL (${value})`,
+  );
+});
+
+test('UTV2-1845: PT1 reports blocked_by_containment for the placeholder host', async () => {
+  const sink = collectChecks();
+  await runT1Checks(
+    { SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'placeholder-key' } as never,
+    sink.addCheck,
+  );
+  assert.equal(sink.byId('PT1')?.status, 'blocked_by_containment');
+});
+
+test('UTV2-1845 inversion: a real but unreachable host still reports infra_error', async () => {
+  // This is the control. The .invalid TLD never resolves, so the ping fails for the same reason
+  // the placeholder ping fails -- and the outcome must still be infra_error, because the cause is
+  // an unreachable database and not containment.
+  const sink = collectChecks();
+  await runT1Checks(
+    {
+      SUPABASE_URL: 'https://unreachable-host.invalid',
+      SUPABASE_SERVICE_ROLE_KEY: 'placeholder-key',
+    } as never,
+    sink.addCheck,
+  );
+  assert.equal(sink.byId('PT1')?.status, 'infra_error');
+});
+
+test('UTV2-1845 inversion: an absent credential still fails, and is not containment', async () => {
+  const sink = collectChecks();
+  await runT1Checks({ SUPABASE_URL: 'http://127.0.0.1:1' } as never, sink.addCheck);
+  assert.equal(sink.byId('PT1')?.status, 'fail');
+});
+
+test('UTV2-1845: blocked_by_containment admits nothing -- it still resolves to INFRA', () => {
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'pass', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'INFRA',
+  );
+  // Control: the mapping is not unconditional. Without the containment outcome the same list passes.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'pass', detail: '' },
+      { id: 'PT1', status: 'pass', detail: '' },
+    ]),
+    'PASS',
+  );
+  // Control: infra_error is unchanged.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'pass', detail: '' },
+      { id: 'PT1', status: 'infra_error', detail: '' },
+    ]),
+    'INFRA',
   );
 });

@@ -212,8 +212,13 @@ export function buildLaneFinalizePlan(input: {
           '--force',
           '--diff-summary',
           standardProofPath(issueId, 'diff-summary.md'),
+          // `ops:proof-generate` writes STANDARD_PROOF_FILES — `diff-summary.md`
+          // and `verification.md` (proof-generate.ts:197). It never writes
+          // `runtime-verification.md`, which only runtime lanes carry, so naming
+          // that file here made every static-proof lane's finalize halt on
+          // ENOENT. t2-proof-bundle now tolerates an absent file either way.
           '--verification-log',
-          standardProofPath(issueId, 'runtime-verification.md'),
+          standardProofPath(issueId, 'verification.md'),
         ],
         required: true,
       });
@@ -376,7 +381,7 @@ export function validateLaneFinalizePullRequest(
 
 function standardProofPath(
   issueId: string,
-  fileName: 'diff-summary.md' | 'runtime-verification.md',
+  fileName: 'diff-summary.md' | 'verification.md' | 'runtime-verification.md',
 ): string {
   return `docs/06_status/proof/${issueId}/${fileName}`;
 }

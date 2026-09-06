@@ -1,0 +1,96 @@
+{
+  "schema_version": "2",
+  "issue_id": "UTV2-1688",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": "949459feaaadf2a54bd7eeee0a8755a9dca3415b",
+    "verified_source_sha": "b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — exit 0. 100 suite blocks, 5962 tests, `# fail 0` throughout, zero `not ok` lines. The owning suite scripts/ops/executor-result-validate.test.ts reports 27/27.",
+      "pnpm_verify": "EXIT 1 locally, and no local PASS is claimed. `pnpm verify` reaches test:live-db -> test:db -> ci:assert-staging, which REFUSES with host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx because writable DB verification may only run inside the staging-ci GitHub environment. This is structural: pnpm verify cannot exit 0 on a developer machine. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
+      "r_level_check": "PASS locally — `Verdict: PASS / Changed files: 3 / Rules matched: (none)`. R-Level Compliance also runs in CI on this branch."
+    },
+    "sha_type": "merge_sha",
+    "anchor_note": "b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4 is the last non-proof commit on the branch. Everything after it touches only docs/06_status/proof/UTV2-1688/ and docs/06_status/lanes/UTV2-1688.json, which are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T07:28:05.027Z"
+  },
+  "static_proof": {
+    "defect_reproduction": {
+      "method": "Executed the validator rather than reading the regex. parseExecutorResultComment + validateExecutorResultFields were imported from origin/main's copy of scripts/ops/executor-result-validate.ts and from this lane's copy, and run against an identical bootstrap executor result whose Branch: equals its head ref.",
+      "before": "Invalid branch: \"bootstrap/utv2-1619-repository-truth-integrity\". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.",
+      "after": "zero errors"
+    },
+    "gate_copy_measured_separately": {
+      "why": "grep -rn \"validateExecutorResultFields\" returns exactly two consumers — its own definition and its test file. executor-result-validator.yml invokes the script only for resolve-check-name (line 103). A proof exercising only the module would say nothing about the gate.",
+      "method": "The inline `const branchRe = ...` literal was extracted from both origin/main's workflow and this lane's, and evaluated against the same branch string.",
+      "before": "/^(claude|codex)\\/(utv2|uni)-\\d+/i  -> test(\"bootstrap/utv2-1619-...\") = false",
+      "after": "/^(claude|codex|bootstrap)\\/(utv2|uni)-\\d+/i  -> test(\"bootstrap/utv2-1619-...\") = true"
+    },
+    "mutation_control": [
+      {
+        "id": "M1",
+        "mutation": "revert bootstrap out of the exported EXECUTOR_RESULT_BRANCH_RE",
+        "killed": [
+          "UTV2-1688: a bootstrap/ branch validates with zero errors",
+          "UTV2-1688: the workflow branch literal is byte-identical to the exported one"
+        ],
+        "totals": "27 tests / 25 pass / 2 fail"
+      },
+      {
+        "id": "M2",
+        "mutation": "revert bootstrap out of the INLINE workflow branchRe only, leaving the script correct",
+        "killed": [
+          "UTV2-1688: the workflow branch literal is byte-identical to the exported one"
+        ],
+        "totals": "27 tests / 26 pass / 1 fail",
+        "note": "Load-bearing. This is the exact shape of the filed defect — script correct, gate stale. Before this lane nothing in the repository failed on it."
+      },
+      {
+        "id": "M3",
+        "mutation": "delete the `Branch: == PR head ref` binding",
+        "killed": [
+          "UTV2-1688 control: a bootstrap/ branch that disagrees with the PR head is still rejected"
+        ],
+        "totals": "27 tests / 26 pass / 1 fail"
+      },
+      {
+        "id": "restored",
+        "mutation": "all three reverted byte-for-byte",
+        "killed": [],
+        "totals": "27 tests / 27 pass / 0 fail"
+      }
+    ],
+    "preserved_bindings": [
+      "Branch: equals the PR head ref (M3 control)",
+      "declared PR equals the actual PR (pre-existing test, unchanged)",
+      "declared head SHA equals the current head (new control on a bootstrap/ branch)",
+      "an unrecognized namespace is still refused, with the head ref set to match so the mismatch rule cannot be what rejects it",
+      "Lane: semantics unchanged — the [claude, codex] check is untouched"
+    ],
+    "reserved_surface_accounting": {
+      "github_diff": ".github/workflows/executor-result-validator.yml",
+      "changed_within_it": "one regex alternation plus comments",
+      "unchanged": [
+        "required-check configuration",
+        "branch protection",
+        "CODEOWNERS",
+        "merge gate and its policy inputs",
+        "tier semantics",
+        "approval policy",
+        "every bypass"
+      ],
+      "note": "The change only ever ADMITS an additional namespace; it removes no requirement. This is the scope UTV2-1688's own PM-authored acceptance criteria define."
+    }
+  },
+  "known_gaps": [
+    "The `work/` namespace and WORK-### issue IDs are NOT included. Admitting a repo-minted identity into a required check changes what that check requires — reserved decision 7, cutover items 8-11. The diff is prepared for review in docs/mission/plan.md, not applied. This lane therefore does not close cutover exit condition 1.",
+    "docs/06_status/proof/UTV2-1688/evidence.json is not in the manifest expected_proof_paths, because that field is settable only at ops:lane-manifest create. `Return review packet` will report it as scope bleed. It is not one of the four required checks.",
+    "No local `pnpm verify` PASS exists or is claimed anywhere in this bundle; ci:assert-staging structurally refuses outside staging-ci."
+  ]
+}

@@ -1,0 +1,314 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1845
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1845
+  objective: PT1 misclassifies containment as infra_error, making every T1 lane
+    unopenable under containment
+  acceptance_criteria:
+    - |-
+      `ops:preflight` PT1 reports a deliberate, documented containment state as an infrastructure fault, and the cascade makes every T1 lane unopenable on a contained workstation. This blocks [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (the Smart Form submission repair), which is on the Milestone 1 critical path and cannot be reclassified out of T1.
+
+      **This issue contains a policy decision reserved to PM.** It is split so the diagnostic half needs no authority and the admission half is decided explicitly rather than by analogy. Do not apply the admission half without a recorded PM decision.
+
+      ## Measured facts
+
+      * `scripts/ops/preflight.ts:1312-1321` — PT1 pings live Supabase and classifies only `pass` / `infra_error` / `fail`.
+      * `local.env:1-4` declares itself `# CONTAINMENT PLACEHOLDER — NOT production credentials.` and `SUPABASE_URL=http://127.0.0.1:1`, *"pointing every client at an unreachable address so no test run can reach production Supabase."* The ping is designed to fail.
+      * `resolveVerdict` (`:1454-1456`) maps any `infra_error` to `INFRA`; no preflight token is written; `lane-start.ts:418` refuses with *"validated preflight token is unavailable."*
+      * PT1 runs only at T1 (`:394-396`), so a T2 lane opens cleanly on the same workstation.
+      * PT1 is waivable at no tier — `WAIVABLE_CHECKS` (`:153-157`) is `T1: {PE3}`, `T2: {PE3, PL4}`, `T3: {PE3, PB2, PG3, PL4, PR7}`.
+      * [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) cannot escape the tier: `checkEventExistenceGate` is defined at `apps/api/src/submission-service.ts:867` and called at `:203`; that is a Tier C exact path, so `classifyMechanicalMinimum` returns a T1 floor (`scripts/ops/tier-classifier.ts:60-63`) and floors never lower.
+
+      ## What already binds the live-DB evidence
+
+      `verify` is a required check and already fails closed without a same-run live-DB proof:
+
+      | Mechanism | Location |
+      | -- | -- |
+      | `verify` **needs** `staging-db-proof` | `.github/workflows/ci.yml:172` |
+      | fails closed if that job did not succeed | `:178-181` |
+      | runs against staging under `environment: staging-ci` | `:37-41` |
+      | runs `test:live-db` → `test:t1-proof:live` | `:122-134` |
+      | receipt uploaded scoped to `run_id` **and** `run_attempt` | `:149-154` |
+      | `verify` downloads that exact artifact, `if-no-files-found: error` | `:279-284` |
+      | receipt verified with `--expect-job staging-db-proof` | `:286-294` |
+
+      So the binding live-DB evidence exists at the PR head, in a stronger form than a local ping at lane-open. This is an argument about *where the precondition binds*, not for reducing the T1 evidence bar.
+
+      ## Part 1 — classification. No admission change. No policy authority needed.
+
+      PT1 gains a distinct outcome for the containment case:
+
+      | Condition | Today | After |
+      | -- | -- | -- |
+      | Credential or URL absent | `fail` | `fail` — unchanged |
+      | Resolved URL is the documented containment placeholder | `infra_error` | `blocked_by_containment` |
+      | Real host configured, ping unhealthy | `infra_error` | `infra_error` — unchanged |
+      | Ping healthy | `pass` | `pass` — unchanged |
+
+      Detection is exact, not heuristic: an unroutable/loopback placeholder host, never a real project URL. `blocked_by_containment` maps to verdict `INFRA` exactly as today, so **no lane opens that could not open before**. Its value is that the refusal names the real cause.
+
+      Precedent for the reclassification, in the same function: PL1 (`preflight.ts:1130-1137`) — *"An absent tracker credential is not an infrastructure failure and not a policy refusal — it is the tracker being optional."* That change was legitimate because Griff ratified it in `intent.md` § "Execution must not depend on the tracker". **No equivalent ratification exists for the live-DB precondition**, which is exactly why Part 2 is separate.
+
+      ## Part 2 — admission. RESERVED. Implement behind the decision, do not self-authorize.
+
+      If PM admits it:
+
+      1. `preflight` writes the token with `t1_live_db_precondition: "deferred_to_ci"`.
+      2. `ops:lane-start` copies that field onto the lane manifest.
+      3. `ops:truth-check` **refuses closeout** for any lane carrying that field unless the `verify` run at the merge SHA carries a verified `staging-db-proof` receipt — a new closeout check, failing closed.
+
+      Net effect at merge: unchanged. At closeout: strictly stronger — the deferral becomes an explicit checked obligation. At lane-open: a T1 lane may open under containment, which it cannot today.
+
+      ## Definition of done
+
+      1. Part 1 lands with tests, and changes no verdict for any input.
+      2. Part 2 is implemented and presented as a reviewable architecture proposal in the PR, with the decision stated. It is not merged without a recorded PM decision.
+      3. `docs/05_operations/` carries the decision packet so the reasoning is not chat-resident.
+
+      ## Verification / self-check
+
+      Three mechanical criteria, shipping as tests:
+
+      1. `ops:preflight <issue> --tier T1 --branch <branch>` on the contained workstation reports `PT1 blocked_by_containment`; with Part 2, verdict `PASS` and a token carrying `t1_live_db_precondition: deferred_to_ci`.
+      2. `SUPABASE_URL` pointed at a real but unreachable host still reports `PT1 infra_error` and verdict `INFRA` — the control still fails on the condition it names. This is the inversion that matters.
+      3. `ops:truth-check` on a lane carrying the deferral fails when the merge-SHA `verify` run has no verified `staging-db-proof` receipt, and passes when it does.
+
+      `pnpm verify` green on the branch.
+
+      ## Out of scope
+
+      * The merge gate, CODEOWNERS, branch protection, required-check configuration, tier semantics, and any approval artifact. None is touched.
+      * Hand-generating a preflight token as a substitution. That is what was done before and is explicitly not the remedy here.
+      * Any change to what `verify` requires.
+  guardrails: []
+  non_goals:
+    - The merge gate, CODEOWNERS, branch protection, required-check
+      configuration, tier semantics, and any approval artifact. None is touched.
+    - Hand-generating a preflight token as a substitution. That is what was done
+      before and is explicitly not the remedy here.
+    - Any change to what `verify` requires.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      `ops:preflight` PT1 reports a deliberate, documented containment state as an infrastructure fault, and the cascade makes every T1 lane unopenable on a contained workstation. This blocks [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (the Smart Form submission repair), which is on the Milestone 1 critical path and cannot be reclassified out of T1.
+
+      **This issue contains a policy decision reserved to PM.** It is split so the diagnostic half needs no authority and the admission half is decided explicitly rather than by analogy. Do not apply the admission half without a recorded PM decision.
+    - |-
+      Measured facts
+      * `scripts/ops/preflight.ts:1312-1321` — PT1 pings live Supabase and classifies only `pass` / `infra_error` / `fail`.
+      * `local.env:1-4` declares itself `# CONTAINMENT PLACEHOLDER — NOT production credentials.` and `SUPABASE_URL=http://127.0.0.1:1`, *"pointing every client at an unreachable address so no test run can reach production Supabase."* The ping is designed to fail.
+      * `resolveVerdict` (`:1454-1456`) maps any `infra_error` to `INFRA`; no preflight token is written; `lane-start.ts:418` refuses with *"validated preflight token is unavailable."*
+      * PT1 runs only at T1 (`:394-396`), so a T2 lane opens cleanly on the same workstation.
+      * PT1 is waivable at no tier — `WAIVABLE_CHECKS` (`:153-157`) is `T1: {PE3}`, `T2: {PE3, PL4}`, `T3: {PE3, PB2, PG3, PL4, PR7}`.
+      * [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) cannot escape the tier: `checkEventExistenceGate` is defined at `apps/api/src/submission-service.ts:867` and called at `:203`; that is a Tier C exact path, so `classifyMechanicalMinimum` returns a T1 floor (`scripts/ops/tier-classifier.ts:60-63`) and floors never lower.
+    - >-
+      What already binds the live-DB evidence
+
+      `verify` is a required check and already fails closed without a same-run
+      live-DB proof:
+
+
+      | Mechanism | Location |
+
+      | -- | -- |
+
+      | `verify` **needs** `staging-db-proof` | `.github/workflows/ci.yml:172` |
+
+      | fails closed if that job did not succeed | `:178-181` |
+
+      | runs against staging under `environment: staging-ci` | `:37-41` |
+
+      | runs `test:live-db` → `test:t1-proof:live` | `:122-134` |
+
+      | receipt uploaded scoped to `run_id` **and** `run_attempt` | `:149-154` |
+
+      | `verify` downloads that exact artifact, `if-no-files-found: error` |
+      `:279-284` |
+
+      | receipt verified with `--expect-job staging-db-proof` | `:286-294` |
+
+
+      So the binding live-DB evidence exists at the PR head, in a stronger form
+      than a local ping at lane-open. This is an argument about *where the
+      precondition binds*, not for reducing the T1 evidence bar.
+    - >-
+      Part 1 — classification. No admission change. No policy authority needed.
+
+      PT1 gains a distinct outcome for the containment case:
+
+
+      | Condition | Today | After |
+
+      | -- | -- | -- |
+
+      | Credential or URL absent | `fail` | `fail` — unchanged |
+
+      | Resolved URL is the documented containment placeholder | `infra_error` |
+      `blocked_by_containment` |
+
+      | Real host configured, ping unhealthy | `infra_error` | `infra_error` —
+      unchanged |
+
+      | Ping healthy | `pass` | `pass` — unchanged |
+
+
+      Detection is exact, not heuristic: an unroutable/loopback placeholder
+      host, never a real project URL. `blocked_by_containment` maps to verdict
+      `INFRA` exactly as today, so **no lane opens that could not open before**.
+      Its value is that the refusal names the real cause.
+
+
+      Precedent for the reclassification, in the same function: PL1
+      (`preflight.ts:1130-1137`) — *"An absent tracker credential is not an
+      infrastructure failure and not a policy refusal — it is the tracker being
+      optional."* That change was legitimate because Griff ratified it in
+      `intent.md` § "Execution must not depend on the tracker". **No equivalent
+      ratification exists for the live-DB precondition**, which is exactly why
+      Part 2 is separate.
+    - >-
+      Part 2 — admission. RESERVED. Implement behind the decision, do not
+      self-authorize.
+
+      If PM admits it:
+
+
+      1. `preflight` writes the token with `t1_live_db_precondition:
+      "deferred_to_ci"`.
+
+      2. `ops:lane-start` copies that field onto the lane manifest.
+
+      3. `ops:truth-check` **refuses closeout** for any lane carrying that field
+      unless the `verify` run at the merge SHA carries a verified
+      `staging-db-proof` receipt — a new closeout check, failing closed.
+
+
+      Net effect at merge: unchanged. At closeout: strictly stronger — the
+      deferral becomes an explicit checked obligation. At lane-open: a T1 lane
+      may open under containment, which it cannot today.
+    - >-
+      Definition of done
+
+      1. Part 1 lands with tests, and changes no verdict for any input.
+
+      2. Part 2 is implemented and presented as a reviewable architecture
+      proposal in the PR, with the decision stated. It is not merged without a
+      recorded PM decision.
+
+      3. `docs/05_operations/` carries the decision packet so the reasoning is
+      not chat-resident.
+    - >-
+      Verification / self-check
+
+      Three mechanical criteria, shipping as tests:
+
+
+      1. `ops:preflight <issue> --tier T1 --branch <branch>` on the contained
+      workstation reports `PT1 blocked_by_containment`; with Part 2, verdict
+      `PASS` and a token carrying `t1_live_db_precondition: deferred_to_ci`.
+
+      2. `SUPABASE_URL` pointed at a real but unreachable host still reports
+      `PT1 infra_error` and verdict `INFRA` — the control still fails on the
+      condition it names. This is the inversion that matters.
+
+      3. `ops:truth-check` on a lane carrying the deferral fails when the
+      merge-SHA `verify` run has no verified `staging-db-proof` receipt, and
+      passes when it does.
+
+
+      `pnpm verify` green on the branch.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1845/pt1-misclassifies-containment-as-infra-error-making-every-t1-lane
+    title: PT1 misclassifies containment as infra_error, making every T1 lane
+      unopenable under containment
+    description: |-
+      `ops:preflight` PT1 reports a deliberate, documented containment state as an infrastructure fault, and the cascade makes every T1 lane unopenable on a contained workstation. This blocks [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (the Smart Form submission repair), which is on the Milestone 1 critical path and cannot be reclassified out of T1.
+
+      **This issue contains a policy decision reserved to PM.** It is split so the diagnostic half needs no authority and the admission half is decided explicitly rather than by analogy. Do not apply the admission half without a recorded PM decision.
+
+      ## Measured facts
+
+      * `scripts/ops/preflight.ts:1312-1321` — PT1 pings live Supabase and classifies only `pass` / `infra_error` / `fail`.
+      * `local.env:1-4` declares itself `# CONTAINMENT PLACEHOLDER — NOT production credentials.` and `SUPABASE_URL=http://127.0.0.1:1`, *"pointing every client at an unreachable address so no test run can reach production Supabase."* The ping is designed to fail.
+      * `resolveVerdict` (`:1454-1456`) maps any `infra_error` to `INFRA`; no preflight token is written; `lane-start.ts:418` refuses with *"validated preflight token is unavailable."*
+      * PT1 runs only at T1 (`:394-396`), so a T2 lane opens cleanly on the same workstation.
+      * PT1 is waivable at no tier — `WAIVABLE_CHECKS` (`:153-157`) is `T1: {PE3}`, `T2: {PE3, PL4}`, `T3: {PE3, PB2, PG3, PL4, PR7}`.
+      * [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) cannot escape the tier: `checkEventExistenceGate` is defined at `apps/api/src/submission-service.ts:867` and called at `:203`; that is a Tier C exact path, so `classifyMechanicalMinimum` returns a T1 floor (`scripts/ops/tier-classifier.ts:60-63`) and floors never lower.
+
+      ## What already binds the live-DB evidence
+
+      `verify` is a required check and already fails closed without a same-run live-DB proof:
+
+      | Mechanism | Location |
+      | -- | -- |
+      | `verify` **needs** `staging-db-proof` | `.github/workflows/ci.yml:172` |
+      | fails closed if that job did not succeed | `:178-181` |
+      | runs against staging under `environment: staging-ci` | `:37-41` |
+      | runs `test:live-db` → `test:t1-proof:live` | `:122-134` |
+      | receipt uploaded scoped to `run_id` **and** `run_attempt` | `:149-154` |
+      | `verify` downloads that exact artifact, `if-no-files-found: error` | `:279-284` |
+      | receipt verified with `--expect-job staging-db-proof` | `:286-294` |
+
+      So the binding live-DB evidence exists at the PR head, in a stronger form than a local ping at lane-open. This is an argument about *where the precondition binds*, not for reducing the T1 evidence bar.
+
+      ## Part 1 — classification. No admission change. No policy authority needed.
+
+      PT1 gains a distinct outcome for the containment case:
+
+      | Condition | Today | After |
+      | -- | -- | -- |
+      | Credential or URL absent | `fail` | `fail` — unchanged |
+      | Resolved URL is the documented containment placeholder | `infra_error` | `blocked_by_containment` |
+      | Real host configured, ping unhealthy | `infra_error` | `infra_error` — unchanged |
+      | Ping healthy | `pass` | `pass` — unchanged |
+
+      Detection is exact, not heuristic: an unroutable/loopback placeholder host, never a real project URL. `blocked_by_containment` maps to verdict `INFRA` exactly as today, so **no lane opens that could not open before**. Its value is that the refusal names the real cause.
+
+      Precedent for the reclassification, in the same function: PL1 (`preflight.ts:1130-1137`) — *"An absent tracker credential is not an infrastructure failure and not a policy refusal — it is the tracker being optional."* That change was legitimate because Griff ratified it in `intent.md` § "Execution must not depend on the tracker". **No equivalent ratification exists for the live-DB precondition**, which is exactly why Part 2 is separate.
+
+      ## Part 2 — admission. RESERVED. Implement behind the decision, do not self-authorize.
+
+      If PM admits it:
+
+      1. `preflight` writes the token with `t1_live_db_precondition: "deferred_to_ci"`.
+      2. `ops:lane-start` copies that field onto the lane manifest.
+      3. `ops:truth-check` **refuses closeout** for any lane carrying that field unless the `verify` run at the merge SHA carries a verified `staging-db-proof` receipt — a new closeout check, failing closed.
+
+      Net effect at merge: unchanged. At closeout: strictly stronger — the deferral becomes an explicit checked obligation. At lane-open: a T1 lane may open under containment, which it cannot today.
+
+      ## Definition of done
+
+      1. Part 1 lands with tests, and changes no verdict for any input.
+      2. Part 2 is implemented and presented as a reviewable architecture proposal in the PR, with the decision stated. It is not merged without a recorded PM decision.
+      3. `docs/05_operations/` carries the decision packet so the reasoning is not chat-resident.
+
+      ## Verification / self-check
+
+      Three mechanical criteria, shipping as tests:
+
+      1. `ops:preflight <issue> --tier T1 --branch <branch>` on the contained workstation reports `PT1 blocked_by_containment`; with Part 2, verdict `PASS` and a token carrying `t1_live_db_precondition: deferred_to_ci`.
+      2. `SUPABASE_URL` pointed at a real but unreachable host still reports `PT1 infra_error` and verdict `INFRA` — the control still fails on the condition it names. This is the inversion that matters.
+      3. `ops:truth-check` on a lane carrying the deferral fails when the merge-SHA `verify` run has no verified `staging-db-proof` receipt, and passes when it does.
+
+      `pnpm verify` green on the branch.
+
+      ## Out of scope
+
+      * The merge gate, CODEOWNERS, branch protection, required-check configuration, tier semantics, and any approval artifact. None is touched.
+      * Hand-generating a preflight token as a substitution. That is what was done before and is explicitly not the remedy here.
+      * Any change to what `verify` requires.
+    captured_at: 2026-09-06T18:51:54.961Z
+    description_sha256: 95d15d9e32547ac849a036d4bb69043ee13ed0c3262cafcd7c02a4d0bd89aba0
+  contract_hash: a273c5bcaa756fcc40a08b552c34b993130cbd4eb901c1043b5ef772c5b865ac

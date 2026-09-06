@@ -1,5 +1,5 @@
 import { pathToFileURL } from 'node:url';
-import { emitJson, getFlag, parseArgs } from './shared.js';
+import { emitJson, getFlag, issueIdScanPattern, parseArgs } from './shared.js';
 
 export type BranchDisciplineResult = {
   ok: boolean;
@@ -16,7 +16,7 @@ export type BranchDisciplineResult = {
   warning: string | null;
 };
 
-const ISSUE_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
+const ISSUE_PATTERN = issueIdScanPattern();
 const EXEMPT_BRANCH_PREFIXES = ['dependabot/', 'renovate/', 'github-actions/'] as const;
 const PROOF_SECTION_HEADING_PATTERN =
   /^(?:#{1,6}\s*)?(?:verification|proof|evidence|test output|tap output|logs?|live-db proof|runtime proof)\b/i;
@@ -56,7 +56,7 @@ export function evaluateIssueReferences(text: string): BranchDisciplineResult {
     code: 'no_issue_reference',
     issue_ids: [],
     branch_issue_ids: [],
-    errors: ['No UTV2-### or UNI-### issue ID referenced'],
+    errors: ['No UTV2-###, UNI-### or WORK-### issue ID referenced'],
     warning: null,
   };
 }
@@ -130,7 +130,7 @@ export function evaluateBranchDiscipline(input: {
       branch_issue_ids: branchIssueIds,
       errors: [
         branchIssueIds.length === 0
-          ? `PR branch "${branch || '<missing>'}" must include exactly one UTV2-### or UNI-### issue ID`
+          ? `PR branch "${branch || '<missing>'}" must include exactly one UTV2-###, UNI-### or WORK-### issue ID`
           : `PR branch "${branch}" references multiple issue IDs: ${branchIssueIds.join(', ')}`,
       ],
       warning: null,
@@ -147,7 +147,7 @@ export function evaluateBranchDiscipline(input: {
       branch_issue_ids: branchIssueIds,
       errors: [
         issueIds.length === 0
-          ? 'No UTV2-### or UNI-### issue ID referenced'
+          ? 'No UTV2-###, UNI-### or WORK-### issue ID referenced'
           : `All PR issue references must match branch issue ${branchIssueId}; found ${issueIds.join(', ')}`,
       ],
       warning: null,

@@ -1,0 +1,163 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1688
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1688
+  objective: Executor Result Validator rejects the bootstrap/ branch namespace
+  acceptance_criteria:
+    - '`branchRe` recognizes the `bootstrap/` namespace alongside `claude/` and
+      `codex/` in **both** copies — see "Two copies of the regex" below.'
+    - "The `Branch: == PR head ref` equality rule is preserved unchanged — the
+      fix widens which namespaces are legal, and does not weaken the binding
+      between the comment and the actual head."
+    - "`Lane:` semantics are unchanged."
+    - A test asserts a `bootstrap/utv2-NNN-*` branch validates, and a test
+      asserts a genuinely mismatched branch still fails — the control must be
+      shown failing on the condition it names, not merely passing.
+    - No change to required-check configuration, branch protection, or any
+      bypass.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Problem
+
+      `scripts/ops/executor-result-validate.ts` validates the `Branch:` field
+      against:
+
+
+      ```
+
+      const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
+
+      ```
+
+
+      The `bootstrap/` branch namespace — introduced for bootstrap governance
+      lanes — is not recognized. A separate rule also requires `Branch:` to
+      equal the PR head ref, so **both** possible spellings fail for a bootstrap
+      lane:
+
+
+      | `Branch:` value | Result |
+
+      | -- | -- |
+
+      | `bootstrap/utv2-1619-...` | FAIL — `Invalid branch: must match
+      claude/utv2-NNN-*, codex/utv2-NNN-*, ...` |
+
+      | `claude/utv2-1619-...` | FAIL — `Branch mismatch: PR head is
+      bootstrap/...` |
+
+
+      Verified by executing `validateExecutorResultFields` directly against PR
+      #1399's live context, not by reading the regex.
+    - |-
+      Impact
+      `Executor Result Validation` is one of four required status contexts on `main`. It is created **only** by an `issue_comment` carrying an `EXECUTOR_RESULT` block (never by a push — [UTV2-1550](https://linear.app/unit-talk-v2/issue/UTV2-1550/prevent-stale-duplicate-required-executor-result-validation-identities)). Since no valid `EXECUTOR_RESULT` can be written for a `bootstrap/` branch, that required context can never be created, and **every bootstrap lane is permanently unmergeable without an admin bypass.**
+
+      Currently blocking PR #1399 ([UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be)), which has Merge Gate APPROVED and the other three required contexts green.
+    - >-
+      Why this is not fixable inside the blocked PR
+
+      `executor-result-validator.yml` deliberately pins its checkout to the
+      base/main copy of the script (`github.sha` for
+      `issue_comment`/`workflow_dispatch`; `base.sha` for `pull_request`) so a
+      PR cannot supply its own validator. A fix committed on a blocked PR's head
+      therefore has no effect on that PR. The fix must reach `main` first, via a
+      normal `claude/`-namespaced lane.
+    - >-
+      Two copies of the regex (fix both)
+
+      The field validation is **duplicated**, not shared:
+
+
+      1. `scripts/ops/executor-result-validate.ts` —
+      `validateExecutorResultFields`, used by the unit tests.
+
+      2. `.github/workflows/executor-result-validator.yml` — an inline
+      `actions/github-script` copy of the same rules, including its own `const
+      branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;`.
+
+
+      The workflow's header comment notes that the *check-name mapping* is
+      looked up from the script "rather than hand-duplicated so the workflow can
+      never drift" — but the field validation itself was duplicated anyway.
+      **The copy that actually gates merges is the one inline in the workflow.**
+      Fixing only the script would make the tests pass while the gate stayed
+      broken.
+
+
+      Preferred: have the workflow call the shared function so the duplication
+      cannot drift again. Minimum: change both and add a test asserting they
+      agree.
+    - |-
+      Notes
+      Distinct from [UTV2-1687](https://linear.app/unit-talk-v2/issue/UTV2-1687/recognize-bootstrap-governance-identity-across-required-checks), which covers bootstrap recognition in File Scope Lock, Return Review Packet, and Branch Discipline. This is the fourth consumer that was missed: the executor-result validator.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace
+    title: Executor Result Validator rejects the bootstrap/ branch namespace
+    description: |-
+      ## Problem
+
+      `scripts/ops/executor-result-validate.ts` validates the `Branch:` field against:
+
+      ```
+      const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
+      ```
+
+      The `bootstrap/` branch namespace — introduced for bootstrap governance lanes — is not recognized. A separate rule also requires `Branch:` to equal the PR head ref, so **both** possible spellings fail for a bootstrap lane:
+
+      | `Branch:` value | Result |
+      | -- | -- |
+      | `bootstrap/utv2-1619-...` | FAIL — `Invalid branch: must match claude/utv2-NNN-*, codex/utv2-NNN-*, ...` |
+      | `claude/utv2-1619-...` | FAIL — `Branch mismatch: PR head is bootstrap/...` |
+
+      Verified by executing `validateExecutorResultFields` directly against PR #1399's live context, not by reading the regex.
+
+      ## Impact
+
+      `Executor Result Validation` is one of four required status contexts on `main`. It is created **only** by an `issue_comment` carrying an `EXECUTOR_RESULT` block (never by a push — [UTV2-1550](https://linear.app/unit-talk-v2/issue/UTV2-1550/prevent-stale-duplicate-required-executor-result-validation-identities)). Since no valid `EXECUTOR_RESULT` can be written for a `bootstrap/` branch, that required context can never be created, and **every bootstrap lane is permanently unmergeable without an admin bypass.**
+
+      Currently blocking PR #1399 ([UTV2-1619](https://linear.app/unit-talk-v2/issue/UTV2-1619/repository-truth-integrity-a-lane-that-can-merge-must-already-be)), which has Merge Gate APPROVED and the other three required contexts green.
+
+      ## Why this is not fixable inside the blocked PR
+
+      `executor-result-validator.yml` deliberately pins its checkout to the base/main copy of the script (`github.sha` for `issue_comment`/`workflow_dispatch`; `base.sha` for `pull_request`) so a PR cannot supply its own validator. A fix committed on a blocked PR's head therefore has no effect on that PR. The fix must reach `main` first, via a normal `claude/`-namespaced lane.
+
+      ## Two copies of the regex (fix both)
+
+      The field validation is **duplicated**, not shared:
+
+      1. `scripts/ops/executor-result-validate.ts` — `validateExecutorResultFields`, used by the unit tests.
+      2. `.github/workflows/executor-result-validator.yml` — an inline `actions/github-script` copy of the same rules, including its own `const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;`.
+
+      The workflow's header comment notes that the *check-name mapping* is looked up from the script "rather than hand-duplicated so the workflow can never drift" — but the field validation itself was duplicated anyway. **The copy that actually gates merges is the one inline in the workflow.** Fixing only the script would make the tests pass while the gate stayed broken.
+
+      Preferred: have the workflow call the shared function so the duplication cannot drift again. Minimum: change both and add a test asserting they agree.
+
+      ## Acceptance criteria
+
+      * `branchRe` recognizes the `bootstrap/` namespace alongside `claude/` and `codex/` in **both** copies — see "Two copies of the regex" below.
+      * The `Branch: == PR head ref` equality rule is preserved unchanged — the fix widens which namespaces are legal, and does not weaken the binding between the comment and the actual head.
+      * `Lane:` semantics are unchanged.
+      * A test asserts a `bootstrap/utv2-NNN-*` branch validates, and a test asserts a genuinely mismatched branch still fails — the control must be shown failing on the condition it names, not merely passing.
+      * No change to required-check configuration, branch protection, or any bypass.
+
+      ## Notes
+
+      Distinct from [UTV2-1687](https://linear.app/unit-talk-v2/issue/UTV2-1687/recognize-bootstrap-governance-identity-across-required-checks), which covers bootstrap recognition in File Scope Lock, Return Review Packet, and Branch Discipline. This is the fourth consumer that was missed: the executor-result validator.
+    captured_at: 2026-09-06T06:54:37.218Z
+    description_sha256: d0b2d913ac02da3f43674a6963926022010e46451486f14f6e9d6b4e57f96aa5
+  contract_hash: 31f9ddc04ff3ab5843cd714ca5d797105f64e53bce038fb5bb1f461779b849cc

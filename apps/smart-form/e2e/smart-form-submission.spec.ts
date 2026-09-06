@@ -630,7 +630,7 @@ test('manual fallback surfaces structured canonical participant selection', asyn
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: 'Manual fallback' }).click();
 
-  await expect(page.getByText('Build canonical matchup', { exact: true })).toBeVisible();
+  await expect(page.getByText('Build matchup from teams', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Away Team')).toBeVisible();
   await expect(page.getByLabel('Home Team')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();

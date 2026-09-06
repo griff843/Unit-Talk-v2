@@ -103,10 +103,29 @@ export interface ValidationContext {
  * workflow using GitHub API data, since those require live lookups this
  * module deliberately stays free of for testability.
  */
+/**
+ * Issue-ID and branch shapes an executor result may declare.
+ *
+ * UTV2-1688: these two literals are DUPLICATED, on purpose, in
+ * `.github/workflows/executor-result-validator.yml` -- an `actions/github-script`
+ * `script:` block is a YAML string and cannot import this module, and the copy
+ * inline in that workflow is the one that actually gates merges. The duplication
+ * had already drifted once (the `bootstrap/` namespace was added to neither), so
+ * `executor-result-validate.test.ts` now reads the workflow and asserts both
+ * literals are byte-identical to these. Change one and the suite goes red.
+ *
+ * Widening a namespace is deliberately the ONLY thing these express. Every
+ * binding rule below -- `Branch:` equals the PR head ref, the declared PR equals
+ * the actual PR, the declared head SHA equals the current head -- is unchanged,
+ * so a wider namespace can never stand in for a weaker attestation.
+ */
+export const EXECUTOR_RESULT_ISSUE_ID_RE = /^(UTV2|UNI)-\d+$/i;
+export const EXECUTOR_RESULT_BRANCH_RE = /^(claude|codex|bootstrap)\/(utv2|uni)-\d+/i;
+
 export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: ValidationContext): string[] {
   const errors: string[] = [];
 
-  if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+  if (!r.issueId || !EXECUTOR_RESULT_ISSUE_ID_RE.test(r.issueId)) {
     errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
   }
 
@@ -114,10 +133,9 @@ export function validateExecutorResultFields(r: ParsedExecutorResult, ctx: Valid
     errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
   }
 
-  const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
-  if (!r.branch || !branchRe.test(r.branch)) {
+  if (!r.branch || !EXECUTOR_RESULT_BRANCH_RE.test(r.branch)) {
     errors.push(
-      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`,
+      `Invalid branch: "${r.branch || '<missing>'}". Must match claude/, codex/ or bootstrap/ followed by utv2-NNN-* or uni-NNN-*.`,
     );
   }
   if (r.branch && r.branch !== ctx.headRef) {
