@@ -109,6 +109,9 @@ pnpm type-check                        # exit 0
 pnpm test                              # exit 0 — tests 5969, pass 5969, fail 0
 pnpm exec tsx --test scripts/ops/preflight.test.ts
                                        # exit 0 — tests 39, pass 39, fail 0
+npx tsx scripts/ci/r-level-check.ts --issue UTV2-1845
+                                       # Verdict: PASS · Changed files: 9 · Rules matched: (none)
+                                       #   — no R-level artifacts required for this diff
 pnpm verify                            # refused locally at test:live-db under containment; the
                                        #   binding receipt is the required `verify` check on this head
 ```
