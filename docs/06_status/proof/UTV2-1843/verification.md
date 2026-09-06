@@ -13,9 +13,17 @@ workflow, no check, no label, no gate.
 
 | Field | Value |
 |---|---|
-| PR: | pending |
+| PR: | https://github.com/griff843/Unit-Talk-v2/pull/1521 |
 | MERGE_SHA: | pending merge |
-| Verified source SHA: | pending |
+| Verified source SHA: | 79bab4d2267061427b48f7a521a8c61acb72436f |
+
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1521
+MERGE_SHA: pending merge
+Verified source SHA: 79bab4d2267061427b48f7a521a8c61acb72436f
+
+`79bab4d2267061427b48f7a521a8c61acb72436f` is the commit carrying every content change in this
+lane, and it is the tree the commands below were run against. The commits after it on this branch
+touch only `docs/06_status/lanes/UTV2-1843.json` and this file, so no verified content moved.
 
 ## What was verified, and how
 
