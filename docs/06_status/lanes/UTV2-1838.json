@@ -1,0 +1,65 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1838",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1838-closeout-safe-to-repeat",
+  "branch": "claude/utv2-1838-closeout-safe-to-repeat",
+  "base_branch": "main",
+  "commit_sha": "3eea8f258479789f08ccb28cec3dd87a770f1710",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1517",
+  "files_changed": [
+    "docs/05_operations/CARRY_FORWARD_MERGE_GATE_INTEGRATION.md",
+    "docs/05_operations/proposals/carry-forward-merge-gate.patch",
+    "docs/06_status/proof/UTV2-1838/.gitkeep",
+    "docs/06_status/proof/UTV2-1838/diff-summary.md",
+    "docs/06_status/proof/UTV2-1838/evidence.json",
+    "docs/06_status/proof/UTV2-1838/verification.md",
+    "docs/mission/plan.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/lane-finalize.test.ts",
+    "scripts/ops/lane-finalize.ts",
+    "scripts/ops/t2-proof-bundle.test.ts",
+    "scripts/ops/t2-proof-bundle.ts"
+  ],
+  "file_scope_lock": [
+    "docs/05_operations/**",
+    "docs/mission/plan.md",
+    "scripts/ops/lane-close.test.ts",
+    "scripts/ops/lane-close.ts",
+    "scripts/ops/lane-finalize.test.ts",
+    "scripts/ops/lane-finalize.ts",
+    "scripts/ops/t2-proof-bundle.test.ts",
+    "scripts/ops/t2-proof-bundle.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1838/diff-summary.md",
+    "docs/06_status/proof/UTV2-1838/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-09-06T03:54:17.456Z",
+  "heartbeat_at": "2026-09-06T05:07:37.527Z",
+  "closed_at": "2026-09-06T05:07:37.527Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-06T05:07:35.846Z",
+      "verdict": "pass",
+      "merge_sha": "3eea8f258479789f08ccb28cec3dd87a770f1710",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1838-closeout-safe-to-repeat",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

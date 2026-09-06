@@ -8,6 +8,7 @@ import {
   parseArgs,
   type LaneManifest,
   readConfiguredEnvValue,
+  resolveTrackerRef,
   readManifest,
   requireIssueId,
   validatePreflightTokenPathValue,
@@ -18,6 +19,8 @@ import {
 import { runTruthCheck } from './truth-check-lib.js';
 import {
   ModelRoutingRebindError,
+  autoHarvestCiDbProofIntoEvidence,
+  autoPopulateStaticProofFromVerifyRun,
   rebindMergeSha,
   rebindModelRoutingJsonSha,
   rebindVerificationMdSha,
@@ -93,6 +96,7 @@ export type CloseoutFailureCode =
   | 'missing_implementation_artifacts' // candidate PR omitted declared proof artifacts
   | 'unreachable_merge_sha' // GitHub merge SHA is not reachable from current main
   | 'repair_required_via_pr' // --repair-merged produced tracked changes while cwd is on `main` (UTV2-1542)
+  | 'close_refused_on_main_checkout' // plain ops:lane-close invoked from a checkout on `main` (UTV2-1838)
   | 'model_routing_rebind_failed' // required model-routing.json sidecar rebind failed (UTV2-1589)
   | 'merge_lock_reap_failed'; // an orphaned-pid merge lock for this lane could not be reclaimed (UTV2-1613)
 
@@ -228,6 +232,11 @@ export function remediationForCode(code: CloseoutFailureCode): string {
       return 'A required model-routing.json sidecar could not be bound to the authoritative merge SHA/PR ' +
         '(missing, malformed, wrong lane identity, or conflicting prior binding). No proof or manifest state was ' +
         'left partially bound -- see model_routing_error_code and proof_path for the specific cause.';
+    case 'close_refused_on_main_checkout':
+      return 'ops:lane-close refuses to run from a checkout whose HEAD is main: closing writes tracked files ' +
+        '(the lane manifest, its truth-check history and heartbeat) and would leave them staged for a direct ' +
+        'push to main (see docs/05_operations/DIRECT_MAIN_BYPASS_POLICY.md). Run it from the lane worktree ' +
+        'under .out/worktrees/, or let the trusted Post-Merge Lane Close workflow close the lane.';
     case 'merge_lock_reap_failed':
       return 'This lane holds a merge lock whose owning process is gone (orphaned PID), but the lock could not be ' +
         'reclaimed. Inspect .ops/merge-lock.json and run `pnpm ops:merge-lock reclaim` explicitly.';
@@ -1161,6 +1170,8 @@ export function rebindRepairedLaneProof(
     pr?: RepairMergedPrInfo | null;
     isCommitReachable?: (ancestor: string, descendant: string) => boolean;
     ensurePrHeadAvailable?: (prNumber: number, headSha: string) => void;
+    /** Test seam. Defaults to true; set false to skip the network-touching harvest. */
+    harvestEvidence?: boolean;
   } = {},
 ): ShaRebindOutcome[] {
   const repoRoot = options.repoRoot ?? process.cwd();
@@ -1346,6 +1357,34 @@ export function rebindRepairedLaneProof(
           },
         ),
       );
+    }
+  }
+
+  // UTV2-1838 -- replay evidence parity. Both harvesters previously lived only
+  // in `proof-generate`'s own `main()`. `post-merge-lane-close.yml:332-335`
+  // short-circuits the proof step on `workflow_dispatch` and delegates here, so
+  // a dispatch replay bound its SHAs correctly but left `static_proof` and
+  // `runtime_proof` unpopulated -- P7/R1/R2 then failed on a replay that would
+  // have passed on a push. Same best-effort, never-fatal contract as the
+  // originals: a miss leaves those gates honestly failed rather than asserting
+  // evidence that was never produced.
+  if (mergeSha && options.harvestEvidence !== false) {
+    try {
+      autoHarvestCiDbProofIntoEvidence(
+        repoRoot,
+        manifest.issue_id,
+        mergeSha,
+        manifest.lane_type,
+        manifest.created_by,
+        { write: true },
+      );
+    } catch {
+      // Never fatal: proof rebinding above already succeeded.
+    }
+    try {
+      autoPopulateStaticProofFromVerifyRun(repoRoot, manifest.issue_id, mergeSha, { write: true });
+    } catch {
+      // Never fatal, same contract.
     }
   }
 
@@ -1546,6 +1585,55 @@ export function guardRepairAgainstMainCheckout(
 }
 
 /**
+ * UTV2-1838: the `--repair-merged` path has been guarded against running in a
+ * checkout that is on `main` since UTV2-1542, but `guardRepairAgainstMainCheckout`
+ * sits *inside* `if (repairMerged)`. A plain `pnpm ops:lane-close <ID>` from the
+ * root checkout while on `main` reached `runTruthCheck` (which appends
+ * `truth_check_history` and writes a heartbeat) and `finalizeLaneCloseManifest`
+ * (which writes `status: done`) with no main-checkout guard at all -- dirtying
+ * tracked files on `main`, which is exactly the shared-checkout condition that
+ * produced the direct-main-push incidents.
+ *
+ * This covers the plain path only. `--repair-merged` keeps the richer guard,
+ * which emits a governed repair packet with branch/PR steps rather than a bare
+ * refusal, and the trusted post-merge automation is exempt from both.
+ */
+export function guardCloseAgainstMainCheckout(options: {
+  issueId: string;
+  currentBranch: string;
+  trustedPostMerge?: boolean;
+  command?: string;
+}): {
+  ok: false;
+  code: CloseoutFailureCode;
+  outcome: CloseoutOutcome;
+  issue_id: string;
+  current_branch: string;
+  remediation: string;
+} | null {
+  if (options.currentBranch !== 'main') {
+    return null;
+  }
+  if (options.trustedPostMerge === true) {
+    return null;
+  }
+  const command = options.command ?? `ops:lane-close ${options.issueId}`;
+  return {
+    ok: false,
+    code: 'close_refused_on_main_checkout',
+    outcome: 'blocked',
+    issue_id: options.issueId,
+    current_branch: options.currentBranch,
+    remediation:
+      `${command} refuses to run from a checkout whose HEAD is \`main\`: closing writes tracked files ` +
+      `(the lane manifest, its truth-check history and heartbeat) and would leave them staged for a ` +
+      `direct push to \`main\`. Run it from the lane worktree instead ` +
+      `(.out/worktrees/<executor>__<branch>), or let the trusted post-merge workflow close the lane.`,
+  };
+}
+
+
+/**
  * Decides whether a blocking merge lock is this same lane's own abandoned
  * lock and may therefore be reclaimed automatically.
  *
@@ -1732,6 +1820,8 @@ export function createRepairRollbackTransaction(
   };
 }
 
+export type LaneCloseTrackerSync = 'synced' | 'skipped' | 'not_eligible';
+
 export type LaneWorktreeCleanup = 'not_requested' | 'already_absent' | 'removed';
 
 export interface SuccessfulLaneCloseResult {
@@ -1746,6 +1836,22 @@ export interface SuccessfulLaneCloseResult {
    */
   issue_completed: boolean;
   issue_completion: IssueCompletionEligibility;
+  /**
+   * Outcome of the OPTIONAL tracker transition (tracker independence, ratified
+   * 2026-09-05).
+   *
+   *   'synced'       -- the tracker issue was transitioned to Done
+   *   'skipped'      -- the lane has no tracker reference, or the tracker write
+   *                     failed; the lane is closed regardless
+   *   'not_eligible' -- issue completion was not eligible, so no transition was
+   *                     attempted in the first place
+   *
+   * 'skipped' and 'not_eligible' are deliberately distinct: one means the
+   * tracker was not reachable, the other means the lane was never going to
+   * complete the issue. Collapsing them would hide a failed tracker write
+   * behind a legitimate no-op.
+   */
+  tracker_sync: LaneCloseTrackerSync;
 }
 
 /**
@@ -1795,6 +1901,7 @@ export function completeAlreadyClosedLaneCleanup(
     // that was ALREADY closed. It completes nothing and must never be read as a
     // statement about the issue.
     issue_completed: false,
+    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2000,8 +2107,33 @@ export async function completeSuccessfulLaneClose(
     truthCheck: authorizedTruthCheck,
     completionIntent: options.completionIntent,
   });
+  // Tracker independence (ratified 2026-09-05). The tracker transition is the
+  // LAST thing closeout does and it is optional. Before this it threw, and the
+  // throw landed AFTER `leaseTransition.commit()` above -- so a missing
+  // credential or an unreachable tracker left the lane half-closed: leases
+  // released, manifest written, closeout aborted. Tracker sync is now recorded
+  // rather than raised.
+  //
+  // This never suppresses a failure of the close itself. Everything that
+  // establishes the lane is closeable already ran and already passed; what is
+  // being tolerated here is a write to a system the repo does not own.
+  let trackerSync: LaneCloseTrackerSync = 'not_eligible';
   if (completionEligibility.eligible) {
-    await (options.transitionLinear ?? transitionLinearIssueToDone)(issueId);
+    const trackerRef = resolveTrackerRef(manifest);
+    if (!trackerRef) {
+      trackerSync = 'skipped';
+    } else {
+      try {
+        await (options.transitionLinear ?? transitionLinearIssueToDone)(trackerRef);
+        trackerSync = 'synced';
+      } catch (error) {
+        trackerSync = 'skipped';
+        leaseTransition.warnings.push(
+          `tracker_sync: skipped -- ${error instanceof Error ? error.message : String(error)}. ` +
+            'The lane is closed; the tracker issue was not transitioned and may need a manual update.',
+        );
+      }
+    }
   }
 
   let syncRemoved = false;
@@ -2040,6 +2172,7 @@ export async function completeSuccessfulLaneClose(
     worktree_cleanup: worktreeCleanup,
     issue_completed: completionEligibility.eligible,
     issue_completion: completionEligibility,
+    tracker_sync: trackerSync,
   };
 }
 
@@ -2151,6 +2284,7 @@ export function completeIdempotentReclose(
     sync_removed: syncRemoved,
     worktree_cleanup: 'not_requested',
     issue_completed: false,
+    tracker_sync: 'not_eligible',
     issue_completion: {
       eligible: false,
       satisfied: [],
@@ -2330,6 +2464,23 @@ async function main(): Promise<void> {
       process.exit(1);
     }
 
+    if (!repairMerged) {
+      const plainBranchResult = git(['rev-parse', '--abbrev-ref', 'HEAD']);
+      const mainCheckoutGuard = guardCloseAgainstMainCheckout({
+        issueId,
+        currentBranch: plainBranchResult.ok ? plainBranchResult.stdout : '',
+        trustedPostMerge,
+        command: invokedCommand,
+      });
+      if (mainCheckoutGuard) {
+        transaction?.rollback();
+        transaction = null;
+        abandonSelfAcquiredLock();
+        emitJson(mainCheckoutGuard);
+        process.exit(1);
+      }
+    }
+
     if (repairMerged) {
       const repair = repairMergedLaneManifest(manifest, {
         releaseLocksIfAlreadyDone: !validatedPr,
@@ -2356,6 +2507,7 @@ async function main(): Promise<void> {
           sync_removed: false,
           worktree_cleanup: 'not_requested',
           issue_completed: false,
+          tracker_sync: 'not_eligible',
           issue_completion: {
             eligible: false,
             satisfied: [],

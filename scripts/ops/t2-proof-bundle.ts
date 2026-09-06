@@ -41,7 +41,28 @@ export interface T2ProofGenerateResult {
   proof_paths: string[];
   generated_paths: string[];
   skipped_paths: string[];
+  /**
+   * Declared proof paths this generator refused to write because the bundle it
+   * produces is Markdown and the declared artifact is not. See
+   * {@link isMarkdownProofPath}.
+   */
+  refused_paths: string[];
   message: string;
+}
+
+/**
+ * `buildT2ProofBundle` emits Markdown and nothing else. `expected_proof_paths`
+ * is a free-form list, and 27 T2-eligible manifests on `main` declare a
+ * structured sidecar there (`evidence.json`, `model-routing.json`). Writing the
+ * Markdown blob over one of those destroys a machine-read artifact that the
+ * proof and merge gates parse.
+ *
+ * Until 2026-09-06 that overwrite was masked, not prevented: `readOptionalFile`
+ * threw ENOENT on `runtime-verification.md` before the writer ever ran. Fixing
+ * that crash unmasks the overwrite, which is why this guard lands with it.
+ */
+export function isMarkdownProofPath(proofPath: string): boolean {
+  return path.extname(proofPath).toLowerCase() === '.md';
 }
 
 export function isEligibleT2OpsLane(manifest: LaneManifest): boolean {
@@ -96,6 +117,7 @@ export function generateT2ProofBundle(
       proof_paths: proofPaths,
       generated_paths: [],
       skipped_paths: [],
+      refused_paths: [],
       message: 'Only T2 governance/hygiene/verification/tooling lanes are eligible for generated proof bundles.',
     };
   }
@@ -109,6 +131,7 @@ export function generateT2ProofBundle(
       proof_paths: proofPaths,
       generated_paths: [],
       skipped_paths: [],
+      refused_paths: [],
       message: 'manifest.commit_sha is required before generating a closeout proof bundle.',
     };
   }
@@ -122,6 +145,7 @@ export function generateT2ProofBundle(
       proof_paths: [],
       generated_paths: [],
       skipped_paths: [],
+      refused_paths: [],
       message: 'manifest.expected_proof_paths must declare where generated proof should be written.',
     };
   }
@@ -131,11 +155,18 @@ export function generateT2ProofBundle(
   const content = buildT2ProofBundle(input);
   const generatedPaths: string[] = [];
   const skippedPaths: string[] = [];
+  const refusedPaths: string[] = [];
 
   for (const proofPath of proofPaths) {
     const absolutePath = path.resolve(root, proofPath);
     if (!absolutePath.startsWith(path.resolve(root) + path.sep)) {
       throw new Error(`Proof path escapes repo root: ${proofPath}`);
+    }
+    // Refuse before the force check: `--force` is what lane-finalize always
+    // passes, so a non-Markdown artifact must be unreachable on that path too.
+    if (!isMarkdownProofPath(proofPath)) {
+      refusedPaths.push(proofPath);
+      continue;
     }
     if (fs.existsSync(absolutePath) && !force) {
       skippedPaths.push(proofPath);
@@ -155,15 +186,29 @@ export function generateT2ProofBundle(
     proof_paths: proofPaths,
     generated_paths: generatedPaths,
     skipped_paths: skippedPaths,
-    message: `Generated ${generatedPaths.length} proof bundle(s); skipped ${skippedPaths.length}.`,
+    refused_paths: refusedPaths,
+    message:
+      `Generated ${generatedPaths.length} proof bundle(s); skipped ${skippedPaths.length}` +
+      `; refused ${refusedPaths.length} non-Markdown path(s).`,
   };
 }
 
-function readOptionalFile(filePath: string | undefined): string {
+/**
+ * Optional means optional. This used to call `fs.readFileSync` unguarded, so a
+ * caller naming a file the bundle generator does not produce crashed the whole
+ * step — `lane-finalize.ts` names `runtime-verification.md`, which only runtime
+ * lanes ever have. It also resolved against the module-level `ROOT` while the
+ * writer honoured `options.root`, so the two disagreed under an injected root.
+ */
+export function readOptionalFile(filePath: string | undefined, root: string = ROOT): string {
   if (!filePath) {
     return '';
   }
-  return fs.readFileSync(path.resolve(ROOT, filePath), 'utf8');
+  const absolutePath = path.resolve(root, filePath);
+  if (!fs.existsSync(absolutePath)) {
+    return '';
+  }
+  return fs.readFileSync(absolutePath, 'utf8');
 }
 
 function main(argv = process.argv.slice(2)): number {
@@ -191,6 +236,11 @@ function main(argv = process.argv.slice(2)): number {
     }
     for (const skippedPath of result.skipped_paths) {
       process.stdout.write(`skipped: ${relativeToRoot(path.resolve(ROOT, skippedPath))}\n`);
+    }
+    for (const refusedPath of result.refused_paths) {
+      process.stdout.write(
+        `refused (not Markdown): ${relativeToRoot(path.resolve(ROOT, refusedPath))}\n`,
+      );
     }
   }
 

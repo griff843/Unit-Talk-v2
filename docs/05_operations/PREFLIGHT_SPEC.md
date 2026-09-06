@@ -84,7 +84,7 @@ Check IDs are stable contracts: additions append, no renumbering.
 | ID | Check | Severity |
 |---|---|---|
 | `PE1` | `local.env` exists at repo root (or `.env` if the former is absent) and is parseable by `@unit-talk/config` without throwing | infra |
-| `PE2` | `LINEAR_API_TOKEN` or `LINEAR_API_KEY` present and non-empty | fail |
+| `PE2` | `LINEAR_API_TOKEN` or `LINEAR_API_KEY` present and non-empty **when a tracker credential is present**. When neither is set, PE2 is `skip`, not `fail` — see §3.4.1 | fail / skip |
 | `PE3` | `GITHUB_TOKEN` present and non-empty | fail |
 | `PE4` | For T1 or T2: `SUPABASE_SERVICE_ROLE_KEY` present and non-empty (required downstream by `test:db` and by T1 runtime proof) | fail |
 | `PE5` | No credential-shaped value is wrapped in unescaped quotes that would survive as a literal (env parser guard — the class of bug that produced commit `1212856`) | fail |
@@ -109,6 +109,31 @@ Check IDs are stable contracts: additions append, no renumbering.
 | `PL4` | Issue has a non-empty description (acceptance criteria surface) | fail |
 | `PL5` | No other active manifest already owns this issue (one-manifest-per-issue rule — prior manifest must be `done` to start a new lane) | fail |
 | `PL6` | No overlap with `file_scope_lock` of any active manifest **if** the caller passed a candidate file list via `--files` (optional early warning; lane-start is the authoritative check) | warn |
+
+#### 3.4.1 Tracker independence — PE2 and PL1–PL6 when no credential is present
+
+Ratified 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the
+tracker"). An ordinary product task must be able to proceed from discovery through
+delegation, verification, PR and closeout **without tracker access and without an issue
+ID**. A transient `curl ETIMEDOUT` on a metadata fetch must not abort a lane whose work
+needs nothing from the tracker.
+
+When neither `LINEAR_API_TOKEN` nor `LINEAR_API_KEY` is set:
+
+| ID | Status | Detail |
+|---|---|---|
+| `PE2` | `skip` — unless the declared `--tier` is **below** the mechanical floor, in which case `fail` | The absence of a tracker credential is neither an infrastructure failure nor a policy refusal; it is the tracker being optional. Conflating the two is the `infra_error` verdict this replaces. |
+| `PL1`–`PL6` | `skip` | Tracker checks are optional and non-blocking. `skip` is deliberate and is never `pass`: a `pass` would assert a requirement was satisfied that was never evaluated. |
+
+**The tier is not waived — it is floored.** With no tracker to author a tier label, the
+tier comes from `--tier`, raised by `classifyMechanicalMinimum()`
+(`scripts/ops/tier-classifier.ts`) applied to the declared file scope. A `--tier` below
+that floor is a **hard `fail` on PE2**, naming the offending paths. Actual risk
+classifications are never lowered merely to eliminate tracker bookkeeping.
+
+The floor is a floor and never a tier source: the classifier is binary — every match
+hard-codes `T1` and the reduce seeds `T3`, so it can never emit `T2`. It can only raise a
+declared tier, never replace one.
 
 ### 3.5 Required-doc / prerequisite-artifact checks (tier-gated)
 
@@ -165,7 +190,7 @@ A baseline cache record has shape `{ head_sha, tests_passed_at, type_check_passe
 | PG1–PG9 (git) | required | required | required |
 | PE1–PE5 (env) | required | required | required, PE4 skipped |
 | PD1–PD5 (deps) | required | required | required |
-| PL1–PL6 (Linear) | required | required | required |
+| PL1–PL6 (Linear) | required when a tracker credential is present; otherwise `skip` (§3.4.1) | same | same |
 | PR1–PR5 (core docs + schemas) | required | required | required |
 | PR6 (evidence bundle schema) | required | required | not required |
 | PR7 (active phase contract) | required | if applicable | not required |

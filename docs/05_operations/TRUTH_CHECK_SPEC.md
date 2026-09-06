@@ -33,11 +33,16 @@ Truth-check never infers. It mechanically checks conditions against rank-1 and r
 - **Tier label** — from Linear issue labels.
 
 ### Environment
-- `LINEAR_API_KEY`
+- `LINEAR_API_KEY` — **optional** since the tracker-independence ratification; see §4.3.1
 - `GITHUB_TOKEN`
 - `SUPABASE_SERVICE_ROLE_KEY` (only if tier requires runtime proof)
 
 Missing env → exit code `3` (infrastructure failure), never `1` (truth failure). These exit codes must not overlap.
+
+**An absent tracker credential is not missing env.** It is a third thing — the tracker
+being optional — and it produces neither `3` nor `1`. The tracker checks report `skip` and
+the run continues to the repo-and-GitHub checks that carry the actual closeout truth. See
+§4.3.1.
 
 ---
 
@@ -102,6 +107,46 @@ Checks run in declared order. First failure determines exit code, but **all chec
 | `L3` | Linear issue `state` ∈ permitted states for lane phase (In Review or Done) | `1` |
 | `L4` | Linear issue PR attachment matches `manifest.pr_url` | `1` |
 | `L5` | If tier == T1, Linear PR carries label `t1-approved` | `1` |
+
+#### 4.3.1 Tracker independence — L1–L4, C1 and C7 with no tracker
+
+Ratified 2026-09-05 (`docs/mission/intent.md` § "Execution must not depend on the
+tracker"). A lane must be closeable without tracker access.
+
+A lane's tracker reference is resolved by `resolveTrackerRef(manifest)`
+(`scripts/ops/shared.ts`), which is three-valued and deliberately so:
+
+| `manifest.tracker_ref` | Meaning |
+|---|---|
+| a `UTV2-###` / `UNI-###` string | that tracker issue is this lane's tracker key |
+| `null` (explicit) | this lane declares it has **no** tracker issue |
+| absent (`undefined`) | unstated — fall back to `issue_id` when that is itself a tracker key |
+
+Absent must never be read as `null`: an older manifest predating the field says nothing
+about its tracker, and reading silence as a declaration would silently skip a check the
+lane never opted out of.
+
+The tracker is **available** when a tracker ref resolves *and* a credential is present.
+When it is not available:
+
+| ID | Status | Why |
+|---|---|---|
+| `L1` | `skip` | issue existence is unverifiable without the tracker |
+| `L2` | `skip` | **the manifest tier stands.** L2 previously *overwrote* `manifest.tier` from the tracker label; with no tracker there is nothing to overwrite it with, and the manifest tier is the authority. |
+| `L3` | `skip` | workflow state is unverifiable |
+| `L4` | `skip` | the PR attachment is created by the tracker's own GitHub integration, which this repository never calls |
+| `C1` | `skip` | the tracker-Done merge-SHA requirement was never evaluated |
+| `C7` | partial — see below | |
+
+Every one of these is `skip` and never `pass`. A `pass` would assert a requirement was
+satisfied that was never evaluated, which is the aggregate-conflation failure class this
+repository keeps re-encountering.
+
+**C7 does not skip wholesale.** Its three failure modes split by what they actually
+depend on. The mode `manifest.status == done` while the PR is **not** merged is a
+repository-and-GitHub fact, needs no tracker, and **continues to fire unconditionally**.
+Only the two tracker-transition modes skip. A control that fires on everything conveys no
+information; a control that skips more than it must conveys less than it should.
 
 ### 4.4 Proof Checks (tier-gated)
 

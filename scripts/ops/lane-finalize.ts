@@ -212,8 +212,13 @@ export function buildLaneFinalizePlan(input: {
           '--force',
           '--diff-summary',
           standardProofPath(issueId, 'diff-summary.md'),
+          // `ops:proof-generate` writes STANDARD_PROOF_FILES — `diff-summary.md`
+          // and `verification.md` (proof-generate.ts:197). It never writes
+          // `runtime-verification.md`, which only runtime lanes carry, so naming
+          // that file here made every static-proof lane's finalize halt on
+          // ENOENT. t2-proof-bundle now tolerates an absent file either way.
           '--verification-log',
-          standardProofPath(issueId, 'runtime-verification.md'),
+          standardProofPath(issueId, 'verification.md'),
         ],
         required: true,
       });
@@ -376,7 +381,7 @@ export function validateLaneFinalizePullRequest(
 
 function standardProofPath(
   issueId: string,
-  fileName: 'diff-summary.md' | 'runtime-verification.md',
+  fileName: 'diff-summary.md' | 'verification.md' | 'runtime-verification.md',
 ): string {
   return `docs/06_status/proof/${issueId}/${fileName}`;
 }
@@ -947,16 +952,55 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     const token =
       readConfiguredEnvValue('LINEAR_API_TOKEN') ||
       readConfiguredEnvValue('LINEAR_API_KEY');
+    // Tracker independence (ratified 2026-09-05): applying a tracker label is
+    // a MIRROR of a decision the repo already made, not the decision itself.
+    // The authoritative tier lives in the lane manifest and in the merge gate's
+    // reading of it; throwing here made an optional mirror-write a hard gate on
+    // finalize. Report `tracker_sync: skipped` and exit 0 instead.
+    //
+    // This does NOT lower a tier and does not skip tier ASSIGNMENT -- only the
+    // tracker write. `--apply-linear-tier-label` is the mirror; the manifest is
+    // the record.
     if (!token) {
-      throw new Error(
-        'LINEAR_API_TOKEN or LINEAR_API_KEY is required to apply the Linear tier label.',
-      );
+      const skipped = {
+        ok: true,
+        code: 'tracker_sync_skipped',
+        issue_id: rawIssueId,
+        tier: linearTier,
+        tracker_sync: 'skipped',
+        message:
+          'No LINEAR_API_TOKEN or LINEAR_API_KEY present; the tier label was not mirrored to the tracker. ' +
+          'The manifest tier is unchanged and remains authoritative.',
+      };
+      if (json) emitJson(skipped);
+      else process.stdout.write(`${skipped.code}: ${rawIssueId} tier:${linearTier}\n`);
+      return 0;
     }
-    const result = await applyLinearTierLabel({
-      issueId: rawIssueId,
-      tier: linearTier,
-      token,
-    });
+    let result: Awaited<ReturnType<typeof applyLinearTierLabel>> & {
+      tracker_sync?: string;
+    };
+    try {
+      result = { ...(await applyLinearTierLabel({
+        issueId: rawIssueId,
+        tier: linearTier,
+        token,
+      })), tracker_sync: 'synced' };
+    } catch (error) {
+      const skipped = {
+        ok: true,
+        code: 'tracker_sync_skipped',
+        issue_id: rawIssueId,
+        tier: linearTier,
+        tracker_sync: 'skipped',
+        message:
+          `Tracker label write failed and was not treated as a finalize failure: ` +
+          `${error instanceof Error ? error.message : String(error)}. ` +
+          'The manifest tier is unchanged and remains authoritative.',
+      };
+      if (json) emitJson(skipped);
+      else process.stdout.write(`${skipped.code}: ${rawIssueId} tier:${linearTier}\n`);
+      return 0;
+    }
     if (json) emitJson(result);
     else
       process.stdout.write(

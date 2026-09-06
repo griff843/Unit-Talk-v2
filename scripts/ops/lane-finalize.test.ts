@@ -103,8 +103,12 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '--force',
     '--diff-summary',
     'docs/06_status/proof/UTV2-1073/diff-summary.md',
+    // UTV2-1838: `ops:proof-generate` writes `verification.md`, never
+    // `runtime-verification.md` (proof-generate.ts:197 STANDARD_PROOF_FILES).
+    // Naming the file it does not write made every static-proof lane's
+    // finalize halt on ENOENT at the required generate_t2_proof_bundle step.
     '--verification-log',
-    'docs/06_status/proof/UTV2-1073/runtime-verification.md',
+    'docs/06_status/proof/UTV2-1073/verification.md',
   ]);
 });
 

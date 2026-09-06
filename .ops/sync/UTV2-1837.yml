@@ -1,0 +1,231 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1837
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1837
+  objective: "Tracker independence: make Linear optional and non-blocking across
+    preflight, delegation and closeout"
+  acceptance_criteria:
+    - |-
+      Staffed by PM ratification 2026-09-05 (`docs/mission/intent.md` "Execution must not depend on the tracker"). This is the **ops-script half** of that cutover.
+
+      **Reserved and NOT touched:** merge authority, the merge gate, its policy inputs, CODEOWNERS, branch protection. No required check (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`) is modified.
+
+      ## Rule
+
+      An ordinary task must run discovery to delegation to verification to PR to closeout **without Linear access**. The test is availability, not automation. Remaining tracker sync must be optional and non-blocking.
+
+      ## Measured cascade (main 649c19bff, both tokens unset)
+
+      1. `scripts/ops/preflight.ts:1128-1137` — PE2 fail; PL1-PL5 all `infra_error`
+      2. `preflight.ts:1413-1414` — any `infra_error` gives verdict INFRA
+      3. `preflight.ts:426-437`, `:466-468` — token written only on PASS, so no token file, exit 3
+      4. `lane-start.ts:787`, `:986` via `shared.ts:2142-2144` — "Missing preflight token"
+      5. `execution-packet.ts:1319-1323` — token required to capture task contract; `:1353-1357` is the observed live ETIMEDOUT failure on [UTV2-1833](https://linear.app/unit-talk-v2/issue/UTV2-1833/record-ratified-mission-direction-post-m1-internal-operating-history)
+      6. `truth-check-lib.ts:980-1001` (L1) — fail, early return, verdict `infra_error`, exit 3; every later check never runs
+      7. `lane-close.ts:2798-2803` — throws out of closeout after leases already committed at `:2004`
+      8. `lane-finalize.ts:945-954` — throws under `--apply-linear-tier-label`
+
+      ## Confirmed secondary findings
+
+      * **Nothing in this repo ever creates a Linear attachment.** `attachmentCreate` appears nowhere in `scripts/` or `.github/`. truth-check L4 (`truth-check-lib.ts:1033-1040`) is therefore a hard closeout gate satisfied only by Linear's native GitHub integration, which keys off the `UTV2-###` in the branch name.
+      * **truth-check L2 (**`:1005-1018`**) overwrites the manifest tier from Linear**, it does not merely check it. That is the one risk-bearing item here and is split out (see Out of scope).
+      * Manifest identity is `UTV2-###`-shaped in two places that disagree: `lane_manifest_v1.schema.json:34` allows only `UTV2-`, runtime `shared.ts:365` allows `UTV2|UNI` while its error message says `UTV2-###`.
+      * Preflight's docs-only fast path (`preflight.ts:1626-1631`) admits only `docs/06_status/**` and `.claude/commands/*.md`, so editing `docs/mission/**` requires the full app test suite to begin.
+      * Preflight reads `env?.LINEAR_API_TOKEN || process.env.LINEAR_API_KEY` at `:1127` — a `LINEAR_API_KEY` in `local.env` is invisible here, unlike `truth-check-lib.ts:980-983`.
+
+      ## Scope
+
+      1. `preflight.ts:1119-1148`, `:1161` — emit PL1-PL5 as `skip` (not `fail`/`infra_error`) when there is no tracker ref or token; take tier from `--tier` raised by the mechanical floor. Verdict must reach PASS and write a token.
+      2. Add a nullable `tracker_ref` to the lane manifest; widen `shared.ts:365`, `:372`, `:656` and `lane_manifest_v1.schema.json` so a repo-minted work identity is legal. `issue_id` becomes repo-owned identity; the Linear key becomes explicit and nullable.
+      3. `truth-check-lib.ts` L1/L3/L4/C1/C7 become `skip` when `tracker_ref` is null, instead of failing or early-returning.
+      4. `lane-close.ts:2794-2803` and `lane-finalize.ts:948-953` record `tracker_sync: skipped` instead of throwing out of closeout.
+      5. `execution-packet.ts:1316-1323` — add a `--description` / file source for the task contract so a first capture needs no API. `assertTaskContract:1254-1265` must admit a non-`linear-issue-snapshot` source kind.
+      6. `lane-maximizer.ts:1622-1642` — document the existing queue-file / `--candidates` source as first-class.
+
+      ## Acceptance
+
+      1. With `LINEAR_API_TOKEN` and `LINEAR_API_KEY` both unset, `ops:preflight` reaches PASS and writes a token, and `ops:lane-start` succeeds.
+      2. With both unset, `ops:truth-check` runs every non-Linear check and reaches a real verdict rather than exiting 3 at L1.
+      3. With both unset, `ops:lane-close` completes and records `tracker_sync: skipped`.
+      4. **Inversion:** restore the tokens and every Linear check must run and be capable of failing — the skips must be conditional on absence, never unconditional.
+      5. Reserved-risk classification is unchanged: tier is never lowered, and the mechanical classifier is used only as a floor.
+
+      ## Out of scope
+
+      * `truth-check-lib.ts:1005-1018` (L2 tier authority relocation) — risk-bearing, needs separate PM sign-off, do not bundle.
+      * `p0-protocol.yml`, `executor-result-validator.yml`, `merge-gate.yml`, and any classifier cutover — reserved.
+      * PR #1491 / #1492 merge-authority changes — a separate architecture decision, not approved by this ratification.
+  guardrails: []
+  non_goals:
+    - "`truth-check-lib.ts:1005-1018` (L2 tier authority relocation) —
+      risk-bearing, needs separate PM sign-off, do not bundle."
+    - "`p0-protocol.yml`, `executor-result-validator.yml`, `merge-gate.yml`, and
+      any classifier cutover — reserved."
+    - "PR #1491 / #1492 merge-authority changes — a separate architecture
+      decision, not approved by this ratification."
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Staffed by PM ratification 2026-09-05 (`docs/mission/intent.md` "Execution
+      must not depend on the tracker"). This is the **ops-script half** of that
+      cutover.
+
+
+      **Reserved and NOT touched:** merge authority, the merge gate, its policy
+      inputs, CODEOWNERS, branch protection. No required check (`verify`,
+      `Executor Result Validation`, `Merge Gate`, `P0 Protocol`) is modified.
+    - >-
+      Rule
+
+      An ordinary task must run discovery to delegation to verification to PR to
+      closeout **without Linear access**. The test is availability, not
+      automation. Remaining tracker sync must be optional and non-blocking.
+    - |-
+      Measured cascade (main 649c19bff, both tokens unset)
+      1. `scripts/ops/preflight.ts:1128-1137` — PE2 fail; PL1-PL5 all `infra_error`
+      2. `preflight.ts:1413-1414` — any `infra_error` gives verdict INFRA
+      3. `preflight.ts:426-437`, `:466-468` — token written only on PASS, so no token file, exit 3
+      4. `lane-start.ts:787`, `:986` via `shared.ts:2142-2144` — "Missing preflight token"
+      5. `execution-packet.ts:1319-1323` — token required to capture task contract; `:1353-1357` is the observed live ETIMEDOUT failure on [UTV2-1833](https://linear.app/unit-talk-v2/issue/UTV2-1833/record-ratified-mission-direction-post-m1-internal-operating-history)
+      6. `truth-check-lib.ts:980-1001` (L1) — fail, early return, verdict `infra_error`, exit 3; every later check never runs
+      7. `lane-close.ts:2798-2803` — throws out of closeout after leases already committed at `:2004`
+      8. `lane-finalize.ts:945-954` — throws under `--apply-linear-tier-label`
+    - >-
+      Confirmed secondary findings
+
+      * **Nothing in this repo ever creates a Linear attachment.**
+      `attachmentCreate` appears nowhere in `scripts/` or `.github/`.
+      truth-check L4 (`truth-check-lib.ts:1033-1040`) is therefore a hard
+      closeout gate satisfied only by Linear's native GitHub integration, which
+      keys off the `UTV2-###` in the branch name.
+
+      * **truth-check L2 (**`:1005-1018`**) overwrites the manifest tier from
+      Linear**, it does not merely check it. That is the one risk-bearing item
+      here and is split out (see Out of scope).
+
+      * Manifest identity is `UTV2-###`-shaped in two places that disagree:
+      `lane_manifest_v1.schema.json:34` allows only `UTV2-`, runtime
+      `shared.ts:365` allows `UTV2|UNI` while its error message says `UTV2-###`.
+
+      * Preflight's docs-only fast path (`preflight.ts:1626-1631`) admits only
+      `docs/06_status/**` and `.claude/commands/*.md`, so editing
+      `docs/mission/**` requires the full app test suite to begin.
+
+      * Preflight reads `env?.LINEAR_API_TOKEN || process.env.LINEAR_API_KEY` at
+      `:1127` — a `LINEAR_API_KEY` in `local.env` is invisible here, unlike
+      `truth-check-lib.ts:980-983`.
+    - >-
+      Scope
+
+      1. `preflight.ts:1119-1148`, `:1161` — emit PL1-PL5 as `skip` (not
+      `fail`/`infra_error`) when there is no tracker ref or token; take tier
+      from `--tier` raised by the mechanical floor. Verdict must reach PASS and
+      write a token.
+
+      2. Add a nullable `tracker_ref` to the lane manifest; widen
+      `shared.ts:365`, `:372`, `:656` and `lane_manifest_v1.schema.json` so a
+      repo-minted work identity is legal. `issue_id` becomes repo-owned
+      identity; the Linear key becomes explicit and nullable.
+
+      3. `truth-check-lib.ts` L1/L3/L4/C1/C7 become `skip` when `tracker_ref` is
+      null, instead of failing or early-returning.
+
+      4. `lane-close.ts:2794-2803` and `lane-finalize.ts:948-953` record
+      `tracker_sync: skipped` instead of throwing out of closeout.
+
+      5. `execution-packet.ts:1316-1323` — add a `--description` / file source
+      for the task contract so a first capture needs no API.
+      `assertTaskContract:1254-1265` must admit a non-`linear-issue-snapshot`
+      source kind.
+
+      6. `lane-maximizer.ts:1622-1642` — document the existing queue-file /
+      `--candidates` source as first-class.
+    - >-
+      Acceptance
+
+      1. With `LINEAR_API_TOKEN` and `LINEAR_API_KEY` both unset,
+      `ops:preflight` reaches PASS and writes a token, and `ops:lane-start`
+      succeeds.
+
+      2. With both unset, `ops:truth-check` runs every non-Linear check and
+      reaches a real verdict rather than exiting 3 at L1.
+
+      3. With both unset, `ops:lane-close` completes and records `tracker_sync:
+      skipped`.
+
+      4. **Inversion:** restore the tokens and every Linear check must run and
+      be capable of failing — the skips must be conditional on absence, never
+      unconditional.
+
+      5. Reserved-risk classification is unchanged: tier is never lowered, and
+      the mechanical classifier is used only as a floor.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1837/tracker-independence-make-linear-optional-and-non-blocking-across
+    title: "Tracker independence: make Linear optional and non-blocking across
+      preflight, delegation and closeout"
+    description: |-
+      Staffed by PM ratification 2026-09-05 (`docs/mission/intent.md` "Execution must not depend on the tracker"). This is the **ops-script half** of that cutover.
+
+      **Reserved and NOT touched:** merge authority, the merge gate, its policy inputs, CODEOWNERS, branch protection. No required check (`verify`, `Executor Result Validation`, `Merge Gate`, `P0 Protocol`) is modified.
+
+      ## Rule
+
+      An ordinary task must run discovery to delegation to verification to PR to closeout **without Linear access**. The test is availability, not automation. Remaining tracker sync must be optional and non-blocking.
+
+      ## Measured cascade (main 649c19bff, both tokens unset)
+
+      1. `scripts/ops/preflight.ts:1128-1137` — PE2 fail; PL1-PL5 all `infra_error`
+      2. `preflight.ts:1413-1414` — any `infra_error` gives verdict INFRA
+      3. `preflight.ts:426-437`, `:466-468` — token written only on PASS, so no token file, exit 3
+      4. `lane-start.ts:787`, `:986` via `shared.ts:2142-2144` — "Missing preflight token"
+      5. `execution-packet.ts:1319-1323` — token required to capture task contract; `:1353-1357` is the observed live ETIMEDOUT failure on [UTV2-1833](https://linear.app/unit-talk-v2/issue/UTV2-1833/record-ratified-mission-direction-post-m1-internal-operating-history)
+      6. `truth-check-lib.ts:980-1001` (L1) — fail, early return, verdict `infra_error`, exit 3; every later check never runs
+      7. `lane-close.ts:2798-2803` — throws out of closeout after leases already committed at `:2004`
+      8. `lane-finalize.ts:945-954` — throws under `--apply-linear-tier-label`
+
+      ## Confirmed secondary findings
+
+      * **Nothing in this repo ever creates a Linear attachment.** `attachmentCreate` appears nowhere in `scripts/` or `.github/`. truth-check L4 (`truth-check-lib.ts:1033-1040`) is therefore a hard closeout gate satisfied only by Linear's native GitHub integration, which keys off the `UTV2-###` in the branch name.
+      * **truth-check L2 (**`:1005-1018`**) overwrites the manifest tier from Linear**, it does not merely check it. That is the one risk-bearing item here and is split out (see Out of scope).
+      * Manifest identity is `UTV2-###`-shaped in two places that disagree: `lane_manifest_v1.schema.json:34` allows only `UTV2-`, runtime `shared.ts:365` allows `UTV2|UNI` while its error message says `UTV2-###`.
+      * Preflight's docs-only fast path (`preflight.ts:1626-1631`) admits only `docs/06_status/**` and `.claude/commands/*.md`, so editing `docs/mission/**` requires the full app test suite to begin.
+      * Preflight reads `env?.LINEAR_API_TOKEN || process.env.LINEAR_API_KEY` at `:1127` — a `LINEAR_API_KEY` in `local.env` is invisible here, unlike `truth-check-lib.ts:980-983`.
+
+      ## Scope
+
+      1. `preflight.ts:1119-1148`, `:1161` — emit PL1-PL5 as `skip` (not `fail`/`infra_error`) when there is no tracker ref or token; take tier from `--tier` raised by the mechanical floor. Verdict must reach PASS and write a token.
+      2. Add a nullable `tracker_ref` to the lane manifest; widen `shared.ts:365`, `:372`, `:656` and `lane_manifest_v1.schema.json` so a repo-minted work identity is legal. `issue_id` becomes repo-owned identity; the Linear key becomes explicit and nullable.
+      3. `truth-check-lib.ts` L1/L3/L4/C1/C7 become `skip` when `tracker_ref` is null, instead of failing or early-returning.
+      4. `lane-close.ts:2794-2803` and `lane-finalize.ts:948-953` record `tracker_sync: skipped` instead of throwing out of closeout.
+      5. `execution-packet.ts:1316-1323` — add a `--description` / file source for the task contract so a first capture needs no API. `assertTaskContract:1254-1265` must admit a non-`linear-issue-snapshot` source kind.
+      6. `lane-maximizer.ts:1622-1642` — document the existing queue-file / `--candidates` source as first-class.
+
+      ## Acceptance
+
+      1. With `LINEAR_API_TOKEN` and `LINEAR_API_KEY` both unset, `ops:preflight` reaches PASS and writes a token, and `ops:lane-start` succeeds.
+      2. With both unset, `ops:truth-check` runs every non-Linear check and reaches a real verdict rather than exiting 3 at L1.
+      3. With both unset, `ops:lane-close` completes and records `tracker_sync: skipped`.
+      4. **Inversion:** restore the tokens and every Linear check must run and be capable of failing — the skips must be conditional on absence, never unconditional.
+      5. Reserved-risk classification is unchanged: tier is never lowered, and the mechanical classifier is used only as a floor.
+
+      ## Out of scope
+
+      * `truth-check-lib.ts:1005-1018` (L2 tier authority relocation) — risk-bearing, needs separate PM sign-off, do not bundle.
+      * `p0-protocol.yml`, `executor-result-validator.yml`, `merge-gate.yml`, and any classifier cutover — reserved.
+      * PR #1491 / #1492 merge-authority changes — a separate architecture decision, not approved by this ratification.
+    captured_at: 2026-09-06T01:36:58.838Z
+    description_sha256: 297b2344a37d20c7a87cb910dbbe4c0ec688a6e0f94cbd9c33563f9a252db75f
+  contract_hash: 73ef6c0097a005e7c3e60dc439bb16cf8e44a8f29adf79402460fa3b15589415

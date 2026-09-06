@@ -70,6 +70,7 @@ import {
   parseJsonFile,
   readConfiguredEnvValue,
   readManifest,
+  resolveTrackerRef,
   relativeToRoot,
   validateManifest,
   validateTruthResultSchemaDependencies,
@@ -247,6 +248,21 @@ export interface CloseoutTruthGateInput {
   proof_artifacts: CloseoutProofArtifact[];
   merge_timestamp_ms?: number | null;
   runtime_proof_required?: boolean;
+  /**
+   * Whether a tracker was actually consulted for `linear_state` (tracker
+   * independence, ratified 2026-09-05).
+   *
+   * Defaults to `true` so every existing caller and every existing test keeps
+   * its exact behaviour. Only a caller that knows it could not read a tracker
+   * -- because the lane declares `tracker_ref: null`, or because no credential
+   * was present -- passes `false`, and only then do the checks whose entire
+   * subject is tracker state SKIP.
+   *
+   * `false` must never be inferred from `linear_state === ''`: an empty state
+   * read FROM a tracker is a real finding, and collapsing the two would turn a
+   * genuine failure into a silent skip.
+   */
+  tracker_available?: boolean;
   transition_age_ms?: number;
   allowed_transition_ms?: number;
 }
@@ -287,7 +303,10 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   const checks: CheckResult[] = [];
   const fail = (id: string, detail: string): void => checks.push({ id, status: 'fail', detail });
   const pass = (id: string, detail: string): void => checks.push({ id, status: 'pass', detail });
+  const skip = (id: string, detail: string): void => checks.push({ id, status: 'skip', detail });
 
+  // Tracker independence: absent unless a caller explicitly says otherwise.
+  const trackerAvailable = input.tracker_available !== false;
   const linearDone = /^done$/i.test(input.linear_state);
   const completedImplementation = input.manifest.files_changed.length > 0 ||
     input.manifest.expected_proof_paths.length > 0;
@@ -295,7 +314,12 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   const prMergeSha = input.pr_merge_sha?.trim() || null;
   const prHeadSha = input.pr_head_sha?.trim() || null;
 
-  if (linearDone && !prMergeSha) {
+  // C1's entire subject is the tracker's Done state. With no tracker there is
+  // no Done to be inconsistent with, so this is a skip and not a pass -- a pass
+  // would assert a requirement was satisfied that was never evaluated.
+  if (!trackerAvailable) {
+    skip('C1', 'C1 skipped: no tracker for this lane, so there is no tracker Done state to reconcile');
+  } else if (linearDone && !prMergeSha) {
     fail('C1', 'Linear Done is not allowed without a merged PR SHA');
   } else {
     pass('C1', 'Linear Done merge SHA requirement satisfied');
@@ -368,8 +392,18 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   const allowedTransitionMs = input.allowed_transition_ms ?? 30 * 60 * 1000;
   const transitionAgeMs = input.transition_age_ms ?? 0;
   const manifestDone = input.manifest.status === 'done';
+  // C7 has three failure modes and only two of them are about the tracker.
+  // "manifest is Done but PR is not merged" compares the repo's own manifest to
+  // GitHub and is fully computable without a tracker, so it is NOT relaxed --
+  // dropping it would lose real protection rather than remove bookkeeping.
   if (manifestDone && !input.pr_merged) {
     fail('C7', 'manifest is Done but PR is not merged');
+  } else if (!trackerAvailable) {
+    skip(
+      'C7',
+      'C7 partially skipped: manifest/PR consistency holds; the two tracker-transition modes ' +
+        'are not evaluable without a tracker for this lane',
+    );
   } else if ((input.pr_merged || manifestDone) && !linearDone && transitionAgeMs > allowedTransitionMs) {
     fail('C7', 'PR is merged but Linear is not Done beyond the allowed transition window');
   } else if (linearDone && !input.pr_merged) {
@@ -981,62 +1015,69 @@ export async function runTruthCheck(
       process.env.LINEAR_API_KEY?.trim() ||
       readConfiguredEnvValue('LINEAR_API_TOKEN') ||
       readConfiguredEnvValue('LINEAR_API_KEY');
-    if (!linearToken) {
-      addCheck('L1', 'fail', 'LINEAR_API_TOKEN or LINEAR_API_KEY is required');
-      return finalizeWithManifest({
-        manifest,
-        dryRun,
-        issueId,
-        tier,
-        checkedAt,
-        checks,
-        failures,
-        reopenReasons,
-        mergeSha,
-        prUrl,
-        verdict: 'infra_error',
-        exitCode: 3,
-        runner: options.runner ?? 'manual',
-      });
-    }
+    // Tracker independence (ratified 2026-09-05). A lane resolves to a tracker
+    // key only when it declares one (or is an older manifest whose `issue_id`
+    // is itself a tracker key -- see resolveTrackerRef). A lane with
+    // `tracker_ref: null`, or any lane run without a credential, proceeds
+    // through EVERY non-tracker check instead of exiting 3 at L1.
+    //
+    // The previous early return is what made closeout hard-depend on Linear:
+    // one missing credential produced verdict `infra_error` before a single
+    // repo, proof, merge or GitHub check had run, so the tracker gated
+    // evidence it has nothing to do with.
+    const trackerRef = resolveTrackerRef(manifest);
+    const trackerAvailable = Boolean(trackerRef) && Boolean(linearToken);
+    let linearIssue: Awaited<ReturnType<typeof fetchLinearIssue>> | null = null;
+    let linearLabels: string[] = [];
+    let stateName = '';
 
-    const linearIssue = await fetchLinearIssue(issueId, linearToken);
-    addCheck('L1', 'pass', `Linear issue ${linearIssue.identifier} exists`);
-    const linearLabels = (linearIssue.labels?.nodes ?? [])
-      .map((label) => label.name.toLowerCase());
-    const tierLabels = linearLabels
-      .map((label) => label.replace(/^tier:/, ''))
-      .filter((label) => label === 't1' || label === 't2' || label === 't3');
-    const uniqueTierLabels = [...new Set(tierLabels)];
-    if (uniqueTierLabels.length !== 1) {
-      addCheck('L2', 'fail', `expected exactly one tier label, found ${uniqueTierLabels.length}`);
+    if (!trackerAvailable) {
+      const why = !trackerRef
+        ? 'lane declares no tracker reference'
+        : 'no LINEAR_API_TOKEN or LINEAR_API_KEY is present';
+      addCheck('L1', 'skip', `L1 skipped: ${why}`);
+      addCheck('L2', 'skip', `L2 skipped: ${why}; manifest tier ${tier} stands`);
+      addCheck('L3', 'skip', `L3 skipped: ${why}`);
+      addCheck('L4', 'skip', `L4 skipped: ${why}`);
     } else {
-      if (!options.tierOverride) {
-        tier = uniqueTierLabels[0].toUpperCase() as LaneTier;
+      linearIssue = await fetchLinearIssue(trackerRef as string, linearToken as string);
+      addCheck('L1', 'pass', `Linear issue ${linearIssue.identifier} exists`);
+      linearLabels = (linearIssue.labels?.nodes ?? [])
+        .map((label) => label.name.toLowerCase());
+      const tierLabels = linearLabels
+        .map((label) => label.replace(/^tier:/, ''))
+        .filter((label) => label === 't1' || label === 't2' || label === 't3');
+      const uniqueTierLabels = [...new Set(tierLabels)];
+      if (uniqueTierLabels.length !== 1) {
+        addCheck('L2', 'fail', `expected exactly one tier label, found ${uniqueTierLabels.length}`);
+      } else {
+        if (!options.tierOverride) {
+          tier = uniqueTierLabels[0].toUpperCase() as LaneTier;
+        }
+        addCheck('L2', 'pass', `Linear tier label is ${uniqueTierLabels[0]}`);
       }
-      addCheck('L2', 'pass', `Linear tier label is ${uniqueTierLabels[0]}`);
-    }
 
-    const stateName = linearIssue.state?.name ?? '';
-    const stateType = linearIssue.state?.type ?? '';
-    if (!isLinearStatePermittedForL3(stateName, stateType)) {
-      addCheck(
-        'L3',
-        'fail',
-        `Linear state ${stateName || 'Unknown'} (type ${stateType || 'unknown'}) is not an active or closeout state; ` +
-          'a lane may only close against an issue that is in flight or already complete',
-      );
-    } else {
-      addCheck('L3', 'pass', `Linear state ${stateName} (type ${stateType || 'unknown'}) is permitted`);
-    }
+      stateName = linearIssue.state?.name ?? '';
+      const stateType = linearIssue.state?.type ?? '';
+      if (!isLinearStatePermittedForL3(stateName, stateType)) {
+        addCheck(
+          'L3',
+          'fail',
+          `Linear state ${stateName || 'Unknown'} (type ${stateType || 'unknown'}) is not an active or closeout state; ` +
+            'a lane may only close against an issue that is in flight or already complete',
+        );
+      } else {
+        addCheck('L3', 'pass', `Linear state ${stateName} (type ${stateType || 'unknown'}) is permitted`);
+      }
 
-    const attachmentUrls = (linearIssue.attachments?.nodes ?? [])
-      .map((attachment) => attachment.url?.trim())
-      .filter((entry): entry is string => Boolean(entry));
-    if (!prUrl || !attachmentUrls.includes(prUrl)) {
-      addCheck('L4', 'fail', 'Linear attachments do not include manifest.pr_url');
-    } else {
-      addCheck('L4', 'pass', 'Linear attachments include manifest.pr_url');
+      const attachmentUrls = (linearIssue.attachments?.nodes ?? [])
+        .map((attachment) => attachment.url?.trim())
+        .filter((entry): entry is string => Boolean(entry));
+      if (!prUrl || !attachmentUrls.includes(prUrl)) {
+        addCheck('L4', 'fail', 'Linear attachments do not include manifest.pr_url');
+      } else {
+        addCheck('L4', 'pass', 'Linear attachments include manifest.pr_url');
+      }
     }
 
     const githubToken = process.env.GITHUB_TOKEN?.trim() || readConfiguredEnvValue('GITHUB_TOKEN');
@@ -1245,6 +1286,7 @@ export async function runTruthCheck(
     const closeoutGateChecks = evaluateCloseoutTruthGate({
       manifest,
       linear_state: stateName,
+      tracker_available: trackerAvailable,
       pr_merged: pullRequest.merged,
       pr_merge_sha: pullRequest.merge_commit_sha,
       pr_head_sha: pullRequest.head?.sha,
@@ -1396,7 +1438,7 @@ export async function runTruthCheck(
       addCheck('G5', 'pass', 'no finalized implementation files_changed entries to inspect');
     }
 
-    const linearProjectIsP0 = linearIssue.project?.id === P0_PROJECT_ID;
+    const linearProjectIsP0 = linearIssue?.project?.id === P0_PROJECT_ID;
     const manifestP0 = manifest.p0_protocol;
     const manifestSaysP0 = manifestP0?.required === true;
 
@@ -1417,7 +1459,7 @@ export async function runTruthCheck(
         addCheck(
           'H1',
           'fail',
-          `manifest declares P0 but Linear project (${linearIssue.project?.name ?? 'none'}) is not the P0 project`,
+          `manifest declares P0 but Linear project (${linearIssue?.project?.name ?? 'none'}) is not the P0 project`,
         );
       } else {
         addCheck('H1', 'pass', 'P0 detection is consistent between Linear and manifest');
