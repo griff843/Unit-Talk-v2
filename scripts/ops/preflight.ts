@@ -1309,7 +1309,7 @@ function runRequiredDocChecks(
   }
 }
 
-async function runT1Checks(
+export async function runT1Checks(
   env: ReturnType<typeof loadEnvironment> | null,
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
 ): Promise<void> {
@@ -1317,7 +1317,22 @@ async function runT1Checks(
     addCheck('PT1', 'fail', 'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL are required for T1 health ping');
   } else {
     const ping = await runSupabaseHealthPing(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-    addCheck('PT1', ping.ok ? 'pass' : 'infra_error', ping.detail);
+    if (ping.ok) {
+      addCheck('PT1', 'pass', ping.detail);
+    } else if (isContainmentPlaceholderSupabaseUrl(env.SUPABASE_URL)) {
+      // UTV2-1845: same verdict as infra_error, different cause. This admits no lane that could
+      // not open before -- whether it should is a PM decision, recorded in
+      // docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md and deliberately not taken here.
+      addCheck(
+        'PT1',
+        'blocked_by_containment',
+        'SUPABASE_URL resolves to the documented containment placeholder, so the T1 live-DB health '
+          + 'ping cannot run. This is containment, not an infrastructure fault. Admitting a T1 lane '
+          + 'on this outcome is a PM decision -- see docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md',
+      );
+    } else {
+      addCheck('PT1', 'infra_error', ping.detail);
+    }
   }
 
   const generatorPath = path.join(ROOT, 'scripts', 'evidence-bundle', 'new-bundle.mjs');
@@ -1451,7 +1466,13 @@ function applyWaivers(
 }
 
 export function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
-  if (checks.some((check) => check.status === 'infra_error')) {
+  if (
+    checks.some(
+      (check) => check.status === 'infra_error' || check.status === 'blocked_by_containment',
+    )
+  ) {
+    // UTV2-1845: `blocked_by_containment` resolves to INFRA exactly as `infra_error` does, so this
+    // classification admits nothing on its own. Changing that is the reserved half of UTV2-1845.
     return 'INFRA';
   }
   if (
@@ -1748,6 +1769,36 @@ async function fetchLinearIssue(
     addCheck('PL1', 'infra_error', error instanceof Error ? error.message : String(error));
     return null;
   }
+}
+
+/**
+ * UTV2-1845: distinguishes the documented containment placeholder from a real Supabase host.
+ *
+ * `local.env` declares itself `# CONTAINMENT PLACEHOLDER -- NOT production credentials` and sets
+ * `SUPABASE_URL=http://127.0.0.1:1`, deliberately pointing every client at an unroutable address so
+ * no local run can reach a real database. PT1's ping is therefore *designed* to fail here, and
+ * reporting that as `infra_error` reports a policy state as a broken dependency.
+ *
+ * The test is exact, not heuristic: it matches only loopback and unspecified hosts, which no
+ * Supabase project URL can be. A real host that happens to be unreachable still fails the ping and
+ * is still reported as `infra_error`, which is the inversion this predicate must not break.
+ */
+export function isContainmentPlaceholderSupabaseUrl(supabaseUrl: string): boolean {
+  let host: string;
+  try {
+    host = new URL(supabaseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  // URL() preserves the brackets on an IPv6 literal.
+  const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+
+  if (bare === 'localhost' || bare === '::1' || bare === '::' || bare === '0.0.0.0') {
+    return true;
+  }
+
+  return /^127(?:\.\d{1,3}){3}$/.test(bare);
 }
 
 async function runSupabaseHealthPing(
