@@ -87,7 +87,7 @@ ASSERTIONS:
   changed. `deploy.yml` remains `workflow_dispatch`-only; nothing about when or whether a deploy
   fires is altered.
 
-## EVIDENCE
+## EVIDENCE:
 
 ### A1/A2/A3/A4 — the actual rejected error, both runtimes
 

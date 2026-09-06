@@ -1,5 +1,5 @@
 {
-  "schema_version": "2",
+  "schema_version": 2,
   "issue_id": "UTV2-1841",
   "tier": "T1",
   "lane_type": "governance",
