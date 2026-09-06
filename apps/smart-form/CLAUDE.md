@@ -17,8 +17,8 @@ submission is pinned server-side to Track Only and cannot create member delivery
 - System layer: **user intake (frontend)**
 - Runtime: Next.js app (port 4100)
 - Maturity: deployed, in contained internal pilot. Zod schema validation, Radix UI, Auth.js v5,
-  6 unit test files + 4 Playwright e2e specs. Milestone 1 steps 1-3 passed in production
-  2026-09-06; step 4 is blocked by UTV2-1842.
+  6 unit test files + 4 Playwright e2e specs. Milestone 1 steps 1-2 passed in production
+  2026-09-06 and step 4 is blocked by UTV2-1842, so no pick has persisted yet.
 
 ## Role in Dependency Graph
 

@@ -212,6 +212,24 @@ That registration is the durable repair and is recorded as a recommendation — 
 **not** requested as a precondition for this PR, because the instruction that authorized this work
 stated it must not become another prerequisite or gate framework.
 
+## Correction made during review, before merge
+
+The first draft of `intent.md` §3.2 stated that canonical identity "**resolved to `griff843`**" in
+production on 2026-09-06. That is not established by anything measurable from here. No pick has
+persisted — step 4 is blocked — so there is no `capper_id` to read back, and a session claim is not
+observable to an agent.
+
+What **is** established, and what the document now says: production `d3f69b804` has #1488
+(`2ac233424`) as an ancestor (`git merge-base --is-ancestor`, verified), and `auth.ts:24` admits a
+sign-in only when `findAllowedCapper` returns non-null, which the post-#1488 parser cannot do
+without an explicit `=<canonicalCapperId>` entry. So a successful sign-in on this build proves an
+explicit canonical mapping was used and that local-part derivation did not occur — and proves
+nothing about *which* id. The pilot-progress line was narrowed the same way, from "steps 1-3
+passed" to steps 1 and 2, with step 3 established only to that extent.
+
+This is the exact defect class this document warns about in §7 — a self-consistent claim that no
+assertion constrains — caught in the artifact whose purpose is to prevent it.
+
 ## What this lane does not claim
 
 - It does not claim the Smart Form is usable. Three of its findings are open gaps tracked under

@@ -78,8 +78,17 @@ over whatever `submittedBy` the form sent.
 **Why this matters:** the value becomes the persisted identity of a real pick. Deriving it from an
 email local part — the pre-#1488 behaviour — silently attributes picks to a non-canonical capper.
 
-**Verified by:** signing in and observing the resolved id. **Confirmed in production 2026-09-06:**
-resolved to `griff843`, not an email local part.
+**Verified by:** signing in, and reading the resolved id back off a persisted pick.
+
+**What is actually established as of 2026-09-06, and what is not.** Sign-in succeeded against
+production `d3f69b804`, and #1488 (`2ac233424`) is an ancestor of that commit — verified with
+`git merge-base --is-ancestor`. Because `auth.ts:24` admits a sign-in only when
+`findAllowedCapper` returns non-null, and the post-#1488 parser drops any entry without an explicit
+`=<canonicalCapperId>`, a successful sign-in on this build **proves an explicit canonical mapping
+was used and that local-part derivation did not occur**. It does **not** by itself establish which
+id was resolved. Confirming that the persisted `capper_id` is `griff843` requires a pick to exist,
+and no pick has persisted yet — step 4 is blocked (§8). The claim is deliberately left at what the
+evidence supports.
 
 **Known hazard, unfixed:** the allow-list is validated *non-empty* at three layers
 (`deploy.yml:100`, `:486`/`:974`, `deploy/production/nextjs-entrypoint.sh:28-31`) and
@@ -414,7 +423,7 @@ Measured 2026-09-06 against `main` `551edfe67` and production `d3f69b804`.
 |---|---|---|---|
 | Reach the deployed form | `smart-form` container + Caddy route | reached in browser | **Done** — pilot step 1 |
 | Authenticate | `auth.ts`, Auth.js v5 + allow-list | signed in | **Done** — pilot step 2 |
-| Canonical identity | `auth-allowlist.ts`, `submit-pick.ts:143` | resolved `griff843` | **Done** — pilot step 3 |
+| Canonical identity | `auth-allowlist.ts`, `submit-pick.ts:143` | explicit mapping proven by a successful sign-in on post-#1488 code; the resolved id is unread until a pick persists | **Partial** — see §3.2 |
 | Sport-aware selections | `MarketTypeGrid`, `market-types.ts`, `TEAM_SPORTS` | unit + e2e | **Done** |
 | DB-backed participants (event-bound) | `ParticipantAutocompleteField` | e2e | **Done** |
 | DB-backed participants (no event) | server accepts it; **client never sends it** | — | **Gap — UTV2-1842 B** |
@@ -431,7 +440,9 @@ Measured 2026-09-06 against `main` `551edfe67` and production `d3f69b804`.
 | Track Only persisted truth | UTV2-1672 guard set | **mutation-tested** | **Built; not yet observed in a live run** |
 | Read-only observation | `GET /api/picks/:id/trace` (authenticated) | — | **Available; not yet exercised** |
 
-**Milestone 1 steps 1–3 passed in production on 2026-09-06. Step 4 is blocked by UTV2-1842 A.**
+**Milestone 1 steps 1 and 2 passed in production on 2026-09-06; step 3 is established only to the
+extent §3.2 states. Step 4 is blocked by UTV2-1842 A**, so steps 3 through 7 cannot be closed out
+until a pick persists.
 Steps 5–7 are unattempted, not failing.
 
 ---
