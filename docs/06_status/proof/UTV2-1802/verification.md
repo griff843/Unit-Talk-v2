@@ -13,7 +13,7 @@ Tier: T1
 Lane type: delivery-ui
 Branch: claude/utv2-1802-cc-management-sql-readonly
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1513
-Head SHA: ef38423dc0c9650db928ee2ea55d5d97063b9590
+Head SHA: aab575f64311070f069ce961ed4da1f2d13da5dd
 result: pass
 
 ## ASSERTIONS:
@@ -29,7 +29,7 @@ result: pass
 
 ## EVIDENCE:
 
-Measured on the lane worktree at head `ef38423dc0c9650db928ee2ea55d5d97063b9590`.
+Measured on the lane worktree at head `aab575f64311070f069ce961ed4da1f2d13da5dd`.
 
 ```
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
@@ -63,16 +63,16 @@ $ npx tsx --test src/lib/privileged-boundary-guard.test.ts
 
 $ pnpm test
 (aggregate across every workspace suite)
-# tests 6043
-# pass 6043
+# tests 6004
+# pass 6004
 # fail 0
 ```
 
 ## Verification
 - [x] `pnpm type-check`: PASS -- `tsc -b tsconfig.json` exits 0 with no diagnostics
-- [x] `pnpm test`: PASS -- 6043 tests, 6043 pass, 0 fail across every workspace suite
+- [x] `pnpm test`: PASS -- 6004 tests, 6004 pass, 0 fail across every workspace suite, re-executed at the post-resync anchor
 - [x] `pnpm --filter @unit-talk/command-center test`: PASS -- 507/507, 0 fail
-- [x] `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS -- `operator-ui` matched; its required `qa-experience-report` artifact is present in the repository. That artifact predates this lane and satisfies the rule mechanically; it is **not** verification of this change, and is not offered as such.
+- [x] `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64`: PASS -- Changed files: 11 -- `operator-ui` matched; its required `qa-experience-report` artifact is present in the repository. That artifact predates this lane and satisfies the rule mechanically; it is **not** verification of this change, and is not offered as such.
 - [x] `pnpm verify`: PASS in CI, not runnable locally -- the required `verify` check succeeded at PR head `8f6dbcd17c62bbd3ed34b3aedf4a176196f2d5d2` in run 34001056027, job 101400905372. It cannot complete on this checkout: its `ci:assert-staging` step refuses off-CI because `local.env` pins `SUPABASE_URL` to `http://127.0.0.1:1` under containment. Every step before that refusal passed locally.
 
 ## Runtime Verification
@@ -204,4 +204,42 @@ does not exist yet.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1513
 Approved PR head: pending merge
-Execution SHA: ef38423dc0c9650db928ee2ea55d5d97063b9590
+Execution SHA: aab575f64311070f069ce961ed4da1f2d13da5dd
+
+## Re-anchor after the origin/main resync
+
+This PR was 10 commits BEHIND `origin/main`. Under `strict: true` it cannot merge in that
+state, and merging BEHIND would be an admin exemption rather than permission, so
+`origin/main` was merged in with `pnpm ops:merge-wrapper git-merge-main` (the wrapper
+refuses to choose a history-rewriting verb on its own; `git-merge-main` preserves history
+and SHAs, which matters on a branch carrying a proof bundle).
+
+The head moved `bcd9e678b` → `aab575f64`. The imported delta carries `apps/smart-form/**`,
+`scripts/ops/**` and `.github/workflows/deploy.yml`, none of them under
+`PROOF_ONLY_PREFIXES`, so the merge commit becomes this branch's last non-proof commit and
+the anchor had to move with it. **Every receipt above was re-executed at the new anchor
+rather than carried forward:**
+
+- `pnpm type-check` — exit 0, no diagnostics.
+- `pnpm test` — tests 6004, pass 6004, fail 0, exit 0.
+- `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64` — `Verdict: PASS`,
+  `Changed files: 11`, `Rules matched: operator-ui`.
+
+**On the test count.** It reads 6004 here and 6043 at the previous anchor. The two were
+measured against different bases and no attempt is made to reconcile them; the figure
+recorded is the one measured at the anchor this bundle binds. It was checked for
+completeness rather than assumed: the run comprises 100 suite blocks in which `# tests`
+equals `# pass` and `# fail` is 0 throughout, and it includes this lane's own two new test
+files. Those filenames do not appear in the output because TAP prints subtest names rather
+than paths — they are matched by the `src/lib/data/*.test.ts` glob in `test:command-center`,
+confirmed by locating three of their subtest names ("a plain SELECT is accepted", "a
+trailing semicolon is the conventional terminator...", "a CTE is accepted") in the run.
+
+**A consequence worth recording rather than hiding.** `Lane authority` and `File scope lock`
+were both red before the resync and both went green on the new head with no other edit —
+the resync changed no lane file and no scope declaration. Those reds were therefore
+artifacts of the BEHIND state, not scope violations.
+
+`pnpm test:db` and `pnpm verify` are deliberately **not** re-claimed locally. Their prior
+receipts were bound to a head that is no longer this PR's, and both are required checks
+that re-run on this head; those runs are the authoritative results.

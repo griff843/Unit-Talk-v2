@@ -7,18 +7,19 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "ef38423dc0c9650db928ee2ea55d5d97063b9590",
+    "verified_source_sha": "aab575f64311070f069ce961ed4da1f2d13da5dd",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json exits 0 with no diagnostics, measured locally at the anchor and again inside the required verify job.",
-      "pnpm_test": "PASS (6043 tests, 6043 pass, 0 fail) \u2014 aggregate across every workspace suite at the anchor.",
-      "pnpm_test_db": "PASS -- the required `Writable DB proof (staging only)` job succeeded against the staging Supabase project in run 34001056027 (job 101399919279): all 17 steps green, receipt artifact 9979596161. Its live suites are repo-wide (4 tests, 4 pass, 0 fail: the atomic-claim concurrency proof and the three UTV2-1815 stake-constraint proofs). None of them exercises this diff, which opens no database connection. It is offered as the tier's required receipt, not as verification of this change.",
-      "r_level_check": "PASS \u2014 operator-ui matched; its required qa-experience-report artifact is present in the repository. That artifact predates this lane: it satisfies the rule mechanically and is not verification of this change, and is not offered as such.",
-      "pnpm_verify": "PASS -- the required `verify` check succeeded at PR head 8f6dbcd17 in run 34001056027 (job 101400905372), including 'Privileged DB client boundary', 'Enforce DB writer classification', 'Verify (static)', 'Command Center tests' and 'Verify staging DB proof receipt'."
+      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json exits 0 with no diagnostics, re-measured at this anchor after the origin/main resync.",
+      "pnpm_test": "PASS \u2014 tests 6004, pass 6004, fail 0, exit 0, re-measured at this anchor after the origin/main resync. This supersedes the 6043 recorded at the previous anchor ef38423d; the two were measured against different bases and no attempt is made here to reconcile them. The count is the sum of 100 suite blocks in which tests == pass and fail == 0 throughout, and it includes this lane's own two new files \u2014 apps/command-center/src/lib/data/management-sql.test.ts and storage-health.test.ts are matched by the src/lib/data/*.test.ts glob in test:command-center, verified by locating three of their subtest names in the run output.",
+      "pnpm_test_db": "set-by-ci \u2014 the previous receipt was bound to the pre-resync head and no longer certifies what will merge. The required `Writable DB proof (staging only)` job re-runs on this head; that run is the authoritative result and no local PASS is claimed.",
+      "r_level_check": "PASS \u2014 `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head aab575f64` reports Verdict: PASS, Changed files: 11, Rules matched: operator-ui. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane.",
+      "pnpm_verify": "set-by-ci \u2014 the previous receipt (head 8f6dbcd17, run 34001056027) is bound to a head that is no longer this PR's. The required `verify` check re-runs on this head and is the authoritative result."
     },
     "sha_type": "verified_source_sha",
-    "bound_at": "2026-09-06T00:28:00.000Z"
+    "bound_at": "2026-09-06T23:17:48.000Z",
+    "anchor_note": "aab575f64311070f069ce961ed4da1f2d13da5dd is the merge of origin/main into this branch, made with `pnpm ops:merge-wrapper git-merge-main` because the PR was 10 commits BEHIND and strict freshness means it cannot merge in that state; merging BEHIND would be an admin exemption rather than permission. It is the anchor because the imported delta carries apps/smart-form/**, scripts/ops/** and .github/workflows/deploy.yml, none of which are in PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), so the merge commit is now the last commit on this branch outside those prefixes. The previous anchor ef38423dc0c9650db928ee2ea55d5d97063b9590 could not be kept by argument. Every receipt above was re-executed at this commit rather than carried forward. The resync changed no lane file and no scope declaration, and `Lane authority` and `File scope lock` \u2014 both red before it \u2014 went green on this head with no other edit, which establishes that those two reds were artifacts of the BEHIND state rather than real scope violations. Commits made after this one are confined to docs/06_status/proof/ and docs/06_status/lanes/ and do not move the anchor."
   },
   "static_proof": {
     "status": "PASS",
