@@ -969,15 +969,21 @@ here rather than filed, per the filing threshold.
 The earlier micromatch reading above stands corrected on its own terms as well: `{ dot: true }` was
 always present, and the fix this plan once proposed would have been a no-op.
 
-### `Close Eligibility Preflight` is not tier-aware, so it predicts a T3 closeout failure that cannot happen
+### Four non-required gates fail a correctly-constructed T3 lane, by two different mechanisms
 
 Measured on this lane (UTV2-1846, PR #1524, T3), and it is a distinct defect from the review-packet
 scope bleed above rather than another instance of it.
 
+**Four** non-required checks are red on this PR. All four trace to the same underlying situation —
+a T3 lane that correctly declares no proof obligation — but they reach it by two different
+mechanisms, and conflating those is what made the first draft of this section propose a repair that
+would have fixed one of the four.
 `Close Eligibility Preflight` reported `BLOCKED` with six failures — CEP-E1 (*manifest declares no
 expected_proof_paths*), CEP-E3, CEP-E4/P11, P12, P13, P14 — and then CEP-C1: *"ops:lane-close would
-fail after merge on: CEP-E1, CEP-E3, CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"*. `Proof Gate`
-failed for the same underlying reason: *"Proof dir contains no markdown files"*.
+fail after merge on: CEP-E1, CEP-E3, CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"*. `Proof Gate`,
+`Proof Auditor Gate` and `Runtime Verifier Gate` each failed on the same fact stated three ways:
+*"Proof dir contains no markdown files"*, and *"No markdown files found in proof dir:
+docs/06_status/proof/UTV2-1846"*.
 
 **That prediction is false, and the contradiction is inside one file.** The gate CEP-C1 claims to
 predict is `truth-check-lib.ts:1004`:
@@ -999,15 +1005,45 @@ T3 on the same basis — is told its closeout will fail when it will not.
 Confirmed against history rather than by reading alone: seven T3 manifests on `main` (UTV2-953, 975,
 977, 983, 991 `done`; 955, 958 `closed`) all carry `expected_proof_paths: []`, and all closed.
 
-`Close Eligibility Preflight` and `Proof Gate` are both non-required, so this blocks no merge. But
-the failure mode is worse than the review-packet one it superficially resembles: that check emits a
-`FAIL` verdict on correct work, whereas this one emits a **specific false prediction about a future
-gate**, which is exactly the kind of output an operator is meant to act on. The repair is to give
-CEP-E1/E3/E4 the same `tier === 'T1' || tier === 'T2'` condition M7 already has. Recorded here
-rather than filed, per the filing threshold.
+All four are non-required, so this blocks no merge. But the failure mode is worse than the
+review-packet one it superficially resembles: that check emits a `FAIL` verdict on correct work,
+whereas CEP-C1 emits a **specific false prediction about a future gate**, which is exactly the kind
+of output an operator is meant to act on.
 
-One consequence for reading this plan's own PR: three of #1524's non-required checks are red and
-none is an ordinary repair. `Branch Discipline Guard` reports `multiple_issue_references` — *"found
+**Three of the four fire on an artifact `ops:lane-start` creates itself.** Each of the three proof
+gates has an applicability escape, and they are not the same mechanism — a distinction worth stating,
+because it decides which repair fixes which gate:
+
+| Gate | Applicability trigger | Escape |
+|---|---|---|
+| `Proof Gate` | the PR **diff** adds/modifies a path under `docs/06_status/proof/` (`:132-139`) | `-z "$proof_dirs"` → *"No proof directories changed — trivial pass"* |
+| `Proof Auditor Gate` | the same diff derivation (`:68-77`) | `-z "$changed_proof_dirs"` → *"gate passes trivially"* |
+| `Runtime Verifier Gate` | the proof **directory exists** on the head checkout (`:59-61`) | `! -d "$PROOF_DIR"` → *"gate not applicable for this PR"* |
+| `Close Eligibility Preflight` | the **manifest** for the branch's issue id (`:64-73`) | only a branch with no issue id, or no manifest |
+
+So none of the first three is *meant* to fire on a lane with no proof obligation. On this lane the
+sole tracked file under `docs/06_status/proof/UTV2-1846/` is the empty `.gitkeep` that
+`ops:lane-start` committed. That one zero-byte file puts a proof path in the diff *and* makes the
+directory exist — it is the entire difference between three red gates and three trivial passes.
+
+**`Close Eligibility Preflight` is not in that group**, and an earlier draft of this section was
+wrong to imply otherwise. CEP reads the manifest, never the proof directory, so deleting the
+`.gitkeep` would not quiet it. The two repairs are therefore complementary, not alternatives, and
+neither subsumes the other:
+
+1. **For CEP only** — give CEP-E1/E3/E4 the same `tier === 'T1' || tier === 'T2'` condition M7
+   already has. This was named as *the* repair in the first draft; it fixes exactly one of the four,
+   because the other three never consult the tier at all.
+2. **For the three proof gates** — stop `ops:lane-start` creating `docs/06_status/proof/<ID>/.gitkeep`
+   for a lane whose `expected_proof_paths` is empty. It also removes an artifact the repo already
+   knows is unsatisfiable: the review packet demands the `.gitkeep` be declared in scope while CEP-E2
+   refuses it once declared, and `expected_proof_paths` is settable only at `create`.
+
+Neither is done here: this lane's `file_scope_lock` is `docs/mission/plan.md` alone, and a lock
+cannot be widened by an agent. Recorded rather than filed, per the filing threshold.
+
+One consequence for reading this plan's own PR: five of #1524's non-required checks are red — the
+four above plus one — and none is an ordinary repair. `Branch Discipline Guard` reports `multiple_issue_references` — *"found
 UTV2-1688, UTV2-1724, UTV2-1730, UTV2-1841, UTV2-1842, UTV2-1846"* — because a mission-plan commit
 body necessarily cites the issues the plan reconciles. Rewriting those messages moves the head and
 invalidates the executor result bound to it, which is the same trade #1479 made deliberately and for
