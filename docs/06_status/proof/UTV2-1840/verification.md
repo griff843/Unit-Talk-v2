@@ -16,7 +16,14 @@
 `0f78f3284` is the last non-proof commit on this branch. Everything after it touches only
 `docs/06_status/proof/UTV2-1840/` and `docs/06_status/lanes/UTV2-1840.json`.
 
-## What was verified
+## Summary
+
+`scripts/ops/branch-discipline-guard.ts` kept a private copy of the work-identifier alternation
+that was never widened when `WORK-###` was minted, so `ops:preflight` PX2 refused a repo-minted
+identifier and no `WORK-###` lane could open. Both patterns now derive from a single exported
+`ISSUE_ID_NAMESPACES` list in `shared.ts`, with eight tests and a mutation control.
+
+## Verification
 
 `pnpm verify` was run in the lane worktree at the execution SHA. `pnpm type-check` and `pnpm test`
 both run inside it, so the figures below are from that single run.

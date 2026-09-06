@@ -1,5 +1,7 @@
 # UTV2-1840 — Diff Summary
 
+## Summary
+
 **Lane type:** governance · **Tier:** T2 · **Executor:** claude
 **Branch:** `claude/utv2-1840-work-id-branch-discipline`
 
