@@ -1,0 +1,236 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1843
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1843
+  objective: Consolidate Smart Form product intent; correct the mobile signed-odds
+    prescription and stale app instructions
+  acceptance_criteria:
+    - |-
+      Consolidate the existing Smart Form product direction into one durable intent document, reconciling contradictions by correcting the canonical contracts in place rather than shadowing them, and wire product intent into Claude and Codex instructions.
+
+      Ratified by Griff 2026-09-06. This is documentation and instruction consolidation only. It introduces no gate, no required check, no approval artifact, no threshold and no new lane type, and no product work waits on it. It must not become a prerequisite or a separate OS improvement program.
+
+      ## Where to look
+
+      * `docs/03_product/smart-form/intent.md` — new; the consolidated product intent
+      * `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — two corrections
+      * `apps/smart-form/CLAUDE.md` — stale, rewritten
+      * `apps/api/CLAUDE.md`, `CLAUDE.md`, `AGENTS.md`, `.claude/commands/dispatch.md` — required-reading wiring
+      * `docs/05_operations/docs_authority_map.md` — register `docs/03_product/*/intent.md`
+
+      ## Contradictions reconciled (corrected in the canonical contract, not restated)
+
+      1. **Mobile signed odds.** The American-odds table required a negative range of -100 to -50000 and simultaneously prescribed `Input mode: numeric`. `inputMode="numeric"` renders a digits-only keypad with no minus key, so `-110` is unenterable on the mobile surface Acceptance Criterion 13 mandates. Griff hit this during the pilot: "I'm unable to put - 110." The same defect exists one field over: the `Line` field prescribes `decimal` against its own `-999.5 to +999.5` range, with placeholder `e.g. -3.5` (`BetForm.tsx:3148`). Both input-mode rows corrected to `text` with a signed pattern; ranges unchanged.
+      2. **Confidence on the operator form.** Acceptance Criterion 11 read "Confidence is not present on the operator form". `T1_SMART_FORM_V1_CONTRACT.md` and `T2_SMART_FORM_CONFIDENCE_CONTRACT.md` (UTV2-49) both require the opposite and are implemented (`form-utils.ts:317,328,377`). Criterion 11 corrected: no raw confidence float is entered; conviction 1-10 is, and `confidence` is derived, with `metadata.confidenceSource: 'capper-conviction'`.
+      3. **Stale app instructions.** `apps/smart-form/CLAUDE.md` described the app as "Public-facing" with "No auth header currently (submitter key should be added)". Both false since #1488 — Auth.js v5 with an allow-list, and the session `capperId` is the persisted identity of every pick. Also listed 3 test files (there are 6) and said nothing about Track Only, `distributionMode`, the three-tier resolution ladder or containment.
+
+      Two further conflicts were examined and deliberately left as they are, with the reasoning recorded: the live-offer-first rule in `T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md` (a precedence rule, not a claim that offers exist), and `SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md` (self-declared planning-only, scoped to evidence eligibility rather than submission — it is not in force and must not be read as a current requirement).
+
+      ## Definition of done
+
+      1. `docs/03_product/smart-form/intent.md` exists and covers the complete journey: authentication and canonical identity; sport-aware selections; database-backed participants; automatically derived matchups; honest fallback when event or participant coverage is missing; signed odds; bet-slip review; submission; receipt; persisted Track Only truth; observation.
+      2. It distinguishes the contained pilot from a finished, repeatably usable Smart Form explicitly, and states that a merge or unit-test count cannot establish deployed usability.
+      3. Each required behaviour is connected to its existing implementation (file:line) and to meaningful verification, with gaps marked honestly rather than omitted.
+      4. The two contract corrections are made in the canonical contract, in place, with the reason recorded inline so they are not "tidied" back.
+      5. `apps/smart-form/CLAUDE.md` is truthful about authentication, canonical identity, Track Only, the resolution ladder, containment, and its own test inventory.
+      6. Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and `apps/api/CLAUDE.md`, explicitly covering backend work that affects a product surface; `docs/03_product/*/intent.md` is registered in the docs authority map; `/dispatch` packets carry the applicable acceptance criteria quoted inline.
+
+      ## Verification / self-check
+
+      * `pnpm verify` green on the branch.
+      * Every file:line citation in the new document re-measured against the branch head, not recalled. Citations are the failure mode here — an issue's own citations are a snapshot, and this document is mostly citations.
+      * No canonical contract is shadowed: for each contradiction, the correction is in the contract and the intent document only points at it.
+      * No new check, workflow, label, gate or lane type is added by this change. Confirm by diff.
+
+      ## Out of scope
+
+      * The [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) Smart Form submission repair itself (event gate, DB-backed fallback selectors, per-side resolution state, the odds input change in `BetForm.tsx`). This lane corrects the *contract* prescription; changing the control is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s diff.
+      * Command Center and pipeline intent documents — written when those products are next worked, not ahead of them.
+      * Reference-data population, containment changes, and anything reserved.
+  guardrails: []
+  non_goals:
+    - The
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)
+      Smart Form submission repair itself (event gate, DB-backed fallback
+      selectors, per-side resolution state, the odds input change in
+      `BetForm.tsx`). This lane corrects the *contract* prescription; changing
+      the control is
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s
+      diff.
+    - Command Center and pipeline intent documents — written when those products
+      are next worked, not ahead of them.
+    - Reference-data population, containment changes, and anything reserved.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Consolidate the existing Smart Form product direction into one durable
+      intent document, reconciling contradictions by correcting the canonical
+      contracts in place rather than shadowing them, and wire product intent
+      into Claude and Codex instructions.
+
+
+      Ratified by Griff 2026-09-06. This is documentation and instruction
+      consolidation only. It introduces no gate, no required check, no approval
+      artifact, no threshold and no new lane type, and no product work waits on
+      it. It must not become a prerequisite or a separate OS improvement
+      program.
+    - >-
+      Where to look
+
+      * `docs/03_product/smart-form/intent.md` — new; the consolidated product
+      intent
+
+      * `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — two
+      corrections
+
+      * `apps/smart-form/CLAUDE.md` — stale, rewritten
+
+      * `apps/api/CLAUDE.md`, `CLAUDE.md`, `AGENTS.md`,
+      `.claude/commands/dispatch.md` — required-reading wiring
+
+      * `docs/05_operations/docs_authority_map.md` — register
+      `docs/03_product/*/intent.md`
+    - >-
+      Contradictions reconciled (corrected in the canonical contract, not
+      restated)
+
+      1. **Mobile signed odds.** The American-odds table required a negative
+      range of -100 to -50000 and simultaneously prescribed `Input mode:
+      numeric`. `inputMode="numeric"` renders a digits-only keypad with no minus
+      key, so `-110` is unenterable on the mobile surface Acceptance Criterion
+      13 mandates. Griff hit this during the pilot: "I'm unable to put - 110."
+      The same defect exists one field over: the `Line` field prescribes
+      `decimal` against its own `-999.5 to +999.5` range, with placeholder `e.g.
+      -3.5` (`BetForm.tsx:3148`). Both input-mode rows corrected to `text` with
+      a signed pattern; ranges unchanged.
+
+      2. **Confidence on the operator form.** Acceptance Criterion 11 read
+      "Confidence is not present on the operator form".
+      `T1_SMART_FORM_V1_CONTRACT.md` and `T2_SMART_FORM_CONFIDENCE_CONTRACT.md`
+      (UTV2-49) both require the opposite and are implemented
+      (`form-utils.ts:317,328,377`). Criterion 11 corrected: no raw confidence
+      float is entered; conviction 1-10 is, and `confidence` is derived, with
+      `metadata.confidenceSource: 'capper-conviction'`.
+
+      3. **Stale app instructions.** `apps/smart-form/CLAUDE.md` described the
+      app as "Public-facing" with "No auth header currently (submitter key
+      should be added)". Both false since #1488 — Auth.js v5 with an allow-list,
+      and the session `capperId` is the persisted identity of every pick. Also
+      listed 3 test files (there are 6) and said nothing about Track Only,
+      `distributionMode`, the three-tier resolution ladder or containment.
+
+
+      Two further conflicts were examined and deliberately left as they are,
+      with the reasoning recorded: the live-offer-first rule in
+      `T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md` (a precedence rule, not a claim
+      that offers exist), and `SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md`
+      (self-declared planning-only, scoped to evidence eligibility rather than
+      submission — it is not in force and must not be read as a current
+      requirement).
+    - >-
+      Definition of done
+
+      1. `docs/03_product/smart-form/intent.md` exists and covers the complete
+      journey: authentication and canonical identity; sport-aware selections;
+      database-backed participants; automatically derived matchups; honest
+      fallback when event or participant coverage is missing; signed odds;
+      bet-slip review; submission; receipt; persisted Track Only truth;
+      observation.
+
+      2. It distinguishes the contained pilot from a finished, repeatably usable
+      Smart Form explicitly, and states that a merge or unit-test count cannot
+      establish deployed usability.
+
+      3. Each required behaviour is connected to its existing implementation
+      (file:line) and to meaningful verification, with gaps marked honestly
+      rather than omitted.
+
+      4. The two contract corrections are made in the canonical contract, in
+      place, with the reason recorded inline so they are not "tidied" back.
+
+      5. `apps/smart-form/CLAUDE.md` is truthful about authentication, canonical
+      identity, Track Only, the resolution ladder, containment, and its own test
+      inventory.
+
+      6. Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and
+      `apps/api/CLAUDE.md`, explicitly covering backend work that affects a
+      product surface; `docs/03_product/*/intent.md` is registered in the docs
+      authority map; `/dispatch` packets carry the applicable acceptance
+      criteria quoted inline.
+    - >-
+      Verification / self-check
+
+      * `pnpm verify` green on the branch.
+
+      * Every file:line citation in the new document re-measured against the
+      branch head, not recalled. Citations are the failure mode here — an
+      issue's own citations are a snapshot, and this document is mostly
+      citations.
+
+      * No canonical contract is shadowed: for each contradiction, the
+      correction is in the contract and the intent document only points at it.
+
+      * No new check, workflow, label, gate or lane type is added by this
+      change. Confirm by diff.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds
+    title: Consolidate Smart Form product intent; correct the mobile signed-odds
+      prescription and stale app instructions
+    description: |-
+      Consolidate the existing Smart Form product direction into one durable intent document, reconciling contradictions by correcting the canonical contracts in place rather than shadowing them, and wire product intent into Claude and Codex instructions.
+
+      Ratified by Griff 2026-09-06. This is documentation and instruction consolidation only. It introduces no gate, no required check, no approval artifact, no threshold and no new lane type, and no product work waits on it. It must not become a prerequisite or a separate OS improvement program.
+
+      ## Where to look
+
+      * `docs/03_product/smart-form/intent.md` — new; the consolidated product intent
+      * `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` — two corrections
+      * `apps/smart-form/CLAUDE.md` — stale, rewritten
+      * `apps/api/CLAUDE.md`, `CLAUDE.md`, `AGENTS.md`, `.claude/commands/dispatch.md` — required-reading wiring
+      * `docs/05_operations/docs_authority_map.md` — register `docs/03_product/*/intent.md`
+
+      ## Contradictions reconciled (corrected in the canonical contract, not restated)
+
+      1. **Mobile signed odds.** The American-odds table required a negative range of -100 to -50000 and simultaneously prescribed `Input mode: numeric`. `inputMode="numeric"` renders a digits-only keypad with no minus key, so `-110` is unenterable on the mobile surface Acceptance Criterion 13 mandates. Griff hit this during the pilot: "I'm unable to put - 110." The same defect exists one field over: the `Line` field prescribes `decimal` against its own `-999.5 to +999.5` range, with placeholder `e.g. -3.5` (`BetForm.tsx:3148`). Both input-mode rows corrected to `text` with a signed pattern; ranges unchanged.
+      2. **Confidence on the operator form.** Acceptance Criterion 11 read "Confidence is not present on the operator form". `T1_SMART_FORM_V1_CONTRACT.md` and `T2_SMART_FORM_CONFIDENCE_CONTRACT.md` (UTV2-49) both require the opposite and are implemented (`form-utils.ts:317,328,377`). Criterion 11 corrected: no raw confidence float is entered; conviction 1-10 is, and `confidence` is derived, with `metadata.confidenceSource: 'capper-conviction'`.
+      3. **Stale app instructions.** `apps/smart-form/CLAUDE.md` described the app as "Public-facing" with "No auth header currently (submitter key should be added)". Both false since #1488 — Auth.js v5 with an allow-list, and the session `capperId` is the persisted identity of every pick. Also listed 3 test files (there are 6) and said nothing about Track Only, `distributionMode`, the three-tier resolution ladder or containment.
+
+      Two further conflicts were examined and deliberately left as they are, with the reasoning recorded: the live-offer-first rule in `T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md` (a precedence rule, not a claim that offers exist), and `SMART_FORM_PROVIDER_IDENTITY_REQUIREMENTS.md` (self-declared planning-only, scoped to evidence eligibility rather than submission — it is not in force and must not be read as a current requirement).
+
+      ## Definition of done
+
+      1. `docs/03_product/smart-form/intent.md` exists and covers the complete journey: authentication and canonical identity; sport-aware selections; database-backed participants; automatically derived matchups; honest fallback when event or participant coverage is missing; signed odds; bet-slip review; submission; receipt; persisted Track Only truth; observation.
+      2. It distinguishes the contained pilot from a finished, repeatably usable Smart Form explicitly, and states that a merge or unit-test count cannot establish deployed usability.
+      3. Each required behaviour is connected to its existing implementation (file:line) and to meaningful verification, with gaps marked honestly rather than omitted.
+      4. The two contract corrections are made in the canonical contract, in place, with the reason recorded inline so they are not "tidied" back.
+      5. `apps/smart-form/CLAUDE.md` is truthful about authentication, canonical identity, Track Only, the resolution ladder, containment, and its own test inventory.
+      6. Product intent is required reading through `CLAUDE.md`, `AGENTS.md` and `apps/api/CLAUDE.md`, explicitly covering backend work that affects a product surface; `docs/03_product/*/intent.md` is registered in the docs authority map; `/dispatch` packets carry the applicable acceptance criteria quoted inline.
+
+      ## Verification / self-check
+
+      * `pnpm verify` green on the branch.
+      * Every file:line citation in the new document re-measured against the branch head, not recalled. Citations are the failure mode here — an issue's own citations are a snapshot, and this document is mostly citations.
+      * No canonical contract is shadowed: for each contradiction, the correction is in the contract and the intent document only points at it.
+      * No new check, workflow, label, gate or lane type is added by this change. Confirm by diff.
+
+      ## Out of scope
+
+      * The [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) Smart Form submission repair itself (event gate, DB-backed fallback selectors, per-side resolution state, the odds input change in `BetForm.tsx`). This lane corrects the *contract* prescription; changing the control is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s diff.
+      * Command Center and pipeline intent documents — written when those products are next worked, not ahead of them.
+      * Reference-data population, containment changes, and anything reserved.
+    captured_at: 2026-09-06T17:48:23.603Z
+    description_sha256: 6f121785b3b933c052ea4c84dcc4cdbb96a2f705f68024ed35491c274ddb29ee
+  contract_hash: 3198a5f4d2745cb2e39a442c6358437c04a8fc346ee8ff13c250f8572616e915
