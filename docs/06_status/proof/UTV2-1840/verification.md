@@ -87,6 +87,18 @@ ASSERTIONS:
 
 EVIDENCE:
 
+r-level-check: `scripts/ci/r-level-check.ts` was run locally at this anchor and also runs in CI on
+this branch as `R-Level Compliance Check` (reported `pass`). Local output:
+
+```text
+Verdict: PASS
+Changed files: 10
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+This diff touches ops scripts, their tests, and docs only, so no R-level artifact beyond the diff
+summary and this verification log is required, and none is claimed.
+
 **`pnpm verify` — exit 1, and not because anything failed.** Every stage passed:
 `ci:db-client-boundary`, `ops:sync-check`, `ops:system-alignment-check`,
 `ops:automation-coverage-check`, `env:check`, `lint`, `type-check`, `build`, `test`, the smart-form
@@ -189,4 +201,5 @@ env -u LINEAR_API_KEY -u LINEAR_API_TOKEN pnpm ops:preflight WORK-902 --tier T3 
 pnpm ops:branch-discipline -- --branch <branch> --title <title> --commits <commits>
 grep -rn "UTV2|UNI" scripts/ .github/
 git diff origin/main --name-only -- .github/
+pnpm exec tsx scripts/ci/r-level-check.ts
 ```
