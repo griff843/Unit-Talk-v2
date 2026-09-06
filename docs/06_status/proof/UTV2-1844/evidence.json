@@ -7,18 +7,18 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "55b0f7c852ff42405c0e02cd461058103ffdbb8a",
+    "verified_source_sha": "65ebfd24b84b3ef2667e8a15f351ade704674bb8",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, measured locally at this anchor.",
-      "pnpm_test": "PASS \u2014 tests 5970, pass 5970, fail 0, exit 0, measured locally at this anchor.",
+      "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor.",
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
-      "r_level_check": "PASS \u2014 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844: Changed files 16, rules matched operator-ui, every triggered required[] artifact present."
+      "r_level_check": "PASS — npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844: Changed files 16, rules matched operator-ui, every triggered required[] artifact present."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "55b0f7c852ff42405c0e02cd461058103ffdbb8a is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1844/, and it is the tree every command above was run against. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES, so they do not move the anchor.",
-    "bound_at": "2026-09-06T19:45:00.000Z"
+    "anchor_note": "65ebfd24b84b3ef2667e8a15f351ade704674bb8 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1844/, and it is the tree every command above was run against. It is the commit that resynced this branch onto origin/main after #1522 (UTV2-1845, 9a233bd90) merged and made this PR BEHIND under strict:true; that resync carries non-proof files, so rule 4 of scripts/ci/proof-binding-validator.ts (a two-dot git diff verified_source_sha..HEAD) forces the anchor onto it. Commits after it touch this proof bundle only and are inside PROOF_ONLY_PREFIXES.",
+    "bound_at": "2026-09-06T21:05:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -35,16 +35,16 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 5970,
+      "tests": 5977,
       "failures": 0,
-      "detail": "tests 5970, pass 5970, fail 0, exit 0"
+      "detail": "tests 5977, pass 5977, fail 0, exit 0"
     },
     "mutation_control": {
       "status": "PASS",
       "count": 1,
       "command": "revert nextSignedInputValue to return parsed unconditionally, run pnpm exec tsx --test apps/smart-form/test/control-plane-boundary.test.ts, restore byte-for-byte",
-      "observed": "# pass 7 / # fail 2 \u2014 'a signed decimal stays enterable one keystroke at a time' and 'a signed field preserves a leading minus that Number() would erase'.",
-      "honest_reading": "The mutation is exactly the behaviour this lane found and repaired: coercing every keystroke through Number() makes -3.5 unenterable one character at a time and erases the sign in -0.5. Two tests stay green under it on purpose \u2014 coercion is correct for a complete value, and the repair must not break that. That inverse is asserted separately as 'a fully typed signed number is handed on as a number, not a string'."
+      "observed": "# pass 7 / # fail 2 — 'a signed decimal stays enterable one keystroke at a time' and 'a signed field preserves a leading minus that Number() would erase'.",
+      "honest_reading": "The mutation is exactly the behaviour this lane found and repaired: coercing every keystroke through Number() makes -3.5 unenterable one character at a time and erases the sign in -0.5. Two tests stay green under it on purpose — coercion is correct for a complete value, and the repair must not break that. That inverse is asserted separately as 'a fully typed signed number is handed on as a number, not a string'."
     },
     "keypad_inversion": {
       "status": "PASS",
@@ -53,7 +53,7 @@
     },
     "rejection_control": {
       "status": "PASS",
-      "detail": "nextSignedInputValue returns null for input that is not a number at all \u2014 asserted over 'abc', '-1-2', '1.2.3', '--5' \u2014 and the component reads null as 'reject this keystroke', leaving the field unchanged rather than writing a partial value through."
+      "detail": "nextSignedInputValue returns null for input that is not a number at all — asserted over 'abc', '-1-2', '1.2.3', '--5' — and the component reads null as 'reject this keystroke', leaving the field unchanged rather than writing a partial value through."
     },
     "identity_mode_three_valued": {
       "status": "PASS",

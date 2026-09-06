@@ -1,7 +1,7 @@
 # PROOF: UTV2-1844 — signed odds and line entry, and a three-valued participant identity mode
 
 MERGE_SHA: pending merge
-Execution SHA: 55b0f7c852ff42405c0e02cd461058103ffdbb8a
+Execution SHA: 65ebfd24b84b3ef2667e8a15f351ade704674bb8
 
 ## ASSERTIONS:
 
@@ -32,8 +32,8 @@ How each assertion above was established, so the evidence table below is read as
 than as description.
 
 - **Executed, not inspected.** Every claim about behaviour comes from a test that was run on this
-  branch at `55b0f7c852ff42405c0e02cd461058103ffdbb8a`. The commands and their exact counts are in
-  "Commands run"; `pnpm test` reports `tests 5970, pass 5970, fail 0`.
+  branch at `65ebfd24b84b3ef2667e8a15f351ade704674bb8`. The commands and their exact counts are in
+  "Commands run"; `pnpm test` reports `tests 5977, pass 5977, fail 0`.
 - **The keystroke repair was proven by inversion.** Reverting `nextSignedInputValue` to coerce every
   keystroke turns exactly two named tests red, and leaves the complete-value test green. Both halves
   matter: the mutation table records the failure, and A3 records what must *not* break while fixing
@@ -74,12 +74,12 @@ than as description.
 
 ### Commands run
 
-Taken against `55b0f7c852ff42405c0e02cd461058103ffdbb8a`, the tree this bundle describes.
+Taken against `65ebfd24b84b3ef2667e8a15f351ade704674bb8`, the tree this bundle describes.
 
 ```
 pnpm lint                              # exit 0
 pnpm type-check                        # exit 0
-pnpm test                              # exit 0 — tests 5970, pass 5970, fail 0
+pnpm test                              # exit 0 — tests 5977, pass 5977, fail 0
 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844
                                        # Verdict: PASS · Changed files: 16 · Rules matched: operator-ui
 pnpm verify                            # refused locally at test:live-db under containment; the
@@ -123,13 +123,13 @@ no `package.json`, no migration, no schema, no API or worker source.
 |---|---|
 | PR: | https://github.com/griff843/Unit-Talk-v2/pull/1523 |
 | MERGE_SHA: | pending merge |
-| Verified source SHA: | 55b0f7c852ff42405c0e02cd461058103ffdbb8a |
+| Verified source SHA: | 65ebfd24b84b3ef2667e8a15f351ade704674bb8 |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1523
 Merge SHA: pending merge
-Verified source SHA: 55b0f7c852ff42405c0e02cd461058103ffdbb8a
+Verified source SHA: 65ebfd24b84b3ef2667e8a15f351ade704674bb8
 
-`55b0f7c852ff42405c0e02cd461058103ffdbb8a` is the last commit on this branch that changes any file
+`65ebfd24b84b3ef2667e8a15f351ade704674bb8` is the last commit on this branch that changes any file
 outside `docs/06_status/proof/UTV2-1844/`, and it is the tree the commands above were run against.
 
 **Why the anchor moved.** It was `825bb865996f310be9351e3790a6f0b388e85b42` until this branch was
@@ -138,12 +138,24 @@ resynced onto `origin/main` to satisfy strict branch-protection freshness rather
 `git diff verified_source_sha..HEAD` (`:129-135`, `:267`), so the resync's own content —
 `docs/06_status/readiness/readiness-score.json`, which is not one of `PROOF_ONLY_PREFIXES` — enters
 that diff and the previous anchor could not be kept by rewording. **Every receipt above was
-re-executed at `55b0f7c85`**, not carried forward.
+re-executed at `65ebfd24b`**, not carried forward.
 
-Two receipts changed and both are recorded rather than smoothed over. `r-level-check` now reports
-**Changed files: 16** where the previous anchor reported 13; the three extra files are the readiness
-ledger the resync carried in and this bundle's own two files. And the A8 containment command was
-rewritten, because the previous form had become self-matching — see the Verification section above.
+Two receipts changed at that first re-anchor and both are recorded rather than smoothed over.
+`r-level-check` reported **Changed files: 16** where the anchor before it reported 13; the three
+extra files are the readiness ledger the resync carried in and this bundle's own two files. And the
+A8 containment command was rewritten, because the previous form had become self-matching — see the
+Verification section above.
+
+**The anchor then moved a second time, for the same structural reason.** #1522 (UTV2-1845) merged at
+`9a233bd90` while this PR was open, which made it `BEHIND` under `strict: true`. It was resynced
+rather than merged behind `main`, and that resync commit — `65ebfd24b`, which carries
+`scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, `scripts/ops/preflight.test.ts` and
+`docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` — is itself a non-proof change, so it
+becomes the anchor. **Every receipt above was re-executed at `65ebfd24b`**, and one of them moved:
+`pnpm test` now reports **tests 5977, pass 5977, fail 0** where the previous anchor reported 5970.
+The seven additional tests are UTV2-1845's `scripts/ops/preflight.test.ts` cases, carried in by the
+resync; no test in this lane's own diff changed. `r-level-check` still reports Changed files 16 and
+the scoped A8 containment grep still exits 1 with no matches.
 
 ## How this lane was executed
 

@@ -17,7 +17,7 @@ containment change.
 | `apps/smart-form/test/api-client.test.ts` | Payload shape under the three identity modes. |
 | `apps/smart-form/e2e/*.spec.ts` | Updated to the new selectors. **Run by no CI workflow** — see `verification.md`. |
 
-**Verification:** `pnpm lint` and `pnpm type-check` exit 0; `pnpm test` is 5970 pass, 0 fail;
+**Verification:** `pnpm lint` and `pnpm type-check` exit 0; `pnpm test` is 5977 pass, 0 fail;
 `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1844` returns `Verdict: PASS` (13 changed files,
 `operator-ui`). `pnpm verify` is refused locally at `test:live-db` under containment, so CI is the
 binding receipt. The keystroke repair is mutation-proven: reverting the round-trip comparison turns
