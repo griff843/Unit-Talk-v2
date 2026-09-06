@@ -27,10 +27,13 @@ Verified source SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
 - [x] **A2 — A real host is never mistaken for the placeholder.** Both real Supabase project URLs,
       an ordinary host, a lookalike (`https://127.0.0.1.example.com`), a malformed string and the
       empty string all return `false`.
-- [x] **A3 — The predicate is bound to this repository's own containment value**, not to a value
-      invented in the test: the assertion reads `SUPABASE_URL` out of `local.env` and requires it to
-      classify as the placeholder. `local.env` is gitignored, so the assertion is conditional on the
-      file existing; it executed and passed on this workstation.
+- [x] **A3 — The predicate is checked against this repository's own configured value**, not against
+      a value invented in the test: the assertion reads `SUPABASE_URL` out of `local.env`, computes
+      the loopback answer independently of the function under test, and requires the two to agree.
+      It therefore holds in both environments — the loopback placeholder locally, a real staging host
+      in CI — where an earlier version that demanded the placeholder answer was red in CI for exactly
+      that reason. `local.env` is gitignored, so the assertion is conditional on the file existing.
+      See "Correction after CI" below.
 - [x] **A4 — PT1 reports `blocked_by_containment` for the placeholder host**, exercised through
       `runT1Checks` rather than through the predicate alone, so the branch selection itself is
       covered.
@@ -48,6 +51,30 @@ Verified source SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
 - [x] **A9 — No reserved surface is touched.** No `.github/workflows/**` file, no CODEOWNERS, no
       branch-protection change, no tier semantics, no approval artifact, no change to what `verify`
       requires. The diff is three ops scripts and one document.
+
+## Verification
+
+How the assertions above were established, so the evidence table is read as measurement rather than
+description.
+
+- **Executed, not inspected.** Every behavioural claim comes from tests run on this branch; counts
+  are in "Commands run" (`pnpm test` — `tests 5969, pass 5969, fail 0`).
+- **Both directions are asserted.** A1 says what the predicate matches and A2 says what it must not,
+  including a lookalike host (`https://127.0.0.1.example.com`) that a substring match would wrongly
+  accept.
+- **The classification is exercised through `runT1Checks`, not through the predicate alone**, so the
+  branch selection is covered rather than assumed (A4-A6), with an unreachable real host as the
+  control that only the classification differs.
+- **The admission claim carries its own controls.** A7 is the load-bearing safety claim — this diff
+  must admit nothing — and it is asserted with two controls so the mapping cannot be vacuous: `pass`
+  still resolves `PASS`, and `infra_error` still resolves `INFRA`.
+- **Both mutations were executed and reverted**, and each turns a named, distinct set of tests red;
+  the table records which.
+- **The reserved half is verified by absence.** A8/A9 are checked against the diff: no workflow, no
+  CODEOWNERS, no branch-protection, no tier or approval change. The admission change itself is
+  written as a decision document and deliberately not implemented.
+- **One assertion was corrected after CI disagreed with it**, rather than after review — recorded in
+  full below rather than silently rewritten.
 
 ## EVIDENCE:
 
