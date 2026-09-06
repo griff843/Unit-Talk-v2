@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1839-carry-forward-c5-c6",
   "branch": "claude/utv2-1839-carry-forward-c5-c6",
   "base_branch": "main",
-  "commit_sha": "5046a095ecd5b87635dff6da75f4b4055a64f33a",
+  "commit_sha": "d35b82217aabc5efeac6b27e47b21f8029d19967",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1514",
   "files_changed": [],
   "file_scope_lock": [
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1839/evidence.json",
     "docs/06_status/proof/UTV2-1839/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-09-06T00:35:30.728Z",
-  "heartbeat_at": "2026-09-06T01:02:22.725Z",
+  "heartbeat_at": "2026-09-06T01:27:01.105Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1839-carry-forward-c5-c6.json",
