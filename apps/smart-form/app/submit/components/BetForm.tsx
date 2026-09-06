@@ -37,6 +37,7 @@ import {
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
   resolveSportsbookId,
+  type SmartFormIdentityMode,
 } from '@/lib/form-utils';
 import { betFormSchema, type BetFormValues, type MarketTypeId } from '@/lib/form-schema';
 import {
@@ -66,6 +67,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
+import { SignedNumberInput } from '@/components/SignedNumberInput';
 import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
 import type {
   CanonicalParticipantIdentity,
@@ -95,6 +97,7 @@ type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
 type OfferSelectionSide = 'over' | 'under' | 'side';
 type ParticipantFieldName = 'playerName' | 'team' | 'awayParticipantName' | 'homeParticipantName';
+type ParticipantSearchResolution = 'idle' | 'searching' | 'results' | 'not-found' | 'error' | 'resolved';
 
 interface SelectedOfferState {
   offer: EventOfferBrowseResult;
@@ -113,7 +116,8 @@ interface ParticipantAutocompleteFieldProps {
   datasetAvailable?: boolean | null;
   allowedParticipantIds?: ReadonlySet<string> | null;
   onSuggestionSelected: (suggestion: ParticipantSuggestion) => void | Promise<void>;
-  onManualChange: () => void;
+  onManualChange: (value: string) => void;
+  onResolutionStateChange?: (state: ParticipantSearchResolution) => void;
   disabledOverride?: boolean;
 }
 
@@ -381,6 +385,7 @@ function ParticipantAutocompleteField({
   allowedParticipantIds,
   onSuggestionSelected,
   onManualChange,
+  onResolutionStateChange,
   disabledOverride = false,
 }: ParticipantAutocompleteFieldProps) {
   const value = useWatch({ control: form.control, name }) ?? '';
@@ -397,6 +402,7 @@ function ParticipantAutocompleteField({
       setHasSearched(false);
       setSearchError(null);
       setIsLoading(false);
+      onResolutionStateChange?.('idle');
       return;
     }
 
@@ -405,6 +411,7 @@ function ParticipantAutocompleteField({
       setIsLoading(true);
       setHasSearched(false);
       setSearchError(null);
+      onResolutionStateChange?.('searching');
 
       try {
         const response = await fetch(buildParticipantSearchUrl(query, searchType, {
@@ -433,12 +440,12 @@ function ParticipantAutocompleteField({
           isRecord(json) ? json : { data: [] },
           searchType,
         );
-        setSuggestions(
-          allowedParticipantIds && allowedParticipantIds.size > 0
-            ? normalizedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
-            : normalizedSuggestions,
-        );
+        const nextSuggestions = allowedParticipantIds
+          ? normalizedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+          : normalizedSuggestions;
+        setSuggestions(nextSuggestions);
         setHasSearched(true);
+        onResolutionStateChange?.(nextSuggestions.length > 0 ? 'results' : 'not-found');
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
           return;
@@ -447,6 +454,7 @@ function ParticipantAutocompleteField({
         setSuggestions([]);
         setHasSearched(true);
         setSearchError(error instanceof Error ? error.message : 'Participant search unavailable');
+        onResolutionStateChange?.('error');
       } finally {
         setIsLoading(false);
       }
@@ -456,7 +464,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [allowedParticipantIds, eventId, name, searchType, sport, teamId, value]);
+  }, [allowedParticipantIds, eventId, name, onResolutionStateChange, searchType, sport, teamId, value]);
 
   const shouldShowMenu =
     isFocused &&
@@ -488,9 +496,10 @@ function ParticipantAutocompleteField({
                 window.setTimeout(() => setIsFocused(false), 120);
               }}
               onChange={(event) => {
-                onManualChange();
+                onManualChange(event.target.value);
                 field.onChange(event.target.value);
                 setSearchError(null);
+                onResolutionStateChange?.('idle');
               }}
             />
           </FormControl>
@@ -505,7 +514,9 @@ function ParticipantAutocompleteField({
                 <div className="px-3 py-2 text-sm text-muted-foreground">Searching participants...</div>
               ) : null}
               {!isLoading && searchError ? (
-                <div className="px-3 py-2 text-sm text-destructive">{searchError}</div>
+                <div role="alert" className="px-3 py-2 text-sm text-destructive">
+                  Search failed: {searchError}. Try again.
+                </div>
               ) : null}
               {!isLoading && !searchError && hasSearched && suggestions.length === 0 ? (
                 <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -527,6 +538,7 @@ function ParticipantAutocompleteField({
                           shouldValidate: true,
                         });
                         form.clearErrors(name);
+                        onResolutionStateChange?.('resolved');
                         onSuggestionSelected(suggestion);
                         setIsFocused(false);
                       }}
@@ -824,7 +836,9 @@ export function BetForm({
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [awayParticipantId, setAwayParticipantId] = useState<string | null>(null);
   const [homeParticipantId, setHomeParticipantId] = useState<string | null>(null);
-  const [manualIdentityOverride, setManualIdentityOverride] = useState(false);
+  const [identityMode, setIdentityMode] = useState<SmartFormIdentityMode>('canonical');
+  const [awaySearchResolution, setAwaySearchResolution] = useState<ParticipantSearchResolution>('idle');
+  const [homeSearchResolution, setHomeSearchResolution] = useState<ParticipantSearchResolution>('idle');
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
   const [selectedOfferParticipantId, setSelectedOfferParticipantId] = useState<string | null>(null);
   const [suspendMarketReset, setSuspendMarketReset] = useState(false);
@@ -900,6 +914,17 @@ export function BetForm({
         .map((participant) => participant.participantId),
     );
   }, [eventBrowse]);
+  const structuredSideIds = useMemo(
+    () => new Set([awayParticipantId, homeParticipantId].filter((id): id is string => Boolean(id))),
+    [awayParticipantId, homeParticipantId],
+  );
+  const allowedMarketTeamIds = allowedTeamIds ?? (
+    identityMode === 'structured-fallback' ? structuredSideIds : null
+  );
+  const canUseManualIdentity =
+    identityMode === 'structured-fallback' &&
+    awaySearchResolution === 'not-found' &&
+    homeSearchResolution === 'not-found';
   const availableOfferFamilies = useMemo(() => {
     if (!eventBrowse) {
       return [] as MarketTypeId[];
@@ -1152,7 +1177,15 @@ export function BetForm({
     setSelectedTeamId(null);
     setAwayParticipantId(null);
     setHomeParticipantId(null);
-    setManualIdentityOverride(Boolean(selectedSport) && !TEAM_SPORTS.has(selectedSport));
+    setIdentityMode(
+      selectedSport
+        ? TEAM_SPORTS.has(selectedSport)
+          ? 'structured-fallback'
+          : 'manual'
+        : 'canonical',
+    );
+    setAwaySearchResolution('idle');
+    setHomeSearchResolution('idle');
     setBrowseSearchQuery('');
     setBrowseSearchResults([]);
     setBrowseSearchError(null);
@@ -1372,7 +1405,9 @@ export function BetForm({
     setSelectedTeamId(null);
     setAwayParticipantId(away ? matchupTeamKey(away) : null);
     setHomeParticipantId(home ? matchupTeamKey(home) : null);
-    setManualIdentityOverride(false);
+    setIdentityMode('canonical');
+    setAwaySearchResolution('resolved');
+    setHomeSearchResolution('resolved');
     form.setValue('eventName', matchup.eventName, {
       shouldDirty: true,
       shouldTouch: true,
@@ -1416,6 +1451,9 @@ export function BetForm({
     setSelectedTeamId(null);
     setAwayParticipantId(null);
     setHomeParticipantId(null);
+    setIdentityMode(isTeamSport ? 'structured-fallback' : 'manual');
+    setAwaySearchResolution('idle');
+    setHomeSearchResolution('idle');
     form.setValue('eventName', '', {
       shouldDirty: true,
       shouldTouch: true,
@@ -1582,6 +1620,10 @@ export function BetForm({
       });
     }
     setSelectedTeamId(suggestion.participantId);
+
+    if (identityMode === 'structured-fallback') {
+      return;
+    }
 
     const uniqueMatchupFromSlate = findUniqueMatchupForTeam(suggestion.participantId);
     if (uniqueMatchupFromSlate) {
@@ -1772,6 +1814,64 @@ export function BetForm({
     });
   }
 
+  function setDerivedMatchupName(awayName: string, homeName: string) {
+    const nextEventName = awayName.trim() && homeName.trim()
+      ? `${awayName.trim()} @ ${homeName.trim()}`
+      : '';
+    form.setValue('eventName', nextEventName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: Boolean(nextEventName),
+    });
+  }
+
+  function handleStructuredSideChange(role: 'away' | 'home') {
+    if (role === 'away') {
+      setAwayParticipantId(null);
+    } else {
+      setHomeParticipantId(null);
+    }
+    setDerivedMatchupName('', '');
+  }
+
+  function enterManualIdentityMode() {
+    if (!canUseManualIdentity) return;
+    setIdentityMode('manual');
+    setAwayParticipantId(null);
+    setHomeParticipantId(null);
+    setSelectedTeamId(null);
+    setSelectedPlayerId(null);
+    setSelectedOfferParticipantId(null);
+    setSelectedOffer(null);
+    form.setValue('team', '');
+    form.setValue('playerName', '');
+    form.setValue('statType', '');
+    form.resetField('direction');
+    form.resetField('line');
+    form.resetField('odds');
+    setDerivedMatchupName(
+      form.getValues('awayParticipantName') ?? '',
+      form.getValues('homeParticipantName') ?? '',
+    );
+  }
+
+  function retryStructuredIdentitySearch() {
+    setIdentityMode('structured-fallback');
+    setAwayParticipantId(null);
+    setHomeParticipantId(null);
+    setAwaySearchResolution('idle');
+    setHomeSearchResolution('idle');
+    form.setValue('awayParticipantName', '');
+    form.setValue('homeParticipantName', '');
+    setDerivedMatchupName('', '');
+  }
+
+  function handleManualSideChange(role: 'away' | 'home', value: string) {
+    const awayName = role === 'away' ? value : (form.getValues('awayParticipantName') ?? '');
+    const homeName = role === 'home' ? value : (form.getValues('homeParticipantName') ?? '');
+    setDerivedMatchupName(awayName, homeName);
+  }
+
   function applyStructuredSideSelection(
     role: 'away' | 'home',
     suggestion: ParticipantSuggestion,
@@ -1783,11 +1883,27 @@ export function BetForm({
         description: 'The same canonical participant cannot occupy both event sides.',
         variant: 'destructive',
       });
+      if (role === 'away') {
+        setAwayParticipantId(null);
+        setAwaySearchResolution('idle');
+        form.setValue('awayParticipantName', '', { shouldDirty: true, shouldValidate: true });
+      } else {
+        setHomeParticipantId(null);
+        setHomeSearchResolution('idle');
+        form.setValue('homeParticipantName', '', { shouldDirty: true, shouldValidate: true });
+      }
+      setDerivedMatchupName('', '');
       return;
     }
 
-    if (role === 'away') setAwayParticipantId(suggestion.participantId);
-    else setHomeParticipantId(suggestion.participantId);
+    setIdentityMode('structured-fallback');
+    if (role === 'away') {
+      setAwayParticipantId(suggestion.participantId);
+      setAwaySearchResolution('resolved');
+    } else {
+      setHomeParticipantId(suggestion.participantId);
+      setHomeSearchResolution('resolved');
+    }
 
     const awayName = role === 'away'
       ? suggestion.displayName
@@ -1795,13 +1911,10 @@ export function BetForm({
     const homeName = role === 'home'
       ? suggestion.displayName
       : form.getValues('homeParticipantName') ?? '';
-    if (awayName && homeName) {
-      form.setValue('eventName', `${awayName} @ ${homeName}`, {
-        shouldDirty: true,
-        shouldTouch: true,
-        shouldValidate: true,
-      });
-    }
+    setDerivedMatchupName(
+      role === 'away' || Boolean(awayParticipantId) ? awayName : '',
+      role === 'home' || Boolean(homeParticipantId) ? homeName : '',
+    );
   }
 
   function buildCanonicalIdentity(
@@ -1820,7 +1933,7 @@ export function BetForm({
   }
 
   function buildParticipantResolution(values: BetFormValues): SmartFormParticipantResolution {
-    if (manualIdentityOverride) {
+    if (identityMode === 'manual') {
       return {
         resolution: 'manual',
         sportId: values.sport,
@@ -1849,7 +1962,7 @@ export function BetForm({
     return {
       resolution: 'canonical',
       sportId: values.sport,
-      eventId: selectedMatchup?.eventId ?? null,
+      eventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
       eventName: values.eventName,
       away: buildCanonicalIdentity(
         awayTeam ? matchupTeamKey(awayTeam) : awayParticipantId,
@@ -1891,19 +2004,19 @@ export function BetForm({
       return;
     }
 
-    if (!manualIdentityOverride && !selectedMatchup && (!awayParticipantId || !homeParticipantId)) {
+    if (identityMode === 'structured-fallback' && (!awayParticipantId || !homeParticipantId)) {
       toast({
         title: 'Select canonical participants',
-        description: 'Choose both event sides from search results, or explicitly use manual participant override.',
+        description: 'Choose both event sides from search results. Free text appears only after both searches return no canonical result.',
         variant: 'destructive',
       });
       return;
     }
-    if (!manualIdentityOverride && awayParticipantId === homeParticipantId) {
+    if (awayParticipantId && awayParticipantId === homeParticipantId) {
       toast({ title: 'Invalid matchup', description: 'Event sides must be different.', variant: 'destructive' });
       return;
     }
-    if (!manualIdentityOverride && selectedMarketType === 'player-prop' && !selectedPlayerId) {
+    if (identityMode !== 'manual' && selectedMarketType === 'player-prop' && !selectedPlayerId) {
       toast({ title: 'Select a canonical player', description: 'Typing a name is not enough; select a search result.', variant: 'destructive' });
       return;
     }
@@ -1913,12 +2026,12 @@ export function BetForm({
     // once, in `evaluateSubmissionGuards`, next to the server rule it mirrors.
     const guardFailure = evaluateSubmissionGuards({
       sportId: values.sport,
-      manualOverride: manualIdentityOverride,
+      identityMode,
       awayParticipantName: values.awayParticipantName,
       homeParticipantName: values.homeParticipantName,
       team: values.team,
       playerName: values.playerName,
-      canonicalEventId: selectedMatchup?.eventId ?? null,
+      canonicalEventId: identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null,
       selectedPlayerId,
     });
     if (guardFailure) {
@@ -1952,10 +2065,11 @@ export function BetForm({
       const resolvedSportsbookId = selectedOfferMatchesSubmittedBook
         ? (selectedOffer?.offer.sportsbookId ?? resolveSportsbookId(catalog, values.sportsbook))
         : resolveSportsbookId(catalog, values.sportsbook);
+      const resolvedEventId = identityMode === 'canonical' ? (selectedMatchup?.eventId ?? null) : null;
 
       const payload = buildSubmissionPayload(values, {
         submissionMode: selectedOffer ? 'live-offer' : 'manual',
-        eventId: selectedMatchup?.eventId ?? null,
+        eventId: resolvedEventId,
         leagueId: eventBrowse?.leagueId ?? selectedMatchup?.leagueId ?? null,
         teamId: selectedTeamId,
         playerId: selectedPlayerId,
@@ -2785,13 +2899,14 @@ export function BetForm({
                               <FormItem>
                                 <FormLabel>Line</FormLabel>
                                 <FormControl>
-                                  <Input
-                                    type="number"
+                                  <SignedNumberInput
                                     step="0.5"
                                     placeholder="e.g. 24.5"
-                                    {...field}
+                                    name={field.name}
+                                    ref={field.ref}
+                                    onBlur={field.onBlur}
                                     value={field.value ?? ''}
-                                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                                    onValueChange={field.onChange}
                                   />
                                 </FormControl>
                                 <FormMessage />
@@ -2820,47 +2935,91 @@ export function BetForm({
       return null;
     }
 
+    const manualTeamField = (label: string) => (
+      <FormField
+        control={form.control}
+        name="team"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>{label}</FormLabel>
+            <FormControl><Input placeholder="Enter unresolved team" {...field} /></FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    );
+
     if (selectedMarketType === 'player-prop') {
       return (
         <div className="space-y-4">
-          <ParticipantAutocompleteField
-            form={form}
-            name="team"
-            label="Team"
-            placeholder="Type a team name"
-            searchType="team"
-            eventId={selectedMatchupId}
-            sport={selectedSport}
-            datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
-            allowedParticipantIds={allowedTeamIds}
-            onSuggestionSelected={handleTeamSuggestionSelection}
-            onManualChange={() => {
-              setSelectedTeamId(null);
-              setSelectedPlayerId(null);
-              setSelectedOfferParticipantId(null);
-              setSelectedOffer(null);
-              form.setValue('playerName', '', {
-                shouldDirty: true,
-                shouldTouch: true,
-                shouldValidate: true,
-              });
-            }}
-          />
-          <ParticipantAutocompleteField
-            form={form}
-            name="playerName"
-            label="Player"
-            placeholder="Type a player name"
-            searchType="player"
-            eventId={selectedMatchupId}
-            teamId={selectedTeamId}
-            sport={selectedSport}
-            datasetAvailable={referenceAvailability?.playersAvailable ?? null}
-            allowedParticipantIds={allowedPlayerIds}
-            onSuggestionSelected={handlePlayerSuggestionSelection}
-            onManualChange={() => setSelectedPlayerId(null)}
-            disabledOverride={!selectedTeamId}
-          />
+          {identityMode === 'manual' ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="team"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team</FormLabel>
+                    <FormControl><Input placeholder="Enter unresolved team" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="playerName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Player</FormLabel>
+                    <FormControl><Input placeholder="Enter unresolved player" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          ) : (
+            <>
+              <ParticipantAutocompleteField
+                form={form}
+                name="team"
+                label="Team"
+                placeholder="Type a team name"
+                searchType="team"
+                eventId={selectedMatchupId}
+                sport={selectedSport}
+                datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
+                allowedParticipantIds={allowedMarketTeamIds}
+                onSuggestionSelected={handleTeamSuggestionSelection}
+                onManualChange={() => {
+                  setSelectedTeamId(null);
+                  setSelectedPlayerId(null);
+                  setSelectedOfferParticipantId(null);
+                  setSelectedOffer(null);
+                  form.setValue('playerName', '', {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  });
+                }}
+                disabledOverride={identityMode === 'structured-fallback' && structuredSideIds.size < 2}
+              />
+              <ParticipantAutocompleteField
+                form={form}
+                name="playerName"
+                label="Player"
+                placeholder="Type a player name"
+                searchType="player"
+                eventId={selectedMatchupId}
+                teamId={selectedTeamId}
+                sport={selectedSport}
+                datasetAvailable={referenceAvailability?.playersAvailable ?? null}
+                allowedParticipantIds={allowedPlayerIds}
+                onSuggestionSelected={handlePlayerSuggestionSelection}
+                onManualChange={() => setSelectedPlayerId(null)}
+                disabledOverride={!selectedTeamId}
+              />
+            </>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <FormField
               control={form.control}
@@ -2871,7 +3030,7 @@ export function BetForm({
                   <FormControl>
                     <Input
                       placeholder="e.g. Knicks vs Heat"
-                      readOnly={Boolean(selectedMatchup)}
+                      readOnly={Boolean(selectedMatchup) || identityMode === 'structured-fallback'}
                       {...field}
                     />
                   </FormControl>
@@ -2937,13 +3096,14 @@ export function BetForm({
                 <FormItem>
                   <FormLabel>Line</FormLabel>
                   <FormControl>
-                    <Input
-                      type="number"
+                    <SignedNumberInput
                       step="0.5"
                       placeholder="e.g. 24.5"
-                      {...field}
+                      name={field.name}
+                      ref={field.ref}
+                      onBlur={field.onBlur}
                       value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                      onValueChange={field.onChange}
                     />
                   </FormControl>
                   <FormMessage />
@@ -3004,13 +3164,17 @@ export function BetForm({
                   <FormItem>
                     <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                      <Input
+                        placeholder="Generated from away and home teams"
+                        readOnly={identityMode === 'structured-fallback'}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {isTeamSport ? (
+              {isTeamSport && identityMode !== 'manual' ? (
                 <ParticipantAutocompleteField
                   form={form}
                   name="team"
@@ -3020,9 +3184,10 @@ export function BetForm({
                   eventId={selectedMatchupId}
                   sport={selectedSport}
                   datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
-                  allowedParticipantIds={allowedTeamIds}
+                  allowedParticipantIds={allowedMarketTeamIds}
                   onSuggestionSelected={handleTeamSuggestionSelection}
                   onManualChange={() => setSelectedTeamId(null)}
+                  disabledOverride={identityMode === 'structured-fallback' && structuredSideIds.size < 2}
                 />
               ) : (
                 <FormField
@@ -3030,7 +3195,7 @@ export function BetForm({
                   name="team"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Competitor</FormLabel>
+                      <FormLabel>{isTeamSport ? 'Team to Win' : 'Competitor'}</FormLabel>
                       <FormControl>
                         <Input placeholder="Enter unresolved competitor" {...field} />
                       </FormControl>
@@ -3113,7 +3278,7 @@ export function BetForm({
                     searchType="team"
                     eventId={selectedMatchupId}
                     sport={selectedSport}
-                    allowedParticipantIds={allowedTeamIds}
+                    allowedParticipantIds={allowedMarketTeamIds}
                     onSuggestionSelected={handleTeamSuggestionSelection}
                     onManualChange={() => setSelectedTeamId(null)}
                   />
@@ -3143,25 +3308,18 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>{selectedMarketLabel ?? 'Spread'}</FormLabel>
                         <FormControl>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
+                          <SignedNumberInput
+                            step="0.5"
                             placeholder="e.g. -3.5"
-                            {...field}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
                             value={
                               typeof field.value === 'number' && field.value > 0
                                 ? `+${field.value}`
                                 : (field.value ?? '')
                             }
-                            onChange={(event) => {
-                              const raw = event.target.value;
-                              if (raw === '' || raw === '-' || raw === '+') {
-                                field.onChange(raw === '' ? undefined : raw as unknown as number);
-                                return;
-                              }
-                              const n = Number(raw);
-                              field.onChange(Number.isNaN(n) ? field.value : n);
-                            }}
+                            onValueChange={field.onChange}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3180,25 +3338,32 @@ export function BetForm({
                   <FormItem>
                     <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                      <Input
+                        placeholder="Generated from away and home teams"
+                        readOnly={identityMode === 'structured-fallback'}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <div className="grid grid-cols-2 gap-3">
-                <ParticipantAutocompleteField
-                  form={form}
-                  name="team"
-                  label="Team"
-                  placeholder="Type a team name"
-                  searchType="team"
-                  eventId={selectedMatchupId}
-                  sport={selectedSport}
-                  allowedParticipantIds={allowedTeamIds}
-                  onSuggestionSelected={handleTeamSuggestionSelection}
-                  onManualChange={() => setSelectedTeamId(null)}
-                />
+                {identityMode === 'manual' ? manualTeamField('Team') : (
+                  <ParticipantAutocompleteField
+                    form={form}
+                    name="team"
+                    label="Team"
+                    placeholder="Type a team name"
+                    searchType="team"
+                    eventId={selectedMatchupId}
+                    sport={selectedSport}
+                    allowedParticipantIds={allowedMarketTeamIds}
+                    onSuggestionSelected={handleTeamSuggestionSelection}
+                    onManualChange={() => setSelectedTeamId(null)}
+                    disabledOverride={structuredSideIds.size < 2}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="line"
@@ -3206,13 +3371,14 @@ export function BetForm({
                     <FormItem>
                       <FormLabel>{selectedMarketLabel ?? 'Spread'}</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <SignedNumberInput
                           step="0.5"
                           placeholder="e.g. -3.5"
-                          {...field}
+                          name={field.name}
+                          ref={field.ref}
+                          onBlur={field.onBlur}
                           value={field.value ?? ''}
-                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -3309,13 +3475,14 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>{selectedMarketLabel ?? 'Total'}</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
+                          <SignedNumberInput
                             step="0.5"
                             placeholder="e.g. 220.5"
-                            {...field}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onValueChange={field.onChange}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3334,7 +3501,11 @@ export function BetForm({
                   <FormItem>
                     <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                      <Input
+                        placeholder="Generated from away and home teams"
+                        readOnly={identityMode === 'structured-fallback'}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -3369,13 +3540,14 @@ export function BetForm({
                     <FormItem>
                       <FormLabel>{selectedMarketLabel ?? 'Total'}</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
+                        <SignedNumberInput
                           step="0.5"
                           placeholder="e.g. 220.5"
-                          {...field}
+                          name={field.name}
+                          ref={field.ref}
+                          onBlur={field.onBlur}
                           value={field.value ?? ''}
-                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          onValueChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />
@@ -3517,13 +3689,14 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Team Total</FormLabel>
                         <FormControl>
-                          <Input
-                            type="number"
+                          <SignedNumberInput
                             step="0.5"
                             placeholder="e.g. 112.5"
-                            {...field}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onValueChange={field.onChange}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3542,25 +3715,32 @@ export function BetForm({
                   <FormItem>
                     <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                      <Input
+                        placeholder="Generated from away and home teams"
+                        readOnly={identityMode === 'structured-fallback'}
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
               <div className="grid grid-cols-2 gap-3">
-                <ParticipantAutocompleteField
-                  form={form}
-                  name="team"
-                  label="Team"
-                  placeholder="Type a team name"
-                  searchType="team"
-                  eventId={selectedMatchupId}
-                  sport={selectedSport}
-                  allowedParticipantIds={allowedTeamIds}
-                  onSuggestionSelected={handleTeamSuggestionSelection}
-                  onManualChange={() => setSelectedTeamId(null)}
-                />
+                {identityMode === 'manual' ? manualTeamField('Team') : (
+                  <ParticipantAutocompleteField
+                    form={form}
+                    name="team"
+                    label="Team"
+                    placeholder="Type a team name"
+                    searchType="team"
+                    eventId={selectedMatchupId}
+                    sport={selectedSport}
+                    allowedParticipantIds={allowedMarketTeamIds}
+                    onSuggestionSelected={handleTeamSuggestionSelection}
+                    onManualChange={() => setSelectedTeamId(null)}
+                    disabledOverride={structuredSideIds.size < 2}
+                  />
+                )}
                 <FormField
                   control={form.control}
                   name="direction"
@@ -3590,13 +3770,14 @@ export function BetForm({
                   <FormItem>
                     <FormLabel>Team Total</FormLabel>
                     <FormControl>
-                      <Input
-                        type="number"
+                      <SignedNumberInput
                         step="0.5"
                         placeholder="e.g. 112.5"
-                        {...field}
+                        name={field.name}
+                        ref={field.ref}
+                        onBlur={field.onBlur}
                         value={field.value ?? ''}
-                        onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        onValueChange={field.onChange}
                       />
                     </FormControl>
                     <FormMessage />
@@ -3758,43 +3939,33 @@ export function BetForm({
                         <p className="text-sm font-semibold text-foreground">
                           {!isTeamSport
                             ? 'Manual event identity'
-                            : manualIdentityOverride
+                            : identityMode === 'manual'
                               ? 'Manual participant override'
-                              : 'Build canonical matchup'}
+                              : 'Build matchup from teams'}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {!isTeamSport
                             ? `${selectedSport} does not use canonical home/away roles here. Event and participant text is explicitly stored as unresolved manual provenance.`
-                            : manualIdentityOverride
+                            : identityMode === 'manual'
                             ? 'Manual identities are explicitly tagged unresolved and never stored as canonical IDs.'
-                            : 'Select Away Team and Home Team from sport-filtered canonical records. The matchup name is derived for you.'}
+                            : 'Select a matchup, or build one from away and home teams — the matchup name is generated automatically.'}
                         </p>
                       </div>
-                      {isTeamSport ? <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => {
-                          const next = !manualIdentityOverride;
-                          setManualIdentityOverride(next);
-                          setAwayParticipantId(null);
-                          setHomeParticipantId(null);
-                          setSelectedTeamId(null);
-                          setSelectedPlayerId(null);
-                          setSelectedOfferParticipantId(null);
-                          setSelectedOffer(null);
-                          form.setValue('awayParticipantName', '');
-                          form.setValue('homeParticipantName', '');
-                          form.setValue('eventName', '');
-                          form.setValue('team', '');
-                          form.setValue('playerName', '');
-                          form.setValue('statType', '');
-                          form.resetField('direction');
-                          form.resetField('line');
-                          form.resetField('odds');
-                        }}
-                      >
-                        {manualIdentityOverride ? 'Use canonical search' : "Can't find participants? Add manually"}
-                      </Button> : null}
+                      {isTeamSport && identityMode === 'manual' ? (
+                        <Button type="button" variant="outline" onClick={retryStructuredIdentitySearch}>
+                          Retry canonical search
+                        </Button>
+                      ) : null}
+                      {isTeamSport && canUseManualIdentity ? (
+                        <Button
+                          data-testid="coverage-gap-manual-entry"
+                          type="button"
+                          variant="outline"
+                          onClick={enterManualIdentityMode}
+                        >
+                          No teams found? Enter both manually
+                        </Button>
+                      ) : null}
                     </div>
 
                     {isTeamSport && referenceAvailabilityError ? (
@@ -3808,7 +3979,7 @@ export function BetForm({
                       </div>
                     ) : null}
 
-                    {isTeamSport && !manualIdentityOverride ? (
+                    {isTeamSport && identityMode === 'structured-fallback' ? (
                       <div className="grid gap-4 sm:grid-cols-2">
                         <ParticipantAutocompleteField
                           form={form}
@@ -3819,7 +3990,8 @@ export function BetForm({
                           sport={selectedSport ?? ''}
                           datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
                           onSuggestionSelected={(suggestion) => applyStructuredSideSelection('away', suggestion)}
-                          onManualChange={() => setAwayParticipantId(null)}
+                          onManualChange={() => handleStructuredSideChange('away')}
+                          onResolutionStateChange={setAwaySearchResolution}
                         />
                         <ParticipantAutocompleteField
                           form={form}
@@ -3830,7 +4002,8 @@ export function BetForm({
                           sport={selectedSport ?? ''}
                           datasetAvailable={referenceAvailability?.teamsAvailable ?? null}
                           onSuggestionSelected={(suggestion) => applyStructuredSideSelection('home', suggestion)}
-                          onManualChange={() => setHomeParticipantId(null)}
+                          onManualChange={() => handleStructuredSideChange('home')}
+                          onResolutionStateChange={setHomeSearchResolution}
                         />
                         {watchedValues.eventName ? (
                           <div className="sm:col-span-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
@@ -3848,7 +4021,14 @@ export function BetForm({
                             <FormItem>
                               <FormLabel>Away Team</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter unresolved away team" {...field} />
+                                <Input
+                                  placeholder="Enter unresolved away team"
+                                  {...field}
+                                  onChange={(event) => {
+                                    field.onChange(event.target.value);
+                                    handleManualSideChange('away', event.target.value);
+                                  }}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -3861,12 +4041,25 @@ export function BetForm({
                             <FormItem>
                               <FormLabel>Home Team</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter unresolved home team" {...field} />
+                                <Input
+                                  placeholder="Enter unresolved home team"
+                                  {...field}
+                                  onChange={(event) => {
+                                    field.onChange(event.target.value);
+                                    handleManualSideChange('home', event.target.value);
+                                  }}
+                                />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
                           )}
                         />
+                        {watchedValues.eventName ? (
+                          <div className="sm:col-span-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Derived matchup</p>
+                            <p className="font-medium text-foreground">{watchedValues.eventName}</p>
+                          </div>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground">
@@ -3917,26 +4110,18 @@ export function BetForm({
                       <FormItem>
                         <FormLabel>Odds</FormLabel>
                         <FormControl>
-                          <Input
-                            type="text"
-                            inputMode="numeric"
+                          <SignedNumberInput
+                            integerOnly
                             placeholder="e.g. -110"
-                            {...field}
+                            name={field.name}
+                            ref={field.ref}
+                            onBlur={field.onBlur}
                             value={
                               typeof field.value === 'number' && field.value > 0
                                 ? `+${field.value}`
                                 : (field.value ?? '')
                             }
-                            onChange={(event) => {
-                              const raw = event.target.value;
-                              // Allow typing "-" or "+" prefix mid-entry without clearing
-                              if (raw === '' || raw === '-' || raw === '+') {
-                                field.onChange(raw === '' ? undefined : raw as unknown as number);
-                                return;
-                              }
-                              const n = Number(raw);
-                              field.onChange(Number.isNaN(n) ? field.value : n);
-                            }}
+                            onValueChange={field.onChange}
                           />
                         </FormControl>
                         <FormMessage />
