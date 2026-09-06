@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "e4dcb59eef2fd80a5dfaa0174cc0fdbc88c55be2",
     "verified_source_sha": "0f78f3284bba06fd672f0d04fa9dec24c5d05f4f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,9 +16,9 @@
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage passed — ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test, the smart-form filter and verify:commands. The run then reached `test:live-db` -> `test:db` -> `ci:assert-staging`, which REFUSED with `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` because writable DB verification may only run inside the staging-ci GitHub environment. `pnpm verify` therefore cannot exit 0 on a developer machine — a structural property of the guard, not of this diff. No local PASS is claimed. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
       "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts, their tests, and docs only; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "anchor_note": "0f78f3284bba06fd672f0d04fa9dec24c5d05f4f is the last non-proof commit on the branch. Everything after it touches only docs/06_status/proof/UTV2-1840/ and docs/06_status/lanes/UTV2-1840.json, which are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
-    "bound_at": "2026-09-06T05:44:16.000Z"
+    "bound_at": "2026-09-06T06:40:31.985Z"
   },
   "static_proof": {
     "status": "PASS",

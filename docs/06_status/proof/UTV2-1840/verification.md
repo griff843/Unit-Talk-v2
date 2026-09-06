@@ -1,6 +1,6 @@
 # PROOF: UTV2-1840
 
-MERGE_SHA: pending merge
+MERGE_SHA: e4dcb59eef2fd80a5dfaa0174cc0fdbc88c55be2
 Execution SHA: 0f78f3284bba06fd672f0d04fa9dec24c5d05f4f
 
 Derive branch-discipline identifiers from one shared namespace list, so a repo-minted `WORK-###`
@@ -8,7 +8,7 @@ work identity can open a lane without a tracker.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: e4dcb59eef2fd80a5dfaa0174cc0fdbc88c55be2
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1518
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
