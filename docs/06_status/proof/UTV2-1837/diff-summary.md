@@ -1,6 +1,6 @@
 # UTV2-1837 — Diff Summary
 
-MERGE_SHA: pending merge
+MERGE_SHA: cd437673d10da54ecdc4e89756d10c027955981b
 
 19 files changed, +1397 / -91 (measured `git diff --stat origin/main`).
 

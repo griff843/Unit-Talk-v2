@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1837-tracker-independence",
   "branch": "claude/utv2-1837-tracker-independence",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "cd437673d10da54ecdc4e89756d10c027955981b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1516",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,22 @@
     "docs/06_status/proof/UTV2-1837/evidence.json",
     "docs/06_status/proof/UTV2-1837/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-06T01:37:06.343Z",
-  "heartbeat_at": "2026-09-06T02:11:42.808Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-06T03:22:27.574Z",
+  "closed_at": "2026-09-06T03:22:27.574Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1837-tracker-independence.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-06T03:22:25.255Z",
+      "verdict": "pass",
+      "merge_sha": "cd437673d10da54ecdc4e89756d10c027955981b",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

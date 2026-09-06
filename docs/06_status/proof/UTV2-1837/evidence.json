@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "cd437673d10da54ecdc4e89756d10c027955981b",
     "verified_source_sha": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,15 +16,29 @@
       "pnpm_verify": "set-by-ci — not obtainable locally. `verify` is `pnpm verify:static && pnpm test:live-db`; the local run reached test:live-db, which mechanically establishes verify:static exited 0, then refused with '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)'. That stage refuses a non-staging target by design. The required `verify` check on this PR at this head is the authoritative result.",
       "r_level_check": "PASS — run inside `pnpm verify`; no R-level artifact beyond the diff summary and verification log is required for this diff, and none is claimed."
     },
-    "sha_type": "source_sha",
+    "sha_type": "merge_sha",
     "anchor_note": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c is the last commit on the branch that is not proof-only — the candidate-source repair made after the first CI run. The proof commit that follows is inside PROOF_ONLY_PREFIXES and does not move the anchor.",
-    "bound_at": "2026-09-06T02:10:50.000Z"
+    "bound_at": "2026-09-06T03:22:24.123Z"
   },
   "static_proof": {
     "status": "PASS",
-    "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "tsc -b tsconfig.json, exit 0, no diagnostics" },
-    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "eslint . --cache, exit 0, no findings" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5941, "failures": 0, "detail": "exit 0; totals summed across the per-package TAP outputs" },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "tsc -b tsconfig.json, exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "eslint . --cache, exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5941,
+      "failures": 0,
+      "detail": "exit 0; totals summed across the per-package TAP outputs"
+    },
     "targeted_test": {
       "status": "PASS",
       "command": "pnpm exec tsx --test scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close,lane-finalize}.test.ts",
