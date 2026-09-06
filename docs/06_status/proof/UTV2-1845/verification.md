@@ -1,7 +1,7 @@
 # PROOF: UTV2-1845 — classify the containment placeholder distinctly in preflight PT1
 
 MERGE_SHA: pending merge
-Execution SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
+Execution SHA: 8a64a33158aa35197a62868a40c161657a6e75fa
 
 Preflight PT1 reported a deliberate, documented containment state as an infrastructure fault, which
 made every T1 lane unopenable on a contained workstation. This lane corrects the classification and
@@ -11,12 +11,26 @@ does not change what any lane is admitted without.
 
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1522
-Verified source SHA: b7274edd3b1665a5074c4edd176d87d0790063b4
+Verified source SHA: 8a64a33158aa35197a62868a40c161657a6e75fa
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
-`b7274edd3b1665a5074c4edd176d87d0790063b4`, the last commit on this branch changing any file outside
+`8a64a33158aa35197a62868a40c161657a6e75fa`, the last commit on this branch changing any file outside
 `docs/06_status/proof/UTV2-1845/`. The binding is written after merge by
 `ops:proof-generate --merge-sha`; no manual append is made here.
+
+**The anchor moved once, and it is worth saying why rather than leaving it as a bare SHA change.**
+The anchor was `b7274edd3b1665a5074c4edd176d87d0790063b4` until this branch was resynced onto
+`origin/main` to satisfy strict branch-protection freshness rather than merge while `BEHIND`. Rule 4
+of `scripts/ci/proof-binding-validator.ts` is a two-dot `git diff verified_source_sha..HEAD`
+(`:129-135`, `:267`), so the resync's own content — `docs/06_status/readiness/readiness-score.json`,
+which is not one of `PROOF_ONLY_PREFIXES` — enters that diff and makes the old anchor invalid. It
+could not be preserved by rewording the anchor note, so it was not.
+
+**Every receipt in "Commands run" below was re-executed at `8a64a3315`**, not carried forward from
+the previous anchor. The counts are identical to the ones taken at `b7274edd3` because the resync
+merged one generated ledger file and changed no source, test or configuration — which is a
+statement about what the merge contained, verified by `git diff`, not an assumption that a rerun
+would agree.
 
 ## ASSERTIONS:
 

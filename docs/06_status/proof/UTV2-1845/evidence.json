@@ -7,7 +7,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "b7274edd3b1665a5074c4edd176d87d0790063b4",
+    "verified_source_sha": "8a64a33158aa35197a62868a40c161657a6e75fa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -17,14 +17,28 @@
       "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts and one document; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "b7274edd3b1665a5074c4edd176d87d0790063b4 is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1845/. It carries the test correction made after CI disagreed with the original assertion. Commits after it are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
-    "bound_at": "2026-09-06T19:45:00.000Z"
+    "anchor_note": "8a64a33158aa35197a62868a40c161657a6e75fa is the merge of origin/main into this branch, taken to satisfy the strict-freshness requirement rather than merge BEHIND. It is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1845/, and it is the anchor because rule 4 of the proof-binding validator is a two-dot `git diff verified_source_sha..HEAD`: the resync carries docs/06_status/readiness/readiness-score.json, which is not a PROOF_ONLY_PREFIX, so the previous anchor b7274edd3b1665a5074c4edd176d87d0790063b4 could not be kept by argument. Every receipt below was re-executed at this commit rather than carried forward; the counts are unchanged from the previous anchor because the merge changed one generated ledger file and no code or test. Commits after this one are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T20:35:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
-    "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "exit 0, no diagnostics" },
-    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "exit 0, no findings" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5969, "failures": 0, "detail": "tests 5969, pass 5969, fail 0, exit 0" },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5969,
+      "failures": 0,
+      "detail": "tests 5969, pass 5969, fail 0, exit 0"
+    },
     "targeted_test": {
       "status": "PASS",
       "command": "pnpm exec tsx --test scripts/ops/preflight.test.ts",
