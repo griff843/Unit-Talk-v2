@@ -254,7 +254,11 @@ export interface MachineResult<T> {
 
 export interface CheckResult {
   id: string;
-  status: 'pass' | 'fail' | 'skip' | 'waived' | 'infra_error';
+  // UTV2-1845: `blocked_by_containment` is neither an infrastructure fault nor a policy
+  // refusal -- it is a check that cannot run because containment deliberately withholds its
+  // input. It resolves to the same verdict as `infra_error` today; the separation exists so a
+  // deliberate policy state stops being reported as a broken dependency.
+  status: 'pass' | 'fail' | 'skip' | 'waived' | 'infra_error' | 'blocked_by_containment';
   detail: string;
 }
 
