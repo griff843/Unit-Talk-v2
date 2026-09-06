@@ -11,7 +11,7 @@ Tier: T2
 Lane type: governance
 Branch: claude/utv2-1837-tracker-independence
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1516
-Execution SHA: 4873899a72f0ac6235ef18af5b82db7ff5fcff86
+Execution SHA: 5ffc0a688b3f1d3a5045faa9d703292c525e6d1c
 result: static
 
 ## ASSERTIONS:
@@ -63,7 +63,7 @@ authority is untouched.
 7 mutation controls, each turning its owning suite red and reverted byte-for-byte.
 Details in the sections below.
 
-Source anchor (`sha_binding.verified_source_sha`): `4873899a72f0ac6235ef18af5b82db7ff5fcff86`
+Source anchor (`sha_binding.verified_source_sha`): `5ffc0a688b3f1d3a5045faa9d703292c525e6d1c`
 
 ## What this lane changes
 
@@ -177,6 +177,6 @@ artifacts for this lane are the diff summary and this verification log, both pre
 
 Merge SHA: pending merge
 
-`sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `4873899a72f0ac6235ef18af5b82db7ff5fcff86`,
+`sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `5ffc0a688b3f1d3a5045faa9d703292c525e6d1c`,
 the last non-proof commit on the branch. The binding is written after merge by
 `ops:proof-generate --merge-sha`; no manual append is made here.
