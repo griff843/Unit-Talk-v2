@@ -14,6 +14,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { evaluateCarryForward } from './approval-carry-forward.ts';
 import { AUTHORIZED_REVIEWERS, collect } from './carry-forward-collect.ts';
 
 const HEAD = 'a'.repeat(40);
@@ -296,4 +297,395 @@ test('a previously posted receipt is never read back as evidence', () => {
   const r = call(h);
   assert.equal(r.ok, false, 'a receipt must never substitute for the approval it describes');
   assert.match((r as { reason: string }).reason, /no pm-verdict\/v1 APPROVED comment/);
+});
+
+// ---------------------------------------------------------------------------
+// Withdrawal semantics (UTV2-1839)
+//
+// Both of these fail OPEN when got wrong: the collector reports no withdrawal,
+// the verifier's C4 passes, and a live objection is carried straight past.
+// ---------------------------------------------------------------------------
+
+const APPROVED_AT = '2026-09-05T16:00:00Z';
+
+function withdrawalHarness(over: { comments?: unknown[]; reviews?: unknown[] }) {
+  return harness({
+    comments: [ok(approvalBody(), { at: APPROVED_AT }), ...(over.comments ?? [])],
+    reviews: over.reviews ?? [],
+    checkRuns: [
+      { name: 'verify', status: 'completed', conclusion: 'success' },
+      { name: 'Executor Result Validation', status: 'completed', conclusion: 'success' },
+      { name: 'P0 Protocol', status: 'completed', conclusion: 'success' },
+    ],
+  });
+}
+
+test('a comment created before the approval but EDITED after it counts as a withdrawal', () => {
+  const { gh, git } = withdrawalHarness({
+    comments: [
+      {
+        body: approvalBody({ verdict: 'CHANGES_REQUIRED' }),
+        created_at: '2026-09-05T15:00:00Z',
+        updated_at: '2026-09-05T17:00:00Z',
+        html_url: 'https://example.invalid/c/edited',
+        user: { login: 'griff843', type: 'User' },
+      },
+    ],
+  });
+  const result = collect({ prNumber: 1503, issueId: 'UTV2-1812', gh, git });
+  assert.equal(result.ok, true);
+  const w = (result as { inputs: { withdrawals: { detail: string; createdAt: string }[] } }).inputs.withdrawals;
+  assert.equal(w.length, 1);
+  assert.match(w[0].detail, /comment edited after the approval; created 2026-09-05T15:00:00Z/);
+  // The recorded time must be the edit, not the creation, or C4's
+  // "after the approval" comparison silently drops it again.
+  assert.equal(w[0].createdAt, '2026-09-05T17:00:00Z');
+});
+
+test('a comment created AND edited before the approval is still not a withdrawal', () => {
+  const { gh, git } = withdrawalHarness({
+    comments: [
+      {
+        body: approvalBody({ verdict: 'CHANGES_REQUIRED' }),
+        created_at: '2026-09-05T14:00:00Z',
+        updated_at: '2026-09-05T15:00:00Z',
+        html_url: 'https://example.invalid/c/old',
+        user: { login: 'griff843', type: 'User' },
+      },
+    ],
+  });
+  const result = collect({ prNumber: 1503, issueId: 'UTV2-1812', gh, git });
+  assert.deepEqual((result as { inputs: { withdrawals: unknown[] } }).inputs.withdrawals, []);
+});
+
+test('a DISMISSED review counts as a withdrawal — dismissal must not erase an objection', () => {
+  // GitHub replaces a CHANGES_REQUESTED review's state with DISMISSED when it
+  // is dismissed, so filtering on CHANGES_REQUESTED alone lets anyone with
+  // write access make a standing objection disappear.
+  const { gh, git } = withdrawalHarness({
+    reviews: [
+      {
+        state: 'DISMISSED',
+        submitted_at: '2026-09-05T18:00:00Z',
+        html_url: 'https://example.invalid/r/1',
+        user: { login: 'griff843', type: 'User' },
+      },
+    ],
+  });
+  const result = collect({ prNumber: 1503, issueId: 'UTV2-1812', gh, git });
+  const w = (result as { inputs: { withdrawals: { detail: string; source: string }[] } }).inputs.withdrawals;
+  assert.equal(w.length, 1);
+  assert.equal(w[0].source, 'github-review');
+  assert.match(w[0].detail, /review dismissed/);
+});
+
+test('an APPROVED or COMMENTED review is not a withdrawal', () => {
+  const { gh, git } = withdrawalHarness({
+    reviews: [
+      { state: 'APPROVED', submitted_at: '2026-09-05T18:00:00Z', html_url: 'https://example.invalid/r/2', user: { login: 'griff843', type: 'User' } },
+      { state: 'COMMENTED', submitted_at: '2026-09-05T19:00:00Z', html_url: 'https://example.invalid/r/3', user: { login: 'griff843', type: 'User' } },
+    ],
+  });
+  const result = collect({ prNumber: 1503, issueId: 'UTV2-1812', gh, git });
+  assert.deepEqual((result as { inputs: { withdrawals: unknown[] } }).inputs.withdrawals, []);
+});
+
+test('a DISMISSED review from a login that is not a CODEOWNER is ignored', () => {
+  const { gh, git } = withdrawalHarness({
+    reviews: [
+      { state: 'DISMISSED', submitted_at: '2026-09-05T18:00:00Z', html_url: 'https://example.invalid/r/4', user: { login: 'someone-else', type: 'User' } },
+    ],
+  });
+  const result = collect({ prNumber: 1503, issueId: 'UTV2-1812', gh, git });
+  assert.deepEqual((result as { inputs: { withdrawals: unknown[] } }).inputs.withdrawals, []);
+  assert.equal(AUTHORIZED_REVIEWERS.has('someone-else'), false);
+});
+
+// ---------------------------------------------------------------------------
+// Real-git integration (UTV2-1839)
+//
+// Everything above drives a fake `git`, which proves the collector's trust
+// rules but proves nothing about whether the commands it issues mean what the
+// conditions assume. These build an actual repository and run the real git
+// binary against it, so `diff-tree --cc`, `rev-parse <ref>:<path>`,
+// `rev-list --not` and `patch-id --stable` are exercised as themselves.
+// ---------------------------------------------------------------------------
+
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
+interface Repo {
+  root: string;
+  git: (args: string[]) => string;
+  gitWithInput: (args: string[], input: string) => string;
+  write: (path: string, body: string) => void;
+  commit: (message: string) => string;
+  cleanup: () => void;
+}
+
+function buildRepo(): Repo {
+  const root = mkdtempSync(join(tmpdir(), 'cf-git-'));
+  const origin = join(root, 'origin.git');
+  const work = join(root, 'work');
+  const raw = (cwd: string, args: string[], input?: string): string =>
+    execFileSync('git', args, { cwd, encoding: 'utf8', input, env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' } });
+
+  raw(root, ['init', '--quiet', '--bare', '--initial-branch=main', origin]);
+  raw(root, ['clone', '--quiet', origin, work]);
+  for (const [k, v] of [['user.email', 'test@example.invalid'], ['user.name', 'Test'], ['commit.gpgsign', 'false']]) {
+    raw(work, ['config', k, v]);
+  }
+
+  return {
+    root,
+    git: (args) => raw(work, args),
+    gitWithInput: (args, input) => raw(work, args, input),
+    write: (path, body) => {
+      mkdirSync(dirname(join(work, path)), { recursive: true });
+      writeFileSync(join(work, path), body);
+    },
+    commit: (message) => {
+      raw(work, ['add', '-A']);
+      raw(work, ['commit', '--quiet', '-m', message]);
+      return raw(work, ['rev-parse', 'HEAD']).trim();
+    },
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+/** A `gh` that answers only what `collect` asks, for a given head and approval. */
+function ghFor(headSha: string, approvedSha: string) {
+  return (args: string[]): string => {
+    const url = args[args.length - 1];
+    if (url.includes('/pulls/') && url.includes('/reviews')) return '[]';
+    if (url.includes('/pulls/')) {
+      return JSON.stringify({ head: { sha: headSha }, base: { ref: 'main' }, state: 'open' });
+    }
+    if (url.includes('/comments')) {
+      return JSON.stringify([
+        {
+          body: approvalBody({ head: approvedSha }),
+          created_at: APPROVED_AT,
+          html_url: 'https://example.invalid/c/1',
+          user: { login: 'griff843', type: 'User' },
+        },
+      ]);
+    }
+    if (url.includes('check-runs')) {
+      return JSON.stringify({
+        check_runs: [
+          { name: 'verify', status: 'completed', conclusion: 'success' },
+          { name: 'Executor Result Validation', status: 'completed', conclusion: 'success' },
+          { name: 'P0 Protocol', status: 'completed', conclusion: 'success' },
+        ],
+      });
+    }
+    throw new Error(`unexpected gh call: ${args.join(' ')}`);
+  };
+}
+
+test('real git: a clean sync from main is admitted, with the anchor and patch-id measured from real objects', () => {
+  const repo = buildRepo();
+  try {
+    repo.write('app.ts', 'export const v = 1;\n');
+    repo.write('docs/06_status/lanes/UTV2-1001.json', '{"a":1}\n');
+    repo.commit('base');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', '-b', 'feature']);
+    repo.write('app.ts', 'export const v = 2;\n');
+    const approvedSha = repo.commit('the reviewed work');
+
+    repo.git(['checkout', '--quiet', 'main']);
+    repo.write('docs/06_status/lanes/UTV2-1002.json', '{"another":"lane"}\n');
+    repo.commit('another lane closes');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', 'feature']);
+    repo.git(['merge', '--quiet', '--no-ff', '-m', "Merge remote-tracking branch 'origin/main'", 'main']);
+    const headSha = repo.git(['rev-parse', 'HEAD']).trim();
+
+    const out = collect({
+      prNumber: 1503,
+      issueId: 'UTV2-1812',
+      gh: ghFor(headSha, approvedSha),
+      git: repo.git,
+      gitWithInput: repo.gitWithInput,
+    });
+    assert.equal(out.ok, true);
+    const inputs = (out as { inputs: import('./approval-carry-forward.ts').CarryForwardInputs }).inputs;
+
+    assert.deepEqual(inputs.changedPaths, ['docs/06_status/lanes/UTV2-1002.json']);
+    assert.deepEqual(inputs.mergeOwnContent, [{ sha: headSha, paths: [] }]);
+    assert.equal(inputs.mainAnchorIsOnMain, true);
+    assert.equal(inputs.mainAnchorSha, repo.git(['rev-parse', 'origin/main']).trim());
+    // Blob identity is read from real objects, and the incoming path is main's.
+    assert.equal(inputs.blobIdentity.length, 1);
+    assert.equal(inputs.blobIdentity[0].atHead, inputs.blobIdentity[0].atMain);
+    assert.notEqual(inputs.blobIdentity[0].atHead, null);
+    // Only the merge itself is off main.
+    assert.deepEqual(inputs.commitsNotOnMain, [headSha]);
+    // The PR's own contribution to its base is unchanged across the sync.
+    assert.equal(inputs.prDiffPatchId.atApproved, inputs.prDiffPatchId.atHead);
+    assert.match(String(inputs.prDiffPatchId.atHead), /^[0-9a-f]{40}$/);
+
+    assert.equal(evaluateCarryForward(inputs).verdict, 'VERIFIED');
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('real git: an evil merge on the branch is caught by both C5 and C6', () => {
+  const repo = buildRepo();
+  try {
+    repo.write('app.ts', 'export const v = 1;\n');
+    repo.commit('base');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', '-b', 'feature']);
+    repo.write('app.ts', 'export const v = 2;\n');
+    const approvedSha = repo.commit('the reviewed work');
+
+    repo.git(['checkout', '--quiet', 'main']);
+    repo.write('docs/06_status/lanes/UTV2-1002.json', '{"another":"lane"}\n');
+    repo.commit('another lane closes');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    // The merge itself carries content that is in neither parent. Git records
+    // it without complaint, and no two-parent diff shows it.
+    repo.git(['checkout', '--quiet', 'feature']);
+    repo.git(['merge', '--quiet', '--no-commit', '--no-ff', 'main']);
+    repo.write('docs/06_status/lanes/UTV2-1002.json', '{"another":"lane","smuggled":true}\n');
+    repo.git(['add', '-A']);
+    repo.git(['commit', '--quiet', '-m', "Merge remote-tracking branch 'origin/main'"]);
+    const headSha = repo.git(['rev-parse', 'HEAD']).trim();
+
+    const out = collect({
+      prNumber: 1503,
+      issueId: 'UTV2-1812',
+      gh: ghFor(headSha, approvedSha),
+      git: repo.git,
+      gitWithInput: repo.gitWithInput,
+    });
+    const inputs = (out as { inputs: import('./approval-carry-forward.ts').CarryForwardInputs }).inputs;
+
+    // Neither parent-to-merge diff reveals it; `--cc` does.
+    assert.deepEqual(inputs.mergeOwnContent, [
+      { sha: headSha, paths: ['docs/06_status/lanes/UTV2-1002.json'] },
+    ]);
+    assert.notEqual(inputs.blobIdentity[0].atHead, inputs.blobIdentity[0].atMain);
+
+    const result = evaluateCarryForward(inputs);
+    assert.equal(result.verdict, 'REFUSED');
+    assert.equal(result.conditions.find((c) => c.id === 'C5')?.status, 'fail');
+    assert.equal(result.conditions.find((c) => c.id === 'C6')?.status, 'fail');
+    // And the conditions that existed before this lane do not see it at all.
+    for (const id of ['C1', 'C2', 'C3', 'C4'] as const) {
+      assert.equal(
+        result.conditions.find((c) => c.id === id)?.status,
+        'pass',
+        `${id} unexpectedly caught the evil merge`,
+      );
+    }
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('real git: a commit smuggled in through a merged side branch is caught by the widened C1', () => {
+  const repo = buildRepo();
+  try {
+    repo.write('app.ts', 'export const v = 1;\n');
+    repo.commit('base');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', '-b', 'feature']);
+    repo.write('app.ts', 'export const v = 2;\n');
+    const approvedSha = repo.commit('the reviewed work');
+
+    // A side branch that never reaches main.
+    repo.git(['checkout', '--quiet', '-b', 'side', 'main']);
+    repo.write('packages/db/src/sneaky.ts', 'export const owned = true;\n');
+    const smuggled = repo.commit('unreviewed change on a side branch');
+
+    repo.git(['checkout', '--quiet', 'feature']);
+    repo.git(['merge', '--quiet', '--no-ff', '-m', 'Merge side', 'side']);
+    const headSha = repo.git(['rev-parse', 'HEAD']).trim();
+
+    const out = collect({
+      prNumber: 1503,
+      issueId: 'UTV2-1812',
+      gh: ghFor(headSha, approvedSha),
+      git: repo.git,
+      gitWithInput: repo.gitWithInput,
+    });
+    const inputs = (out as { inputs: import('./approval-carry-forward.ts').CarryForwardInputs }).inputs;
+
+    assert.ok(inputs.commitsNotOnMain.includes(smuggled), 'the smuggled commit is off main');
+    const result = evaluateCarryForward(inputs);
+    assert.equal(result.verdict, 'REFUSED');
+    assert.equal(result.conditions.find((c) => c.id === 'C1')?.status, 'fail');
+  } finally {
+    repo.cleanup();
+  }
+});
+
+test('real git: an octopus merge whose third parent is off main is caught by the widened C1', () => {
+  // The premise the widening was written against — "a merge whose second parent
+  // is on main can still carry, through THAT parent's ancestry, commits main
+  // does not have" — is false for a two-parent merge: if the second parent is
+  // an ancestor of main, so is everything reachable from it. What is genuinely
+  // reachable, and was genuinely unchecked, is a merge with THREE or more
+  // parents: the pre-UTV2-1839 code inspected `parents[1]` and nothing beyond.
+  const repo = buildRepo();
+  try {
+    repo.write('app.ts', 'export const v = 1;\n');
+    repo.commit('base');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', '-b', 'feature']);
+    repo.write('app.ts', 'export const v = 2;\n');
+    const approvedSha = repo.commit('the reviewed work');
+
+    repo.git(['checkout', '--quiet', '-b', 'side', 'main']);
+    repo.write('packages/db/src/sneaky.ts', 'export const owned = true;\n');
+    const smuggled = repo.commit('unreviewed change on a side branch');
+
+    repo.git(['checkout', '--quiet', 'main']);
+    repo.write('docs/06_status/lanes/UTV2-1002.json', '{"a":1}\n');
+    repo.commit('another lane closes');
+    repo.git(['push', '--quiet', 'origin', 'main']);
+
+    repo.git(['checkout', '--quiet', 'feature']);
+    repo.git(['merge', '--quiet', '--no-ff', '-m', 'Merge branches main and side', 'main', 'side']);
+    const headSha = repo.git(['rev-parse', 'HEAD']).trim();
+
+    const out = collect({
+      prNumber: 1503,
+      issueId: 'UTV2-1812',
+      gh: ghFor(headSha, approvedSha),
+      git: repo.git,
+      gitWithInput: repo.gitWithInput,
+    });
+    const inputs = (out as { inputs: import('./approval-carry-forward.ts').CarryForwardInputs }).inputs;
+
+    // Three parents, and the SECOND one is on main — so the pre-UTV2-1839
+    // check would have looked at exactly the innocent one and stopped.
+    assert.equal(inputs.firstParentChain.length, 1);
+    assert.equal(inputs.firstParentChain[0].parents.length, 3);
+    assert.equal(inputs.isAncestorOfMain(inputs.firstParentChain[0].parents[1]), true);
+    assert.equal(inputs.firstParentChain[0].parents[2], smuggled);
+    assert.equal(inputs.isAncestorOfMain(smuggled), false);
+
+    const result = evaluateCarryForward(inputs);
+    assert.equal(result.verdict, 'REFUSED');
+    const c1 = result.conditions.find((c) => c.id === 'C1');
+    assert.equal(c1?.status, 'fail');
+    assert.match(String(c1?.detail), /merged parent\(s\) not on origin\/main/);
+    assert.match(String(c1?.detail), new RegExp(smuggled.slice(0, 9)));
+  } finally {
+    repo.cleanup();
+  }
 });

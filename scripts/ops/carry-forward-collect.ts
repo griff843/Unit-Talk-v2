@@ -31,7 +31,9 @@ import {
   renderReceipt,
   type CarryForwardInputs,
   type CarryForwardResult,
+  type BlobIdentity,
   type ChainCommit,
+  type MergeOwnContent,
   type RequiredCheck,
   type WithdrawalSignal,
 } from './approval-carry-forward.ts';
@@ -61,12 +63,16 @@ export interface CollectOptions {
   /** Injected in tests; defaults to the real `gh` and `git`. */
   gh?: (args: string[]) => string;
   git?: (args: string[]) => string;
+  /** `git` invoked with stdin — only `patch-id` needs it. */
+  gitWithInput?: (args: string[], input: string) => string;
 }
 
 const realGh = (args: string[]): string =>
   execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const realGit = (args: string[]): string =>
   execFileSync('git', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+const realGitWithInput = (args: string[], input: string): string =>
+  execFileSync('git', args, { encoding: 'utf8', input, maxBuffer: 64 * 1024 * 1024 });
 
 export interface CollectionFailure {
   ok: false;
@@ -84,6 +90,9 @@ export interface Collection {
 export function collect(opts: CollectOptions): Collection | CollectionFailure {
   const gh = opts.gh ?? realGh;
   const git = opts.git ?? realGit;
+  const gitWithInput =
+    opts.gitWithInput ??
+    (opts.git ? (args: string[], _input: string) => opts.git!(args) : realGitWithInput);
 
   const pr = JSON.parse(gh(['api', `repos/{owner}/{repo}/pulls/${opts.prNumber}`])) as {
     head: { sha: string };
@@ -101,7 +110,13 @@ export function collect(opts: CollectOptions): Collection | CollectionFailure {
   // ── The surviving approval ───────────────────────────────────────────────
   const comments = JSON.parse(
     gh(['api', '--paginate', `repos/{owner}/{repo}/issues/${opts.prNumber}/comments`]),
-  ) as { body: string; created_at: string; html_url: string; user?: { login?: string; type?: string } }[];
+  ) as {
+    body: string;
+    created_at: string;
+    updated_at?: string;
+    html_url: string;
+    user?: { login?: string; type?: string };
+  }[];
 
   const authorized = comments.filter(
     (c) => c.user?.type === 'User' && AUTHORIZED_REVIEWERS.has(c.user?.login ?? ''),
@@ -166,6 +181,85 @@ export function collect(opts: CollectOptions): Collection | CollectionFailure {
     ? git(['diff', '--name-only', approvedSha, headSha]).split('\n').filter(Boolean)
     : [];
 
+  // ── C5: what each merge introduced that no parent had ────────────────────
+  // `--cc` prints the merge SHA as a header line and then only the paths whose
+  // result differs from every parent. Dropping the header is the whole parse;
+  // anything left is content nobody reviewed on either side.
+  const mergeOwnContent: MergeOwnContent[] = firstParentChain
+    .filter((c) => c.parents.length >= 2)
+    .map((c) => {
+      const lines = git(['diff-tree', '--cc', '-r', '--name-only', c.sha])
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .filter((l) => l !== c.sha);
+      return { sha: c.sha, paths: lines };
+    });
+
+  // ── C6: the anchor the incoming content is compared against ──────────────
+  // The base branch tip moves on its own (the readiness ledger writes to it on
+  // a schedule), so comparing against the tip would refuse a correctly synced
+  // branch for commits it has never seen. The right comparand is the newest
+  // commit of the base branch the head actually contains — which is a commit
+  // ON that branch, so "identical to the anchor" is still "identical to main".
+  let mainAnchorSha = '';
+  try {
+    mainAnchorSha = git(['merge-base', headSha, `origin/${pr.base.ref}`]).trim();
+  } catch {
+    mainAnchorSha = '';
+  }
+  const mainAnchorIsOnMain =
+    mainAnchorSha !== '' && isAncestor(mainAnchorSha, `origin/${pr.base.ref}`);
+
+  const blobAt = (ref: string, path: string): string | null => {
+    try {
+      return git(['rev-parse', `${ref}:${path}`]).trim() || null;
+    } catch {
+      // The path does not exist at that ref. Absent is a real answer here, and
+      // C6 treats absent-on-both-sides as identical.
+      return null;
+    }
+  };
+  const blobIdentity: BlobIdentity[] = mainAnchorIsOnMain
+    ? changedPaths.map((path) => ({
+        path,
+        atHead: blobAt(headSha, path),
+        atMain: blobAt(mainAnchorSha, path),
+      }))
+    : [];
+
+  // ── C1 (widened): everything the head gained that the base does not have ──
+  const commitsNotOnMain = approvedShaIsAncestor
+    ? git([
+        'rev-list',
+        `${approvedSha}..${headSha}`,
+        '--not',
+        `origin/${pr.base.ref}`,
+      ])
+        .split('\n')
+        .filter(Boolean)
+    : [];
+
+  // ── C7: the PR's own contribution, relative to its base, at both points ───
+  const patchIdOf = (sha: string): string | null => {
+    try {
+      const base = git(['merge-base', `origin/${pr.base.ref}`, sha]).trim();
+      const diff = git(['diff', base, sha]);
+      // An empty diff has no patch-id; report it as unavailable rather than as
+      // a match, so two unrelated empty diffs can never read as identical.
+      if (diff.trim() === '') return null;
+      const out = gitWithInput(['patch-id', '--stable'], diff).trim();
+      const id = out.split(/\s+/)[0];
+      return id && /^[0-9a-f]{40}$/.test(id) ? id : null;
+    } catch {
+      return null;
+    }
+  };
+  const prDiffPatchId = {
+    atApproved: patchIdOf(approvedSha),
+    atHead: patchIdOf(headSha),
+  };
+
   // ── Required checks at this exact head ───────────────────────────────────
   const checkRuns = JSON.parse(
     gh(['api', '--paginate', `repos/{owner}/{repo}/commits/${headSha}/check-runs?per_page=100`]),
@@ -184,26 +278,59 @@ export function collect(opts: CollectOptions): Collection | CollectionFailure {
   });
 
   // ── Withdrawals after the approval ───────────────────────────────────────
+  //
+  // Two decisions are made explicitly here rather than left implicit, because
+  // both were silent gaps and both fail *open* if got wrong.
+  //
+  // 1. A comment's effective time is `max(created_at, updated_at)`. A comment
+  //    posted before the approval and *edited afterwards* to say
+  //    CHANGES_REQUIRED carries an old `created_at`, so keying on creation
+  //    alone would skip it entirely. The body being read is the current body;
+  //    the timestamp must describe the same moment as the body does.
+  //
+  // 2. A DISMISSED review counts as a withdrawal signal. When a
+  //    CHANGES_REQUESTED review is dismissed, GitHub *replaces* its state with
+  //    DISMISSED, so filtering on CHANGES_REQUESTED alone lets anyone with
+  //    write access erase a standing objection. Dismissal is a human
+  //    intervention on the review record after an approval; requiring a fresh
+  //    verdict is the fail-closed reading, and it costs a round trip in the
+  //    only case where a human already intervened.
+  const effectiveAt = (createdAt: string, updatedAt?: string): string =>
+    updatedAt && updatedAt > createdAt ? updatedAt : createdAt;
+
   const withdrawals: WithdrawalSignal[] = [];
   for (const c of authorized) {
-    if (c.created_at <= approval.comment.created_at) continue;
+    const at = effectiveAt(c.created_at, c.updated_at);
+    if (at <= approval.comment.created_at) continue;
     const parsed = parseVerdict(c.body);
     if (parsed && parsed.verdict !== 'APPROVED') {
       withdrawals.push({
         source: 'pm-verdict',
-        createdAt: c.created_at,
-        detail: `${parsed!.verdict} at ${c.html_url}`,
+        createdAt: at,
+        detail:
+          at === c.created_at
+            ? `${parsed.verdict} at ${c.html_url}`
+            : `${parsed.verdict} at ${c.html_url} (comment edited after the approval; created ${c.created_at})`,
       });
     }
   }
   const reviews = JSON.parse(
     gh(['api', '--paginate', `repos/{owner}/{repo}/pulls/${opts.prNumber}/reviews`]),
-  ) as { state: string; submitted_at: string; html_url: string; user?: { login?: string; type?: string } }[];
+  ) as {
+    state: string;
+    submitted_at: string;
+    html_url: string;
+    user?: { login?: string; type?: string };
+  }[];
   for (const r of reviews) {
     if (r.user?.type !== 'User' || !AUTHORIZED_REVIEWERS.has(r.user?.login ?? '')) continue;
-    if (r.state !== 'CHANGES_REQUESTED') continue;
+    if (r.state !== 'CHANGES_REQUESTED' && r.state !== 'DISMISSED') continue;
     if (r.submitted_at <= approval.comment.created_at) continue;
-    withdrawals.push({ source: 'github-review', createdAt: r.submitted_at, detail: r.html_url });
+    withdrawals.push({
+      source: 'github-review',
+      createdAt: r.submitted_at,
+      detail: r.state === 'DISMISSED' ? `${r.html_url} (review dismissed)` : r.html_url,
+    });
   }
 
   return {
@@ -220,6 +347,12 @@ export function collect(opts: CollectOptions): Collection | CollectionFailure {
       changedPaths,
       requiredChecks,
       withdrawals,
+      mergeOwnContent,
+      blobIdentity,
+      mainAnchorSha,
+      mainAnchorIsOnMain,
+      commitsNotOnMain,
+      prDiffPatchId,
     },
   };
 }
