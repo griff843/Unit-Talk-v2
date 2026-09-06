@@ -13,27 +13,59 @@ and what was learned.
 Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, the secret
 metadata listing and the current readiness ledger. Not against docs or chat history.
 
-- `main` is `175f07c10`. (This bullet read `85f63c696` until 2026-09-05T22:10Z.) The last commit that
-  changed shipped behaviour is `1734bf201` — the #1477 merge (UTV2-1811, rate-limit bucket
-  contract), followed by its lane-close `9797bcbee`. That lane is truth-closed: manifest `done`,
-  Linear Done, `sha_binding.merge_sha` bound to `1734bf20`. **No lane manifest is `in_progress` on
-  `main`.** The readiness ledger still writes directly to `main` on a schedule, so the tip moves
-  without a PR and every head-pinned artifact on an open lane ages against commits that changed no
-  code.
+- `main` is `7231dc9c7` (re-measured 2026-09-06T04:30Z; this bullet read `175f07c10` before, and
+  `85f63c696` before that). The last commit that changed code a **deployed** container executes is
+  still `b7d9fc07f` — #1501, `GET /api/picks/:id/trace` below the auth gate. Everything merged since
+  is ops scripts, tests, docs, or `apps/command-center/**`, and the Command Center is in no
+  production compose service. **No lane manifest is `in_progress` on `main`.** The readiness ledger
+  still writes directly to `main` on a schedule, so the tip moves without a PR and every head-pinned
+  artifact on an open lane ages against commits that changed no code.
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **11 PRs are open** (measured 2026-09-06). Every one is blocked on `Merge Gate`, in three
-  distinct ways:
+- **12 PRs are open** (re-measured 2026-09-06T04:30Z; #1517, this lane, is the twelfth). Every one
+  is blocked on `Merge Gate`, in three distinct ways:
   - **Not admissible as a lane at all** (#1429, #1491, #1492, #1495, #1496, #1498) — six PRs opened
     with no `UTV2-###` in the branch, so `Merge Gate` reports *"No issue ID found in PR branch or
     title. Cannot resolve authoritative tier."* This is self-inflicted, not a policy defect. The
     count fell from eight because **#1493 and #1494 were re-homed and closed**, exactly as the
     readmission ruling prescribes: #1493's diff landed as **#1503 (UTV2-1812), merged
     `9ac4694d9`**, and #1494's is open as **#1513 (UTV2-1802)**.
-  - **Admissible, awaiting a T1 verdict** (#1513, #1479, #1505) — all three green on `verify`;
-    what each needs is an approval artifact, not a repair. #1513 and #1479 are `BEHIND` and should
-    be resynced before a head-pinned verdict is bound to them.
+  - **Admissible, awaiting a T1 verdict** (#1513, #1479, #1505) — all three green on `verify`,
+    re-measured 2026-09-06T04:30Z. #1513's only remaining obstacle is genuinely the verdict. **#1479
+    is not:** `Branch Discipline Guard`, `Proof Coverage Guard` and `Shadow Parity Check` are all
+    red on its head `cdc72758`, and #1505's `File scope lock` is red. None of those four is a
+    required check, so none of them blocks the merge — but binding a head-pinned verdict to a PR
+    whose own contract checks disagree with it is not a reasonable hand-off — so each red was read
+    rather than assumed. **None of the four turns out to be an ordinary repair**, and #1479 had
+    already reached that conclusion itself: `docs/06_status/proof/UTV2-1815/verification.md`
+    gives all three of its reds a measured cause.
+    - #1479 `Require live-DB proof for runtime changes` — the guard requires the *same PR* that
+      touches `apps/api/src/settlement-service.ts` to also touch an `apps/*/src/t1-proof-*.test.ts`
+      (`proof-coverage-guard.yml:141-163`). The proof exists and is on `main`
+      (`apps/api/src/t1-proof-utv2-1815-stake-units.test.ts`, landed by #1504 under UTV2-1831) — but
+      it landed on a *different* PR, so #1479's own diff cannot contain it, and that path is outside
+      #1479's `file_scope_lock`. Closing it needs a `scope-override/v1` or the
+      `skip-proof-coverage` label. Both are Griff's.
+    - #1479 `Check issue references` — `found UTV2-1783, UTV2-1815`. The one reference is commit
+      `32bb89db8`'s message citing the ratification that governs its merge-SHA anchor row. Rewriting
+      it changes that SHA, and `32bb89db` is the head the lane's staging receipt is bound to. The
+      lane left it uncorrected deliberately, and that is the right trade: a verifiable receipt is
+      worth more than a green non-required check.
+    - #1479 `Shadow Parity Check` — *"No mechanically read-only production credential is
+      provisioned."* It refuses service-role credentials by design, so it compared nothing and
+      reached no parity conclusion. Provisioning the credential is reserved decision 4.
+    - #1505 `File scope lock` — *"package.json is not declared by UTV2-1827."* `file_scope_lock` is
+      pinned at lane-start and cannot be widened by an agent, so this needs a CODEOWNERS
+      `scope-override/v1` pinned to the head — standing item 8 under "Requires Griff" — or the
+      `package.json` wiring dropped, which would leave the runner unwired.
+
+    So all three are genuinely verdict-blocked, and the first draft of this bullet was wrong in both
+    directions: it first said they needed no repair, then said the repairs were ordinary. The true
+    statement is narrower — every one of the four reds is non-required, and every one is closed only
+    by an action reserved to Griff. #1513 and #1479 are also `BEHIND` and should be resynced before
+    a head-pinned verdict is bound.
+  - **This lane** (#1517, UTV2-1838) — `verify` green, `Merge Gate` awaiting the T2 artifact.
   - **Admissible, `verify` red** (#1451) — real repair work, production DDL, PM-gated.
   - #1484 remains open awaiting a verdict.
 - Measured 2026-09-03: `strict: true` did **not** block #1474 even though it was genuinely BEHIND
@@ -759,19 +791,43 @@ Two other repairs landed with them:
   replay that would have passed on a push. Both are now called from `rebindRepairedLaneProof`
   under the same best-effort, never-fatal contract they carry in `proof-generate`.
 
-**Two scoped items were deliberately not done, and this is the record of why.** A lane's
+**One scoped item was deliberately not done, and one turned out not to need doing.** A lane's
 `file_scope_lock` is pinned at lane-start and cannot be widened by an agent, and UTV2-1838's lock
 covers `lane-close.ts`, `lane-finalize.ts` and `t2-proof-bundle.ts` — not these two files:
 
-| Not done | File | What it needs |
+| Item | File | State |
 |---|---|---|
-| `truth_check_history` grows on every non-`done` run; the guard at `truth-check-lib.ts:1860-1864` covers only `done`, so an infra-error early return (`:986`, `:1045`, `:1062`) permanently records a `fail` for what was a token blip | `scripts/ops/truth-check-lib.ts` | do not append a history entry on an infra-error exit |
-| A provably terminal lane's lease cannot be reclaimed for 48h — reclaim is purely TTL-gated (`lease-registry.ts:523-531`, `claude` TTL at `:133`). Observed live on UTV2-1830: merged `1cb31a43e`, truth-closed, lease still `active` with a dead owning PID. `ops:lease release` is the working escape, but reclaim should not require knowing that | `scripts/ops/lease-registry.ts` | gate reclaim on lane terminality, reusing `findLeasesHeldByTerminalLanes` (`:769-800`) rather than the clock |
+| A provably terminal lane's lease cannot be reclaimed for 48h — reclaim is purely TTL-gated (`lease-registry.ts:523-531`, `claude` TTL at `:133`). Observed live on UTV2-1830: merged `1cb31a43e`, truth-closed, lease still `active` with a dead owning PID. `ops:lease release` is the working escape, but reclaim should not require knowing that | `scripts/ops/lease-registry.ts` | **Real, not done.** Gate reclaim on lane terminality, reusing `findLeasesHeldByTerminalLanes` (`:769-800`) rather than the clock. Out of scope; recorded, not filed |
+| `truth_check_history` grows on every non-`done` run, so an infra-error early return records a `fail` for what was a token blip | `scripts/ops/truth-check-lib.ts` | **The defect does not exist.** See below |
 
-Both are survivable by hand today and neither blocks production, so per the ratified filing
-threshold they are recorded here rather than filed. They are the natural content of the next
-governance lane if the slot is spent, alongside the `pre-proof-validator` classification repair
-under Learned.
+**Corrected 2026-09-06: the `truth_check_history` defect this plan and UTV2-1838's own issue text
+both asserted is not real, and the line numbers cited for it were stale.** The issue named
+`truth-check-lib.ts:1860-1864` as a `done`-only guard and `:986`, `:1045`, `:1062` as infra-error
+early returns. On current `main` those lines are unrelated code. Measured directly by calling
+`finalizeWithManifest` with its injectable `writeManifestFn` and counting writes:
+
+| Case | Writes |
+|---|---|
+| second close on a `done` lane, exit 0 | **0** |
+| second close on a `done` lane, exit 1 | **0** |
+| `infra_error` on a live lane, exit 3 | **0** |
+| `ineligible` on a live lane, exit 2 | **0** |
+| genuine `fail` on a live lane, exit 1 | 1 — correct, and the control that shows the probe can observe a write |
+
+Every `infra_error` path uses `exitCode: 3` (`:919`, `:938`, `:955`, `:1097`, `:1595`), and
+`finalizeWithManifest:1898` returns before any write on exit 2 or 3. That guard was introduced in
+`4c029b006` on 2026-04-11 and the `done` guard in `7bcc642d7` (UTV2-1224) on 2026-06-06 — both
+predate the issue. So this was never fixed recently; **it was wrong when written**, and acceptance
+criterion 3 already holds on `main`. What is genuinely missing is a regression test locking it, and
+that test file is also outside this lane's lock.
+
+The lease item is survivable by hand today and blocks no production, so per the ratified filing
+threshold it is recorded here rather than filed. It is the natural content of the next governance
+lane if the slot is spent, alongside the `pre-proof-validator` classification repair under Learned.
+
+The general lesson is the expensive one: **an issue's own file:line citations are a snapshot, and a
+lane that implements against them without re-measuring implements against a stale repo.** Two of
+the three citations here had drifted and the defect behind them was never real.
 
 ### `docs/mission/**` lane registration — resolved on `main`
 
