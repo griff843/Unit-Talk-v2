@@ -1,0 +1,100 @@
+{
+  "schema_version": "2",
+  "issue_id": "UTV2-1841",
+  "tier": "T1",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "c7b170b1ecd10548e6bfcad38f895a3f1b3ffa5e",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — run inside pnpm verify:static, exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — run inside pnpm verify:static. 101 suite blocks, 6097 tests, `# fail 0` throughout, zero `not ok` lines. The command-center block reports `# tests 480 / # pass 480 / # fail 0` with `ok 65 - cached service-role client reauthenticates every request`.",
+      "pnpm_verify": "EXIT 1 locally, and no local PASS is claimed. `pnpm verify` reaches test:live-db -> test:db -> ci:assert-staging, which refuses outside the staging-ci GitHub environment, so it cannot exit 0 on a developer machine. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
+      "pnpm_verify_static": "PASS — REAL_EXIT=0, captured unpiped. This is the literal script .github/workflows/deploy.yml runs, and it is the job that failed on the candidate.",
+      "r_level_check": "R-Level Compliance runs in CI on this branch."
+    },
+    "sha_type": "merge_sha",
+    "anchor_note": "c7b170b1ecd10548e6bfcad38f895a3f1b3ffa5e is the last non-proof commit on the branch. Everything after it touches only docs/06_status/proof/UTV2-1841/ and docs/06_status/lanes/UTV2-1841.json, which are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T09:05:00.000Z"
+  },
+  "static_proof": {
+    "defect_reproduction": {
+      "method": "Executed the failing test on both runtimes with an instrumented copy that logs the thrown value before the assertion runs, rather than reading the assertion and inferring. Same test body, same assertion, same built checkout; only the node binary differed.",
+      "failing_run": "Deploy run 34031708984, candidate 391d4345c499f75255a749f73ce26cae7d44cce7, apps/command-center/src/lib/data/client-cache-auth.test.ts:55, `not ok 65`, 479/480 passed.",
+      "node_20": "v20.20.2 — PROBE: threw PrivilegedAccessDeniedError code= COMMAND_CENTER_AUTH_REQUIRED instanceof= false -> not ok 1, # pass 0 # fail 1",
+      "node_22": "v22.22.1 — PROBE: threw PrivilegedAccessDeniedError code= COMMAND_CENTER_AUTH_REQUIRED instanceof= true -> ok 1, # pass 1 # fail 0",
+      "cause": "Under Node 20's loader, ../request-auth resolves to two distinct module instances, so the test's imported PrivilegedAccessDeniedError is a different class object from the one server-api.ts throws. instanceof is therefore false against an error that is, by class name and by code, exactly the expected one.",
+      "not_a_fail_open": "The guard refuses the unauthenticated request on BOTH runtimes, with the correct error and the correct code. No request was admitted without authorization on either. The assertion was correctly reporting an unsupported runtime."
+    },
+    "runtime_alignment_measured": {
+      "package_json_engines_node": ">=22.0.0",
+      "nvmrc": "22",
+      "images": [
+        "Dockerfile: node:22-alpine (builder, api, worker, ingestor, discord-bot)",
+        "apps/command-center/Dockerfile: node:22-alpine",
+        "deploy/production/Dockerfile.nextjs: ARG NODE_VERSION=22-alpine"
+      ],
+      "workflows_running_the_verify_suite": [
+        "ci.yml — node-version 22",
+        "proof-gate.yml — node-version 22",
+        "t1-proof-gate.yml — node-version 22",
+        "deploy.yml — node-version 20 BEFORE this lane, 22 after"
+      ],
+      "conclusion": "deploy.yml was the only one of the four verify-running workflows on Node 20. The release gate was verifying on a runtime production does not run."
+    },
+    "mutation_control": [
+      {
+        "id": "A",
+        "mutation": "none — baseline, guard intact, node v22.22.1",
+        "result": "ok 1",
+        "totals": "# tests 1 / # pass 1 / # fail 0"
+      },
+      {
+        "id": "B",
+        "mutation": "delete the missing-authorization refusal from apps/command-center/src/lib/server-api.ts — the `if (!authorization) { return denied('COMMAND_CENTER_AUTH_REQUIRED', ...) }` block, leaving the readHeader line",
+        "result": "not ok 1",
+        "totals": "# tests 1 / # pass 0 / # fail 1",
+        "note": "Load-bearing. Proves the preserved assertion still fails on the condition it names, so passing on Node 22 is not vacuous."
+      },
+      {
+        "id": "C",
+        "mutation": "restored byte-for-byte",
+        "result": "ok 1",
+        "totals": "# tests 1 / # pass 1 / # fail 0",
+        "note": "git status --porcelain empty afterwards; the diff contains no apps/ file."
+      }
+    ],
+    "preserved_bindings": [
+      "The authentication assertion in client-cache-auth.test.ts is byte-for-byte unchanged — instanceof check, code equality check, and the surrounding assert.rejects all intact.",
+      "deploy.yml remains workflow_dispatch-only; nothing about when or whether a deploy fires is changed.",
+      "A candidate that fails the suite on Node 22 still fails Deploy — no requirement is removed."
+    ],
+    "reserved_surface_accounting": {
+      "github_diff": ".github/workflows/deploy.yml",
+      "changed_within_it": "one line — node-version: 20 -> 22 in the verify job's single Setup Node step",
+      "codeowners": "/.github/workflows/** @griff843 — hence tier T1 and a required pm-verdict/v1 from CODEOWNERS",
+      "unchanged": [
+        "required-check configuration",
+        "branch protection",
+        "CODEOWNERS",
+        "merge gate and its policy inputs",
+        "tier semantics",
+        "approval policy",
+        "every bypass",
+        "deploy.yml triggers, inputs, promote, smoke and rollback steps",
+        "package.json — declared in file_scope_lock, not needed, untouched",
+        "apps/command-center/** — untouched"
+      ]
+    }
+  },
+  "known_gaps": [
+    "32 other workflow files still pin node-version 20. None of them runs the verify suite. A repository-wide Node sweep would exceed this lane's declared scope and delay the deployment candidate it exists to unblock; recorded, not fixed here.",
+    "The dual-module-instance resolution under Node 20 is not repaired, because Node 20 is below the repository's declared minimum. If a Node 20 consumer ever became supported, the import graph under apps/command-center/src/lib/ would need revisiting.",
+    "This lane does not verify a deploy end to end. Dispatching Deploy is a reserved action. What is proven is that the job that failed now passes at this anchor on the runtime the workflow will use.",
+    "No local `pnpm verify` PASS exists or is claimed anywhere in this bundle; ci:assert-staging structurally refuses outside staging-ci."
+  ]
+}
