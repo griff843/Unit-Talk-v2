@@ -969,6 +969,50 @@ here rather than filed, per the filing threshold.
 The earlier micromatch reading above stands corrected on its own terms as well: `{ dot: true }` was
 always present, and the fix this plan once proposed would have been a no-op.
 
+### `Close Eligibility Preflight` is not tier-aware, so it predicts a T3 closeout failure that cannot happen
+
+Measured on this lane (UTV2-1846, PR #1524, T3), and it is a distinct defect from the review-packet
+scope bleed above rather than another instance of it.
+
+`Close Eligibility Preflight` reported `BLOCKED` with six failures — CEP-E1 (*manifest declares no
+expected_proof_paths*), CEP-E3, CEP-E4/P11, P12, P13, P14 — and then CEP-C1: *"ops:lane-close would
+fail after merge on: CEP-E1, CEP-E3, CEP-E4/P11, CEP-E4/P12, CEP-E4/P13, CEP-E4/P14"*. `Proof Gate`
+failed for the same underlying reason: *"Proof dir contains no markdown files"*.
+
+**That prediction is false, and the contradiction is inside one file.** The gate CEP-C1 claims to
+predict is `truth-check-lib.ts:1004`:
+
+```ts
+if ((tier === 'T1' || tier === 'T2') && manifest.expected_proof_paths.length === 0) {
+  addCheck('M7', 'fail', 'expected_proof_paths must be non-empty for T1/T2');
+} else {
+  addCheck('M7', 'pass', 'expected_proof_paths satisfies tier requirement');
+}
+```
+
+M7 is explicitly tier-aware and **passes T3 with an empty list**. CEP-E1, at `:570-577` in the same
+module, reads `input.manifest.expected_proof_paths ?? []` and fails on empty with no tier condition
+at all. So a correctly-constructed T3 lane — `defaultProofPaths` (`shared.ts:932-942`) returns `[]`
+for T3 by design, and `executor-result-validator.yml:249-255` accepts `Proof Artifact: CI only` for
+T3 on the same basis — is told its closeout will fail when it will not.
+
+Confirmed against history rather than by reading alone: seven T3 manifests on `main` (UTV2-953, 975,
+977, 983, 991 `done`; 955, 958 `closed`) all carry `expected_proof_paths: []`, and all closed.
+
+`Close Eligibility Preflight` and `Proof Gate` are both non-required, so this blocks no merge. But
+the failure mode is worse than the review-packet one it superficially resembles: that check emits a
+`FAIL` verdict on correct work, whereas this one emits a **specific false prediction about a future
+gate**, which is exactly the kind of output an operator is meant to act on. The repair is to give
+CEP-E1/E3/E4 the same `tier === 'T1' || tier === 'T2'` condition M7 already has. Recorded here
+rather than filed, per the filing threshold.
+
+One consequence for reading this plan's own PR: three of #1524's non-required checks are red and
+none is an ordinary repair. `Branch Discipline Guard` reports `multiple_issue_references` — *"found
+UTV2-1688, UTV2-1724, UTV2-1730, UTV2-1841, UTV2-1842, UTV2-1846"* — because a mission-plan commit
+body necessarily cites the issues the plan reconciles. Rewriting those messages moves the head and
+invalidates the executor result bound to it, which is the same trade #1479 made deliberately and for
+the same reason.
+
 ### Closeout repeatability — UTV2-1838, and what it deliberately left undone
 
 The failure this lane exists for was observed twice (UTV2-1835, UTV2-1836): `ops:lane-finalize
