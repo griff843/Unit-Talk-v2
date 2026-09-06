@@ -333,6 +333,131 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
   });
 });
 
+test('buildSubmissionPayload preserves signed values and structured fallback participant IDs', () => {
+  const payload = buildSubmissionPayload(
+    buildBaseValues({
+      sport: 'NCAAF',
+      marketType: 'spread',
+      eventName: 'TCU @ UNC',
+      playerName: undefined,
+      statType: undefined,
+      direction: undefined,
+      team: 'TCU',
+      line: -3.5,
+      odds: -110,
+    }),
+    {
+      submissionMode: 'manual',
+      eventId: null,
+      teamId: 'team-tcu',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: 'NCAAF',
+        eventId: null,
+        eventName: 'TCU @ UNC',
+        away: {
+          participantId: 'team-tcu',
+          displayName: 'TCU',
+          participantType: 'team',
+          teamId: null,
+        },
+        home: {
+          participantId: 'team-unc',
+          displayName: 'UNC',
+          participantType: 'team',
+          teamId: null,
+        },
+        team: {
+          participantId: 'team-tcu',
+          displayName: 'TCU',
+          participantType: 'team',
+          teamId: null,
+        },
+        player: null,
+      },
+    },
+  );
+
+  assert.equal(payload.line, -3.5);
+  assert.equal(payload.odds, -110);
+  assert.equal(payload.metadata?.eventId, null);
+  assert.equal(payload.metadata?.teamId, 'team-tcu');
+  assert.deepEqual(payload.metadata?.participantResolution, {
+    resolution: 'canonical',
+    sportId: 'NCAAF',
+    eventId: null,
+    eventName: 'TCU @ UNC',
+    away: {
+      participantId: 'team-tcu',
+      displayName: 'TCU',
+      participantType: 'team',
+      teamId: null,
+    },
+    home: {
+      participantId: 'team-unc',
+      displayName: 'UNC',
+      participantType: 'team',
+      teamId: null,
+    },
+    team: {
+      participantId: 'team-tcu',
+      displayName: 'TCU',
+      participantType: 'team',
+      teamId: null,
+    },
+    player: null,
+  });
+});
+
+test('buildSubmissionPayload keeps manual coverage-gap provenance free of canonical IDs', () => {
+  const payload = buildSubmissionPayload(
+    buildBaseValues({
+      sport: 'NCAAF',
+      marketType: 'moneyline',
+      eventName: 'Temple @ Navy',
+      playerName: undefined,
+      statType: undefined,
+      direction: undefined,
+      line: undefined,
+      team: 'Navy',
+    }),
+    {
+      submissionMode: 'manual',
+      eventId: null,
+      teamId: null,
+      playerId: null,
+      participantResolution: {
+        resolution: 'manual',
+        sportId: 'NCAAF',
+        eventId: null,
+        manualOverride: true,
+        reason: 'canonical-coverage-gap',
+        enteredEventName: 'Temple @ Navy',
+        enteredParticipants: [
+          { role: 'away', displayName: 'Temple', canonicalParticipantId: null },
+          { role: 'home', displayName: 'Navy', canonicalParticipantId: null },
+        ],
+      },
+    },
+  );
+
+  assert.equal(payload.metadata?.eventId, null);
+  assert.equal(payload.metadata?.teamId, null);
+  assert.equal(payload.metadata?.playerId, null);
+  assert.deepEqual(payload.metadata?.participantResolution, {
+    resolution: 'manual',
+    sportId: 'NCAAF',
+    eventId: null,
+    manualOverride: true,
+    reason: 'canonical-coverage-gap',
+    enteredEventName: 'Temple @ Navy',
+    enteredParticipants: [
+      { role: 'away', displayName: 'Temple', canonicalParticipantId: null },
+      { role: 'home', displayName: 'Navy', canonicalParticipantId: null },
+    ],
+  });
+});
+
 test('buildSubmissionPayload uses normalized manual market keys instead of lossy display strings', () => {
   const totalPayload = buildSubmissionPayload(
     buildBaseValues({
