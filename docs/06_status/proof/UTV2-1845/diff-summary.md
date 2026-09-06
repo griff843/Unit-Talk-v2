@@ -1,6 +1,6 @@
 # DIFF SUMMARY: UTV2-1845
 
-MERGE_SHA: pending merge
+MERGE_SHA: 9a233bd90063d818d19cc026ec22f216671b6dea
 
 ## Files changed
 

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1845 — classify the containment placeholder distinctly in preflight PT1
 
-MERGE_SHA: pending merge
+MERGE_SHA: 9a233bd90063d818d19cc026ec22f216671b6dea
 Execution SHA: 8a64a33158aa35197a62868a40c161657a6e75fa
 
 Preflight PT1 reported a deliberate, documented containment state as an infrastructure fault, which
@@ -9,7 +9,7 @@ does not change what any lane is admitted without.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 9a233bd90063d818d19cc026ec22f216671b6dea
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1522
 Verified source SHA: 8a64a33158aa35197a62868a40c161657a6e75fa
 

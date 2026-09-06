@@ -6,7 +6,7 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "9a233bd90063d818d19cc026ec22f216671b6dea",
     "verified_source_sha": "8a64a33158aa35197a62868a40c161657a6e75fa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -16,9 +16,9 @@
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment — the very containment condition this lane is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
       "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts and one document; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
-    "sha_type": "pending_merge",
+    "sha_type": "merge_sha",
     "anchor_note": "8a64a33158aa35197a62868a40c161657a6e75fa is the merge of origin/main into this branch, taken to satisfy the strict-freshness requirement rather than merge BEHIND. It is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1845/, and it is the anchor because rule 4 of the proof-binding validator is a two-dot `git diff verified_source_sha..HEAD`: the resync carries docs/06_status/readiness/readiness-score.json, which is not a PROOF_ONLY_PREFIX, so the previous anchor b7274edd3b1665a5074c4edd176d87d0790063b4 could not be kept by argument. Every receipt below was re-executed at this commit rather than carried forward; the counts are unchanged from the previous anchor because the merge changed one generated ledger file and no code or test. Commits after this one are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
-    "bound_at": "2026-09-06T20:12:46.000Z"
+    "bound_at": "2026-09-06T20:35:51.849Z"
   },
   "static_proof": {
     "status": "PASS",
