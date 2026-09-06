@@ -498,9 +498,13 @@ test('UTV2-1845 inversion: a real host is never mistaken for the containment pla
   }
 });
 
-test("UTV2-1845: the repository's own containment placeholder is classified as containment", () => {
-  // Binds the predicate to the actual value in local.env rather than to a value invented here.
-  // local.env is gitignored, so this asserts only where it exists.
+test("UTV2-1845: the predicate agrees with an independent reading of the repo's own SUPABASE_URL", () => {
+  // Binds the predicate to the actual value this repository runs with rather than to a value
+  // invented here. It asserts agreement, not a fixed verdict: under local containment that value is
+  // the loopback placeholder and the expected answer is true, while in CI `local.env` is written
+  // from the staging-ci environment and the expected answer is false. An earlier version of this
+  // test asserted `true` unconditionally and was red in CI for exactly that reason -- it had
+  // encoded one environment's value as if it were the contract.
   const localEnvPath = path.join(ROOT, 'local.env');
   if (!fs.existsSync(localEnvPath)) {
     return;
@@ -513,10 +517,26 @@ test("UTV2-1845: the repository's own containment placeholder is classified as c
     return;
   }
   const value = line.slice('SUPABASE_URL='.length).trim().replace(/^['"]|['"]$/g, '');
+
+  // Computed here without calling the function under test, so the two can disagree.
+  let expected = false;
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const bare = host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+    expected =
+      bare === 'localhost' ||
+      bare === '::1' ||
+      bare === '::' ||
+      bare === '0.0.0.0' ||
+      /^127(?:\.\d{1,3}){3}$/.test(bare);
+  } catch {
+    expected = false;
+  }
+
   assert.equal(
     isContainmentPlaceholderSupabaseUrl(value),
-    true,
-    `local.env SUPABASE_URL should classify as the containment placeholder, got ${value}`,
+    expected,
+    `predicate disagrees with an independent loopback reading of local.env SUPABASE_URL (${value})`,
   );
 });
 
