@@ -1,0 +1,77 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1840",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "0f78f3284bba06fd672f0d04fa9dec24c5d05f4f",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS. The completed local `pnpm verify` run contains zero `not ok` lines and 101 suite blocks totalling 6091 tests with `# fail 0` throughout.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage passed — ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test, the smart-form filter and verify:commands. The run then reached `test:live-db` -> `test:db` -> `ci:assert-staging`, which REFUSED with `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` because writable DB verification may only run inside the staging-ci GitHub environment. `pnpm verify` therefore cannot exit 0 on a developer machine — a structural property of the guard, not of this diff. No local PASS is claimed. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
+      "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts, their tests, and docs only; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
+    },
+    "sha_type": "verified_source_sha",
+    "anchor_note": "0f78f3284bba06fd672f0d04fa9dec24c5d05f4f is the last non-proof commit on the branch. Everything after it touches only docs/06_status/proof/UTV2-1840/ and docs/06_status/lanes/UTV2-1840.json, which are inside PROOF_ONLY_PREFIXES and do not move the anchor.",
+    "bound_at": "2026-09-06T05:44:16.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "tsc -b tsconfig.json, exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test (inside pnpm verify)",
+      "tests": 6091,
+      "failures": 0,
+      "detail": "101 suite blocks, 6091 tests, 0 fail, zero `not ok` lines."
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+      "tests": 101,
+      "failures": 0,
+      "detail": "+8 tests added by this lane: namespace coverage driven off the exported ISSUE_ID_NAMESPACES list, WORK-### admitted end to end, and five controls that must still refuse."
+    },
+    "defect_reproduction": {
+      "status": "PASS",
+      "command": "env -u LINEAR_API_KEY -u LINEAR_API_TOKEN pnpm ops:preflight WORK-902 --tier T3 --branch claude/work-902-tracker-independence-proof --files 'docs/06_status/CURRENT_STATE.md' --json",
+      "environment": "a git worktree, which does not carry the gitignored local.env that loadEnvironment() reads — so the tracker credential is genuinely absent, not merely unset in the parent process",
+      "before": "PE2 skip, PL1 skip, PX2 FAIL (Branch discipline FAILED: PR branch \"claude/work-902-tracker-independence-proof\" ...) on unpatched main fd18b486c",
+      "after": "PE2 skip, PL1 skip, PX2 PASS (branch and commit issue references are disciplined), same command, same environment, only this lane's patch applied",
+      "honest_reading": "Both runs report an overall verdict of INFRA, caused by PE1 (`Neither local.env nor .env exists at repo root`) cascading to PX1/PB1/PB2 on `Missing env file: local.env`, plus PG2 on the deliberately dirty A/B tree. No claim is made that a lane can be opened from a fully credential-free environment; local.env carries Supabase and other non-tracker credentials and that dependency is out of scope for the ratified tracker correction. What this isolates is the tracker dependency: identical environment, identical failures elsewhere, PX2 the only check whose result changes."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 1,
+      "command": "revert scripts/ops/branch-discipline-guard.ts:19 to its own pre-WORK alternation /\\b(?:UTV2|UNI)-\\d+\\b/gi, run scripts/ops/shared.test.ts, restore and confirm a clean tree",
+      "observed": "101 tests / 96 pass / 5 fail — not ok 94, 95, 97, 98, 100. Restored: 101/101.",
+      "honest_reading": "The mutation kills the two positive tests and three of the five controls. The two that survive it (the no-identifier refusal and the dependabot exemption) are not weakened by the mutation and are not expected to fail; they exist to catch the opposite error, a widening that stops refusing."
+    },
+    "residual_duplication": {
+      "status": "MEASURED_AND_DISCLOSED",
+      "command": "grep -rn \"UTV2|UNI\" scripts/ .github/",
+      "sites": 22,
+      "detail": "This lane removes the copy on the lane-open path only. Of the 22 remaining: 1 is deliberately narrow and correct (shared.ts:415 TRACKER_REF_PATTERN — a tracker key is a Linear id and WORK-### is documented as not one); 2 would hard-refuse a WORK-### lane after it opens (executor-result-validate.ts:109, proof-rebind.ts:1652); 2 degrade softly (proof-schema.ts:326, proof-binding-validator.ts:150); 5 are discovery/reconciliation and non-blocking; 7 are RESERVED workflow surfaces (merge-gate.yml, executor-result-validator.yml, p0-protocol.yml, tier-label-check.yml, tier-label-apply.yml, merge-gate-verdict.cjs) that are cutover items 8-11 and are deliberately untouched.",
+      "honest_reading": "The accurate claim is that a WORK-### task moves from `cannot start` to `cannot finish`. Cutover exit condition 1 is advanced, not closed. Stated in the same terms in docs/mission/plan.md."
+    },
+    "reserved_surface_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "detail": "Empty. No change to merge authority, the merge gate, its policy inputs, CODEOWNERS, branch protection, tiers, or approval policy."
+    }
+  },
+  "known_gaps": [
+    "The two hard refusals in executor-result-validate.ts:109 and proof-rebind.ts:1652 are identified and left unrepaired. Widening ERV's identifier pattern touches a required check's validator and proof-rebind's is a path-traversal guard on a value used as a directory segment; both deserve their own lane rather than being bundled into this one.",
+    "Cutover exit conditions 4 (fresh and compacted sessions recover the mission) and 5 (existing PRs finish without administrative restarts) remain undemonstrated. This lane makes no claim about either.",
+    "The eight new tests live in scripts/ops/shared.test.ts rather than a file named for the guard, because pnpm verify fails closed on any new test file not reachable from package.json's test:ops script and package.json is outside this lane's file_scope_lock. Coverage is real and wired; the file naming is a scope artifact, recorded in docs/mission/plan.md."
+  ]
+}
