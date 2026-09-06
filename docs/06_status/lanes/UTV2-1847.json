@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1847-smart-form-e2e-ci",
   "branch": "codex/utv2-1847-smart-form-e2e-ci",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "656ed035355927c57547ceb2e4f995b96b8fdc91",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1525",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,22 @@
     "docs/06_status/proof/UTV2-1847/model-routing.json",
     "docs/06_status/proof/UTV2-1847/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-06T21:59:05.800Z",
-  "heartbeat_at": "2026-09-06T23:06:14.231Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-06T23:44:09.663Z",
+  "closed_at": "2026-09-06T23:44:09.663Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1847-smart-form-e2e-ci.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-06T23:44:07.600Z",
+      "verdict": "pass",
+      "merge_sha": "656ed035355927c57547ceb2e4f995b96b8fdc91",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "model_routing": {
     "profile": "codex-sol-high",

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1847 — connected Smart Form browser submission
 
-MERGE_SHA: pending merge
+MERGE_SHA: 656ed035355927c57547ceb2e4f995b96b8fdc91
 
 Execution SHA: d692e92c09b5d664b0428ef746ed59fba466c916  
 Tier: T2 · Lane type: delivery-ui  
@@ -87,9 +87,9 @@ claims writable staging/database evidence.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge  
-PR: pending  
-Approved PR head: pending merge  
+Merge SHA: 656ed035355927c57547ceb2e4f995b96b8fdc91
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1525
+Approved PR head: 7137fd5e318aff05b5150f8d260d1d1fdabcb489
 Execution SHA: d692e92c09b5d664b0428ef746ed59fba466c916
 
 ## Anchor correction and orchestrator re-measurement
