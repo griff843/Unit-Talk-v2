@@ -34,6 +34,10 @@ MERGE_SHA: pending merge
       "Implemented; unreachable today". Five rows would have read Done on merged code and green tests,
       and an operator can perform none of the five today.
 
+- [x] **A11 —** The three paths `Lane authority` rejected are registered in `.lane/lanes/governance.yml`
+      by name or by one bounded subtree, following the resolution this file's own comments record
+      eight times. No glob over `apps/**` is opened, and no other subtree is admitted.
+
 ## EVIDENCE:
 
 | Assertion | Evidence |
@@ -46,6 +50,7 @@ MERGE_SHA: pending merge
 | A8 | The citation re-measurement table in §2 below, and the printed source lines beneath it |
 | A9 | `docs/03_product/smart-form/intent.md` §4.1 in this diff — the two-column comparison table separating authorized static seeding from provider activation, with a "Needs the other? No" row; and `docs/05_operations/T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` (RATIFIED 2026-04-02), which classifies sports, leagues, teams, sportsbooks, market families, market types and stat types as governed static seed with provider contribution "Nothing" |
 | A10 | `docs/03_product/smart-form/intent.md` §8 in this diff — the state vocabulary table and the row-by-row application; and §9 standing criterion 5, rewritten to the same distinction |
+| A11 | `.lane/lanes/governance.yml` in this diff — two named `CLAUDE.md` entries and one `docs/03_product/**` subtree, each with the reason recorded inline; and the `Lane authority` job on this PR, which named exactly those three paths |
 
 ### Commands run
 
@@ -55,21 +60,24 @@ pnpm type-check                        # exit 0
 pnpm test                              # exit 0 — tests 5962, pass 5962, fail 0
 pnpm verify                            # refused locally at test:live-db under containment, see below
 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843
-                                       # Verdict: PASS · Changed files: 12 · Rules matched: operator-ui
+                                       # Verdict: PASS · Changed files: 13 · Rules matched: operator-ui
 ```
 
 `scripts/ci/r-level-check.ts` matched the `operator-ui` rule and returned PASS with every triggered
 `required[]` artifact present.
 
-**Re-run 2026-09-06 against `25cff67f5`, after the owner-review corrections.** The block above is
-that re-run, not the earlier one: an anchor may not be moved to a newer commit while the receipts
-under it were taken at an older tree. `pnpm build` was dropped from the list rather than restated,
-because it was not re-run — this diff adds no compiled source. `verify` is green on this head in
-CI, which is the binding receipt.
+**Re-run 2026-09-06 against `49eb75f1b`, after the owner-review corrections and the scope
+registration.** The block above is that re-run, not an earlier one: an anchor may not be moved to a
+newer commit while the receipts under it were taken at an older tree, so the anchor was moved twice
+on this lane and the receipts were re-taken both times. `pnpm build` was dropped from the list rather than restated,
+because it was not re-run — this diff adds no compiled source. `verify` was green in CI on `9433a5558`, the head immediately
+before the scope registration, and re-runs on this head; CI is the binding receipt, not the local
+run.
 
 ### Diff scope
 
 ```
+ .lane/lanes/governance.yml                         |  18 +
  .claude/commands/dispatch.md                       |   9 +
  AGENTS.md                                          |  17 +
  CLAUDE.md                                          |  17 +
@@ -78,7 +86,7 @@ CI, which is the binding receipt.
  docs/03_product/smart-form/intent.md               | 537 +++++++++++++++++++++
  .../SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md  |  31 +-
  docs/05_operations/docs_authority_map.md           |   1 +
- 8 files changed, 698 insertions(+), 13 deletions(-)
+ 9 files changed, 716 insertions(+), 13 deletions(-)
 ```
 
 Measured with `git diff --stat origin/main...HEAD` excluding this lane's own manifest, sync file and
@@ -105,15 +113,16 @@ workflow, no check, no label, no gate.
 |---|---|
 | PR: | https://github.com/griff843/Unit-Talk-v2/pull/1521 |
 | MERGE_SHA: | pending merge |
-| Verified source SHA: | 25cff67f5a275e1837422eb90ff9884c408f8dbd |
+| Verified source SHA: | 49eb75f1b0dc133f5c2ee77415ff4dfacee93957 |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1521
 Merge SHA: pending merge
-Verified source SHA: 25cff67f5a275e1837422eb90ff9884c408f8dbd
+Verified source SHA: 49eb75f1b0dc133f5c2ee77415ff4dfacee93957
 
-`25cff67f5a275e1837422eb90ff9884c408f8dbd` is the last commit on this branch that changes any file outside
+`49eb75f1b0dc133f5c2ee77415ff4dfacee93957` is the last commit on this branch that changes any file outside
 `docs/06_status/proof/UTV2-1843/`, and it is the tree the commands below were run against. It
-carries the three owner-review corrections recorded under "Corrections made on owner review".
+carries the scope registration recorded under "Fifth correction" below; the three owner-review
+corrections it sits on top of are recorded under "Corrections made on owner review".
 Every commit after it touches this proof bundle only, so no verified content moved.
 
 ## What was verified, and how
@@ -313,6 +322,40 @@ from the list rather than restated, since it was not re-run.
 Two assertions were added rather than only fixing the format: A9 and A10 state the reference-data
 seeding correction and the state-vocabulary correction, so the checklist asserts the corrections
 instead of merely containing them.
+
+### Fifth correction — the scope authority, resolved under the existing policy rather than waived
+
+`Lane authority` was red on this PR and stayed red, naming three paths: `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/intent.md`. An earlier framing of that
+red — that `Lane authority` is not one of the four required checks, so it does not block the merge —
+is withdrawn here. It is a true statement about branch protection and it is not authorization.
+Merging past a lane-authority refusal because the check happens to be advisory is exactly the
+self-certification the lane system exists to refuse.
+
+The resolution was looked up rather than invented, and three candidate routes were measured:
+
+1. **Re-home the lane under a lane type that already admits the paths.** Measured and rejected:
+   `.lane/lanes/delivery-ui.yml` admits `apps/smart-form/**`, which covers one of the three files.
+   No lane type in `.lane/lanes/` admits `apps/api/CLAUDE.md` or `docs/03_product/**`, so no
+   re-homing makes this diff legal.
+2. **Narrow the diff to paths already admitted.** Rejected on substance, not convenience: the
+   product-intent document *is* `docs/03_product/smart-form/intent.md`, so dropping it leaves a PR
+   that points at a document it no longer contains.
+3. **Register the paths, in this PR, bounded.** This is what `.lane/lanes/governance.yml`'s own
+   comments record as the resolution eight separate times (UTV2-1524, 1528, 1541, 1557, 1199, 1384,
+   1253, 1629), most recently by UTV2-1829 for `docs/mission/**`. Taken.
+
+The registration is deliberately narrow. The two `CLAUDE.md` files are named individually, matching
+the `packages/db` + `packages/contracts` shape UTV2-1199 used, rather than opening a glob over
+`apps/**`; `docs/03_product/**` admits one subtree and nothing else.
+
+**This does not authorize itself.** `.lane/lanes/governance.yml` is outside this lane's
+`file_scope_lock`, and a lock is pinned at lane-start and cannot be widened by an agent. The
+registration commit therefore requires a CODEOWNERS `scope-override/v1` comment listing
+`.lane/lanes/governance.yml` and pinned to this PR's head — `docs/05_operations/schemas/scope-override-v1.md`
+rule 5 makes a stale override invalid, which is why the registration was pushed **first** and the
+override requested against the resulting head, not the reverse. Until that comment exists, this PR
+is parked, not mergeable.
 
 ## What this lane does not claim
 

@@ -17,11 +17,15 @@ required check, no label, no gate, no new lane type.
 | `AGENTS.md` | The same for Codex, under Mission Context, naming the canonical contracts to read alongside each intent and stating that a canonical contract wins over an intent document. |
 | `.claude/commands/dispatch.md` | Dispatch packets touching a product surface name the intent document and **quote the applicable acceptance criteria inline** rather than citing them by number. Packet content, not a gate. |
 | `docs/05_operations/docs_authority_map.md` | `docs/03_product/*/intent.md` registered as Tier 3 Product, with its authority explicitly subordinate to the canonical contracts it indexes. |
+| `.lane/lanes/governance.yml` | **Scope registration.** `Lane authority` rejected `apps/api/CLAUDE.md`, `apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/intent.md` as outside every governance-lane path. Registered here, in this PR, which is the resolution this file's own comments record eight times. Bounded: the two `CLAUDE.md` files are named individually (the UTV2-1199 shape), not admitted by a glob over `apps/**`; `docs/03_product/**` admits one subtree. This file is outside the lane's `file_scope_lock`, so the commit requires a CODEOWNERS `scope-override/v1` pinned to the head. |
 | `docs/06_status/proof/UTV2-1843/.gitkeep` | Deleted — the review packet requires it be declared and CEP-E2 refuses it once declared. |
 
-**Verification:** `pnpm lint`, `pnpm type-check`, `pnpm build` and `pnpm test` (5962 pass, 0 fail)
-all exit 0 on the branch. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843` returns
+**Verification:** `pnpm lint`, `pnpm type-check` and `pnpm test` (5962 pass, 0 fail) all exit 0 on
+the branch, re-run against the current anchor `49eb75f1b`. `pnpm build` was dropped from this list
+rather than restated: it was not re-run after the anchor moved, and this diff adds no compiled
+source. `verify` was green in CI on `9433a5558`. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843` returns
 Verdict: PASS (rules matched: operator-ui). `pnpm verify` is refused locally at `test:live-db` by
 `ci:assert-staging` under containment; CI is the authoritative receipt. Every `file:line` citation
-in the new document was re-measured against the branch head and two were corrected. Details and the
-expected non-required `Lane authority` failure are in `verification.md`.
+in the new document was re-measured against the branch head and two were corrected. `Lane authority` is resolved by the
+registration above rather than waived; that resolution, the two routes measured and rejected before
+it, and the override it still requires are recorded in `verification.md` under "Fifth correction".
