@@ -260,6 +260,9 @@ remains pure and read-only; the collector still performs no write.
 
 ## Merge SHA Binding
 
+Merge SHA: pending merge
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1514
+
 `sha_binding.merge_sha` is `null` pre-merge and `verified_source_sha` is the last
 commit that changed source. `post-merge-lane-close.yml` runs
 `ops:proof-generate --merge-sha` after the merge; no manual append is made here.
@@ -284,9 +287,16 @@ manifest — no proof glob. So the lane's own proof directory is admitted **only
 by literal `expected_proof_paths` entries, and `ops:lane-manifest update` cannot
 extend that list (`lane-manifest.ts:128` sets it at `create` only).
 
-This lane closed it by listing the four proof files that actually exist in
-`expected_proof_paths`. That is a **truthful widening**, not a fabrication: each
-listed path is a real file this lane produced. It is recorded here because the
+Closing it exposed a second contradiction between the same two gates. Adding
+`.gitkeep` to `expected_proof_paths` satisfied the review packet and immediately
+failed `Close eligibility preflight` with `CEP-E2 empty proof artifacts:
+docs/06_status/proof/UTV2-1839/.gitkeep` — one gate demands the file be declared,
+the other refuses a declared artifact that is empty, and `ops:lane-start` creates
+it empty. The resolution taken here is to **delete the placeholder**: it existed
+only to make an empty directory committable, and the directory now holds three
+real files. `evidence.json` and the two markdown artifacts are declared in
+`expected_proof_paths`, which is a truthful widening — each listed path is a real
+file this lane produced. It is recorded here because the
 underlying repair is one of the two named in `plan.md` — give the packet a
 `docs/06_status/proof/<ID>/**` glob the way `sameIssueLaneMetadataPaths` already
 does for the sync file and the manifest, or teach `ops:lane-manifest update` to
