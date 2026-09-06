@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
 import { defineReadOnlyQueries } from './management-sql';
 import type { DbRuntimeHealth, StorageDomainHealth, StorageGrowthSource } from '../types.js';
+import { assertPrivilegedRequestAuthenticated } from '../request-auth';
 
 interface DiskConfigResponse {
   attributes?: {
@@ -162,11 +163,10 @@ export function isManagementPlaneEnabled(
 /**
  * Throws before any network call when the gate is shut.
  *
- * This is asserted inside each request function rather than only at
- * `getStorageHealth`, so a future caller that reaches the management plane by
- * another route is refused too. `assertManagementPlaneEnabled` runs before
- * `resolveManagementEnv`, so a shut gate is reported as a policy refusal and
- * never as a missing credential.
+ * Asserted inside each request function rather than only at `getStorageHealth`,
+ * so a future caller that reaches the management plane by another route is
+ * refused too. It runs before `resolveManagementEnv`, so a shut gate is
+ * reported as a policy refusal and never as a missing credential.
  */
 function assertManagementPlaneEnabled(): void {
   if (!isManagementPlaneEnabled()) {
@@ -486,10 +486,13 @@ export function unavailableStorageHealth(
 }
 
 export async function getStorageHealth(): Promise<DbRuntimeHealth> {
+  await assertPrivilegedRequestAuthenticated();
   const now = new Date();
 
-  // Checked before the Promise.all below, so a shut gate issues no request at
-  // all rather than issuing seven and discarding the results.
+  // Checked after the caller is authenticated and before the Promise.all below,
+  // so a shut gate issues no request at all rather than issuing seven and
+  // discarding the results. Authentication comes first: an unauthenticated
+  // caller must not learn the gate's state.
   if (!isManagementPlaneEnabled()) {
     return unavailableStorageHealth(MANAGEMENT_PLANE_DISABLED_REASON, now.toISOString());
   }
