@@ -8,15 +8,15 @@
   "branch": "claude/utv2-1846-mission-plan-reconcile",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1524",
   "files_changed": [],
   "file_scope_lock": [
     "docs/mission/plan.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-06T20:55:45.703Z",
-  "heartbeat_at": "2026-09-06T20:55:45.703Z",
+  "heartbeat_at": "2026-09-06T21:04:23.081Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1846-mission-plan-reconcile.json",
