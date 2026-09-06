@@ -25,9 +25,9 @@
     "docs/06_status/proof/UTV2-1843/evidence.json",
     "docs/06_status/proof/UTV2-1843/verification.md"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-06T17:48:36.823Z",
-  "heartbeat_at": "2026-09-06T18:06:37.802Z",
+  "heartbeat_at": "2026-09-06T23:43:47.784Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1843-smart-form-product-intent.json",
