@@ -7,18 +7,18 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "d0f0ca00ef44a938dcaf3b4c9c61d6919548c1be",
+    "verified_source_sha": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS - exit 0, no diagnostics, measured locally at this anchor (pnpm type-check).",
-      "pnpm_test": "PASS - tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor (pnpm test). The count rose from 5962 at the previous anchor because the resync onto origin/main carries newly merged test files into the suite.",
+      "pnpm_test": "PASS - tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor (pnpm test).",
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
-      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 20, Rules matched operator-ui, every triggered required[] artifact present. The count is 20 rather than the 14 recorded at the previous anchor because this resync carries six further main-side files into the changed set."
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 14, Rules matched operator-ui, every triggered required[] artifact present. The count is 14 here, having read 20 at the previous anchor d0f0ca00e: this resync brings docs/mission/plan.md into agreement with origin/main, so it leaves the branch diff entirely. The number is regenerated at each anchor rather than carried forward precisely because it moves in both directions."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "d0f0ca00ef44a938dcaf3b4c9c61d6919548c1be is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND. It is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43 -- docs/06_status/proof/ and docs/06_status/lanes/), and it is the tree every command above was run against. Rule 4 is a two-dot git diff verified_source_sha..HEAD (:129-135, :267), so commits after this one touch only the proof bundle and the lane manifest and do not move the anchor. The anchor has now moved four times on this lane: for the owner-review corrections, for the scope registration, for the first resync, and for this one. Receipts were re-executed at each move rather than carried forward -- the test and r-level counts above both changed as a result, which is why carrying them forward would have been false.",
-    "bound_at": "2026-09-06T22:02:00.000Z"
+    "anchor_note": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8 is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND -- merging BEHIND would be an admin exemption, not permission. It is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43 -- docs/06_status/proof/ and docs/06_status/lanes/), and it is the tree every command above was run against. Rule 4 is a two-dot git diff verified_source_sha..HEAD (:129-135, :267), so commits after this one touch only the proof bundle and the lane manifest and do not move the anchor. The anchor has moved five times on this lane; the receipts were re-executed at every move rather than carried forward, and both the test count and the r-level file count changed across those moves.",
+    "bound_at": "2026-09-06T22:10:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
