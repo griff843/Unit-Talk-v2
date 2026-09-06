@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Execution SHA: 89e2ef767c3a7d3edd3cb552439c95d651d2ccd5  
+Execution SHA: d692e92c09b5d664b0428ef746ed59fba466c916  
 Tier: T2 · Lane type: delivery-ui  
 Result: pass
 
@@ -90,7 +90,7 @@ claims writable staging/database evidence.
 Merge SHA: pending merge  
 PR: pending  
 Approved PR head: pending merge  
-Execution SHA: 89e2ef767c3a7d3edd3cb552439c95d651d2ccd5
+Execution SHA: d692e92c09b5d664b0428ef746ed59fba466c916
 
 ## Anchor correction and orchestrator re-measurement
 
@@ -99,14 +99,14 @@ The executing agent originally recorded the execution SHA as
 is an orphaned pre-rebase copy of the same test commit, left behind when the lane was replayed onto
 `a2efc4172`. Binding a proof to an unreachable commit would make every SHA row in this bundle
 unverifiable, so the rows above now name the reachable anchor
-`89e2ef767c3a7d3edd3cb552439c95d651d2ccd5`.
+`d692e92c09b5d664b0428ef746ed59fba466c916`.
 
 The receipts are carried forward rather than discarded, because the two commits are provably
 identical over the source this lane changes:
 
 ```
 $ git diff --name-only 3518fef1c120187c1acf3be38fc01a8c109eed14 \
-    89e2ef767c3a7d3edd3cb552439c95d651d2ccd5 -- apps/ packages/
+    d692e92c09b5d664b0428ef746ed59fba466c916 -- apps/ packages/
 (empty)
 ```
 

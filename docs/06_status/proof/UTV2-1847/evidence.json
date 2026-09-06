@@ -7,18 +7,18 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "89e2ef767c3a7d3edd3cb552439c95d651d2ccd5",
+    "verified_source_sha": "d692e92c09b5d664b0428ef746ed59fba466c916",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS — exit 0, no diagnostics, re-measured by the orchestrator at this anchor.",
-      "pnpm_test": "PASS — tests 5977, pass 5977, fail 0, exit 0, re-measured by the orchestrator at this anchor.",
+      "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, re-executed at this anchor.",
+      "pnpm_test": "PASS \u2014 tests 5977, pass 5977, fail 0, exit 0, re-executed at this anchor. 100 suite blocks with tests == pass and fail 0 throughout. The count is unchanged from the previous anchor, which is the expected result: the only commit between them renames a test and adds a comment, and adds no test.",
       "pnpm_verify": "Not claimed locally. pnpm verify includes a live-DB stage that refuses to run outside the staging-ci GitHub environment, which this lane does not have. The required `verify` check on this PR is the authoritative result; no local PASS is asserted.",
-      "r_level_check": "PASS — `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head a983b2276` reports Verdict: PASS, Changed files: 10, Rules matched: operator-ui. The operator-ui rule's required qa-experience-report artifact is present, which is why the checker passes rather than being waived."
+      "r_level_check": "PASS \u2014 `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head d692e92c0` reports Verdict: PASS, Changed files: 10, Rules matched: operator-ui. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "89e2ef767c3a7d3edd3cb552439c95d651d2ccd5 is the last commit on this branch touching any path outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43 — docs/06_status/proof/ and docs/06_status/lanes/). The two commits after it, 6fc1858fa and a983b2276, are proof artifacts only and do not move the anchor; the uncommitted manifest edit and .gitkeep removal are likewise proof-only. The executing agent originally recorded 3518fef1c120187c1acf3be38fc01a8c109eed14, which is an orphaned pre-rebase copy of the same test commit and is NOT reachable from this branch. It was corrected rather than kept: `git diff --name-only 3518fef1 89e2ef767 -- apps/ packages/` is empty, so the source this lane changes is byte-identical and the executing agent's receipts transfer, but a proof bound to an unreachable commit could not be verified by anyone.",
-    "bound_at": "2026-09-06T23:40:00.000Z"
+    "anchor_note": "d692e92c09b5d664b0428ef746ed59fba466c916 is the last commit on this branch outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43), verified by the validator's own two-dot rule rather than by reading commit subjects: filtering `git diff --name-only d692e92c0..HEAD` against docs/06_status/proof/ and docs/06_status/lanes/ is empty, while the same test against the previous anchor 89e2ef767 yields 1 path. The anchor moved because the T2 diff review found the spec titled 'reports the connected environment honestly without route interception' fulfils **/api/auth/session in its own beforeEach. The substantive property held -- every reference-data read goes to the real API un-intercepted, which is what the skip messages claim -- but the title claimed more than the test delivers, so it was scoped to reference-data routes and a comment now forbids adding a handler for any /api/reference-data/** path. Correcting it was preferred over recording it because an over-claiming title is the same defect class this bundle exists to avoid. Earlier history, kept because it is load-bearing: the executing agent originally recorded 3518fef1c120187c1acf3be38fc01a8c109eed14, an orphaned pre-rebase copy of the test commit that is NOT reachable from this branch. Its receipts were carried forward only because `git diff --name-only 3518fef1 89e2ef767 -- apps/ packages/` is empty; every receipt has since been re-executed at the current anchor regardless.",
+    "bound_at": "2026-09-06T23:28:06.000Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -90,7 +90,7 @@
   },
   "runtime_proof": {
     "status": "NOT_APPLICABLE",
-    "detail": "Static-proof delivery-ui lane. The runtime it exercises is deliberately local and contained — Chromium to a Next dev server to an API HTTP route to an isolated in-memory repository and back. It contacts no production system and claims no writable staging or database evidence."
+    "detail": "Static-proof delivery-ui lane. The runtime it exercises is deliberately local and contained \u2014 Chromium to a Next dev server to an API HTTP route to an isolated in-memory repository and back. It contacts no production system and claims no writable staging or database evidence."
   },
   "known_gaps": [
     "CI invocation is deliberately not part of this slice. The suite added here is not yet run by any workflow: .github/workflows/qa-fast.yml and the root package.json wiring are assigned to a separate singleton-approved hygiene lane, because qa-fast.yml currently converts a SKIP into a green check (exit code 1 is swallowed; only exit 2 propagates) and that defect must be repaired in the same change that starts depending on it, not inherited.",
