@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1802-cc-management-sql-readonly",
   "branch": "claude/utv2-1802-cc-management-sql-readonly",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "ef38423dc0c9650db928ee2ea55d5d97063b9590",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1513",
   "files_changed": [],
   "file_scope_lock": [
@@ -18,7 +18,7 @@
   ],
   "status": "in_review",
   "started_at": "2026-09-06T00:06:10.315Z",
-  "heartbeat_at": "2026-09-06T00:21:01.249Z",
+  "heartbeat_at": "2026-09-06T00:39:29.168Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1802-cc-management-sql-readonly.json",

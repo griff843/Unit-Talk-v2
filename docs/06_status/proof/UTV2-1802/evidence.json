@@ -1,0 +1,164 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1802",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "ef38423dc0c9650db928ee2ea55d5d97063b9590",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json exits 0 with no diagnostics, measured locally at the anchor and again inside the required verify job.",
+      "pnpm_test": "PASS (6043 tests, 6043 pass, 0 fail) \u2014 aggregate across every workspace suite at the anchor.",
+      "pnpm_test_db": "PASS -- the required `Writable DB proof (staging only)` job succeeded against the staging Supabase project in run 34001056027 (job 101399919279): all 17 steps green, receipt artifact 9979596161. Its live suites are repo-wide (4 tests, 4 pass, 0 fail: the atomic-claim concurrency proof and the three UTV2-1815 stake-constraint proofs). None of them exercises this diff, which opens no database connection. It is offered as the tier's required receipt, not as verification of this change.",
+      "r_level_check": "PASS \u2014 operator-ui matched; its required qa-experience-report artifact is present in the repository. That artifact predates this lane: it satisfies the rule mechanically and is not verification of this change, and is not offered as such.",
+      "pnpm_verify": "PASS -- the required `verify` check succeeded at PR head 8f6dbcd17 in run 34001056027 (job 101400905372), including 'Privileged DB client boundary', 'Enforce DB writer classification', 'Verify (static)', 'Command Center tests' and 'Verify staging DB proof receipt'."
+    },
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-06T00:28:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "tsc -b tsconfig.json, exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 6043,
+      "failures": 0
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm --filter @unit-talk/command-center test",
+      "tests": 507,
+      "failures": 0,
+      "detail": "Includes the three suites this lane depends on: storage-health.test.ts 10/10 (new), management-sql.test.ts 17/17 (new, taken verbatim from #1494), privileged-boundary-guard.test.ts 11/11 (pre-existing on main, and the control that caught the reverted guard)."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "command": "four inversions applied one at a time to apps/command-center/src/lib/data/storage-health.ts, each followed by a byte-for-byte restore, re-running npx tsx --test src/lib/data/storage-health.test.ts",
+      "expected": "each inversion fails the assertion that names the property it breaks",
+      "observed": "baseline 10 pass / 0 fail. (1) remove assertManagementPlaneEnabled() from fetchManagementJson -> 9 pass / 1 fail, 'fetchManagementJson lost its management-plane gate'. (2) remove it from runManagementQuery -> 9 pass / 1 fail, 'runManagementQuery lost its management-plane gate'. (3) remove the getStorageHealth short-circuit -> 9 pass / 1 fail, 'getStorageHealth lost its management-plane gate'. (4) weaken the predicate from === 'true' to any non-empty string -> 9 pass / 1 fail, 'is shut for every value that is not exactly \"true\"'. After restoration git diff reports no change and the suite returns 10 pass / 0 fail.",
+      "detail": "Inversion 4 is what distinguishes 'a check exists' from 'the right check exists'; it catches the common regression where a gate is simplified to a truthiness test and silently opens on \"false\". Inversion 3 is caught by the structural assertion and NOT by the behavioural absence-of-request assertion \u2014 with the short-circuit gone, authentication still refuses first and no request is issued for that other reason. That is stated explicitly so the bundle is not read as claiming the behavioural test alone is guard-sensitive."
+    },
+    "r_level": {
+      "status": "PASS",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "observed": "Verdict: PASS; 9 changed files; rules matched: operator-ui"
+    },
+    "local_verify_limitation": {
+      "status": "EXPECTED",
+      "detail": "pnpm verify cannot complete on this checkout by design. Its `ci:assert-staging` step refuses off-CI \u2014 'REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)' \u2014 because local.env pins SUPABASE_URL to http://127.0.0.1:1 under containment. Every step before it passed: env:check, lint, type-check, build, and pnpm test at 6043/6043. The authoritative pnpm verify result is the required `verify` check in CI, recorded in ci_verify below."
+    },
+    "ci_verify": {
+      "status": "PASS",
+      "check": "verify",
+      "head_sha": "8f6dbcd17c62bbd3ed34b3aedf4a176196f2d5d2",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34001056027/job/101400905372",
+      "detail": "Run 34001056027. The head it ran on differs from verified_source_sha ef38423dc only by 8f6dbcd17, a lane-manifest-only commit (docs/06_status/lanes/UTV2-1802.json, 3 insertions 3 deletions) that binds the manifest to PR #1513. No source file differs between the two, so the anchor remains the last non-proof commit that changed code."
+    }
+  },
+  "runtime_proof": {
+    "kind": "static",
+    "harness": "The change is confined to apps/command-center's data layer. It opens no database connection, runs no migration, changes no schema and alters no repository call; its entire runtime effect is on outbound HTTPS requests to https://api.supabase.com/. getStorageHealth is a privileged boundary whose first statement is `await assertPrivilegedRequestAuthenticated()`, which resolves the current Next request through headers() and fails closed outside a request scope, so a unit test cannot drive its body end to end. next/headers cannot be module-mocked here either: node:test's mock.module requires --experimental-test-module-mocks, which this runner does not set \u2014 measured, not assumed ('import_node_test.mock.module is not a function'). Rather than add an unauthenticated export purely to make the boundary testable \u2014 a real security regression bought for a convenience \u2014 the property is established behaviourally on a globalThis.fetch recorder and structurally per chokepoint, in the idiom privileged-boundary-guard.test.ts already uses. No live-database observation is offered and none is claimed.",
+    "queries": [
+      {
+        "name": "a shut gate issues zero management-plane requests",
+        "method": "delete UNIT_TALK_COMMAND_CENTER_MANAGEMENT_API_ENABLED, replace globalThis.fetch with a recorder, call getStorageHealth() in-process under the real Node runtime, then filter the recorded calls to those whose URL starts with https://api.supabase.com/",
+        "result": "zero recorded management-plane calls; assert.deepEqual(managementCalls(), [])",
+        "significance": "This is the acceptance criterion asserted on the absence of the request rather than on rendered output. The call itself fails closed on authentication outside a request scope, so this proves the stronger property that nothing leaks even on the failing path."
+      },
+      {
+        "name": "the same holds for every non-\"true\" value, not only for an absent one",
+        "method": "repeat the above for 'false', '1', 'yes' and the empty string",
+        "result": "zero recorded management-plane calls in every case",
+        "significance": "A gate keyed on truthiness rather than on the exact string would open on 'false'. This is the behavioural half of what mutation 4 proves structurally."
+      },
+      {
+        "name": "each of the three functions that can reach the management plane owns its own refusal",
+        "method": "parse the body of getStorageHealth, fetchManagementJson and runManagementQuery out of the source and assert the position of each check",
+        "result": "getStorageHealth: `assertPrivilegedRequestAuthenticated` precedes `isManagementPlaneEnabled`, which precedes `await Promise.all`. fetchManagementJson and runManagementQuery: `assertManagementPlaneEnabled()` precedes both `fetch(` and `resolveManagementEnv`.",
+        "significance": "One shared chokepoint would be a single point of failure for a later refactor. Requiring the check before resolveManagementEnv is what makes a shut gate report a policy refusal rather than a missing credential."
+      },
+      {
+        "name": "degradation is honest rather than absent",
+        "method": "call unavailableStorageHealth('because the gate is shut') and inspect every status-bearing field",
+        "result": "managementPlane.available === false with the given reason; storageDomains contains both 'app' and 'ingestion'; disk.alertStatus === 'unavailable' and every storageDomains[].alertStatus === 'unavailable'",
+        "significance": "An omitted row renders as nothing and nothing reads as healthy, which is why 'unavailable' is a member of the StorageAlertStatus union rather than an absent field."
+      },
+      {
+        "name": "the authentication guard PR #1494 silently reverted is restored",
+        "method": "git show <ref>:apps/command-center/src/lib/data/storage-health.ts | grep -c assertPrivilegedRequestAuthenticated, for origin/main, for this lane's #1494-verbatim commit 6cde3622f, and for the head",
+        "result": "origin/main 2; 6cde3622f 0; head 2. privileged-boundary-guard.test.ts passes 11/11 at the head.",
+        "significance": "The guard reached main in 9ac4694d9 (#1503, UTV2-1812) on 2026-09-05T19:49:34-04:00; #1494's merge-base 717b46971 is dated 2026-09-02T17:09:57-04:00. Taking that branch's file wholesale removed the guard with no merge conflict and nothing in #1494's own diff to show for it. Repaired by rebuilding the file as a three-way merge (git merge-file, main / 717b46971 / #1494 head, exit 0, no conflict markers) and reapplying the management-plane gate on top."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "management-plane requests issued with the gate shut",
+        "value": 0
+      },
+      {
+        "probe": "distinct non-\"true\" gate values proven to issue zero requests",
+        "value": 5
+      },
+      {
+        "probe": "functions able to reach the management plane, each carrying its own check",
+        "value": 3
+      },
+      {
+        "probe": "gate inversions applied, and gate inversions caught",
+        "value": 4
+      },
+      {
+        "probe": "storage domain rows present in the unavailable reading",
+        "value": 2
+      },
+      {
+        "probe": "status-bearing fields in the unavailable reading that read as healthy",
+        "value": 0
+      },
+      {
+        "probe": "occurrences of assertPrivilegedRequestAuthenticated in storage-health.ts at the head",
+        "value": 2
+      },
+      {
+        "probe": "occurrences of the same at this lane's #1494-verbatim commit 6cde3622f",
+        "value": 0
+      },
+      {
+        "probe": "live database connections opened by this diff",
+        "value": 0
+      },
+      {
+        "probe": "files changed outside apps/command-center/** and this lane's own artifacts",
+        "value": 0
+      },
+      {
+        "probe": "callers of getStorageHealth in the repository",
+        "value": 1
+      },
+      {
+        "probe": "System Health render sites on main that display storageDomains",
+        "value": 0
+      }
+    ],
+    "live_db": {
+      "status": "PASS",
+      "target": "staging",
+      "detail": "The required staging DB proof job succeeded (job 101399919279, receipt artifact 9979596161), and `verify` consumed that receipt in-run via its 'Verify staging DB proof receipt' step. The suites it runs are the repository's existing live-DB proofs and are unrelated to this diff; this lane adds no live-DB assertion because it opens no connection. Recorded as the tier's receipt, explicitly not as evidence about this change.",
+      "run_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34001056027"
+    }
+  },
+  "scope_note": {
+    "observation": "There is no System Health render site on main. storageDomains, provisionedGiB, usedPct and daysToFull appear nowhere under apps/command-center/src/app or src/components; the only consumer of getStorageHealth is getDashboardRuntimeData, whose db field feeds the overview model.",
+    "consequence": "The 'renders honestly' property is asserted at the data boundary, which is the only place it currently exists to assert. When a storage panel is built it will need its own assertion that 'unavailable' renders as unavailable, and that assertion does not exist yet.",
+    "why_recorded": "Recorded rather than papered over. Claiming a render-level proof that no render site exists to support would be exactly the self-consistent-artifact defect this repository has already paid for repeatedly."
+  }
+}
