@@ -230,6 +230,44 @@ passed" to steps 1 and 2, with step 3 established only to that extent.
 This is the exact defect class this document warns about in §7 — a self-consistent claim that no
 assertion constrains — caught in the artifact whose purpose is to prevent it.
 
+## Corrections made on owner review, 2026-09-06
+
+Three defects were reported by the owner after the first push. All three are in the document's
+*claims*, not in the wiring, and each was measured before being corrected.
+
+**1. `intent.md` §4.1 asserted that seeding the catalog requires unparking provider ingestion.**
+False. `docs/05_operations/T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` (RATIFIED
+2026-04-02) §1 lists sports, leagues, **teams**, sportsbooks, market families, market types and stat
+types with primary seed source *"Governed static seed (migration)"*, ongoing refresh source
+*"None"*, and provider contribution *"Nothing"*. §2 states a team row *"cannot be created from a
+provider observation alone — must be seeded from governed data or operator-approved."* Only players
+and player-team assignments are provider-sourced. The section now distinguishes an authorized
+static reference-data seed (production data — reserved item 1) from provider activation (reserved
+items 3 and 6), states that neither requires the other, and states that **neither is a Milestone 1
+prerequisite**. Standing criterion 5 in §9 was corrected the same way; it previously collapsed both
+into "a reserved decision".
+
+**2. `intent.md` §8 recorded Submission as "Done".** It is not. Every real attempt 422s on the
+event-existence gate (UTV2-1842 finding A) and no pick has persisted. The table now carries an
+explicit state vocabulary — Exercised / Implemented, blocked in the deployed flow / Implemented,
+unreachable today / Partial / Gap — and the distinction is applied consistently, not only to the
+reported row. Five rows moved off an implicit "Done": Submission, Receipt, Track Only persisted
+truth, read-only observation and honest fallback provenance are each implemented and unreachable
+behind the same gate; event-bound participants is unreachable because production holds 789 events
+and **0 in the future**. Rows that were genuinely performed against the deployed system — reaching
+the form, authenticating, sport-aware selection, bet-slip review — are now labelled *Exercised*
+rather than *Done*, so the word carries a measured meaning.
+
+**3. "Non-required check" was treated as authorization for the `Lane authority` red.** It is not,
+and that reasoning is withdrawn. `lane:check` fails on exactly three paths — `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/intent.md` — none of which any lane
+contract in `.lane/lanes/` admits (`grep -l 03_product .lane/lanes/*.yml` returns nothing;
+`apps/smart-form/**` is admitted only by `delivery-ui`). The supported resolution is the one
+`.lane/lanes/governance.yml` records eight times in its own comments: the lane that hits the gap
+adds the bounded glob in the same PR. `.lane/lanes/governance.yml` is outside this lane's pinned
+`file_scope_lock`, so that edit requires a CODEOWNERS `scope-override/v1` pinned to the head. That
+request is stated exactly in the PR body rather than routed around.
+
 ## What this lane does not claim
 
 - It does not claim the Smart Form is usable. Three of its findings are open gaps tracked under

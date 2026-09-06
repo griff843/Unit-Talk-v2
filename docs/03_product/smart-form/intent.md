@@ -244,9 +244,33 @@ Tracked as **UTV2-1842** finding C.
 
 ### 4.1 Fallback is not a workaround for an empty catalog
 
-Reference-data population is **out of scope of the fallback design**. Seeding the catalog requires
-unparking provider ingestion, which is a reserved decision (`docs/mission/intent.md` § "Reserved
-decisions", item 5) and is deliberately parked for the duration of Milestone 1.
+Reference-data population is **out of scope of the fallback design** — but not because it is
+impossible under containment. **Corrected 2026-09-06:** an earlier draft of this section claimed
+that "seeding the catalog requires unparking provider ingestion." That is false, and
+`docs/05_operations/T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` (RATIFIED 2026-04-02)
+§1 says so directly.
+
+Two different actions were conflated, and the policy separates them:
+
+| | Authorized static reference-data seeding | Provider activation |
+|---|---|---|
+| What it is | A governed static seed applied by migration — sports, leagues, **teams**, sportsbooks, market families, market types, stat types | Turning paid provider ingestion on |
+| Source | `V1_REFERENCE_DATA` → migration seed SQL, or operator-approved rows | SGO, live |
+| Policy | Seeding policy §1: these domains are *"Governed static seed (migration)"*, refresh source *"None"*, providers contribute *"Nothing"* | `T1_PROVIDER_INGESTION_CONTRACT.md`; `SYNDICATE_MACHINE_MODE` |
+| Which reserved decision | Production DDL / data (`docs/mission/intent.md` reserved item 1) | Paid provider commitment (item 3) and containment (item 6) |
+| Needs the other? | **No** | — |
+
+The policy's core principle is the reason: *"Providers are sources of observations, not sources of
+truth."* Only **players** and **player-team assignments** are seeded from provider observations.
+Teams are explicitly not: a team row *"cannot be created from a provider observation alone — must be
+seeded from governed data or operator-approved"* (§2). So the NCAAF/NCAAB/SOCCER team gap below is
+closable by an authorized static seed with containment fully intact.
+
+**Neither action is a Milestone 1 prerequisite.** `docs/mission/intent.md` § "What step 4 does and
+does not require" states that the pilot does not require canonical reference-data coverage, and this
+document introduces no threshold of its own. Honest fallback provenance is what the pilot needs;
+catalog coverage is what ordinary repeated use needs, and that belongs to Milestone 2 and is
+sequenced on its own merits.
 
 Measured 2026-09-06 in production: MLB 30 teams, NBA 30, NFL 32, NHL 32, **NCAAF 0, NCAAB 0,
 SOCCER 0**; 789 events, **0 in the future**, latest `2026-07-02`. The fallback is therefore the
@@ -419,31 +443,45 @@ a physical on-screen keyboard, and no evidence should be described as if it did.
 
 Measured 2026-09-06 against `main` `551edfe67` and production `d3f69b804`.
 
+**The state vocabulary is deliberate, and "Done" is the narrowest word in it.** A merge, a green
+check or a passing unit test establishes none of these states on its own (§7):
+
+| State | Means |
+|---|---|
+| **Exercised** | Actually performed against the deployed system, by a person, and observed |
+| **Implemented; blocked in the deployed flow** | The code exists and its tests pass, but no operator can reach the behaviour today. Not "Done" |
+| **Implemented; unreachable today** | The code exists and is not itself blocked, but its precondition is absent in production |
+| **Partial** | Implemented for some inputs and not others; the table says which |
+| **Gap** | Not implemented |
+
 | Required behaviour | Implementation | Verification | State |
 |---|---|---|---|
-| Reach the deployed form | `smart-form` container + Caddy route | reached in browser | **Done** — pilot step 1 |
-| Authenticate | `auth.ts`, Auth.js v5 + allow-list | signed in | **Done** — pilot step 2 |
+| Reach the deployed form | `smart-form` container + Caddy route | reached in browser | **Exercised** — pilot step 1 |
+| Authenticate | `auth.ts`, Auth.js v5 + allow-list | signed in | **Exercised** — pilot step 2 |
 | Canonical identity | `auth-allowlist.ts`, `submit-pick.ts:143` | explicit mapping proven by a successful sign-in on post-#1488 code; the resolved id is unread until a pick persists | **Partial** — see §3.2 |
-| Sport-aware selections | `MarketTypeGrid`, `market-types.ts`, `TEAM_SPORTS` | unit + e2e | **Done** |
-| DB-backed participants (event-bound) | `ParticipantAutocompleteField` | e2e | **Done** |
+| Sport-aware selections | `MarketTypeGrid`, `market-types.ts`, `TEAM_SPORTS` | unit + e2e, and reached in the browser | **Exercised** |
+| DB-backed participants (event-bound) | `ParticipantAutocompleteField` | e2e | **Implemented; unreachable today** — production holds 789 events, **0 in the future** (§4.1), so no event binds |
 | DB-backed participants (no event) | server accepts it; **client never sends it** | — | **Gap — UTV2-1842 B** |
-| Derived matchup name | `applyStructuredSideSelection:1799` | e2e | **Partial** — canonical tier only |
+| Derived matchup name | `applyStructuredSideSelection:1799` | e2e | **Partial** — canonical tier only, and that tier is itself unreachable today |
 | Distinct sides refused in browser | `BetForm.tsx:1902` | e2e | **Partial** — skipped in manual tier |
-| Honest fallback provenance | `validateManualResolution`, `findCanonicalCoverage` | unit | **Done, server-side** |
+| Honest fallback provenance | `validateManualResolution`, `findCanonicalCoverage` | unit | **Implemented; blocked in the deployed flow** — the event gate rejects before validation is reached |
 | Partial coverage / search failure | `reference-data.ts:37` single boolean | — | **Gap — UTV2-1842 C** |
 | Event gate tolerates a parked catalog | `checkEventExistenceGate` blocks everything | — | **Gap — UTV2-1842 A** |
 | Signed odds on mobile | `BetForm.tsx:3922` `inputMode="numeric"` | — | **Gap — UTV2-1842 D** |
 | Signed spread line on mobile | `BetForm.tsx:3148` `inputMode="decimal"` | — | **Gap — same defect, §6.1** |
-| Bet-slip review | `BetSlipPanel`, `calcPayout` | unit | **Done** |
-| Submission | `POST /api/submissions`, guards mirrored | unit + e2e | **Done** |
-| Receipt | `SuccessReceipt` | e2e | **Done** |
-| Track Only persisted truth | UTV2-1672 guard set | **mutation-tested** | **Built; not yet observed in a live run** |
-| Read-only observation | `GET /api/picks/:id/trace` (authenticated) | — | **Available; not yet exercised** |
+| Bet-slip review | `BetSlipPanel`, `calcPayout` | unit, and reached in the browser | **Exercised** |
+| Submission | `POST /api/submissions`, guards mirrored | unit + e2e | **Implemented; blocked in the deployed flow** — every real attempt 422s on the event gate (UTV2-1842 A). No pick has persisted |
+| Receipt | `SuccessReceipt` | e2e | **Implemented; blocked in the deployed flow** — downstream of a submission that cannot succeed |
+| Track Only persisted truth | UTV2-1672 guard set | **mutation-tested** | **Implemented; blocked in the deployed flow** — the guards are proven by inversion, and no live pick has yet passed through them |
+| Read-only observation | `GET /api/picks/:id/trace` (authenticated) | — | **Implemented; blocked in the deployed flow** — there is no persisted pilot pick to observe |
 
-**Milestone 1 steps 1 and 2 passed in production on 2026-09-06; step 3 is established only to the
-extent §3.2 states. Step 4 is blocked by UTV2-1842 A**, so steps 3 through 7 cannot be closed out
-until a pick persists.
-Steps 5–7 are unattempted, not failing.
+**Read the table by that vocabulary and the shape of the work is unambiguous.** Milestone 1 steps 1
+and 2 are *exercised*; step 3 is established only to the extent §3.2 states. **Step 4 is blocked by
+UTV2-1842 A**, and steps 5, 6 and 7 are each *implemented and blocked behind it* — not failing, and
+not done. Nothing below step 4 can change state until a real pick persists.
+
+The distinction matters beyond bookkeeping: five rows in this table would have read "Done" on the
+evidence of merged code and green tests, and an operator cannot perform any of the five today.
 
 ---
 
@@ -471,8 +509,11 @@ executor should not have to resolve a cross-document numbering to know what it m
 3. A transient failure is never recorded as a permanent fact.
 4. Operator-facing behaviour is verified at the level it lives at — a rendered control is evidence
    about a control; a schema test is not.
-5. Reference-data population is not a fix. If a change appears to need catalog seeding, that is a
-   reserved decision and the task stops at stating it.
+5. Reference-data population is not a fix *for a resolution or provenance defect*, and it is never
+   a substitute for honest fallback. It is also not a reserved decision *about containment*: per
+   §4.1, an authorized static team/league/market seed is a production-data action (reserved item 1)
+   and is independent of provider activation (items 3 and 6). If a change appears to need catalog
+   seeding, the task states which of the two it means, and does not conflate them.
 
 ---
 
