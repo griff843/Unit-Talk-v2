@@ -26,6 +26,28 @@ Execution SHA: 825bb865996f310be9351e3790a6f0b388e85b42
       in this diff.
 - [x] **A9 —** The keystroke fix is mutation-proven — reverting it turns two tests red, named below.
 
+## Verification
+
+How each assertion above was established, so the evidence table below is read as measurement rather
+than as description.
+
+- **Executed, not inspected.** Every claim about behaviour comes from a test that was run on this
+  branch at `825bb865996f310be9351e3790a6f0b388e85b42`. The commands and their exact counts are in
+  "Commands run"; `pnpm test` reports `tests 5970, pass 5970, fail 0`.
+- **The keystroke repair was proven by inversion.** Reverting `nextSignedInputValue` to coerce every
+  keystroke turns exactly two named tests red, and leaves the complete-value test green. Both halves
+  matter: the mutation table records the failure, and A3 records what must *not* break while fixing
+  it.
+- **The mobile-keypad assertion carries its own inversion.** The rendering test asserts the positive
+  attributes and additionally `doesNotMatch(/inputmode="(?:numeric|decimal)"/)`, so a silent
+  regression to a keypad without a minus key fails rather than passing unnoticed.
+- **Containment was checked by diff, not by recollection.** `git diff origin/main...HEAD` filtered on
+  `trackOnly` and `distributionMode` returns nothing, so this lane changes no delivery or
+  distribution behaviour.
+- **What is not verified here is stated, not omitted.** `pnpm verify` refused locally under
+  containment at `test:live-db`; the binding receipt is the required `verify` check on this head, and
+  the end-to-end browser flow is explicitly disclaimed in "What this lane does not claim".
+
 ## EVIDENCE:
 
 | Assertion | Evidence |
