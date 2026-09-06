@@ -1,0 +1,108 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1827
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1827
+  objective: "Governed staging proof runner: execute allowlisted lane scripts
+    under staging-ci without widening each lane"
+  acceptance_criteria:
+    - |-
+      ## Problem
+
+      Active T1/data-canonical lanes can receive staging credentials only through workflows whose commands are hardcoded. [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) has proved that no existing `staging-ci` runner can execute its lane-owned `scripts/run-canonical-reference-bootstrap.ts`, so its required first-run + second-run idempotency proof is mechanically unreachable without editing a shared Tier C workflow outside the lane scope. The same execution-capability gap also affects other lane-specific staging proof such as [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention).
+
+      ## PM-approved architecture
+
+      Add the smallest governed staging execution surface that lets an authorized lane run a **predeclared allowlisted proof command** against the staging environment without creating a generic arbitrary-shell/secret-exfiltration interface.
+
+      Required properties:
+
+      1. The dispatch input selects from an explicit allowlist or repository-owned command key; do not accept free-form shell or arbitrary paths/args.
+      2. Execution is pinned to the requested commit/head and records commit SHA, command key, environment/project identity, actor/run ID, exit status, and a machine-readable receipt.
+      3. The runner uses `staging-ci` only and must mechanically reject the production Supabase project/reference.
+      4. Staging credentials are not printed or exposed to lane code beyond the intended process environment.
+      5. The first admitted commands must cover the concrete blockers for [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent); add [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention) only if its final preservation command can use the same security model without broadening secret authority.
+      6. Negative tests prove an unknown command key, arbitrary shell/path, production target, or unapproved ref fails closed.
+      7. No production mutation, provider activation, ingestion/system-pick unpark, member delivery, or generic workflow refactor.
+
+      ## File scope / tier
+
+      Tier **T1** because this changes a shared workflow/secret execution surface. Keep the implementation to the minimum `.github/workflows/**` staging runner change plus narrowly required script/test/proof/lane artifacts. Exact-head independent review and separately authenticated PM authority remain required for merge.
+
+      ## Done
+
+      [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) can invoke its canonical bootstrap twice on approved staging and obtain a durable execution receipt without changing [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent)'s own frozen scope; unauthorized command/target mutations are proven rejected.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Problem
+      Active T1/data-canonical lanes can receive staging credentials only through workflows whose commands are hardcoded. [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) has proved that no existing `staging-ci` runner can execute its lane-owned `scripts/run-canonical-reference-bootstrap.ts`, so its required first-run + second-run idempotency proof is mechanically unreachable without editing a shared Tier C workflow outside the lane scope. The same execution-capability gap also affects other lane-specific staging proof such as [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention).
+    - |-
+      PM-approved architecture
+      Add the smallest governed staging execution surface that lets an authorized lane run a **predeclared allowlisted proof command** against the staging environment without creating a generic arbitrary-shell/secret-exfiltration interface.
+
+      Required properties:
+
+      1. The dispatch input selects from an explicit allowlist or repository-owned command key; do not accept free-form shell or arbitrary paths/args.
+      2. Execution is pinned to the requested commit/head and records commit SHA, command key, environment/project identity, actor/run ID, exit status, and a machine-readable receipt.
+      3. The runner uses `staging-ci` only and must mechanically reject the production Supabase project/reference.
+      4. Staging credentials are not printed or exposed to lane code beyond the intended process environment.
+      5. The first admitted commands must cover the concrete blockers for [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent); add [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention) only if its final preservation command can use the same security model without broadening secret authority.
+      6. Negative tests prove an unknown command key, arbitrary shell/path, production target, or unapproved ref fails closed.
+      7. No production mutation, provider activation, ingestion/system-pick unpark, member delivery, or generic workflow refactor.
+    - >-
+      File scope / tier
+
+      Tier **T1** because this changes a shared workflow/secret execution
+      surface. Keep the implementation to the minimum `.github/workflows/**`
+      staging runner change plus narrowly required script/test/proof/lane
+      artifacts. Exact-head independent review and separately authenticated PM
+      authority remain required for merge.
+    - |-
+      Done
+      [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) can invoke its canonical bootstrap twice on approved staging and obtain a durable execution receipt without changing [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent)'s own frozen scope; unauthorized command/target mutations are proven rejected.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1827/governed-staging-proof-runner-execute-allowlisted-lane-scripts-under
+    title: "Governed staging proof runner: execute allowlisted lane scripts under
+      staging-ci without widening each lane"
+    description: |-
+      ## Problem
+
+      Active T1/data-canonical lanes can receive staging credentials only through workflows whose commands are hardcoded. [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) has proved that no existing `staging-ci` runner can execute its lane-owned `scripts/run-canonical-reference-bootstrap.ts`, so its required first-run + second-run idempotency proof is mechanically unreachable without editing a shared Tier C workflow outside the lane scope. The same execution-capability gap also affects other lane-specific staging proof such as [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention).
+
+      ## PM-approved architecture
+
+      Add the smallest governed staging execution surface that lets an authorized lane run a **predeclared allowlisted proof command** against the staging environment without creating a generic arbitrary-shell/secret-exfiltration interface.
+
+      Required properties:
+
+      1. The dispatch input selects from an explicit allowlist or repository-owned command key; do not accept free-form shell or arbitrary paths/args.
+      2. Execution is pinned to the requested commit/head and records commit SHA, command key, environment/project identity, actor/run ID, exit status, and a machine-readable receipt.
+      3. The runner uses `staging-ci` only and must mechanically reject the production Supabase project/reference.
+      4. Staging credentials are not printed or exposed to lane code beyond the intended process environment.
+      5. The first admitted commands must cover the concrete blockers for [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent); add [UTV2-1771](https://linear.app/unit-talk-v2/issue/UTV2-1771/preserve-june-provider-offer-history-partitions-before-retention) only if its final preservation command can use the same security model without broadening secret authority.
+      6. Negative tests prove an unknown command key, arbitrary shell/path, production target, or unapproved ref fails closed.
+      7. No production mutation, provider activation, ingestion/system-pick unpark, member delivery, or generic workflow refactor.
+
+      ## File scope / tier
+
+      Tier **T1** because this changes a shared workflow/secret execution surface. Keep the implementation to the minimum `.github/workflows/**` staging runner change plus narrowly required script/test/proof/lane artifacts. Exact-head independent review and separately authenticated PM authority remain required for merge.
+
+      ## Done
+
+      [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) can invoke its canonical bootstrap twice on approved staging and obtain a durable execution receipt without changing [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent)'s own frozen scope; unauthorized command/target mutations are proven rejected.
+    captured_at: 2026-09-05T13:22:08.827Z
+    description_sha256: d7af014c3b95026ad44aa7b67cfc134b8c8f335327475e9854a733a8fa619f6c
+  contract_hash: f628d51b1cc8656b59da2cd5cdb8310f2dd580aac8bc4f245782aadba9ccdd77
