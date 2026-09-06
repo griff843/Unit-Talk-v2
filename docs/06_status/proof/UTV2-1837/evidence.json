@@ -7,7 +7,7 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "4dbc17d149da9de59bddb32b16e883321612150b",
+    "verified_source_sha": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
@@ -17,7 +17,7 @@
       "r_level_check": "PASS — run inside `pnpm verify`; no R-level artifact beyond the diff summary and verification log is required for this diff, and none is claimed."
     },
     "sha_type": "source_sha",
-    "anchor_note": "4dbc17d149da9de59bddb32b16e883321612150b is the merge of origin/main into the lane branch and is the last commit that is not proof-only. The proof commit that follows is inside PROOF_ONLY_PREFIXES and does not move the anchor.",
+    "anchor_note": "5ffc0a688b3f1d3a5045faa9d703292c525e6d1c is the last commit on the branch that is not proof-only — the candidate-source repair made after the first CI run. The proof commit that follows is inside PROOF_ONLY_PREFIXES and does not move the anchor.",
     "bound_at": "2026-09-06T02:10:50.000Z"
   },
   "static_proof": {
