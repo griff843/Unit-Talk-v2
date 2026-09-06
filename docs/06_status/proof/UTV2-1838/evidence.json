@@ -6,19 +6,19 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "3eea8f258479789f08ccb28cec3dd87a770f1710",
     "verified_source_sha": "80b955acd77a721a1c52f825342cc384c1011e3d",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor.",
       "pnpm_test": "PASS. The completed local `pnpm verify` run contains zero `not ok` lines and 101 suite blocks each reporting `# fail 0`, covering apps, command-center, smart-form, verification, the seven domain suites, qa-agent, ut-cli, ops and t1-proof:local.",
-      "pnpm_verify": "EXIT 1 locally, and not because anything failed a test. Every stage through `verify:commands` passed; the run then reached `test:live-db` -> `test:db` -> `ci:assert-staging`, which REFUSED with `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` because writable DB verification may only run inside the staging-ci GitHub environment. `pnpm verify` therefore cannot exit 0 on a developer machine without staging credentials \u2014 a structural property of the guard, not a property of this diff. No local PASS is claimed. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
-      "r_level_check": "set-by-ci \u2014 R-Level Compliance runs in CI on this branch. This diff touches ops scripts and docs only; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed a test. Every stage through `verify:commands` passed; the run then reached `test:live-db` -> `test:db` -> `ci:assert-staging`, which REFUSED with `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx` because writable DB verification may only run inside the staging-ci GitHub environment. `pnpm verify` therefore cannot exit 0 on a developer machine without staging credentials — a structural property of the guard, not a property of this diff. No local PASS is claimed. The required `verify` check on this PR, which runs inside staging-ci, is the authoritative result.",
+      "r_level_check": "set-by-ci — R-Level Compliance runs in CI on this branch. This diff touches ops scripts and docs only; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
-    "sha_type": "source_sha",
+    "sha_type": "merge_sha",
     "anchor_note": "80b955acd77a721a1c52f825342cc384c1011e3d is the last non-proof commit on the branch. It is a docs-only reconciliation of docs/mission/plan.md that changed no code and no test; the implementation this bundle attests to is its parent d34d35ac2, and every measurement below was taken there. The proof commit that follows is inside PROOF_ONLY_PREFIXES and does not move the anchor.",
-    "bound_at": "2026-09-06T04:20:00.000Z"
+    "bound_at": "2026-09-06T05:07:35.841Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -49,11 +49,11 @@
       "count": 3,
       "command": "apply each mutation to the real source, run the owning suite, restore byte-for-byte and confirm a clean tree",
       "observed": "M1 remove the !isMarkdownProofPath refusal from generateT2ProofBundle -> 6 pass / 2 fail, including the byte-level assertion that a pre-existing evidence.json survives --force. M2 remove the existence guard from readOptionalFile -> 8 pass / 1 fail, reproducing the finalize ENOENT. M3 guardCloseAgainstMainCheckout returns null unconditionally -> 182 pass / 1 fail.",
-      "honest_reading": "M1 is the load-bearing one and it asserts file content, not an exit code \u2014 an exit-code assertion would have passed with the guard removed, because the writer reports success either way. The two harvester calls added to rebindRepairedLaneProof have NO mutation control: they are wrapped in try/catch by design and both reach the network, so a unit-level inversion would prove only that the try/catch works. That gap is stated in known_gaps rather than implied to be covered."
+      "honest_reading": "M1 is the load-bearing one and it asserts file content, not an exit code — an exit-code assertion would have passed with the guard removed, because the writer reports success either way. The two harvester calls added to rebindRepairedLaneProof have NO mutation control: they are wrapped in try/catch by design and both reach the network, so a unit-level inversion would prove only that the try/catch works. That gap is stated in known_gaps rather than implied to be covered."
     },
     "coupled_ordering": {
       "status": "PASS",
-      "detail": "The overwrite guard precedes the ENOENT repair in both the diff and the assertion list. Before this lane, readOptionalFile's unguarded fs.readFileSync \u2014 evaluated as a function argument \u2014 threw before generateT2ProofBundle ran, and that crash was the only thing preventing --force from writing the Markdown bundle over every expected_proof_paths entry. 27 T2-eligible manifests on main declare evidence.json or model-routing.json there. Repairing the crash alone would have converted a halt into silent destruction of machine-read proof artifacts."
+      "detail": "The overwrite guard precedes the ENOENT repair in both the diff and the assertion list. Before this lane, readOptionalFile's unguarded fs.readFileSync — evaluated as a function argument — threw before generateT2ProofBundle ran, and that crash was the only thing preventing --force from writing the Markdown bundle over every expected_proof_paths entry. 27 T2-eligible manifests on main declare evidence.json or model-routing.json there. Repairing the crash alone would have converted a halt into silent destruction of machine-read proof artifacts."
     },
     "reserved_surface_untouched": {
       "status": "PASS",
@@ -63,21 +63,21 @@
     },
     "scope_honesty": {
       "status": "PASS",
-      "detail": "The issue names seven scope items and six acceptance criteria. Criteria 1, 2, 4 and 6 are implemented here. Criterion 3 was NOT implemented because measurement showed it already holds on main \u2014 see acceptance_criterion_3 below. Criterion 5 (lease-registry.ts: reclaim a terminal lane's lease without waiting out the 48h TTL) is genuinely not done: the file is outside this lane's file_scope_lock, which is pinned at lane-start and cannot be widened by an agent. Rather than request a scope override or smuggle it in, it is recorded in docs/mission/plan.md with file:line and the required repair."
+      "detail": "The issue names seven scope items and six acceptance criteria. Criteria 1, 2, 4 and 6 are implemented here. Criterion 3 was NOT implemented because measurement showed it already holds on main — see acceptance_criterion_3 below. Criterion 5 (lease-registry.ts: reclaim a terminal lane's lease without waiting out the 48h TTL) is genuinely not done: the file is outside this lane's file_scope_lock, which is pinned at lane-start and cannot be widened by an agent. Rather than request a scope override or smuggle it in, it is recorded in docs/mission/plan.md with file:line and the required repair."
     },
     "acceptance_criterion_3": {
       "status": "ALREADY_HOLDS_ON_MAIN",
       "claim_in_issue": "truth_check_history grows on every non-done run; an infra-error early return at truth-check-lib.ts:986/:1045/:1062 permanently records a fail for what was a token blip, and the guard at :1860-1864 covers only done.",
-      "finding": "The defect does not exist, and the cited line numbers are stale \u2014 on current main they are unrelated code.",
+      "finding": "The defect does not exist, and the cited line numbers are stale — on current main they are unrelated code.",
       "method": "Called finalizeWithManifest directly with its injectable writeManifestFn and counted writes. Not read from source.",
       "observed": {
         "second close on a done lane, exit 0": "0 writes",
         "second close on a done lane, exit 1": "0 writes",
         "infra_error on a live lane, exit 3": "0 writes",
         "ineligible on a live lane, exit 2": "0 writes",
-        "genuine fail on a live lane, exit 1": "1 write \u2014 the control proving the probe can observe a write at all"
+        "genuine fail on a live lane, exit 1": "1 write — the control proving the probe can observe a write at all"
       },
-      "why": "Every infra_error path uses exitCode 3 (:919, :938, :955, :1097, :1595) and finalizeWithManifest:1898 returns before any write on exit 2 or 3. That guard came in with 4c029b006 (2026-04-11); the done guard with 7bcc642d7 / UTV2-1224 (2026-06-06). Both predate the issue, so this was not recently fixed \u2014 the issue was wrong when written.",
+      "why": "Every infra_error path uses exitCode 3 (:919, :938, :955, :1097, :1595) and finalizeWithManifest:1898 returns before any write on exit 2 or 3. That guard came in with 4c029b006 (2026-04-11); the done guard with 7bcc642d7 / UTV2-1224 (2026-06-06). Both predate the issue, so this was not recently fixed — the issue was wrong when written.",
       "remaining_gap": "No regression test locks the behaviour. scripts/ops/truth-check-lib.test.ts is also outside this lane's file_scope_lock."
     }
   },
@@ -86,9 +86,9 @@
     "detail": "T2 static-proof governance lane. Changes ops scripts and docs only; touches no database, no HTTP surface, and no runtime container. No live-DB proof is required and none is claimed."
   },
   "known_gaps": [
-    "Acceptance criterion 5 is NOT met: scripts/ops/lease-registry.ts is outside this lane's file_scope_lock and was deliberately not taken through a scope override. Recorded in docs/mission/plan.md. Criterion 3 is met, but by main rather than by this diff \u2014 see static_proof.acceptance_criterion_3; no regression test locks it, and that test file is also out of scope.",
+    "Acceptance criterion 5 is NOT met: scripts/ops/lease-registry.ts is outside this lane's file_scope_lock and was deliberately not taken through a scope override. Recorded in docs/mission/plan.md. Criterion 3 is met, but by main rather than by this diff — see static_proof.acceptance_criterion_3; no regression test locks it, and that test file is also out of scope.",
     "The two evidence harvesters newly called from rebindRepairedLaneProof have no mutation control. Both are wrapped never-fatal and both reach the network, so a unit inversion would test the try/catch rather than the behaviour. Acceptance criterion 6 (a workflow_dispatch replay populates static_proof identically to a push) is argued from the call site, not observed on a real replay.",
-    "`pnpm verify` exits 1 locally and always will without staging credentials: `ci:assert-staging` refuses a 127.0.0.1 target, so `test:live-db` cannot run outside the staging-ci GitHub environment. Everything before it passed \u2014 0 `not ok`, 101 suite blocks at `# fail 0`. The required `verify` check on this PR is the authoritative full-tree result and this bundle claims no local PASS.",
-    "Return review packet will report this lane's own proof artifacts as out-of-scope \u2014 the recorded defect at scripts/ops/pr-review-packet.ts:487-491, where expected_proof_paths is an exact list and evidence.json is not among this lane's declared paths. It is not one of the four required checks and blocks no merge."
+    "`pnpm verify` exits 1 locally and always will without staging credentials: `ci:assert-staging` refuses a 127.0.0.1 target, so `test:live-db` cannot run outside the staging-ci GitHub environment. Everything before it passed — 0 `not ok`, 101 suite blocks at `# fail 0`. The required `verify` check on this PR is the authoritative full-tree result and this bundle claims no local PASS.",
+    "Return review packet will report this lane's own proof artifacts as out-of-scope — the recorded defect at scripts/ops/pr-review-packet.ts:487-491, where expected_proof_paths is an exact list and evidence.json is not among this lane's declared paths. It is not one of the four required checks and blocks no merge."
   ]
 }

@@ -1,6 +1,6 @@
 # PROOF: UTV2-1838
 
-MERGE_SHA: pending merge
+MERGE_SHA: 3eea8f258479789f08ccb28cec3dd87a770f1710
 Execution SHA: 80b955acd77a721a1c52f825342cc384c1011e3d
 
 Closeout safe to repeat — unmask the finalize ENOENT halt without unmasking the
@@ -8,7 +8,7 @@ Closeout safe to repeat — unmask the finalize ENOENT halt without unmasking th
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 3eea8f258479789f08ccb28cec3dd87a770f1710
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1517
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is
