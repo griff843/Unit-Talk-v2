@@ -12,7 +12,7 @@
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS — tsc -b tsconfig.json, exit 0, no diagnostics, measured locally at this anchor",
-      "pnpm_test": "PASS — exit 0. Aggregated across the per-package tsx --test invocations: 5938 tests, 5938 pass, 0 fail.",
+      "pnpm_test": "PASS — exit 0. Aggregated across the per-package tsx --test invocations: 5941 tests, 5941 pass, 0 fail.",
       "pnpm_verify": "set-by-ci — not obtainable locally. `verify` is `pnpm verify:static && pnpm test:live-db`; the local run reached test:live-db, which mechanically establishes verify:static exited 0, then refused with '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1)'. That stage refuses a non-staging target by design. The required `verify` check on this PR at this head is the authoritative result.",
       "r_level_check": "PASS — run inside `pnpm verify`; no R-level artifact beyond the diff summary and verification log is required for this diff, and none is claimed."
     },
@@ -24,11 +24,11 @@
     "status": "PASS",
     "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "tsc -b tsconfig.json, exit 0, no diagnostics" },
     "lint": { "status": "PASS", "command": "pnpm lint", "detail": "eslint . --cache, exit 0, no findings" },
-    "test": { "status": "PASS", "command": "pnpm test", "tests": 5938, "failures": 0, "detail": "exit 0; totals summed across the per-package TAP outputs" },
+    "test": { "status": "PASS", "command": "pnpm test", "tests": 5941, "failures": 0, "detail": "exit 0; totals summed across the per-package TAP outputs" },
     "targeted_test": {
       "status": "PASS",
       "command": "pnpm exec tsx --test scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close,lane-finalize}.test.ts",
-      "detail": "preflight 32/32, shared 93/93, truth-check-lib 132/132, execution-packet 103/103, lane-maximizer 91/91, lane-close 180/180, lane-finalize 27/27. +31 tests added by this lane."
+      "detail": "preflight 32/32, shared 93/93, truth-check-lib 132/132, execution-packet 103/103, lane-maximizer 94/94, lane-close 180/180, lane-finalize 27/27. +34 tests added by this lane."
     },
     "mutation_control": {
       "status": "PASS",

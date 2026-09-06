@@ -23,6 +23,7 @@ import {
   LINEAR_CANDIDATE_QUERY,
   linearCandidateMaxPages,
   parseQueueCandidates,
+  hasTrackerSource,
   resolveCandidateSource,
   runMaximizerCli,
 } from './lane-maximizer.js';
@@ -2459,3 +2460,31 @@ test('UTV2-1837: an explicit source always outranks the credential probe', () =>
     assert.equal(resolveCandidateSource(['--from-stdin'], hasCredential), 'explicit');
   }
 });
+
+// UTV2-1837 — the source decision must come from the deps the caller supplied,
+// not from whatever credential the machine happens to hold. Getting this wrong
+// is not hypothetical: probing only `process.env` made sixteen pre-existing
+// tests that inject a fake tracker pass locally and fail in CI, where they
+// silently stopped exercising the Linear path at all.
+test('UTV2-1837: injected Linear deps ARE a tracker source', () => {
+  assert.equal(
+    hasTrackerSource({ linear: fakeLinearDeps([[candidateIssueNode('UTV2-9001')]]) }),
+    true,
+    'a caller that supplies a tracker in place of the wire has a tracker source',
+  );
+});
+
+test('UTV2-1837: with no deps and no credential the CLI reads the queue, not an unreachable tracker', async () => {
+  assert.equal(resolveCandidateSource([], false), 'queue');
+  assert.equal(
+    resolveCandidateSource(['--from-linear'], false),
+    'linear',
+    'an EXPLICIT --from-linear is still honoured; the fallback is a default, never an override',
+  );
+});
+
+test('UTV2-1837 inversion: an explicit flag beats the credential probe in both directions', () => {
+  assert.equal(resolveCandidateSource(['--from-queue'], true), 'queue');
+  assert.equal(resolveCandidateSource(['--candidates', '[]'], false), 'explicit');
+});
+

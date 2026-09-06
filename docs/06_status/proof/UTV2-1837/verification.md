@@ -34,7 +34,7 @@ $ pnpm lint
 eslint . --cache — exit 0, no findings
 
 $ pnpm test
-5938 tests, 5938 pass, 0 fail — exit 0
+5941 tests, 5941 pass, 0 fail — exit 0
 
 $ pnpm verify
 reached test:live-db, then:
@@ -45,7 +45,7 @@ reached test:live-db, then:
 
 $ pnpm exec tsx --test scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close,lane-finalize}.test.ts
 preflight 32/32 · shared 93/93 · truth-check-lib 132/132 · execution-packet 103/103
-lane-maximizer 91/91 · lane-close 180/180 · lane-finalize 27/27
+lane-maximizer 94/94 · lane-close 180/180 · lane-finalize 27/27
 
 $ git diff origin/main --name-only -- .github/
 (empty)
@@ -59,7 +59,7 @@ authority is untouched.
 
 ## Verification
 
-`pnpm type-check` clean · `pnpm lint` exit 0 · `pnpm test` 5938 tests / 0 failures ·
+`pnpm type-check` clean · `pnpm lint` exit 0 · `pnpm test` 5941 tests / 0 failures ·
 7 mutation controls, each turning its owning suite red and reverted byte-for-byte.
 Details in the sections below.
 
@@ -91,7 +91,7 @@ This lane implements the ops-script half of that rule. It changes **no merge aut
 ```
 pnpm type-check      # clean
 pnpm lint            # exit 0
-pnpm test            # 5938 tests, 5938 pass, 0 fail
+pnpm test            # 5941 tests, 5941 pass, 0 fail
 pnpm verify          # green through lint / type-check / build / test / verify:commands
 pnpm r-level-check   # see R-level below
 ```
@@ -124,6 +124,24 @@ below.
 | M4 | `shared`: `resolveTrackerRef` reads an ABSENT `tracker_ref` as an explicit `null` | shared 92 pass / **1 fail** |
 | M5 | `lane-maximizer`: ignore the missing credential when choosing a candidate source | lane-maximizer 90 pass / **1 fail** |
 | M6 | `execution-packet`: `captureOrReadTaskContract` ignores the local work order | execution-packet 102 pass / **1 fail** |
+
+### A real defect this lane introduced, caught by CI and repaired
+
+The first CI run of this branch failed `verify` with **16 test failures that pass locally**,
+all in `lane-maximizer.test.ts`. The cause was mine: `resolveCandidateSource` took the
+tracker-credential argument as a **default parameter that probed `process.env`**, so the
+source selection depended on whether the machine running the code held a credential. The CLI
+chose `linear` locally and `queue` in CI, and sixteen pre-existing tests that inject a fake
+tracker silently stopped exercising it.
+
+This is worth recording rather than quietly fixing, because it is the exact hazard the change
+is about: a decision that reads ambient state instead of what the caller declared. The repair
+computes the decision **once**, from the deps the caller actually supplied
+(`hasTrackerSource(deps)` — injected Linear deps *are* a tracker), and threads it down.
+An explicit `--from-linear` now also outranks the probe in both directions: the
+credential-based choice is a default, never an override.
+
+`lane-maximizer.test.ts` went 91 → 94 tests, three of them asserting exactly this.
 
 ### Not covered — stated rather than implied
 

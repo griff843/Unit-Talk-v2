@@ -28,9 +28,9 @@ MERGE_SHA: pending merge
 ## Tests
 
 `scripts/ops/{preflight,shared,truth-check-lib,execution-packet,lane-maximizer,lane-close}.test.ts`
-— +31 tests. Suite totals after the change: preflight 32, shared 93, truth-check-lib 132,
-execution-packet 103, lane-maximizer 91, lane-close 180, lane-finalize 27 — all green.
-Repo-wide: 5938 tests, 0 failures.
+— +34 tests. Suite totals after the change: preflight 32, shared 93, truth-check-lib 132,
+execution-packet 103, lane-maximizer 94, lane-close 180, lane-finalize 27 — all green.
+Repo-wide: 5941 tests, 0 failures.
 
 ## Not changed
 
