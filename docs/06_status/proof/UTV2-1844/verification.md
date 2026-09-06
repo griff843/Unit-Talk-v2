@@ -1,4 +1,4 @@
-# VERIFICATION: UTV2-1844
+# PROOF: UTV2-1844 — signed odds and line entry, and a three-valued participant identity mode
 
 MERGE_SHA: pending merge
 Execution SHA: 825bb865996f310be9351e3790a6f0b388e85b42
