@@ -9,7 +9,7 @@ field-validation rules, and make the duplication self-policing.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1519
 
 `sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is the last non-proof commit on
 the branch; everything after it touches only `docs/06_status/proof/UTV2-1688/` and

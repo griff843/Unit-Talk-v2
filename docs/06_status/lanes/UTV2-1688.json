@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1688-executor-result-namespace",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1519",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/executor-result-validator.yml",
@@ -23,7 +23,7 @@
   ],
   "status": "started",
   "started_at": "2026-09-06T06:54:47.686Z",
-  "heartbeat_at": "2026-09-06T06:54:47.686Z",
+  "heartbeat_at": "2026-09-06T07:07:49.221Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1688-executor-result-namespace.json",
