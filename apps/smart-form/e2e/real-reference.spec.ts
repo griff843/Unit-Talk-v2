@@ -24,6 +24,12 @@ async function readRows(
   return payload.data ?? [];
 }
 
+// The only route fulfilled in this file is the Auth.js session endpoint. That is
+// authentication plumbing, not reference data: canonical identity moved to a server
+// session fetch, so without it the page never renders and these specs would assert
+// nothing. Every reference-data read below goes to the real API un-intercepted, which
+// is the property this file exists to hold and what its skip messages claim. Do not
+// add a route handler for any /api/reference-data/** path here.
 test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/session', (route) => route.fulfill({
     status: 200,
@@ -37,7 +43,7 @@ test.beforeEach(async ({ page }) => {
   await installCapperSession(page);
 });
 
-test('real-reference UI reports the connected environment honestly without route interception', async ({ page }) => {
+test('real-reference UI reports the connected environment honestly without reference-data route interception', async ({ page }) => {
   await page.goto('/submit');
   await expect(page.getByRole('heading', { name: 'Canonical pick entry' })).toBeVisible();
   await page.screenshot({ path: `${proofDirectory}/real-01-authenticated-shell.png`, fullPage: true });
