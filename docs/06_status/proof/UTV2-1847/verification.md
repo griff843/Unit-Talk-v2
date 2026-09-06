@@ -2,7 +2,7 @@
 
 MERGE_SHA: pending merge
 
-Execution SHA: 3518fef1c120187c1acf3be38fc01a8c109eed14  
+Execution SHA: 89e2ef767c3a7d3edd3cb552439c95d651d2ccd5  
 Tier: T2 · Lane type: delivery-ui  
 Result: pass
 
@@ -90,4 +90,35 @@ claims writable staging/database evidence.
 Merge SHA: pending merge  
 PR: pending  
 Approved PR head: pending merge  
-Execution SHA: 3518fef1c120187c1acf3be38fc01a8c109eed14
+Execution SHA: 89e2ef767c3a7d3edd3cb552439c95d651d2ccd5
+
+## Anchor correction and orchestrator re-measurement
+
+The executing agent originally recorded the execution SHA as
+`3518fef1c120187c1acf3be38fc01a8c109eed14`. That commit is **not reachable from this branch** — it
+is an orphaned pre-rebase copy of the same test commit, left behind when the lane was replayed onto
+`a2efc4172`. Binding a proof to an unreachable commit would make every SHA row in this bundle
+unverifiable, so the rows above now name the reachable anchor
+`89e2ef767c3a7d3edd3cb552439c95d651d2ccd5`.
+
+The receipts are carried forward rather than discarded, because the two commits are provably
+identical over the source this lane changes:
+
+```
+$ git diff --name-only 3518fef1c120187c1acf3be38fc01a8c109eed14 \
+    89e2ef767c3a7d3edd3cb552439c95d651d2ccd5 -- apps/ packages/
+(empty)
+```
+
+The whole difference between them is `main`'s UTV2-1846 landing. Independently re-measured by the
+orchestrator at the reachable anchor:
+
+- `pnpm type-check` — exit 0, no diagnostics.
+- `pnpm test` — tests 5977, pass 5977, fail 0, exit 0.
+- `npx tsx scripts/ci/r-level-check.ts --base a2efc4172 --head a983b2276` — `Verdict: PASS`,
+  `Changed files: 10`, `Rules matched: operator-ui`. Note this script forces
+  `cwd: repoRoot`, so it must be given explicit SHAs rather than `HEAD` when invoked from a lane
+  worktree; run with `--head HEAD` it silently measures the root checkout instead.
+
+`pnpm verify` is not claimed locally: its live-DB half refuses outside the `staging-ci` GitHub
+environment. The required `verify` check on this PR is the authoritative result.
