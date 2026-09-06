@@ -14,6 +14,23 @@ Before executing work, read:
 
 These provide the shared Unit Talk mission and current production direction.
 
+### Product intent — required reading when your packet touches a product surface
+
+If your work packet changes how a product behaves for its operator — **including backend work in
+`apps/api`, `packages/domain` or the pipeline** that changes what the product can do or what it
+records — read that product's intent document and the canonical contracts it indexes before you
+start, and satisfy the acceptance criteria your packet quotes.
+
+| Product | Intent | Also read |
+|---|---|---|
+| Smart Form (operator pick intake) | `docs/03_product/smart-form/intent.md` | `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md`, `SMART_FORM_SPORTSBOOK_CONSTRAINT_CONTRACT.md`, `T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md`, `T1_SMART_FORM_V1_CONTRACT.md`, `T2_SMART_FORM_CONFIDENCE_CONTRACT.md`; and `DELIVERY_KILL_SWITCH.md` + `RUNTIME_MODE_CONTRACT.md` for anything near distribution |
+| Command Center | *written when that product is next worked* | `apps/command-center/CLAUDE.md` |
+| Pipeline (grading, settlement, CLV) | *written when that product is next worked* | `T1_AUTOMATED_GRADING_CONTRACT.md`, `T1_CLV_CLOSING_LINE_WIRING_CONTRACT.md` |
+
+These are product intent, not gates: they add no check and no approval artifact. Where an intent
+document and a canonical contract disagree, the contract wins and the intent document is stale —
+report it, do not silently follow either.
+
 The assigned Codex work packet defines your bounded implementation slice.
 
 Do not redefine the mission, widen your task, or modify `docs/mission/intent.md`.

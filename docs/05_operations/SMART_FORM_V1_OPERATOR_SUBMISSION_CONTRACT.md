@@ -189,7 +189,16 @@ The `confidence` field on `SubmissionPayload` remains available for programmatic
 | Positive range | +100 to +50000 |
 | Negative range | -100 to -50000 |
 | Forbidden | ±0, fractions, values between -99 and +99 (exclusive of ±100) |
-| Input mode | `numeric` |
+| Input mode | `text` with `pattern="^[+-]?[0-9]*$"` — **not** `numeric` (see note) |
+
+> **Corrected 2026-09-06.** This row previously read `numeric`. `inputMode="numeric"` renders a
+> digits-only keypad on iOS and Android with **no minus key**, so the negative range this same table
+> requires is unenterable on the mobile surface Acceptance Criterion 13 mandates. The contradiction
+> was implemented faithfully and hit by the operator during the Milestone 1 pilot. The validation
+> ranges above are unchanged; only the keyboard hint is corrected. Any control implementing this row
+> must accept a leading `-`, and the verification for it asserts the rendered attribute and the
+> persisted value — a schema test is not evidence, because the schema always accepted `-110`.
+> Product intent: `docs/03_product/smart-form/intent.md` §6.1.
 
 ### Odds — Decimal Format
 
@@ -211,7 +220,12 @@ The `confidence` field on `SubmissionPayload` remains available for programmatic
 | Range | -999.5 to +999.5 |
 | Required when | Player prop, spread, total, team total |
 | Not required when | Moneyline |
-| Input mode | `decimal` |
+| Input mode | `text` with `pattern="^[+-]?[0-9]*\\.?[0-9]*$"` — **not** `decimal` (see note) |
+
+> **Corrected 2026-09-06.** Same defect as the American-odds row above, and the same reason:
+> `inputMode="decimal"` offers digits and a decimal separator but **no minus key**, while this
+> table's own range is `-999.5 to +999.5` and the field's placeholder is `e.g. -3.5`. A negative
+> spread was therefore unenterable on mobile. Range and step are unchanged.
 | Market-aware | Spread lines may be negative or positive; prop/total lines are typically positive |
 
 ## Dependency-Driven Field Behavior
@@ -301,7 +315,18 @@ SubmissionPayload.metadata     = {
 8. Decimal odds validated as 1.01–501.00, converted to American before submission
 9. Units hard-enforced at 0.5–5.0
 10. Line validated as finite number within ±999.5
-11. Confidence is not present on the operator form
+11. A raw `confidence` float is never entered by the operator. The operator enters **capper
+    conviction (1-10, required)**, and the form derives submission `confidence` from it, recording
+    `metadata.confidenceSource: 'capper-conviction'` so a capper signal is never mistaken for a
+    market-derived one. **Corrected 2026-09-06** — this criterion previously read "Confidence is not
+    present on the operator form", which two later ratified contracts contradict:
+    `T1_SMART_FORM_V1_CONTRACT.md` requires the `capperConviction` input and
+    `T2_SMART_FORM_CONFIDENCE_CONTRACT.md` (UTV2-49) requires `buildSubmissionPayload()` to set
+    top-level `confidence`. Both are implemented (`apps/smart-form/lib/form-utils.ts:317,328,377`;
+    conviction 10 maps to `confidence` 0.99, not 1.0, per UTV2-1379's strict `confidence < 1` guard
+    downstream — the displayed conviction stays 10/10). The original
+    intent — no hand-entered probability — is preserved above; its literal text was stale.
+    Product intent: `docs/03_product/smart-form/intent.md` §6.2.
 12. Invalid submissions fail closed with clear inline field errors
 13. Form flow is fast, bet-slip-like, and mobile-usable
 14. Submission creates a truthful candidate pick via `POST /api/submissions`
