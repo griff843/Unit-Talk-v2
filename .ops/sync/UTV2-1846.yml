@@ -1,0 +1,171 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1846
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1846
+  objective: "Mission plan: reconcile plan.md against the 2026-09-06 production deploy"
+  acceptance_criteria:
+    - Every occurrence of "production is `e48106fc`", "only the `Deploy`
+      dispatch remains", and "no `Deploy` run has fired since 2026-09-01" is
+      **removed**, not softened.
+    - Wave 0 item 1 and "Requires Griff" item 1 leave their tables **by being
+      done**, recorded the way the plan already records the three items that
+      left on 2026-09-05.
+    - "The Milestone 1 blocker is restated as what it actually is:
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-su\
+      bmission-repair-event-existence-gate-blocks-every-human)'s backend
+      submission admission, whose decision packet is
+      `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` (merged
+      `9a233bd90`)."
+    - The readiness section distinguishes containment from breakage explicitly,
+      and records the structural consequence — readiness cannot reach GREEN
+      while containment holds, because two blocking dimensions measure the flags
+      containment sets to false. This is not an argument for unparking anything.
+    - The single `true_failure` dead-letter row is named as an open item,
+      because it is a delivery record and any Track Only non-delivery claim
+      rests on that table.
+    - Open-PR counts and states are re-measured rather than carried forward.
+  guardrails: []
+  non_goals:
+    - Merge authority, the merge gate, CODEOWNERS, branch protection, tier
+      semantics, containment settings, and `intent.md`. No reserved surface is
+      touched. This lane edits `docs/mission/plan.md` and nothing else.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Claude-owned plan maintenance, per `docs/mission/intent.md`: *"plan.md is
+      Claude-owned. Reconcile it against live GitHub/runtime truth and update it
+      as reality changes."* This creates no contract, changes no gate, tier,
+      merge authority or lane mechanic, and records no new ratification. It
+      corrects measured facts only.
+    - >-
+      Why now
+
+      `docs/mission/plan.md` is wrong in its single most load-bearing claim, and
+      wrong in the direction that misleads: it says the Milestone 1 path is
+      blocked on a reserved `Deploy` dispatch. That dispatch has happened. An
+      owner reading the plan today would act on a false premise about what he is
+      being asked for.
+    - >-
+      Measured facts (2026-09-06, against the GitHub API, git ancestry and the
+      readiness ledger)
+
+      **The deploy ran and succeeded.**
+
+
+      | run | SHA | result | when |
+
+      | -- | -- | -- | -- |
+
+      | 34041575531 | `d3f69b804` | success | 2026-09-06T15:12:30Z |
+
+      | 34031708984 | `391d4345c` | failure | 2026-09-06T11:57:41Z |
+
+      | 33513608611 | `e48106fc9` | success | 2026-09-01T13:28:39Z |
+
+
+      Production is `d3f69b804df755e0392e71c018fba9585b7e8185`, not `e48106fc`.
+      One attempt failed earlier the same day; the second succeeded.
+
+
+      **Both Milestone 1 identity prerequisites are live**, by ancestry rather
+      than by recollection:
+
+
+      ```
+
+      git merge-base --is-ancestor 2ac233424 d3f69b804   # #1488 canonical
+      capper identity  -> yes
+
+      git merge-base --is-ancestor b7d9fc07f d3f69b804   # #1501 authenticated
+      picks trace  -> yes
+
+      ```
+
+
+      **There is zero container-code drift between production and** `main`,
+      re-measured at `main` `3ad11a69b`:
+
+
+      ```
+
+      git diff --name-only d3f69b804 origin/main -- 'apps/**' 'packages/**'
+      'deploy/**' | grep -vc '\.test\.'
+
+      0
+
+      ```
+
+
+      **Readiness is RED, and two of its four blockers are containment rather
+      than breakage.** `deploy_sha_alignment` fails on a 1-commit distance, not
+      behavioural drift (0 container-code files differ). `ingestor_health` and
+      `worker_outbox_health` fail because `SYNDICATE_MACHINE_MODE=parked` sets
+      their autorun flags false. `dead_letter_count` is 1954 rows = 1953
+      `governance_hold` (attempt_count 0, which the ledger's own semantics say
+      do not fail readiness) + exactly **1** `true_failure`.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1846/mission-plan-reconcile-planmd-against-the-2026-09-06-production-deploy
+    title: "Mission plan: reconcile plan.md against the 2026-09-06 production deploy"
+    description: |-
+      Claude-owned plan maintenance, per `docs/mission/intent.md`: *"plan.md is Claude-owned. Reconcile it against live GitHub/runtime truth and update it as reality changes."* This creates no contract, changes no gate, tier, merge authority or lane mechanic, and records no new ratification. It corrects measured facts only.
+
+      ## Why now
+
+      `docs/mission/plan.md` is wrong in its single most load-bearing claim, and wrong in the direction that misleads: it says the Milestone 1 path is blocked on a reserved `Deploy` dispatch. That dispatch has happened. An owner reading the plan today would act on a false premise about what he is being asked for.
+
+      ## Measured facts (2026-09-06, against the GitHub API, git ancestry and the readiness ledger)
+
+      **The deploy ran and succeeded.**
+
+      | run | SHA | result | when |
+      | -- | -- | -- | -- |
+      | 34041575531 | `d3f69b804` | success | 2026-09-06T15:12:30Z |
+      | 34031708984 | `391d4345c` | failure | 2026-09-06T11:57:41Z |
+      | 33513608611 | `e48106fc9` | success | 2026-09-01T13:28:39Z |
+
+      Production is `d3f69b804df755e0392e71c018fba9585b7e8185`, not `e48106fc`. One attempt failed earlier the same day; the second succeeded.
+
+      **Both Milestone 1 identity prerequisites are live**, by ancestry rather than by recollection:
+
+      ```
+      git merge-base --is-ancestor 2ac233424 d3f69b804   # #1488 canonical capper identity  -> yes
+      git merge-base --is-ancestor b7d9fc07f d3f69b804   # #1501 authenticated picks trace  -> yes
+      ```
+
+      **There is zero container-code drift between production and** `main`, re-measured at `main` `3ad11a69b`:
+
+      ```
+      git diff --name-only d3f69b804 origin/main -- 'apps/**' 'packages/**' 'deploy/**' | grep -vc '\.test\.'
+      0
+      ```
+
+      **Readiness is RED, and two of its four blockers are containment rather than breakage.** `deploy_sha_alignment` fails on a 1-commit distance, not behavioural drift (0 container-code files differ). `ingestor_health` and `worker_outbox_health` fail because `SYNDICATE_MACHINE_MODE=parked` sets their autorun flags false. `dead_letter_count` is 1954 rows = 1953 `governance_hold` (attempt_count 0, which the ledger's own semantics say do not fail readiness) + exactly **1** `true_failure`.
+
+      ## Acceptance criteria
+
+      1. Every occurrence of "production is `e48106fc`", "only the `Deploy` dispatch remains", and "no `Deploy` run has fired since 2026-09-01" is **removed**, not softened.
+      2. Wave 0 item 1 and "Requires Griff" item 1 leave their tables **by being done**, recorded the way the plan already records the three items that left on 2026-09-05.
+      3. The Milestone 1 blocker is restated as what it actually is: [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s backend submission admission, whose decision packet is `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` (merged `9a233bd90`).
+      4. The readiness section distinguishes containment from breakage explicitly, and records the structural consequence — readiness cannot reach GREEN while containment holds, because two blocking dimensions measure the flags containment sets to false. This is not an argument for unparking anything.
+      5. The single `true_failure` dead-letter row is named as an open item, because it is a delivery record and any Track Only non-delivery claim rests on that table.
+      6. Open-PR counts and states are re-measured rather than carried forward.
+
+      ## Out of scope
+
+      Merge authority, the merge gate, CODEOWNERS, branch protection, tier semantics, containment settings, and `intent.md`. No reserved surface is touched. This lane edits `docs/mission/plan.md` and nothing else.
+    captured_at: 2026-09-06T20:55:35.887Z
+    description_sha256: 20e9265d1ab69b8ea5740d57ae64d1db0fe095376e49cc1274c943f9d8d840b2
+  contract_hash: 4a68b2fed2ffc5a40c389338b6256127e164250803c0b4cab084e1e8fa9a4a98
