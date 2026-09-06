@@ -1,7 +1,7 @@
 # PROOF: UTV2-1688
 
 MERGE_SHA: pending merge
-Execution SHA: pending first commit
+Execution SHA: b2cfd6d2132e8f1e07510e4afb3b148939f5c8d4
 
 Recognize the `bootstrap/` branch namespace in the executor-result validator, in both copies of its
 field-validation rules, and make the duplication self-policing.
