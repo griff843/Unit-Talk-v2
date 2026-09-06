@@ -1,0 +1,181 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1848
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1848
+  objective: "PT1 deferral enforcement: refuse closeout for a lane whose T1
+    live-DB precondition was deferred to CI, unless the merge SHA carries a
+    verified staging-db-proof receipt"
+  acceptance_criteria:
+    - A manifest with no `t1_live_db_precondition` field validates and closes
+      out exactly as today. Asserted against a real existing manifest, not a
+      fixture.
+    - "A manifest carrying `t1_live_db_precondition: deferred_to_ci` whose merge
+      SHA has a verified `staging-db-proof` receipt closes out."
+    - The same manifest without that receipt is refused, fail-closed, with the
+      missing receipt named.
+    - "Mutation-checked: deleting the new check turns criterion 3 red. A check
+      that cannot fail is not a check."
+    - An unrecognised value of the field is refused rather than ignored.
+  guardrails: []
+  non_goals:
+    - No change to `resolveVerdict`, to whether a preflight token is written, to
+      `WAIVABLE_CHECKS`, to any required check, to branch protection, to
+      CODEOWNERS or to the merge gate. `scripts/ops/lane-start.ts` is not
+      touched — that file carries the admission-side copy of the field and is a
+      Tier C path.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      The enforcement half of
+      `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2, split out
+      so it can land **before** the admission decision rather than after it.
+    - >-
+      Why this is separable, and why it must land first
+
+      Part 2 of that packet has two halves that are routinely conflated:
+
+
+      1. **Admission** — whether `blocked_by_containment` may issue a preflight
+      token for a T1 lane. This changes what a T1 lane is admitted without,
+      repo-wide. It is reserved under `docs/mission/intent.md` § "Changes to the
+      operating model" and is **not** in this issue's scope.
+
+      2. **Enforcement** — if a lane *is* ever admitted that way, the deferral
+      must be a recorded, checked obligation rather than an unrecorded one. This
+      is that half.
+
+
+      Enforcement admits nothing. It adds a fail-closed closeout refusal keyed
+      on a manifest field that no lane on `main` currently carries and none can
+      produce, because the admission half is not applied. It is inert on every
+      existing lane and strictly stronger on any future one.
+
+
+      Landing it first makes the owner decision in section 5 of the packet a
+      yes/no on one small diff whose safety half is already on `main`, already
+      tested and already mutation-checked — instead of a yes/no on a proposal
+      whose protection is promised.
+    - >-
+      Scope
+
+      * `scripts/ops/shared.ts` — add the optional manifest field
+      `t1_live_db_precondition` with the single legal value `deferred_to_ci`,
+      admitted by manifest validation. Absent on every existing manifest;
+      absence is the normal case and must fail nothing.
+
+      * `scripts/ops/truth-check-lib.ts` — a new closeout check that refuses
+      when the field is present and the `verify` run at the manifest merge SHA
+      does not carry a verified `staging-db-proof` receipt. Same receipt
+      `.github/workflows/ci.yml` already validates with `--expect-job
+      staging-db-proof`.
+
+      * `scripts/ops/shared.test.ts`, `scripts/ops/truth-check-lib.test.ts` —
+      both already wired into `test:ops`.
+
+      * `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` — record that
+      the enforcement half has landed, and carry the exact remaining admission
+      diff so the owner decision is a review of a diff rather than a proposal.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db
+    title: "PT1 deferral enforcement: refuse closeout for a lane whose T1 live-DB
+      precondition was deferred to CI, unless the merge SHA carries a verified
+      staging-db-proof receipt"
+    description: >-
+      The enforcement half of
+      `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2, split out
+      so it can land **before** the admission decision rather than after it.
+
+
+      ## Why this is separable, and why it must land first
+
+
+      Part 2 of that packet has two halves that are routinely conflated:
+
+
+      1. **Admission** — whether `blocked_by_containment` may issue a preflight
+      token for a T1 lane. This changes what a T1 lane is admitted without,
+      repo-wide. It is reserved under `docs/mission/intent.md` § "Changes to the
+      operating model" and is **not** in this issue's scope.
+
+      2. **Enforcement** — if a lane *is* ever admitted that way, the deferral
+      must be a recorded, checked obligation rather than an unrecorded one. This
+      is that half.
+
+
+      Enforcement admits nothing. It adds a fail-closed closeout refusal keyed
+      on a manifest field that no lane on `main` currently carries and none can
+      produce, because the admission half is not applied. It is inert on every
+      existing lane and strictly stronger on any future one.
+
+
+      Landing it first makes the owner decision in section 5 of the packet a
+      yes/no on one small diff whose safety half is already on `main`, already
+      tested and already mutation-checked — instead of a yes/no on a proposal
+      whose protection is promised.
+
+
+      ## Scope
+
+
+      * `scripts/ops/shared.ts` — add the optional manifest field
+      `t1_live_db_precondition` with the single legal value `deferred_to_ci`,
+      admitted by manifest validation. Absent on every existing manifest;
+      absence is the normal case and must fail nothing.
+
+      * `scripts/ops/truth-check-lib.ts` — a new closeout check that refuses
+      when the field is present and the `verify` run at the manifest merge SHA
+      does not carry a verified `staging-db-proof` receipt. Same receipt
+      `.github/workflows/ci.yml` already validates with `--expect-job
+      staging-db-proof`.
+
+      * `scripts/ops/shared.test.ts`, `scripts/ops/truth-check-lib.test.ts` —
+      both already wired into `test:ops`.
+
+      * `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` — record that
+      the enforcement half has landed, and carry the exact remaining admission
+      diff so the owner decision is a review of a diff rather than a proposal.
+
+
+      ## Explicitly out of scope
+
+
+      No change to `resolveVerdict`, to whether a preflight token is written, to
+      `WAIVABLE_CHECKS`, to any required check, to branch protection, to
+      CODEOWNERS or to the merge gate. `scripts/ops/lane-start.ts` is not
+      touched — that file carries the admission-side copy of the field and is a
+      Tier C path.
+
+
+      ## Acceptance criteria
+
+
+      1. A manifest with no `t1_live_db_precondition` field validates and closes
+      out exactly as today. Asserted against a real existing manifest, not a
+      fixture.
+
+      2. A manifest carrying `t1_live_db_precondition: deferred_to_ci` whose
+      merge SHA has a verified `staging-db-proof` receipt closes out.
+
+      3. The same manifest without that receipt is refused, fail-closed, with
+      the missing receipt named.
+
+      4. Mutation-checked: deleting the new check turns criterion 3 red. A check
+      that cannot fail is not a check.
+
+      5. An unrecognised value of the field is refused rather than ignored.
+    captured_at: 2026-09-06T23:53:37.437Z
+    description_sha256: 779f2ccf18d91e985c2d531261219a56443476f47c4498764ee064b9d08db22d
+  contract_hash: 430056c6c9f18abcc2c237cd277b07b497b0c25bdceb9139b888dcbc814140d3
