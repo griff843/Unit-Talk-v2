@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1833",
+  "tier": "T3",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "125aa50d3d37690bee51d4b15ffa6c92c032f11a",
+    "verified_source_sha": "1256c3a7d20ace4453a89fe93a5c47eef892284a",
+    "evidence_commit_sha": "1256c3a7d20ace4453a89fe93a5c47eef892284a",
+    "current_pr_head_sha": "7f3ab6a3c23de8613e1f011942f37ac5232f3e31",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS (exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_test": "PASS (5476 tests, 0 failures, exit 0) measured locally in the lane worktree at this anchor",
+      "pnpm_lint": "PASS via the required CI `verify` context only. Not measured locally; recorded as a CI result rather than restated as a local run.",
+      "pnpm_build": "PASS via the required CI `verify` context only. Not measured locally; recorded as a CI result rather than restated as a local run.",
+      "pnpm_verify": "PASS — required CI `verify` context, run 33975114129, conclusion success at head 6aef700d2c11eac99aff6e95953b385a60bc6359. Includes the staging DB proof receipt steps, which cannot run off-CI under local containment.",
+      "r_level_check": "PASS (no R-level artifacts required for this diff)"
+    },
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-05T16:05:00.000Z"
+  },
+  "static_proof": {
+    "type_check": { "status": "PASS", "command": "pnpm type-check" },
+    "test": { "status": "PASS", "command": "pnpm test", "tests": 5476, "failures": 0 },
+    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "executed as a stage of pnpm verify in the required CI context, not locally" },
+    "build": { "status": "PASS", "command": "pnpm build", "detail": "executed as a stage of pnpm verify in the required CI context, not locally" },
+    "scope_controls": [
+      {
+        "assertion": "A1 — no file changed outside docs/mission/** and this lane's own control-plane paths",
+        "command": "git diff --name-only origin/main..HEAD | grep -vE '^(docs/mission/|\\.ops/sync/UTV2-1833\\.yml$|docs/06_status/lanes/UTV2-1833\\.json$|docs/06_status/proof/UTV2-1833/)'",
+        "expected": "no output",
+        "observed": "no output",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A2 — no executable or governance-mechanical surface is touched, so this lane changes no gate, tier, merge authority, workflow or hook",
+        "command": "git diff --name-only origin/main..HEAD | grep -cE '^(\\.github/|\\.claude/|\\.agents/|scripts/|\\.lane/|apps/|packages/|eslint\\.config|package\\.json)'",
+        "expected": "0",
+        "observed": "0",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A3 — the micromatch claim replaced in plan.md is corrected against source, not merely softened",
+        "command": "sed -n '214p' scripts/lane-contract.ts",
+        "expected": "the call passes micromatch's dot option",
+        "observed": "return micromatch.isMatch(file, patterns, { dot: true }); — so the prior plan.md diagnosis that matchesAny() omits the dot option was false, and this lane replaces it rather than appending a correction beneath it.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A4 — no secret value is recorded and none was read; the ALLOWED_CAPPER_EMAILS reshape is recorded by update timestamp only",
+        "command": "gh secret list --repo griff843/Unit-Talk-v2 | grep -i capper; git diff -U0 origin/main..HEAD | grep '^+' | grep -iE '@[a-z0-9.-]+\\.(com|net|org)' | grep -v noreply@anthropic",
+        "expected": "the listing returns a name and timestamp only; zero address-shaped additions in the diff",
+        "observed": "the listing returned 'ALLOWED_CAPPER_EMAILS\t2026-09-03T17:29:12Z' — GitHub's secret listing carries no value, and none was separately requested, printed or written. The diff grep produced no output.",
+        "status": "PASS"
+      },
+      {
+        "assertion": "A5 — no R-level artifact is required for this diff",
+        "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+        "expected": "PASS",
+        "observed": "Verdict: PASS; Changed files: 5; Rules matched: (none)",
+        "status": "PASS"
+      }
+    ]
+  },
+  "runtime_proof": null,
+  "runtime_proof_rationale": "Not applicable and not claimed. Assertions A1 and A2 measure that this diff adds no code path, schema, workflow or runtime behaviour; it changes two mission documents and this lane's own control-plane artifacts only."
+}

@@ -1,0 +1,228 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1812",
+  "tier": "T1",
+  "lane_type": "delivery-ui",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": "9ac4694d918546bbd8da80ff8ac926577e46a178",
+    "verified_source_sha": "3d46af43633264c86f717851510a5cf86958f88c",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS — tsc -b exit 0, 0 diagnostics (measured locally at the anchor; also inside the required verify job)",
+      "pnpm_test": "PASS (5807 tests, 5807 pass, 0 failures, 0 skipped) — measured with SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY unset, i.e. under CI's environment rather than the checkout's",
+      "pnpm_test_db": "PASS — 'Writable DB proof (staging only)' job 101305997745 succeeded against staging in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c; steps 'Run writable DB proof against staging' and 'Run the T1 live proof suites against staging' both success, followed by 'Scrub credentials'. https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101305997745",
+      "r_level_check": "PASS — operator-ui matched; required artifact qa-experience-report present. The artifact that satisfied this rule is dated 2026-05-13 and predates this lane; it satisfies the gate mechanically and is not verification of this change. The QA Experience Regression (Advisory) check is red at this head for net::ERR_CONNECTION_REFUSED at http://localhost:4300/ — no Command Center process — reproduced locally at the same head; see verification.md \"The QA Experience advisory fails for lack of a server, not for a regression\".",
+      "pnpm_verify": "PASS — required `verify` check completed success in run 33965951639, whose head_sha is this anchor 3d46af43633264c86f717851510a5cf86958f88c (https://github.com/griff843/Unit-Talk-v2/actions/runs/33965951639/job/101306812905)"
+    },
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-05T23:49:58.131Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "tsc -b tsconfig.json, exit 0, no diagnostics"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 5807,
+      "failures": 0,
+      "detail": "0 'not ok' lines across the whole run; 0 TypeScript errors. Run with the three SUPABASE_* variables unset, so the result does not depend on this checkout carrying credentials CI does not have."
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test apps/command-center/src/lib/{middleware-matcher,route-surface,require-actor,server-action-guard}.test.ts",
+      "tests": 92,
+      "failures": 0,
+      "detail": "middleware-matcher 14/14, route-surface 62/62, require-actor 6/6, server-action-guard 10/10"
+    },
+    "test_wiring": {
+      "status": "PASS",
+      "command": "executable-wiring check inside pnpm verify",
+      "observed": "verdict=PASS required_roots=verify; total=496 required-reachable=337 optional-reachable=40 unwired=119 (baselined=119 new=0)",
+      "significance": "new=0 means all three new test files are required-reachable under verify rather than parked in the baselined-unwired set, where they would gate nothing."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 7,
+      "command": "apply each mutation, re-run the affected suite, restore source",
+      "expected": "each control fails on the condition it names",
+      "observed": "M1 original matcher restored -> middleware-matcher 8/14 fail, route-surface 1/62 fail ('not ok 48 — a dot in a dynamic segment does not exempt /picks/[id]'). M2-M7 actor guard removed from board/execution/intervention/picks/review/settle in turn -> each fails exactly 1 test. M8 actor: 'operator' restored -> fails 1 test.",
+      "correction": "M5 initially did NOT fail: the guard suite matched resolveActorOrRefusal inside actions/picks.ts's own docblock, so deleting the real call left it green. Comments and string literals are now stripped before the guard is looked for, and M5 fails as it should. Recorded because it is the same defect class this bundle exists to rule out — a self-consistent artifact where no assertion constrains the code."
+    },
+    "r_level": {
+      "status": "PASS",
+      "command": "npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD",
+      "observed": "Verdict: PASS; rules matched: operator-ui; artifact qa-experience-report found at apps/qa-agent/artifacts/unit-talk-command_center-research_lines-operator/2026-05-13T14-30-59-lopam7/result.json. The artifact that satisfied this rule is dated 2026-05-13 and predates this lane; it satisfies the gate mechanically and is not verification of this change. The QA Experience Regression (Advisory) check is red at this head for net::ERR_CONNECTION_REFUSED at http://localhost:4300/ — no Command Center process — reproduced locally at the same head; see verification.md \"The QA Experience advisory fails for lack of a server, not for a regression\"."
+    },
+    "local_verify_limitation": {
+      "status": "EXPECTED",
+      "command": "pnpm verify",
+      "observed": "exit 1 at the final stage test:live-db: '[assert-staging] REFUSED: target identity could not be resolved from its URL (host=127.0.0.1). Writable DB verification requires xskgrzbteyqdufktjrjx.'",
+      "significance": "This stage refuses a non-staging target by design and is not obtainable locally. It is not a failure of this change; the CI receipt above is the authoritative result for it."
+    },
+    "ci_verify": {
+      "status": "PASS",
+      "check": "verify",
+      "head_sha": "3d46af43633264c86f717851510a5cf86958f88c",
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/33941814155/job/101241525078",
+      "detail": "Completed exact-head CI at the execution anchor. This bundle represents no completed check as pending."
+    },
+    "test_hermeticity": {
+      "status": "PASS",
+      "command": "env -u SUPABASE_URL -u SUPABASE_ANON_KEY -u SUPABASE_SERVICE_ROLE_KEY pnpm --filter @unit-talk/command-center test",
+      "observed": "480 tests, 480 pass, 0 fail, 0 skipped",
+      "defect": "Two pins this lane added (lib/data/client-cache-auth.test.ts and 'the authenticated forged-actor cases actually reach the backend' in lib/server-action-guard.test.ts) passed locally and failed the required verify. Both build the data client, which resolves SUPABASE_* before any request exists, so their verdict depended on the ambient checkout environment rather than on behaviour.",
+      "repair": "withLoopbackSupabaseTarget in lib/test-support/workspace-env.ts overrides the Supabase target with a literal loopback address rather than filling a gap, so CI and a credentialled checkout exercise the same target. decideTarget in packages/db/src/privileged-client-boundary.ts allows a literal loopback address explicitly as provably isolated, and globalThis.fetch is stubbed over the same window in the forged-actor harness.",
+      "limit": "The stubbed response means the forged-actor pin establishes only that each action issues an outbound request under an authenticated caller — what makes the forged-actor loops non-vacuous. It establishes nothing about how a real backend would treat that request."
+    }
+  },
+  "runtime_proof": {
+    "kind": "app-runtime",
+    "harness": "Two production builds of the Command Center, served by `next start` and probed over real HTTP with curl. The two arms differ in exactly one line of one file -- the middleware matcher -- and in nothing else; see runtime_proof.build_identities for the sha256 of each built source and the one-line diff between them. Probing a served build is the only way to observe this defect: Next's `config.matcher` decides whether middleware is invoked at all, so a test that calls `middleware()` directly cannot see it, and every such test passed while the bypass was live.",
+    "build_identities": {
+      "arm_a_fixed": {
+        "git_head": "3d46af43633264c86f717851510a5cf86958f88c",
+        "working_tree": "clean at git_head",
+        "middleware_matcher": "['/((?!_next/static|_next/image).*)']",
+        "middleware_sha256": "70008bf9782372c84d628297940893c409221cb9a427f1842322a5a86d2ce88c",
+        "build": "pnpm exec next build -> Compiled successfully"
+      },
+      "arm_b_control": {
+        "git_head": "3d46af43633264c86f717851510a5cf86958f88c",
+        "working_tree": "git_head with exactly one line of apps/command-center/src/middleware.ts reverted; no other file differs",
+        "middleware_matcher": "['/((?!.*\\\\..*).*)', '/icon.svg']",
+        "middleware_sha256": "45541b041a1336fc712d6c518ad19acb3587203f2f1462fc14e587fc4fb7df2b",
+        "build": "pnpm exec next build -> Compiled successfully"
+      },
+      "matcher_only_diff": "--- a/apps/command-center/src/middleware.ts\n+++ b/apps/command-center/src/middleware.ts\n@@ -108,7 +108,7 @@\n-  matcher: ['/((?!_next/static|_next/image).*)'],\n+  matcher: ['/((?!.*\\\\..*).*)', '/icon.svg'],\n",
+      "note": "Both middleware.ts sha256 values were recorded from the file as it stood when that arm was built, and the fixed value was re-confirmed after the control arm was reverted, so the tree that produced arm A is byte-identical to the tree at the anchor commit."
+    },
+    "configuration_conditions": {
+      "UNIT_TALK_APP_ENV": "production",
+      "COMMAND_CENTER_AUTH_TOKEN": "<redacted -- a locally generated probe value, not a provisioned secret; no real credential was used or is recorded>",
+      "auth_mode": "derived, not overridden: UNIT_TALK_APP_ENV=production makes the Command Center unconditionally auth-required. No COMMAND_CENTER_AUTH_MODE was set.",
+      "server": "pnpm exec next start -p <port>, one port per arm, one arm running at a time",
+      "database": "none reachable. No Supabase credentials were provided to either arm, so no probe read or wrote any database, staging or production.",
+      "commands": [
+        "pnpm exec next build",
+        "pnpm exec next start -p 3987            # arm A (fixed)",
+        "pnpm exec next start -p 3988            # arm B (control)",
+        "curl -s -i http://127.0.0.1:<port>/picks/abc.def",
+        "curl -s -i http://127.0.0.1:<port>/picks/abc",
+        "curl -s -i -X POST -H 'Next-Action: <40-hex fabricated id>' -H 'Content-Type: text/plain;charset=UTF-8' --data '[]' http://127.0.0.1:<port>/picks/abc.def",
+        "curl -s -i -H 'Authorization: Bearer <redacted-probe-token>' http://127.0.0.1:<port>/picks/abc.def"
+      ],
+      "redaction": "Applied to the captured transcripts: the probe token -> <redacted-probe-token>; x-request-id -> <uuid>; Date -> <timestamp>; ETag -> <etag>. Nothing else was altered."
+    },
+    "queries": [
+      {
+        "name": "an anonymous dotted-path request to a dynamic route is refused",
+        "method": "GET http://127.0.0.1:<port>/picks/abc.def with no credentials, against each arm",
+        "result": "arm B (original matcher): HTTP 200, Content-Type text/html, body begins '<!DOCTYPE html><html lang=\"en\" class=\"dark\">' -- the operator page rendered. arm A (fixed): HTTP 401, Content-Type application/json, body {\"ok\":false,\"error\":{\"code\":\"COMMAND_CENTER_AUTH_REQUIRED\",...}}, with a WWW-Authenticate challenge and x-request-id set by the middleware.",
+        "significance": "This is the exposure, observed rather than inferred. Under the original matcher Next never invoked middleware for this path, so authentication was skipped entirely -- not evaluated and allowed. The page's server components hold service-role database access."
+      },
+      {
+        "name": "the same route without a dot was already refused, in both arms",
+        "method": "GET http://127.0.0.1:<port>/picks/abc with no credentials, against each arm",
+        "result": "401 in both arms, identical JSON refusal body.",
+        "significance": "Establishes that the defect was the URL's shape and nothing else. The route, the handler and the auth decision function were all unchanged; only whether middleware ran at all differed."
+      },
+      {
+        "name": "an anonymous Next-Action POST to the dotted path -- stated limitation",
+        "method": "POST http://127.0.0.1:<port>/picks/abc.def carrying a Next-Action header with a FABRICATED 40-hex action id and an empty JSON array body, against each arm",
+        "result": "arm B (original matcher): HTTP 404, header 'x-nextjs-action-not-found: 1', body 'Server action not found.' -- Next rejected the fabricated id before dispatch. arm A (fixed): HTTP 401 with the same JSON refusal as the GET.",
+        "significance": "This demonstrates rejection at the authentication boundary: with the fix the request never reaches the action dispatcher. It does NOT prove anonymous execution of a real server action, because the action id was fabricated and Next declined it on that ground alone in the control arm. The remaining server-action coverage is attributed to the source tests and mutations recorded under static_proof.mutation_control, not to this probe.",
+        "limitation": "stated, not resolved -- see static_proof.mutation_control entries M2 through M8 for what does constrain the server-action surface"
+      },
+      {
+        "name": "the correctly-configured path is preserved",
+        "method": "GET / , /picks/abc and /picks/abc.def with 'Authorization: Bearer <redacted-probe-token>' against arm A",
+        "result": "200 in all three cases; /picks/abc.def returns the rendered operator page with Content-Type text/html.",
+        "significance": "The fix refuses anonymous callers without refusing authenticated ones. Requirement 5 of the issue, measured rather than asserted."
+      },
+      {
+        "name": "public paths stay public under the narrowed matcher",
+        "method": "GET /api/health and /icon.svg with no credentials, against each arm",
+        "result": "200 in both arms, both paths.",
+        "significance": "Narrowing the matcher to Next's build output moved the public/private decision into isPublicPath without changing which paths are actually public."
+      }
+    ],
+    "row_counts": [
+      {
+        "probe": "anonymous requests that rendered operator HTML, arm B (original matcher)",
+        "value": 2
+      },
+      {
+        "probe": "anonymous requests that rendered operator HTML, arm A (fixed)",
+        "value": 0
+      },
+      {
+        "probe": "files differing between the two built trees",
+        "value": 1
+      },
+      {
+        "probe": "lines differing between the two built trees",
+        "value": 1
+      },
+      {
+        "probe": "routes in the real route tree asserted to reach the middleware",
+        "value": 62
+      },
+      {
+        "probe": "routes that fail that assertion under the original matcher",
+        "value": 1
+      },
+      {
+        "probe": "server-action modules whose actor guard is pinned by a mutation",
+        "value": 6
+      },
+      {
+        "probe": "mutations applied, each failing exactly one test",
+        "value": 7
+      },
+      {
+        "probe": "databases read or written by any probe in this proof",
+        "value": 0
+      },
+      {
+        "probe": "real credentials used or recorded anywhere in this bundle",
+        "value": 0
+      }
+    ],
+    "raw_responses": {
+      "note": "Verbatim curl -i transcripts, redacted only as described in configuration_conditions.redaction.",
+      "arm_a_fixed": "### anonymous  GET /picks/abc.def\nHTTP/1.1 401 Unauthorized\ncache-control: no-store\ncontent-type: application/json\nwww-authenticate: Basic realm=\"Unit Talk Command Center\", charset=\"UTF-8\"\nx-request-id: <uuid>\nVary: Accept-Encoding\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n{\"ok\":false,\"error\":{\"code\":\"COMMAND_CENTER_AUTH_REQUIRED\",\"message\":\"Command Center authentication is required.\"}}\n\n### anonymous  GET /picks/abc\nHTTP/1.1 401 Unauthorized\ncache-control: no-store\ncontent-type: application/json\nwww-authenticate: Basic realm=\"Unit Talk Command Center\", charset=\"UTF-8\"\nx-request-id: <uuid>\nVary: Accept-Encoding\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n{\"ok\":false,\"error\":{\"code\":\"COMMAND_CENTER_AUTH_REQ\n\n### anonymous  POST /picks/abc.def   (Next-Action, fabricated action id)\nHTTP/1.1 401 Unauthorized\ncache-control: no-store\ncontent-type: application/json\nwww-authenticate: Basic realm=\"Unit Talk Command Center\", charset=\"UTF-8\"\nx-request-id: <uuid>\nVary: Accept-Encoding\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n{\"ok\":false,\"error\":{\"code\":\"COMMAND_CENTER_AUTH_REQ\n\n### authenticated  GET /picks/abc.def   (Authorization: Bearer <redacted-probe-token>)\nHTTP/1.1 200 OK\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\nX-Powered-By: Next.js\nCache-Control: private, no-cache, no-store, max-age=0, must-revalidate\nContent-Type: text/html; charset=utf-8\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n<!DOCTYPE html><html lang=\"en\"\n",
+      "arm_b_control": "### anonymous  GET /picks/abc.def\nHTTP/1.1 200 OK\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\nX-Powered-By: Next.js\nCache-Control: private, no-cache, no-store, max-age=0, must-revalidate\nContent-Type: text/html; charset=utf-8\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n<!DOCTYPE html><html lang=\"en\" class=\"dark\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"/><link rel=\"stylesheet\" href=\"/_next/static/css/562af93c758ce5dd.css\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/webpack-1e19b2a6\n\n### anonymous  GET /picks/abc\nHTTP/1.1 401 Unauthorized\ncache-control: no-store\ncontent-type: application/json\nwww-authenticate: Basic realm=\"Unit Talk Command Center\", charset=\"UTF-8\"\nx-request-id: <uuid>\nVary: Accept-Encoding\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n{\"ok\":false,\"error\":{\"code\":\"COMMAND_CENTER_AUTH_REQ\n\n### anonymous  POST /picks/abc.def   (Next-Action, fabricated action id)\nHTTP/1.1 404 Not Found\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\nCache-Control: no-cache, no-store, max-age=0, must-revalidate\nx-nextjs-action-not-found: 1\ncontent-type: text/plain\nETag: <etag>\nContent-Length: 24\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\n\nServer action not found.\n\n### authenticated  GET /picks/abc.def   (Authorization: Bearer <redacted-probe-token>)\nHTTP/1.1 200 OK\nVary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch, Accept-Encoding\nX-Powered-By: Next.js\nCache-Control: private, no-cache, no-store, max-age=0, must-revalidate\nContent-Type: text/html; charset=utf-8\nDate: <timestamp>\nConnection: keep-alive\nKeep-Alive: timeout=5\nTransfer-Encoding: chunked\n\n<!DOCTYPE html><html lang=\"en\"\n"
+    },
+    "live_db": {
+      "status": "NOT_APPLICABLE",
+      "detail": "This lane changes an HTTP authentication boundary in a Next.js app and touches no database code, no schema and no query. Neither probe arm was given database credentials, so neither read nor wrote any database. The required `verify` check on this PR still runs pnpm test:db against staging; its result is recorded in sha_binding.ci_sentinels.pnpm_test_db as the CI receipt at the anchor SHA."
+    }
+  },
+  "independent_review": {
+    "reviewer": "separate Claude agent that did not author the implementation",
+    "range_reviewed": "870bbbafb70087c1bba1d814c20eca0861f9e16f..3d46af43633264c86f717851510a5cf86958f88c",
+    "implementation_commit": "870bbbafb70087c1bba1d814c20eca0861f9e16f",
+    "verdict": "CONFIRMED",
+    "scope": [
+      "no product code changed in the reviewed range — every non-test file is either byte-identical to origin/main (next-env.d.ts), a package.json `test` script line, an ops ledger artifact merged from main, or a test-support helper that no product module imports",
+      "the loopback target is allowed by decideTarget as provably isolated (packages/db/src/target-identity.ts isLoopbackTarget, privileged-client-boundary.ts kind==='loopback'), and no test can reach a real database: the helper overrides SUPABASE_URL unconditionally, server-action-guard stubs globalThis.fetch for the same window, and client-cache-auth issues no request",
+      "both env windows are finally-protected and restore prior values, deleting keys that were absent",
+      "no assertion was weakened — the change makes previously-unreachable assertions reachable; both named guards still fail under mutation (moving the auth call inside the client cache check; forwarding the caller-supplied actor header)",
+      "the package `test` script is a widening relative to origin/main, not a narrowing: main's script was src/lib/*.test.ts src/lib/data/*.test.ts, and the net change is + src/lib/*.test.tsx",
+      "the rewritten docblock overclaims nothing; its closing paragraph is a de-claim"
+    ],
+    "reviewer_measured": {
+      "command_center_suite_with_supabase_env_unset": "tsx --test src/lib/data/client-cache-auth.test.ts src/lib/server-action-guard.test.ts — pass 55, fail 0",
+      "command_center_package_suite": "# tests 480 / # pass 480 / # fail 0",
+      "automation_coverage_check": "verdict=PASS, unwired=119 (baselined=119, new=0)"
+    },
+    "reviewer_flag_non_blocking": "two docblocks say the src/app originals are 'not reachable from any package script'; true of origin/main and of the merged result, momentarily false at 870bbbaf on this branch alone"
+  }
+}

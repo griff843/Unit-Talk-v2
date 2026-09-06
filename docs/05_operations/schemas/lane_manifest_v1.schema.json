@@ -31,7 +31,16 @@
       "enum": [1, 2],
       "description": "1 = historical (pre-UTV2-1526 model-routing compatibility rework); 2 = current, written by createManifest for every newly created lane. This is the real Codex model-routing compatibility boundary -- NOT model_routing's presence/absence. See the allOf conditionals below and scripts/ops/shared.ts's LANE_MANIFEST_CURRENT_SCHEMA_VERSION doc comment."
     },
-    "issue_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
+    "issue_id": {
+      "type": "string",
+      "pattern": "^(?:UTV2|WORK)-[0-9]+$",
+      "description": "Repo-owned work identity, not a tracker key (tracker independence, ratified 2026-09-05). WORK-### is the repo-minted namespace for work with no tracker issue. KNOWN BOUND: merge-gate.yml, p0-protocol.yml and executor-result-validator.yml are reserved surfaces and still resolve a lane by UTV2-###, so a WORK-### lane is usable through closeout but is not yet mergeable."
+    },
+    "tracker_ref": {
+      "type": ["string", "null"],
+      "pattern": "^(?:UTV2|UNI)-[0-9]+$",
+      "description": "The tracker (Linear) issue key for this lane, or null when the lane deliberately has no tracker issue, in which case every tracker-dependent preflight and truth-check gate SKIPS. ABSENT is not null: a manifest written before this field existed falls back to issue_id via resolveTrackerRef(), so historical lanes keep the behaviour they had. Optional and non-blocking by design."
+    },
     "lane_type": { "enum": ["claude", "codex-cli", "codex-cloud"] },
     "executor": {
       "enum": ["claude", "codex-cli", "codex-cloud"],

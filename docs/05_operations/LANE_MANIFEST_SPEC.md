@@ -100,7 +100,8 @@ The manifest is a single JSON object. Unknown fields are preserved but not acted
 | Field | Type | Required? | Mutable? | Notes |
 |---|---|---|---|---|
 | `schema_version` | int | yes | no | currently `1` |
-| `issue_id` | string | yes | no | must match filename |
+| `issue_id` | string | yes | no | must match filename. Repo-owned work identity: `UTV2-###` **or** `WORK-###` (see §17) |
+| `tracker_ref` | string\|null | no | no | optional tracker key (`UTV2-###` / `UNI-###`); explicit `null` declares the lane has no tracker issue; absent means unstated (see §17) |
 | `lane_type` | enum | yes | no | determines merge authority |
 | `tier` | enum | yes | no | mirrors Linear label; snapshot at start |
 | `worktree_path` | string | yes | no | absolute path |
@@ -397,3 +398,43 @@ The fix splits the guard's status sets:
 **`files_changed` is never read by either role.** Only `file_scope_lock` (current/declared-at-lane-start edit-scope) ever participates in scope or conflict evaluation, in both the guard and in `ops:lane-start`'s own overlap check. This was already true before this fix; the fix only corrects *which manifests'* `file_scope_lock` counts toward blocking others. The immutable historical record (`files_changed`) remains exactly as GitHub's merged diff produced it, and truth-check's `S1` (files_changed ⊆ file_scope_lock ∪ expected_proof_paths) and `G5` (no post-merge touches without a linked follow-up) checks continue to run against it unchanged.
 
 **Scope note:** this fix does not implement LANE_MANIFEST_SPEC §2's "Override close" event — that remains documented-but-unimplemented, unchanged by UTV2-1571. UTV2-1550's own terminal closure is a separate, narrower question (see the UTV2-1571 proof bundle for the specific mechanical gap and the manual, PM-reviewed path required to close it).
+
+---
+
+## 17. Repo-owned work identity and `tracker_ref` (UTV2-1837)
+
+Ratified 2026-09-05, `docs/mission/intent.md` § "Execution must not depend on the
+tracker": scope, ownership, dependencies and traceability are preserved and carried by
+**repository-owned work identity** where an identifier is genuinely needed. The tracker
+is a record of execution, never a precondition for it.
+
+`issue_id` is therefore the lane's **repo-owned identity**, and it accepts `WORK-###`
+alongside `UTV2-###`. It remains immutable and must match the manifest filename. It is
+the primary key for the manifest filename, sync filename, proof directory, branch name,
+worktree path, preflight-token path and file-scope lifecycle grant — all repo-local.
+
+`tracker_ref` is the separate, optional, explicitly nullable **tracker key**. It is
+three-valued and the distinction is load-bearing:
+
+| Value | Meaning |
+|---|---|
+| `"UTV2-1837"` / `"UNI-42"` | this lane's tracker issue |
+| `null` | this lane declares it has **no** tracker issue |
+| absent | unstated — `resolveTrackerRef()` falls back to `issue_id` when that is itself a tracker key |
+
+**Absent is never read as `null`.** Every manifest written before this field existed is
+absent, and treating that silence as an opt-out would silently skip closeout checks the
+lane never opted out of. `resolveTrackerRef()` (`scripts/ops/shared.ts`) is the single
+resolver; nothing reads the field directly.
+
+`WORK-###` is deliberately **not** a valid `tracker_ref` — a repo-minted identity is not
+a tracker key, and admitting it would let the two namespaces silently merge.
+
+### Known bound — a `WORK-###` lane is not yet mergeable
+
+`merge-gate.yml`, `p0-protocol.yml` and `executor-result-validator.yml` still resolve a
+lane by `UTV2-###`. All three are **reserved surfaces** (merge authority, `intent.md`
+reserved decision 7) and are not changed here. A `WORK-###` lane is therefore usable for
+discovery, delegation, verification and closeout, and is **not yet mergeable**. Closing
+that gap is a PM decision on the merge gate, not an ordinary lane.
+

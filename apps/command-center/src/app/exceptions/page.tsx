@@ -3,7 +3,7 @@ import { StatCard, SeverityBadge, Table, TableHead, TableBody, Th, Td, DegradedS
 import { getExceptionQueues } from '@/lib/data/picks';
 import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
-import { fetchRuntimeHealth } from '@/lib/server-api';
+import { getRuntimeHealth } from '@/lib/data/runtime-truth';
 
 export const metadata = { title: 'Exceptions — Unit Talk Command Center' };
 import { describeOperatorFailure } from '@/lib/describe-error';
@@ -34,7 +34,7 @@ async function loadFireBoardInputs(): Promise<{ inputs: FireBoardInputs; loadErr
     getExceptionQueues(),
     getProviderCycleHealth(),
     getPipelineHealthSnapshot(),
-    fetchRuntimeHealth(),
+    getRuntimeHealth(),
   ]);
 
   let exceptions: FireBoardExceptionCounts | null = null;

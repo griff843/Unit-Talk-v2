@@ -309,6 +309,103 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      # UTV2-1834: every env write below overwrites its file in place, and
+      # .unit-talk-release is only advanced AFTER those writes, so at this point
+      # the host still holds the OUTGOING release tag. Snapshotting under that
+      # tag is what lets `deploy/rollback.sh --tag <outgoing>` restore the exact
+      # configuration that actually ran with the image it restores. Without it a
+      # rollback produces old image + new config, a pairing never deployed.
+      - name: Snapshot outgoing configuration for rollback
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH' '$GITHUB_RUN_ID'" <<'SNAPSHOT_REMOTE'
+          set -eu
+          cd "$1"
+          RUN_ID="${2:-unknown}"
+
+          # Read the in-flight marker BEFORE this step writes its own. Its
+          # presence means a previous attempt died between the env writes and
+          # the release-record advance, so the configuration now on disk was
+          # written by that failed attempt and is NOT the configuration running
+          # as the release named below.
+          INFLIGHT=0
+          if [ -f .unit-talk-deploy-inflight ]; then
+            INFLIGHT=1
+          fi
+
+          if [ ! -f .unit-talk-release ]; then
+            echo "no .unit-talk-release on the host: first deploy, nothing to snapshot"
+            printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+            exit 0
+          fi
+
+          OUTGOING="$(cat .unit-talk-release)"
+          if [ -z "$OUTGOING" ]; then
+            echo "WARNING: .unit-talk-release is empty; skipping configuration snapshot" >&2
+            printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+            exit 0
+          fi
+
+          # .unit-talk-release only advances AFTER the env writes, so a deploy
+          # that fails between the two leaves the PREVIOUS release named there
+          # while its configuration has already been replaced on disk. An
+          # unconditional copy on the retry overwrites the good snapshot with
+          # the configuration that broke the deploy, and a rollback to the
+          # running release then restores exactly what it is meant to undo.
+          #
+          # Refusing to overwrite unconditionally is NOT the fix, because a
+          # legitimate redeploy of the same tag -- a secret rotation with no
+          # code change, which is precisely the documented recovery from a bad
+          # configuration -- must be allowed to refresh the snapshot, or the
+          # stored copy silently diverges from what is running.
+          #
+          # The in-flight marker is what distinguishes the two: it is present
+          # only when a previous attempt died mid-write.
+          if [ "$INFLIGHT" = 1 ]; then
+            echo "WARNING: a previous deploy attempt did not complete; the configuration" >&2
+            echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
+          fi
+
+          for f in .env.production .env.web .env.smart-form; do
+            [ -f "$f" ] || continue
+
+            if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
+              echo "keeping existing snapshot $f.$OUTGOING"
+              continue
+            fi
+
+            cp -p "$f" "$f.$OUTGOING"
+            chmod 600 "$f.$OUTGOING"
+            echo "snapshot $f -> $f.$OUTGOING"
+          done
+
+          # These snapshots contain secrets, so they are pruned rather than kept
+          # forever, bounding how many copies of a leaked credential survive.
+          #
+          # The snapshot for the release currently on the host is excluded from
+          # the prune: it is the one a rollback from a failed deploy depends on,
+          # and the prune is mtime-ordered, so a run of failed retries would
+          # otherwise age out the only snapshot worth keeping. That exemption
+          # sits OUTSIDE the count, so the real ceiling per file is six -- five
+          # historical plus the current release -- not five.
+          #
+          # `|| true` keeps the exclusion honest under `set -o pipefail`: grep
+          # exits 1 when it filters every line, which is a normal outcome here,
+          # not an error. This heredoc runs under `set -eu` today, but other
+          # remote bodies in this workflow use `pipefail` and this line must not
+          # become a silent step failure if it is ever hardened to match.
+          for f in .env.production .env.web .env.smart-form; do
+            { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
+              rm -f "$stale"
+              echo "pruned $stale"
+            done
+          done
+
+          # Everything after this point in the job replaces configuration on
+          # disk. If the job dies before the release record advances, this
+          # marker is what tells the next attempt not to trust what it finds.
+          printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+          SNAPSHOT_REMOTE
+
       - name: Write .env.production to server
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -578,6 +675,7 @@ jobs:
             "set -eu && cd '$DEPLOY_PATH' && \
              if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.previous; fi && \
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
+             rm -f .unit-talk-deploy-inflight && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
           for attempt in $(seq 1 30); do
@@ -803,6 +901,103 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      # UTV2-1834: every env write below overwrites its file in place, and
+      # .unit-talk-release is only advanced AFTER those writes, so at this point
+      # the host still holds the OUTGOING release tag. Snapshotting under that
+      # tag is what lets `deploy/rollback.sh --tag <outgoing>` restore the exact
+      # configuration that actually ran with the image it restores. Without it a
+      # rollback produces old image + new config, a pairing never deployed.
+      - name: Snapshot outgoing configuration for rollback
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "bash -s -- '$DEPLOY_PATH' '$GITHUB_RUN_ID'" <<'SNAPSHOT_REMOTE'
+          set -eu
+          cd "$1"
+          RUN_ID="${2:-unknown}"
+
+          # Read the in-flight marker BEFORE this step writes its own. Its
+          # presence means a previous attempt died between the env writes and
+          # the release-record advance, so the configuration now on disk was
+          # written by that failed attempt and is NOT the configuration running
+          # as the release named below.
+          INFLIGHT=0
+          if [ -f .unit-talk-deploy-inflight ]; then
+            INFLIGHT=1
+          fi
+
+          if [ ! -f .unit-talk-release ]; then
+            echo "no .unit-talk-release on the host: first deploy, nothing to snapshot"
+            printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+            exit 0
+          fi
+
+          OUTGOING="$(cat .unit-talk-release)"
+          if [ -z "$OUTGOING" ]; then
+            echo "WARNING: .unit-talk-release is empty; skipping configuration snapshot" >&2
+            printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+            exit 0
+          fi
+
+          # .unit-talk-release only advances AFTER the env writes, so a deploy
+          # that fails between the two leaves the PREVIOUS release named there
+          # while its configuration has already been replaced on disk. An
+          # unconditional copy on the retry overwrites the good snapshot with
+          # the configuration that broke the deploy, and a rollback to the
+          # running release then restores exactly what it is meant to undo.
+          #
+          # Refusing to overwrite unconditionally is NOT the fix, because a
+          # legitimate redeploy of the same tag -- a secret rotation with no
+          # code change, which is precisely the documented recovery from a bad
+          # configuration -- must be allowed to refresh the snapshot, or the
+          # stored copy silently diverges from what is running.
+          #
+          # The in-flight marker is what distinguishes the two: it is present
+          # only when a previous attempt died mid-write.
+          if [ "$INFLIGHT" = 1 ]; then
+            echo "WARNING: a previous deploy attempt did not complete; the configuration" >&2
+            echo "         on disk is not what ran as $OUTGOING -- preserving snapshots" >&2
+          fi
+
+          for f in .env.production .env.web .env.smart-form; do
+            [ -f "$f" ] || continue
+
+            if [ "$INFLIGHT" = 1 ] && [ -e "$f.$OUTGOING" ]; then
+              echo "keeping existing snapshot $f.$OUTGOING"
+              continue
+            fi
+
+            cp -p "$f" "$f.$OUTGOING"
+            chmod 600 "$f.$OUTGOING"
+            echo "snapshot $f -> $f.$OUTGOING"
+          done
+
+          # These snapshots contain secrets, so they are pruned rather than kept
+          # forever, bounding how many copies of a leaked credential survive.
+          #
+          # The snapshot for the release currently on the host is excluded from
+          # the prune: it is the one a rollback from a failed deploy depends on,
+          # and the prune is mtime-ordered, so a run of failed retries would
+          # otherwise age out the only snapshot worth keeping. That exemption
+          # sits OUTSIDE the count, so the real ceiling per file is six -- five
+          # historical plus the current release -- not five.
+          #
+          # `|| true` keeps the exclusion honest under `set -o pipefail`: grep
+          # exits 1 when it filters every line, which is a normal outcome here,
+          # not an error. This heredoc runs under `set -eu` today, but other
+          # remote bodies in this workflow use `pipefail` and this line must not
+          # become a silent step failure if it is ever hardened to match.
+          for f in .env.production .env.web .env.smart-form; do
+            { ls -1t "$f".* 2>/dev/null || true; } | { grep -vxF "$f.$OUTGOING" || true; } | tail -n +6 | while read -r stale; do
+              rm -f "$stale"
+              echo "pruned $stale"
+            done
+          done
+
+          # Everything after this point in the job replaces configuration on
+          # disk. If the job dies before the release record advances, this
+          # marker is what tells the next attempt not to trust what it finds.
+          printf '%s\n' "$RUN_ID" > .unit-talk-deploy-inflight
+          SNAPSHOT_REMOTE
 
       - name: Write .env.production to server
         env:
@@ -1062,6 +1257,7 @@ jobs:
             "set -eu && cd '$DEPLOY_PATH' && \
              docker rm -f caddy 2>/dev/null || true && \
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
+             rm -f .unit-talk-deploy-inflight && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
           for attempt in $(seq 1 30); do

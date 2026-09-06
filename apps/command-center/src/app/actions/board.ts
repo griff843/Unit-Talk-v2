@@ -5,6 +5,7 @@ import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
 } from '@/lib/server-api';
+import { resolveActorOrRefusal } from '@/lib/require-actor';
 import type { WriteBoardPicksResult } from '@/lib/types';
 
 /**
@@ -16,6 +17,21 @@ import type { WriteBoardPicksResult } from '@/lib/types';
  * Idempotent: candidates already linked to a pick are skipped.
  */
 export async function writeSystemPicks(): Promise<WriteBoardPicksResult> {
+  const actorResolution = await resolveActorOrRefusal();
+  if (!actorResolution.ok) {
+    return {
+      ok: false,
+      boardRunId: '',
+      boardSize: 0,
+      written: 0,
+      skipped: 0,
+      errors: 0,
+      durationMs: 0,
+      pickIds: [],
+      error: actorResolution.error,
+    };
+  }
+
   const apiUrl = resolveApiBaseUrl();
   const headers = resolveCommandCenterApiHeaders();
 
