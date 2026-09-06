@@ -5,6 +5,20 @@ TIER: T2
 LANE_TYPE: governance
 MERGE_SHA: pending merge
 
+## Summary
+
+Makes the tracker optional across preflight, closeout, delegation and discovery, so an
+ordinary task can run end to end with no tracker credential and no tracker issue. Merge
+authority is untouched.
+
+## Verification
+
+`pnpm type-check` clean · `pnpm lint` exit 0 · `pnpm test` 5938 tests / 0 failures ·
+7 mutation controls, each turning its owning suite red and reverted byte-for-byte.
+Details in the sections below.
+
+Source anchor (`sha_binding.verified_source_sha`): `4873899a72f0ac6235ef18af5b82db7ff5fcff86`
+
 ## What this lane changes
 
 Ratified 2026-09-05, `docs/mission/intent.md` § "Execution must not depend on the
@@ -99,6 +113,6 @@ artifacts for this lane are the diff summary and this verification log, both pre
 
 Merge SHA: pending merge
 
-`sha_binding.merge_sha` is `null` pre-merge and `verified_source_sha` is the last
-non-proof commit on the branch. The binding is written after merge by
+`sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `4873899a72f0ac6235ef18af5b82db7ff5fcff86`,
+the last non-proof commit on the branch. The binding is written after merge by
 `ops:proof-generate --merge-sha`; no manual append is made here.
