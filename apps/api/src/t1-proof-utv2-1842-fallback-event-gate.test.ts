@@ -131,16 +131,35 @@ async function restQuery<T>(path: string): Promise<T[]> {
  * gate firing at all. The row is upserted rather than assumed: relying on
  * whatever staging happens to hold would make both tests below conditional on
  * unrelated fixture state.
+ *
+ * `events.sport_id` is a foreign key to `sports.id`, so the sport cannot be a
+ * hardcoded string -- a literal 'nba' is refused with
+ * `events_sport_id_fkey` on any database whose sport ids are not that.
+ * Resolving a real id from `sports` keeps the fixture legal wherever this runs,
+ * and an empty `sports` table is reported as the environment problem it is
+ * rather than being papered over with a fabricated id.
  */
 async function armTheGate(label: string): Promise<void> {
+  const sports = await restQuery<{ id: string }>('sports?select=id&limit=1');
+  assert.equal(
+    sports.length,
+    1,
+    'the sports catalog is empty, so no legal event fixture can be created; the gate cannot be armed and nothing below would prove anything',
+  );
   await repositories.events.upsertByExternalId({
     externalId: `utv2-1842-${RUN_ID}-${label}`,
-    sportId: 'nba',
+    sportId: sports[0]!.id,
     eventName: `UTV2-1842 unrelated event ${RUN_ID} ${label}`,
     eventDate: new Date().toISOString().slice(0, 10),
     status: 'scheduled',
     metadata: { proof_run: RUN_ID, proof_issue: 'UTV2-1842' },
   });
+
+  // The precondition is asserted directly, not inferred from the upsert
+  // succeeding: the gate fires on the table being non-empty, so that is the
+  // fact worth checking.
+  const anyEvent = await restQuery<{ id: string }>('events?select=id&limit=1');
+  assert.equal(anyEvent.length, 1, 'events must be non-empty or the event-existence gate is dormant');
 }
 
 /** The eventName below is run-unique, so it cannot match a real or seeded row. */
@@ -150,23 +169,33 @@ function unmatchedEventName(label: string): string {
 
 function manualCoverageGapPayload(): SubmissionPayload {
   const eventName = unmatchedEventName('manual');
+  // `market` is `nba-spread` and the sport is NBA because `picks.market_type_id`
+  // is a foreign key into the seeded `market_types` catalog, and an invented
+  // market string is refused by `picks_market_type_id_fkey` -- the exact failure
+  // `scripts/ci/seed-staging-fixtures.ts` documents. This pair is the one the
+  // existing UTV2-1815 live proof already writes successfully against staging.
+  //
+  // NBA is a team sport, so `validateManualResolution` requires BOTH sides of
+  // the entered matchup. Supplying two is therefore not incidental: it is the
+  // stricter of the two manual-path rules, so this fixture exercises the manual
+  // override at its most constrained rather than at its most permissive.
   return {
     source: 'smart-form',
-    market: 'MMA moneyline',
-    selection: `utv2-1842-${RUN_ID} Challenger One`,
-    line: 0,
+    market: 'nba-spread',
+    selection: `utv2-1842-${RUN_ID} Challenger Alpha`,
+    line: -3.5,
     odds: -110,
     stakeUnits: 1,
     confidence: 0.6,
     eventName,
     metadata: {
-      sport: 'MMA',
+      sport: 'NBA',
       distributionMode: 'track-only',
       proof_run: RUN_ID,
       proof_issue: 'UTV2-1842',
       participantResolution: {
         resolution: 'manual',
-        sportId: 'MMA',
+        sportId: 'NBA',
         eventId: null,
         manualOverride: true,
         reason: 'canonical-coverage-gap',
@@ -257,7 +286,7 @@ test(
         submitPickController(
           {
             source: 'smart-form',
-            market: 'NBA points',
+            market: 'nba-spread',
             selection: `utv2-1842-${RUN_ID} Player Over 18.5`,
             line: 18.5,
             odds: -110,
