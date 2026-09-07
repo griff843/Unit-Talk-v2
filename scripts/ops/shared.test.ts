@@ -1736,10 +1736,29 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
   let carriers = 0;
   let validated = 0;
   let skippedNullWorktree = 0;
+  let skippedVanished = 0;
   for (const file of files) {
-    const manifest = JSON.parse(
-      fs.readFileSync(path.join(lanesDir, file), 'utf8'),
-    ) as LaneManifest;
+    // UTV2-1851: `docs/06_status/lanes/` is a LIVE directory, and other suites
+    // in the same `pnpm test:ops` run write real fixture manifests into it and
+    // delete them again (`lane-link-pr.test.ts` uses the `UTV2-991xx` range).
+    // node:test runs test files concurrently, so a file present at `readdirSync`
+    // can be gone by the time this loop reaches it. Observed on 2026-09-07:
+    // `ENOENT ... docs/06_status/lanes/UTV2-99124.json` failed this test and
+    // therefore `pnpm test`, `pnpm verify` and preflight PB2 -- a race, not a
+    // finding about the field. A vanished file is counted and skipped; every
+    // OTHER read error still throws, and the `validated > 0` assertion below
+    // still refuses a vacuous pass.
+    let raw: string;
+    try {
+      raw = fs.readFileSync(path.join(lanesDir, file), 'utf8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        skippedVanished += 1;
+        continue;
+      }
+      throw error;
+    }
+    const manifest = JSON.parse(raw) as LaneManifest;
     if (manifest.t1_live_db_precondition !== undefined) {
       carriers += 1;
     }
@@ -1770,6 +1789,7 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
   );
 
   void skippedNullWorktree;
+  void skippedVanished;
 
   assert.strictEqual(
     carriers,
