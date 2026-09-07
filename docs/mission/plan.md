@@ -340,9 +340,18 @@ replaces those checks — it tells each session what to declare so the checks ne
 
 | Owner | Files | Why |
 |---|---|---|
-| **Codex** | `scripts/ops/preflight.ts`, `scripts/ops/truth-check-lib.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**` | items 1, 3, 5, 6, 7 of the change set above, and the reserved items 8–11 if PM ever releases them |
-| **Claude (this session)** | `apps/smart-form/**` | Wave 1 steps 2–3 |
+| **Claude (this session)** | `scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-start.ts` | the ratified PT1 route B admission change — see below. **Revised 2026-09-07**: an earlier draft of this table gave `preflight.ts` and `shared.ts` to Codex, before the ratification landed. |
+| **Claude (this session)** | `apps/smart-form/**`, `apps/api/src/submission-service.ts` | Wave 1 steps 2–3 and UTV2-1842 |
+| **Codex** | `scripts/ops/truth-check-lib.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**` | items 3, 5, 6, 7 of the change set above, and the reserved items 8–11 if PM ever releases them |
 | **Neither, without asking first** | root `package.json`, `.lane/lanes/governance.yml`, `docs/mission/plan.md` | genuinely shared; see below |
+
+**`preflight.ts` moved sides, and Codex must be told before it starts.** Griff ratified PT1 route B
+on 2026-09-07, which makes `preflight.ts` the file the highest-priority work edits. Codex's item 1
+— *"emit PL1-PL5 as `skip` when there is no tracker ref"* — is in the same file. Those two changes
+are independent in intent and adjacent in code, which is exactly the shape that produces a silent
+conflict. This session takes the file for the admission change because it is now the priority item;
+Codex's PL1-PL5 change should either wait for it to land or be authored against the merged result,
+not in parallel.
 
 **Root `package.json` is the one real collision, and this session has given it up.** The plan
 already records that a lane which adds a `*.test.ts` must declare `package.json`, because `pnpm
@@ -362,6 +371,62 @@ prohibited regardless of how convenient the ordering makes it look.
 
 **`docs/mission/plan.md` is shared and is being edited by this lane right now (UTV2-1849, #1527).**
 Codex should reconcile its own findings into this file *after* #1527 lands, not concurrently.
+
+---
+
+## The route B bootstrap — why the admission change takes two lanes
+
+Ratified 2026-09-07. The remaining admission diff is the three edits in
+`PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a. They do **not** all sit at the same tier, and that is
+the whole scheduling problem:
+
+```
+['scripts/ops/preflight.ts']   -> T3   (no matches)
+['scripts/ops/shared.ts']      -> T3   (no matches)
+['scripts/ops/lane-start.ts']  -> T1   (rule_id: tier-c-pattern)
+```
+
+`lane-start.ts` matches `/^scripts\/ops\/(?:lane|merge|tier)-[^/]+(?<!\.test)\.ts$/`. So the
+edit that copies the deferral onto the manifest is **T1-floored, and therefore blocked by the exact
+refusal this change exists to lift**. The change cannot land in one lane from a contained
+workstation. It is not a deadlock — it is an ordering constraint, and it resolves in two lanes:
+
+| Lane | Tier | Files | What it does |
+|---|---|---|---|
+| 1 | **T3** — opens today | `scripts/ops/preflight.ts`, `scripts/ops/shared.ts` | stops folding `blocked_by_containment` into `INFRA`, writes `t1_live_db_precondition: "deferred_to_ci"` into the generated token, and **refuses to admit a manifest that drops it** |
+| 2 | **T1** — opens only after lane 1 merges | `scripts/ops/lane-start.ts` | copies the deferral from the validated token onto the manifest |
+
+**The order is the dangerous part, and lane 1 has to close it rather than leave it open.** Between
+lane 1 and lane 2 there is a window in which PT1 no longer refuses, so a T1 lane can be opened while
+`lane-start` still knows nothing about the field — the manifest would carry no
+`t1_live_db_precondition`, `G6` would evaluate `skip`, and the live-DB obligation would be
+**silently discarded**. That is precisely the failure the ratification names.
+
+Lane 1 therefore carries the bridge, and it is placed where it can be: `validateManifest` in
+`shared.ts` already validates the manifest's `preflight_token` **path**
+(`shared.ts:1748-1759`, via `validatePreflightTokenPathValue`). Lane 1 extends it to read the
+token's **contents** and fail closed when the token records a deferral the manifest does not. So
+between the two lanes a deferral-carrying lane cannot be created at all — the manifest is rejected —
+and nothing is admitted that G6 would later fail to see. The obligation cannot be dropped by
+omission, only by a change that deliberately removes the check, which is what mutation testing is
+for.
+
+Malformed is handled by the rules UTV2-1848 already landed: an unrecognised
+`t1_live_db_precondition` value is a `validateManifest` **error**, never ignored, and the field is
+an error at any tier other than T1. Lane 1 adds the third case — present in the token, absent from
+the manifest — so all three of missing, malformed and mismatched fail closed.
+
+**What lane 1 must not do.** It must not weaken any other preflight check to get itself admitted,
+and it must not write a token by hand. Its own lane is T3, so it opens through the ordinary
+credential-free path with every check actually run — `PB1` type-check and `PB2` full `pnpm test`
+included. Hand-generating a substitute passing token is prohibited by the ratification and is not
+needed by this sequence.
+
+**Staging verification is preserved, not replaced.** Route B defers the *precondition*, not the
+proof: a T1 lane admitted this way still owes `verify` and `Writable DB proof (staging only)` green
+on its merge SHA, and `G6` refuses closeout without both. The deferral moves where the live-DB
+evidence is obtained — from the operator's workstation to CI — and changes nothing about whether it
+is obtained.
 
 ---
 
@@ -512,9 +577,26 @@ So the sequence is now:
    `127.0.0.1:4000` with an explicit contained environment (empty `SUPABASE_*`,
    `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`) and waits on
    `/api/health/runtime` before starting `next dev` with `NEXT_PUBLIC_API_BASE_URL` pointed at it.
-   So the browser → API half of the harness exists. What is missing is the persistence half and an
-   execution site: the contained config supplies no Supabase, so a spec asserting a *persisted*
-   pick needs the staging credentials the `verify` job already carries.
+   So the browser → API half of the harness exists.
+
+   **What is missing is the persistence half — and Griff ruled on 2026-09-07 how it may not be
+   obtained.** The obvious move is to pass the staging credentials the `verify` job already carries
+   into that `webServer` env. **Do not.** That API child process runs with
+   `UNIT_TALK_API_RUNTIME_MODE: 'fail_open'` and `UNIT_TALK_QA_SEED_ENABLED: 'true'`; handing a
+   fail-open, QA-seeding runtime a live staging credential is how the staging database acquired
+   ~93% CI-fixture contamination in the first place. **The local in-memory harness and staging
+   database verification stay distinct**: the Playwright config keeps its empty `SUPABASE_*` and
+   stays a browser → API contract harness, and persistence is asserted where a real credential
+   already lives under real controls — `pnpm test:db` / the `Writable DB proof (staging only)` job,
+   which `assert-staging-target.ts` already pins to `xskgrzbteyqdufktjrjx`.
+
+   **And the execution-site question is not settled by the tier floor.** Griff: *"any change to the
+   required CI execution path should be reviewed as part of the actual change, regardless of
+   file-based tier minimum."* Adding an e2e run — and a `playwright install chromium --with-deps`
+   — to a script that executes inside the required `verify` check changes what a required check
+   does and how long it takes. `classifyMechanicalMinimum` returning `T3` for
+   `apps/smart-form/package.json` is a floor, not a verdict, and this is one of the cases where the
+   floor is the wrong answer. That hunk gets reviewed on its own terms whatever the classifier says.
 
    What that route does **not** get for free is a browser. `ci.yml` never mentions Playwright;
    the three qa workflows each run `playwright install chromium --with-deps` themselves. Adding
@@ -1295,7 +1377,16 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 Consolidated from Wave 0, in dependency order. **This list is one item long on the Milestone 1
 path.** Everything below item 1 blocks only itself.
 
-1. **Decide UTV2-1842's backend admission.** Route **A0** (export staging credentials for one
+1. ~~**Decide UTV2-1842's backend admission.**~~ **RATIFIED 2026-09-07 — route B.** Griff
+   authorized the bounded admission change for the deliberately contained PT1 case, to be
+   implemented through the governed PR path. The ratification is explicit that it is **policy
+   authorization, not a merge or deployment approval**, and it carries five binding conditions:
+   every other applicable preflight check must still pass; the deferral is recorded in the
+   generated token **and** the manifest; required staging verification is preserved before merge;
+   `G6` is retained at closeout; and **missing or malformed deferral information must not silently
+   discard the obligation**. Substitute hand-generated passing tokens are prohibited. Implementation
+   sequencing is under "The route B bootstrap" below. The original packet text follows for
+   reference: Route **A0** (export staging credentials for one
    preflight invocation — no code change, unblocks the lane today, a bounded reserved-decision-4
    secrets action) or route **B** (Part 1 + Part 2 — admit with a recorded, closeout-enforced
    deferral, which unblocks every future T1 lane opened from a contained workstation). The packet
