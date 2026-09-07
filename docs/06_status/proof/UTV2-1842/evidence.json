@@ -7,31 +7,31 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "ea3d9092b07435657bae41b9b1bb8e3a10aae76f",
+    "verified_source_sha": "b80384b79918f7eca765c25533b69643e6178b74",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_verify": "PASS - required `verify` check completed success at ea3d9092b07435657bae41b9b1bb8e3a10aae76f (https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101641425096)",
-      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101639545199 succeeded against staging in run 34089360088 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 129849.725156; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 2/2. https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101639545199",
+      "pnpm_verify": "PASS - required `verify` check completed success at b80384b79918f7eca765c25533b69643e6178b74 (https://github.com/griff843/Unit-Talk-v2/actions/runs/34093798436/job/101654390075)",
+      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101652781269 succeeded against staging in run 34093798436 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 79794.810216; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 2/2. https://github.com/griff843/Unit-Talk-v2/actions/runs/34093798436/job/101652781269",
       "r_level_check": "PASS - https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964897/job/101613260148"
     },
     "sha_type": "head_sha",
-    "bound_at": "2026-09-07T05:45:00Z"
+    "bound_at": "2026-09-07T07:25:00Z"
   },
   "static_proof": {
     "status": "PASS",
     "command": "pnpm verify:static",
     "detail": "Measured at this anchor locally: `pnpm type-check` exit 0, `pnpm lint` exit 0, `scripts/ci/db-writer-inventory.ts` ok=true with 51 credentialed tests and 0 errors, and the three suites this lane changed at 156/156. `pnpm verify:static` was measured green in full locally at the previous anchor 9c4c8485cde9b58d5c4b6f697462280c2e919514 (all eleven stages exit 0; `pnpm test` 6008/6008). It was NOT re-measured locally at this anchor -- the re-run was killed by the low-memory monitor -- so the authority for the full chain at THIS head is the CI receipt below rather than a local claim. The delta between the two anchors adds one test file that `pnpm test` cannot reach (`test:apps-api-core` and `test:t1-proof:local` are explicit file lists, not globs) plus its two registration edits, so the local suite's composition is unchanged.",
-    "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at ea3d9092b07435657bae41b9b1bb8e3a10aae76f and passed: every TAP block in job 101641425096 totals 6631 tests, 6631 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101641425096"
+    "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at b80384b79918f7eca765c25533b69643e6178b74 and passed: every TAP block in job 101654390075 totals 6631 tests, 6631 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34093798436/job/101654390075"
   },
   "runtime_proof": {
     "status": "PASS",
     "environment": "staging Supabase, via the CI 'Writable DB proof (staging only)' job pinned by scripts/ci/assert-staging-target.ts - never production",
     "command": "pnpm test:live-db (pnpm test:db && pnpm test:t1-proof:live)",
     "receipt": {
-      "run_id": "34089360088",
-      "job_id": "101639545199",
-      "head_sha": "ea3d9092b07435657bae41b9b1bb8e3a10aae76f",
+      "run_id": "34093798436",
+      "job_id": "101652781269",
+      "head_sha": "b80384b79918f7eca765c25533b69643e6178b74",
       "test_db": {
         "tests": 7,
         "pass": 7,

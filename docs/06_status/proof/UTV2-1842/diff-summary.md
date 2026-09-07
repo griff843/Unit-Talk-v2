@@ -1,15 +1,15 @@
 # UTV2-1842 Diff Summary
 
-Generated at: 2026-09-07T06:07:15.000Z
+Generated at: 2026-09-07T07:25:00.000Z
 Issue: UTV2-1842
 Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1842-smart-form-submission-repair
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1529
-Head SHA: ea3d9092b07435657bae41b9b1bb8e3a10aae76f
+Head SHA: b80384b79918f7eca765c25533b69643e6178b74
 Merge SHA: N/A
 Diff base: 4d4b57da68a88c3bbac33b50eb29a0b9cd259037
-Diff target: ea3d9092b07435657bae41b9b1bb8e3a10aae76f
+Diff target: b80384b79918f7eca765c25533b69643e6178b74
 
 ## Git Diff Stat
 ```
@@ -21,14 +21,14 @@ Diff target: ea3d9092b07435657bae41b9b1bb8e3a10aae76f
  apps/api/src/smart-form-validation.ts              |  36 +-
  apps/api/src/submission-service.test.ts            |  91 +++++
  apps/api/src/submission-service.ts                 |  21 +
- .../t1-proof-utv2-1842-fallback-event-gate.test.ts | 310 +++++++++++++++
+ .../t1-proof-utv2-1842-fallback-event-gate.test.ts | 358 +++++++++++++++++
  docs/05_operations/db-writer-classification.json   |   5 +
  docs/06_status/lanes/UTV2-1842.json                |  36 ++
- docs/06_status/proof/UTV2-1842/diff-summary.md     |  56 +++
- docs/06_status/proof/UTV2-1842/evidence.json       | 118 ++++++
- docs/06_status/proof/UTV2-1842/verification.md     | 177 +++++++++
+ docs/06_status/proof/UTV2-1842/diff-summary.md     |  58 +++
+ docs/06_status/proof/UTV2-1842/evidence.json       | 120 ++++++
+ docs/06_status/proof/UTV2-1842/verification.md     | 235 ++++++++++++
  package.json                                       |   2 +-
- 15 files changed, 1497 insertions(+), 11 deletions(-)
+ 15 files changed, 1607 insertions(+), 11 deletions(-)
 ```
 
 ## Git Name Status
@@ -54,5 +54,5 @@ M	package.json
 - No files_changed entries recorded.
 
 ## SHA Binding
-Head SHA: ea3d9092b07435657bae41b9b1bb8e3a10aae76f
+Head SHA: b80384b79918f7eca765c25533b69643e6178b74
 Merge SHA: N/A
