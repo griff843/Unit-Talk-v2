@@ -1,0 +1,139 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1850
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1850
+  objective: "Smart Form e2e: assert the persisted Track Only pick, and wire the
+    suite so something runs it"
+  acceptance_criteria:
+    - |-
+      Wave 1 step 3 of the Milestone 1 path. **T3 — measured, not assumed.**
+
+      `classifyMechanicalMinimum` returns `T3` with no matches for `apps/smart-form/package.json`, `package.json`, `apps/smart-form/playwright.config.ts` and `apps/smart-form/e2e/*.spec.ts`. None is under a Tier C prefix, so this lane opens under containment and does **not** wait on the reserved PT1 admission decision. Adding a `.github/workflows/*` file would floor it at T1 and must not be done in this lane.
+
+      ## What is already true (measured on `main`, do not redo)
+
+      * [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) (#1525, `656ed0353`) rewrote `apps/smart-form/playwright.config.ts`. It now declares a **two-entry** `webServer`: `pnpm --dir ../api dev` on `127.0.0.1:4000` under an explicit contained env (empty `SUPABASE_*`, `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`), health-gated on `/api/health/runtime`, then `next dev` on `4100` with `NEXT_PUBLIC_API_BASE_URL` pointed at the API. The browser to API half of the harness exists.
+      * Four specs exist: `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts`.
+      * **Nothing runs them.** [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` each run the qa-agent's own Playwright project, never `apps/smart-form`'s `test:e2e:fixture`.
+      * The required `verify` check binds the `staging-ci` environment and writes real staging Supabase credentials into the env file (`ci.yml:42,99-102`), and `verify:static` already runs `pnpm --filter @unit-talk/smart-form verify` — today just `type-check && test`. So there is an existing, credentialed execution site that needs no workflow edit.
+
+      ## Scope
+
+      `apps/smart-form/**` **and nothing else.**
+
+      Narrowed deliberately on 2026-09-07 for concurrent-session safety. Codex owns tracker independence in a separate session and its work is likely to add test files, which forces it to declare the root `package.json` (`pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on an unreachable `*.test.ts`, and the only wiring point is the `test:ops` script there). Rather than contend for that file, this lane wires the e2e suite through `apps/smart-form/package.json`**'s own** `verify` **script**, which `verify:static` already invokes as `pnpm --filter @unit-talk/smart-form verify`. No root edit, no overlap with Codex, nothing extra to serialize.
+
+      Explicitly **not** in scope, and owned by the Codex session: `scripts/ops/preflight.ts`, `scripts/ops/truth-check-lib.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**`, root `package.json`. See `docs/mission/plan.md` § "Concurrent session ownership".
+
+      ## Acceptance
+
+      1. A spec covers the combined browser to API to **persisted pick** flow, asserting: stale events, signed odds and spread lines, canonical team fallback, honest `canonical-coverage-gap` provenance where coverage is absent, and **Track Only non-delivery** (no outbox row, `metadata->>'distributionMode'` pinned).
+      2. Persistence is asserted against a real row, not a mocked client. The contained `webServer` env sets `SUPABASE_*` empty by design; a persistence spec needs those passed through from the job environment. Do this by *reading* the ambient values rather than hardcoding, and keep the contained defaults when they are absent so a local run still works.
+      3. The suite is reachable from a package script that already runs — extend `apps/smart-form`**'s own** `verify` **script**. Do not wire it through the root `package.json`; that file belongs to the Codex session this cycle. `pnpm verify` must fail closed if the suite fails.
+      4. **The browser-install question is decided explicitly, not slipped in.** `ci.yml` never mentions Playwright; the three qa workflows install chromium themselves. Putting `playwright install chromium --with-deps` inside a package script that runs in a *required* check changes what that check does and how long it takes. If this lane cannot make that change defensibly within T3, it wires everything else, leaves the e2e step behind an opt-in env flag that CI does not yet set, and records the remaining decision in `docs/mission/plan.md` — it does **not** silently add minutes to a required check.
+      5. `pnpm verify:static` green locally; no `.github/workflows/**` file touched, and no file outside `apps/smart-form/**` touched.
+
+      Reference: `docs/mission/plan.md` Wave 1 step 3, as reconciled by [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Wave 1 step 3 of the Milestone 1 path. **T3 — measured, not assumed.**
+
+
+      `classifyMechanicalMinimum` returns `T3` with no matches for
+      `apps/smart-form/package.json`, `package.json`,
+      `apps/smart-form/playwright.config.ts` and
+      `apps/smart-form/e2e/*.spec.ts`. None is under a Tier C prefix, so this
+      lane opens under containment and does **not** wait on the reserved PT1
+      admission decision. Adding a `.github/workflows/*` file would floor it at
+      T1 and must not be done in this lane.
+    - |-
+      What is already true (measured on `main`, do not redo)
+      * [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) (#1525, `656ed0353`) rewrote `apps/smart-form/playwright.config.ts`. It now declares a **two-entry** `webServer`: `pnpm --dir ../api dev` on `127.0.0.1:4000` under an explicit contained env (empty `SUPABASE_*`, `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`), health-gated on `/api/health/runtime`, then `next dev` on `4100` with `NEXT_PUBLIC_API_BASE_URL` pointed at the API. The browser to API half of the harness exists.
+      * Four specs exist: `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts`.
+      * **Nothing runs them.** [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` each run the qa-agent's own Playwright project, never `apps/smart-form`'s `test:e2e:fixture`.
+      * The required `verify` check binds the `staging-ci` environment and writes real staging Supabase credentials into the env file (`ci.yml:42,99-102`), and `verify:static` already runs `pnpm --filter @unit-talk/smart-form verify` — today just `type-check && test`. So there is an existing, credentialed execution site that needs no workflow edit.
+    - >-
+      Scope
+
+      `apps/smart-form/**` **and nothing else.**
+
+
+      Narrowed deliberately on 2026-09-07 for concurrent-session safety. Codex
+      owns tracker independence in a separate session and its work is likely to
+      add test files, which forces it to declare the root `package.json` (`pnpm
+      verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on an unreachable
+      `*.test.ts`, and the only wiring point is the `test:ops` script there).
+      Rather than contend for that file, this lane wires the e2e suite through
+      `apps/smart-form/package.json`**'s own** `verify` **script**, which
+      `verify:static` already invokes as `pnpm --filter @unit-talk/smart-form
+      verify`. No root edit, no overlap with Codex, nothing extra to serialize.
+
+
+      Explicitly **not** in scope, and owned by the Codex session:
+      `scripts/ops/preflight.ts`, `scripts/ops/truth-check-lib.ts`,
+      `scripts/ops/shared.ts`, `scripts/ops/lane-close.ts`,
+      `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`,
+      `scripts/ops/lane-maximizer.ts`, `.github/workflows/**`, root
+      `package.json`. See `docs/mission/plan.md` § "Concurrent session
+      ownership".
+    - |-
+      Acceptance
+      1. A spec covers the combined browser to API to **persisted pick** flow, asserting: stale events, signed odds and spread lines, canonical team fallback, honest `canonical-coverage-gap` provenance where coverage is absent, and **Track Only non-delivery** (no outbox row, `metadata->>'distributionMode'` pinned).
+      2. Persistence is asserted against a real row, not a mocked client. The contained `webServer` env sets `SUPABASE_*` empty by design; a persistence spec needs those passed through from the job environment. Do this by *reading* the ambient values rather than hardcoding, and keep the contained defaults when they are absent so a local run still works.
+      3. The suite is reachable from a package script that already runs — extend `apps/smart-form`**'s own** `verify` **script**. Do not wire it through the root `package.json`; that file belongs to the Codex session this cycle. `pnpm verify` must fail closed if the suite fails.
+      4. **The browser-install question is decided explicitly, not slipped in.** `ci.yml` never mentions Playwright; the three qa workflows install chromium themselves. Putting `playwright install chromium --with-deps` inside a package script that runs in a *required* check changes what that check does and how long it takes. If this lane cannot make that change defensibly within T3, it wires everything else, leaves the e2e step behind an opt-in env flag that CI does not yet set, and records the remaining decision in `docs/mission/plan.md` — it does **not** silently add minutes to a required check.
+      5. `pnpm verify:static` green locally; no `.github/workflows/**` file touched, and no file outside `apps/smart-form/**` touched.
+
+      Reference: `docs/mission/plan.md` Wave 1 step 3, as reconciled by [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1850/smart-form-e2e-assert-the-persisted-track-only-pick-and-wire-the-suite
+    title: "Smart Form e2e: assert the persisted Track Only pick, and wire the suite
+      so something runs it"
+    description: |-
+      Wave 1 step 3 of the Milestone 1 path. **T3 — measured, not assumed.**
+
+      `classifyMechanicalMinimum` returns `T3` with no matches for `apps/smart-form/package.json`, `package.json`, `apps/smart-form/playwright.config.ts` and `apps/smart-form/e2e/*.spec.ts`. None is under a Tier C prefix, so this lane opens under containment and does **not** wait on the reserved PT1 admission decision. Adding a `.github/workflows/*` file would floor it at T1 and must not be done in this lane.
+
+      ## What is already true (measured on `main`, do not redo)
+
+      * [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) (#1525, `656ed0353`) rewrote `apps/smart-form/playwright.config.ts`. It now declares a **two-entry** `webServer`: `pnpm --dir ../api dev` on `127.0.0.1:4000` under an explicit contained env (empty `SUPABASE_*`, `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`), health-gated on `/api/health/runtime`, then `next dev` on `4100` with `NEXT_PUBLIC_API_BASE_URL` pointed at the API. The browser to API half of the harness exists.
+      * Four specs exist: `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts`.
+      * **Nothing runs them.** [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` each run the qa-agent's own Playwright project, never `apps/smart-form`'s `test:e2e:fixture`.
+      * The required `verify` check binds the `staging-ci` environment and writes real staging Supabase credentials into the env file (`ci.yml:42,99-102`), and `verify:static` already runs `pnpm --filter @unit-talk/smart-form verify` — today just `type-check && test`. So there is an existing, credentialed execution site that needs no workflow edit.
+
+      ## Scope
+
+      `apps/smart-form/**` **and nothing else.**
+
+      Narrowed deliberately on 2026-09-07 for concurrent-session safety. Codex owns tracker independence in a separate session and its work is likely to add test files, which forces it to declare the root `package.json` (`pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on an unreachable `*.test.ts`, and the only wiring point is the `test:ops` script there). Rather than contend for that file, this lane wires the e2e suite through `apps/smart-form/package.json`**'s own** `verify` **script**, which `verify:static` already invokes as `pnpm --filter @unit-talk/smart-form verify`. No root edit, no overlap with Codex, nothing extra to serialize.
+
+      Explicitly **not** in scope, and owned by the Codex session: `scripts/ops/preflight.ts`, `scripts/ops/truth-check-lib.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**`, root `package.json`. See `docs/mission/plan.md` § "Concurrent session ownership".
+
+      ## Acceptance
+
+      1. A spec covers the combined browser to API to **persisted pick** flow, asserting: stale events, signed odds and spread lines, canonical team fallback, honest `canonical-coverage-gap` provenance where coverage is absent, and **Track Only non-delivery** (no outbox row, `metadata->>'distributionMode'` pinned).
+      2. Persistence is asserted against a real row, not a mocked client. The contained `webServer` env sets `SUPABASE_*` empty by design; a persistence spec needs those passed through from the job environment. Do this by *reading* the ambient values rather than hardcoding, and keep the contained defaults when they are absent so a local run still works.
+      3. The suite is reachable from a package script that already runs — extend `apps/smart-form`**'s own** `verify` **script**. Do not wire it through the root `package.json`; that file belongs to the Codex session this cycle. `pnpm verify` must fail closed if the suite fails.
+      4. **The browser-install question is decided explicitly, not slipped in.** `ci.yml` never mentions Playwright; the three qa workflows install chromium themselves. Putting `playwright install chromium --with-deps` inside a package script that runs in a *required* check changes what that check does and how long it takes. If this lane cannot make that change defensibly within T3, it wires everything else, leaves the e2e step behind an opt-in env flag that CI does not yet set, and records the remaining decision in `docs/mission/plan.md` — it does **not** silently add minutes to a required check.
+      5. `pnpm verify:static` green locally; no `.github/workflows/**` file touched, and no file outside `apps/smart-form/**` touched.
+
+      Reference: `docs/mission/plan.md` Wave 1 step 3, as reconciled by [UTV2-1849](https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1).
+    captured_at: 2026-09-07T06:41:39.240Z
+    description_sha256: e4d65cef3def183cacc57283e3c39a86bb28cea7aa9d4f0c9600df702b527b6f
+  contract_hash: 96cc6d17bd8254b227311744cbe9da0e6f0a75b51718389711bddca01a0ef56b
