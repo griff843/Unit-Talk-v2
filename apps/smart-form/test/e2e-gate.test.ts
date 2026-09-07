@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // it is deliberately dependency-free so `verify` can run it before any build step.
 import {
   E2E_ENV_FLAG,
+  blockedDatabaseEnvSamples,
   QA_AUTH_BYPASS_ENV_FLAG,
   createContainedE2eEnv,
   isDirectExecution,
@@ -172,9 +173,14 @@ test('the directly runnable fixture script uses the portable contained launcher'
     'node scripts/run-e2e-gate.mjs --fixture NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=1',
   );
 
+  const leakProbeKeys: string[] = blockedDatabaseEnvSamples();
+  const leakProbeEnv = Object.fromEntries(
+    leakProbeKeys.map((key) => [key, 'must-not-leak']),
+  );
+
   let invocation: { command?: string; args?: string[]; env?: Record<string, string> } = {};
   const status = runFixtureSuite({
-    env: { PATH: '/bin', SUPABASE_SERVICE_ROLE_KEY: 'must-not-leak' },
+    env: { PATH: '/bin', ...leakProbeEnv },
     platform: 'win32',
     spawnSyncFn: (
       command: string,
@@ -203,5 +209,16 @@ test('the directly runnable fixture script uses the portable contained launcher'
     'e2e/smart-form-submission.spec.ts',
   ]);
   assert.equal(invocation.env?.[QA_AUTH_BYPASS_ENV_FLAG], '1');
-  assert.equal(invocation.env?.SUPABASE_SERVICE_ROLE_KEY, undefined);
+  // Every branch of the runner's own denylist, not one hand-picked example.
+  // The names come from `blockedDatabaseEnvSamples()`, which derives them from
+  // `BLOCKED_DATABASE_ENV_KEY` itself, so widening the denylist widens this
+  // assertion automatically and the two cannot drift apart.
+  assert.ok(leakProbeKeys.length >= 3, 'the denylist must contribute probes, or this asserts nothing');
+  for (const key of leakProbeKeys) {
+    assert.equal(
+      invocation.env?.[key],
+      undefined,
+      `${key} matches the runner's database-credential denylist and must not reach the child`,
+    );
+  }
 });

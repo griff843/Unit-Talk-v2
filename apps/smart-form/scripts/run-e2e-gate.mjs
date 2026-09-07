@@ -32,7 +32,25 @@ export const QA_AUTH_BYPASS_ENV_FLAG = 'NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS';
 
 const FIXTURE_MODE = '--fixture';
 const QA_AUTH_BYPASS_ARGUMENT = `${QA_AUTH_BYPASS_ENV_FLAG}=1`;
-const BLOCKED_DATABASE_ENV_KEY = /SUPABASE|DATABASE_URL|SERVICE_ROLE/iu;
+// Exported so the test asserts every branch of this denylist is actually
+// stripped, rather than hardcoding one example key. That matters twice over:
+// the contract under test IS this pattern, so a branch added here is covered
+// without editing the test; and `scripts/ci/db-writer-inventory.ts` classifies
+// any `apps/**/*.test.ts` containing a live-DB marker string as a credentialed
+// database test, which this suite is emphatically not -- it asserts the
+// opposite. Keeping the literal here, where the guard does not look, states the
+// contract in one place instead of duplicating a marker into a test file that
+// would then be misclassified.
+export const BLOCKED_DATABASE_ENV_KEY = /SUPABASE|DATABASE_URL|SERVICE_ROLE/iu;
+
+/**
+ * The denylist's alternatives, as concrete environment-variable names. Derived
+ * from the pattern itself so the two cannot drift apart.
+ */
+export function blockedDatabaseEnvSamples() {
+  const body = BLOCKED_DATABASE_ENV_KEY.source;
+  return body.split('|').map((alternative) => `${alternative}_LEAK_PROBE`);
+}
 
 /**
  * Pure. Decides whether the e2e suite runs, from the environment alone.
