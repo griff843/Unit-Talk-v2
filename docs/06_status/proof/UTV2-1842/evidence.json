@@ -7,12 +7,12 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "83394eb628a56ba6f778ea0377932b3e85aaa7ae",
+    "verified_source_sha": "ea3d9092b07435657bae41b9b1bb8e3a10aae76f",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_verify": "PASS - required `verify` check completed success at 83394eb628a56ba6f778ea0377932b3e85aaa7ae (https://github.com/griff843/Unit-Talk-v2/actions/runs/34086958110/job/101634036203)",
-      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101632723196 succeeded against staging in run 34086958110 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 101085.447432; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 2/2. https://github.com/griff843/Unit-Talk-v2/actions/runs/34086958110/job/101632723196",
+      "pnpm_verify": "PASS - required `verify` check completed success at ea3d9092b07435657bae41b9b1bb8e3a10aae76f (https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101641425096)",
+      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101639545199 succeeded against staging in run 34089360088 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 129849.725156; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 2/2. https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101639545199",
       "r_level_check": "PASS - https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964897/job/101613260148"
     },
     "sha_type": "head_sha",
@@ -22,22 +22,22 @@
     "status": "PASS",
     "command": "pnpm verify:static",
     "detail": "Measured at this anchor locally: `pnpm type-check` exit 0, `pnpm lint` exit 0, `scripts/ci/db-writer-inventory.ts` ok=true with 51 credentialed tests and 0 errors, and the three suites this lane changed at 156/156. `pnpm verify:static` was measured green in full locally at the previous anchor 9c4c8485cde9b58d5c4b6f697462280c2e919514 (all eleven stages exit 0; `pnpm test` 6008/6008). It was NOT re-measured locally at this anchor -- the re-run was killed by the low-memory monitor -- so the authority for the full chain at THIS head is the CI receipt below rather than a local claim. The delta between the two anchors adds one test file that `pnpm test` cannot reach (`test:apps-api-core` and `test:t1-proof:local` are explicit file lists, not globs) plus its two registration edits, so the local suite's composition is unchanged.",
-    "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at 83394eb628a56ba6f778ea0377932b3e85aaa7ae and passed: every TAP block in job 101634036203 totals 6631 tests, 6631 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34086958110/job/101634036203"
+    "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at ea3d9092b07435657bae41b9b1bb8e3a10aae76f and passed: every TAP block in job 101641425096 totals 6631 tests, 6631 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34089360088/job/101641425096"
   },
   "runtime_proof": {
     "status": "PASS",
     "environment": "staging Supabase, via the CI 'Writable DB proof (staging only)' job pinned by scripts/ci/assert-staging-target.ts - never production",
     "command": "pnpm test:live-db (pnpm test:db && pnpm test:t1-proof:live)",
     "receipt": {
-      "run_id": "34086958110",
-      "job_id": "101632723196",
-      "head_sha": "83394eb628a56ba6f778ea0377932b3e85aaa7ae",
+      "run_id": "34089360088",
+      "job_id": "101639545199",
+      "head_sha": "ea3d9092b07435657bae41b9b1bb8e3a10aae76f",
       "test_db": {
         "tests": 7,
         "pass": 7,
         "fail": 0,
         "skipped": 0,
-        "duration_ms": 101085.447432
+        "duration_ms": 129849.725156
       },
       "t1_proof_utv2_1842": {
         "file": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
@@ -45,7 +45,7 @@
         "pass": 2,
         "fail": 0,
         "skipped": 0,
-        "duration_ms": 19554.075353,
+        "duration_ms": 23833.073787,
         "subtests": [
           "ok 1 - UTV2-1842 live DB: a manual coverage-gap Track Only pick persists with honest provenance and creates no delivery row",
           "ok 2 - UTV2-1842 live DB: the event-existence gate is still armed - a smart-form pick with no server-validated fallback is refused"
@@ -98,12 +98,14 @@
       "apps/api/src/controllers/submit-pick-controller.test.ts",
       "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
       "package.json",
-      "docs/05_operations/db-writer-classification.json"
+      "docs/05_operations/db-writer-classification.json",
+      ".lane/lanes/runtime.yml"
     ],
-    "detail": "Seven files inside the pinned lock, plus this lane's own manifest, .ops/sync file and proof bundle. TWO files are outside it and are declared above rather than left to be discovered: adding a live-DB proof has two mandatory registration points and neither lives under apps/api/src. A file_scope_lock is pinned at lane-start and cannot be widened by an agent, so these need a CODEOWNERS scope-override/v1; the non-required 'File scope lock' check reporting them is a correct check reporting a real scope question, not a defective one. No workflow, no merge control, no branch protection, no containment setting, no deploy path and no migration is touched.",
+    "detail": "Seven files inside the pinned lock, plus this lane's own manifest, .ops/sync file and proof bundle. THREE files are outside it and are declared above rather than left to be discovered: adding a live-DB proof has two mandatory registration points, neither of which lives under apps/api/src, and admitting the second of those into the runtime lane's allowlist is the third. A file_scope_lock is pinned at lane-start and cannot be widened by an agent, so these need a CODEOWNERS scope-override/v1; the non-required 'File scope lock' check reporting them is a correct check reporting a real scope question, not a defective one. No workflow, no merge control, no branch protection, no containment setting, no deploy path and no migration is touched.",
     "out_of_scope_files": {
       "package.json": "Wires the new t1-proof suite into `test:t1-proof:live`. `pnpm verify` fails closed with WIRING_TEST_UNWIRED_NEW on any test file unreachable from a package script, and this is the only wiring point for a live-DB proof.",
-      "docs/05_operations/db-writer-classification.json": "Registers the new suite as a credentialed DB test with owner `api` and its single executing command. `verify`'s 'Enforce DB writer classification' step fails closed without it."
+      "docs/05_operations/db-writer-classification.json": "Registers the new suite as a credentialed DB test with owner `api` and its single executing command. `verify`'s 'Enforce DB writer classification' step fails closed without it.",
+      ".lane/lanes/runtime.yml": "Admits docs/05_operations/db-writer-classification.json into the runtime lane's allowed_path_globs as one exact file. Without it `Lane authority` fails with `outside_allowed_paths` and no runtime lane can legally carry its own live-DB proof. Allowlist admission correction only -- no taxonomy change, no executor-policy change, no change to any required check."
     }
   },
   "limits": [
