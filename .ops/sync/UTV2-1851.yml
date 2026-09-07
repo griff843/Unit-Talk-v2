@@ -1,0 +1,186 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1851
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1851
+  objective: "PT1 route B lane 1: admit the contained placeholder, record the
+    deferral in the token, and refuse a manifest that drops it"
+  acceptance_criteria:
+    - |-
+      **Ratified by Griff on 2026-09-07.** Route B of `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`, implemented through the governed PR path. This is **policy authorization, not a merge or deployment approval.**
+
+      Lane 1 of two. See `docs/mission/plan.md` § "The route B bootstrap".
+
+      ## Scope
+
+      `scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, their test files, `docs/05_operations/schemas/preflight_token_v1.schema.json`, and `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`. **T3** — measured as a set: `{"mechanicalMinimum":"T3","matches":[]}`.
+
+      **The two contract specs are deliberately excluded and belong to lane 2.** `docs/05_operations/TRUTH_CHECK_SPEC.md` and `docs/05_operations/LANE_MANIFEST_SPEC.md` both match `tier-c-pattern` and floor at **T1**, so including either would make this lane unopenable under containment — the exact refusal it exists to lift. They are updated in lane 2, which is T1 anyway and which is the point at which the contract is actually complete.
+
+      The token schema needs no strictness change (`additionalProperties: true`), but the new field is documented there rather than left implicit.
+
+      `scripts/ops/lane-start.ts` is **not** in scope. It floors at T1 (`tier-c-pattern`) and is therefore blocked by the exact refusal this lane lifts; it is lane 2, and it opens only after this one merges.
+
+      ## What to implement
+
+      1. `preflight.ts` **—** `resolveVerdict` **(around** `:1468-1477`**) stops folding** `blocked_by_containment` **into** `INFRA`**.** Only the containment placeholder is admitted. A genuine `infra_error` still resolves to `INFRA` and still refuses. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db)'s Part 1 already classifies the containment placeholder honestly via `isContainmentPlaceholderSupabaseUrl`; this lane changes only what that classification resolves to.
+      2. `preflight.ts` **— the token emission writes** `t1_live_db_precondition: "deferred_to_ci"` into the generated preflight token whenever PT1 was admitted this way, and only then.
+      3. `shared.ts` **—** `validateManifest` **fails closed when the token records a deferral the manifest does not.** It already validates the token *path* at `:1748-1759` via `validatePreflightTokenPathValue`; extend it to read the token's contents. This is the bridge that closes the window between lane 1 and lane 2: until lane 2 teaches `lane-start` to copy the field, a deferral-carrying lane cannot be created at all, so nothing is admitted whose obligation `G6` would later fail to see.
+
+      ## Binding conditions from the ratification
+
+      * **Every other applicable preflight check must still pass.** This lane weakens nothing else. Do not touch any other check's status mapping.
+      * **The deferral is recorded in the generated token and the manifest.** Token here; manifest in lane 2, with this lane's `validateManifest` rule making lane 2 mandatory rather than optional.
+      * **Required staging verification is preserved before merge.** Route B defers the *precondition*, not the proof. A lane admitted this way still owes `verify` and `Writable DB proof (staging only)` green on its merge SHA.
+      * `G6` **is retained at closeout.** Do not modify `evaluateT1LiveDbPreconditionDeferral` or its wiring.
+      * **Missing or malformed deferral information must not silently discard the obligation.** [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) already makes an unrecognised value an error and the field an error at any tier but T1. This lane adds the third case — present in token, absent from manifest. All three fail closed.
+      * **No hand-generated substitute passing tokens.** This lane's own preflight runs the ordinary credential-free T3 path with every check actually executed.
+
+      ## Acceptance
+
+      1. `resolveVerdict` returns `PASS` for a check list whose only non-pass entry is `PT1: blocked_by_containment`, and still returns `INFRA` when any entry is `infra_error`. Both asserted.
+      2. A generated token from a containment-admitted run carries `t1_live_db_precondition: "deferred_to_ci"`; a token from an ordinary run does not carry the field at all.
+      3. `validateManifest` returns an error when the referenced token carries the deferral and the manifest omits it, and no error when both carry it. Mutation-checked: removing the new rule must turn a test red.
+      4. The three existing fail-closed cases still hold — unrecognised value, wrong tier, and (from acceptance 3) mismatch.
+      5. `pnpm verify:static` green. No file outside the declared scope touched.
+
+      ## Coordination
+
+      `preflight.ts` is contended. The Codex tracker-independence session's change-set item 1 (emit PL1-PL5 as `skip` when there is no tracker ref) edits the same file. This lane takes it as the priority item; Codex's change waits for this to land or is authored against the merged result. Recorded in `docs/mission/plan.md` § "Concurrent session ownership".
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      **Ratified by Griff on 2026-09-07.** Route B of
+      `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`, implemented
+      through the governed PR path. This is **policy authorization, not a merge
+      or deployment approval.**
+
+
+      Lane 1 of two. See `docs/mission/plan.md` § "The route B bootstrap".
+    - >-
+      Scope
+
+      `scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, their test files,
+      `docs/05_operations/schemas/preflight_token_v1.schema.json`, and
+      `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`. **T3** — measured
+      as a set: `{"mechanicalMinimum":"T3","matches":[]}`.
+
+
+      **The two contract specs are deliberately excluded and belong to lane 2.**
+      `docs/05_operations/TRUTH_CHECK_SPEC.md` and
+      `docs/05_operations/LANE_MANIFEST_SPEC.md` both match `tier-c-pattern` and
+      floor at **T1**, so including either would make this lane unopenable under
+      containment — the exact refusal it exists to lift. They are updated in
+      lane 2, which is T1 anyway and which is the point at which the contract is
+      actually complete.
+
+
+      The token schema needs no strictness change (`additionalProperties:
+      true`), but the new field is documented there rather than left implicit.
+
+
+      `scripts/ops/lane-start.ts` is **not** in scope. It floors at T1
+      (`tier-c-pattern`) and is therefore blocked by the exact refusal this lane
+      lifts; it is lane 2, and it opens only after this one merges.
+    - |-
+      What to implement
+      1. `preflight.ts` **—** `resolveVerdict` **(around** `:1468-1477`**) stops folding** `blocked_by_containment` **into** `INFRA`**.** Only the containment placeholder is admitted. A genuine `infra_error` still resolves to `INFRA` and still refuses. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db)'s Part 1 already classifies the containment placeholder honestly via `isContainmentPlaceholderSupabaseUrl`; this lane changes only what that classification resolves to.
+      2. `preflight.ts` **— the token emission writes** `t1_live_db_precondition: "deferred_to_ci"` into the generated preflight token whenever PT1 was admitted this way, and only then.
+      3. `shared.ts` **—** `validateManifest` **fails closed when the token records a deferral the manifest does not.** It already validates the token *path* at `:1748-1759` via `validatePreflightTokenPathValue`; extend it to read the token's contents. This is the bridge that closes the window between lane 1 and lane 2: until lane 2 teaches `lane-start` to copy the field, a deferral-carrying lane cannot be created at all, so nothing is admitted whose obligation `G6` would later fail to see.
+    - |-
+      Binding conditions from the ratification
+      * **Every other applicable preflight check must still pass.** This lane weakens nothing else. Do not touch any other check's status mapping.
+      * **The deferral is recorded in the generated token and the manifest.** Token here; manifest in lane 2, with this lane's `validateManifest` rule making lane 2 mandatory rather than optional.
+      * **Required staging verification is preserved before merge.** Route B defers the *precondition*, not the proof. A lane admitted this way still owes `verify` and `Writable DB proof (staging only)` green on its merge SHA.
+      * `G6` **is retained at closeout.** Do not modify `evaluateT1LiveDbPreconditionDeferral` or its wiring.
+      * **Missing or malformed deferral information must not silently discard the obligation.** [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) already makes an unrecognised value an error and the field an error at any tier but T1. This lane adds the third case — present in token, absent from manifest. All three fail closed.
+      * **No hand-generated substitute passing tokens.** This lane's own preflight runs the ordinary credential-free T3 path with every check actually executed.
+    - >-
+      Acceptance
+
+      1. `resolveVerdict` returns `PASS` for a check list whose only non-pass
+      entry is `PT1: blocked_by_containment`, and still returns `INFRA` when any
+      entry is `infra_error`. Both asserted.
+
+      2. A generated token from a containment-admitted run carries
+      `t1_live_db_precondition: "deferred_to_ci"`; a token from an ordinary run
+      does not carry the field at all.
+
+      3. `validateManifest` returns an error when the referenced token carries
+      the deferral and the manifest omits it, and no error when both carry it.
+      Mutation-checked: removing the new rule must turn a test red.
+
+      4. The three existing fail-closed cases still hold — unrecognised value,
+      wrong tier, and (from acceptance 3) mismatch.
+
+      5. `pnpm verify:static` green. No file outside the declared scope touched.
+    - >-
+      Coordination
+
+      `preflight.ts` is contended. The Codex tracker-independence session's
+      change-set item 1 (emit PL1-PL5 as `skip` when there is no tracker ref)
+      edits the same file. This lane takes it as the priority item; Codex's
+      change waits for this to land or is authored against the merged result.
+      Recorded in `docs/mission/plan.md` § "Concurrent session ownership".
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral
+    title: "PT1 route B lane 1: admit the contained placeholder, record the deferral
+      in the token, and refuse a manifest that drops it"
+    description: |-
+      **Ratified by Griff on 2026-09-07.** Route B of `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`, implemented through the governed PR path. This is **policy authorization, not a merge or deployment approval.**
+
+      Lane 1 of two. See `docs/mission/plan.md` § "The route B bootstrap".
+
+      ## Scope
+
+      `scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, their test files, `docs/05_operations/schemas/preflight_token_v1.schema.json`, and `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`. **T3** — measured as a set: `{"mechanicalMinimum":"T3","matches":[]}`.
+
+      **The two contract specs are deliberately excluded and belong to lane 2.** `docs/05_operations/TRUTH_CHECK_SPEC.md` and `docs/05_operations/LANE_MANIFEST_SPEC.md` both match `tier-c-pattern` and floor at **T1**, so including either would make this lane unopenable under containment — the exact refusal it exists to lift. They are updated in lane 2, which is T1 anyway and which is the point at which the contract is actually complete.
+
+      The token schema needs no strictness change (`additionalProperties: true`), but the new field is documented there rather than left implicit.
+
+      `scripts/ops/lane-start.ts` is **not** in scope. It floors at T1 (`tier-c-pattern`) and is therefore blocked by the exact refusal this lane lifts; it is lane 2, and it opens only after this one merges.
+
+      ## What to implement
+
+      1. `preflight.ts` **—** `resolveVerdict` **(around** `:1468-1477`**) stops folding** `blocked_by_containment` **into** `INFRA`**.** Only the containment placeholder is admitted. A genuine `infra_error` still resolves to `INFRA` and still refuses. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db)'s Part 1 already classifies the containment placeholder honestly via `isContainmentPlaceholderSupabaseUrl`; this lane changes only what that classification resolves to.
+      2. `preflight.ts` **— the token emission writes** `t1_live_db_precondition: "deferred_to_ci"` into the generated preflight token whenever PT1 was admitted this way, and only then.
+      3. `shared.ts` **—** `validateManifest` **fails closed when the token records a deferral the manifest does not.** It already validates the token *path* at `:1748-1759` via `validatePreflightTokenPathValue`; extend it to read the token's contents. This is the bridge that closes the window between lane 1 and lane 2: until lane 2 teaches `lane-start` to copy the field, a deferral-carrying lane cannot be created at all, so nothing is admitted whose obligation `G6` would later fail to see.
+
+      ## Binding conditions from the ratification
+
+      * **Every other applicable preflight check must still pass.** This lane weakens nothing else. Do not touch any other check's status mapping.
+      * **The deferral is recorded in the generated token and the manifest.** Token here; manifest in lane 2, with this lane's `validateManifest` rule making lane 2 mandatory rather than optional.
+      * **Required staging verification is preserved before merge.** Route B defers the *precondition*, not the proof. A lane admitted this way still owes `verify` and `Writable DB proof (staging only)` green on its merge SHA.
+      * `G6` **is retained at closeout.** Do not modify `evaluateT1LiveDbPreconditionDeferral` or its wiring.
+      * **Missing or malformed deferral information must not silently discard the obligation.** [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) already makes an unrecognised value an error and the field an error at any tier but T1. This lane adds the third case — present in token, absent from manifest. All three fail closed.
+      * **No hand-generated substitute passing tokens.** This lane's own preflight runs the ordinary credential-free T3 path with every check actually executed.
+
+      ## Acceptance
+
+      1. `resolveVerdict` returns `PASS` for a check list whose only non-pass entry is `PT1: blocked_by_containment`, and still returns `INFRA` when any entry is `infra_error`. Both asserted.
+      2. A generated token from a containment-admitted run carries `t1_live_db_precondition: "deferred_to_ci"`; a token from an ordinary run does not carry the field at all.
+      3. `validateManifest` returns an error when the referenced token carries the deferral and the manifest omits it, and no error when both carry it. Mutation-checked: removing the new rule must turn a test red.
+      4. The three existing fail-closed cases still hold — unrecognised value, wrong tier, and (from acceptance 3) mismatch.
+      5. `pnpm verify:static` green. No file outside the declared scope touched.
+
+      ## Coordination
+
+      `preflight.ts` is contended. The Codex tracker-independence session's change-set item 1 (emit PL1-PL5 as `skip` when there is no tracker ref) edits the same file. This lane takes it as the priority item; Codex's change waits for this to land or is authored against the merged result. Recorded in `docs/mission/plan.md` § "Concurrent session ownership".
+    captured_at: 2026-09-07T01:25:53.751Z
+    description_sha256: 2fd433752ad701a7e3d57caa98bbac0f577fd51e1216ac7d01068851cd9424d8
+  contract_hash: ae11ffe352dc0a8a056b9f6acc9a90cbff59d82f74a9afe88d64484b89cf4f99
