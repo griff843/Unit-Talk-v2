@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1848",
+  "tier": "T2",
+  "lane_type": "governance",
+  "proof_profile": "static",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "e8c51d0aa",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS \u2014 tests 6131, pass 6131, fail 0, exit 0, measured locally at this anchor.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed \u2014 env:check, lint, type-check, build and the full test suite (6131/6131). The run then reached test:live-db, whose ci:assert-staging step REFUSED with 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx' \u2014 the containment placeholder doing exactly what containment mandates, which is the condition this lane's subject matter is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "PASS \u2014 Verdict: PASS, changed files 9, rules matched (none). This diff touches two ops scripts, their two test files and three documents; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
+    },
+    "sha_type": "verified_source_sha",
+    "anchor_note": "e8c51d0aa is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1848/. Commits after it are inside PROOF_ONLY_PREFIXES and do not move the anchor. merge_sha is null pre-merge and is written after merge by ops:proof-generate --merge-sha.",
+    "bound_at": "2026-09-07T00:08:35.140161Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
+    "test": {
+      "status": "PASS",
+      "command": "pnpm test",
+      "tests": 6131,
+      "failures": 0,
+      "detail": "PASS \u2014 tests 6131, pass 6131, fail 0, exit 0, measured locally at this anchor."
+    },
+    "targeted_test": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/shared.test.ts && pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
+      "tests": 244,
+      "failures": 0,
+      "detail": "shared.test.ts 105/105 exit 0; truth-check-lib.test.ts 139/139 exit 0. Both files are already reachable from the test:ops script, so no package.json wiring change was needed and none was made."
+    },
+    "mutation_control": {
+      "status": "PASS",
+      "count": 3,
+      "command": "apply each mutation to scripts/ops/truth-check-lib.ts, run scripts/ops/truth-check-lib.test.ts, restore byte-for-byte from a backup and re-run to confirm 139/139",
+      "observed": "M1 the receipt-not-green branch made unreachable -> # pass 138 / # fail 1 ('G6 fails when the deferred receipt is not green'). M2 the unreadable-checks branch made unreachable -> # pass 137 / # fail 2 (the unreadable-checks test and the not-green test). M3 addCheck(g6.id, g6.status, g6.detail) replaced with void g6 -> # pass 138 / # fail 1 (the wiring assertion).",
+      "honest_reading": "M3 is the load-bearing one: before it, the whole check could have been removed from the run with every behavioural test in this bundle still passing \u2014 the failure mode recorded for the executor-result validator, where the tested copy was not the copy that gated anything. The first attempt at M1 silently no-oped on an indentation mismatch and reported # fail 0; that was a failed mutation rather than a passing control, and it was re-run with an asserted single match."
+    },
+    "admits_nothing": {
+      "status": "PASS",
+      "detail": "No manifest on main carries t1_live_db_precondition and nothing in this repository writes it, so G6 reports skip on every existing lane. resolveVerdict in scripts/ops/preflight.ts is untouched, so blocked_by_containment still resolves to INFRA and no lane opens that could not open before.",
+      "significance": "This lane adds a fail-closed obligation. The admission change that would activate it is written out as an exact diff in PT1_CONTAINMENT_ADMISSION_DECISION.md section 6a and deliberately not applied; it is reserved to PM under intent.md 'Changes to the operating model'."
+    },
+    "not_routable_around": {
+      "status": "PASS",
+      "detail": "G6 is evaluated after the G1-G4 block. Both earlier exits that skip it are hard returns that cannot produce a passing verdict: no GitHub token returns verdict infra_error with exit 3, and no pr_url returns verdict fail with exit 1. A lane carrying the field therefore cannot reach a pass without G6 having run.",
+      "significance": "Placement was read from the enclosing control flow rather than assumed, because a check wired after a soft continue would be a fail-open."
+    },
+    "receipt_contexts_asserted_directly": {
+      "status": "PASS",
+      "detail": "T1_DEFERRAL_RECEIPT_CONTEXTS names both 'verify' and 'Writable DB proof (staging only)'. verify already declares needs: staging-db-proof with an explicit fail-closed guard in .github/workflows/ci.yml, so asserting verify alone would arguably suffice \u2014 but that is an inference about workflow wiring, and a later edit loosening the needs: relationship must not be able to silently satisfy this gate.",
+      "significance": "The passing test asserts the detail string names every context, so a context silently dropped from the constant fails the test rather than quietly narrowing the receipt."
+    },
+    "reserved_surface_untouched": {
+      "status": "PASS",
+      "command": "git diff origin/main --name-only -- .github/",
+      "observed": "empty",
+      "significance": "No workflow changed. No CODEOWNERS change, no branch-protection change, no tier semantics, no approval artifact, and no change to what verify requires."
+    },
+    "unsatisfiable_gitkeep_removed": {
+      "status": "PASS",
+      "detail": "docs/06_status/proof/UTV2-1848/.gitkeep, created and committed by ops:lane-start, was deleted. Return review packet rejects it as out-of-scope unless it is declared in expected_proof_paths, and CEP-E2 refuses it once declared, while expected_proof_paths is settable only at create. The file is unsatisfiable in both directions and holds nothing."
+    }
+  },
+  "runtime_proof": {
+    "status": "NOT_APPLICABLE",
+    "detail": "Static-proof governance lane. It adds a manifest field, its validation rules and one closeout check. The evaluator is pure \u2014 it takes the manifest field, the merge SHA and a CommitCheckResult as arguments \u2014 and the lane adds no database access of its own."
+  },
+  "known_gaps": [
+    "G6 has never fired on a real lane and cannot have: no manifest carries t1_live_db_precondition. Every claim about its behaviour comes from direct invocation of the evaluator with constructed inputs, plus a source assertion that it is wired into the run.",
+    "The admission half of PT1_CONTAINMENT_ADMISSION_DECISION Part 2 -- whether blocked_by_containment may issue a preflight token for a T1 lane -- remains unapplied and reserved. This lane does not unblock UTV2-1842; route A0 or route B in section 5 of that document does, and both are the owner's decision.",
+    "The fetchCommitChecks call that supplies G6's receipt input is exercised only through the evaluator's injected argument, not end-to-end against GitHub. The catch that maps a throw to null is asserted by the unreadable-checks test on the evaluator side; the network call itself is not covered by a new test."
+  ]
+}
