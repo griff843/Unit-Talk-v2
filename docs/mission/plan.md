@@ -1083,6 +1083,15 @@ neither subsumes the other:
 Neither is done here: this lane's `file_scope_lock` is `docs/mission/plan.md` alone, and a lock
 cannot be widened by an agent. Recorded rather than filed, per the filing threshold.
 
+**Repair 2 is now confirmed empirically rather than argued.** UTV2-1849 (#1527) is the same shape as
+UTV2-1846 — T3, `expected_proof_paths: []`, `docs/mission/plan.md` alone — and deleted the
+`docs/06_status/proof/UTV2-1849/.gitkeep` that `ops:lane-start` had committed. On that PR
+`Return review packet` **passes**, and so do `Proof Gate`, `Proof Auditor Gate` (skipping) and
+`Runtime Verifier Gate`, where #1524 had all four red. `Close eligibility preflight` is still red,
+exactly as the table above predicts: CEP reads the manifest and never the proof directory, so
+removing the file cannot quiet it. The two repairs really are complementary, and the cheaper one is
+already available to any T3 lane today — delete the `.gitkeep`.
+
 One consequence for reading this plan's own PR: five of #1524's non-required checks are red — the
 four above plus one — and none is an ordinary repair. `Branch Discipline Guard` reports `multiple_issue_references` — *"found
 UTV2-1688, UTV2-1724, UTV2-1730, UTV2-1841, UTV2-1842, UTV2-1846"* — because a mission-plan commit
@@ -1285,11 +1294,33 @@ actually a Griff-reserved item, only an unadmitted PR, and it is now Wave 3 exec
 
 **One item is outstanding and is not on the Milestone 1 path: a `scope-override/v1` on #1521**
 (UTV2-1843, Smart Form product-intent consolidation). Its four required checks were green, but its
-`File scope lock` is red because the diff adds `apps/api/CLAUDE.md`, `apps/smart-form/CLAUDE.md` and
-`docs/03_product/**` to `.lane/lanes/governance.yml` — genuinely outside its own pinned lock. That
-is a real scope question, not the review-packet defect, and "non-required check" is not
-authorization to merge past it. The PR has since gone `BEHIND`, so per the head-pinning rule it
-should be resynced and reconciled *before* the override is requested, not after.
+`File scope lock` is red.
+
+**Corrected 2026-09-07 — the three paths this paragraph previously named are all *inside* the
+lock.** It said the violation was that the diff adds `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/**` to `.lane/lanes/governance.yml`. Measured
+against the manifest on the branch, `file_scope_lock` already contains `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/**`. Re-running the scope comparison
+over all 14 changed files against the lock plus the lane's own metadata and declared proof paths
+returns **exactly one** violation:
+
+```
+OUT OF SCOPE: .lane/lanes/governance.yml
+total files: 14
+```
+
+So the scope question is real but is one file, not three: the lane must register its own doc
+subtree in the lane-authority allowlist, and `.lane/lanes/governance.yml` is the file that does it.
+That is precisely the mechanism UTV2-1829 used for `docs/mission/**` and that
+`.lane/lanes/governance.yml`'s own comments record eight prior times — a CODEOWNERS
+`scope-override/v1` pinned to an exact head SHA. It remains a real scope question, not the
+review-packet defect, and "non-required check" is not authorization to merge past it.
+
+**Its lease is already released and its lane is already parked**, so it is not blocking the
+frontend repair: `docs/06_status/lanes/UTV2-1843.json` on the branch reads `"status": "parked"` and
+`.ops/leases/UTV2-1843.json` reads `"status": "released"` with `owner_pid: null`. The PR is
+`BEHIND`, so per the head-pinning rule it should be resynced and reconciled *before* the override is
+requested, not after — the override binds a head SHA and every later commit invalidates it.
 
 ---
 
