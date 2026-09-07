@@ -1,6 +1,6 @@
 # PROOF: UTV2-1848 — enforce the deferred T1 live-DB precondition at closeout
 
-MERGE_SHA: pending merge
+MERGE_SHA: 1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4
 Execution SHA: bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa
 
 `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 has two halves. One adds a
@@ -10,7 +10,7 @@ against protection that already exists and is already tested.
 
 ## Merge SHA Binding
 
-Merge SHA: pending merge
+Merge SHA: 1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1526
 Verified source SHA: bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa
 

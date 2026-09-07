@@ -6,19 +6,19 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4",
     "verified_source_sha": "bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
-      "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, measured locally at this anchor.",
-      "pnpm_test": "PASS \u2014 tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
-      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed \u2014 env:check, lint, type-check, build and the full test suite. The run then reached test:live-db, whose ci:assert-staging step REFUSED with 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx' \u2014 the containment placeholder doing exactly what containment mandates, which is the condition this lane's subject matter is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
-      "r_level_check": "PASS \u2014 Verdict: PASS, changed files 9, rules matched (none). This diff touches two ops scripts, their two test files and three documents; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
+      "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
+      "pnpm_test": "PASS — tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed — env:check, lint, type-check, build and the full test suite. The run then reached test:live-db, whose ci:assert-staging step REFUSED with 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx' — the containment placeholder doing exactly what containment mandates, which is the condition this lane's subject matter is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "r_level_check": "PASS — Verdict: PASS, changed files 9, rules matched (none). This diff touches two ops scripts, their two test files and three documents; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
-    "sha_type": "verified_source_sha",
+    "sha_type": "merge_sha",
     "anchor_note": "bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1848/. It moved once, from e8c51d0aa, when acceptance criterion 1 was strengthened to read the real lane manifests instead of a constructed fixture; every receipt below was re-executed at this commit rather than carried forward. Commits after it are inside PROOF_ONLY_PREFIXES (docs/06_status/proof/ and docs/06_status/lanes/) and do not move the anchor. merge_sha is null pre-merge and is written after merge by ops:proof-generate --merge-sha.",
-    "bound_at": "2026-09-07T00:08:35.140161Z"
+    "bound_at": "2026-09-07T00:33:48.106Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -37,7 +37,7 @@
       "command": "pnpm test",
       "tests": 5989,
       "failures": 0,
-      "detail": "PASS \u2014 tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
+      "detail": "PASS — tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
       "honest_reading": "An earlier draft recorded 6131 here, obtained by summing every \"# tests\" line in the pnpm verify log. That log aggregates TAP from stages outside pnpm test, so it is not this command's count. Corrected by re-running the command at this anchor rather than by adjusting the arithmetic."
     },
     "targeted_test": {
@@ -52,7 +52,7 @@
       "count": 3,
       "command": "apply each mutation to scripts/ops/truth-check-lib.ts, run scripts/ops/truth-check-lib.test.ts, restore byte-for-byte from a backup and re-run to confirm 139/139",
       "observed": "M1 the receipt-not-green branch made unreachable -> # pass 138 / # fail 1 ('G6 fails when the deferred receipt is not green'). M2 the unreadable-checks branch made unreachable -> # pass 137 / # fail 2 (the unreadable-checks test and the not-green test). M3 addCheck(g6.id, g6.status, g6.detail) replaced with void g6 -> # pass 138 / # fail 1 (the wiring assertion).",
-      "honest_reading": "M3 is the load-bearing one: before it, the whole check could have been removed from the run with every behavioural test in this bundle still passing \u2014 the failure mode recorded for the executor-result validator, where the tested copy was not the copy that gated anything. The first attempt at M1 silently no-oped on an indentation mismatch and reported # fail 0; that was a failed mutation rather than a passing control, and it was re-run with an asserted single match."
+      "honest_reading": "M3 is the load-bearing one: before it, the whole check could have been removed from the run with every behavioural test in this bundle still passing — the failure mode recorded for the executor-result validator, where the tested copy was not the copy that gated anything. The first attempt at M1 silently no-oped on an indentation mismatch and reported # fail 0; that was a failed mutation rather than a passing control, and it was re-run with an asserted single match."
     },
     "admits_nothing": {
       "status": "PASS",
@@ -66,7 +66,7 @@
     },
     "receipt_contexts_asserted_directly": {
       "status": "PASS",
-      "detail": "T1_DEFERRAL_RECEIPT_CONTEXTS names both 'verify' and 'Writable DB proof (staging only)'. verify already declares needs: staging-db-proof with an explicit fail-closed guard in .github/workflows/ci.yml, so asserting verify alone would arguably suffice \u2014 but that is an inference about workflow wiring, and a later edit loosening the needs: relationship must not be able to silently satisfy this gate.",
+      "detail": "T1_DEFERRAL_RECEIPT_CONTEXTS names both 'verify' and 'Writable DB proof (staging only)'. verify already declares needs: staging-db-proof with an explicit fail-closed guard in .github/workflows/ci.yml, so asserting verify alone would arguably suffice — but that is an inference about workflow wiring, and a later edit loosening the needs: relationship must not be able to silently satisfy this gate.",
       "significance": "The passing test asserts the detail string names every context, so a context silently dropped from the constant fails the test rather than quietly narrowing the receipt."
     },
     "reserved_surface_untouched": {
@@ -89,7 +89,7 @@
   },
   "runtime_proof": {
     "status": "NOT_APPLICABLE",
-    "detail": "Static-proof governance lane. It adds a manifest field, its validation rules and one closeout check. The evaluator is pure \u2014 it takes the manifest field, the merge SHA and a CommitCheckResult as arguments \u2014 and the lane adds no database access of its own."
+    "detail": "Static-proof governance lane. It adds a manifest field, its validation rules and one closeout check. The evaluator is pure — it takes the manifest field, the merge SHA and a CommitCheckResult as arguments — and the lane adds no database access of its own."
   },
   "known_gaps": [
     "G6 has never fired on a real lane and cannot have: no manifest carries t1_live_db_precondition. Every claim about its behaviour comes from direct invocation of the evaluator with constructed inputs, plus a source assertion that it is wired into the run.",
