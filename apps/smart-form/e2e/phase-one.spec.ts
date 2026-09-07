@@ -395,6 +395,83 @@ test('manual participant override persists honest unresolved provenance without 
     reason: 'canonical-coverage-gap',
     enteredEventName: 'Temple @ Navy',
   });
+  // UTV2-1850: this test already typed `-120` into the odds control and then asserted
+  // nothing about it. Filling a control proves the control accepts the keystrokes; it
+  // does not prove the sign survived the schema, the request body, the API and the
+  // repository. Assert the persisted value, and assert it is negative on its own so a
+  // regression that drops the sign fails here rather than in a matchObject that would
+  // still pass on `120`.
+  expect(persistedPick['odds']).toBe(-120);
+  await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
+});
+
+// UTV2-1850 -- UTV2-1842 acceptance 8: "Signed American odds (-110) are enterable on a
+// mobile browser and persist as -110. Verified through the browser control and the
+// persisted row."
+//
+// Neither half was asserted anywhere before this test. The structured-fallback case
+// above asserts a *positive* value (`+105` -> `105`), which cannot fail on a dropped
+// minus sign, and the manual case above filled `-120` without reading it back at all.
+// The defect UTV2-1842 recorded is specifically mobile: `inputMode="numeric"` renders a
+// digits-only keypad with no minus key, so `-110` is unenterable on a phone. The
+// browser-control half of the assertion is therefore `inputmode="text"` plus a pattern
+// that admits a sign, measured on a phone-sized viewport; the persisted half is the row
+// read back out of the API's own repository.
+test('mobile manual coverage-gap submission persists signed negative odds and creates no delivery', async ({ page, request }) => {
+  await assertIsolatedApiReady(request);
+  await page.route('**/api/reference-data/catalog', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalog) }));
+  await page.route('**/api/reference-data/matchups?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+  await page.route('**/api/reference-data/search/teams?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }));
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/submit');
+  await page.getByRole('button', { name: 'NCAAF' }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+  await page.getByLabel('Away Team').fill('Temple');
+  await expect(page.getByText('No canonical team found for \u201cTemple\u201d.', { exact: true })).toBeVisible();
+  await page.getByLabel('Home Team').fill('Navy');
+  await expect(page.getByText('No canonical team found for \u201cNavy\u201d.', { exact: true })).toBeVisible();
+  await page.getByTestId('coverage-gap-manual-entry').click();
+
+  await page.getByRole('button', { name: /ML\s*Moneyline|Moneyline/i }).first().click();
+  await expect(page.getByLabel('Matchup')).toHaveValue('Temple @ Navy');
+  await page.getByLabel('Team to Win').fill('Navy');
+
+  // The browser-control half. `inputmode="numeric"` is the defect; anything that admits
+  // a sign is the fix, so assert the attribute that governs the mobile keypad rather
+  // than assuming the fill below could only have succeeded one way.
+  const oddsInput = page.locator('input[name="odds"]');
+  await expect(oddsInput, 'a numeric inputmode renders a keypad with no minus key on a phone').toHaveAttribute('inputmode', 'text');
+  await expect(oddsInput).toHaveAttribute('pattern');
+  await oddsInput.fill('-110');
+  await expect(oddsInput, 'the control must retain the sign it was given').toHaveValue('-110');
+
+  await page.getByRole('button', { name: '8', exact: true }).click();
+  await expect(page.getByText('Internal Tracking \u00b7 Track Only', { exact: true })).toBeVisible();
+  const submissionResponsePromise = page.waitForResponse((response) =>
+    response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/submissions');
+  // The phone viewport renders the mobile submit control, not the desktop one carrying
+  // `data-testid="smart-form-submit-button"`, so address it by role the way the other
+  // mobile cases in this file do.
+  await page.getByRole('button', { name: 'Submit', exact: true }).click();
+  const submissionResponse = await submissionResponsePromise;
+  expect(submissionResponse.status(), 'Browser submission must reach the real local API').toBe(201);
+  const submission = await submissionResponse.json() as {
+    data: { pickId: string; lifecycleState: string; outboxEnqueued: boolean };
+  };
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submission.data).toMatchObject({ lifecycleState: 'validated', outboxEnqueued: false });
+
+  // The persisted half.
+  const persistedPick = await readPersistedPick(request, submission.data.pickId);
+  expect(persistedPick['odds'], 'the minus sign must survive schema, request, API and repository').toBe(-110);
+  const metadata = persistedPick['metadata'] as Record<string, unknown>;
+  expect(metadata['distributionMode']).toBe('track-only');
+  expect(metadata['participantResolution']).toMatchObject({
+    resolution: 'manual',
+    manualOverride: true,
+    reason: 'canonical-coverage-gap',
+  });
   await assertTrackOnlyHasNoOutbox(request, submission.data.pickId);
 });
 
