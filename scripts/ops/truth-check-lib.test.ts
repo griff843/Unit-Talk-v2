@@ -29,6 +29,8 @@ import {
   evaluateCloseEligibilityPreflight,
   finalizeWithManifest,
   evaluateTerminalLeaseInvariant,
+  evaluateT1LiveDbPreconditionDeferral,
+  T1_DEFERRAL_RECEIPT_CONTEXTS,
 } from './truth-check-lib.js';
 import { laneLifecycleScopePatterns } from '../ci/file-scope-guard.js';
 import type { DispatchLease } from './lease-registry.js';
@@ -2953,4 +2955,105 @@ test('UTV2-1837: an EMPTY tracker state is not the same as an absent tracker', (
     closeoutStatusFor(asAbsent, 'C1'),
     'an empty tracker state must not be collapsed into an absent tracker',
   );
+});
+
+
+// ---------------------------------------------------------------------------
+// UTV2-1848 -- G6, the closeout obligation created by deferring preflight PT1
+// to CI.
+//
+// The check is inert on `main` by design: nothing writes
+// `t1_live_db_precondition`, because admitting a lane with a deferred live-DB
+// precondition is a reserved PM decision that has not been taken. These tests
+// lock the behaviour it *will* have the moment such a lane exists, so the
+// decision is a review of a two-line diff against protection that already
+// works rather than a review of a proposal.
+// ---------------------------------------------------------------------------
+
+function greenReceipts(): CommitCheckResult {
+  return { passed: true, missing: [] };
+}
+
+test('G6 skips when the lane recorded no deferred live-DB precondition', () => {
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    precondition: undefined,
+    mergeSha: 'a'.repeat(40),
+    receiptChecks: greenReceipts(),
+  });
+  assert.strictEqual(result.status, 'skip');
+  assert.strictEqual(result.id, 'G6');
+  assert.match(result.detail, /records no deferred T1 live-DB precondition/);
+});
+
+test('G6 passes when the deferred receipt is green at the merge SHA', () => {
+  const sha = 'b'.repeat(40);
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    precondition: 'deferred_to_ci',
+    mergeSha: sha,
+    receiptChecks: greenReceipts(),
+  });
+  assert.strictEqual(result.status, 'pass');
+  assert.match(result.detail, new RegExp(sha));
+  for (const context of T1_DEFERRAL_RECEIPT_CONTEXTS) {
+    assert.ok(
+      result.detail.includes(context),
+      `the passing detail must name the receipt it verified: ${context}`,
+    );
+  }
+});
+
+test('G6 fails when the deferred receipt is not green -- the deferral is not self-satisfying', () => {
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    precondition: 'deferred_to_ci',
+    mergeSha: 'c'.repeat(40),
+    receiptChecks: { passed: false, missing: ['Writable DB proof (staging only)'] },
+  });
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /Writable DB proof \(staging only\)/);
+});
+
+test('G6 fails when the checks at the merge SHA could not be read', () => {
+  // Unreadable evidence is refused rather than read as an absence of evidence:
+  // this is the fail-open the whole check exists to prevent.
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    precondition: 'deferred_to_ci',
+    mergeSha: 'd'.repeat(40),
+    receiptChecks: null,
+  });
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /could not be read/);
+});
+
+test('G6 fails when the manifest carries a deferral but no merge SHA to verify it against', () => {
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    precondition: 'deferred_to_ci',
+    mergeSha: null,
+    receiptChecks: greenReceipts(),
+  });
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /no merge SHA/);
+});
+
+test('G6 refuses an unrecognised precondition value instead of reading it as no deferral', () => {
+  const result = evaluateT1LiveDbPreconditionDeferral({
+    // The manifest validator refuses this shape too; this asserts the closeout
+    // gate does not depend on that validator having run.
+    precondition: 'deferred' as unknown as LaneManifest['t1_live_db_precondition'],
+    mergeSha: 'e'.repeat(40),
+    receiptChecks: greenReceipts(),
+  });
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /unrecognised value/);
+});
+
+test('G6 is wired into the truth-check run, not merely exported', () => {
+  // Without this, every assertion above would still pass with the check
+  // unreachable -- the failure mode recorded for the executor-result validator,
+  // where the tested copy was not the copy that gated anything.
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts/ops/truth-check-lib.ts'),
+    'utf8',
+  );
+  assert.match(source, /evaluateT1LiveDbPreconditionDeferral\(\{/);
+  assert.match(source, /addCheck\(g6\.id, g6\.status, g6\.detail\)/);
 });

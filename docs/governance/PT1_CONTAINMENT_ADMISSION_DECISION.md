@@ -252,6 +252,90 @@ Both were executed, not reasoned about. The controls that must keep failing on t
 — a real-but-unreachable host reporting `infra_error`, an absent credential reporting `fail` — are
 asserted directly and pass.
 
+## 6a. What UTV2-1848 added — the enforcement half of Part 2, landed before the decision
+
+Part 2 above has two halves that do not have to land together, and they carry very different
+authority:
+
+| Half | What it does | Authority |
+|---|---|---|
+| **Enforcement** — record the deferral and refuse closeout without the receipt | Adds a fail-closed obligation. Admits nothing | Ordinary engineering |
+| **Admission** — let `blocked_by_containment` issue a token | Changes which lanes may open | **Reserved.** `intent.md` § "Changes to the operating model" |
+
+UTV2-1848 landed the enforcement half only. It is **inert on `main`**: nothing writes
+`t1_live_db_precondition`, no manifest carries it, and `G6` reports `skip` on every lane. Landing it
+first is what turns the reserved decision from a review of a proposal into a review of a two-line
+diff against protection that already exists and is already tested.
+
+**What landed:**
+
+- `scripts/ops/shared.ts` — `T1_LIVE_DB_PRECONDITION_DEFERRED` (a one-member union, not a boolean)
+  and the optional `LaneManifest.t1_live_db_precondition` field; `validateManifest` refuses any
+  other value and refuses the field at any tier other than `T1`.
+- `scripts/ops/truth-check-lib.ts` — `T1_DEFERRAL_RECEIPT_CONTEXTS` and
+  `evaluateT1LiveDbPreconditionDeferral`, wired into the run as check `G6`.
+- Tests in `scripts/ops/shared.test.ts` and `scripts/ops/truth-check-lib.test.ts`, both already
+  wired into `test:ops`.
+- Spec: `TRUTH_CHECK_SPEC.md` §4.2 `G6`, `LANE_MANIFEST_SPEC.md` §4.3.
+
+**Mutation evidence — executed, not reasoned about:**
+
+| Mutation | Result |
+|---|---|
+| `if (!input.receiptChecks.passed)` made unreachable (receipt fail-open) | 1 test fails — the deferral is not self-satisfying |
+| `if (!input.receiptChecks)` made unreachable (unreadable checks treated as fine) | 2 tests fail |
+| `addCheck(g6.id, ...)` removed, leaving the evaluator exported but unwired | 1 test fails — the wiring assertion |
+
+The third mutation is the load-bearing one. Without it, every other assertion here would still pass
+with the check unreachable — the exact failure recorded for the executor-result validator, where the
+tested copy was not the copy that gated anything.
+
+**G6 cannot be routed around.** It is evaluated after the `G1`–`G4` block, and both earlier exits
+that skip it — no GitHub token (`verdict: infra_error`, exit 3) and no `pr_url` (`verdict: fail`,
+exit 1) — already end the run without a passing verdict. A lane carrying the field cannot reach
+`pass` without `G6` having run.
+
+### The exact remaining admission diff
+
+This is the whole of what PM is being asked to approve for route B. Three edits, all in the
+lane-open path; nothing here touches the merge gate, CODEOWNERS, branch protection, tier semantics
+or any required check.
+
+**1. `scripts/ops/preflight.ts` — `resolveVerdict` (currently `:1468-1477`).** Stop folding
+`blocked_by_containment` into `INFRA`:
+
+```diff
+-  if (
+-    checks.some(
+-      (check) => check.status === 'infra_error' || check.status === 'blocked_by_containment',
+-    )
+-  ) {
++  if (checks.some((check) => check.status === 'infra_error')) {
+     return 'INFRA';
+   }
+```
+
+`infra_error` still resolves to `INFRA`, so a real-but-unreachable host is unaffected — the control
+still fails on the condition it names.
+
+**2. `scripts/ops/preflight.ts` — token emission.** When any check reports
+`blocked_by_containment`, write `t1_live_db_precondition: "deferred_to_ci"` onto the preflight
+token. This is what makes the deferral a record rather than a silence.
+
+**3. `scripts/ops/lane-start.ts` — manifest creation.** Copy that field from the validated token
+onto the manifest, unchanged. `validateManifest` already refuses it at any tier other than `T1`, so
+a mis-copy fails closed at creation rather than at closeout.
+
+**Non-secret success criterion, unchanged from §5** — and note that its third item is *already
+satisfied and tested* on `main`: `ops:truth-check` on a lane carrying the deferral fails when the
+merge-SHA receipt is absent and passes when it is green. Only items 1 and 2 depend on the diff
+above.
+
+**What this still does not do.** It does not make an absent Supabase credential pass (`fail`,
+unchanged), does not admit a genuinely unreachable real host (`infra_error`, unchanged), and does
+not lower any tier or waive any proof artifact. It changes exactly one thing: whether a T1 lane may
+*open* on a workstation whose containment placeholder is doing what containment mandates.
+
 ## 7. Why this document lives in `docs/governance/`
 
 `docs/05_operations/` would be the ordinary home, and it was the first choice. It is unavailable to

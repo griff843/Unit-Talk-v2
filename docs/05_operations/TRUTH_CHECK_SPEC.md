@@ -97,6 +97,36 @@ Checks run in declared order. First failure determines exit code, but **all chec
 | `G3` | Merge commit is reachable in `main` first-parent history | `1` |
 | `G4` | CI check runs on merge commit are all green (required checks only) | `1` |
 | `G5` | No commits on `main` after merge SHA touch `files_changed` without a linked follow-up issue (24h window) | `4` |
+| `G6` | If the manifest carries `t1_live_db_precondition`, the CI staging live-DB receipt is green at the merge SHA | `1` |
+
+#### G6 — deferred T1 live-DB precondition (UTV2-1848)
+
+`G6` is the closeout half of `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2. It
+exists so that a T1 lane which was ever admitted with its preflight `PT1` live-DB check deferred to
+CI cannot close without the evidence that deferral moved.
+
+**It is inert today, by design.** No manifest carries `t1_live_db_precondition` and nothing in this
+repository writes it, because admitting such a lane is a reserved PM decision that has not been
+taken. Until it is, `G6` reports `skip` on every lane and changes no outcome. Landing the
+enforcement first means the admission decision is a review of a two-line diff against protection
+that already works, rather than a review of a proposal.
+
+| Manifest state | `G6` |
+|---|---|
+| field absent (every lane on `main` today) | `skip` |
+| `deferred_to_ci`, receipt contexts green at the merge SHA | `pass` |
+| `deferred_to_ci`, a receipt context missing or failing | `fail` |
+| `deferred_to_ci`, no merge SHA on the manifest | `fail` |
+| `deferred_to_ci`, the checks at the merge SHA could not be read | `fail` |
+| any other value | `fail` — refused, never read as "no deferral" |
+
+The receipt is both `verify` and `Writable DB proof (staging only)`, asserted together.
+`verify` already declares `needs: staging-db-proof` with a fail-closed guard, so asserting `verify`
+alone would arguably suffice — but that is an inference about workflow wiring, and a later edit
+loosening the `needs:` relationship must not silently satisfy this gate.
+
+Every uncertain input is a refusal. An unreadable check list is `fail`, not `skip`: unverifiable
+evidence is not absent evidence.
 
 ### 4.3 Linear Checks (always)
 

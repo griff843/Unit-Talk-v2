@@ -5,6 +5,14 @@ import path from 'node:path';
 import type { ModelRoutingBlock } from './model-routing.js';
 
 export type LaneTier = 'T1' | 'T2' | 'T3';
+
+/**
+ * The only legal value of `LaneManifest.t1_live_db_precondition` (UTV2-1848).
+ * Deliberately a one-member union rather than a boolean: a future second
+ * deferral basis must be named and reviewed, not expressed by flipping a flag.
+ */
+export const T1_LIVE_DB_PRECONDITION_DEFERRED = 'deferred_to_ci';
+export type T1LiveDbPrecondition = typeof T1_LIVE_DB_PRECONDITION_DEFERRED;
 export type LaneManifestStatus =
   | 'started'
   | 'in_progress'
@@ -189,6 +197,31 @@ export interface LaneManifest {
    * ScopeReleaseHistoryEntry and validateScopeReleaseHistory.
    */
   scope_release_history?: ScopeReleaseHistoryEntry[];
+  /**
+   * Records that this lane's T1 live-DB precondition (preflight PT1) was not
+   * satisfied at lane-open and was deferred to the CI staging receipt at the
+   * merge SHA instead (UTV2-1848).
+   *
+   * Three-valued on purpose, and the absent case is the only one that exists
+   * on `main` today:
+   *   - `undefined` (absent) -- PT1 was satisfied at lane-open, or the lane is
+   *                  not T1. Every closeout behaves exactly as it did before
+   *                  this field existed. This is the normal case.
+   *   - `'deferred_to_ci'` -- the obligation moved to closeout, where G6
+   *                  refuses unless the merge SHA carries a green `verify` and
+   *                  a green `Writable DB proof (staging only)`.
+   *   - anything else -- rejected. An unrecognised value must never be read as
+   *                  "no deferral"; that would turn a typo into a silently
+   *                  dropped obligation.
+   *
+   * NOTE ON AUTHORITY: nothing in this repository currently *writes* this
+   * field. Admitting a T1 lane on `blocked_by_containment` is a reserved PM
+   * decision recorded in docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md
+   * and deliberately not taken here. This field and its closeout check are the
+   * enforcement half, landed first so the admission decision is a review of a
+   * diff whose protection already exists rather than one that promises it.
+   */
+  t1_live_db_precondition?: T1LiveDbPrecondition;
   stale?: boolean;
   orphaned?: boolean;
   override?: {
@@ -1821,6 +1854,23 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
       if (!mr.override.reason || !mr.override.reason.trim()) {
         errors.push(`${sourcePath}: model_routing.override.reason is required when override is present`);
       }
+    }
+  }
+
+  if (manifest.t1_live_db_precondition !== undefined) {
+    if (manifest.t1_live_db_precondition !== T1_LIVE_DB_PRECONDITION_DEFERRED) {
+      // Refused, not ignored. Reading an unrecognised value as "no deferral"
+      // would convert a typo into a silently dropped closeout obligation --
+      // the exact failure mode this field exists to make impossible.
+      errors.push(
+        `${sourcePath}: t1_live_db_precondition must be "${T1_LIVE_DB_PRECONDITION_DEFERRED}" `
+          + `(got ${JSON.stringify(manifest.t1_live_db_precondition)})`,
+      );
+    } else if (manifest.tier !== 'T1') {
+      errors.push(
+        `${sourcePath}: t1_live_db_precondition is present but tier is "${manifest.tier}" -- `
+          + 'the T1 live-DB precondition only exists at T1',
+      );
     }
   }
 
