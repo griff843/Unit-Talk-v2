@@ -19,7 +19,6 @@ import {
   mergeVerifierIdentity,
   normalizeFileScopePath,
   normalizeRepoRelativePath,
-  requireIssueId,
   requireVerificationTarget,
   validateBranchName,
   validateManifest,
@@ -28,7 +27,6 @@ import {
   T1_LIVE_DB_PRECONDITION_DEFERRED,
   ROOT,
   worktreePathForBranch,
-  T1_LIVE_DB_PRECONDITION_DEFERRED,
   getRepoRoot,
   type LaneManifest,
 } from './shared.js';
@@ -1733,7 +1731,7 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
 
   assert.ok(files.length > 0, 'expected real lane manifests to read');
 
-  let carriers = 0;
+  const carriers: Array<{ file: string; tier: string }> = [];
   let validated = 0;
   let skippedNullWorktree = 0;
   let skippedVanished = 0;
@@ -1760,7 +1758,7 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
     }
     const manifest = JSON.parse(raw) as LaneManifest;
     if (manifest.t1_live_db_precondition !== undefined) {
-      carriers += 1;
+      carriers.push({ file, tier: String(manifest.tier) });
     }
     // A closed lane's manifest has `worktree_path: null`, and validateManifest
     // throws on it from isPortableAbsolutePath -- a pre-existing defect,
@@ -1791,12 +1789,27 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
   void skippedNullWorktree;
   void skippedVanished;
 
-  assert.strictEqual(
-    carriers,
-    0,
-    'no manifest may carry t1_live_db_precondition: the admission half that would write it is '
-      + 'reserved and unapplied. If this ever fails, the admission decision was taken -- and G6 '
-      + 'closeout enforcement is then live rather than inert.',
+  // UTV2-1851: this assertion previously required `carriers === 0`, on the
+  // stated grounds that "the admission half that would write it is reserved and
+  // unapplied". PM ratified route B on 2026-09-06, so that premise is gone:
+  // `ops:preflight` now writes the deferral into an admitted contained T1 token,
+  // and `createManifest` derives it from there. A carrier is now an EXPECTED
+  // artifact, and deleting the assertion would have been the wrong repair --
+  // what it was really guarding is that the field never appears somewhere it
+  // could not have come from. That constraint survives the ratification, so it
+  // is restated rather than dropped:
+  //
+  // PT1 is the field's only writer and PT1 runs only under `if (tier === 'T1')`
+  // (`preflight.ts`). A carrier at any other tier therefore cannot have been
+  // produced by the admission path -- it was hand-written, copied, or produced
+  // by a regression that let a non-T1 token carry it. Each of those is exactly
+  // the silent-discard-in-reverse that this lane forbids.
+  const misTiered = carriers.filter((c) => c.tier !== 'T1');
+  assert.deepStrictEqual(
+    misTiered,
+    [],
+    'only a T1 lane may carry t1_live_db_precondition: PT1 is its sole writer and PT1 runs only '
+      + 'at T1, so a carrier at another tier cannot have come from the admission path.',
   );
 });
 
@@ -1877,10 +1890,30 @@ test('UTV2-1851: a manifest deferral no token granted is refused', () => {
   });
 });
 
+// UTV2-1851: `createManifest` now REFUSES to build a manifest from a malformed
+// token (see the derivation tests at the end of this file), so the test below
+// can no longer construct its subject from the very token it is about to feed
+// the validator. It constructs from a path that does not exist on disk instead
+// -- `createManifest` skips derivation when the token file is absent -- and
+// passes the malformed token to the validator directly.
+//
+// That is not a weakening. It is the point: there are now TWO enforcement
+// points on the same rule, an early one at construction and a late one at
+// validation, and this test is the control on the LATE one. The late one still
+// has to work on its own, because a manifest can reach `validateManifest`
+// without passing through `createManifest` in this process at all -- every
+// manifest read back off disk does exactly that.
+const ABSENT_TOKEN = '.out/ops/preflight/claude/utv2-1851-absent-fixture.json';
+
 test('UTV2-1851: malformed deferral information is an error, never read as "no deferral"', () => {
+  assert.ok(
+    !fs.existsSync(path.join(ROOT, ABSENT_TOKEN)),
+    'the construction-time token must genuinely be absent, or this test is testing the wrong path',
+  );
+
   // Unparseable.
   withTokenFile('{not json', (tokenPath) => {
-    const manifest = activeT1Manifest(tokenPath);
+    const manifest = activeT1Manifest(ABSENT_TOKEN);
     delete manifest.t1_live_db_precondition;
     const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
     assert.equal(errors.length, 1);
@@ -1890,7 +1923,7 @@ test('UTV2-1851: malformed deferral information is an error, never read as "no d
   // Parseable but not an object -- `.t1_live_db_precondition` on an array or a
   // scalar is `undefined`, which is exactly the "silently no deferral" read.
   withTokenFile('[]', (tokenPath) => {
-    const manifest = activeT1Manifest(tokenPath);
+    const manifest = activeT1Manifest(ABSENT_TOKEN);
     const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
     assert.equal(errors.length, 1);
     assert.match(errors[0]!, /not a JSON object/);
@@ -1898,7 +1931,7 @@ test('UTV2-1851: malformed deferral information is an error, never read as "no d
 
   // Recognisable field, unrecognised value -- a typo must not become a dropped obligation.
   withTokenFile(JSON.stringify({ t1_live_db_precondition: 'deferred' }), (tokenPath) => {
-    const manifest = activeT1Manifest(tokenPath);
+    const manifest = activeT1Manifest(ABSENT_TOKEN);
     const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
     assert.equal(errors.length, 1);
     assert.match(errors[0]!, /must be "deferred_to_ci"/);
@@ -1950,4 +1983,116 @@ test('UTV2-1851: validateManifest runs the bridge for active lanes and not for r
       );
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1851 — the T1 transition itself.
+//
+// The tests above prove `validateManifest` refuses a manifest that disagrees
+// with its token. That is the enforcement point, and on its own it produced a
+// DEADLOCK rather than a working admission: `ops:preflight` would write the
+// deferral into the token, an unchanged `ops:lane-start` would build a manifest
+// without it, and validateManifest would then refuse the lane. Nothing could
+// open -- including the lane that would have taught lane-start to copy it,
+// because that lane is itself T1.
+//
+// `createManifest` derives the field from the token instead. These tests are
+// the controls on that derivation. They are written against `createManifest`
+// rather than against `lane-start.ts` deliberately: `createManifest` is the
+// single constructor all five of lane-start's manifest paths funnel through,
+// and it is the ONLY place the field can enter a manifest, because there is no
+// caller input for it.
+// ---------------------------------------------------------------------------
+
+test('createManifest carries a deferral forward from the token (the T1 transition)', () => {
+  withTokenFile(
+    JSON.stringify({ t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }),
+    (tokenPath) => {
+      // Exactly the call `ops:lane-start` makes. Note what is NOT passed: there
+      // is no `t1_live_db_precondition` input, and there is no way to add one.
+      const manifest = createManifest({
+        issue_id: 'UTV2-1842',
+        tier: 'T1',
+        branch: 'claude/utv2-1842-smart-form',
+        worktree_path: worktreePathForBranch('claude/utv2-1842-smart-form'),
+        file_scope_lock: ['apps/api/src/**'],
+        expected_proof_paths: defaultProofPaths('UTV2-1842', 'T1'),
+        preflight_token: tokenPath,
+      });
+
+      assert.strictEqual(
+        manifest.t1_live_db_precondition,
+        T1_LIVE_DB_PRECONDITION_DEFERRED,
+        'the obligation must reach the manifest, or G6 has nothing to enforce at closeout',
+      );
+    },
+  );
+});
+
+test('createManifest leaves the field absent for an ordinary token (no deferral is invented)', () => {
+  withTokenFile(JSON.stringify({ status: 'pass' }), (tokenPath) => {
+    const manifest = createManifest({
+      issue_id: 'UTV2-1842',
+      tier: 'T1',
+      branch: 'claude/utv2-1842-smart-form',
+      worktree_path: worktreePathForBranch('claude/utv2-1842-smart-form'),
+      file_scope_lock: ['apps/api/src/**'],
+      expected_proof_paths: defaultProofPaths('UTV2-1842', 'T1'),
+      preflight_token: tokenPath,
+    });
+
+    // The inverse direction matters as much as the forward one. If the
+    // derivation were unconditional, every T1 lane would claim a deferral it
+    // was never granted, and G6 would demand a staging receipt from lanes that
+    // ran their live-DB check normally.
+    assert.strictEqual(manifest.t1_live_db_precondition, undefined);
+    assert.ok(
+      !Object.prototype.hasOwnProperty.call(manifest, 't1_live_db_precondition'),
+      'the key must be absent, not present-and-undefined: it is serialised to JSON',
+    );
+  });
+});
+
+test('createManifest refuses to build a manifest from a malformed token rather than reading it as "no deferral"', () => {
+  // The binding condition: "verify that missing or malformed deferral
+  // information cannot silently discard the obligation". A token that cannot be
+  // parsed is the case where a permissive reader would return undefined, the
+  // manifest would omit the field, and the grant would vanish with every gate
+  // green. It must fail closed at construction instead.
+  withTokenFile('{ not json', (tokenPath) => {
+    assert.throws(
+      () =>
+        createManifest({
+          issue_id: 'UTV2-1842',
+          tier: 'T1',
+          branch: 'claude/utv2-1842-smart-form',
+          worktree_path: worktreePathForBranch('claude/utv2-1842-smart-form'),
+          file_scope_lock: ['apps/api/src/**'],
+          expected_proof_paths: defaultProofPaths('UTV2-1842', 'T1'),
+          preflight_token: tokenPath,
+        }),
+      /cannot create lane manifest for UTV2-1842/,
+    );
+  });
+});
+
+test('createManifest refuses an unrecognised deferral value rather than dropping it', () => {
+  // A near-miss value is the more dangerous shape than unparseable JSON: it
+  // looks deliberate. Enum widening must be a reviewed change, never something
+  // a token can assert.
+  withTokenFile(JSON.stringify({ t1_live_db_precondition: 'deferred' }), (tokenPath) => {
+    assert.throws(
+      () =>
+        createManifest({
+          issue_id: 'UTV2-1842',
+          tier: 'T1',
+          branch: 'claude/utv2-1842-smart-form',
+          worktree_path: worktreePathForBranch('claude/utv2-1842-smart-form'),
+          file_scope_lock: ['apps/api/src/**'],
+          expected_proof_paths: defaultProofPaths('UTV2-1842', 'T1'),
+          preflight_token: tokenPath,
+        }),
+      /cannot create lane manifest for UTV2-1842/,
+    );
+  });
 });

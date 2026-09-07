@@ -2464,6 +2464,45 @@ export function createManifest(input: {
   if (!VALID_LANE_MANIFEST_SCHEMA_VERSIONS.includes(schemaVersion)) {
     throw new Error(`Invalid schema_version: ${String(schemaVersion)}`);
   }
+
+  // UTV2-1851: the deferral is CARRIED FORWARD FROM THE TOKEN, here, rather
+  // than being passed in by the caller.
+  //
+  // This is the T1 transition, and it is the whole reason the route B bootstrap
+  // works. Once `ops:preflight` admits a contained PT1 and writes
+  // `t1_live_db_precondition` into the token, an UNCHANGED `ops:lane-start`
+  // constructs its manifest without that field -- and `validateManifest`'s
+  // token/manifest agreement rule then refuses the manifest. The lane would not
+  // open. That is fail-closed, but it is also a deadlock: the very lane that
+  // would teach `lane-start` to copy the field is itself T1, so it could never
+  // be opened either.
+  //
+  // Deriving it here breaks the deadlock without weakening anything, because
+  // `createManifest` is the single constructor every lane-start path already
+  // funnels through (five call sites in lane-start.ts, all passing
+  // `preflight_token`). Two properties follow, and both matter:
+  //
+  //   - A caller CANNOT ASSERT a deferral: there is no input field for it, so
+  //     the only source is a token `ops:preflight` actually wrote.
+  //   - A caller CANNOT DROP one: it is set unconditionally from the token, and
+  //     `validateManifest` independently refuses any active lane whose manifest
+  //     and token disagree in either direction.
+  //
+  // A token file that is not required to exist is a test fixture, not a lane;
+  // in that case nothing is derived, and the `validateManifest` bridge remains
+  // the enforcement point regardless.
+  let t1LiveDbPrecondition: T1LiveDbPrecondition | undefined;
+  if (fs.existsSync(path.join(ROOT, preflightToken))) {
+    const fromToken = readPreflightTokenT1LiveDbPrecondition(preflightToken);
+    if (!fromToken.ok) {
+      // Fail closed. An unreadable or malformed token is never read as "no
+      // deferral" -- that is precisely the silent discard this lane forbids.
+      throw new Error(
+        `cannot create lane manifest for ${input.issue_id}: ${fromToken.reason}`,
+      );
+    }
+    t1LiveDbPrecondition = fromToken.value;
+  }
   const isCodexExecutor = input.executor === 'codex-cli' || input.executor === 'codex-cloud';
   if (isCodexExecutor && schemaVersion === 2 && !input.model_routing) {
     throw new Error(
@@ -2518,6 +2557,7 @@ export function createManifest(input: {
     reopen_history: [],
     ...(input.model_routing ? { model_routing: input.model_routing } : {}),
     ...(input.verification_target ? { verification_target: input.verification_target } : {}),
+    ...(t1LiveDbPrecondition ? { t1_live_db_precondition: t1LiveDbPrecondition } : {}),
   };
 }
 
