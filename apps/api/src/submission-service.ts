@@ -36,6 +36,7 @@ import {
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
 import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
+import type { SmartFormValidationOutcome } from './smart-form-validation.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 import {
   assertNoAutomatedDirectToValidatedWrite,
@@ -131,6 +132,9 @@ export async function processSubmission(
     participants?: import('@unit-talk/db').ParticipantRepository;
     events?: EventRepository;
   },
+  // UTV2-1842: optional and absent by default. An omitted outcome cannot waive anything --
+  // see the event-existence gate below -- so every existing caller keeps today's behaviour.
+  smartFormOutcome?: SmartFormValidationOutcome,
 ): Promise<SubmissionProcessingResult> {
   payload = ensureMeasurableStakeUnits(payload);
   const automatedWrite = prepareAutomatedSubmission(payload);
@@ -194,14 +198,31 @@ export async function processSubmission(
   // matching event exists before accepting.
   // Gate is skipped for api/model-driven/other sources and when the events repo is empty.
   const isHumanSource = payload.source === 'smart-form' || payload.source === 'alert-agent';
+  // UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_START
+  // Waived only for the two Smart Form paths that validateSmartFormRelationships has already
+  // validated *without* a canonical event: an explicit manual coverage-gap override, and the
+  // structured team fallback for a canonical team sport. Both carry honest provenance on the
+  // pick. Asking those submissions to name a row in an event catalog that containment keeps
+  // unpopulated refuses the exact contained pilot the fallback exists to serve.
+  //
+  // The predicate is written as an allow-list of two affirmative values on purpose. An absent
+  // outcome is `undefined`, `undefined?.kind` is `undefined`, and neither literal matches, so
+  // the gate stays enforcing by default. Writing it as `!== 'canonical-event'` would invert
+  // that into a fail-open: it would waive the gate for `undefined` and for `not-smart-form`
+  // alike, including the alert-agent source that never reaches this validator at all.
+  const eventCheckWaived =
+    smartFormOutcome?.kind === 'manual-coverage-gap' ||
+    smartFormOutcome?.kind === 'structured-team-fallback';
   if (
     isHumanSource &&
+    !eventCheckWaived &&
     repositories.events &&
     typeof payload.eventName === 'string' &&
     payload.eventName.trim().length > 0
   ) {
     await checkEventExistenceGate(payload.eventName.trim(), repositories.events);
   }
+  // UTV2-1842 EVENT_GATE_FALLBACK_WAIVER_END
 
   const submission = createValidatedSubmission(nextSubmissionId(), {
     ...payload,

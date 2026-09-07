@@ -11,6 +11,7 @@ import {
   type Logger,
 } from '@unit-talk/observability';
 import { validateSmartFormRelationships } from '../smart-form-validation.js';
+import type { SmartFormValidationOutcome } from '../smart-form-validation.js';
 
 export interface SubmitPickControllerResult {
   submissionId: string;
@@ -32,13 +33,22 @@ export async function submitPickController(
     logger?: Logger | undefined;
   } = {},
 ): Promise<ApiResponse<SubmitPickControllerResult>> {
+  // UTV2-1842: the outcome records which path admitted the submission, so the event-existence
+  // gate in processSubmission can waive itself for a server-validated fallback and for nothing
+  // else. Passing it is what makes the waiver possible; omitting it leaves the gate enforcing.
+  //
+  // It is held in a container declared *outside* the guard markers on purpose. The mutation
+  // control in submit-pick-controller.test.ts deletes every line between them, so a build with
+  // the relationship guard removed must still compile and must waive nothing. An unset
+  // `outcome` is the fail-closed value, so removing the guard removes the waiver with it.
+  const smartForm: { outcome?: SmartFormValidationOutcome } = {};
   // UTV2-1672 SMART_FORM_RELATIONSHIP_GUARD_START
-  await validateSmartFormRelationships(payload, repositories.referenceData);
+  smartForm.outcome = await validateSmartFormRelationships(payload, repositories.referenceData);
   // UTV2-1672 SMART_FORM_RELATIONSHIP_GUARD_END
   const routingShadowEnabled = isModelDrivenRoutingShadowEnabled(payload);
   const result = routingShadowEnabled
     ? await processShadowSubmission(payload, repositories)
-    : await processSubmission(payload, repositories);
+    : await processSubmission(payload, repositories, smartForm.outcome);
 
   if (!result.pick.id) {
     throw new ApiError(500, 'PICK_CREATION_FAILED', 'Canonical pick was not created');

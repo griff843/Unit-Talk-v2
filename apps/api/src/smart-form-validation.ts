@@ -8,11 +8,31 @@ import { ApiError } from './errors.js';
 
 const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCCER']);
 
+// UTV2-1842 SMART_FORM_OUTCOME_START
+// The event-existence gate in submission-service.ts refuses any human-source pick whose
+// eventName matches no row once the events repository is populated. Under containment the
+// canonical event catalog is deliberately not being filled, so a Smart Form submission that
+// legitimately took a fallback path -- an explicit manual coverage-gap override, or the
+// structured team fallback for a team sport with no canonical event -- is refused by a gate
+// that is asking a question the fallback has already answered a different way.
+//
+// This validator is the only place that knows *which* path admitted the submission, and it
+// knows it only after the full server-side check for that path has passed. Returning that
+// decision lets the gate waive itself for exactly those two outcomes and for nothing else.
+// The waiver is therefore gated on server-validated fallback eligibility, never on a bare
+// null eventId.
+export type SmartFormValidationOutcome =
+  | { kind: 'not-smart-form' }
+  | { kind: 'manual-coverage-gap' }
+  | { kind: 'structured-team-fallback' }
+  | { kind: 'canonical-event'; eventId: string };
+// UTV2-1842 SMART_FORM_OUTCOME_END
+
 export async function validateSmartFormRelationships(
   payload: SubmissionPayload,
   referenceData: ReferenceDataRepository,
-): Promise<void> {
-  if (payload.source !== 'smart-form') return;
+): Promise<SmartFormValidationOutcome> {
+  if (payload.source !== 'smart-form') return { kind: 'not-smart-form' };
 
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_START
   // `smart-form` predates this product as a generic submission source, and
@@ -23,7 +43,7 @@ export async function validateSmartFormRelationships(
   // handlers/submit-pick.ts guarantees it -- or a participantResolution, so
   // keying on the presence of either covers all real Smart Form traffic
   // without retrofitting the contract onto the legacy label.
-  if (!carriesSmartFormFields(payload)) return;
+  if (!carriesSmartFormFields(payload)) return { kind: 'not-smart-form' };
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_END
 
   const metadata = payload.metadata;
@@ -58,23 +78,23 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
-    return;
+    return { kind: 'manual-coverage-gap' };
   }
 
   const eventId = readOptionalString(resolution.eventId);
   if (!eventId) {
     assertFlatMetadataIdentity(payload, resolution);
-    if (TEAM_SPORTS.has(sportId.toUpperCase())) {
-      await validateStructuredTeamFallback(resolution, sportId, referenceData);
-    } else {
+    if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    return;
+    await validateStructuredTeamFallback(resolution, sportId, referenceData);
+    return { kind: 'structured-team-fallback' };
   }
 
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
+  return { kind: 'canonical-event', eventId };
 }
 
 async function validateManualResolution(

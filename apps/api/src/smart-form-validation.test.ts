@@ -1020,3 +1020,115 @@ test('searchPlayers stops paging once the limit is satisfied', async () => {
   assert.equal(pageRequests.length, 1);
   assert.deepEqual(pageRequests[0], [0, 499]);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1842: the validator now reports *which* path admitted the submission.
+//
+// submission-service.ts waives the event-existence gate for exactly two of
+// these four outcomes. That waiver is only sound if each outcome is produced
+// after — never instead of — the full server-side check for its path, so these
+// tests pin the mapping. Every payload below is one the existing tests above
+// already prove is validated; what is new is the value that comes back.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1842: a canonical event resolution reports canonical-event with its event id', async () => {
+  const outcome = await validateSmartFormRelationships(payload(), referenceData());
+  assert.deepEqual(outcome, { kind: 'canonical-event', eventId: event.eventId });
+});
+
+test('UTV2-1842: a validated manual coverage gap reports manual-coverage-gap', async () => {
+  const manual = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'manual',
+      sportId: 'MMA',
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Fighter A vs Fighter B',
+      enteredParticipants: [
+        { role: 'competitor', displayName: 'Fighter A', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Fighter B', canonicalParticipantId: null },
+      ],
+    },
+  });
+  manual.eventName = 'Fighter A vs Fighter B';
+
+  const outcome = await validateSmartFormRelationships(manual, referenceData());
+  assert.deepEqual(outcome, { kind: 'manual-coverage-gap' });
+});
+
+test('UTV2-1842: a search-backed structured team fallback reports structured-team-fallback', async () => {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+
+  const outcome = await validateSmartFormRelationships(soccer, repository);
+  assert.deepEqual(outcome, { kind: 'structured-team-fallback' });
+});
+
+test('UTV2-1842: an unvalidated legacy smart-form shape reports not-smart-form', async () => {
+  // This shape is admitted by the carriesSmartFormFields escape without any
+  // relationship validation at all. It must therefore report the outcome that
+  // does NOT waive the event gate — see the matching test in
+  // submission-service.test.ts.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nfl-spread',
+    selection: 'legacy submission',
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 70,
+    metadata: { proof_fixture_id: 'legacy-shape' },
+  };
+
+  const outcome = await validateSmartFormRelationships(legacy, referenceData());
+  assert.deepEqual(outcome, { kind: 'not-smart-form' });
+});
+
+test('UTV2-1842: a non-team sport with no event still fails rather than reporting a fallback', async () => {
+  // The waiver must be unreachable for a sport the structured fallback cannot
+  // verify. If this ever returns an outcome instead of throwing, a submission
+  // with no canonical event and no manual override would skip the event gate.
+  const mma = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'MMA',
+      eventId: null,
+      eventName: 'Fighter A vs Fighter B',
+      away: { participantId: 'fighter-a', displayName: 'Fighter A', participantType: 'player' },
+      home: { participantId: 'fighter-b', displayName: 'Fighter B', participantType: 'player' },
+    },
+  });
+  mma.eventName = 'Fighter A vs Fighter B';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(mma, referenceData()),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /explicit manual override/);
+      return true;
+    },
+  );
+});
