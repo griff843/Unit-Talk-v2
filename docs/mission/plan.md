@@ -462,8 +462,18 @@ So the sequence is now:
    prefix, so a lane covering all of it opens under containment. And the required `verify` check
    already reaches this app: `verify:static` runs `pnpm --filter @unit-talk/smart-form verify`,
    which today is `pnpm type-check && pnpm test`. So the suite can be authored, wired and made
-   runnable — including standing the API up alongside `next dev` in `playwright.config.ts`'s
-   `webServer`, which the current config does not do — without touching a workflow at all.
+   runnable without touching a workflow at all.
+
+   **And more of that is already done than this plan said.** The claim it carried — that
+   `playwright.config.ts` *"starts only `pnpm dev` on `127.0.0.1:4100` with no API process while
+   the client posts to `127.0.0.1:4000`"* — is stale: UTV2-1847 rewrote it, and the config on
+   `main` now declares a **two-entry `webServer`** that stands `pnpm --dir ../api dev` up on
+   `127.0.0.1:4000` with an explicit contained environment (empty `SUPABASE_*`,
+   `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`) and waits on
+   `/api/health/runtime` before starting `next dev` with `NEXT_PUBLIC_API_BASE_URL` pointed at it.
+   So the browser → API half of the harness exists. What is missing is the persistence half and an
+   execution site: the contained config supplies no Supabase, so a spec asserting a *persisted*
+   pick needs the staging credentials the `verify` job already carries.
 
    What that route does **not** get for free is a browser. `ci.yml` never mentions Playwright;
    the three qa workflows each run `playwright install chromium --with-deps` themselves. Adding
