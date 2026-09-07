@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1855-smart-form-client-units-clamp",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1533",
   "files_changed": [],
   "file_scope_lock": [
     "apps/smart-form/app/submit/components/BetForm.tsx",
@@ -17,9 +17,9 @@
     "apps/smart-form/test/form-schema.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-07T20:43:13.823Z",
-  "heartbeat_at": "2026-09-07T20:43:13.823Z",
+  "heartbeat_at": "2026-09-07T21:06:22.526Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1855-smart-form-client-units-clamp.json",
