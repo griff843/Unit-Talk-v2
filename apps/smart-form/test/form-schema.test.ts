@@ -649,3 +649,38 @@ describe('units stepper wiring', () => {
     assert.deepEqual(offenders, [], `Numeric clamp literal in an onChange handler: ${offenders.join(' | ')}`);
   });
 });
+
+describe('units bounds are stated once, in two forms that cannot diverge', () => {
+  // `apps/api/src/smart-form-validation.test.ts` (UTV2-1853) asserts the API bounds
+  // match this file by scraping it for the literal `min(0.5` / `max(5.0` arguments,
+  // because neither side may import the other. Replacing those literals with the
+  // constants would silently blind that check -- it looks like a tidy refactor and
+  // it turns a real cross-app drift guard into a no-op. This is the mirror
+  // assertion: it fails here, in this app's own suite, if the constants and the
+  // literals in the zod chain ever stop agreeing.
+  const source = readFileSync(
+    fileURLToPath(new URL('../lib/form-schema.ts', import.meta.url)),
+    'utf8',
+  );
+
+  test('the zod chain carries the numeric literals the API drift test reads', () => {
+    assert.ok(source.includes(`.min(${UNITS_MIN},`), 'units min literal missing from the schema');
+    assert.ok(
+      source.includes(`.max(${UNITS_MAX.toFixed(1)},`),
+      'units max literal missing from the schema',
+    );
+  });
+
+  test('the constants and the literals describe the same bounds', () => {
+    // Scoped to the `units:` field, not the whole file -- several other fields
+    // declare their own `.min(`/`.max(` and would otherwise be matched first.
+    const unitsField = /\n\s*units:\s*z[\s\S]*?,\n\s*\w+:/u.exec(source);
+    assert.ok(unitsField, 'units field not found in the schema');
+    const parsedMin = /\.min\((\d+(?:\.\d+)?),/u.exec(unitsField[0]);
+    const parsedMax = /\.max\((\d+(?:\.\d+)?),/u.exec(unitsField[0]);
+    assert.ok(parsedMin, 'no units min literal found');
+    assert.ok(parsedMax, 'no units max literal found');
+    assert.equal(Number(parsedMin[1]), UNITS_MIN);
+    assert.equal(Number(parsedMax[1]), UNITS_MAX);
+  });
+});
