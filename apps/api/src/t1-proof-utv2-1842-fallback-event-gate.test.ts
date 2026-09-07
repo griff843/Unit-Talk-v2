@@ -375,7 +375,7 @@ test(
 );
 
 test(
-  'UTV2-1842 live DB: the same fallback submitted delivery-eligible is refused by the gate and persists nothing',
+  'UTV2-1842 live DB: the same fallback kind submitted delivery-eligible is refused by the gate and persists nothing',
   { skip: skipReason },
   async () => {
     // The review finding on #1529, asserted against the real database rather
