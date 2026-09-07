@@ -1,0 +1,129 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1855
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1855
+  objective: "Smart Form client: units stepper exceeds the schema cap, and a dead
+    odds validator cites a nonexistent contract"
+  acceptance_criteria:
+    - The units `+` button cannot produce a value the schema rejects; a
+      regression test asserts the
+    - "      clamp at the schema maximum rather than at a hard-coded literal."
+    - "`apps/smart-form/lib/odds-validator.ts` is deleted and `pnpm --filter
+      @unit-talk/smart-form verify` stays green."
+    - No change to field optionality or to any validation bound — this issue
+      corrects a control to
+    - "      match the existing contract, it does not change the contract."
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Two bounded client defects, found by enumerating every numeric input in `BetForm.tsx` against
+      `apps/smart-form/lib/form-schema.ts`. They are the only two remaining; odds sign handling, the
+      mobile signed-number input, matchup selection, duplicate-side rejection and `canonical-coverage-gap`
+      provenance were all measured and are already correct ([UTV2-1844](https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed)).
+    - >-
+      1. Units stepper can exceed the schema maximum
+
+      `apps/smart-form/app/submit/components/BetForm.tsx:4154`
+
+
+      ```
+
+      onClick={() => field.onChange(Math.min(10, ((field.value as number |
+      undefined) ?? 1) + 0.5))}
+
+      ```
+
+
+      `form-schema.ts` bounds units at `.min(0.5).max(5.0)`, and the decrement
+      button at `:4144` correctly
+
+      uses `Math.max(0.5, ...)`. So the `+` button lets the operator reach
+      5.5-10.0, which the client-side
+
+      resolver then rejects at submit. Fix: `Math.min(5, ...)`.
+
+
+      Note the presets are unaffected — `UNITS_PRESETS = [0.5, 1, 2, 3]` (`:91`)
+      are all in range.
+    - |-
+      2. Delete the dead odds validator
+      `apps/smart-form/lib/odds-validator.ts` has **zero importers**
+      (`grep -rn "odds-validator" --include=*.ts --include=*.tsx` returns nothing) and its header cites
+      `docs/contracts/SMARTFORM-ODDS-FIELD-INTEGRITY-007.md`, which does not exist in the repository. The
+      live odds validation is `form-schema.ts` on the client and `apps/api/src/smart-form-validation.ts`
+      on the server, and [UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds) closed the bound-drift gap between them with a drift test. Dead code
+      that names a contract nobody can read is worse than absent — delete it.
+    - |-
+      Tier
+      `apps/smart-form/**` matches no Tier C exact path, prefix or pattern, so
+      `classifyMechanicalMinimum` returns **T3**. Lane type: delivery-ui.
+
+      Scope note: declare the specific files rather than `apps/smart-form/**` — [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) is parked but
+      still holds `apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/**` in its `file_scope_lock`
+      (`parked` is in `ACTIVE_LOCK_STATUSES`, `shared.ts:542`).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds
+    title: "Smart Form client: units stepper exceeds the schema cap, and a dead odds
+      validator cites a nonexistent contract"
+    description: |-
+      Two bounded client defects, found by enumerating every numeric input in `BetForm.tsx` against
+      `apps/smart-form/lib/form-schema.ts`. They are the only two remaining; odds sign handling, the
+      mobile signed-number input, matchup selection, duplicate-side rejection and `canonical-coverage-gap`
+      provenance were all measured and are already correct ([UTV2-1844](https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed)).
+
+      ## 1. Units stepper can exceed the schema maximum
+
+      `apps/smart-form/app/submit/components/BetForm.tsx:4154`
+
+      ```
+      onClick={() => field.onChange(Math.min(10, ((field.value as number | undefined) ?? 1) + 0.5))}
+      ```
+
+      `form-schema.ts` bounds units at `.min(0.5).max(5.0)`, and the decrement button at `:4144` correctly
+      uses `Math.max(0.5, ...)`. So the `+` button lets the operator reach 5.5-10.0, which the client-side
+      resolver then rejects at submit. Fix: `Math.min(5, ...)`.
+
+      Note the presets are unaffected — `UNITS_PRESETS = [0.5, 1, 2, 3]` (`:91`) are all in range.
+
+      ## 2. Delete the dead odds validator
+
+      `apps/smart-form/lib/odds-validator.ts` has **zero importers**
+      (`grep -rn "odds-validator" --include=*.ts --include=*.tsx` returns nothing) and its header cites
+      `docs/contracts/SMARTFORM-ODDS-FIELD-INTEGRITY-007.md`, which does not exist in the repository. The
+      live odds validation is `form-schema.ts` on the client and `apps/api/src/smart-form-validation.ts`
+      on the server, and [UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds) closed the bound-drift gap between them with a drift test. Dead code
+      that names a contract nobody can read is worse than absent — delete it.
+
+      ## Acceptance criteria
+
+      - [ ] The units `+` button cannot produce a value the schema rejects; a regression test asserts the
+            clamp at the schema maximum rather than at a hard-coded literal.
+      - [ ] `apps/smart-form/lib/odds-validator.ts` is deleted and `pnpm --filter @unit-talk/smart-form verify` stays green.
+      - [ ] No change to field optionality or to any validation bound — this issue corrects a control to
+            match the existing contract, it does not change the contract.
+
+      ## Tier
+
+      `apps/smart-form/**` matches no Tier C exact path, prefix or pattern, so
+      `classifyMechanicalMinimum` returns **T3**. Lane type: delivery-ui.
+
+      Scope note: declare the specific files rather than `apps/smart-form/**` — [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) is parked but
+      still holds `apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/**` in its `file_scope_lock`
+      (`parked` is in `ACTIVE_LOCK_STATUSES`, `shared.ts:542`).
+    captured_at: 2026-09-07T20:43:03.204Z
+    description_sha256: 7f4fb855e18a9cfd3063c284ea9c58b7368fc1590781cb79219cfa53d504c2c2
+  contract_hash: db6723715a6d45d150c8ac2381c45abe56a65848cbfe1a5c2de85d4114ab7dce
