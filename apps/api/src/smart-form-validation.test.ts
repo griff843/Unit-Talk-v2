@@ -1336,6 +1336,34 @@ test('UTV2-1853: a contract-legal submission is still accepted (non-vacuity cont
   assert.equal(outcome.kind, 'canonical-event');
 });
 
+test('UTV2-1853: an absent odds or stakeUnits is accepted -- this guard bounds, it does not require', async () => {
+  // `odds` and `stakeUnits` are optional in SubmissionPayload
+  // (packages/contracts/src/submission.ts:21-22) and submit-pick.ts reads both through
+  // readOptionalNumber. A bounds guard must not silently promote either to mandatory:
+  // doing so is a field-presence contract change, and it refused three pre-existing
+  // http-integration cases that post a legitimate odds-less Smart Form body.
+  const noOdds = numericPayload({ stakeUnits: 1.5 });
+  delete (noOdds as { odds?: number }).odds;
+  assert.equal((await validateSmartFormRelationships(noOdds, referenceData())).kind, 'canonical-event');
+
+  const noStake = numericPayload({ odds: -110 });
+  delete (noStake as { stakeUnits?: number }).stakeUnits;
+  assert.equal((await validateSmartFormRelationships(noStake, referenceData())).kind, 'canonical-event');
+});
+
+test('UTV2-1853: a non-finite odds or stakeUnits is still refused when it IS provided', async () => {
+  // The complement of the test above: optional means "may be absent", never
+  // "may be NaN". Without this pair, relaxing presence could be over-relaxed to
+  // skipping validation entirely and every bounds test would still pass.
+  const oddsErr = await guardrailError(numericPayload({ odds: Number.NaN }));
+  assert.equal(oddsErr.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(oddsErr.message, /odds must be a finite number when provided/);
+
+  const stakeErr = await guardrailError(numericPayload({ stakeUnits: Number.NaN }));
+  assert.equal(stakeErr.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(stakeErr.message, /stakeUnits must be a finite number when provided/);
+});
+
 test('UTV2-1853: odds below the American minimum magnitude are refused', async () => {
   const err = await guardrailError(numericPayload({ odds: 7 }));
   assert.equal(err.status, 422);

@@ -737,35 +737,46 @@ function failBound(message: string): never {
 function assertSmartFormNumericBounds(payload: SubmissionPayload): void {
   const { odds, stakeUnits, line } = payload;
 
-  if (odds === undefined || !Number.isFinite(odds)) {
-    failBound('odds is required on a Smart Form submission');
-  }
-  if (!Number.isInteger(odds)) {
-    failBound(`odds must be a whole number in American format (received ${odds})`);
-  }
-  const oddsMagnitude = Math.abs(odds);
-  if (
-    oddsMagnitude < SMART_FORM_ODDS_MIN_MAGNITUDE ||
-    oddsMagnitude > SMART_FORM_ODDS_MAX_MAGNITUDE
-  ) {
-    failBound(
-      `odds must be American format between ${SMART_FORM_ODDS_MIN_MAGNITUDE} and ` +
-        `${SMART_FORM_ODDS_MAX_MAGNITUDE} in magnitude (received ${odds})`,
-    );
+  // Presence is deliberately NOT asserted. `odds` and `stakeUnits` are optional in
+  // SubmissionPayload (packages/contracts/src/submission.ts:21-22) and submit-pick.ts reads
+  // both through readOptionalNumber. This guard bounds the values a submission does carry;
+  // making either mandatory would be a field-presence contract change, which belongs with
+  // that contract rather than in a bounds guard.
+  if (odds !== undefined) {
+    if (!Number.isFinite(odds)) {
+      failBound('odds must be a finite number when provided');
+    }
+    if (!Number.isInteger(odds)) {
+      failBound(`odds must be a whole number in American format (received ${odds})`);
+    }
+    const oddsMagnitude = Math.abs(odds);
+    if (
+      oddsMagnitude < SMART_FORM_ODDS_MIN_MAGNITUDE ||
+      oddsMagnitude > SMART_FORM_ODDS_MAX_MAGNITUDE
+    ) {
+      failBound(
+        `odds must be American format between ${SMART_FORM_ODDS_MIN_MAGNITUDE} and ` +
+          `${SMART_FORM_ODDS_MAX_MAGNITUDE} in magnitude (received ${odds})`,
+      );
+    }
   }
 
-  if (stakeUnits === undefined || !Number.isFinite(stakeUnits)) {
-    failBound('stakeUnits is required on a Smart Form submission');
-  }
-  if (stakeUnits < SMART_FORM_UNITS_MIN || stakeUnits > SMART_FORM_UNITS_MAX) {
-    failBound(
-      `stakeUnits must be between ${SMART_FORM_UNITS_MIN} and ${SMART_FORM_UNITS_MAX} ` +
-        `(received ${stakeUnits})`,
-    );
-  }
-  // Compared as a quotient of the step so 1.5 is exact rather than a float remainder.
-  if (!Number.isInteger(stakeUnits / SMART_FORM_UNITS_STEP)) {
-    failBound(`stakeUnits must be a multiple of ${SMART_FORM_UNITS_STEP} (received ${stakeUnits})`);
+  if (stakeUnits !== undefined) {
+    if (!Number.isFinite(stakeUnits)) {
+      failBound('stakeUnits must be a finite number when provided');
+    }
+    if (stakeUnits < SMART_FORM_UNITS_MIN || stakeUnits > SMART_FORM_UNITS_MAX) {
+      failBound(
+        `stakeUnits must be between ${SMART_FORM_UNITS_MIN} and ${SMART_FORM_UNITS_MAX} ` +
+          `(received ${stakeUnits})`,
+      );
+    }
+    // Compared as a quotient of the step so 1.5 is exact rather than a float remainder.
+    if (!Number.isInteger(stakeUnits / SMART_FORM_UNITS_STEP)) {
+      failBound(
+        `stakeUnits must be a multiple of ${SMART_FORM_UNITS_STEP} (received ${stakeUnits})`,
+      );
+    }
   }
 
   // `line` is deliberately not required: a moneyline pick legitimately carries none, which
