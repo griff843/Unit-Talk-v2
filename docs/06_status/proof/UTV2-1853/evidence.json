@@ -6,10 +6,10 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
     "verified_source_sha": "208446676c06e86e30faaafed76919a8f4508097",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
+    "evidence_commit_sha": "208446676c06e86e30faaafed76919a8f4508097",
+    "current_pr_head_sha": "10e31597b48d05b3a0ee88bf9f4265dc8fa31b20",
     "ci_sentinels": {
       "pnpm_type_check": "PASS — exit 0, no diagnostics, measured locally at this anchor.",
       "pnpm_lint": "PASS — exit 0, no findings, measured locally at this anchor.",
@@ -23,8 +23,16 @@
   },
   "static_proof": {
     "status": "PASS",
-    "type_check": { "status": "PASS", "command": "pnpm type-check", "detail": "exit 0, no diagnostics" },
-    "lint": { "status": "PASS", "command": "pnpm lint", "detail": "exit 0, no findings" },
+    "type_check": {
+      "status": "PASS",
+      "command": "pnpm type-check",
+      "detail": "exit 0, no diagnostics"
+    },
+    "lint": {
+      "status": "PASS",
+      "command": "pnpm lint",
+      "detail": "exit 0, no findings"
+    },
     "test": {
       "status": "PASS",
       "command": "pnpm test",
@@ -74,8 +82,98 @@
     }
   },
   "runtime_proof": {
-    "status": "NOT_APPLICABLE",
-    "detail": "This lane changes a pure validation function and its call site. It performs no I/O, reads no database and touches no delivery path, so there is nothing for a live-DB run to observe that the unit suite does not already cover. The mutation results are the execution evidence."
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 22031.29ms)"
+      },
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 20373.68ms)"
+      },
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 19962.87ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 21612.31ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 129.00ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 25370.64ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 22281.03ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 22,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 2,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-07T21:29:39.464Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34163184455, job 101868994715), which ran immediately before the smoke-test step in the same job, on head 59b6d51ec3909e1e10cf1b7f6141844ec21889c6. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34163184455,
+      "run_attempt": 1,
+      "job_id": 101868994715,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34163184455/job/101868994715",
+      "target_head_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
+      "target_merge_sha": "59b6d51ec3909e1e10cf1b7f6141844ec21889c6",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
   },
   "known_gaps": [
     "This lane does NOT repair the Smart Form submission blocker. A canonical or structured-fallback submission still fails before persistence for reasons this diff does not address — the reference-data identity defects are tracked separately. Bounding the numerics is necessary and is not sufficient.",

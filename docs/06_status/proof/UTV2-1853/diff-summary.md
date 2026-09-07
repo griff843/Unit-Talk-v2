@@ -7,7 +7,7 @@ Lane type: runtime
 Branch: claude/utv2-1853-smart-form-api-numeric-guardrails
 PR URL: 1531
 Head SHA: 208446676c06e86e30faaafed76919a8f4508097
-Merge SHA: N/A
+Merge SHA: 59b6d51ec3909e1e10cf1b7f6141844ec21889c6
 Diff base: d629a55100ee239df118205bab5fe90d1638b317
 Diff target: 208446676c06e86e30faaafed76919a8f4508097
 
@@ -33,4 +33,4 @@ A	docs/06_status/lanes/UTV2-1853.json
 
 ## SHA Binding
 Head SHA: 208446676c06e86e30faaafed76919a8f4508097
-Merge SHA: N/A
+Merge SHA: 59b6d51ec3909e1e10cf1b7f6141844ec21889c6
