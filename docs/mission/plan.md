@@ -416,6 +416,15 @@ Malformed is handled by the rules UTV2-1848 already landed: an unrecognised
 an error at any tier other than T1. Lane 1 adds the third case — present in the token, absent from
 the manifest — so all three of missing, malformed and mismatched fail closed.
 
+**The two contract specs are T1-floored too, which decides where they land.** Measured:
+`docs/05_operations/TRUTH_CHECK_SPEC.md` and `docs/05_operations/LANE_MANIFEST_SPEC.md` both match
+`tier-c-pattern`, so adding either to lane 1's scope would floor lane 1 at T1 and make it
+unopenable — the same refusal, reached by a different file. They go in lane 2, which is T1 anyway
+and which is the point at which the contract is actually complete rather than half-written. Lane 1
+carries `docs/05_operations/schemas/preflight_token_v1.schema.json` (T3) so the new token field is
+documented where it is emitted rather than left implicit; the schema needs no strictness change,
+since it already sets `additionalProperties: true`.
+
 **What lane 1 must not do.** It must not weaken any other preflight check to get itself admitted,
 and it must not write a token by hand. Its own lane is T3, so it opens through the ordinary
 credential-free path with every check actually run — `PB1` type-check and `PB2` full `pnpm test`
