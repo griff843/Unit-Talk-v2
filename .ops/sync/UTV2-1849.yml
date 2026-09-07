@@ -1,0 +1,75 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1849
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1849
+  objective: "Mission plan reconciliation: record UTV2-1848 and correct the PT1
+    admission decision's blast radius"
+  acceptance_criteria:
+    - |-
+      Reconcile `docs/mission/plan.md` against measured truth as of 2026-09-06/07.
+
+      Scope: `docs/mission/plan.md` only. T3, governance lane, no code change.
+
+      What must be recorded:
+
+      1. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) **merged and closed.** PR #1526, merge SHA `1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`, manifest `done`, Linear Done, closeout commit `e32bc506c`. It landed the *enforcement* half of `PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 before the reserved admission decision: the optional `t1_live_db_precondition` manifest field, its two `validateManifest` rules, and the `G6` truth-check closeout gate asserting both `verify` and `Writable DB proof (staging only)` are green on the merge SHA. It is inert today (0 of 752 manifests carry the field) and admits nothing.
+      2. **Correct "Nothing else on the board waits on this" (line ~1194).** It is false. Measured: `classifyMechanicalMinimum(['.github/workflows/smart-form-e2e.yml'])` returns `T1` via the `tier-c-prefix` rule, because `.github/workflows/` is in `TIER_C_PATH_PREFIXES` (`scripts/ops/merge-risk.ts:57-89`). Every T1 lane runs PT1, PT1 is waivable at no tier, and under containment `SUPABASE_URL=http://127.0.0.1:1` makes PT1 report `blocked_by_containment`, which `resolveVerdict` folds into `INFRA` — so no preflight token is written and `lane-start` refuses. Therefore Wave 1 step 3 (wiring the Smart Form e2e suite into CI) is blocked by the *same* reserved decision as [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human), not only [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) itself. The correct statement is that the PT1 admission decision blocks any lane whose file scope touches a Tier C prefix.
+      3. [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) **(#1525,** `656ed0353`**) did not wire the e2e suite into CI.** It changed `apps/smart-form/playwright.config.ts` and three specs but touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` all run the qa-agent's own Playwright, never `apps/smart-form`'s `test:e2e:fixture`. Wave 1 step 3 remains open.
+      4. **The exact remaining admission diff now exists on** `main`, in `PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a — three edits (stop folding `blocked_by_containment` into `INFRA`; emit `t1_live_db_precondition: "deferred_to_ci"` in the token; copy it onto the manifest at lane-start). The owner decision is now a yes/no on a small diff whose closeout protection already exists.
+      5. **Recorded-not-filed, new this session:** `validateManifest` throws `ERR_INVALID_ARG_TYPE` from `isPortableAbsolutePath` (`shared.ts:1884`) on a manifest with `worktree_path: null` — 16 of 752 on `main`, all closed lanes. Pre-existing and unrelated to the new field.
+      6. **Reconfirmed:** the closeout commit message "lane closed, sync file removed" is false again — `.ops/sync/UTV2-1848.yml` is still tracked on `main`.
+
+      Acceptance: `docs/mission/plan.md` states each of the above, and no other file changes.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Reconcile `docs/mission/plan.md` against measured truth as of 2026-09-06/07.
+
+      Scope: `docs/mission/plan.md` only. T3, governance lane, no code change.
+
+      What must be recorded:
+
+      1. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) **merged and closed.** PR #1526, merge SHA `1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`, manifest `done`, Linear Done, closeout commit `e32bc506c`. It landed the *enforcement* half of `PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 before the reserved admission decision: the optional `t1_live_db_precondition` manifest field, its two `validateManifest` rules, and the `G6` truth-check closeout gate asserting both `verify` and `Writable DB proof (staging only)` are green on the merge SHA. It is inert today (0 of 752 manifests carry the field) and admits nothing.
+      2. **Correct "Nothing else on the board waits on this" (line ~1194).** It is false. Measured: `classifyMechanicalMinimum(['.github/workflows/smart-form-e2e.yml'])` returns `T1` via the `tier-c-prefix` rule, because `.github/workflows/` is in `TIER_C_PATH_PREFIXES` (`scripts/ops/merge-risk.ts:57-89`). Every T1 lane runs PT1, PT1 is waivable at no tier, and under containment `SUPABASE_URL=http://127.0.0.1:1` makes PT1 report `blocked_by_containment`, which `resolveVerdict` folds into `INFRA` — so no preflight token is written and `lane-start` refuses. Therefore Wave 1 step 3 (wiring the Smart Form e2e suite into CI) is blocked by the *same* reserved decision as [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human), not only [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) itself. The correct statement is that the PT1 admission decision blocks any lane whose file scope touches a Tier C prefix.
+      3. [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) **(#1525,** `656ed0353`**) did not wire the e2e suite into CI.** It changed `apps/smart-form/playwright.config.ts` and three specs but touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` all run the qa-agent's own Playwright, never `apps/smart-form`'s `test:e2e:fixture`. Wave 1 step 3 remains open.
+      4. **The exact remaining admission diff now exists on** `main`, in `PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a — three edits (stop folding `blocked_by_containment` into `INFRA`; emit `t1_live_db_precondition: "deferred_to_ci"` in the token; copy it onto the manifest at lane-start). The owner decision is now a yes/no on a small diff whose closeout protection already exists.
+      5. **Recorded-not-filed, new this session:** `validateManifest` throws `ERR_INVALID_ARG_TYPE` from `isPortableAbsolutePath` (`shared.ts:1884`) on a manifest with `worktree_path: null` — 16 of 752 on `main`, all closed lanes. Pre-existing and unrelated to the new field.
+      6. **Reconfirmed:** the closeout commit message "lane closed, sync file removed" is false again — `.ops/sync/UTV2-1848.yml` is still tracked on `main`.
+
+      Acceptance: `docs/mission/plan.md` states each of the above, and no other file changes.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1849/mission-plan-reconciliation-record-utv2-1848-and-correct-the-pt1
+    title: "Mission plan reconciliation: record UTV2-1848 and correct the PT1
+      admission decision's blast radius"
+    description: |-
+      Reconcile `docs/mission/plan.md` against measured truth as of 2026-09-06/07.
+
+      Scope: `docs/mission/plan.md` only. T3, governance lane, no code change.
+
+      What must be recorded:
+
+      1. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) **merged and closed.** PR #1526, merge SHA `1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`, manifest `done`, Linear Done, closeout commit `e32bc506c`. It landed the *enforcement* half of `PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 before the reserved admission decision: the optional `t1_live_db_precondition` manifest field, its two `validateManifest` rules, and the `G6` truth-check closeout gate asserting both `verify` and `Writable DB proof (staging only)` are green on the merge SHA. It is inert today (0 of 752 manifests carry the field) and admits nothing.
+      2. **Correct "Nothing else on the board waits on this" (line ~1194).** It is false. Measured: `classifyMechanicalMinimum(['.github/workflows/smart-form-e2e.yml'])` returns `T1` via the `tier-c-prefix` rule, because `.github/workflows/` is in `TIER_C_PATH_PREFIXES` (`scripts/ops/merge-risk.ts:57-89`). Every T1 lane runs PT1, PT1 is waivable at no tier, and under containment `SUPABASE_URL=http://127.0.0.1:1` makes PT1 report `blocked_by_containment`, which `resolveVerdict` folds into `INFRA` — so no preflight token is written and `lane-start` refuses. Therefore Wave 1 step 3 (wiring the Smart Form e2e suite into CI) is blocked by the *same* reserved decision as [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human), not only [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) itself. The correct statement is that the PT1 admission decision blocks any lane whose file scope touches a Tier C prefix.
+      3. [UTV2-1847](https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci) **(#1525,** `656ed0353`**) did not wire the e2e suite into CI.** It changed `apps/smart-form/playwright.config.ts` and three specs but touched no `package.json` and no workflow. `qa-fast.yml`, `qa-experience-regression.yml` and `post-merge-qa-gate.yml` all run the qa-agent's own Playwright, never `apps/smart-form`'s `test:e2e:fixture`. Wave 1 step 3 remains open.
+      4. **The exact remaining admission diff now exists on** `main`, in `PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a — three edits (stop folding `blocked_by_containment` into `INFRA`; emit `t1_live_db_precondition: "deferred_to_ci"` in the token; copy it onto the manifest at lane-start). The owner decision is now a yes/no on a small diff whose closeout protection already exists.
+      5. **Recorded-not-filed, new this session:** `validateManifest` throws `ERR_INVALID_ARG_TYPE` from `isPortableAbsolutePath` (`shared.ts:1884`) on a manifest with `worktree_path: null` — 16 of 752 on `main`, all closed lanes. Pre-existing and unrelated to the new field.
+      6. **Reconfirmed:** the closeout commit message "lane closed, sync file removed" is false again — `.ops/sync/UTV2-1848.yml` is still tracked on `main`.
+
+      Acceptance: `docs/mission/plan.md` states each of the above, and no other file changes.
+    captured_at: 2026-09-07T00:51:20.875Z
+    description_sha256: 5e37bbc235ffa827595f1f0a8515ac548c610cec55dc6aa2d573a11ad2daeaa1
+  contract_hash: 38079f60782173c843c16a1bc9c441a91948f6ae0af9b631b58e902b122d3c07
