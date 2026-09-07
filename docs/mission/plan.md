@@ -455,6 +455,23 @@ So the sequence is now:
    and, to add the workflow, one that declares `.github/workflows/**`. **That second path is
    T1-floored and therefore blocked by the same reserved PT1 admission decision as UTV2-1842**;
    see the correction under "Requires Griff" item 1.
+
+   **But the workflow is not the only route, and the rest of the work is executable today.**
+   Measured: `['apps/smart-form/package.json', 'package.json',
+   'apps/smart-form/playwright.config.ts', 'apps/smart-form/e2e/…']` floors at **T3** — no Tier C
+   prefix, so a lane covering all of it opens under containment. And the required `verify` check
+   already reaches this app: `verify:static` runs `pnpm --filter @unit-talk/smart-form verify`,
+   which today is `pnpm type-check && pnpm test`. So the suite can be authored, wired and made
+   runnable — including standing the API up alongside `next dev` in `playwright.config.ts`'s
+   `webServer`, which the current config does not do — without touching a workflow at all.
+
+   What that route does **not** get for free is a browser. `ci.yml` never mentions Playwright;
+   the three qa workflows each run `playwright install chromium --with-deps` themselves. Adding
+   the e2e run to `smart-form`'s `verify` script would therefore need the browser install to
+   happen inside a package script running in a **required** check — which is a real change to what
+   a required check does and how long it takes, not a scripting detail, and should be decided as
+   one rather than slipped in. The clean split is: do the T3 authoring and wiring now, and let the
+   *execution site* be the one thing that waits.
 4. **Then run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`,
    submit a real internal Track Only pick, assert persistence, observe the Track Only guards holding
    during the run, and observe the result through a safe read-only internal/operator path.
