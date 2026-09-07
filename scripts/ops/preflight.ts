@@ -21,6 +21,7 @@ import {
   PREFLIGHT_BASELINE_CACHE_PATH,
   ROOT,
   TRUTH_CHECK_RESULT_SCHEMA_PATH,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   branchExists,
   currentHeadSha,
   getFlag,
@@ -438,6 +439,9 @@ async function main(): Promise<number> {
           baseline.cacheHit,
           collectCheckedDocs(requireDocs, tier, linearState.labels),
           readmissionContext,
+          checks.some(
+            (check) => check.id === 'PT1' && check.status === 'blocked_by_containment',
+          ),
         ),
       );
       if (baseline.updatedCache) {
@@ -1466,13 +1470,23 @@ function applyWaivers(
 }
 
 export function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
-  if (
-    checks.some(
-      (check) => check.status === 'infra_error' || check.status === 'blocked_by_containment',
-    )
-  ) {
-    // UTV2-1845: `blocked_by_containment` resolves to INFRA exactly as `infra_error` does, so this
-    // classification admits nothing on its own. Changing that is the reserved half of UTV2-1845.
+  if (checks.some((check) => check.status === 'infra_error')) {
+    return 'INFRA';
+  }
+  // UTV2-1851 (route B, ratified 2026-09-06). PT1's `blocked_by_containment` no longer forces
+  // INFRA: a T1 lane opened from a deliberately contained workstation is admitted, and the
+  // live-DB obligation MOVES to closeout rather than being waived. It is recorded on the token
+  // by `createToken` below, copied to the manifest, and enforced at closeout by G6, which
+  // refuses unless the merge SHA carries a green `verify` and a green
+  // `Writable DB proof (staging only)`. See docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md.
+  //
+  // Scope is deliberately narrow in two ways:
+  //   - Only PT1 is admitted. Any OTHER check reporting `blocked_by_containment` still returns
+  //     INFRA, so a future emitter cannot inherit this admission without its own review.
+  //   - Nothing else is relaxed. The `fail` handling below is untouched, so every other
+  //     applicable preflight check must still pass for this to reach PASS.
+  const containmentBlocked = checks.filter((check) => check.status === 'blocked_by_containment');
+  if (containmentBlocked.some((check) => check.id !== 'PT1')) {
     return 'INFRA';
   }
   if (
@@ -1490,7 +1504,7 @@ export function resolveVerdict(checks: CheckResult[]): PreflightVerdict {
   return 'PASS';
 }
 
-function createToken(
+export function createToken(
   issueId: string,
   tier: LaneTier,
   branch: string,
@@ -1500,6 +1514,7 @@ function createToken(
   baselineCacheHit: boolean,
   requiredDocsChecked: string[],
   readmissionContext: ExistingBranchReadmissionContext | null = null,
+  t1LiveDbPreconditionDeferred = false,
 ): PreflightToken | ExistingBranchReadmissionToken {
   const ttlMinutes = tier === 'T1' ? 15 : 30;
   const token: PreflightToken = {
@@ -1520,6 +1535,12 @@ function createToken(
     baseline_cache_hit: baselineCacheHit,
     preflight_run_id: crypto.randomUUID(),
     required_docs_checked: requiredDocsChecked,
+    // UTV2-1851: recorded when and only when PT1 was admitted on
+    // `blocked_by_containment`. The token is the origin of the obligation;
+    // `validateManifest` refuses any manifest that disagrees with it.
+    ...(t1LiveDbPreconditionDeferred
+      ? { t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }
+      : {}),
   };
   return readmissionContext ? { ...token, ...readmissionContext } : token;
 }

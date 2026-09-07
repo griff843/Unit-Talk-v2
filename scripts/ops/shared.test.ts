@@ -23,6 +23,10 @@ import {
   requireVerificationTarget,
   validateBranchName,
   validateManifest,
+  validateT1LiveDbPreconditionAgainstToken,
+  readPreflightTokenT1LiveDbPrecondition,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
+  ROOT,
   worktreePathForBranch,
   T1_LIVE_DB_PRECONDITION_DEFERRED,
   getRepoRoot,
@@ -1773,5 +1777,157 @@ test('every real lane manifest on this branch is unaffected by the new field (ac
     'no manifest may carry t1_live_db_precondition: the admission half that would write it is '
       + 'reserved and unapplied. If this ever fails, the admission decision was taken -- and G6 '
       + 'closeout enforcement is then live rather than inert.',
+  );
+});
+
+
+// ---------------------------------------------------------------------------
+// UTV2-1851 — the route B bridge. Ratified by PM 2026-09-06.
+//
+// Route B admits a T1 lane whose live-DB precondition was deferred to CI. The
+// obligation lives in two places on purpose: the preflight token (written by
+// `ops:preflight`, the origin of the grant) and the lane manifest (read at
+// closeout by G6, the enforcement point).
+//
+// The failure this bridge exists to make impossible: a manifest that simply
+// omits the field. G6 would evaluate `skip`, the obligation would vanish, and
+// nothing anywhere would be red. Every test below is written from the binding
+// condition "verify that missing or malformed deferral information cannot
+// silently discard the obligation".
+// ---------------------------------------------------------------------------
+
+function withTokenFile(
+  contents: string | null,
+  run: (relativeTokenPath: string) => void,
+): void {
+  const dir = fs.mkdtempSync(path.join(ROOT, '.out', 'utv2-1851-token-'));
+  const absolute = path.join(dir, 'token.json');
+  if (contents !== null) {
+    fs.writeFileSync(absolute, contents);
+  }
+  try {
+    run(path.relative(ROOT, absolute).split(path.sep).join('/'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+function activeT1Manifest(preflightToken: string) {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1851',
+    tier: 'T1',
+    branch: 'claude/utv2-1851-bridge',
+    worktree_path: worktreePathForBranch('claude/utv2-1851-bridge'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1851', 'T1'),
+    preflight_token: preflightToken,
+  });
+  return manifest;
+}
+
+test('UTV2-1851: a token deferral the manifest omits is refused, not ignored', () => {
+  withTokenFile(
+    JSON.stringify({ t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }),
+    (tokenPath) => {
+      const manifest = activeT1Manifest(tokenPath);
+      delete manifest.t1_live_db_precondition;
+      const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+      assert.equal(errors.length, 1);
+      assert.match(errors[0]!, /would discard it/);
+
+      // INVERSION: with the manifest carrying the same value, the same token is accepted.
+      // Without this control the assertion above would also pass on a function that
+      // rejected everything.
+      manifest.t1_live_db_precondition = T1_LIVE_DB_PRECONDITION_DEFERRED;
+      assert.deepStrictEqual(
+        validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture'),
+        [],
+      );
+    },
+  );
+});
+
+test('UTV2-1851: a manifest deferral no token granted is refused', () => {
+  withTokenFile(JSON.stringify({ schema_version: 1 }), (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    manifest.t1_live_db_precondition = T1_LIVE_DB_PRECONDITION_DEFERRED;
+    const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!, /never granted/);
+  });
+});
+
+test('UTV2-1851: malformed deferral information is an error, never read as "no deferral"', () => {
+  // Unparseable.
+  withTokenFile('{not json', (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    delete manifest.t1_live_db_precondition;
+    const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!, /not valid JSON/);
+  });
+
+  // Parseable but not an object -- `.t1_live_db_precondition` on an array or a
+  // scalar is `undefined`, which is exactly the "silently no deferral" read.
+  withTokenFile('[]', (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!, /not a JSON object/);
+  });
+
+  // Recognisable field, unrecognised value -- a typo must not become a dropped obligation.
+  withTokenFile(JSON.stringify({ t1_live_db_precondition: 'deferred' }), (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!, /must be "deferred_to_ci"/);
+  });
+
+  // Absent file.
+  withTokenFile(null, (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    const errors = validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture');
+    assert.equal(errors.length, 1);
+    assert.match(errors[0]!, /could not be read/);
+  });
+});
+
+test('UTV2-1851: an ordinary lane -- no deferral on either side -- is unaffected', () => {
+  withTokenFile(JSON.stringify({ schema_version: 1, status: 'pass' }), (tokenPath) => {
+    const manifest = activeT1Manifest(tokenPath);
+    delete manifest.t1_live_db_precondition;
+    assert.deepStrictEqual(
+      validateT1LiveDbPreconditionAgainstToken(manifest, tokenPath, 'fixture'),
+      [],
+    );
+    assert.deepStrictEqual(readPreflightTokenT1LiveDbPrecondition(tokenPath), {
+      ok: true,
+      value: undefined,
+    });
+  });
+});
+
+test('UTV2-1851: validateManifest runs the bridge for active lanes and not for reaped ones', () => {
+  withTokenFile(
+    JSON.stringify({ t1_live_db_precondition: T1_LIVE_DB_PRECONDITION_DEFERRED }),
+    (tokenPath) => {
+      const manifest = activeT1Manifest(tokenPath);
+      delete manifest.t1_live_db_precondition;
+      manifest.status = 'in_progress';
+      assert.ok(
+        validateManifest(manifest).some((e) => /would discard it/.test(e)),
+        'an active lane must be refused when its manifest drops a granted deferral',
+      );
+
+      // A merged or done lane is allowed to have had its token reaped, so the
+      // bridge does not run and this is not retroactively an error.
+      manifest.status = 'done';
+      manifest.closed_at = new Date().toISOString();
+      assert.equal(
+        validateManifest(manifest).some((e) => /would discard it/.test(e)),
+        false,
+      );
+    },
   );
 });
