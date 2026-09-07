@@ -25,9 +25,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1827/evidence.json"
   ],
-  "status": "in_review",
+  "status": "parked",
   "started_at": "2026-09-05T13:22:18.863Z",
-  "heartbeat_at": "2026-09-05T13:34:38.144Z",
+  "heartbeat_at": "2026-09-07T03:16:37.820Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1827-governed-staging-proof-runner.json",
