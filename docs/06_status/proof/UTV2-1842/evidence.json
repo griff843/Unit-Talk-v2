@@ -1,0 +1,96 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1842",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "READY_FOR_REVIEW",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "9c4c8485cde9b58d5c4b6f697462280c2e919514",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS - required `verify` check completed success at 9c4c8485cde9b58d5c4b6f697462280c2e919514 (https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964826/job/101614766683)",
+      "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101613322111 succeeded against staging in run 34079964826 at this exact anchor SHA. `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 117230.076453, after `ci:assert-staging` confirmed the approved staging project; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout. https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964826/job/101613322111",
+      "r_level_check": "PASS - https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964897/job/101613260148"
+    },
+    "sha_type": "head_sha",
+    "bound_at": "2026-09-07T04:55:49.685674Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "command": "pnpm verify:static",
+    "detail": "All eleven stages exit 0 at this anchor in the lane worktree: ci:db-client-boundary, ops:sync-check, ops:system-alignment-check, ops:automation-coverage-check, env:check, lint, type-check, build, test, @unit-talk/smart-form verify, verify:commands. `pnpm test` reported 6008/6008 pass, 0 fail. The three suites this lane changed report 156/156.",
+    "ci_receipt": "The required `verify` check independently reproduced this in CI at 9c4c8485cde9b58d5c4b6f697462280c2e919514: https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964826/job/101614766683"
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "environment": "staging Supabase, via the CI 'Writable DB proof (staging only)' job pinned by scripts/ci/assert-staging-target.ts - never production",
+    "command": "pnpm test:live-db (pnpm test:db && pnpm test:t1-proof:live)",
+    "receipt": {
+      "run_id": "34079964826",
+      "job_id": "101613322111",
+      "head_sha": "9c4c8485cde9b58d5c4b6f697462280c2e919514",
+      "test_db": {
+        "tests": 7,
+        "pass": 7,
+        "fail": 0,
+        "skipped": 0,
+        "duration_ms": 117230.076453
+      },
+      "started_at": "2026-09-07T03:32:33Z",
+      "completed_at": "2026-09-07T03:41:44Z"
+    },
+    "significance": "These suites are `{ skip: skipReason }`-gated on SUPABASE_SERVICE_ROLE_KEY, so an absent credential yields a passing job with every test skipped. `skipped: 0`, corroborated by a 117s duration for seven tests, is what establishes the suite actually executed against staging rather than short-circuiting.",
+    "containment_note": "This lane was authored on a workstation under production containment, where SUPABASE_URL is the documented 127.0.0.1:1 placeholder and no live database is reachable. The manifest therefore records t1_live_db_precondition: 'deferred_to_ci' under the route B admission ratified 2026-09-07. The deferral moves where the live-DB evidence is obtained, not whether it is obtained: truth-check G6 re-asserts both `verify` and `Writable DB proof (staging only)` directly on the merge SHA at closeout and refuses without them."
+  },
+  "mutation_controls": [
+    {
+      "id": 1,
+      "mutation": "drop 'manual-coverage-gap' from eventCheckWaived",
+      "result": "not ok - UTV2-1842: manual coverage-gap outcome waives the event existence gate",
+      "totals": "142 pass / 1 fail"
+    },
+    {
+      "id": 2,
+      "mutation": "drop 'structured-team-fallback' from eventCheckWaived",
+      "result": "not ok - UTV2-1842: structured team fallback outcome waives the event existence gate",
+      "totals": "142 pass / 1 fail"
+    },
+    {
+      "id": 3,
+      "mutation": "rewrite the predicate as smartFormOutcome?.kind !== 'canonical-event' (fail-open inversion)",
+      "result": "not ok x2 - UTV2-1842: not-smart-form outcome does NOT waive the event existence gate, AND the pre-existing 'event gate: pick with unknown eventName is rejected when events repo is populated'",
+      "totals": "141 pass / 2 fail"
+    },
+    {
+      "id": 4,
+      "mutation": "controller stops passing the outcome to processSubmission (unwire)",
+      "result": "not ok - UTV2-1842: a manual coverage-gap Track Only pick persists while the events catalog holds only other events",
+      "totals": "12 pass / 1 fail",
+      "significance": "Neither unit suite can see this mutation. Without the controller-level test the wiring could be deleted with every other test in the repository still green."
+    }
+  ],
+  "scope": {
+    "declared_file_scope": [
+      "apps/api/src/**"
+    ],
+    "files_changed": [
+      "apps/api/src/smart-form-validation.ts",
+      "apps/api/src/smart-form-validation.test.ts",
+      "apps/api/src/submission-service.ts",
+      "apps/api/src/submission-service.test.ts",
+      "apps/api/src/controllers/submit-pick-controller.ts",
+      "apps/api/src/controllers/submit-pick-controller.test.ts"
+    ],
+    "detail": "Six files, every one inside the pinned lock, plus this lane's own manifest, .ops/sync file and proof bundle. No new test file, so no root package.json wiring. No workflow, no merge control, no branch protection, no containment setting, no deploy path and no migration is touched."
+  },
+  "limits": [
+    "The runtime_proof receipt establishes that the EXISTING T1 live-proof suites still pass at this anchor against staging. It does NOT exercise this lane's own change against a live database - no t1-proof suite for the fallback waiver exists yet. Writing one requires adding apps/api/src/t1-proof-utv2-1842-*.test.ts AND wiring it into the root package.json test:t1-proof:live script, and package.json is outside this lane's pinned file_scope_lock, which an agent cannot widen. That is why the non-required 'Require live-DB proof for runtime changes' check is red on this PR, and it is a real finding rather than a defective check. It needs a CODEOWNERS scope-override/v1 for package.json, or the skip-proof-coverage label.",
+    "The change is control-flow only and touches no database access path: the waiver decides whether checkEventExistenceGate is called, and that gate's own behaviour is unmodified. The behavioural evidence here is therefore in-process against the in-memory repository bundle, which is the same harness the pre-existing event-gate tests use.",
+    "This lane does not prove Milestone 1 step 4 end to end. It removes the API-side refusal that blocked it. Reaching the deployed form, authenticating, and submitting a real pick remain a separate run against the deployed system.",
+    "The non-required 'Shadow Parity Check' is red because no mechanically read-only production credential is provisioned; it refuses service-role credentials by design, so it compared nothing and reached no parity conclusion. Provisioning that credential is a reserved secrets decision."
+  ],
+  "generated_at": "2026-09-07T04:55:49.685819Z"
+}
