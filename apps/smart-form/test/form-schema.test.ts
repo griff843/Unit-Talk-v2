@@ -3,8 +3,16 @@
  * This is the validation layer for the live browser submit surface.
  */
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import test, { describe } from 'node:test';
-import { betFormSchema } from '../lib/form-schema.ts';
+import {
+  betFormSchema,
+  clampUnits,
+  UNITS_MAX,
+  UNITS_MIN,
+  UNITS_STEP,
+} from '../lib/form-schema.ts';
 
 // Minimal valid player-prop
 function validProp(overrides: Record<string, unknown> = {}) {
@@ -549,5 +557,95 @@ describe('moneyline conditional fields', () => {
   test('period moneyline also requires team', () => {
     const fields = errorFields(validMoneyline({ marketType: '1p_moneyline', team: '' }));
     assert.ok(fields.includes('team'), `Expected team error, got: ${fields.join(', ')}`);
+  });
+});
+
+// --- Units guardrail (UTV2-1855) ---
+//
+// The units stepper in BetForm used to carry its own literals, and the increment button's was 10
+// while the schema caps at 5.0, so the operator could reach a value the resolver then rejected.
+// These assertions are driven from the schema itself rather than from a repeated literal, so a
+// future bound change cannot silently reintroduce the drift.
+
+describe('units guardrail', () => {
+  test('clampUnits never produces a value the schema rejects', () => {
+    // Sweep well past both bounds, on and off the step grid.
+    for (let raw = -3; raw <= 12.0001; raw += 0.1) {
+      const clamped = clampUnits(Number(raw.toFixed(4)));
+      const result = betFormSchema.safeParse(validMoneyline({ units: clamped }));
+      assert.equal(
+        result.success,
+        true,
+        `clampUnits(${raw.toFixed(2)}) = ${clamped} was rejected by the schema`,
+      );
+    }
+  });
+
+  test('repeated increments from the default settle at the schema maximum', () => {
+    let value = 1;
+    for (let i = 0; i < 40; i++) {
+      value = clampUnits(value + UNITS_STEP);
+    }
+    assert.equal(value, UNITS_MAX);
+    assert.equal(betFormSchema.safeParse(validMoneyline({ units: value })).success, true);
+  });
+
+  test('repeated decrements from the default settle at the schema minimum', () => {
+    let value = 1;
+    for (let i = 0; i < 40; i++) {
+      value = clampUnits(value - UNITS_STEP);
+    }
+    assert.equal(value, UNITS_MIN);
+    assert.equal(betFormSchema.safeParse(validMoneyline({ units: value })).success, true);
+  });
+
+  test('the schema itself still refuses one step beyond either bound', () => {
+    assert.equal(betFormSchema.safeParse(validMoneyline({ units: UNITS_MAX + UNITS_STEP })).success, false);
+    assert.equal(betFormSchema.safeParse(validMoneyline({ units: UNITS_MIN - UNITS_STEP })).success, false);
+  });
+
+  test('non-finite input falls back to the minimum rather than NaN or Infinity', () => {
+    // Deliberately the minimum, not the maximum: a non-finite stake is a broken input, and the
+    // conservative resolution for a stake field is the smallest legal value, never the largest.
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      assert.equal(clampUnits(bad), UNITS_MIN);
+      assert.equal(betFormSchema.safeParse(validMoneyline({ units: clampUnits(bad) })).success, true);
+    }
+  });
+});
+
+// The two units stepper buttons live in JSX and cannot be driven by a unit test, so this asserts
+// the property that actually regressed: that they route through the shared clamp rather than
+// carrying their own literal bound. Before UTV2-1855 the increment handler read
+// `Math.min(10, ...)` while the schema capped units at 5.0.
+
+describe('units stepper wiring', () => {
+  const source = readFileSync(
+    fileURLToPath(new URL('../app/submit/components/BetForm.tsx', import.meta.url)),
+    'utf8',
+  );
+
+  test('every units stepper handler routes through clampUnits', () => {
+    const handlers = source
+      .split('\n')
+      .filter((line) => line.includes('field.onChange(') && line.includes('UNITS_STEP'));
+    assert.equal(handlers.length, 2, `Expected 2 units stepper handlers, found ${handlers.length}`);
+    for (const handler of handlers) {
+      assert.ok(
+        handler.includes('clampUnits('),
+        `Units stepper handler does not use clampUnits: ${handler.trim()}`,
+      );
+    }
+  });
+
+  test('no units stepper handler carries its own numeric bound', () => {
+    const offenders = source
+      .split('\n')
+      .filter(
+        (line) =>
+          line.includes('field.onChange(') &&
+          /Math\.(?:min|max)\(\s*-?\d/u.test(line),
+      );
+    assert.deepEqual(offenders, [], `Numeric clamp literal in an onChange handler: ${offenders.join(' | ')}`);
   });
 });
