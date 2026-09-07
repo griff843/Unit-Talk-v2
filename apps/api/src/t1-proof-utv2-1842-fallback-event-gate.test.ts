@@ -48,9 +48,21 @@
  *
  * FIXTURES
  * --------
- * Every row this file creates is tagged with `utv2-1842-<runId>` and is NOT
- * deleted, so it can be found after the run. No row it did not create is
- * mutated. The canonical-coverage claim is made with deliberately fabricated
+ * Every row this file creates is tagged with `utv2-1842-<runId>`. The evidence
+ * rows -- the picks, and their absence from the delivery queue -- are NOT
+ * deleted, so they can be found after the run. No row it did not create is
+ * mutated.
+ *
+ * The two `armTheGate` event rows are the deliberate exception, and the `after`
+ * hook below deletes them. They are not evidence; they are infrastructure, and
+ * unlike every other row here they mutate a GLOBAL precondition:
+ * `checkEventExistenceGate` skips entirely when `events` is empty, so leaving
+ * them behind silently arms the gate for every later run against this database.
+ * That is not hypothetical -- ten of them accumulated across five runs on
+ * 2026-09-07 and turned `t1-proof-awaiting-approval.test.ts`'s UTV2-1672 Track
+ * Only suite red on an unrelated PR, because that suite's manual coverage-gap
+ * submission reaches 201 only while the gate is dormant. A proof that leaves
+ * the system in a state where other proofs fail is not finished. The canonical-coverage claim is made with deliberately fabricated
  * participant names carrying the run id, so the `findCanonicalCoverage` check in
  * `validateManualResolution` cannot accidentally match a seeded fixture and turn
  * a real refusal into a passing test for the wrong reason.
@@ -69,7 +81,7 @@
  * Run: UNIT_TALK_APP_ENV=local npx tsx --test apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts
  */
 
-import test, { before } from 'node:test';
+import test, { after, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { loadEnvironment } from '@unit-talk/config';
@@ -95,6 +107,8 @@ const skipReason = hasSupabaseEnv()
   : 'SUPABASE_SERVICE_ROLE_KEY not configured — skipping live DB proof';
 
 const RUN_ID = randomUUID().slice(0, 8);
+/** External ids of the arming events, so the `after` hook deletes exactly them. */
+const armedEventExternalIds: string[] = [];
 let repositories: RepositoryBundle;
 let supabaseUrl: string;
 let serviceRoleKey: string;
@@ -116,6 +130,36 @@ function authHeaders() {
     'Content-Type': 'application/json',
   };
 }
+
+after(async () => {
+  if (skipReason || armedEventExternalIds.length === 0) return;
+
+  // Deleted by external_id, which is this run's own namespace
+  // (`utv2-1842-<RUN_ID>-<label>`), so a concurrent run's arming rows and every
+  // pre-existing row are untouched. Failing to clean up is reported rather than
+  // swallowed: a silent cleanup failure would leave the next run's UTV2-1672
+  // suite red for a reason nothing in this file explains.
+  const encoded = armedEventExternalIds.map((id) => `"${id}"`).join(',');
+  const resp = await fetch(`${supabaseUrl}/rest/v1/events?external_id=in.(${encoded})`, {
+    method: 'DELETE',
+    headers: { ...authHeaders(), Prefer: 'return=representation' },
+  });
+  const body = await resp.json();
+  assert.ok(resp.ok, `arming-event cleanup failed: ${JSON.stringify(body)}`);
+  assert.equal(
+    (body as unknown[]).length,
+    armedEventExternalIds.length,
+    `expected to delete ${armedEventExternalIds.length} arming events, deleted ${(body as unknown[]).length}`,
+  );
+
+  // The global precondition this file mutated must be restored, not merely
+  // "probably restored". Any row left matching this file's own name prefix is
+  // leaked state that would arm the gate for the next run.
+  const leaked = await restQuery<{ id: string }>(
+    'events?select=id&event_name=like.UTV2-1842%20unrelated%20event%20*',
+  );
+  assert.equal(leaked.length, 0, `${leaked.length} UTV2-1842 arming event(s) leaked into the database`);
+});
 
 async function restQuery<T>(path: string): Promise<T[]> {
   const resp = await fetch(`${supabaseUrl}/rest/v1/${path}`, { headers: authHeaders() });
@@ -146,14 +190,18 @@ async function armTheGate(label: string): Promise<void> {
     1,
     'the sports catalog is empty, so no legal event fixture can be created; the gate cannot be armed and nothing below would prove anything',
   );
+  const externalId = `utv2-1842-${RUN_ID}-${label}`;
   await repositories.events.upsertByExternalId({
-    externalId: `utv2-1842-${RUN_ID}-${label}`,
+    externalId,
     sportId: sports[0]!.id,
     eventName: `UTV2-1842 unrelated event ${RUN_ID} ${label}`,
     eventDate: new Date().toISOString().slice(0, 10),
     status: 'scheduled',
     metadata: { proof_run: RUN_ID, proof_issue: 'UTV2-1842' },
   });
+  // Recorded only after the upsert succeeds, so the `after` hook's exact-count
+  // assertion cannot fail on a row that was never created.
+  if (!armedEventExternalIds.includes(externalId)) armedEventExternalIds.push(externalId);
 
   // The precondition is asserted directly, not inferred from the upsert
   // succeeding: the gate fires on the table being non-empty, so that is the
