@@ -7,17 +7,17 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "e8c51d0aa",
+    "verified_source_sha": "bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS \u2014 exit 0, no diagnostics, measured locally at this anchor.",
-      "pnpm_test": "PASS \u2014 tests 6131, pass 6131, fail 0, exit 0, measured locally at this anchor.",
-      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed \u2014 env:check, lint, type-check, build and the full test suite (6131/6131). The run then reached test:live-db, whose ci:assert-staging step REFUSED with 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx' \u2014 the containment placeholder doing exactly what containment mandates, which is the condition this lane's subject matter is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
+      "pnpm_test": "PASS \u2014 tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
+      "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed \u2014 env:check, lint, type-check, build and the full test suite. The run then reached test:live-db, whose ci:assert-staging step REFUSED with 'host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx' \u2014 the containment placeholder doing exactly what containment mandates, which is the condition this lane's subject matter is about. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
       "r_level_check": "PASS \u2014 Verdict: PASS, changed files 9, rules matched (none). This diff touches two ops scripts, their two test files and three documents; no R-level artifact beyond the diff summary and verification log is required, and none is claimed."
     },
     "sha_type": "verified_source_sha",
-    "anchor_note": "e8c51d0aa is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1848/. Commits after it are inside PROOF_ONLY_PREFIXES and do not move the anchor. merge_sha is null pre-merge and is written after merge by ops:proof-generate --merge-sha.",
+    "anchor_note": "bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa is the last commit on this branch changing any file outside docs/06_status/proof/UTV2-1848/. It moved once, from e8c51d0aa, when acceptance criterion 1 was strengthened to read the real lane manifests instead of a constructed fixture; every receipt below was re-executed at this commit rather than carried forward. Commits after it are inside PROOF_ONLY_PREFIXES (docs/06_status/proof/ and docs/06_status/lanes/) and do not move the anchor. merge_sha is null pre-merge and is written after merge by ops:proof-generate --merge-sha.",
     "bound_at": "2026-09-07T00:08:35.140161Z"
   },
   "static_proof": {
@@ -35,16 +35,17 @@
     "test": {
       "status": "PASS",
       "command": "pnpm test",
-      "tests": 6131,
+      "tests": 5989,
       "failures": 0,
-      "detail": "PASS \u2014 tests 6131, pass 6131, fail 0, exit 0, measured locally at this anchor."
+      "detail": "PASS \u2014 tests 5989, pass 5989, fail 0, exit 0, measured by running pnpm test on its own at this anchor.",
+      "honest_reading": "An earlier draft recorded 6131 here, obtained by summing every \"# tests\" line in the pnpm verify log. That log aggregates TAP from stages outside pnpm test, so it is not this command's count. Corrected by re-running the command at this anchor rather than by adjusting the arithmetic."
     },
     "targeted_test": {
       "status": "PASS",
       "command": "pnpm exec tsx --test scripts/ops/shared.test.ts && pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts",
-      "tests": 244,
+      "tests": 245,
       "failures": 0,
-      "detail": "shared.test.ts 105/105 exit 0; truth-check-lib.test.ts 139/139 exit 0. Both files are already reachable from the test:ops script, so no package.json wiring change was needed and none was made."
+      "detail": "shared.test.ts 106/106 exit 0; truth-check-lib.test.ts 139/139 exit 0. Both files are already reachable from the test:ops script, so no package.json wiring change was needed and none was made."
     },
     "mutation_control": {
       "status": "PASS",
@@ -77,6 +78,13 @@
     "unsatisfiable_gitkeep_removed": {
       "status": "PASS",
       "detail": "docs/06_status/proof/UTV2-1848/.gitkeep, created and committed by ops:lane-start, was deleted. Return review packet rejects it as out-of-scope unless it is declared in expected_proof_paths, and CEP-E2 refuses it once declared, while expected_proof_paths is settable only at create. The file is unsatisfiable in both directions and holds nothing."
+    },
+    "real_manifest_inertness": {
+      "status": "PASS",
+      "command": "pnpm exec tsx --test scripts/ops/shared.test.ts",
+      "observed": "752 manifests read from docs/06_status/lanes/, 0 carrying t1_live_db_precondition, 736 validated with 0 errors attributable to the field, 16 skipped.",
+      "significance": "The issue's acceptance criterion 1 requires this against a real existing manifest rather than a fixture. The carriers==0 assertion doubles as a tripwire: if it ever fails, the reserved admission half was applied and G6 is live rather than inert.",
+      "honest_reading": "The 16 skipped are closed lanes whose worktree_path is null, on which validateManifest throws from isPortableAbsolutePath. That is a pre-existing defect unrelated to this field and outside this lane scope; they are counted and skipped rather than swallowed, and the test refuses to pass vacuously if the validated count is zero."
     }
   },
   "runtime_proof": {
@@ -86,6 +94,7 @@
   "known_gaps": [
     "G6 has never fired on a real lane and cannot have: no manifest carries t1_live_db_precondition. Every claim about its behaviour comes from direct invocation of the evaluator with constructed inputs, plus a source assertion that it is wired into the run.",
     "The admission half of PT1_CONTAINMENT_ADMISSION_DECISION Part 2 -- whether blocked_by_containment may issue a preflight token for a T1 lane -- remains unapplied and reserved. This lane does not unblock UTV2-1842; route A0 or route B in section 5 of that document does, and both are the owner's decision.",
-    "The fetchCommitChecks call that supplies G6's receipt input is exercised only through the evaluator's injected argument, not end-to-end against GitHub. The catch that maps a throw to null is asserted by the unreadable-checks test on the evaluator side; the network call itself is not covered by a new test."
+    "The fetchCommitChecks call that supplies G6's receipt input is exercised only through the evaluator's injected argument, not end-to-end against GitHub. The catch that maps a throw to null is asserted by the unreadable-checks test on the evaluator side; the network call itself is not covered by a new test.",
+    "validateManifest throws (not returns an error) on a manifest whose worktree_path is null, from isPortableAbsolutePath at scripts/ops/shared.ts:1884. 16 of the 752 manifests on this branch are in that state. Found while writing the acceptance-criterion-1 test; pre-existing, unrelated to this field, and deliberately not repaired here -- this lane file_scope_lock covers shared.ts, but the repair changes validation behaviour for every closed lane and belongs in its own reviewed change."
   ]
 }

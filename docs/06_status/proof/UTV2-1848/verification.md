@@ -1,7 +1,7 @@
 # PROOF: UTV2-1848 — enforce the deferred T1 live-DB precondition at closeout
 
 MERGE_SHA: pending merge
-Execution SHA: e8c51d0aa
+Execution SHA: bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa
 
 `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2 has two halves. One adds a
 fail-closed closeout obligation; the other changes which lanes may open. Only the second is
@@ -11,10 +11,10 @@ against protection that already exists and is already tested.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: pending
-Verified source SHA: e8c51d0aa
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1526
+Verified source SHA: bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa
 
-`sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `e8c51d0aa`, the last commit
+`sha_binding.merge_sha` is `null` pre-merge. `verified_source_sha` is `bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa`, the last commit
 on this branch changing any file outside `docs/06_status/proof/UTV2-1848/`. The binding is written
 after merge by `ops:proof-generate --merge-sha`; no manual append is made here.
 
@@ -50,6 +50,12 @@ after merge by `ops:proof-generate --merge-sha`; no manual append is made here.
 - [x] **A10 — This lane admits nothing.** No token field is written, no manifest field is written,
       and `resolveVerdict` is untouched. The admission half is written out in full as a diff in
       `PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a and deliberately not applied.
+- [x] **A12 — The inertness claim is asserted against the real lane manifests, not a fixture.**
+      All 752 files in `docs/06_status/lanes/` are read: none carries `t1_live_db_precondition`,
+      and the field contributes no validation error to any of the 736 that `validateManifest` can
+      process. This is the issue's acceptance criterion 1, and a constructed fixture cannot satisfy
+      it. If that assertion ever fails, the reserved admission half was applied and `G6` is live
+      rather than inert.
 - [x] **A11 — No reserved surface is touched.** `git diff origin/main --name-only -- .github/` is
       empty: no workflow, no CODEOWNERS, no branch-protection change, no tier semantics, no
       approval artifact, no change to what `verify` requires.
@@ -84,6 +90,7 @@ description.
 | A6 | test *"G6 fails when the deferred receipt is not green"*; mutation M1 |
 | A7 | tests *"...could not be read"*, *"...no merge SHA..."*, *"...unrecognised precondition value..."*; mutation M2 |
 | A9 | test *"G6 is wired into the truth-check run, not merely exported"*; mutation M3 |
+| A12 | test *"every real lane manifest on this branch is unaffected by the new field (acceptance criterion 1)"* — 752 manifests read, 736 validated, 0 carriers |
 | A10, A11 | the diff scope below and `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a |
 
 ### Commands run
@@ -91,9 +98,9 @@ description.
 ```
 pnpm lint                                             # exit 0
 pnpm type-check                                       # exit 0
-pnpm test                                             # exit 0 — tests 6131, pass 6131, fail 0
+pnpm test                                             # exit 0 — tests 5989, pass 5989, fail 0
 pnpm verify                                           # exit 1 at test:live-db only; see below
-pnpm exec tsx --test scripts/ops/shared.test.ts        # exit 0 — tests 105, pass 105, fail 0
+pnpm exec tsx --test scripts/ops/shared.test.ts        # exit 0 — tests 106, pass 106, fail 0
 pnpm exec tsx --test scripts/ops/truth-check-lib.test.ts
                                                       # exit 0 — tests 139, pass 139, fail 0
 npx tsx scripts/ci/r-level-check.ts --issue UTV2-1848
@@ -102,12 +109,17 @@ npx tsx scripts/ci/r-level-check.ts --issue UTV2-1848
 ```
 
 `pnpm verify` exits 1 locally and not because anything failed. Every stage through
-`verify:commands` passed — `env:check`, `lint`, `type-check`, `build` and the full suite at
-6131/6131. It then reaches `test:live-db`, whose `ci:assert-staging` step refuses with
+`verify:commands` passed — `env:check`, `lint`, `type-check`, `build` and the full test suite. It
+then reaches `test:live-db`, whose `ci:assert-staging` step refuses with
 `host=127.0.0.1 ref=unidentified expected=xskgrzbteyqdufktjrjx`: the containment placeholder doing
 exactly what containment mandates, which is the condition this lane's subject matter is about. No
 local `pnpm verify` PASS is claimed; the required `verify` check on this PR is the authoritative
 result.
+
+`pnpm test` is reported here at **5989/5989**, measured by running it on its own at this anchor.
+An earlier draft of this bundle said 6131, taken by summing every `# tests` line in the `verify`
+log — which aggregates TAP from stages outside `pnpm test` and so is not that command's count. The
+number was corrected by re-running the command rather than by adjusting the arithmetic.
 
 ### Mutation evidence
 

@@ -1,7 +1,7 @@
 # DIFF SUMMARY: UTV2-1848 — enforce the deferred T1 live-DB precondition at closeout
 
 MERGE_SHA: pending merge
-Execution SHA: e8c51d0aa
+Execution SHA: bd45bc8a3939bfb7246d54e0d3fd6c22f94123aa
 
 ## What changed
 
