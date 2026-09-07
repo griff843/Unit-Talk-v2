@@ -216,9 +216,24 @@ function unmatchedEventName(label: string): string {
 }
 
 function manualCoverageGapPayload(
-  overrides: { distributionMode?: 'track-only' | 'delivery-eligible' } = {},
+  overrides: { distributionMode?: 'track-only' | 'delivery-eligible'; caseLabel?: string } = {},
 ): SubmissionPayload {
-  const eventName = unmatchedEventName('manual');
+  // `caseLabel` exists because `computeSubmissionIdempotencyKey`
+  // (submission-service.ts:80-90) hashes only source|market|selection|line|odds|eventName --
+  // metadata is not an input. Two submissions differing only in
+  // `metadata.distributionMode` therefore collide on that key, and the idempotency check at
+  // submission-service.ts:150 returns an idempotent success BEFORE the event-existence gate
+  // at :203 is ever reached. A literally byte-identical-but-for-distributionMode payload
+  // consequently cannot observe the gate at all: it observes the duplicate short-circuit and
+  // resolves, which is exactly how this file failed against staging on 2026-09-07.
+  //
+  // So the label varies `selection` and `eventName` -- the two key inputs -- and nothing else.
+  // Neither is an input to `waivesEventExistenceGate`: the eventName stays a run-unique name
+  // that matches no catalog row, and the selection stays a fabricated run-scoped string. The
+  // manual coverage-gap shape, sport, market, line and odds are held fixed, so
+  // `distributionMode` remains the only difference the waiver predicate can see.
+  const caseLabel = overrides.caseLabel ?? 'manual';
+  const eventName = unmatchedEventName(caseLabel);
   // `market` is `nba-spread` and the sport is NBA because `picks.market_type_id`
   // is a foreign key into the seeded `market_types` catalog, and an invented
   // market string is refused by `picks_market_type_id_fkey` -- the exact failure
@@ -232,7 +247,7 @@ function manualCoverageGapPayload(
   return {
     source: 'smart-form',
     market: 'nba-spread',
-    selection: `utv2-1842-${RUN_ID} Challenger Alpha`,
+    selection: `utv2-1842-${RUN_ID}-${caseLabel} Challenger Alpha`,
     line: -3.5,
     odds: -110,
     stakeUnits: 1,
@@ -364,10 +379,14 @@ test(
   { skip: skipReason },
   async () => {
     // The review finding on #1529, asserted against the real database rather
-    // than against the in-memory bundle. This payload is byte-identical to the
-    // accepted one in test 1 except for `distributionMode`, so the only thing
-    // that can explain a different result is the Track Only half of the waiver
-    // predicate. Delete it and this test goes red while test 1 stays green.
+    // than against the in-memory bundle. This payload differs from the accepted
+    // one in test 1 in `distributionMode` and in the run-scoped `caseLabel` that
+    // keeps the two submissions distinct under the idempotency key -- see the
+    // comment on `manualCoverageGapPayload`. Neither the selection nor the
+    // eventName is an input to `waivesEventExistenceGate`, and the eventName is
+    // still a name no catalog row matches, so the Track Only half of the waiver
+    // predicate remains the only thing that can explain a different result.
+    // Delete it and this test goes red while test 1 stays green.
     //
     // It matters at this layer specifically: an authenticated capper is
     // server-pinned to `track-only` upstream, but an operator or service-role
@@ -377,7 +396,10 @@ test(
     // delivery.
     await armTheGate('delivery-eligible');
 
-    const payload = manualCoverageGapPayload({ distributionMode: 'delivery-eligible' });
+    const payload = manualCoverageGapPayload({
+      distributionMode: 'delivery-eligible',
+      caseLabel: 'delivery-eligible',
+    });
     await assert.rejects(
       () => submitPickController(payload, repositories),
       (err: unknown) => {
@@ -392,11 +414,11 @@ test(
 
     // Refusal is only meaningful if nothing was written. `picks` has no
     // event_name column -- the matchup name lives in metadata -- so the row is
-    // looked up by `selection`, which carries this run's id and therefore
-    // cannot be satisfied by an unrelated row. Test 1 writes the same selection
-    // string, so this query is also non-vacuous: it finds that row when the
-    // suite runs in order, which is why it is scoped to this run's refused
-    // submission by asserting on the refusal above first.
+    // looked up by `selection`, which carries this run's id and this case's
+    // label and therefore cannot be satisfied by an unrelated row, nor by the
+    // row test 1 wrote. The `distributionMode` filter below is kept as a second
+    // constraint rather than removed: it is what makes the assertion say the
+    // specific thing this test is about.
     const persisted = await restQuery<{ id: string; metadata: Record<string, unknown> | null }>(
       `picks?select=id,metadata&selection=eq.${encodeURIComponent(payload.selection)}`,
     );
