@@ -127,6 +127,6 @@ above are the execution evidence.
 ## Merge SHA Binding
 
 Merge SHA: pending merge
-PR: 1531
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1531
 Approved PR head: pending merge
 Execution SHA: 208446676c06e86e30faaafed76919a8f4508097
