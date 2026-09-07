@@ -36,6 +36,7 @@ import {
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
 import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
+import { waivesEventExistenceGate } from './smart-form-validation.js';
 import type { SmartFormValidationOutcome } from './smart-form-validation.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 import {
@@ -205,14 +206,18 @@ export async function processSubmission(
   // pick. Asking those submissions to name a row in an event catalog that containment keeps
   // unpopulated refuses the exact contained pilot the fallback exists to serve.
   //
-  // The predicate is written as an allow-list of two affirmative values on purpose. An absent
-  // outcome is `undefined`, `undefined?.kind` is `undefined`, and neither literal matches, so
-  // the gate stays enforcing by default. Writing it as `!== 'canonical-event'` would invert
-  // that into a fail-open: it would waive the gate for `undefined` and for `not-smart-form`
-  // alike, including the alert-agent source that never reaches this validator at all.
-  const eventCheckWaived =
-    smartFormOutcome?.kind === 'manual-coverage-gap' ||
-    smartFormOutcome?.kind === 'structured-team-fallback';
+  // The predicate is written as an allow-list of affirmative values on purpose. An absent
+  // outcome is `undefined` and matches nothing, so the gate stays enforcing by default.
+  // Writing it as `!== 'canonical-event'` would invert that into a fail-open: it would waive
+  // the gate for `undefined` and for `not-smart-form` alike, including the alert-agent source
+  // that never reaches this validator at all.
+  //
+  // It also requires Track Only. A capper is server-pinned to `track-only` upstream, but an
+  // operator or service-role caller is not, and a qualified `delivery-eligible` result
+  // proceeds to the controller's outbox-enqueue path -- so waiving on the fallback kind alone
+  // would admit a pick naming no canonical event into member delivery. `waivesEventExistenceGate`
+  // is the single place that decision is made; see smart-form-validation.ts.
+  const eventCheckWaived = waivesEventExistenceGate(smartFormOutcome);
   if (
     isHumanSource &&
     !eventCheckWaived &&

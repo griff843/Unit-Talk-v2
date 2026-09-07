@@ -21,11 +21,39 @@ const TEAM_SPORTS = new Set(['NFL', 'NCAAF', 'NBA', 'NCAAB', 'MLB', 'NHL', 'SOCC
 // decision lets the gate waive itself for exactly those two outcomes and for nothing else.
 // The waiver is therefore gated on server-validated fallback eligibility, never on a bare
 // null eventId.
+//
+// The outcome carries the submission's `distributionMode` because the waiver is only
+// authorized for Track Only. An authenticated capper is server-pinned to `track-only` by
+// handlers/submit-pick.ts, but an operator or service-role caller reaches this same validator
+// with `delivery-eligible` and is *not* pinned, and a qualified delivery-eligible result
+// proceeds to the controller's outbox-enqueue path. Waiving on the fallback kind alone would
+// therefore admit a pick naming no canonical event into member delivery -- the opposite of
+// what this contained repair is for. The mode travels with the outcome rather than being
+// re-read at the gate so the gate cannot disagree with the validator about which submission
+// it is looking at.
+export type SmartFormDistributionMode = 'track-only' | 'delivery-eligible';
+
 export type SmartFormValidationOutcome =
   | { kind: 'not-smart-form' }
-  | { kind: 'manual-coverage-gap' }
-  | { kind: 'structured-team-fallback' }
-  | { kind: 'canonical-event'; eventId: string };
+  | { kind: 'manual-coverage-gap'; distributionMode: SmartFormDistributionMode }
+  | { kind: 'structured-team-fallback'; distributionMode: SmartFormDistributionMode }
+  | { kind: 'canonical-event'; eventId: string; distributionMode: SmartFormDistributionMode };
+
+/**
+ * The single predicate the event-existence gate consults.
+ *
+ * Both halves are load-bearing and both are affirmative. The kind must be one of the two
+ * paths that were fully server-validated *without* a canonical event, and the submission
+ * must be Track Only. An absent outcome is `undefined` and satisfies neither, so the gate
+ * stays enforcing by default for every caller that does not pass one.
+ */
+export function waivesEventExistenceGate(outcome: SmartFormValidationOutcome | undefined): boolean {
+  if (!outcome) return false;
+  if (outcome.kind !== 'manual-coverage-gap' && outcome.kind !== 'structured-team-fallback') {
+    return false;
+  }
+  return outcome.distributionMode === 'track-only';
+}
 // UTV2-1842 SMART_FORM_OUTCOME_END
 
 export async function validateSmartFormRelationships(
@@ -47,10 +75,11 @@ export async function validateSmartFormRelationships(
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_END
 
   const metadata = payload.metadata;
-  const distributionMode = metadata?.['distributionMode'];
-  if (distributionMode !== 'track-only' && distributionMode !== 'delivery-eligible') {
+  const rawDistributionMode = metadata?.['distributionMode'];
+  if (rawDistributionMode !== 'track-only' && rawDistributionMode !== 'delivery-eligible') {
     fail('distributionMode must be track-only or delivery-eligible');
   }
+  const distributionMode: SmartFormDistributionMode = rawDistributionMode;
 
   const resolution = readResolution(metadata?.['participantResolution']);
   if (!resolution) fail('participantResolution must use the typed canonical or manual contract');
@@ -78,7 +107,7 @@ export async function validateSmartFormRelationships(
 
   if (resolution.resolution === 'manual') {
     await validateManualResolution(payload, resolution, sportId, referenceData);
-    return { kind: 'manual-coverage-gap' };
+    return { kind: 'manual-coverage-gap', distributionMode };
   }
 
   const eventId = readOptionalString(resolution.eventId);
@@ -87,14 +116,14 @@ export async function validateSmartFormRelationships(
     if (!TEAM_SPORTS.has(sportId.toUpperCase())) {
       fail('canonical participant resolution without an event is not verifiable; use explicit manual override');
     }
-    await validateStructuredTeamFallback(resolution, sportId, referenceData);
-    return { kind: 'structured-team-fallback' };
+    await validateStructuredTeamFallback(payload, resolution, sportId, referenceData);
+    return { kind: 'structured-team-fallback', distributionMode };
   }
 
   const event = await referenceData.getEventBrowse(eventId);
   if (!event) fail(`canonical event was not found: ${eventId}`);
   validateCanonicalEvent(payload, resolution, sportId, event);
-  return { kind: 'canonical-event', eventId };
+  return { kind: 'canonical-event', eventId, distributionMode };
 }
 
 async function validateManualResolution(
@@ -128,6 +157,14 @@ async function validateManualResolution(
   }
   if (payload.eventName && normalize(payload.eventName) !== normalize(resolution.enteredEventName)) {
     fail('manual enteredEventName does not match submission eventName');
+  }
+  // UTV2-1842: the flat metadata copy is bound too. This outcome now waives the
+  // event-existence gate, and an unchecked `metadata.eventName` is the same fabrication
+  // surface the structured path was flagged for -- a different field carrying a name the
+  // server never agreed to.
+  const flatManualEventName = readOptionalString(payload.metadata?.['eventName']);
+  if (flatManualEventName && normalize(flatManualEventName) !== normalize(resolution.enteredEventName)) {
+    fail('manual enteredEventName does not match metadata eventName');
   }
 
   // UTV2-1672 MANUAL_COVERAGE_GAP_PROOF_GUARD_START
@@ -199,6 +236,7 @@ async function validateManualResolution(
 }
 
 async function validateStructuredTeamFallback(
+  payload: SubmissionPayload,
   resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
   sportId: string,
   referenceData: ReferenceDataRepository,
@@ -223,6 +261,79 @@ async function validateStructuredTeamFallback(
   if (resolution.player) {
     fail('canonical player selection requires a canonical event so team membership can be verified');
   }
+
+  // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_START
+  // The checks above verify the two *identities*. They say nothing about the name the
+  // submission carries, and the name is what is persisted and later read by a human. Without
+  // this block a payload with genuine DB-backed away/home IDs and an arbitrary
+  // `eventName: "Fake Finals"` passes every identity check, and -- now that this outcome
+  // waives the event-existence gate -- the fabricated name is persisted with provenance
+  // claiming it was server-validated. It was not.
+  //
+  // So the name is bound to the sides that *were* verified: it must name exactly those two
+  // teams, away first, using the canonical display names `validateSearchBackedTeam` has
+  // already pinned to the reference-data rows. The Smart Form derives the field this way
+  // itself (`setDerivedMatchupName`, "Away @ Home"), so this refuses fabrication without
+  // refusing anything the form can produce.
+  validateStructuredMatchupName(payload, resolution);
+  // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_END
+}
+
+/**
+ * Separators a matchup name may use between its two sides. Each requires surrounding
+ * whitespace, so a team name that merely contains one of these letter sequences -- "Atlanta"
+ * for `at`, for instance -- is never split.
+ */
+const MATCHUP_SEPARATOR = /\s+(?:@|vs\.?|v\.?|at)\s+/iu;
+
+function validateStructuredMatchupName(
+  payload: SubmissionPayload,
+  resolution: Extract<SmartFormParticipantResolution, { resolution: 'canonical' }>,
+) {
+  const away = resolution.away;
+  const home = resolution.home;
+  // Narrowing only; validateStructuredTeamFallback has already failed without both sides.
+  if (!away || !home) return;
+
+  // All three places a matchup name can travel. They are checked against the same verified
+  // sides rather than against each other, so agreeing on a fabricated name is not a way past
+  // this: consistency between the payload and the resolution metadata is a consequence of
+  // both binding to the teams, not a substitute for it.
+  const named: Array<{ field: string; value: string }> = [];
+  const push = (field: string, value: unknown) => {
+    const text = readOptionalString(value);
+    if (text) named.push({ field, value: text });
+  };
+  push('eventName', payload.eventName);
+  push('metadata.eventName', payload.metadata?.['eventName']);
+  push('participantResolution.eventName', resolution.eventName);
+
+  for (const { field, value } of named) {
+    const sides = splitMatchupSides(value);
+    if (!sides) {
+      fail(
+        `${field} "${value}" does not name a matchup; a structured fallback without a canonical event must name its two verified sides as "${away.displayName} @ ${home.displayName}"`,
+      );
+    }
+    if (normalize(sides.away) !== normalize(away.displayName) || normalize(sides.home) !== normalize(home.displayName)) {
+      fail(
+        `${field} "${value}" does not match the verified structured matchup "${away.displayName} @ ${home.displayName}"`,
+      );
+    }
+  }
+}
+
+function splitMatchupSides(value: string): { away: string; home: string } | null {
+  // Canonical event names carry a "· Game N" disambiguator for doubleheaders;
+  // matchesCanonicalEventName strips it on the canonical path and the same name can reach
+  // the fallback path, so it is stripped here rather than treated as a mismatch.
+  const withoutGameNumber = value.trim().replace(/\s*·\s*game\s+\d+$/iu, '');
+  const parts = withoutGameNumber.split(MATCHUP_SEPARATOR);
+  if (parts.length !== 2) return null;
+  const away = parts[0]?.trim() ?? '';
+  const home = parts[1]?.trim() ?? '';
+  if (!away || !home) return null;
+  return { away, home };
 }
 
 async function validateSearchBackedTeam(

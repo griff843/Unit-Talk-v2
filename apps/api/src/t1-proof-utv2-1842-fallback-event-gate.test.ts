@@ -215,7 +215,9 @@ function unmatchedEventName(label: string): string {
   return `UTV2-1842 uncatalogued ${label} ${RUN_ID}`;
 }
 
-function manualCoverageGapPayload(): SubmissionPayload {
+function manualCoverageGapPayload(
+  overrides: { distributionMode?: 'track-only' | 'delivery-eligible' } = {},
+): SubmissionPayload {
   const eventName = unmatchedEventName('manual');
   // `market` is `nba-spread` and the sport is NBA because `picks.market_type_id`
   // is a foreign key into the seeded `market_types` catalog, and an invented
@@ -238,7 +240,7 @@ function manualCoverageGapPayload(): SubmissionPayload {
     eventName,
     metadata: {
       sport: 'NBA',
-      distributionMode: 'track-only',
+      distributionMode: overrides.distributionMode ?? 'track-only',
       proof_run: RUN_ID,
       proof_issue: 'UTV2-1842',
       participantResolution: {
@@ -353,6 +355,58 @@ test(
         );
         return true;
       },
+    );
+  },
+);
+
+test(
+  'UTV2-1842 live DB: the same fallback submitted delivery-eligible is refused by the gate and persists nothing',
+  { skip: skipReason },
+  async () => {
+    // The review finding on #1529, asserted against the real database rather
+    // than against the in-memory bundle. This payload is byte-identical to the
+    // accepted one in test 1 except for `distributionMode`, so the only thing
+    // that can explain a different result is the Track Only half of the waiver
+    // predicate. Delete it and this test goes red while test 1 stays green.
+    //
+    // It matters at this layer specifically: an authenticated capper is
+    // server-pinned to `track-only` upstream, but an operator or service-role
+    // caller is not, and a qualified delivery-eligible pick proceeds to the
+    // controller's outbox-enqueue path. Waiving on the fallback kind alone
+    // would have admitted a pick naming no canonical event into member
+    // delivery.
+    await armTheGate('delivery-eligible');
+
+    const payload = manualCoverageGapPayload({ distributionMode: 'delivery-eligible' });
+    await assert.rejects(
+      () => submitPickController(payload, repositories),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.ok(
+          err.message.includes('EVENT_NOT_FOUND') || err.message.includes(RUN_ID),
+          `refusal must name the event gate or the unmatched event; got: ${err.message}`,
+        );
+        return true;
+      },
+    );
+
+    // Refusal is only meaningful if nothing was written. `picks` has no
+    // event_name column -- the matchup name lives in metadata -- so the row is
+    // looked up by `selection`, which carries this run's id and therefore
+    // cannot be satisfied by an unrelated row. Test 1 writes the same selection
+    // string, so this query is also non-vacuous: it finds that row when the
+    // suite runs in order, which is why it is scoped to this run's refused
+    // submission by asserting on the refusal above first.
+    const persisted = await restQuery<{ id: string; metadata: Record<string, unknown> | null }>(
+      `picks?select=id,metadata&selection=eq.${encodeURIComponent(payload.selection)}`,
+    );
+    const deliveryEligible = persisted.filter(
+      (row) => (row.metadata ?? {})['distributionMode'] === 'delivery-eligible',
+    );
+    assert.equal(
+      deliveryEligible.length,
+      0,
+      `a refused delivery-eligible fallback must persist no pick; found ${deliveryEligible.length}`,
     );
   },
 );
