@@ -276,6 +276,17 @@ export interface PreflightToken {
   baseline_cache_hit?: boolean;
   preflight_run_id?: string;
   required_docs_checked?: string[];
+  /**
+   * UTV2-1851 (route B). Written by `ops:preflight` when, and only when, PT1
+   * was admitted on `blocked_by_containment` -- i.e. the T1 live-DB health ping
+   * could not run because containment deliberately withholds its input.
+   *
+   * The token is the ORIGIN of the obligation and the manifest is its carrier.
+   * `validateManifest` refuses any manifest that disagrees with its own token,
+   * in either direction, so the obligation cannot be dropped by a manifest that
+   * simply omits it -- see `validateT1LiveDbPreconditionAgainstToken` below.
+   */
+  t1_live_db_precondition?: T1LiveDbPrecondition;
 }
 
 export interface MachineResult<T> {
@@ -921,6 +932,99 @@ export function deriveDeliveryUiApp(fileScopeLock: string[]): string | null {
     apps.add(match[0]);
   }
   return apps.size === 1 ? [...apps][0]! : null;
+}
+
+/**
+ * UTV2-1851 (route B). Reads the `t1_live_db_precondition` recorded on a
+ * preflight token.
+ *
+ * FAIL-CLOSED BY CONSTRUCTION: every outcome that is not "the token was read
+ * and says X" is reported as an error rather than as absence. An unreadable,
+ * unparseable, non-object or wrongly-valued token must never be summarised as
+ * "no deferral" -- that is precisely how a real closeout obligation would be
+ * discarded silently.
+ */
+export function readPreflightTokenT1LiveDbPrecondition(
+  normalizedTokenPath: string,
+): { ok: true; value: T1LiveDbPrecondition | undefined } | { ok: false; reason: string } {
+  const absolute = path.join(ROOT, normalizedTokenPath);
+  let raw: string;
+  try {
+    raw = fs.readFileSync(absolute, 'utf8');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `preflight token could not be read (${message})` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, reason: `preflight token is not valid JSON (${message})` };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { ok: false, reason: 'preflight token is not a JSON object' };
+  }
+  const value = (parsed as { t1_live_db_precondition?: unknown }).t1_live_db_precondition;
+  if (value === undefined) {
+    return { ok: true, value: undefined };
+  }
+  if (value !== T1_LIVE_DB_PRECONDITION_DEFERRED) {
+    return {
+      ok: false,
+      reason:
+        `preflight token t1_live_db_precondition must be "${T1_LIVE_DB_PRECONDITION_DEFERRED}" `
+        + `(got ${JSON.stringify(value)})`,
+    };
+  }
+  return { ok: true, value: T1_LIVE_DB_PRECONDITION_DEFERRED };
+}
+
+/**
+ * UTV2-1851 (route B). The bridge that makes the manifest copy MANDATORY
+ * rather than optional.
+ *
+ * Route B admits a T1 lane whose live-DB precondition was deferred to CI. The
+ * obligation is recorded twice on purpose: on the token, which `ops:preflight`
+ * writes, and on the manifest, which closeout check G6 reads. Between those two
+ * writes there is a window in which a manifest could simply omit the field --
+ * G6 would then evaluate `skip` and the obligation would vanish with nothing
+ * red anywhere. This function closes that window by refusing the disagreement
+ * itself:
+ *
+ *   token says deferred, manifest silent  -> error (the discard this prevents)
+ *   manifest says deferred, token silent  -> error (unbacked claim)
+ *   token unreadable / malformed          -> error (never read as "no deferral")
+ *   both silent                           -> no error (every ordinary lane)
+ *
+ * It runs only for statuses that require the token file to still exist; a
+ * merged or done lane's token is allowed to have been reaped.
+ */
+export function validateT1LiveDbPreconditionAgainstToken(
+  manifest: LaneManifest,
+  normalizedTokenPath: string,
+  sourcePath: string,
+): string[] {
+  const token = readPreflightTokenT1LiveDbPrecondition(normalizedTokenPath);
+  if (!token.ok) {
+    return [`${sourcePath}: ${token.reason}`];
+  }
+  const onManifest = manifest.t1_live_db_precondition;
+  if (token.value !== undefined && onManifest === undefined) {
+    return [
+      `${sourcePath}: preflight token ${normalizedTokenPath} records `
+        + `t1_live_db_precondition "${token.value}" but the manifest does not. The closeout `
+        + 'obligation (G6) is carried by the manifest, so omitting it here would discard it.',
+    ];
+  }
+  if (token.value === undefined && onManifest !== undefined) {
+    return [
+      `${sourcePath}: manifest records t1_live_db_precondition `
+        + `${JSON.stringify(onManifest)} but preflight token ${normalizedTokenPath} does not. `
+        + 'The deferral originates at preflight; a manifest cannot assert one that was never granted.',
+    ];
+  }
+  return [];
 }
 
 export function validatePreflightTokenPathValue(
@@ -1749,9 +1853,17 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
     errors.push(`${sourcePath}: preflight_token is required`);
   } else {
     try {
-      validatePreflightTokenPathValue(manifest.preflight_token, {
+      const normalizedTokenPath = validatePreflightTokenPathValue(manifest.preflight_token, {
         requireExistingFile: ACTIVE_LOCK_STATUSES.has(manifest.status),
       });
+      // UTV2-1851: the token/manifest agreement check runs only where the token
+      // file is still required to exist. A reaped token on a merged or done lane
+      // is not evidence that a deferral was dropped.
+      if (ACTIVE_LOCK_STATUSES.has(manifest.status)) {
+        errors.push(
+          ...validateT1LiveDbPreconditionAgainstToken(manifest, normalizedTokenPath, sourcePath),
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (
@@ -2352,6 +2464,45 @@ export function createManifest(input: {
   if (!VALID_LANE_MANIFEST_SCHEMA_VERSIONS.includes(schemaVersion)) {
     throw new Error(`Invalid schema_version: ${String(schemaVersion)}`);
   }
+
+  // UTV2-1851: the deferral is CARRIED FORWARD FROM THE TOKEN, here, rather
+  // than being passed in by the caller.
+  //
+  // This is the T1 transition, and it is the whole reason the route B bootstrap
+  // works. Once `ops:preflight` admits a contained PT1 and writes
+  // `t1_live_db_precondition` into the token, an UNCHANGED `ops:lane-start`
+  // constructs its manifest without that field -- and `validateManifest`'s
+  // token/manifest agreement rule then refuses the manifest. The lane would not
+  // open. That is fail-closed, but it is also a deadlock: the very lane that
+  // would teach `lane-start` to copy the field is itself T1, so it could never
+  // be opened either.
+  //
+  // Deriving it here breaks the deadlock without weakening anything, because
+  // `createManifest` is the single constructor every lane-start path already
+  // funnels through (five call sites in lane-start.ts, all passing
+  // `preflight_token`). Two properties follow, and both matter:
+  //
+  //   - A caller CANNOT ASSERT a deferral: there is no input field for it, so
+  //     the only source is a token `ops:preflight` actually wrote.
+  //   - A caller CANNOT DROP one: it is set unconditionally from the token, and
+  //     `validateManifest` independently refuses any active lane whose manifest
+  //     and token disagree in either direction.
+  //
+  // A token file that is not required to exist is a test fixture, not a lane;
+  // in that case nothing is derived, and the `validateManifest` bridge remains
+  // the enforcement point regardless.
+  let t1LiveDbPrecondition: T1LiveDbPrecondition | undefined;
+  if (fs.existsSync(path.join(ROOT, preflightToken))) {
+    const fromToken = readPreflightTokenT1LiveDbPrecondition(preflightToken);
+    if (!fromToken.ok) {
+      // Fail closed. An unreadable or malformed token is never read as "no
+      // deferral" -- that is precisely the silent discard this lane forbids.
+      throw new Error(
+        `cannot create lane manifest for ${input.issue_id}: ${fromToken.reason}`,
+      );
+    }
+    t1LiveDbPrecondition = fromToken.value;
+  }
   const isCodexExecutor = input.executor === 'codex-cli' || input.executor === 'codex-cloud';
   if (isCodexExecutor && schemaVersion === 2 && !input.model_routing) {
     throw new Error(
@@ -2406,6 +2557,7 @@ export function createManifest(input: {
     reopen_history: [],
     ...(input.model_routing ? { model_routing: input.model_routing } : {}),
     ...(input.verification_target ? { verification_target: input.verification_target } : {}),
+    ...(t1LiveDbPrecondition ? { t1_live_db_precondition: t1LiveDbPrecondition } : {}),
   };
 }
 
