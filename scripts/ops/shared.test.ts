@@ -25,6 +25,8 @@ import {
   validateManifest,
   worktreePathForBranch,
   T1_LIVE_DB_PRECONDITION_DEFERRED,
+  getRepoRoot,
+  type LaneManifest,
 } from './shared.js';
 
 test('normalizeFileScopePath canonicalizes repo-relative file paths', () => {
@@ -1715,4 +1717,61 @@ test('validateManifest refuses a deferral on a non-T1 lane', () => {
   const errors = deferralErrors(manifest);
   assert.strictEqual(errors.length, 1);
   assert.match(errors[0], /only exists at T1/);
+});
+
+test('every real lane manifest on this branch is unaffected by the new field (acceptance criterion 1)', () => {
+  // A fixture cannot show that the field is inert on the manifests that
+  // actually exist. This reads them.
+  const lanesDir = path.join(getRepoRoot(), 'docs/06_status/lanes');
+  const files = fs
+    .readdirSync(lanesDir)
+    .filter((f) => f.endsWith('.json'));
+
+  assert.ok(files.length > 0, 'expected real lane manifests to read');
+
+  let carriers = 0;
+  let validated = 0;
+  let skippedNullWorktree = 0;
+  for (const file of files) {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(lanesDir, file), 'utf8'),
+    ) as LaneManifest;
+    if (manifest.t1_live_db_precondition !== undefined) {
+      carriers += 1;
+    }
+    // A closed lane's manifest has `worktree_path: null`, and validateManifest
+    // throws on it from isPortableAbsolutePath -- a pre-existing defect,
+    // unrelated to this field and out of this lane's scope. Validating those
+    // would test that defect rather than this field, so they are counted and
+    // skipped rather than swallowed.
+    if (typeof manifest.worktree_path !== 'string') {
+      skippedNullWorktree += 1;
+      continue;
+    }
+
+    // Only the errors this field is responsible for: real manifests carry
+    // unrelated environment-dependent findings (a preflight token that exists
+    // only on the machine that issued it, for one), and masking those would
+    // make the assertion untrue rather than stronger.
+    const errors = validateManifest(manifest).filter((e) =>
+      e.includes('t1_live_db_precondition'),
+    );
+    assert.deepStrictEqual(errors, [], `${file} must be unaffected by the new field`);
+    validated += 1;
+  }
+
+  assert.ok(
+    validated > 0,
+    'at least one real manifest must actually have been validated, or this test is vacuous',
+  );
+
+  void skippedNullWorktree;
+
+  assert.strictEqual(
+    carriers,
+    0,
+    'no manifest may carry t1_live_db_precondition: the admission half that would write it is '
+      + 'reserved and unapplied. If this ever fails, the admission decision was taken -- and G6 '
+      + 'closeout enforcement is then live rather than inert.',
+  );
 });
