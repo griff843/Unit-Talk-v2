@@ -1,0 +1,423 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1842
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1842
+  objective: Smart Form submission repair — event-existence gate blocks every
+    human submission under containment; structured team fallback unreachable
+    from the UI; signed odds unenterable on mobile
+  acceptance_criteria:
+    - "A Track Only submission using the manual coverage-gap path succeeds
+      against a production-shaped events table containing only stale events; the
+      exception is keyed on the server-validated classification, and a
+      client-forged `eventId: null` does **not** bypass the gate.
+      Mutation-checked."
+    - The event-existence gate still rejects a canonical event-bound submission
+      naming a nonexistent event. Mutation-checked.
+    - Where team coverage exists, away/home are chosen from DB-backed selectors,
+      participant IDs are preserved into the submission, and provenance records
+      canonical resolution — not coverage-gap.
+    - Partial coverage and search failure are represented distinctly per side. A
+      search failure surfaces as retryable and never degrades to coverage-gap
+      provenance.
+    - Free-text entry is reachable only where team coverage is genuinely absent.
+    - Selecting the same team on both sides is refused in the browser, before
+      submission.
+    - The matchup name is generated automatically in the fallback tier.
+    - Signed American odds (`-110`) are enterable on a mobile browser and
+      persist as `-110`. Verified through the browser control and the persisted
+      row.
+    - "User-facing language: select a matchup, or build one from away/home
+      teams, with its name generated automatically."
+  guardrails: []
+  non_goals:
+    - Reference-data population. Seeding NCAAF teams would require unparking
+      provider ingestion, which is a reserved decision. This repair makes the
+      fallback correct; it does not fill the catalog.
+    - The `listUpcoming` symmetric-window naming defect itself. It is the
+      mechanism behind (A) but is also consumed by grading and closing-line
+      paths; changing its semantics has a wider blast radius and is recorded
+      separately rather than bundled here.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      (description preamble)
+
+      Discovered during the live Milestone 1 pilot on 2026-09-06, against
+      production at `d3f69b804`. Steps 1-3 of Milestone 1 passed (reach form,
+      authenticate, resolve canonical identity `griff843`). Step 4 — submit a
+      real Track Only pick — is blocked by the defects below.
+
+
+      All findings measured against production Supabase and the deployed code,
+      not inferred.
+    - >-
+      A. The event-existence gate blocks every human submission while ingestion
+      is parked
+
+      `apps/api/src/submission-service.ts:196-203` runs
+      `checkEventExistenceGate` for every `smart-form` / `alert-agent`
+      submission. The gate (`:867-879`) skips only when
+      `events.listUpcoming(undefined, 90)` returns empty.
+
+
+      `listUpcoming` does not return upcoming events. In
+      `packages/db/src/runtime-repositories.ts` it builds a **symmetric
+      window**:
+
+
+      ```ts
+
+      const start = toIsoDate(addDays(today, -windowDays));  // now - 90d
+
+      const end   = toIsoDate(addDays(today,  windowDays));  // now + 90d
+
+      ```
+
+
+      Measured in production 2026-09-06: 789 events total, **0 with**
+      `event_date > now()`, latest `2026-07-02`. The +/-90d window nonetheless
+      returns **312** rows (2026-06-08 .. 2026-07-02), all in the past. So the
+      gate reads a *stale* catalog as a *live* one, does not skip, and rejects
+      any event name that does not match a months-old row:
+
+
+      `422 EVENT_NOT_FOUND — No event found matching "<name>" — verify the event
+      name and try again`
+
+
+      Consequences:
+
+
+      * Provider ingestion is parked under containment, so no future event will
+      ever exist to match. The gate is unsatisfiable by design for the pilot.
+
+      * It fires regardless of participant resolution — including the manual
+      `canonical-coverage-gap` path that exists precisely for absent reference
+      data. The form offers a fallback the API then refuses.
+
+      * Events exist only for MLB/NBA/NHL. There are no NFL or NCAAF events at
+      all, so the canonical (event-bound) path is currently impossible for
+      **every** sport.
+
+
+      **Required fix.** The exception must be gated on **server-validated Smart
+      Form fallback eligibility**, not on a client-supplied `eventId: null` and
+      not merely on `manualOverride`. `validateSmartFormRelationships` already
+      runs first, in `apps/api/src/controllers/submit-pick-controller.ts:36`,
+      before the submission service. Its validated classification
+      (canonical-with-event / structured-team-fallback / manual-coverage-gap)
+      must be what the gate consults. A client must not be able to skip the gate
+      by asserting a field.
+    - >-
+      B. The structured team fallback is implemented server-side but unreachable
+      from the UI
+
+      `apps/api/src/smart-form-validation.ts:64-72` already supports canonical
+      resolution **without** an event for team sports —
+      `validateStructuredTeamFallback` requires distinct away/home, validates
+      both IDs against the reference data (`validateSearchBackedTeam`), and
+      calls `validateDistinctSides`. `TEAM_SPORTS` includes NCAAF.
+
+
+      The client never produces this shape. `BetForm.tsx:3811` renders DB-backed
+      `ParticipantAutocompleteField` only when `!manualIdentityOverride`; the
+      override branch (`:3842-3869`) drops to two plain free-text `Input`s. The
+      toggle is binary, so it conflates "search found nothing" with "this sport
+      has no data".
+
+
+      Note the contract boundary: `validateManualResolution` (`:80-110`)
+      **fails** any manual submission whose participants carry a
+      `canonicalParticipantId`. Manual is deliberately all-or-nothing so
+      coverage-gap provenance cannot launder real IDs. DB-backed team selection
+      therefore belongs in the structured-fallback tier, not inside manual mode.
+
+
+      **Required behaviour** — a three-tier ladder:
+
+
+      | Coverage | Tier | Provenance |
+
+      | -- | -- | -- |
+
+      | Upcoming event exists | canonical + event | full canonical |
+
+      | Teams resolvable, no event | structured team fallback, real participant
+      IDs | canonical, `eventId: null` |
+
+      | Teams genuinely absent | explicit free-text manual |
+      `canonical-coverage-gap` |
+    - >-
+      C. Availability is a sport-wide boolean and cannot express partial
+      coverage or search failure
+
+      `apps/api/src/handlers/reference-data.ts:37` is `teamsAvailable:
+      teams.length > 0`.
+
+
+      * A sport with 3 of 130 teams reports `true`.
+
+      * A **failed** search is indistinguishable from an empty one.
+
+
+      Both mislead the UI into the wrong tier. The second is a data-truth
+      defect: a transient search error must never be silently recorded as
+      permanent `canonical-coverage-gap` provenance. Per-side resolution state
+      is required — resolved / not-found / search-failed — and a search failure
+      must surface and be retryable rather than degrade to free text.
+
+
+      Measured coverage 2026-09-06: MLB 30 teams, NBA 30, NFL 32, NHL 32,
+      **NCAAF 0**, NCAAB 0, SOCCER 0.
+    - >-
+      D. Signed American odds cannot be entered on mobile
+
+      `BetForm.tsx:3915-3941` sets `inputMode="numeric"`, which renders a
+      digits-only keypad on Android/iOS with no minus key. `-110` is unenterable
+      on a phone.
+
+
+      The Zod schema (`apps/smart-form/lib/form-schema.ts:27-32`) and the
+      `onChange` handler both accept negative values correctly, so this is
+      purely the input control. Verification must cover the **browser control**
+      and the **persisted value**, not merely schema acceptance.
+    - >-
+      E. Missing client-side guards in the fallback tier
+
+      * Distinct sides: `BetForm.tsx:1902` skips the same-team check when
+      `manualIdentityOverride` is set. The server rejects it, but only after
+      submission.
+
+      * Matchup name: derived as `${away} @ ${home}` only in
+      `applyStructuredSideSelection` (`:1799`), which fires on canonical
+      suggestion selection. No derivation exists in the fallback tier, so the
+      operator hand-types the event name.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human
+    title: Smart Form submission repair — event-existence gate blocks every human
+      submission under containment; structured team fallback unreachable from
+      the UI; signed odds unenterable on mobile
+    description: >-
+      Discovered during the live Milestone 1 pilot on 2026-09-06, against
+      production at `d3f69b804`. Steps 1-3 of Milestone 1 passed (reach form,
+      authenticate, resolve canonical identity `griff843`). Step 4 — submit a
+      real Track Only pick — is blocked by the defects below.
+
+
+      All findings measured against production Supabase and the deployed code,
+      not inferred.
+
+
+      ## A. The event-existence gate blocks every human submission while
+      ingestion is parked
+
+
+      `apps/api/src/submission-service.ts:196-203` runs
+      `checkEventExistenceGate` for every `smart-form` / `alert-agent`
+      submission. The gate (`:867-879`) skips only when
+      `events.listUpcoming(undefined, 90)` returns empty.
+
+
+      `listUpcoming` does not return upcoming events. In
+      `packages/db/src/runtime-repositories.ts` it builds a **symmetric
+      window**:
+
+
+      ```ts
+
+      const start = toIsoDate(addDays(today, -windowDays));  // now - 90d
+
+      const end   = toIsoDate(addDays(today,  windowDays));  // now + 90d
+
+      ```
+
+
+      Measured in production 2026-09-06: 789 events total, **0 with**
+      `event_date > now()`, latest `2026-07-02`. The +/-90d window nonetheless
+      returns **312** rows (2026-06-08 .. 2026-07-02), all in the past. So the
+      gate reads a *stale* catalog as a *live* one, does not skip, and rejects
+      any event name that does not match a months-old row:
+
+
+      `422 EVENT_NOT_FOUND — No event found matching "<name>" — verify the event
+      name and try again`
+
+
+      Consequences:
+
+
+      * Provider ingestion is parked under containment, so no future event will
+      ever exist to match. The gate is unsatisfiable by design for the pilot.
+
+      * It fires regardless of participant resolution — including the manual
+      `canonical-coverage-gap` path that exists precisely for absent reference
+      data. The form offers a fallback the API then refuses.
+
+      * Events exist only for MLB/NBA/NHL. There are no NFL or NCAAF events at
+      all, so the canonical (event-bound) path is currently impossible for
+      **every** sport.
+
+
+      **Required fix.** The exception must be gated on **server-validated Smart
+      Form fallback eligibility**, not on a client-supplied `eventId: null` and
+      not merely on `manualOverride`. `validateSmartFormRelationships` already
+      runs first, in `apps/api/src/controllers/submit-pick-controller.ts:36`,
+      before the submission service. Its validated classification
+      (canonical-with-event / structured-team-fallback / manual-coverage-gap)
+      must be what the gate consults. A client must not be able to skip the gate
+      by asserting a field.
+
+
+      ## B. The structured team fallback is implemented server-side but
+      unreachable from the UI
+
+
+      `apps/api/src/smart-form-validation.ts:64-72` already supports canonical
+      resolution **without** an event for team sports —
+      `validateStructuredTeamFallback` requires distinct away/home, validates
+      both IDs against the reference data (`validateSearchBackedTeam`), and
+      calls `validateDistinctSides`. `TEAM_SPORTS` includes NCAAF.
+
+
+      The client never produces this shape. `BetForm.tsx:3811` renders DB-backed
+      `ParticipantAutocompleteField` only when `!manualIdentityOverride`; the
+      override branch (`:3842-3869`) drops to two plain free-text `Input`s. The
+      toggle is binary, so it conflates "search found nothing" with "this sport
+      has no data".
+
+
+      Note the contract boundary: `validateManualResolution` (`:80-110`)
+      **fails** any manual submission whose participants carry a
+      `canonicalParticipantId`. Manual is deliberately all-or-nothing so
+      coverage-gap provenance cannot launder real IDs. DB-backed team selection
+      therefore belongs in the structured-fallback tier, not inside manual mode.
+
+
+      **Required behaviour** — a three-tier ladder:
+
+
+      | Coverage | Tier | Provenance |
+
+      | -- | -- | -- |
+
+      | Upcoming event exists | canonical + event | full canonical |
+
+      | Teams resolvable, no event | structured team fallback, real participant
+      IDs | canonical, `eventId: null` |
+
+      | Teams genuinely absent | explicit free-text manual |
+      `canonical-coverage-gap` |
+
+
+      ## C. Availability is a sport-wide boolean and cannot express partial
+      coverage or search failure
+
+
+      `apps/api/src/handlers/reference-data.ts:37` is `teamsAvailable:
+      teams.length > 0`.
+
+
+      * A sport with 3 of 130 teams reports `true`.
+
+      * A **failed** search is indistinguishable from an empty one.
+
+
+      Both mislead the UI into the wrong tier. The second is a data-truth
+      defect: a transient search error must never be silently recorded as
+      permanent `canonical-coverage-gap` provenance. Per-side resolution state
+      is required — resolved / not-found / search-failed — and a search failure
+      must surface and be retryable rather than degrade to free text.
+
+
+      Measured coverage 2026-09-06: MLB 30 teams, NBA 30, NFL 32, NHL 32,
+      **NCAAF 0**, NCAAB 0, SOCCER 0.
+
+
+      ## D. Signed American odds cannot be entered on mobile
+
+
+      `BetForm.tsx:3915-3941` sets `inputMode="numeric"`, which renders a
+      digits-only keypad on Android/iOS with no minus key. `-110` is unenterable
+      on a phone.
+
+
+      The Zod schema (`apps/smart-form/lib/form-schema.ts:27-32`) and the
+      `onChange` handler both accept negative values correctly, so this is
+      purely the input control. Verification must cover the **browser control**
+      and the **persisted value**, not merely schema acceptance.
+
+
+      ## E. Missing client-side guards in the fallback tier
+
+
+      * Distinct sides: `BetForm.tsx:1902` skips the same-team check when
+      `manualIdentityOverride` is set. The server rejects it, but only after
+      submission.
+
+      * Matchup name: derived as `${away} @ ${home}` only in
+      `applyStructuredSideSelection` (`:1799`), which fires on canonical
+      suggestion selection. No derivation exists in the fallback tier, so the
+      operator hand-types the event name.
+
+
+      ## Acceptance criteria
+
+
+      1. A Track Only submission using the manual coverage-gap path succeeds
+      against a production-shaped events table containing only stale events; the
+      exception is keyed on the server-validated classification, and a
+      client-forged `eventId: null` does **not** bypass the gate.
+      Mutation-checked.
+
+      2. The event-existence gate still rejects a canonical event-bound
+      submission naming a nonexistent event. Mutation-checked.
+
+      3. Where team coverage exists, away/home are chosen from DB-backed
+      selectors, participant IDs are preserved into the submission, and
+      provenance records canonical resolution — not coverage-gap.
+
+      4. Partial coverage and search failure are represented distinctly per
+      side. A search failure surfaces as retryable and never degrades to
+      coverage-gap provenance.
+
+      5. Free-text entry is reachable only where team coverage is genuinely
+      absent.
+
+      6. Selecting the same team on both sides is refused in the browser, before
+      submission.
+
+      7. The matchup name is generated automatically in the fallback tier.
+
+      8. Signed American odds (`-110`) are enterable on a mobile browser and
+      persist as `-110`. Verified through the browser control and the persisted
+      row.
+
+      9. User-facing language: select a matchup, or build one from away/home
+      teams, with its name generated automatically.
+
+
+      ## Out of scope
+
+
+      * Reference-data population. Seeding NCAAF teams would require unparking
+      provider ingestion, which is a reserved decision. This repair makes the
+      fallback correct; it does not fill the catalog.
+
+      * The `listUpcoming` symmetric-window naming defect itself. It is the
+      mechanism behind (A) but is also consumed by grading and closing-line
+      paths; changing its semantics has a wider blast radius and is recorded
+      separately rather than bundled here.
+    captured_at: 2026-09-07T03:20:45.726Z
+    description_sha256: 9827d05d14929e9ca4bc3b81c79b9d1ef366468f2141ed48660fd1b27208b8c1
+  contract_hash: a6fc122ecea8ddbcf43e288152998469a65c1fa767d4f6c4334f28bd825aa6b7

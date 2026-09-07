@@ -459,3 +459,100 @@ test('mutation control: removing TRACK_ONLY_REQUEST_INTEGRITY_GUARD answers a Tr
     },
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1842: the Milestone 1 blocker, end to end through the controller.
+//
+// The event-existence gate refuses any human-source pick whose eventName
+// matches nothing once the events repository holds rows. Under containment the
+// canonical event catalog is deliberately not being filled, so a Track Only
+// pick submitted with honest `canonical-coverage-gap` provenance was refused
+// with 422 EVENT_NOT_FOUND before it ever reached persistence.
+//
+// This is the wiring test. The two unit suites pin the validator's outcome and
+// the gate's waiver independently; only this one fails if the controller stops
+// handing the outcome to processSubmission, which would leave both of those
+// green while the deployed flow stayed broken.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1842: a manual coverage-gap Track Only pick persists while the events catalog holds only other events', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // Seeding any row activates the gate. The name deliberately does not match.
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-utv2-1842-controller',
+    sportId: 'nba',
+    eventName: 'Knicks vs Heat',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  const result = await submitPickController(
+    makePayload('smart-form', {
+      eventName: 'Manual event',
+      metadata: {
+        sport: 'MMA',
+        distributionMode: 'track-only',
+        participantResolution: {
+          resolution: 'manual',
+          sportId: 'MMA',
+          eventId: null,
+          manualOverride: true,
+          reason: 'canonical-coverage-gap',
+          enteredEventName: 'Manual event',
+          enteredParticipants: [
+            { role: 'away', displayName: 'Challenger One', canonicalParticipantId: null },
+            { role: 'home', displayName: 'Challenger Two', canonicalParticipantId: null },
+          ],
+        },
+      },
+    }),
+    repositories,
+  );
+
+  assert.equal(result.status, 201);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+
+  const persisted = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.ok(persisted);
+  // Provenance stays honest: the waiver records why the event was absent, it
+  // does not claim a canonical resolution the submission never had.
+  const metadata = persisted.metadata as Record<string, unknown>;
+  assert.equal(metadata['distributionMode'], 'track-only');
+  const resolution = metadata['participantResolution'] as Record<string, unknown>;
+  assert.equal(resolution['resolution'], 'manual');
+  assert.equal(resolution['reason'], 'canonical-coverage-gap');
+  assert.equal(resolution['eventId'], null);
+  // Track Only still creates no delivery work.
+  assert.equal(result.body.data.outboxEnqueued, false);
+  assert.equal((await repositories.outbox.listByPickId(result.body.data.pickId)).length, 0);
+});
+
+test('UTV2-1842: a smart-form pick that claims a canonical event it cannot name is still refused', async () => {
+  // The waiver must not become a general escape from the gate. This payload
+  // carries no participantResolution at all, so the validator reports
+  // not-smart-form and the gate stays enforcing.
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-utv2-1842-controller-neg',
+    sportId: 'nba',
+    eventName: 'Knicks vs Heat',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  await assert.rejects(
+    () =>
+      submitPickController(
+        makePayload('smart-form', { eventName: 'Lakers vs Celtics', metadata: { sport: 'NBA' } }),
+        repositories,
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('EVENT_NOT_FOUND') || err.message.includes('Lakers vs Celtics'));
+      return true;
+    },
+  );
+});

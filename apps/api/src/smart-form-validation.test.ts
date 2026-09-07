@@ -1020,3 +1020,285 @@ test('searchPlayers stops paging once the limit is satisfied', async () => {
   assert.equal(pageRequests.length, 1);
   assert.deepEqual(pageRequests[0], [0, 499]);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1842: the validator now reports *which* path admitted the submission.
+//
+// submission-service.ts waives the event-existence gate for exactly two of
+// these four outcomes. That waiver is only sound if each outcome is produced
+// after — never instead of — the full server-side check for its path, so these
+// tests pin the mapping. Every payload below is one the existing tests above
+// already prove is validated; what is new is the value that comes back.
+// ---------------------------------------------------------------------------
+
+test('UTV2-1842: a canonical event resolution reports canonical-event with its event id', async () => {
+  const outcome = await validateSmartFormRelationships(payload(), referenceData());
+  assert.deepEqual(outcome, { kind: 'canonical-event', eventId: event.eventId, distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: a validated manual coverage gap reports manual-coverage-gap', async () => {
+  const manual = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'manual',
+      sportId: 'MMA',
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Fighter A vs Fighter B',
+      enteredParticipants: [
+        { role: 'competitor', displayName: 'Fighter A', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Fighter B', canonicalParticipantId: null },
+      ],
+    },
+  });
+  manual.eventName = 'Fighter A vs Fighter B';
+
+  const outcome = await validateSmartFormRelationships(manual, referenceData());
+  assert.deepEqual(outcome, { kind: 'manual-coverage-gap', distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: a search-backed structured team fallback reports structured-team-fallback', async () => {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+
+  const outcome = await validateSmartFormRelationships(soccer, repository);
+  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'track-only' });
+});
+
+test('UTV2-1842: an unvalidated legacy smart-form shape reports not-smart-form', async () => {
+  // This shape is admitted by the carriesSmartFormFields escape without any
+  // relationship validation at all. It must therefore report the outcome that
+  // does NOT waive the event gate — see the matching test in
+  // submission-service.test.ts.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'nfl-spread',
+    selection: 'legacy submission',
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 70,
+    metadata: { proof_fixture_id: 'legacy-shape' },
+  };
+
+  const outcome = await validateSmartFormRelationships(legacy, referenceData());
+  assert.deepEqual(outcome, { kind: 'not-smart-form' });
+});
+
+test('UTV2-1842: a non-team sport with no event still fails rather than reporting a fallback', async () => {
+  // The waiver must be unreachable for a sport the structured fallback cannot
+  // verify. If this ever returns an outcome instead of throwing, a submission
+  // with no canonical event and no manual override would skip the event gate.
+  const mma = payload({
+    sport: 'MMA',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'MMA',
+      eventId: null,
+      eventName: 'Fighter A vs Fighter B',
+      away: { participantId: 'fighter-a', displayName: 'Fighter A', participantType: 'player' },
+      home: { participantId: 'fighter-b', displayName: 'Fighter B', participantType: 'player' },
+    },
+  });
+  mma.eventName = 'Fighter A vs Fighter B';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(mma, referenceData()),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /explicit manual override/);
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1842 review corrections — the two findings on PR #1529.
+//
+// 1. The waiver was not restricted to Track Only. The outcome now carries the
+//    submission's distributionMode so submission-service.ts can require it; the
+//    tests that the waiver itself honours it live in submission-service.test.ts.
+// 2. The structured fallback validated the away/home *identities* and never
+//    bound the submitted matchup *name* to them, so a payload with genuine
+//    DB-backed team IDs and an arbitrary eventName was reported fully
+//    server-validated and — via the new waiver — persisted the fabricated name.
+// ---------------------------------------------------------------------------
+
+function structuredFallback(overrides: Record<string, unknown> = {}) {
+  const soccer = payload({
+    sport: 'Soccer',
+    participantResolution: {
+      resolution: 'canonical',
+      sportId: 'Soccer',
+      eventId: null,
+      eventName: 'Arsenal @ Chelsea',
+      away: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+      home: { participantId: 'team-chelsea', displayName: 'Chelsea', participantType: 'team' },
+      team: { participantId: 'team-arsenal', displayName: 'Arsenal', participantType: 'team' },
+    },
+    eventName: 'Arsenal @ Chelsea',
+    ...overrides,
+  });
+  soccer.eventName = 'Arsenal @ Chelsea';
+  soccer.selection = 'Arsenal';
+  const repository = referenceData();
+  repository.searchTeams = async (sportId, query) => {
+    assert.equal(sportId, 'Soccer');
+    return [{
+      participantId: query === 'Arsenal' ? 'team-arsenal' : 'team-chelsea',
+      displayName: query,
+      sport: 'Soccer',
+    }];
+  };
+  return { soccer, repository };
+}
+
+test('UTV2-1842: the outcome reports delivery-eligible when the submission is delivery-eligible', async () => {
+  // The waiver is decided from this value. If the validator ever hard-codes
+  // 'track-only' here, or drops the field, a delivery-eligible operator
+  // submission would be waived — which is finding 1 restored.
+  const { soccer, repository } = structuredFallback({ distributionMode: 'delivery-eligible' });
+  const outcome = await validateSmartFormRelationships(soccer, repository);
+  assert.deepEqual(outcome, { kind: 'structured-team-fallback', distributionMode: 'delivery-eligible' });
+});
+
+test('UTV2-1842: a fabricated structured matchup name is refused', async () => {
+  // The exact case in the review: real away/home IDs, an invented event name.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Fake Finals';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Fake Finals';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Fake Finals';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.match(err.message, /does not name a matchup/);
+      return true;
+    },
+  );
+});
+
+test('UTV2-1842: a structured matchup name naming the wrong teams is refused', async () => {
+  // Well-formed as a matchup, so it survives the shape check, and wrong. This
+  // is the assertion that goes red if the binding is weakened to "looks like
+  // A @ B" without comparing the sides.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Arsenal @ Tottenham';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Arsenal @ Tottenham';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Arsenal @ Tottenham';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    /does not match the verified structured matchup/,
+  );
+});
+
+test('UTV2-1842: a structured matchup name with the sides reversed is refused', async () => {
+  // Away and home are not interchangeable: the persisted name would assert the
+  // wrong venue for a pick whose line depends on it.
+  const { soccer, repository } = structuredFallback();
+  soccer.eventName = 'Chelsea @ Arsenal';
+  (soccer.metadata as Record<string, unknown>)['eventName'] = 'Chelsea @ Arsenal';
+  ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Chelsea @ Arsenal';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(soccer, repository),
+    /does not match the verified structured matchup/,
+  );
+});
+
+test('UTV2-1842: each field carrying a matchup name is bound independently', async () => {
+  // Binding only `payload.eventName` would leave two other fields as
+  // fabrication surfaces. Each is checked against the verified sides rather
+  // than against the others, so agreeing on a wrong name is not a way past it.
+  for (const mutate of [
+    (p: SubmissionPayload) => { p.eventName = 'Fake Finals'; },
+    (p: SubmissionPayload) => { (p.metadata as Record<string, unknown>)['eventName'] = 'Fake Finals'; },
+    (p: SubmissionPayload) => {
+      ((p.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = 'Fake Finals';
+    },
+  ]) {
+    const { soccer, repository } = structuredFallback();
+    (soccer.metadata as Record<string, unknown>)['eventName'] = 'Arsenal @ Chelsea';
+    mutate(soccer);
+    await assert.rejects(
+      () => validateSmartFormRelationships(soccer, repository),
+      /does not name a matchup|does not match the verified structured matchup/,
+    );
+  }
+});
+
+test('UTV2-1842: the matchup name the Smart Form derives is accepted', async () => {
+  // setDerivedMatchupName in BetForm.tsx writes exactly `${away} @ ${home}`
+  // from the same canonical display names. A binding that refused this would
+  // block the pilot rather than protect it, so the accept case is asserted
+  // alongside the refusals — including the separator and doubleheader-suffix
+  // variants the canonical path already tolerates.
+  for (const name of [
+    'Arsenal @ Chelsea',
+    'Arsenal vs Chelsea',
+    'Arsenal vs. Chelsea',
+    'Arsenal at Chelsea',
+    'arsenal @ chelsea',
+    'Arsenal @ Chelsea · Game 2',
+  ]) {
+    const { soccer, repository } = structuredFallback();
+    soccer.eventName = name;
+    (soccer.metadata as Record<string, unknown>)['eventName'] = name;
+    ((soccer.metadata as Record<string, unknown>)['participantResolution'] as Record<string, unknown>)['eventName'] = name;
+    const outcome = await validateSmartFormRelationships(soccer, repository);
+    assert.deepEqual(
+      outcome,
+      { kind: 'structured-team-fallback', distributionMode: 'track-only' },
+      `${name} must still be accepted`,
+    );
+  }
+});
+
+test('UTV2-1842: a manual coverage gap binds its flat metadata event name too', async () => {
+  const manual = payload({
+    sport: 'MMA',
+    eventName: 'Fighter A vs Fighter B',
+    participantResolution: {
+      resolution: 'manual',
+      sportId: 'MMA',
+      eventId: null,
+      manualOverride: true,
+      reason: 'canonical-coverage-gap',
+      enteredEventName: 'Fighter A vs Fighter B',
+      enteredParticipants: [
+        { role: 'competitor', displayName: 'Fighter A', canonicalParticipantId: null },
+        { role: 'competitor', displayName: 'Fighter B', canonicalParticipantId: null },
+      ],
+    },
+  });
+  manual.eventName = 'Fighter A vs Fighter B';
+  (manual.metadata as Record<string, unknown>)['eventName'] = 'Totally Different Card';
+
+  await assert.rejects(
+    () => validateSmartFormRelationships(manual, referenceData()),
+    /does not match metadata eventName/,
+  );
+});
