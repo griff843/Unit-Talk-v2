@@ -1302,3 +1302,159 @@ test('UTV2-1842: a manual coverage gap binds its flat metadata event name too', 
     /does not match metadata eventName/,
   );
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-1853 -- server-side numeric guardrails
+//
+// SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md: "A value accepted by the form must be
+// accepted by the API; a value rejected by the form must also be rejected by the API."
+// Before this lane only the browser enforced the bounds, so a modified client, a replayed
+// request, or a direct POST persisted values the contract forbids.
+// ---------------------------------------------------------------------------
+
+/** A payload whose *top-level* numeric fields can be overridden, unlike `payload()`. */
+function numericPayload(overrides: Partial<SubmissionPayload> = {}): SubmissionPayload {
+  return { ...payload(), ...overrides };
+}
+
+async function guardrailError(p: SubmissionPayload): Promise<{ status: number; code: string; message: string }> {
+  try {
+    await validateSmartFormRelationships(p, referenceData());
+  } catch (error) {
+    const e = error as { status?: number; code?: string; message?: string };
+    return { status: e.status ?? 0, code: e.code ?? '', message: e.message ?? '' };
+  }
+  throw new Error('expected the submission to be refused, but it was accepted');
+}
+
+test('UTV2-1853: a contract-legal submission is still accepted (non-vacuity control)', async () => {
+  // Without this the whole block could pass with a guard that refuses everything.
+  const outcome = await validateSmartFormRelationships(
+    numericPayload({ odds: -110, stakeUnits: 1.5, line: -3.5 }),
+    referenceData(),
+  );
+  assert.equal(outcome.kind, 'canonical-event');
+});
+
+test('UTV2-1853: odds below the American minimum magnitude are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: 7 }));
+  assert.equal(err.status, 422);
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /odds must be American format/);
+});
+
+test('UTV2-1853: odds above the American maximum magnitude are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: -50001 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+});
+
+test('UTV2-1853: fractional odds are refused', async () => {
+  const err = await guardrailError(numericPayload({ odds: 110.5 }));
+  assert.match(err.message, /whole number/);
+});
+
+test('UTV2-1853: both American boundary values are accepted', async () => {
+  for (const odds of [100, -100, 50000, -50000]) {
+    const outcome = await validateSmartFormRelationships(numericPayload({ odds }), referenceData());
+    assert.equal(outcome.kind, 'canonical-event', `odds ${odds} should be accepted`);
+  }
+});
+
+test('UTV2-1853: a stake above the contract maximum is refused', async () => {
+  // The shape a modified client produces: 500u at long odds.
+  const err = await guardrailError(numericPayload({ stakeUnits: 500 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /stakeUnits must be between/);
+});
+
+test('UTV2-1853: a stake below the contract minimum is refused', async () => {
+  const err = await guardrailError(numericPayload({ stakeUnits: 0.25 }));
+  assert.match(err.message, /stakeUnits must be between/);
+});
+
+test('UTV2-1853: a stake off the 0.5 step is refused', async () => {
+  const err = await guardrailError(numericPayload({ stakeUnits: 2.3 }));
+  assert.match(err.message, /multiple of/);
+});
+
+test('UTV2-1853: every legal 0.5 step from 0.5 to 5.0 is accepted', async () => {
+  for (let units = 0.5; units <= 5.0000001; units += 0.5) {
+    const outcome = await validateSmartFormRelationships(
+      numericPayload({ stakeUnits: Number(units.toFixed(1)) }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `stake ${units} should be accepted`);
+  }
+});
+
+test('UTV2-1853: a line beyond the contract magnitude is refused', async () => {
+  const err = await guardrailError(numericPayload({ line: 100000 }));
+  assert.match(err.message, /line must be within/);
+});
+
+test('UTV2-1853: the line boundary is accepted and an absent line is not required', async () => {
+  for (const line of [999.5, -999.5, undefined]) {
+    const outcome = await validateSmartFormRelationships(
+      numericPayload({ line }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `line ${String(line)} should be accepted`);
+  }
+});
+
+test('UTV2-1853: conviction outside 1-10 is refused', async () => {
+  const err = await guardrailError(payload({ capperConviction: 11 }));
+  assert.equal(err.code, 'SMART_FORM_GUARDRAIL_INVALID');
+  assert.match(err.message, /capperConviction must be between/);
+});
+
+test('UTV2-1853: the full 1-10 conviction range is accepted', async () => {
+  for (let c = 1; c <= 10; c += 1) {
+    const outcome = await validateSmartFormRelationships(
+      payload({ capperConviction: c }),
+      referenceData(),
+    );
+    assert.equal(outcome.kind, 'canonical-event', `conviction ${c} should be accepted`);
+  }
+});
+
+test('UTV2-1853: the guard does not reach the legacy service-role smart-form label', async () => {
+  // The UTV2-1672 trigger-scope guard runs first. A caller using `smart-form` as a plain
+  // source label, carrying none of the Smart Form fields, must stay exempt -- otherwise
+  // this lane silently retrofits the contract onto traffic it never governed.
+  const legacy: SubmissionPayload = {
+    source: 'smart-form',
+    market: 'moneyline',
+    selection: 'TCU',
+    odds: 7,
+    stakeUnits: 500,
+  };
+  const outcome = await validateSmartFormRelationships(legacy, referenceData());
+  assert.equal(outcome.kind, 'not-smart-form');
+});
+
+test('UTV2-1853: the API bounds have not drifted from the client form schema', async () => {
+  // packages never import from apps and apps never import from apps, so the bounds cannot
+  // live in one shared module. This asserts the two copies still agree, the same way
+  // UTV2-1688 bound the executor-result regexes to their workflow copy.
+  const schemaPath = fileURLToPath(
+    new URL('../../smart-form/lib/form-schema.ts', import.meta.url),
+  );
+  const schema = await readFile(schemaPath, 'utf8');
+
+  const {
+    SMART_FORM_ODDS_MIN_MAGNITUDE,
+    SMART_FORM_ODDS_MAX_MAGNITUDE,
+    SMART_FORM_UNITS_MIN,
+    SMART_FORM_UNITS_MAX,
+    SMART_FORM_CONVICTION_MIN,
+    SMART_FORM_CONVICTION_MAX,
+  } = await import('./smart-form-validation.js');
+
+  assert.ok(schema.includes(String(SMART_FORM_ODDS_MIN_MAGNITUDE)), 'odds min drifted');
+  assert.ok(schema.includes(String(SMART_FORM_ODDS_MAX_MAGNITUDE)), 'odds max drifted');
+  assert.ok(schema.includes(`min(${SMART_FORM_UNITS_MIN}`), 'units min drifted');
+  assert.ok(schema.includes(`max(${SMART_FORM_UNITS_MAX.toFixed(1)}`), 'units max drifted');
+  assert.ok(schema.includes(`min(${SMART_FORM_CONVICTION_MIN}`), 'conviction min drifted');
+  assert.ok(schema.includes(`max(${SMART_FORM_CONVICTION_MAX}`), 'conviction max drifted');
+});
