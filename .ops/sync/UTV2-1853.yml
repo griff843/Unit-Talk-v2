@@ -1,0 +1,235 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1853
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1853
+  objective: Make the API enforce the numeric guardrails that
+    `SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` requires it to enforce, on
+    the authenticated-capper submission path only.
+  acceptance_criteria:
+    - A Smart Form submission with `odds` outside ±100..±50000, non-integer, or
+      zero is rejected with a field-named message.
+    - Same for `stakeUnits` outside 0.5..5.0, and `line` outside ±999.5 **where
+      a line is required** (the contract bounds it "where required", so an
+      absent line on a moneyline stays legal).
+    - "### Status code — corrected"
+    - An earlier draft of this issue said 400. The contract specifies **no**
+      status code, only the invariant. `smart-form-validation.ts` already
+      rejects via `fail()` -> `ApiError(422,
+      'SMART_FORM_RELATIONSHIP_INVALID')`, so the guardrails reuse 422 for one
+      consistent taxonomy on this path — but under a sibling `failGuardrail()`
+      emitting `SMART_FORM_GUARDRAIL_INVALID`, because a numeric bound is not a
+      relationship failure and the client should be able to distinguish them.
+    - Non-capper sources (system picks, alert agent, board-pick-writer,
+      candidate-pick-scanner) are **unaffected** — asserted by a test that
+      submits an out-of-range system pick and expects success.
+    - "Duplication is unavoidable here: `apps/smart-form` cannot import from
+      `apps/api` (core invariant 8 — apps never import from apps), and hoisting
+      the constants into `packages/contracts` would re-floor the lane at T1 on a
+      Tier C prefix. So the literals are duplicated and a **drift test asserts
+      the two copies agree**, following the pattern
+      [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-resu\
+      lt-validator-rejects-the-bootstrap-branch-namespace) established for the
+      executor-result regexes."
+    - "Mutation-tested: removing each bound turns a distinct test red."
+  guardrails:
+    - No containment change. No change to `packages/contracts`. No change to
+      required-check configuration or merge authority.
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - >-
+      Contract clause
+
+      > "API validates the same constraints as a safety net… a value rejected by
+      the form must also be rejected by the API"
+
+      > (`docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md`,
+      Server-Side Enforcement)
+    - >-
+      Measured current state (main @ d629a5510)
+
+      Enforced client-side only, in `apps/smart-form/lib/form-schema.ts`:
+
+
+      | Guardrail | Contract bound | Server enforcement today |
+
+      | -- | -- | -- |
+
+      | `odds` | ±100 .. ±50000 | **none** —
+      `packages/contracts/src/submission.ts:75-77` type-checks number only |
+
+      | `stakeUnits` upper | 0.5 .. 5.0 | **lower bound only** —
+      `apps/api/src/handlers/submit-pick.ts:87-89` rejects `<= 0`; no ceiling |
+
+      | `line` | ±999.5 (where required) | **none** |
+
+
+      Note: `line` is unbounded on **both** sides —
+      `apps/smart-form/lib/form-schema.ts:22` is `z.coerce.number().optional()`
+      with no range. The contract's ±999.5 is enforced nowhere today, so this
+      lane adds it to the client schema as well as the API.
+
+
+      A modified client or a direct POST therefore persists an out-of-range
+      pick.
+
+
+      ### Correction to an earlier reading
+
+
+      An automated gap analysis reported that `submission-service.ts:511-519`
+      (`ensureMeasurableStakeUnits`) "silently defaults a non-positive stake to
+      1", implying a hole on the capper path. It is not one. The HTTP route is
+      `routes/submissions.ts:42` -> `handleSubmitPick` -> `submitPickController`
+      -> `processSubmission`, and `handleSubmitPick:87-89` rejects non-positive
+      stakes with a 400 before the service is reached.
+      `ensureMeasurableStakeUnits` is defense-in-depth for the two direct
+      internal callers (`board-pick-writer.ts:329`,
+      `candidate-pick-scanner.ts:264`), which are system-pick paths. Do not
+      "repair" it.
+    - >-
+      Scope decision — why not `packages/contracts`
+
+      Units 0.5-5.0 is a *Smart Form operator* constraint, not a universal
+      submission constraint. Applying it in
+      `packages/contracts/src/submission.ts` would bind every submitter
+      including system picks and the alert agent, which the contract does not
+      govern. It also floors the lane at T1 on the `packages/contracts/src/`
+      Tier C prefix for no benefit.
+
+
+      The guardrail therefore lands on the smart-form path, where
+      `isAuthenticatedCapper` is already resolved.
+    - >-
+      File scope
+
+      * `apps/api/src/smart-form-validation.ts`
+
+      * `apps/api/src/handlers/submit-pick.ts`
+
+      * `apps/api/src/smart-form-validation.test.ts`
+
+
+      Lane type `runtime`. `package.json` is **not** declared —
+      `smart-form-validation.test.ts` already exists and is already wired, so
+      there is no `WIRING_TEST_UNWIRED_NEW` exposure, and root `package.json` is
+      reserved for the concurrent Codex session per `docs/mission/plan.md`.
+
+
+      `classifyMechanicalMinimum` returns T3 for this set. Declared **T2**: this
+      is a fail-closed guard on the pick write path, and the mechanical floor is
+      a floor rather than a verdict.
+
+
+      ### The server/client split is mechanically forced, not a preference
+
+
+      Measured against `.lane/lanes/*.yml`: **no lane type admits both**
+      `apps/api/**` **and** `apps/smart-form/**` — `runtime.yml` carries
+      `apps/api/**`, `delivery-ui.yml` carries `apps/smart-form`. A single lane
+      covering both sides is therefore inadmissible under the lane-authority
+      contract.
+
+
+      So this lane is server-only. The client-side `line` ±999.5 bound, and the
+      extension of the drift test to cover it, land in the sibling `delivery-ui`
+      lane alongside the odds-format control and the conviction range fix.
+
+
+      ### Considered and rejected: shared constants in
+      `packages/contracts/src/smart-form.ts`
+
+
+      `runtime.yml` does admit that path, and it would give a real single source
+      of truth rather than a drift test. Rejected because
+      `packages/contracts/src/` is a Tier C prefix: it floors the lane at T1,
+      which buys a PM verdict, a `t1-approved` label and a staging live-DB proof
+      for a change with zero behavioural difference from the
+      duplication-plus-drift-test route. Recorded as a follow-up, not done here.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds
+    title: "Smart Form: API must re-validate the operator numeric guardrails (odds,
+      units, line)"
+    description: |-
+      ## Objective
+
+      Make the API enforce the numeric guardrails that `SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` requires it to enforce, on the authenticated-capper submission path only.
+
+      ## Contract clause
+
+      > "API validates the same constraints as a safety net… a value rejected by the form must also be rejected by the API"
+      > (`docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md`, Server-Side Enforcement)
+
+      ## Measured current state (main @ d629a5510)
+
+      Enforced client-side only, in `apps/smart-form/lib/form-schema.ts`:
+
+      | Guardrail | Contract bound | Server enforcement today |
+      | -- | -- | -- |
+      | `odds` | ±100 .. ±50000 | **none** — `packages/contracts/src/submission.ts:75-77` type-checks number only |
+      | `stakeUnits` upper | 0.5 .. 5.0 | **lower bound only** — `apps/api/src/handlers/submit-pick.ts:87-89` rejects `<= 0`; no ceiling |
+      | `line` | ±999.5 (where required) | **none** |
+
+      Note: `line` is unbounded on **both** sides — `apps/smart-form/lib/form-schema.ts:22` is `z.coerce.number().optional()` with no range. The contract's ±999.5 is enforced nowhere today, so this lane adds it to the client schema as well as the API.
+
+      A modified client or a direct POST therefore persists an out-of-range pick.
+
+      ### Correction to an earlier reading
+
+      An automated gap analysis reported that `submission-service.ts:511-519` (`ensureMeasurableStakeUnits`) "silently defaults a non-positive stake to 1", implying a hole on the capper path. It is not one. The HTTP route is `routes/submissions.ts:42` -> `handleSubmitPick` -> `submitPickController` -> `processSubmission`, and `handleSubmitPick:87-89` rejects non-positive stakes with a 400 before the service is reached. `ensureMeasurableStakeUnits` is defense-in-depth for the two direct internal callers (`board-pick-writer.ts:329`, `candidate-pick-scanner.ts:264`), which are system-pick paths. Do not "repair" it.
+
+      ## Scope decision — why not `packages/contracts`
+
+      Units 0.5-5.0 is a *Smart Form operator* constraint, not a universal submission constraint. Applying it in `packages/contracts/src/submission.ts` would bind every submitter including system picks and the alert agent, which the contract does not govern. It also floors the lane at T1 on the `packages/contracts/src/` Tier C prefix for no benefit.
+
+      The guardrail therefore lands on the smart-form path, where `isAuthenticatedCapper` is already resolved.
+
+      ## Acceptance criteria
+
+      1. A Smart Form submission with `odds` outside ±100..±50000, non-integer, or zero is rejected with a field-named message.
+      2. Same for `stakeUnits` outside 0.5..5.0, and `line` outside ±999.5 **where a line is required** (the contract bounds it "where required", so an absent line on a moneyline stays legal).
+
+      ### Status code — corrected
+
+      An earlier draft of this issue said 400. The contract specifies **no** status code, only the invariant. `smart-form-validation.ts` already rejects via `fail()` -> `ApiError(422, 'SMART_FORM_RELATIONSHIP_INVALID')`, so the guardrails reuse 422 for one consistent taxonomy on this path — but under a sibling `failGuardrail()` emitting `SMART_FORM_GUARDRAIL_INVALID`, because a numeric bound is not a relationship failure and the client should be able to distinguish them.
+      3. Non-capper sources (system picks, alert agent, board-pick-writer, candidate-pick-scanner) are **unaffected** — asserted by a test that submits an out-of-range system pick and expects success.
+      4. Duplication is unavoidable here: `apps/smart-form` cannot import from `apps/api` (core invariant 8 — apps never import from apps), and hoisting the constants into `packages/contracts` would re-floor the lane at T1 on a Tier C prefix. So the literals are duplicated and a **drift test asserts the two copies agree**, following the pattern [UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace) established for the executor-result regexes.
+      5. Mutation-tested: removing each bound turns a distinct test red.
+
+      ## File scope
+
+      * `apps/api/src/smart-form-validation.ts`
+      * `apps/api/src/handlers/submit-pick.ts`
+      * `apps/api/src/smart-form-validation.test.ts`
+
+      Lane type `runtime`. `package.json` is **not** declared — `smart-form-validation.test.ts` already exists and is already wired, so there is no `WIRING_TEST_UNWIRED_NEW` exposure, and root `package.json` is reserved for the concurrent Codex session per `docs/mission/plan.md`.
+
+      `classifyMechanicalMinimum` returns T3 for this set. Declared **T2**: this is a fail-closed guard on the pick write path, and the mechanical floor is a floor rather than a verdict.
+
+      ### The server/client split is mechanically forced, not a preference
+
+      Measured against `.lane/lanes/*.yml`: **no lane type admits both** `apps/api/**` **and** `apps/smart-form/**` — `runtime.yml` carries `apps/api/**`, `delivery-ui.yml` carries `apps/smart-form`. A single lane covering both sides is therefore inadmissible under the lane-authority contract.
+
+      So this lane is server-only. The client-side `line` ±999.5 bound, and the extension of the drift test to cover it, land in the sibling `delivery-ui` lane alongside the odds-format control and the conviction range fix.
+
+      ### Considered and rejected: shared constants in `packages/contracts/src/smart-form.ts`
+
+      `runtime.yml` does admit that path, and it would give a real single source of truth rather than a drift test. Rejected because `packages/contracts/src/` is a Tier C prefix: it floors the lane at T1, which buys a PM verdict, a `t1-approved` label and a staging live-DB proof for a change with zero behavioural difference from the duplication-plus-drift-test route. Recorded as a follow-up, not done here.
+
+      ## Guardrails
+
+      No containment change. No change to `packages/contracts`. No change to required-check configuration or merge authority.
+    captured_at: 2026-09-07T18:35:34.947Z
+    description_sha256: 69b44261c3a206b49a30f1b443c5e3d60a8327d2220fa10fcbd1eedb61f4a69d
+  contract_hash: 410f1e693dcf4f313f2767f7c920fdd802c36f0d876604c0df063f692822a0d0

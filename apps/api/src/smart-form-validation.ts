@@ -74,6 +74,13 @@ export async function validateSmartFormRelationships(
   if (!carriesSmartFormFields(payload)) return { kind: 'not-smart-form' };
   // UTV2-1672 SMART_FORM_TRIGGER_SCOPE_END
 
+  // UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_CALL_START
+  // Placed after the trigger-scope guard above, so it governs exactly the
+  // traffic the Smart Form itself produces and leaves the legacy `smart-form`
+  // service-role label untouched.
+  assertSmartFormNumericBounds(payload);
+  // UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_CALL_END
+
   const metadata = payload.metadata;
   const rawDistributionMode = metadata?.['distributionMode'];
   if (rawDistributionMode !== 'track-only' && rawDistributionMode !== 'delivery-eligible') {
@@ -695,6 +702,108 @@ function matchesCanonicalEventName(submitted: string, canonical: string) {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
+// UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_START
+// SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md fixes these bounds and states, under
+// "Server-Side Enforcement", that a value the form rejects must also be rejected by the
+// API. Today only the browser enforces them, so a modified client, a replayed request, or
+// a direct POST carrying source:'smart-form' persists values the product contract forbids.
+//
+// The literals are duplicated from apps/smart-form/lib/form-schema.ts rather than shared:
+// packages never import from apps and apps never import from apps (root CLAUDE.md core
+// invariant 8), so no module may legally hold the single copy. The duplication is made
+// self-policing instead -- smart-form-validation.test.ts reads form-schema.ts and asserts
+// each literal below still appears in it, the same drift-test shape UTV2-1688 used for the
+// executor-result regexes.
+export const SMART_FORM_ODDS_MIN_MAGNITUDE = 100;
+export const SMART_FORM_ODDS_MAX_MAGNITUDE = 50000;
+export const SMART_FORM_UNITS_MIN = 0.5;
+export const SMART_FORM_UNITS_MAX = 5;
+export const SMART_FORM_UNITS_STEP = 0.5;
+export const SMART_FORM_LINE_MAX_MAGNITUDE = 999.5;
+export const SMART_FORM_CONVICTION_MIN = 1;
+export const SMART_FORM_CONVICTION_MAX = 10;
+
+/**
+ * A numeric bound violation is not a relationship failure. Reusing
+ * SMART_FORM_RELATIONSHIP_INVALID would report "this selection does not resolve to a
+ * canonical participant" for a submission whose participants resolved perfectly and whose
+ * odds were 7 -- a misdiagnosis an operator would act on.
+ */
+function failBound(message: string): never {
+  throw new ApiError(422, 'SMART_FORM_GUARDRAIL_INVALID', message);
+}
+
+function assertSmartFormNumericBounds(payload: SubmissionPayload): void {
+  const { odds, stakeUnits, line } = payload;
+
+  // Presence is deliberately NOT asserted. `odds` and `stakeUnits` are optional in
+  // SubmissionPayload (packages/contracts/src/submission.ts:21-22) and submit-pick.ts reads
+  // both through readOptionalNumber. This guard bounds the values a submission does carry;
+  // making either mandatory would be a field-presence contract change, which belongs with
+  // that contract rather than in a bounds guard.
+  if (odds !== undefined) {
+    if (!Number.isFinite(odds)) {
+      failBound('odds must be a finite number when provided');
+    }
+    if (!Number.isInteger(odds)) {
+      failBound(`odds must be a whole number in American format (received ${odds})`);
+    }
+    const oddsMagnitude = Math.abs(odds);
+    if (
+      oddsMagnitude < SMART_FORM_ODDS_MIN_MAGNITUDE ||
+      oddsMagnitude > SMART_FORM_ODDS_MAX_MAGNITUDE
+    ) {
+      failBound(
+        `odds must be American format between ${SMART_FORM_ODDS_MIN_MAGNITUDE} and ` +
+          `${SMART_FORM_ODDS_MAX_MAGNITUDE} in magnitude (received ${odds})`,
+      );
+    }
+  }
+
+  if (stakeUnits !== undefined) {
+    if (!Number.isFinite(stakeUnits)) {
+      failBound('stakeUnits must be a finite number when provided');
+    }
+    if (stakeUnits < SMART_FORM_UNITS_MIN || stakeUnits > SMART_FORM_UNITS_MAX) {
+      failBound(
+        `stakeUnits must be between ${SMART_FORM_UNITS_MIN} and ${SMART_FORM_UNITS_MAX} ` +
+          `(received ${stakeUnits})`,
+      );
+    }
+    // Compared as a quotient of the step so 1.5 is exact rather than a float remainder.
+    if (!Number.isInteger(stakeUnits / SMART_FORM_UNITS_STEP)) {
+      failBound(
+        `stakeUnits must be a multiple of ${SMART_FORM_UNITS_STEP} (received ${stakeUnits})`,
+      );
+    }
+  }
+
+  // `line` is deliberately not required: a moneyline pick legitimately carries none, which
+  // is what the contract's "where required" qualifier means.
+  if (line !== undefined) {
+    if (!Number.isFinite(line)) failBound('line must be a finite number when provided');
+    if (Math.abs(line) > SMART_FORM_LINE_MAX_MAGNITUDE) {
+      failBound(
+        `line must be within +/-${SMART_FORM_LINE_MAX_MAGNITUDE} in magnitude (received ${line})`,
+      );
+    }
+  }
+
+  const conviction = payload.metadata?.['capperConviction'];
+  if (conviction !== undefined) {
+    if (typeof conviction !== 'number' || !Number.isInteger(conviction)) {
+      failBound('capperConviction must be a whole number when provided');
+    }
+    if (conviction < SMART_FORM_CONVICTION_MIN || conviction > SMART_FORM_CONVICTION_MAX) {
+      failBound(
+        `capperConviction must be between ${SMART_FORM_CONVICTION_MIN} and ` +
+          `${SMART_FORM_CONVICTION_MAX} (received ${conviction})`,
+      );
+    }
+  }
+}
+// UTV2-1853 SMART_FORM_NUMERIC_BOUNDS_END
 
 function fail(message: string): never {
   throw new ApiError(422, 'SMART_FORM_RELATIONSHIP_INVALID', message);
