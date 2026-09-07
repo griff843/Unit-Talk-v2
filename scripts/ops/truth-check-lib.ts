@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { parseScopeOverrideComment } from '../ci/scope-override-comment-parser.ts';
+
 // UTV2-1222: Normalize short vs full SHA comparison. The GitHub API returns the
 // full 40-char SHA while lane manifests may store the abbreviated 8-char form.
 // Treat a short SHA as matching if it is a valid hex prefix (≥7 chars) of the
@@ -868,6 +870,7 @@ export function evaluateScopeDiff(
   fileScopeLock: string[],
   expectedProofPaths: string[],
   issueId?: string | null,
+  authorizedOverridePaths: string[] = [],
 ): { status: 'pass' | 'fail'; detail: string } {
   if (filesChanged.length === 0 || fileScopeLock.length === 0) {
     return { status: 'pass', detail: 'scope-diff check not applicable (empty files_changed or scope)' };
@@ -886,7 +889,25 @@ export function evaluateScopeDiff(
   // this lane's exact issue ID: another issue's manifest or sync file still
   // fails, and an arbitrary file under either directory still fails. An absent
   // or malformed issue ID yields no patterns, so the grant fails closed.
-  const allowedPatterns = [...fileScopeLock, ...expectedProofPaths, ...laneLifecycleScopePatterns(issueId)];
+  // UTV2-1529: a CODEOWNERS-granted `scope-override/v1` comment is a sanctioned
+  // widening of the pinned lock, and the PRE-merge gate already honors it
+  // (.github/workflows/file-scope-lock-check.yml -> scripts/ci/file-scope-guard.ts
+  // --override-file). S1 knew nothing about overrides, so an override that was
+  // honored AT MERGE was invisible AT CLOSEOUT and the lane could not reach a
+  // terminal state -- while still holding its file_scope_lock against every
+  // later lane on the same paths.
+  //
+  // `authorizedOverridePaths` is resolved by the CALLER
+  // (resolveAuthorizedScopeOverridePaths) and is already bound to this lane's
+  // issue, this lane's PR, and the merged PR's exact head SHA. This function
+  // stays pure and never talks to GitHub, so the binding rules are testable on
+  // their own and a caller that resolves nothing simply gets today's behaviour.
+  const allowedPatterns = [
+    ...fileScopeLock,
+    ...expectedProofPaths,
+    ...laneLifecycleScopePatterns(issueId),
+    ...authorizedOverridePaths,
+  ];
   const outOfScope = filesChanged.filter(
     (f) =>
       !allowedPatterns.some((pattern) => matchesLockPattern(f, pattern)) &&
@@ -894,9 +915,80 @@ export function evaluateScopeDiff(
       !f.startsWith('docs/06_status/proof/'),
   );
 
-  return outOfScope.length > 0
-    ? { status: 'fail', detail: `files_changed outside file_scope_lock: ${outOfScope.join(', ')}` }
+  if (outOfScope.length > 0) {
+    return { status: 'fail', detail: `files_changed outside file_scope_lock: ${outOfScope.join(', ')}` };
+  }
+
+  const admittedByOverride = authorizedOverridePaths.length === 0
+    ? []
+    : filesChanged.filter(
+      (f) =>
+        !([...fileScopeLock, ...expectedProofPaths, ...laneLifecycleScopePatterns(issueId)]
+          .some((pattern) => matchesLockPattern(f, pattern))) &&
+        !f.includes('deleted-file') &&
+        !f.startsWith('docs/06_status/proof/') &&
+        authorizedOverridePaths.some((pattern) => matchesLockPattern(f, pattern)),
+    );
+
+  return admittedByOverride.length > 0
+    ? {
+      status: 'pass',
+      detail: 'all files_changed are within file_scope_lock or proof paths; '
+        + `admitted by authorized scope-override/v1: ${admittedByOverride.join(', ')}`,
+    }
     : { status: 'pass', detail: 'all files_changed are within file_scope_lock or proof paths' };
+}
+
+/**
+ * Resolve which paths an authorized `scope-override/v1` comment grants THIS lane.
+ *
+ * Every rule below is load-bearing and independently mutation-tested; each one
+ * is the difference between a sanctioned widening and a forgeable one:
+ *
+ *   1. author must be a CODEOWNER and not a Bot -- a PR's own diff cannot forge
+ *      a comment, because GitHub attests to who posted it, but any *other*
+ *      account could post one.
+ *   2. `Issue:` must equal this manifest's issue id -- another lane's override
+ *      grants this lane nothing.
+ *   3. `PR:` must equal this lane's PR number -- an override written for a
+ *      different PR grants nothing.
+ *   4. `Head-SHA:` must equal the merged PR's head SHA -- an override pinned to
+ *      a superseded head grants nothing, exactly as the pre-merge gate requires.
+ *
+ * Fails closed: a null/absent head SHA or PR number resolves NOTHING rather
+ * than resolving everything, so an unreadable comment list can never be read as
+ * "override granted".
+ */
+export function resolveAuthorizedScopeOverridePaths(
+  comments: Array<{ body?: string; user?: { login?: string; type?: string } | null }>,
+  binding: { issueId: string; prNumber: number | null; headSha: string | null },
+  authorizedLogins: ReadonlySet<string> = PM_VERDICT_CODEOWNERS,
+): string[] {
+  // Mirrors file-scope-guard.ts:148 -- an unresolved issue, PR number or head
+  // resolves NOTHING rather than everything.
+  if (!binding.issueId || binding.prNumber === null || !binding.headSha) return [];
+
+  const granted: string[] = [];
+  for (const comment of comments) {
+    if (!comment.body) continue;
+    if (comment.user?.type === 'Bot') continue;
+    const login = comment.user?.login;
+    if (!login || !authorizedLogins.has(login)) continue;
+
+    const parsed = parseScopeOverrideComment(comment.body);
+    if (!parsed) continue;
+    if (parsed.issue_id.toUpperCase() !== binding.issueId.toUpperCase()) continue;
+    if (parsed.pr_number !== binding.prNumber) continue;
+    // EXACT equality, deliberately not shaMatches(): this mirrors
+    // scripts/ci/file-scope-guard.ts:156 byte-for-byte. An authorization
+    // artifact must bind one head, and shaMatches() accepts a >=7-char prefix,
+    // which would admit an override pinned less precisely than the pre-merge
+    // gate accepts. The two gates must answer this question identically.
+    if (parsed.head_sha !== binding.headSha) continue;
+
+    granted.push(...parsed.paths);
+  }
+  return [...new Set(granted)];
 }
 
 export function evaluateT2ProofEvidence(input: {
@@ -1531,11 +1623,36 @@ export async function runTruthCheck(
       }
     }
 
+    // UTV2-1529: read the same CODEOWNERS-granted scope-override/v1 comments the
+    // PRE-merge `File scope lock` check already honors, so an override that was
+    // honored at merge is not invisible at closeout. Fails closed: any error
+    // resolving them leaves `authorizedOverridePaths` empty and S1 behaves
+    // exactly as it did before this change.
+    let authorizedOverridePaths: string[] = [];
+    if (githubToken) {
+      try {
+        const overrideComments = await fetchGitHubPullRequestComments(
+          prRef.owner,
+          prRef.repo,
+          prRef.number,
+          githubToken,
+        );
+        authorizedOverridePaths = resolveAuthorizedScopeOverridePaths(overrideComments, {
+          issueId: manifest.issue_id,
+          prNumber: prRef.number,
+          headSha: typeof pullRequest.head?.sha === 'string' ? pullRequest.head.sha : null,
+        });
+      } catch {
+        authorizedOverridePaths = [];
+      }
+    }
+
     const scopeDiff = evaluateScopeDiff(
       manifest.files_changed,
       manifest.file_scope_lock,
       manifest.expected_proof_paths,
       manifest.issue_id,
+      authorizedOverridePaths,
     );
     addCheck('S1', scopeDiff.status, scopeDiff.detail);
 

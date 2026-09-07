@@ -6,7 +6,7 @@
   "proof_profile": "app-runtime",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
     "verified_source_sha": "215fd9fac360c1ed1411fc10664dd5e4bf361f95",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
@@ -15,8 +15,8 @@
       "pnpm_test_db": "PASS - 'Writable DB proof (staging only)' job 101767960316 succeeded against staging in run 34129880790 at this exact anchor SHA. `ci:assert-staging` logged 'OK: target is the approved staging project'; `pnpm test:db` reported '# tests 7 / # pass 7 / # fail 0 / # skipped 0', duration_ms 105284.032055; the `test:t1-proof:live` chain then ran with '# skipped 0' throughout, including this lane's own new suite at 3/3, duration_ms 23573.388474. https://github.com/griff843/Unit-Talk-v2/actions/runs/34129880790/job/101767960316",
       "r_level_check": "PASS - https://github.com/griff843/Unit-Talk-v2/actions/runs/34079964897/job/101613260148"
     },
-    "sha_type": "head_sha",
-    "bound_at": "2026-09-07T14:12:00Z"
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-07T20:23:21.936Z"
   },
   "static_proof": {
     "status": "PASS",
@@ -25,39 +25,98 @@
     "ci_receipt": "The required `verify` check reproduced the identical verify:static chain in CI at 215fd9fac360c1ed1411fc10664dd5e4bf361f95 and passed: every TAP block in job 101770407801 totals 6650 tests, 6650 pass, 0 fail, 0 skipped. https://github.com/griff843/Unit-Talk-v2/actions/runs/34129880790/job/101770407801"
   },
   "runtime_proof": {
-    "status": "PASS",
-    "environment": "staging Supabase, via the CI 'Writable DB proof (staging only)' job pinned by scripts/ci/assert-staging-target.ts - never production",
-    "command": "pnpm test:live-db (pnpm test:db && pnpm test:t1-proof:live)",
-    "receipt": {
-      "run_id": "34129880790",
-      "job_id": "101767960316",
-      "head_sha": "215fd9fac360c1ed1411fc10664dd5e4bf361f95",
-      "test_db": {
-        "tests": 7,
-        "pass": 7,
-        "fail": 0,
-        "skipped": 0,
-        "duration_ms": 105284.032055
+    "command": "pnpm test:db",
+    "supabase_project": "xskgrzbteyqdufktjrjx",
+    "test_file": "apps/api/src/database-smoke.test.ts",
+    "tests": 7,
+    "pass": 7,
+    "fail": 0,
+    "queries": [
+      {
+        "table": "picks,submissions",
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured (ok 1, 9472.87ms)"
       },
-      "t1_proof_utv2_1842": {
-        "file": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
-        "tests": 3,
-        "pass": 3,
-        "fail": 0,
-        "skipped": 0,
-        "duration_ms": 23573.388474,
-        "subtests": [
-          "ok 1 - UTV2-1842 live DB: a manual coverage-gap Track Only pick persists with honest provenance and creates no delivery row",
-          "ok 2 - UTV2-1842 live DB: the event-existence gate is still armed - a smart-form pick with no server-validated fallback is refused",
-          "ok 3 - UTV2-1842 live DB: the same fallback kind submitted delivery-eligible is refused by the gate and persists nothing"
-        ]
+      {
+        "table": "pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row (ok 2, 8902.81ms)"
       },
-      "started_at": "2026-09-07T13:55:49Z",
-      "completed_at": "2026-09-07T14:03:52Z"
-    },
-    "significance": "These suites are `{ skip: skipReason }`-gated on SUPABASE_SERVICE_ROLE_KEY, so an absent credential yields a passing job with every test skipped. `skipped: 0` in both blocks, corroborated by 105s for seven test:db tests and 23.6s for three live submissions, is what establishes they actually executed against staging rather than short-circuiting. Test 3 is the case that failed at the previous binding with 'Missing expected rejection': its payload was byte-identical to test 1 except for distributionMode, and computeSubmissionIdempotencyKey (submission-service.ts:80-90) hashes source|market|selection|line|odds|eventName and not metadata, so it matched test 1's key and returned test 1's pick from the duplicate short-circuit at :150-195 -- which runs before the event gate at :203. The fixture now varies a run-scoped caseLabel through selection and eventName, neither of which waivesEventExistenceGate consults, leaving distributionMode as the only predicate input that differs.",
-    "containment_note": "This lane was authored on a workstation under production containment, where SUPABASE_URL is the documented 127.0.0.1:1 placeholder and no live database is reachable. The manifest therefore records t1_live_db_precondition: 'deferred_to_ci' under the route B admission ratified 2026-09-07. The deferral moves where the live-DB evidence is obtained, not whether it is obtained: truth-check G6 re-asserts both `verify` and `Writable DB proof (staging only)` directly on the merge SHA at closeout and refuses without them.",
-    "non_vacuity": "The live suite was not mutation-tested; mutating it costs a full staging run. Its anti-vacuity control is inside the suite and is stronger than a build-level mutation would have been: both tests run in the same process, against the same database, with the same armed `events` table and the same run-unique event name matching no row. The ONLY difference is whether the submission carries a server-validated fallback outcome. Test 2 was refused and test 1 was accepted, which isolates the waiver as the cause of the acceptance. The predicate itself is separately mutation-tested four ways in process."
+      {
+        "table": "audit_log,distribution_outbox,distribution_receipts,pick_lifecycle,picks,submissions",
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes (ok 3, 9444.79ms)"
+      },
+      {
+        "table": "audit_log,pick_lifecycle,picks,settlement_records,submissions",
+        "description": "UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row (ok 4, 9327.68ms)"
+      },
+      {
+        "table": "unknown (no literal .from() table reference found in test source)",
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport (ok 5, 66.42ms)"
+      },
+      {
+        "table": "picks,settlement_records,submissions",
+        "description": "UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows (ok 6, 9086.72ms)"
+      },
+      {
+        "table": "audit_log,picks,settlement_records,submissions",
+        "description": "UTV2-996: correction chain is additive — original settlement row is not mutated (ok 7, 9057.81ms)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_receipts",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "distribution_outbox",
+        "count": 11,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "system_runs",
+        "count": 1,
+        "status": "reset (rows deleted)"
+      },
+      {
+        "table": "sports",
+        "count": 9,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "cappers",
+        "count": 1,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_families",
+        "count": 6,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "selection_types",
+        "count": 3,
+        "status": "upserted (synthetic reference rows)"
+      },
+      {
+        "table": "market_types",
+        "count": 133,
+        "status": "upserted (synthetic reference rows)"
+      }
+    ],
+    "row_counts_captured_at": "2026-09-07T17:07:38.515Z",
+    "row_counts_note": "Harvested automatically by ops:proof-generate's CI-DB-proof auto-harvest (UTV2-1641) from the \"Seed synthetic staging fixtures\" step's log of CI job \"Writable DB proof (staging only)\" (run 34146186542, job 101818611504), which ran immediately before the smoke-test step in the same job, on head 40b0f19f479790770c3e71769a61df4dc40e3efc. Not re-run locally -- this host has no credential to staging xskgrzbteyqdufktjrjx.",
+    "ci_run": {
+      "workflow": "CI",
+      "job": "Writable DB proof (staging only)",
+      "run_id": 34146186542,
+      "run_attempt": 1,
+      "job_id": 101818611504,
+      "job_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/34146186542/job/101818611504",
+      "target_head_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+      "target_merge_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+      "conclusion": "success",
+      "identity_source": "merge_sha_run"
+    }
   },
   "mutation_controls": [
     {

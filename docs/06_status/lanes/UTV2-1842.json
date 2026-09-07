@@ -7,23 +7,45 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1842-smart-form-submission-repair",
   "branch": "claude/utv2-1842-smart-form-submission-repair",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1529",
-  "files_changed": [],
+  "files_changed": [
+    ".lane/lanes/runtime.yml",
+    "apps/api/src/controllers/submit-pick-controller.test.ts",
+    "apps/api/src/controllers/submit-pick-controller.ts",
+    "apps/api/src/smart-form-validation.test.ts",
+    "apps/api/src/smart-form-validation.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+    "docs/05_operations/db-writer-classification.json",
+    "docs/06_status/proof/UTV2-1842/diff-summary.md",
+    "docs/06_status/proof/UTV2-1842/evidence.json",
+    "docs/06_status/proof/UTV2-1842/verification.md",
+    "package.json"
+  ],
   "file_scope_lock": [
     "apps/api/src/**"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1842/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-09-07T03:20:49.618Z",
-  "heartbeat_at": "2026-09-07T03:32:01.095Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-09-07T20:23:27.469Z",
+  "closed_at": "2026-09-07T20:23:27.469Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/claude/utv2-1842-smart-form-submission-repair.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-07T20:23:24.585Z",
+      "verdict": "pass",
+      "merge_sha": "40b0f19f479790770c3e71769a61df4dc40e3efc",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "t1_live_db_precondition": "deferred_to_ci",
   "execution_location": {
