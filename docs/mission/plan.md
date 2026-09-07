@@ -324,6 +324,47 @@ and that is reserved.
 
 **This is Wave 0 item 1 and the one thing on the Milestone 1 critical path.**
 
+## Concurrent session ownership — Claude and Codex, 2026-09-07
+
+Griff directed on 2026-09-07 that **Codex owns tracker independence in a separate session** while
+this session continues the **Smart Form repair**. Two independent sessions on one repository is
+exactly the condition that produced the 2026-09-03 drift incident, so the split is written down
+here rather than held in either session's context, and it is enforced by the mechanisms that
+already exist rather than by good intentions.
+
+**The enforcement is mechanical, not conventional.** `file_scope_lock` is pinned at lane-start and
+cannot be widened by an agent; preflight `PL6` refuses a lane whose candidate files overlap any
+active manifest; and `.ops/leases/` refuses a second lane on the same files. A session that
+declares its scope honestly at lane-start cannot silently take the other's files. Nothing below
+replaces those checks — it tells each session what to declare so the checks never have to fire.
+
+| Owner | Files | Why |
+|---|---|---|
+| **Codex** | `scripts/ops/preflight.ts`, `scripts/ops/truth-check-lib.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**` | items 1, 3, 5, 6, 7 of the change set above, and the reserved items 8–11 if PM ever releases them |
+| **Claude (this session)** | `apps/smart-form/**` | Wave 1 steps 2–3 |
+| **Neither, without asking first** | root `package.json`, `.lane/lanes/governance.yml`, `docs/mission/plan.md` | genuinely shared; see below |
+
+**Root `package.json` is the one real collision, and this session has given it up.** The plan
+already records that a lane which adds a `*.test.ts` must declare `package.json`, because `pnpm
+verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on an unreachable test file and the only wiring
+point is the `test:ops` script. Codex's work is likely to add test files and will need it. This
+session therefore wires the Smart Form e2e suite through **`apps/smart-form/package.json`'s own
+`verify` script**, which `verify:static` already invokes as `pnpm --filter @unit-talk/smart-form
+verify` — no root edit, no overlap, and one less thing to serialize. UTV2-1850's declared scope is
+`apps/smart-form/**` alone for this reason.
+
+**Merges are serialized, and `strict: true` is what does it.** Branch protection requires a branch
+to be current with `main` before merging, so two ready PRs cannot land simultaneously — the second
+resyncs. The rule each session follows is: check for an open PR from the other session in a
+mergeable state before merging, and land the one that is already green rather than racing it. The
+sanctioned resync is `pnpm ops:merge-wrapper main-sync`; a direct `git push origin main` is
+prohibited regardless of how convenient the ordering makes it look.
+
+**`docs/mission/plan.md` is shared and is being edited by this lane right now (UTV2-1849, #1527).**
+Codex should reconcile its own findings into this file *after* #1527 lands, not concurrently.
+
+---
+
 ## Execution waves
 
 Production-first. The waves are a dependency ordering, not a queue: work in a later wave that
