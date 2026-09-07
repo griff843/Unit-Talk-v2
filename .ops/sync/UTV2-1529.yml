@@ -1,0 +1,285 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1529
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1529
+  objective: Closeout and review gates must consume trusted scope-override/v1
+    authorization
+  acceptance_criteria:
+    - |-
+      ## Defect class
+
+      A CODEOWNERS-granted `scope-override/v1` comment is honored by the **pre-merge** gate
+      (`.github/workflows/file-scope-lock-check.yml`, which collects authorized comments into
+      `.out/scope-overrides.json` and passes `--override-file` to `scripts/ci/file-scope-guard.ts`)
+      and by `scripts/ops/bootstrap-authorization.ts`.
+
+      No other gate knows overrides exist. `grep -c "scope-override" scripts/ops/truth-check-lib.ts`
+      returns **0**. Same duplication-without-parity class as the executor-result-validator inline copy
+      ([UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)).
+
+      ## Limb 1 — `truth-check` S1 (BLOCKING PRODUCTION, staffed here)
+
+      Measured 2026-09-07 on [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (#1529 → PR #1529, merged `40b0f19f4`).
+
+      Griff granted a `scope-override/v1` on PR #1529, authored as `griff843`, pinned to head SHA
+      `2afdc79256fc881a42f1e26404582faef64b7883` (which *is* the merged PR's head SHA), naming exactly:
+
+      * `package.json`
+      * `docs/05_operations/db-writer-classification.json`
+      * `.lane/lanes/runtime.yml`
+
+      `File scope lock` honored it and passed. Post-merge closeout then failed on:
+
+      ```
+      [FAIL] S1 files_changed outside file_scope_lock: .lane/lanes/runtime.yml, docs/05_operations/db-writer-classification.json, package.json
+      ```
+
+      (run `34151974663`, and the original push-triggered run `34146186551`).
+
+      `evaluateScopeDiff` (`scripts/ops/truth-check-lib.ts:866-899`) takes only `filesChanged`,
+      `fileScopeLock`, `expectedProofPaths`, `issueId`. There is no override input.
+
+      ### Why this blocks delivery now
+
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s manifest is stuck `in_review` on `main` holding `file_scope_lock: ["apps/api/src/**"]`.
+      `ACTIVE_LOCK_STATUSES` includes it, so it holds that lock against every later lane. Measured
+      consequences:
+
+      * `File scope lock` red on #1531 ([UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds)): *"apps/api/src/smart-form-validation.ts locked by*
+        [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)*"*.
+      * The Smart Form reference-data repair cannot open a lane on `apps/api/src/handlers/reference-data.ts`
+        or `apps/api/src/smart-form-validation.ts` at all.
+
+      Both are on the Milestone 1 critical path.
+
+      ### Do NOT work around it
+
+      Narrowing `manifest.files_changed` would make S1 pass by falsifying the record of what the PR
+      actually changed. `ops:lane-close --repair-merged` from the root checkout refuses with
+      `repair_required_via_pr` independently of S1.
+
+      ### Fix
+
+      `scripts/ci/scope-override-comment-parser.ts` already exists and is unit-tested — it mirrors the
+      workflow's inline parser. Reuse it. Resolve authorized overrides at the `runTruthCheck` call site
+      (which already has `prRef`, `githubToken`, `pullRequest.head.sha` and
+      `fetchGitHubPullRequestComments`) and pass the granted paths into `evaluateScopeDiff`.
+
+      Binding rules that must be preserved, each with a test that fails when it is removed:
+
+      1. comment author ∈ `PM_VERDICT_CODEOWNERS`, and `user.type !== 'Bot'`
+      2. `Issue:` equals this manifest's `issue_id`
+      3. `PR:` equals this manifest's PR number
+      4. `Head-SHA:` equals the merged PR's head SHA — a stale-head override grants nothing
+      5. only the listed `Paths:` are admitted; every other out-of-scope file still fails S1
+
+      An unresolvable/unreadable comment list must never be read as "override granted".
+
+      ## Limb 2 — `Return review packet` (NOT staffed here)
+
+      `scripts/ops/pr-review-packet.ts` has the same blindness. It is a **separate** defect from the
+      `pr-review-packet.ts:487-491` proof-directory scope bleed (that one is about
+      `expected_proof_paths` being an exact list rather than a `docs/06_status/proof/<ID>/**` glob, and
+      is what reds #1531). Left open deliberately; neither is a required check.
+
+      ## Acceptance
+
+      * `ops:lane-close UTV2-1842` reaches a `done` manifest on `main` through the governed post-merge
+        path, with S1 passing because the override is honored — not because the record was narrowed.
+      * All five binding rules above are mutation-tested.
+      * No change to required-check configuration, branch protection, CODEOWNERS or the merge gate.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Defect class
+      A CODEOWNERS-granted `scope-override/v1` comment is honored by the **pre-merge** gate
+      (`.github/workflows/file-scope-lock-check.yml`, which collects authorized comments into
+      `.out/scope-overrides.json` and passes `--override-file` to `scripts/ci/file-scope-guard.ts`)
+      and by `scripts/ops/bootstrap-authorization.ts`.
+
+      No other gate knows overrides exist. `grep -c "scope-override" scripts/ops/truth-check-lib.ts`
+      returns **0**. Same duplication-without-parity class as the executor-result-validator inline copy
+      ([UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)).
+    - |-
+      Limb 1 — `truth-check` S1 (BLOCKING PRODUCTION, staffed here)
+      Measured 2026-09-07 on [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (#1529 → PR #1529, merged `40b0f19f4`).
+
+      Griff granted a `scope-override/v1` on PR #1529, authored as `griff843`, pinned to head SHA
+      `2afdc79256fc881a42f1e26404582faef64b7883` (which *is* the merged PR's head SHA), naming exactly:
+
+      * `package.json`
+      * `docs/05_operations/db-writer-classification.json`
+      * `.lane/lanes/runtime.yml`
+
+      `File scope lock` honored it and passed. Post-merge closeout then failed on:
+
+      ```
+      [FAIL] S1 files_changed outside file_scope_lock: .lane/lanes/runtime.yml, docs/05_operations/db-writer-classification.json, package.json
+      ```
+
+      (run `34151974663`, and the original push-triggered run `34146186551`).
+
+      `evaluateScopeDiff` (`scripts/ops/truth-check-lib.ts:866-899`) takes only `filesChanged`,
+      `fileScopeLock`, `expectedProofPaths`, `issueId`. There is no override input.
+
+      ### Why this blocks delivery now
+
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s manifest is stuck `in_review` on `main` holding `file_scope_lock: ["apps/api/src/**"]`.
+      `ACTIVE_LOCK_STATUSES` includes it, so it holds that lock against every later lane. Measured
+      consequences:
+
+      * `File scope lock` red on #1531 ([UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds)): *"apps/api/src/smart-form-validation.ts locked by*
+        [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)*"*.
+      * The Smart Form reference-data repair cannot open a lane on `apps/api/src/handlers/reference-data.ts`
+        or `apps/api/src/smart-form-validation.ts` at all.
+
+      Both are on the Milestone 1 critical path.
+
+      ### Do NOT work around it
+
+      Narrowing `manifest.files_changed` would make S1 pass by falsifying the record of what the PR
+      actually changed. `ops:lane-close --repair-merged` from the root checkout refuses with
+      `repair_required_via_pr` independently of S1.
+
+      ### Fix
+
+      `scripts/ci/scope-override-comment-parser.ts` already exists and is unit-tested — it mirrors the
+      workflow's inline parser. Reuse it. Resolve authorized overrides at the `runTruthCheck` call site
+      (which already has `prRef`, `githubToken`, `pullRequest.head.sha` and
+      `fetchGitHubPullRequestComments`) and pass the granted paths into `evaluateScopeDiff`.
+
+      Binding rules that must be preserved, each with a test that fails when it is removed:
+
+      1. comment author ∈ `PM_VERDICT_CODEOWNERS`, and `user.type !== 'Bot'`
+      2. `Issue:` equals this manifest's `issue_id`
+      3. `PR:` equals this manifest's PR number
+      4. `Head-SHA:` equals the merged PR's head SHA — a stale-head override grants nothing
+      5. only the listed `Paths:` are admitted; every other out-of-scope file still fails S1
+
+      An unresolvable/unreadable comment list must never be read as "override granted".
+    - >-
+      Limb 2 — `Return review packet` (NOT staffed here)
+
+      `scripts/ops/pr-review-packet.ts` has the same blindness. It is a
+      **separate** defect from the
+
+      `pr-review-packet.ts:487-491` proof-directory scope bleed (that one is
+      about
+
+      `expected_proof_paths` being an exact list rather than a
+      `docs/06_status/proof/<ID>/**` glob, and
+
+      is what reds #1531). Left open deliberately; neither is a required check.
+    - >-
+      Acceptance
+
+      * `ops:lane-close UTV2-1842` reaches a `done` manifest on `main` through
+      the governed post-merge
+        path, with S1 passing because the override is honored — not because the record was narrowed.
+      * All five binding rules above are mutation-tested.
+
+      * No change to required-check configuration, branch protection, CODEOWNERS
+      or the merge gate.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1529/closeout-and-review-gates-must-consume-trusted-scope-overridev1
+    title: Closeout and review gates must consume trusted scope-override/v1
+      authorization
+    description: |-
+      ## Defect class
+
+      A CODEOWNERS-granted `scope-override/v1` comment is honored by the **pre-merge** gate
+      (`.github/workflows/file-scope-lock-check.yml`, which collects authorized comments into
+      `.out/scope-overrides.json` and passes `--override-file` to `scripts/ci/file-scope-guard.ts`)
+      and by `scripts/ops/bootstrap-authorization.ts`.
+
+      No other gate knows overrides exist. `grep -c "scope-override" scripts/ops/truth-check-lib.ts`
+      returns **0**. Same duplication-without-parity class as the executor-result-validator inline copy
+      ([UTV2-1688](https://linear.app/unit-talk-v2/issue/UTV2-1688/executor-result-validator-rejects-the-bootstrap-branch-namespace)).
+
+      ## Limb 1 — `truth-check` S1 (BLOCKING PRODUCTION, staffed here)
+
+      Measured 2026-09-07 on [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (#1529 → PR #1529, merged `40b0f19f4`).
+
+      Griff granted a `scope-override/v1` on PR #1529, authored as `griff843`, pinned to head SHA
+      `2afdc79256fc881a42f1e26404582faef64b7883` (which *is* the merged PR's head SHA), naming exactly:
+
+      * `package.json`
+      * `docs/05_operations/db-writer-classification.json`
+      * `.lane/lanes/runtime.yml`
+
+      `File scope lock` honored it and passed. Post-merge closeout then failed on:
+
+      ```
+      [FAIL] S1 files_changed outside file_scope_lock: .lane/lanes/runtime.yml, docs/05_operations/db-writer-classification.json, package.json
+      ```
+
+      (run `34151974663`, and the original push-triggered run `34146186551`).
+
+      `evaluateScopeDiff` (`scripts/ops/truth-check-lib.ts:866-899`) takes only `filesChanged`,
+      `fileScopeLock`, `expectedProofPaths`, `issueId`. There is no override input.
+
+      ### Why this blocks delivery now
+
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s manifest is stuck `in_review` on `main` holding `file_scope_lock: ["apps/api/src/**"]`.
+      `ACTIVE_LOCK_STATUSES` includes it, so it holds that lock against every later lane. Measured
+      consequences:
+
+      * `File scope lock` red on #1531 ([UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds)): *"apps/api/src/smart-form-validation.ts locked by*
+        [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)*"*.
+      * The Smart Form reference-data repair cannot open a lane on `apps/api/src/handlers/reference-data.ts`
+        or `apps/api/src/smart-form-validation.ts` at all.
+
+      Both are on the Milestone 1 critical path.
+
+      ### Do NOT work around it
+
+      Narrowing `manifest.files_changed` would make S1 pass by falsifying the record of what the PR
+      actually changed. `ops:lane-close --repair-merged` from the root checkout refuses with
+      `repair_required_via_pr` independently of S1.
+
+      ### Fix
+
+      `scripts/ci/scope-override-comment-parser.ts` already exists and is unit-tested — it mirrors the
+      workflow's inline parser. Reuse it. Resolve authorized overrides at the `runTruthCheck` call site
+      (which already has `prRef`, `githubToken`, `pullRequest.head.sha` and
+      `fetchGitHubPullRequestComments`) and pass the granted paths into `evaluateScopeDiff`.
+
+      Binding rules that must be preserved, each with a test that fails when it is removed:
+
+      1. comment author ∈ `PM_VERDICT_CODEOWNERS`, and `user.type !== 'Bot'`
+      2. `Issue:` equals this manifest's `issue_id`
+      3. `PR:` equals this manifest's PR number
+      4. `Head-SHA:` equals the merged PR's head SHA — a stale-head override grants nothing
+      5. only the listed `Paths:` are admitted; every other out-of-scope file still fails S1
+
+      An unresolvable/unreadable comment list must never be read as "override granted".
+
+      ## Limb 2 — `Return review packet` (NOT staffed here)
+
+      `scripts/ops/pr-review-packet.ts` has the same blindness. It is a **separate** defect from the
+      `pr-review-packet.ts:487-491` proof-directory scope bleed (that one is about
+      `expected_proof_paths` being an exact list rather than a `docs/06_status/proof/<ID>/**` glob, and
+      is what reds #1531). Left open deliberately; neither is a required check.
+
+      ## Acceptance
+
+      * `ops:lane-close UTV2-1842` reaches a `done` manifest on `main` through the governed post-merge
+        path, with S1 passing because the override is honored — not because the record was narrowed.
+      * All five binding rules above are mutation-tested.
+      * No change to required-check configuration, branch protection, CODEOWNERS or the merge gate.
+    captured_at: 2026-09-07T19:45:54.210Z
+    description_sha256: da86c7b0331c5fa799533abd17782e58049d733296358914ab1bbbaa840aee59
+  contract_hash: 62fb08b9e5f0f17609b2fb1854170ff700c711835280fda1978ebef321870b91
