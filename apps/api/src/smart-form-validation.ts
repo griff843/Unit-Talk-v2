@@ -643,12 +643,15 @@ async function findCanonicalCoverage(
   const enteredTokens = aliasTokens(displayName);
   if (enteredTokens.length === 0) return null;
 
-  // The catalog first, and not only as an optimisation. `searchTeams` reads the
-  // `teams` table and `searchPlayers` joins current assignments; both are empty
-  // in production today, so a search-only proof returns null for every name in
-  // every sport and the guard degrades to accepting whatever it is told. The
-  // catalog reads `participants`, which is populated, so this is the branch
-  // that actually carries the refusal.
+  // The catalog first, and not only as an optimisation. All three reference-data
+  // reads now agree on one populated source: `getCatalog`, `searchTeams` and
+  // `searchPlayers` all read `participants` (UTV2-1854). Before that, `searchTeams`
+  // read the canonical `teams` table and `searchPlayers` joined
+  // `player_team_assignments`, both of which are empty under parked provider
+  // ingestion -- so a search-only proof returned null for every name in every sport
+  // and this guard degraded to accepting whatever it was told. The catalog is still
+  // tried first because it is one read of the whole sport and an exact alias match
+  // over the same rows the searches then rank.
   const catalog = await referenceData.getCatalog();
   const sport = catalog.sports.find((candidate) => candidate.id === sportId);
   for (const team of sport?.teams ?? []) {

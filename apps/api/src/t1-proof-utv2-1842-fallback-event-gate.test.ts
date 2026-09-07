@@ -37,14 +37,37 @@
  *
  * WHAT IT DELIBERATELY DOES NOT PROVE
  * -----------------------------------
- * It does not prove the structured team-fallback branch against a live database.
- * That branch requires a canonical team-sport catalog with coverage for exactly
- * one side of a matchup, and populating one is reference-data seeding under a
- * reserved provider decision. That branch's waiver is proven by the unit suite
- * and by mutation, and this file says so rather than implying live coverage it
- * does not have.
- *
  * It does not prove the browser half of Milestone 1. It starts at the API.
+ *
+ * WHAT UTV2-1854 ADDED
+ * --------------------
+ * This block used to say the structured team-fallback branch could not be proven
+ * against a live database, because that branch needed a canonical team catalog and
+ * populating one was reference-data seeding under a reserved provider decision.
+ * That constraint is gone: the branch resolves from `participants`, the provider
+ * observation layer every other reference-data surface already reads, so proving it
+ * needs two participant rows rather than a seeded catalog. The paragraph is
+ * corrected here rather than left standing as a disclaimer for a limit that no
+ * longer applies -- a stale "this is not proven" is as misleading as a stale claim
+ * that it is.
+ *
+ * 4. A structured Track Only pick whose two sides are participant ids is ACCEPTED,
+ *    and the ids that were verified are the ids that are PERSISTED. Asserting the
+ *    ids rather than the display names is the point: a fabricated resolution
+ *    survives a name check and does not survive a `participants.id` check.
+ * 5. That pick likewise creates ZERO `distribution_outbox` rows.
+ * 6. The control for 4: the same payload with one side naming no participants row
+ *    is REFUSED, and refused *for a participant-identity reason* rather than any
+ *    other. Without the reason assertion an unrelated refusal would pass as this
+ *    control.
+ *
+ * The two team rows those tests use are fixtures in the run's own namespace, tagged
+ * `utv2-1854-<runId>` in both `external_id` and `display_name`, deleted by the
+ * `after` hook with a leak assertion. Staging's `participants` table is empty
+ * (measured 2026-09-07), so depending on ambient rows would make the proof
+ * conditional on fixture state it does not control. Creating two rows the test owns
+ * and removes is not reference-data seeding: nothing outside this file reads them,
+ * and no production database is touched.
  *
  * FIXTURES
  * --------
@@ -432,3 +455,217 @@ test(
     );
   },
 );
+
+// ===========================================================================
+// UTV2-1854 — the structured team-fallback branch, against a live database.
+//
+// The header block above says this file "does not prove the structured
+// team-fallback branch against a live database", because that branch needed a
+// canonical team catalog and populating one was reference-data seeding under a
+// reserved provider decision. UTV2-1854 removed that constraint: the branch now
+// resolves from `participants`, which is the provider observation layer the rest
+// of reference data already reads. The paragraph is corrected in this lane
+// rather than left standing as a disclaimer for a limit that no longer exists.
+//
+// The two team rows below are fixtures in this run's own namespace, created and
+// deleted here. They are NOT reference-data seeding: nothing outside this file
+// reads them, they carry the run id in both `external_id` and `display_name`,
+// and the `after` hook asserts they are gone. Staging's `participants` table is
+// empty (measured 2026-09-07), so relying on ambient rows would make this test
+// conditional on fixture state it does not control.
+// ===========================================================================
+
+/** `participants.id` of this run's two fixture teams, in [away, home] order. */
+let fixtureTeamIds: { away: string; home: string } | null = null;
+const fixtureParticipantExternalIds: string[] = [];
+
+async function createFixtureTeams(): Promise<{ away: string; home: string }> {
+  if (fixtureTeamIds) return fixtureTeamIds;
+  const rows = [
+    {
+      external_id: `utv2-1854-${RUN_ID}-away`,
+      participant_type: 'team',
+      sport: 'NBA',
+      display_name: `UTV2-1854 Away Club ${RUN_ID}`,
+      metadata: { proof_run: RUN_ID, proof_issue: 'UTV2-1854' },
+    },
+    {
+      external_id: `utv2-1854-${RUN_ID}-home`,
+      participant_type: 'team',
+      sport: 'NBA',
+      display_name: `UTV2-1854 Home Club ${RUN_ID}`,
+      metadata: { proof_run: RUN_ID, proof_issue: 'UTV2-1854' },
+    },
+  ];
+  const resp = await fetch(`${supabaseUrl}/rest/v1/participants`, {
+    method: 'POST',
+    headers: { ...authHeaders(), Prefer: 'return=representation' },
+    body: JSON.stringify(rows),
+  });
+  const body = (await resp.json()) as Array<{ id: string; external_id: string }>;
+  assert.ok(resp.ok, `fixture team creation failed: ${JSON.stringify(body)}`);
+  assert.equal(body.length, 2, `expected 2 fixture teams, created ${body.length}`);
+  for (const row of body) fixtureParticipantExternalIds.push(row.external_id);
+  const away = body.find((row) => row.external_id.endsWith('-away'))!;
+  const home = body.find((row) => row.external_id.endsWith('-home'))!;
+  fixtureTeamIds = { away: away.id, home: home.id };
+  return fixtureTeamIds;
+}
+
+function structuredFallbackPayload(
+  teams: { away: string; home: string },
+  // No `caseLabel` override here, deliberately, unlike `manualCoverageGapPayload`
+  // above: the refusal control below is rejected by `validateSmartFormRelationships`
+  // before `submitPick` computes an idempotency key, so the two cases may share a
+  // selection and event name without the accepted one being observed as a replay.
+  // See the NOTE at the end of this file.
+  overrides: { awayId?: string } = {},
+): SubmissionPayload {
+  const awayName = `UTV2-1854 Away Club ${RUN_ID}`;
+  const homeName = `UTV2-1854 Home Club ${RUN_ID}`;
+  // `validateStructuredMatchupName` binds the persisted name to the two verified
+  // sides, away first -- the same "Away @ Home" the Smart Form derives itself.
+  const eventName = `${awayName} @ ${homeName}`;
+  return {
+    source: 'smart-form',
+    market: 'nba-spread',
+    selection: awayName,
+    line: -3.5,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 0.6,
+    eventName,
+    metadata: {
+      sport: 'NBA',
+      distributionMode: 'track-only',
+      proof_run: RUN_ID,
+      proof_issue: 'UTV2-1854',
+      participantResolution: {
+        resolution: 'canonical',
+        sportId: 'NBA',
+        eventId: null,
+        enteredEventName: eventName,
+        away: {
+          participantType: 'team',
+          participantId: overrides.awayId ?? teams.away,
+          displayName: awayName,
+        },
+        home: {
+          participantType: 'team',
+          participantId: teams.home,
+          displayName: homeName,
+        },
+      },
+    },
+  } as unknown as SubmissionPayload;
+}
+
+test(
+  'UTV2-1854 live DB: a structured Track Only pick resolves both sides from participants, persists their ids, and creates no delivery row',
+  { skip: skipReason },
+  async () => {
+    await armTheGate('structured');
+    const teams = await createFixtureTeams();
+
+    const response = await submitPickController(structuredFallbackPayload(teams), repositories);
+    assert.equal(
+      response.status,
+      201,
+      `the structured path must be reachable; got ${response.status} ${JSON.stringify(response.body)}`,
+    );
+    assert.ok(response.body.ok);
+    if (!response.body.ok) return;
+    const { pickId } = response.body.data;
+
+    const rows = await restQuery<PickRow>(`picks?id=eq.${pickId}&select=id,metadata`);
+    assert.equal(rows.length, 1, `expected exactly one persisted pick, got ${rows.length}`);
+    const metadata = rows[0]!.metadata ?? {};
+    assert.equal(metadata['distributionMode'], 'track-only');
+
+    // The identities that were verified are the identities that were persisted.
+    // Asserting the ids rather than the names is the point: a name survives a
+    // fabricated resolution, a `participants.id` does not.
+    const resolution = metadata['participantResolution'] as Record<string, unknown>;
+    assert.ok(resolution, 'persisted pick must carry its participantResolution provenance');
+    assert.equal(resolution['resolution'], 'canonical');
+    assert.equal(resolution['eventId'], null);
+    assert.equal((resolution['away'] as Record<string, unknown>)['participantId'], teams.away);
+    assert.equal((resolution['home'] as Record<string, unknown>)['participantId'], teams.home);
+
+    const outbox = await restQuery<{ id: string }>(
+      `distribution_outbox?pick_id=eq.${pickId}&select=id`,
+    );
+    assert.equal(
+      outbox.length,
+      0,
+      `Track Only must create no delivery work; found ${outbox.length} distribution_outbox row(s)`,
+    );
+  },
+);
+
+test(
+  'UTV2-1854 live DB: the structured path still refuses a participant id that names no row',
+  { skip: skipReason },
+  async () => {
+    // The control for the test above. Without it, a `searchTeams` that answered
+    // with everything -- or a `validateSearchBackedTeam` that stopped checking --
+    // would make the acceptance above pass for the wrong reason.
+    await armTheGate('structured-control');
+    const teams = await createFixtureTeams();
+
+    const response = await submitPickController(
+      structuredFallbackPayload(teams, { awayId: randomUUID() }),
+      repositories,
+    );
+    assert.notEqual(
+      response.status,
+      201,
+      'a structured side naming no participants row must be refused',
+    );
+    // Assert the reason, not merely a non-201: a refusal for an unrelated cause
+    // (auth, rate limit, a malformed market) would otherwise pass as this control
+    // while proving nothing about participant verification.
+    assert.match(
+      JSON.stringify(response.body),
+      /participant|canonical|not found|unverified/iu,
+      `refused, but not for a participant-identity reason: ${JSON.stringify(response.body)}`,
+    );
+  },
+);
+
+// NOTE for the lane: the idempotency-key collision the manual fixture documents
+// does NOT apply to the refusal control above. `validateSmartFormRelationships`
+// runs in `submit-pick-controller.ts:46`, before `submitPick` computes the key at
+// `submission-service.ts:146`, so the control is refused at validation and never
+// reaches the duplicate short-circuit. The accepted case and the control may
+// therefore share selection/eventName without the acceptance being observed as an
+// idempotent replay. Assert the refusal REASON, not merely a non-201, so a
+// refusal for an unrelated reason cannot pass as this control.
+
+after(async () => {
+  // A SEPARATE hook from the arming-event cleanup above, deliberately: that one
+  // early-returns when no event was armed, and these fixture rows must be removed
+  // whenever they were created regardless of what else the run did.
+  if (skipReason || fixtureParticipantExternalIds.length === 0) return;
+
+  const encoded = fixtureParticipantExternalIds.map((id) => `"${id}"`).join(',');
+  const resp = await fetch(`${supabaseUrl}/rest/v1/participants?external_id=in.(${encoded})`, {
+    method: 'DELETE',
+    headers: { ...authHeaders(), Prefer: 'return=representation' },
+  });
+  const body = await resp.json();
+  assert.ok(resp.ok, `fixture participant cleanup failed: ${JSON.stringify(body)}`);
+  assert.equal(
+    (body as unknown[]).length,
+    fixtureParticipantExternalIds.length,
+    `expected to delete ${fixtureParticipantExternalIds.length} fixture participants, deleted ${(body as unknown[]).length}`,
+  );
+
+  // Leak assertion, same reasoning as the arming events: reference data that
+  // survives the run would make a later run's coverage answers depend on this
+  // file's leftovers.
+  const leaked = await restQuery<{ id: string }>(
+    `participants?select=id&external_id=like.utv2-1854-${RUN_ID}*`,
+  );
+  assert.equal(leaked.length, 0, `${leaked.length} UTV2-1854 fixture participant(s) leaked`);
+});
