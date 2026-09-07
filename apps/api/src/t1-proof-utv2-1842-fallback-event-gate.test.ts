@@ -613,22 +613,30 @@ test(
     await armTheGate('structured-control');
     const teams = await createFixtureTeams();
 
-    const response = await submitPickController(
-      structuredFallbackPayload(teams, { awayId: randomUUID() }),
-      repositories,
-    );
-    assert.notEqual(
-      response.status,
-      201,
-      'a structured side naming no participants row must be refused',
-    );
-    // Assert the reason, not merely a non-201: a refusal for an unrelated cause
-    // (auth, rate limit, a malformed market) would otherwise pass as this control
-    // while proving nothing about participant verification.
-    assert.match(
-      JSON.stringify(response.body),
-      /participant|canonical|not found|unverified/iu,
-      `refused, but not for a participant-identity reason: ${JSON.stringify(response.body)}`,
+    // `validateSmartFormRelationships` runs at `submit-pick-controller.ts:46` and
+    // signals a relationship refusal by THROWING an ApiError, not by returning a
+    // non-201 response -- the same shape the two UTV2-1842 refusal controls above
+    // assert. Measured against staging on 2026-09-07: the first form of this test
+    // awaited a response object and the refusal it exists to observe reached it as
+    // a rejection instead.
+    await assert.rejects(
+      () =>
+        submitPickController(
+          structuredFallbackPayload(teams, { awayId: randomUUID() }),
+          repositories,
+        ),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        // Assert the reason, not merely a rejection: a refusal for an unrelated
+        // cause (auth, rate limit, a malformed market) would otherwise pass as
+        // this control while proving nothing about participant verification.
+        assert.match(
+          err.message,
+          /participant|canonical|not found|unverified/iu,
+          `refused, but not for a participant-identity reason: ${err.message}`,
+        );
+        return true;
+      },
     );
   },
 );
