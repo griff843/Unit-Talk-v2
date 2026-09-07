@@ -17,6 +17,7 @@ import {
   evaluateTestRunLogEvidence,
   fetchCommitChecks,
   fetchGitHubPullRequestComments,
+  resolveAuthorizedScopeOverridePaths,
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
@@ -3056,4 +3057,224 @@ test('G6 is wired into the truth-check run, not merely exported', () => {
   );
   assert.match(source, /evaluateT1LiveDbPreconditionDeferral\(\{/);
   assert.match(source, /addCheck\(g6\.id, g6\.status, g6\.detail\)/);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1529 — S1 must honour the same CODEOWNERS-granted scope-override/v1
+// comments the pre-merge `File scope lock` check already honours.
+//
+// The fixture below is the VERBATIM comment Griff posted on PR #1529 (UTV2-1842)
+// on 2026-09-07, copied from the GitHub API rather than composed here. That lane
+// merged at head `2afdc7925…` with `File scope lock` green, and then could not
+// close, because S1 knew nothing about overrides and named the exact three paths
+// the override granted.
+// ---------------------------------------------------------------------------
+
+const UTV2_1842_OVERRIDE_BODY = [
+  'SCOPE_OVERRIDE: APPROVED',
+  'schema: scope-override/v1',
+  'Issue: UTV2-1842',
+  'PR: #1529',
+  'Head-SHA: 2afdc79256fc881a42f1e26404582faef64b7883',
+  'Paths:',
+  '- package.json',
+  '- docs/05_operations/db-writer-classification.json',
+  '- .lane/lanes/runtime.yml',
+  'Reason: three mandatory registration points live outside apps/api/src.',
+].join('\n');
+
+const UTV2_1842_OVERRIDE_COMMENT = {
+  body: UTV2_1842_OVERRIDE_BODY,
+  user: { login: 'griff843', type: 'User' },
+};
+
+const UTV2_1842_BINDING = {
+  issueId: 'UTV2-1842',
+  prNumber: 1529,
+  headSha: '2afdc79256fc881a42f1e26404582faef64b7883',
+};
+
+const UTV2_1842_FILES_CHANGED = [
+  'apps/api/src/submission-service.ts',
+  'package.json',
+  'docs/05_operations/db-writer-classification.json',
+  '.lane/lanes/runtime.yml',
+];
+
+test('UTV2-1529: an authorized override grants exactly the paths it lists', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], UTV2_1842_BINDING),
+    ['package.json', 'docs/05_operations/db-writer-classification.json', '.lane/lanes/runtime.yml'],
+  );
+});
+
+test('UTV2-1529: S1 fails UTV2-1842 without the override — the observed defect', () => {
+  const result = evaluateScopeDiff(
+    UTV2_1842_FILES_CHANGED,
+    ['apps/api/src/**'],
+    [],
+    'UTV2-1842',
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /package\.json/);
+  assert.match(result.detail, /db-writer-classification\.json/);
+  assert.match(result.detail, /\.lane\/lanes\/runtime\.yml/);
+});
+
+test('UTV2-1529: S1 passes UTV2-1842 once the authorized override is supplied', () => {
+  const granted = resolveAuthorizedScopeOverridePaths(
+    [UTV2_1842_OVERRIDE_COMMENT],
+    UTV2_1842_BINDING,
+  );
+  const result = evaluateScopeDiff(
+    UTV2_1842_FILES_CHANGED,
+    ['apps/api/src/**'],
+    [],
+    'UTV2-1842',
+    granted,
+  );
+  assert.strictEqual(result.status, 'pass');
+  // The pass must SAY it was an override, so an operator reading the closeout
+  // record can see the widening rather than believing the lock covered it.
+  assert.match(result.detail, /authorized scope-override\/v1/);
+  assert.match(result.detail, /package\.json/);
+});
+
+test('UTV2-1529: an override never admits a path it did not list', () => {
+  const granted = resolveAuthorizedScopeOverridePaths(
+    [UTV2_1842_OVERRIDE_COMMENT],
+    UTV2_1842_BINDING,
+  );
+  const result = evaluateScopeDiff(
+    [...UTV2_1842_FILES_CHANGED, 'packages/domain/src/scoring.ts'],
+    ['apps/api/src/**'],
+    [],
+    'UTV2-1842',
+    granted,
+  );
+  assert.strictEqual(result.status, 'fail');
+  assert.match(result.detail, /packages\/domain\/src\/scoring\.ts/);
+  assert.doesNotMatch(result.detail, /package\.json/);
+});
+
+// --- binding rules: each mutation below must independently revoke the grant ---
+
+test('UTV2-1529 binding: a non-CODEOWNERS author grants nothing', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths(
+      [{ body: UTV2_1842_OVERRIDE_BODY, user: { login: 'someone-else', type: 'User' } }],
+      UTV2_1842_BINDING,
+    ),
+    [],
+  );
+});
+
+test('UTV2-1529 binding: a Bot posting as a CODEOWNER grants nothing', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths(
+      [{ body: UTV2_1842_OVERRIDE_BODY, user: { login: 'griff843', type: 'Bot' } }],
+      UTV2_1842_BINDING,
+    ),
+    [],
+  );
+});
+
+test("UTV2-1529 binding: another lane's override grants nothing here", () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], {
+      ...UTV2_1842_BINDING,
+      issueId: 'UTV2-1843',
+    }),
+    [],
+  );
+});
+
+test('UTV2-1529 binding: an override written for another PR grants nothing', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], {
+      ...UTV2_1842_BINDING,
+      prNumber: 1530,
+    }),
+    [],
+  );
+});
+
+test('UTV2-1529 binding: an override pinned to a superseded head grants nothing', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], {
+      ...UTV2_1842_BINDING,
+      headSha: '0000000000000000000000000000000000000000',
+    }),
+    [],
+  );
+});
+
+test('UTV2-1529 binding: an unknown head or PR number fails closed, not open', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], {
+      ...UTV2_1842_BINDING,
+      headSha: null,
+    }),
+    [],
+  );
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths([UTV2_1842_OVERRIDE_COMMENT], {
+      ...UTV2_1842_BINDING,
+      prNumber: null,
+    }),
+    [],
+  );
+});
+
+test('UTV2-1529 binding: an ordinary comment is not an override', () => {
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths(
+      [
+        { body: 'lgtm, approved', user: { login: 'griff843', type: 'User' } },
+        { body: 'SCOPE_OVERRIDE: APPROVED', user: { login: 'griff843', type: 'User' } },
+      ],
+      UTV2_1842_BINDING,
+    ),
+    [],
+  );
+});
+
+test('UTV2-1529: S1 is unchanged when no override is resolved', () => {
+  const withEmpty = evaluateScopeDiff(['apps/api/src/x.ts'], ['apps/api/src/**'], [], 'UTV2-1842', []);
+  const withNone = evaluateScopeDiff(['apps/api/src/x.ts'], ['apps/api/src/**'], [], 'UTV2-1842');
+  assert.deepStrictEqual(withEmpty, withNone);
+  assert.strictEqual(withEmpty.detail, 'all files_changed are within file_scope_lock or proof paths');
+});
+
+test('UTV2-1529: the S1 call site is wired to the override resolver', () => {
+  // Without this, resolveAuthorizedScopeOverridePaths could be deleted from the
+  // call site with every behavioural test above still green -- the exact failure
+  // mode the executor-result-validator duplication produced (UTV2-1688).
+  const source = fs.readFileSync(
+    path.join(getRepoRoot(), 'scripts/ops/truth-check-lib.ts'),
+    'utf8',
+  );
+  assert.match(source, /authorizedOverridePaths = resolveAuthorizedScopeOverridePaths\(/);
+  assert.match(source, /evaluateScopeDiff\(\s*manifest\.files_changed,[\s\S]{0,200}authorizedOverridePaths,/);
+});
+
+test('UTV2-1529 binding: a 7-char prefix of the head SHA is NOT accepted', () => {
+  // truth-check has a shaMatches() helper that accepts >=7-char prefixes.
+  // Using it here would make closeout accept an override the pre-merge
+  // File scope lock check (exact equality, file-scope-guard.ts:156) rejects.
+  assert.deepStrictEqual(
+    resolveAuthorizedScopeOverridePaths(
+      [
+        {
+          body: UTV2_1842_OVERRIDE_BODY.replace(
+            'Head-SHA: 2afdc79256fc881a42f1e26404582faef64b7883',
+            'Head-SHA: 2afdc79',
+          ),
+          user: { login: 'griff843', type: 'User' },
+        },
+      ],
+      UTV2_1842_BINDING,
+    ),
+    [],
+  );
 });
