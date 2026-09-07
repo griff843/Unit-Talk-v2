@@ -62,6 +62,7 @@ import {
   type LaneTier,
   type TruthCheckHistoryEntry,
   type TruthCheckResult,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   EVIDENCE_BUNDLE_SCHEMA_PATH,
   MANIFEST_DIR,
   ROOT,
@@ -265,6 +266,107 @@ export interface CloseoutTruthGateInput {
   tracker_available?: boolean;
   transition_age_ms?: number;
   allowed_transition_ms?: number;
+}
+
+/**
+ * The two GitHub contexts that together constitute the CI staging live-DB
+ * receipt at a merge SHA (UTV2-1848).
+ *
+ * `verify` is one of the four required checks and declares
+ * `needs: staging-db-proof` with an explicit fail-closed guard
+ * (.github/workflows/ci.yml), so its success already implies the proof job
+ * succeeded. That is an *inference*, and this check does not rely on it: the
+ * proof job's own context is asserted directly alongside it, so a future edit
+ * that loosens the `needs:` relationship cannot silently satisfy this gate.
+ */
+export const T1_DEFERRAL_RECEIPT_CONTEXTS = [
+  'verify',
+  'Writable DB proof (staging only)',
+] as const;
+
+/**
+ * G6 -- the closeout obligation created by deferring preflight PT1 to CI.
+ *
+ * This is the enforcement half of
+ * docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md Part 2. It admits
+ * nothing on its own: no manifest on `main` carries
+ * `t1_live_db_precondition`, and nothing in this repository writes it, because
+ * the admission half is a reserved PM decision that has not been taken. Until
+ * it is, this check reports `skip` on every lane and changes no outcome.
+ *
+ * When a lane *does* carry the field, the live-DB evidence the deferral moved
+ * is required to actually exist at the merge SHA, and its absence is fatal.
+ * Fail-closed throughout: an unreadable check list, a missing merge SHA and an
+ * unrecognised field value are all refusals, never passes.
+ */
+export function evaluateT1LiveDbPreconditionDeferral(input: {
+  precondition: LaneManifest['t1_live_db_precondition'];
+  mergeSha: string | null;
+  receiptChecks: CommitCheckResult | null;
+}): CheckResult & { status: 'pass' | 'fail' | 'skip' } {
+  const id = 'G6';
+
+  if (input.precondition === undefined) {
+    return {
+      id,
+      status: 'skip',
+      detail:
+        'lane records no deferred T1 live-DB precondition; PT1 was satisfied at lane-open or the '
+        + 'lane is not T1',
+    };
+  }
+
+  if (input.precondition !== T1_LIVE_DB_PRECONDITION_DEFERRED) {
+    return {
+      id,
+      status: 'fail',
+      detail:
+        `t1_live_db_precondition has the unrecognised value ${JSON.stringify(input.precondition)}; `
+        + `the only legal value is "${T1_LIVE_DB_PRECONDITION_DEFERRED}". An unrecognised value is `
+        + 'refused rather than read as "no deferral"',
+    };
+  }
+
+  if (!input.mergeSha) {
+    return {
+      id,
+      status: 'fail',
+      detail:
+        'lane deferred its T1 live-DB precondition to CI, but the manifest carries no merge SHA to '
+        + 'verify the staging receipt against',
+    };
+  }
+
+  if (!input.receiptChecks) {
+    return {
+      id,
+      status: 'fail',
+      detail:
+        `lane deferred its T1 live-DB precondition to CI, but the GitHub checks at merge SHA `
+        + `${input.mergeSha} could not be read. The deferred obligation is unverifiable, so this `
+        + 'refuses rather than assuming it was met',
+    };
+  }
+
+  if (!input.receiptChecks.passed) {
+    return {
+      id,
+      status: 'fail',
+      detail:
+        `lane deferred its T1 live-DB precondition to CI, and the staging receipt is not green at `
+        + `merge SHA ${input.mergeSha}. Missing or failing: `
+        + `${input.receiptChecks.missing.join(', ') || '(none reported)'}. Required: `
+        + `${T1_DEFERRAL_RECEIPT_CONTEXTS.join(', ')}`,
+    };
+  }
+
+  return {
+    id,
+    status: 'pass',
+    detail:
+      `deferred T1 live-DB precondition satisfied at merge SHA ${input.mergeSha}: `
+      + `${T1_DEFERRAL_RECEIPT_CONTEXTS.join(' and ')} are both green`,
+  };
 }
 
 export function evaluateTerminalLeaseInvariant(
@@ -1210,6 +1312,33 @@ export async function runTruthCheck(
         `required checks missing or failing on ${requiredCheckResult.checkedSha} SHA: ${requiredCheckResult.missing.join(', ')}; evidence=${evidence}`,
       );
     }
+
+    // G6 -- UTV2-1848. Reached only after every earlier hard return, each of
+    // which already ends the run without a passing verdict, so a lane carrying
+    // a deferred precondition cannot route around this check.
+    const deferral = manifest.t1_live_db_precondition;
+    let deferralReceiptChecks: CommitCheckResult | null = null;
+    if (deferral !== undefined && mergeSha) {
+      try {
+        deferralReceiptChecks = await fetchCommitChecks({
+          owner: prRef.owner,
+          repo: prRef.repo,
+          sha: mergeSha,
+          token: githubToken,
+          requiredChecks: [...T1_DEFERRAL_RECEIPT_CONTEXTS],
+        });
+      } catch {
+        // Left null on purpose: the evaluator treats an unreadable check list
+        // as a refusal, not as an absence of evidence.
+        deferralReceiptChecks = null;
+      }
+    }
+    const g6 = evaluateT1LiveDbPreconditionDeferral({
+      precondition: deferral,
+      mergeSha,
+      receiptChecks: deferralReceiptChecks,
+    });
+    addCheck(g6.id, g6.status, g6.detail);
 
     if (tier === 'T1') {
       const labels = (pullRequest.labels ?? []).map((label: { name?: string }) => label.name?.toLowerCase());

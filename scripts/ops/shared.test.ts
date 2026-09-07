@@ -24,6 +24,9 @@ import {
   validateBranchName,
   validateManifest,
   worktreePathForBranch,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
+  getRepoRoot,
+  type LaneManifest,
 } from './shared.js';
 
 test('normalizeFileScopePath canonicalizes repo-relative file paths', () => {
@@ -1651,4 +1654,124 @@ test('UTV2-1840: the scan pattern is global, so matchAll cannot silently return 
   const pattern = issueIdScanPattern();
   assert.equal(pattern.global, true);
   assert.equal(pattern.lastIndex, 0, 'a fresh pattern must not carry state between callers');
+});
+
+// UTV2-1848 -- t1_live_db_precondition.
+// The field exists so that IF a T1 lane is ever admitted with its live-DB
+// preflight deferred to CI, the deferral is recorded on the manifest and
+// enforced at closeout by truth-check G6. Nothing writes it today: admitting
+// such a lane is a reserved PM decision that has not been taken, so these
+// tests lock the shape of a field that is currently inert by design.
+
+function deferralManifest(): ReturnType<typeof createManifest> {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1848',
+    tier: 'T1',
+    branch: 'claude/utv2-1848-pt1-deferral-enforcement',
+    worktree_path: worktreePathForBranch('claude/utv2-1848-pt1-deferral-enforcement'),
+    file_scope_lock: ['scripts/ops/**'],
+    expected_proof_paths: defaultProofPaths('UTV2-1848', 'T1'),
+    preflight_token: '.out/ops/preflight/claude/utv2-1848-pt1-deferral-enforcement.json',
+  });
+  // Closed lanes are exempt from the live preflight-token existence check, the
+  // same shape the other validateManifest tests in this file use.
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  return manifest;
+}
+
+/** Only the errors this field is responsible for, so unrelated rules cannot mask them. */
+function deferralErrors(manifest: ReturnType<typeof createManifest>): string[] {
+  return validateManifest(manifest).filter((e) => e.includes('t1_live_db_precondition'));
+}
+
+test('validateManifest accepts a manifest with no t1_live_db_precondition (the normal case)', () => {
+  const manifest = deferralManifest();
+  assert.strictEqual(manifest.t1_live_db_precondition, undefined);
+  assert.deepStrictEqual(validateManifest(manifest), []);
+  assert.deepStrictEqual(deferralErrors(manifest), []);
+});
+
+test('validateManifest accepts the one legal deferral value at T1', () => {
+  const manifest = deferralManifest();
+  manifest.t1_live_db_precondition = T1_LIVE_DB_PRECONDITION_DEFERRED;
+  assert.deepStrictEqual(validateManifest(manifest), []);
+});
+
+test('validateManifest refuses an unrecognised t1_live_db_precondition rather than ignoring it', () => {
+  // Reading an unknown value as "no deferral" would turn a typo into a
+  // silently dropped closeout obligation -- the exact failure this field
+  // exists to make impossible.
+  const manifest = deferralManifest();
+  (manifest as { t1_live_db_precondition?: unknown }).t1_live_db_precondition = 'deferred';
+  const errors = deferralErrors(manifest);
+  assert.strictEqual(errors.length, 1);
+  assert.match(errors[0], /t1_live_db_precondition must be "deferred_to_ci"/);
+});
+
+test('validateManifest refuses a deferral on a non-T1 lane', () => {
+  const manifest = deferralManifest();
+  manifest.tier = 'T2';
+  manifest.expected_proof_paths = defaultProofPaths('UTV2-1848', 'T2');
+  manifest.t1_live_db_precondition = T1_LIVE_DB_PRECONDITION_DEFERRED;
+  const errors = deferralErrors(manifest);
+  assert.strictEqual(errors.length, 1);
+  assert.match(errors[0], /only exists at T1/);
+});
+
+test('every real lane manifest on this branch is unaffected by the new field (acceptance criterion 1)', () => {
+  // A fixture cannot show that the field is inert on the manifests that
+  // actually exist. This reads them.
+  const lanesDir = path.join(getRepoRoot(), 'docs/06_status/lanes');
+  const files = fs
+    .readdirSync(lanesDir)
+    .filter((f) => f.endsWith('.json'));
+
+  assert.ok(files.length > 0, 'expected real lane manifests to read');
+
+  let carriers = 0;
+  let validated = 0;
+  let skippedNullWorktree = 0;
+  for (const file of files) {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(lanesDir, file), 'utf8'),
+    ) as LaneManifest;
+    if (manifest.t1_live_db_precondition !== undefined) {
+      carriers += 1;
+    }
+    // A closed lane's manifest has `worktree_path: null`, and validateManifest
+    // throws on it from isPortableAbsolutePath -- a pre-existing defect,
+    // unrelated to this field and out of this lane's scope. Validating those
+    // would test that defect rather than this field, so they are counted and
+    // skipped rather than swallowed.
+    if (typeof manifest.worktree_path !== 'string') {
+      skippedNullWorktree += 1;
+      continue;
+    }
+
+    // Only the errors this field is responsible for: real manifests carry
+    // unrelated environment-dependent findings (a preflight token that exists
+    // only on the machine that issued it, for one), and masking those would
+    // make the assertion untrue rather than stronger.
+    const errors = validateManifest(manifest).filter((e) =>
+      e.includes('t1_live_db_precondition'),
+    );
+    assert.deepStrictEqual(errors, [], `${file} must be unaffected by the new field`);
+    validated += 1;
+  }
+
+  assert.ok(
+    validated > 0,
+    'at least one real manifest must actually have been validated, or this test is vacuous',
+  );
+
+  void skippedNullWorktree;
+
+  assert.strictEqual(
+    carriers,
+    0,
+    'no manifest may carry t1_live_db_precondition: the admission half that would write it is '
+      + 'reserved and unapplied. If this ever fails, the admission decision was taken -- and G6 '
+      + 'closeout enforcement is then live rather than inert.',
+  );
 });
