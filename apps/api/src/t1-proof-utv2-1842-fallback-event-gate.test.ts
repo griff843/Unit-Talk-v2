@@ -1244,6 +1244,30 @@ test(
       (resolution['player'] as Record<string, unknown>)['teamId'],
       fixture.homeTeamId,
     );
+
+    // The two id columns on `picks` point at two different tables, and the
+    // difference is the whole reason this submission used to fail closed.
+    // `participant_id` is a foreign key into `participants` -- the provider
+    // observation layer -- and carries the player's identity. `player_id` is a
+    // foreign key into the CANONICAL `players` table, which is empty under
+    // parked provider ingestion, so it must report absence rather than fabricate
+    // a reference. Before this lane the same participants id was written into
+    // both and every player prop died on `picks_player_id_fkey`.
+    const idRows = await restQuery<{
+      participant_id: string | null;
+      player_id: string | null;
+    }>(`picks?id=eq.${response.body.data.pickId}&select=participant_id,player_id`);
+    assert.equal(idRows.length, 1);
+    assert.equal(
+      idRows[0]!.participant_id,
+      fixture.playerId,
+      'participant_id must carry the observation-layer player identity',
+    );
+    assert.equal(
+      idRows[0]!.player_id,
+      null,
+      'player_id must be null while the canonical players table has no row for this id',
+    );
   },
 );
 

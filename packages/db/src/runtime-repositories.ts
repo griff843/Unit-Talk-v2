@@ -350,6 +350,42 @@ function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
   };
 }
 
+/**
+ * `picks.player_id` is a foreign key into the CANONICAL `players` table.
+ * `metadata.playerId` carries whatever identity the submitting surface had, and
+ * for the Smart Form that is a `participants.id` from the provider observation
+ * layer -- a different id space. Writing it through unchecked makes every player
+ * prop fail on `picks_player_id_fkey` for as long as canonical player coverage is
+ * absent, which it is under parked provider ingestion.
+ *
+ * Resolving it the way `capperId` is already resolved -- an existence check that
+ * yields `null` on a miss -- is what makes the column honest rather than
+ * fabricated. No identity is lost by the null: the observation-layer id is
+ * carried by `picks.participant_id` (FK -> `participants`, which the same value
+ * satisfies) and by `metadata.participantResolution`.
+ */
+async function resolveCanonicalPlayerId(
+  client: UnitTalkSupabaseClient,
+  pick: CanonicalPick,
+): Promise<string | null> {
+  const candidate = extractPlayerId(pick);
+  if (!candidate) {
+    return null;
+  }
+
+  const { data, error } = await client
+    .from('players')
+    .select('id')
+    .eq('id', candidate)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to resolve player foreign key: ${error.message}`);
+  }
+
+  return data?.id ?? null;
+}
+
 async function resolvePickForeignKeys(
   client: UnitTalkSupabaseClient,
   pick: CanonicalPick,
@@ -357,14 +393,17 @@ async function resolvePickForeignKeys(
   capperId: string | null;
   sportId: string | null;
   marketTypeId: string | null;
+  playerId: string | null;
 }> {
   const candidates = derivePickForeignKeyCandidates(pick);
+  const playerId = await resolveCanonicalPlayerId(client, pick);
 
   if (!candidates.capperCandidate) {
     return {
       capperId: null,
       sportId: candidates.sportId,
       marketTypeId: candidates.marketTypeId,
+      playerId,
     };
   }
 
@@ -382,6 +421,7 @@ async function resolvePickForeignKeys(
     capperId: data?.id ?? null,
     sportId: candidates.sportId,
     marketTypeId: candidates.marketTypeId,
+    playerId,
   };
 }
 
@@ -2953,7 +2993,7 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: extractParticipantId(pick),
-        player_id: extractPlayerId(pick),
+        player_id: foreignKeys.playerId,
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,
         market_type_id: foreignKeys.marketTypeId,
@@ -3048,7 +3088,7 @@ export class DatabasePickRepository implements PickRepository {
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: extractParticipantId(pick),
-        player_id: extractPlayerId(pick),
+        player_id: foreignKeys.playerId,
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,
         market_type_id: foreignKeys.marketTypeId,
