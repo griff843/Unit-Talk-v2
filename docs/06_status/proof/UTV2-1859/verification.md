@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-1859 · **Lane:** claude · **Tier:** T2 · **Lane type:** delivery-ui
 **Branch:** `claude/utv2-1859-client-submission-guard`
-MERGE_SHA: pending merge
+MERGE_SHA: 9abb4ac62aa150d097d3adfc04b05fd9ee6d6629
 
 **Verified source SHA:** `c10f289cbc654c2f5ba2ac152c5685b49d57a3dc`
 
@@ -15,7 +15,7 @@ MERGE_SHA: pending merge
 | Verified source SHA: | c10f289cbc654c2f5ba2ac152c5685b49d57a3dc |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1539
-Merge SHA: pending merge
+Merge SHA: 9abb4ac62aa150d097d3adfc04b05fd9ee6d6629
 Verified source SHA: c10f289cbc654c2f5ba2ac152c5685b49d57a3dc
 
 `c10f289cbc654c2f5ba2ac152c5685b49d57a3dc` is the last commit on this branch that changes any file

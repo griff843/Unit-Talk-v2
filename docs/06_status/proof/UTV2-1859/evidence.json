@@ -6,11 +6,11 @@
   "proof_profile": "static",
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
-    "merge_sha": null,
+    "merge_sha": "9abb4ac62aa150d097d3adfc04b05fd9ee6d6629",
     "verified_source_sha": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc",
     "evidence_commit_sha": null,
     "current_pr_head_sha": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc",
-    "sha_type": "pending_merge",
+    "sha_type": "merge_sha",
     "ci_sentinels": {
       "pnpm_type_check": "PASS - exit 0, no diagnostics. Re-measured in the lane worktree at this anchor after the second main resync.",
       "pnpm_test": "PASS - the two touched suites report tests 58, pass 58, fail 0, exit 0 (pnpm exec tsx --test apps/smart-form/test/form-utils.test.ts apps/smart-form/test/api-client.test.ts), re-measured at this anchor. The full suite runs in the required `verify` check on this PR, which is the authoritative result; no local full-suite PASS is claimed.",
@@ -19,7 +19,7 @@
       "pnpm_lint": "PASS - exit 0, no findings, re-measured at this anchor. Added after the first CI run failed on it: the initial attestation ran pnpm type-check and the touched suites but never pnpm lint, which verify:static runs, so it claimed a green tree that had not been fully measured. See the lint_regression entry in static_proof."
     },
     "anchor_note": "c10f289cbc654c2f5ba2ac152c5685b49d57a3dc is the second main-resync merge commit and the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES. Every command recorded here was re-run against that tree rather than carried forward. It replaced 2902c3e92, which replaced 1cbdbc88d; the first replacement was forced by a CI lint failure that changed the code, and the two after it by main resyncs required because branch protection is strict. Both resyncs brought documentation only and zero application code, which is why every count except the r-level file count is unchanged -- and the r-level count moved because that check compares against main, not because this lane changed.\\n\\nRule 4 of scripts/ci/proof-binding-validator.ts is a two-dot `git diff verified_source_sha..HEAD`, so every commit after this one must stay inside docs/06_status/proof/ or docs/06_status/lanes/. The only commit after it is the bundle re-anchor, which does.",
-    "bound_at": "2026-09-08T15:05:00.000Z"
+    "bound_at": "2026-09-08T15:35:15.990Z"
   },
   "static_proof": {
     "status": "PASS",
