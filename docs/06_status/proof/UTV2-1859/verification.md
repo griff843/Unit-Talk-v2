@@ -6,6 +6,24 @@ MERGE_SHA: pending merge
 
 **Verified source SHA:** `c10f289cbc654c2f5ba2ac152c5685b49d57a3dc`
 
+## Merge SHA Binding
+
+| Field | Value |
+|---|---|
+| PR: | https://github.com/griff843/Unit-Talk-v2/pull/1539 |
+| MERGE_SHA: | pending merge |
+| Verified source SHA: | c10f289cbc654c2f5ba2ac152c5685b49d57a3dc |
+
+PR: https://github.com/griff843/Unit-Talk-v2/pull/1539
+Merge SHA: pending merge
+Verified source SHA: c10f289cbc654c2f5ba2ac152c5685b49d57a3dc
+
+`c10f289cbc654c2f5ba2ac152c5685b49d57a3dc` is the last commit on this branch that changes any file
+outside `docs/06_status/proof/UTV2-1859/`, and it is the tree every command in this document was run
+against. It is the second merge of `origin/main` into this branch, taken to satisfy strict
+branch-protection freshness rather than to change anything: both resyncs brought documentation only
+and zero application code.
+
 ## ASSERTIONS:
 
 - [x] **A1 —** The `canonical-player-requires-event` branch is removed from
