@@ -1,0 +1,40 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1856",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1856-browse-participant-identity",
+  "branch": "claude/utv2-1856-browse-participant-identity",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1536",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/smart-form-validation.test.ts",
+    "apps/api/src/smart-form-validation.ts",
+    "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+    "packages/db/src/canonical-reference-schema.test.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1856/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-09-08T08:53:32.442Z",
+  "heartbeat_at": "2026-09-08T09:13:09.795Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1856-browse-participant-identity.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "t1_live_db_precondition": "deferred_to_ci",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1856-browse-participant-identity",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

@@ -265,9 +265,33 @@ async function validateStructuredTeamFallback(
     }
   }
 
+  // UTV2-1856 STRUCTURED_FALLBACK_PLAYER_START
+  // This used to refuse outright: "canonical player selection requires a canonical event so
+  // team membership can be verified". That premise was true when it was written and is no
+  // longer. Team membership was then derivable only from the canonical
+  // `player_team_assignments` table, which an event browse read; with provider ingestion
+  // parked that table is empty, so an event was the only place a relationship could come
+  // from. `searchPlayers` now resolves each player's team from the provider observation edge
+  // (`participants.metadata->>'team_external_id'` matched against a team participant's
+  // `external_id`) and answers with a team `participants.id` -- the same id space the two
+  // structured sides are expressed in. So membership is verifiable here, against the same
+  // authority, with no event row involved.
+  //
+  // The refusal is kept for the one case where it is still true: a player whose team
+  // relationship the database cannot establish. That is a genuine coverage gap and the
+  // explicit manual path is where it belongs -- inventing a relationship to admit the pick
+  // would be exactly the fabricated provenance the manual path exists to avoid.
   if (resolution.player) {
-    fail('canonical player selection requires a canonical event so team membership can be verified');
+    await validateSearchBackedPlayer(
+      resolution.player,
+      resolution.away,
+      resolution.home,
+      resolution.team ?? null,
+      sportId,
+      referenceData,
+    );
   }
+  // UTV2-1856 STRUCTURED_FALLBACK_PLAYER_END
 
   // UTV2-1842 STRUCTURED_FALLBACK_MATCHUP_NAME_START
   // The checks above verify the two *identities*. They say nothing about the name the
@@ -354,6 +378,53 @@ async function validateSearchBackedTeam(
   if (!match) fail(`participant ${identity.participantId} is not canonical for sport ${sportId}`);
   if (normalize(match.displayName) !== normalize(identity.displayName)) {
     fail(`participant ID/display mismatch for ${identity.participantId}`);
+  }
+}
+
+/**
+ * Verifies a structured-fallback player selection without a canonical event.
+ *
+ * Every check here is an identity check against reference data the server read itself. The
+ * caller-supplied `identity.teamId` is never trusted as the source of the relationship -- it
+ * is only compared against the relationship the server resolved, so a client that sends the
+ * wrong team is refused rather than believed.
+ */
+async function validateSearchBackedPlayer(
+  identity: CanonicalParticipantIdentity,
+  away: CanonicalParticipantIdentity,
+  home: CanonicalParticipantIdentity,
+  selectedTeam: CanonicalParticipantIdentity | null,
+  sportId: string,
+  referenceData: ReferenceDataRepository,
+) {
+  if (identity.participantType !== 'player') {
+    fail('structured player selection must be a canonical player');
+  }
+
+  const results = await referenceData.searchPlayers(sportId, identity.displayName, 25);
+  const match = results.find((row) => row.participantId === identity.participantId);
+  if (!match) fail(`participant ${identity.participantId} is not canonical for sport ${sportId}`);
+  if (normalize(match.displayName) !== normalize(identity.displayName)) {
+    fail(`participant ID/display mismatch for ${identity.participantId}`);
+  }
+
+  if (!match.teamId) {
+    fail(
+      `player ${identity.participantId} has no verifiable team relationship without a canonical event; use explicit manual override`,
+    );
+  }
+
+  const sideIds = new Set([away.participantId, home.participantId]);
+  if (!sideIds.has(match.teamId)) {
+    fail(`player ${identity.participantId} is not on either side of the structured matchup`);
+  }
+
+  if (selectedTeam && match.teamId !== selectedTeam.participantId) {
+    fail(`player ${identity.participantId} is not assigned to team ${selectedTeam.participantId}`);
+  }
+
+  if (identity.teamId && identity.teamId !== match.teamId) {
+    fail(`participant team relationship mismatch for ${identity.participantId}`);
   }
 }
 

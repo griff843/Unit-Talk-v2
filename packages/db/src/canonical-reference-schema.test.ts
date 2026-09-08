@@ -28,6 +28,7 @@ test('canonical schema metadata includes expected owners for backbone tables', (
 import {
   DatabaseReferenceDataRepository,
   InMemoryReferenceDataRepository,
+  createInMemoryRepositoryBundle,
 } from './runtime-repositories.js';
 import { V1_REFERENCE_DATA } from '@unit-talk/contracts';
 
@@ -402,4 +403,454 @@ test('the in-memory repository applies the same proof-fixture exclusion, before 
     ['p-legit'],
     'a fixture must not consume the limit and displace a real player',
   );
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1856 — event browse must resolve participant identity from `participants`
+//
+// `getEventBrowse` and the player half of `searchBrowse` resolved identity
+// through `loadCanonicalTeamsByParticipantIds` (provider_entity_aliases where
+// entity_kind='team', then `teams`) and `loadCurrentAssignments`
+// (player_team_assignments). Measured read-only on production 2026-09-08:
+// `teams` 0 rows, `player_team_assignments` 0 rows, and all 840
+// `provider_entity_aliases` rows are entity_kind='player'. Both maps are empty
+// unconditionally, so every player came back `teamId: null`, which
+// apps/api/src/smart-form-validation.ts:448 rejected on every canonical-event
+// player prop and which made BetForm's player picker empty once a team was
+// selected.
+//
+// Every harness below therefore leaves the canonical tables EMPTY. That is not
+// a convenience -- it is the production condition under containment, and a
+// fixture that populated them would prove the fix on data the running system
+// does not have.
+// ---------------------------------------------------------------------------
+
+type BrowseTables = Record<string, Array<Record<string, unknown>>>;
+
+/**
+ * Resolves every table to its fixture rows and supports `maybeSingle()`, which
+ * `getEventBrowse` uses for the event row itself. Predicates are NOT emulated
+ * here, unlike `recordingBuilder` above: each fixture below names exactly the
+ * rows its query would return, so emulating `.in(...)` would only re-implement
+ * the fixture. The one predicate that must be observable -- the proof-fixture
+ * exclusion -- is asserted through the RESULT, not through the call log, because
+ * in this path it is an in-process `continue` rather than a pushed-down filter.
+ */
+function browseHarness(tables: BrowseTables): DatabaseReferenceDataRepository {
+  const from = (table: string) => {
+    const rows = tables[table] ?? [];
+    const builder: Record<string, unknown> = {
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: rows, error: null }).then(resolve),
+      maybeSingle: () =>
+        Promise.resolve({ data: rows[0] ?? null, error: null }),
+    };
+    for (const method of ['select', 'eq', 'in', 'is', 'order', 'limit', 'ilike']) {
+      builder[method] = () => builder;
+    }
+    return builder;
+  };
+  return Object.create(DatabaseReferenceDataRepository.prototype, {
+    client: { value: { from }, enumerable: true },
+  }) as DatabaseReferenceDataRepository;
+}
+
+const HOME_TEAM = {
+  id: 'participant-team-home',
+  external_id: 'CLUB-HOME',
+  participant_type: 'team',
+  sport: 'NBA',
+  display_name: 'Home Club',
+  metadata: {},
+};
+
+/** `external_id: null` keeps `loadEventOffers` out of the picture entirely. */
+const BROWSE_EVENT = {
+  id: 'event-1',
+  event_name: 'Away Club @ Home Club',
+  event_date: '2026-09-08',
+  status: 'scheduled',
+  sport_id: 'NBA',
+  external_id: null,
+  metadata: {},
+};
+
+test('getEventBrowse resolves a player team through the participants edge while the canonical tables are empty', async () => {
+  const repository = browseHarness({
+    events: [BROWSE_EVENT],
+    event_participants: [
+      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
+      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
+    ],
+    participants: [
+      HOME_TEAM,
+      {
+        id: 'participant-player-1',
+        external_id: 'PLAYER-1',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Rostered Player',
+        metadata: { team_external_id: 'CLUB-HOME' },
+      },
+    ],
+    provider_entity_aliases: [],
+    teams: [],
+    player_team_assignments: [],
+    leagues: [],
+  });
+
+  const result = await repository.getEventBrowse('event-1');
+  const player = result?.participants.find(
+    (participant) => participant.participantId === 'participant-player-1',
+  );
+
+  assert.ok(player, 'the player must be present in the browse result');
+  assert.equal(
+    player.teamId,
+    'participant-team-home',
+    'teamId must be the team PARTICIPANT id -- the id space searchTeams, searchPlayers and the whole handler layer already use',
+  );
+  assert.equal(player.teamName, 'Home Club');
+});
+
+test('getEventBrowse reports an honest null for a player with no team key, and does not fabricate one', async () => {
+  const repository = browseHarness({
+    events: [BROWSE_EVENT],
+    event_participants: [
+      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
+      { event_id: 'event-1', participant_id: 'participant-player-2', role: 'competitor' },
+    ],
+    participants: [
+      HOME_TEAM,
+      {
+        id: 'participant-player-2',
+        external_id: 'PLAYER-2',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Team-less Player',
+        metadata: {},
+      },
+    ],
+    provider_entity_aliases: [],
+    teams: [],
+    player_team_assignments: [],
+    leagues: [],
+  });
+
+  const result = await repository.getEventBrowse('event-1');
+  const player = result?.participants.find(
+    (participant) => participant.participantId === 'participant-player-2',
+  );
+
+  assert.ok(player, 'a team-less player is still a legitimate participant and must be retained');
+  assert.equal(player.teamId, null, 'no team key means no team -- never the only team in the event');
+  assert.equal(player.teamName, null);
+});
+
+test('getEventBrowse leaves a player whose team key names a team outside this event unrelated', async () => {
+  const repository = browseHarness({
+    events: [BROWSE_EVENT],
+    event_participants: [
+      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
+      { event_id: 'event-1', participant_id: 'participant-player-3', role: 'competitor' },
+    ],
+    participants: [
+      HOME_TEAM,
+      {
+        id: 'participant-player-3',
+        external_id: 'PLAYER-3',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Elsewhere Player',
+        metadata: { team_external_id: 'CLUB-SOMEWHERE-ELSE' },
+      },
+    ],
+    provider_entity_aliases: [],
+    teams: [],
+    player_team_assignments: [],
+    leagues: [],
+  });
+
+  const result = await repository.getEventBrowse('event-1');
+  const player = result?.participants.find(
+    (participant) => participant.participantId === 'participant-player-3',
+  );
+
+  assert.ok(player);
+  assert.equal(
+    player.teamId,
+    null,
+    'a key that matches no team IN THIS EVENT must not fall through to whichever team is present',
+  );
+});
+
+test('getEventBrowse excludes a confirmed proof fixture attached to an event while retaining the legitimate player beside it', async () => {
+  const repository = browseHarness({
+    events: [BROWSE_EVENT],
+    event_participants: [
+      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
+      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
+      { event_id: 'event-1', participant_id: 'participant-fixture', role: 'competitor' },
+    ],
+    participants: [
+      HOME_TEAM,
+      {
+        id: 'participant-player-1',
+        external_id: 'PLAYER-1',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Rostered Player',
+        metadata: { team_external_id: 'CLUB-HOME' },
+      },
+      {
+        // Deliberately given a REAL team key, so it would resolve and be pickable
+        // if the exclusion were absent. A fixture with no key would be excluded by
+        // accident -- it would simply carry teamId: null -- and the test would
+        // pass without the control existing. This is the constructed case: on
+        // production, 0 of the 26 confirmed fixtures sit in any event_participants
+        // row, so no production row exercises this path.
+        id: 'participant-fixture',
+        external_id: 'FIXTURE-1',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Proof Fixture Player',
+        metadata: { team_external_id: 'CLUB-HOME', proofIssue: 'UTV2-1672' },
+      },
+    ],
+    provider_entity_aliases: [],
+    teams: [],
+    player_team_assignments: [],
+    leagues: [],
+  });
+
+  const result = await repository.getEventBrowse('event-1');
+  const ids = (result?.participants ?? []).map(
+    (participant) => participant.participantId,
+  );
+
+  assert.ok(
+    !ids.includes('participant-fixture'),
+    'a confirmed proof fixture must not be selectable in the picker this result feeds',
+  );
+  assert.ok(
+    ids.includes('participant-player-1'),
+    'the legitimate player on the same event must be retained -- exclusion must not be a blunt drop',
+  );
+  assert.ok(
+    ids.includes('participant-team-home'),
+    'and the ordinary team participant must be retained',
+  );
+});
+
+test('getEventBrowse keeps a row whose proofIssue is null: that names no issue and is not a confirmed fixture', async () => {
+  const repository = browseHarness({
+    events: [BROWSE_EVENT],
+    event_participants: [
+      { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
+      { event_id: 'event-1', participant_id: 'participant-player-4', role: 'competitor' },
+    ],
+    participants: [
+      HOME_TEAM,
+      {
+        id: 'participant-player-4',
+        external_id: 'PLAYER-4',
+        participant_type: 'player',
+        sport: 'NBA',
+        display_name: 'Null Marker Player',
+        metadata: { team_external_id: 'CLUB-HOME', proofIssue: null },
+      },
+    ],
+    provider_entity_aliases: [],
+    teams: [],
+    player_team_assignments: [],
+    leagues: [],
+  });
+
+  const result = await repository.getEventBrowse('event-1');
+  const player = result?.participants.find(
+    (participant) => participant.participantId === 'participant-player-4',
+  );
+
+  assert.ok(
+    player,
+    'the browse predicate must agree with isConfirmedProofFixture, which treats a null marker as naming no issue',
+  );
+  assert.equal(player.teamId, 'participant-team-home');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1856 — the in-memory and database reference-data repositories are two
+// implementations of one interface, and they had diverged in three places.
+//
+// Server-side evidence could not see it: every server test asserted the
+// database path, every in-memory test asserted the in-memory path, and nothing
+// compared them. The operator-visible consequence was that a canonical player
+// prop submitted through the fail-open harness returned 422 from
+// `validateSearchBackedPlayer`, because the player's resolved `teamId` was
+// hardcoded `null` and the team's `participantId` was a synthetic string that
+// could never equal a participant id anyway.
+//
+// This is the same defect class as UTV2-1688 and UTV2-1859: one rule stored
+// twice, one copy changed, all tests green because each copy is tested against
+// itself. The tests below compare the copies.
+// ---------------------------------------------------------------------------
+
+test('the in-memory repository resolves a player team through the participants edge, as the database path does', async () => {
+  const row = (
+    id: string,
+    displayName: string,
+    participantType: 'team' | 'player',
+    externalId: string | null,
+    metadata: Record<string, unknown>,
+    sport = 'NBA',
+  ) => ({
+    id,
+    display_name: displayName,
+    external_id: externalId,
+    league: sport,
+    sport,
+    participant_type: participantType,
+    metadata,
+    created_at: '2026-09-08T00:00:00Z',
+    updated_at: '2026-09-08T00:00:00Z',
+  });
+
+  const repository = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+    participants: [
+      row('team-lakers', 'Lakers', 'team', 'nba:lakers', {}),
+      row('team-other-sport', 'Lakers', 'team', 'nba:lakers', {}, 'NFL'),
+      row('p-linked', 'Linked Player', 'player', 'p1', { team_external_id: 'nba:lakers' }),
+      row('p-unlinked', 'Unlinked Player', 'player', 'p2', {}),
+      row('p-dangling', 'Dangling Player', 'player', 'p3', { team_external_id: 'nba:no-such-team' }),
+      row('p-cross-sport', 'Cross Sport Player', 'player', 'p4', { team_external_id: 'nfl:lakers' }),
+    ] as never,
+  });
+
+  const players = await repository.searchPlayers('NBA', 'Player', 25);
+  const byName = new Map(players.map((p) => [p.displayName, p.teamId]));
+
+  assert.equal(
+    byName.get('Linked Player'),
+    'team-lakers',
+    'a player whose team key names a seeded team in the same sport resolves to that team participant id',
+  );
+  assert.equal(
+    byName.get('Unlinked Player'),
+    null,
+    'a player carrying no team key gets an honest null, never a guessed team',
+  );
+  assert.equal(
+    byName.get('Dangling Player'),
+    null,
+    'a team key naming no seeded team gets an honest null',
+  );
+  assert.equal(
+    byName.get('Cross Sport Player'),
+    null,
+    'a team key is resolved within the queried sport only; a same-named team in another sport is not a match',
+  );
+});
+
+test('the in-memory repository answers searchTeams with real participant ids when teams are seeded', async () => {
+  const seeded = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+    participants: [
+      {
+        id: 'team-lakers',
+        display_name: 'Lakers',
+        external_id: 'nba:lakers',
+        league: 'NBA',
+        sport: 'NBA',
+        participant_type: 'team',
+        metadata: {},
+        created_at: '2026-09-08T00:00:00Z',
+        updated_at: '2026-09-08T00:00:00Z',
+      },
+    ] as never,
+  });
+
+  const seededResults = await seeded.searchTeams('NBA', 'Lakers', 5);
+  assert.deepEqual(
+    seededResults.map((team) => team.participantId),
+    ['team-lakers'],
+    'a seeded team answers with its own row id, which is what a resolved player teamId can equal',
+  );
+
+  // Behaviour preservation: with no seeded team participants there is no real
+  // id to return, so the catalog-derived form is kept rather than dropping the
+  // team from the result entirely.
+  const unseeded = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA);
+  const unseededResults = await unseeded.searchTeams('NBA', 'Lakers', 5);
+  assert.deepEqual(
+    unseededResults.map((team) => team.participantId),
+    ['team:NBA:Lakers'],
+  );
+});
+
+test('the in-memory bundle seeds one participant set both repositories agree on', async () => {
+  // The seeding is opt-in under the repository's existing QA-seed flag, which
+  // is what the contained Playwright harness sets. The default-off case is
+  // asserted by its own test below.
+  const previous = process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  process.env['UNIT_TALK_QA_SEED_ENABLED'] = 'true';
+  const bundle = (() => {
+    try {
+      return createInMemoryRepositoryBundle();
+    } finally {
+      if (previous === undefined) delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
+      else process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+    }
+  })();
+
+  const teams = await bundle.referenceData.searchTeams('NBA', 'Lakers', 5);
+  const team = teams.find((row) => row.displayName === 'Lakers');
+  assert.ok(team, 'the seeded catalog answers a team search');
+
+  const participantRow = await bundle.participants.findById(team.participantId);
+  assert.ok(
+    participantRow,
+    'searchTeams returns an id the participant repository can actually resolve — a synthetic id could not',
+  );
+
+  const players = await bundle.referenceData.searchPlayers('NBA', 'Lakers', 25);
+  assert.ok(players.length > 0, 'the seeded bundle answers a player search');
+  assert.ok(
+    players.some((player) => player.teamId === team.participantId),
+    'at least one seeded player resolves to exactly the team id searchTeams returned — the equality validateSearchBackedPlayer requires',
+  );
+
+  const unaffiliated = await bundle.referenceData.searchPlayers('NBA', 'Unaffiliated', 5);
+  assert.ok(unaffiliated.length > 0, 'the honest-null case exists in the seeded data, not only in fixtures');
+  assert.equal(
+    unaffiliated[0]!.teamId,
+    null,
+    'a seeded player with no team key still reports null rather than a guessed team',
+  );
+});
+
+test('the in-memory bundle carries no QA player fixtures unless the QA seed flag is set', async () => {
+  // Fixture data appearing unasked is the failure direction that matters: every
+  // API unit test builds this bundle expecting a blank runtime, and a seeded
+  // player would silently change what `/api/reference-data/availability`
+  // reports about a sport. The safe default is the empty one.
+  const previous = process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  try {
+    const bundle = createInMemoryRepositoryBundle();
+    const players = await bundle.referenceData.searchPlayers('NBA', 'Starter', 25);
+    assert.deepEqual(players, [], 'no QA player fixture exists without the flag');
+
+    // Teams are a different case and deliberately so: the bundle has always
+    // seeded team participants into the participant repository, so a real id
+    // exists for them with or without the flag. What the flag gates is the
+    // player fixture, which never existed before this lane.
+    const teams = await bundle.referenceData.searchTeams('NBA', 'Lakers', 5);
+    const team = teams.find((row) => row.displayName === 'Lakers');
+    assert.ok(team, 'the catalog still answers a team search with the flag off');
+    assert.ok(
+      await bundle.participants.findById(team.participantId),
+      'and it answers with an id the participant repository resolves, not a synthetic string',
+    );
+  } finally {
+    if (previous !== undefined) process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+  }
 });
