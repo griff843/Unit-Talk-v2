@@ -1,20 +1,22 @@
 # Mission Plan — live
 
 **Owner:** Claude. Rewritten as reality changes. Not a log, not a backlog, not Linear in Markdown.
-**Last reconciled against live truth:** 2026-09-06
+**Last reconciled against live truth:** 2026-09-07
 
 Answers five questions: what is true now, what is executable, what is blocked, what requires Griff,
 and what was learned.
 
 ---
 
-## Reconciled current truth (2026-09-06)
+## Reconciled current truth (2026-09-07)
 
 Verified against `origin/main`, the GitHub API, branch protection, check-run outputs, the secret
 metadata listing and the current readiness ledger. Not against docs or chat history.
 
-- `main` is `3ad11a69b` (re-measured 2026-09-06T20:50Z; this bullet read `7231dc9c7` earlier the
-  same day, `175f07c10` before that, and `85f63c696` before that). **Production is
+- `main` is `e32bc506c` (re-measured 2026-09-07T00:40Z; this bullet read `3ad11a69b` earlier, and
+  `7231dc9c7`, `175f07c10`, `85f63c696` before that). Two lanes landed between those two tips:
+  UTV2-1847 (#1525, `656ed0353`) and UTV2-1848 (#1526, merge SHA
+  `1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`, closeout `e32bc506c`). **Production is
   `d3f69b804`, and there is now zero container-code drift between production and `main`** — see the
   rewritten deploy section below, which replaces the "only Deploy remains" framing this plan carried
   for five days. **No lane manifest is `in_progress` on `main`.** The readiness ledger still writes
@@ -24,8 +26,9 @@ metadata listing and the current readiness ledger. Not against docs or chat hist
 - Branch protection on `main` requires exactly four checks: `verify`, `Executor Result Validation`,
   `Merge Gate`, `P0 Protocol`. `strict: true`. **`enforce_admins: false`**, no push restrictions,
   no rulesets, no required reviews. Unchanged.
-- **12 PRs are open** (re-measured 2026-09-06T20:55Z, after #1523 merged; this lane is not yet
-  among them). The composition has shifted and the previous "every one is blocked on `Merge Gate`"
+- **12 PRs are open** (re-measured 2026-09-07T00:50Z — the same twelve as the previous
+  reconciliation: #1429, #1451, #1479, #1484, #1491, #1492, #1495, #1496, #1498, #1505, #1513,
+  #1521; this lane is not yet among them). The composition has shifted and the previous "every one is blocked on `Merge Gate`"
   framing no longer holds — #1523 merged cleanly through the ordinary path, which is the first
   end-to-end demonstration since the ratification that an open PR can finish without an
   administrative restart. Current state by class:
@@ -321,6 +324,121 @@ and that is reserved.
 
 **This is Wave 0 item 1 and the one thing on the Milestone 1 critical path.**
 
+## Concurrent session ownership — Claude and Codex, 2026-09-07
+
+Griff directed on 2026-09-07 that **Codex owns tracker independence in a separate session** while
+this session continues the **Smart Form repair**. Two independent sessions on one repository is
+exactly the condition that produced the 2026-09-03 drift incident, so the split is written down
+here rather than held in either session's context, and it is enforced by the mechanisms that
+already exist rather than by good intentions.
+
+**The enforcement is mechanical, not conventional.** `file_scope_lock` is pinned at lane-start and
+cannot be widened by an agent; preflight `PL6` refuses a lane whose candidate files overlap any
+active manifest; and `.ops/leases/` refuses a second lane on the same files. A session that
+declares its scope honestly at lane-start cannot silently take the other's files. Nothing below
+replaces those checks — it tells each session what to declare so the checks never have to fire.
+
+| Owner | Files | Why |
+|---|---|---|
+| **Claude (this session)** | `scripts/ops/preflight.ts`, `scripts/ops/shared.ts`, `scripts/ops/lane-start.ts` | the ratified PT1 route B admission change — see below. **Revised 2026-09-07**: an earlier draft of this table gave `preflight.ts` and `shared.ts` to Codex, before the ratification landed. |
+| **Claude (this session)** | `apps/smart-form/**`, `apps/api/src/submission-service.ts` | Wave 1 steps 2–3 and UTV2-1842 |
+| **Codex** | `scripts/ops/truth-check-lib.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-finalize.ts`, `scripts/ops/execution-packet.ts`, `scripts/ops/lane-maximizer.ts`, `.github/workflows/**` | items 3, 5, 6, 7 of the change set above, and the reserved items 8–11 if PM ever releases them |
+| **Neither, without asking first** | root `package.json`, `.lane/lanes/governance.yml`, `docs/mission/plan.md` | genuinely shared; see below |
+
+**`preflight.ts` moved sides, and Codex must be told before it starts.** Griff ratified PT1 route B
+on 2026-09-07, which makes `preflight.ts` the file the highest-priority work edits. Codex's item 1
+— *"emit PL1-PL5 as `skip` when there is no tracker ref"* — is in the same file. Those two changes
+are independent in intent and adjacent in code, which is exactly the shape that produces a silent
+conflict. This session takes the file for the admission change because it is now the priority item;
+Codex's PL1-PL5 change should either wait for it to land or be authored against the merged result,
+not in parallel.
+
+**Root `package.json` is the one real collision, and this session has given it up.** The plan
+already records that a lane which adds a `*.test.ts` must declare `package.json`, because `pnpm
+verify` fails closed with `WIRING_TEST_UNWIRED_NEW` on an unreachable test file and the only wiring
+point is the `test:ops` script. Codex's work is likely to add test files and will need it. This
+session therefore wires the Smart Form e2e suite through **`apps/smart-form/package.json`'s own
+`verify` script**, which `verify:static` already invokes as `pnpm --filter @unit-talk/smart-form
+verify` — no root edit, no overlap, and one less thing to serialize. UTV2-1850's declared scope is
+`apps/smart-form/**` alone for this reason.
+
+**Merges are serialized, and `strict: true` is what does it.** Branch protection requires a branch
+to be current with `main` before merging, so two ready PRs cannot land simultaneously — the second
+resyncs. The rule each session follows is: check for an open PR from the other session in a
+mergeable state before merging, and land the one that is already green rather than racing it. The
+sanctioned resync is `pnpm ops:merge-wrapper main-sync`; a direct `git push origin main` is
+prohibited regardless of how convenient the ordering makes it look.
+
+**`docs/mission/plan.md` is shared and is being edited by this lane right now (UTV2-1849, #1527).**
+Codex should reconcile its own findings into this file *after* #1527 lands, not concurrently.
+
+---
+
+## The route B bootstrap — why the admission change takes two lanes
+
+Ratified 2026-09-07. The remaining admission diff is the three edits in
+`PT1_CONTAINMENT_ADMISSION_DECISION.md` §6a. They do **not** all sit at the same tier, and that is
+the whole scheduling problem:
+
+```
+['scripts/ops/preflight.ts']   -> T3   (no matches)
+['scripts/ops/shared.ts']      -> T3   (no matches)
+['scripts/ops/lane-start.ts']  -> T1   (rule_id: tier-c-pattern)
+```
+
+`lane-start.ts` matches `/^scripts\/ops\/(?:lane|merge|tier)-[^/]+(?<!\.test)\.ts$/`. So the
+edit that copies the deferral onto the manifest is **T1-floored, and therefore blocked by the exact
+refusal this change exists to lift**. The change cannot land in one lane from a contained
+workstation. It is not a deadlock — it is an ordering constraint, and it resolves in two lanes:
+
+| Lane | Tier | Files | What it does |
+|---|---|---|---|
+| 1 | **T3** — opens today | `scripts/ops/preflight.ts`, `scripts/ops/shared.ts` | stops folding `blocked_by_containment` into `INFRA`, writes `t1_live_db_precondition: "deferred_to_ci"` into the generated token, and **refuses to admit a manifest that drops it** |
+| 2 | **T1** — opens only after lane 1 merges | `scripts/ops/lane-start.ts` | copies the deferral from the validated token onto the manifest |
+
+**The order is the dangerous part, and lane 1 has to close it rather than leave it open.** Between
+lane 1 and lane 2 there is a window in which PT1 no longer refuses, so a T1 lane can be opened while
+`lane-start` still knows nothing about the field — the manifest would carry no
+`t1_live_db_precondition`, `G6` would evaluate `skip`, and the live-DB obligation would be
+**silently discarded**. That is precisely the failure the ratification names.
+
+Lane 1 therefore carries the bridge, and it is placed where it can be: `validateManifest` in
+`shared.ts` already validates the manifest's `preflight_token` **path**
+(`shared.ts:1748-1759`, via `validatePreflightTokenPathValue`). Lane 1 extends it to read the
+token's **contents** and fail closed when the token records a deferral the manifest does not. So
+between the two lanes a deferral-carrying lane cannot be created at all — the manifest is rejected —
+and nothing is admitted that G6 would later fail to see. The obligation cannot be dropped by
+omission, only by a change that deliberately removes the check, which is what mutation testing is
+for.
+
+Malformed is handled by the rules UTV2-1848 already landed: an unrecognised
+`t1_live_db_precondition` value is a `validateManifest` **error**, never ignored, and the field is
+an error at any tier other than T1. Lane 1 adds the third case — present in the token, absent from
+the manifest — so all three of missing, malformed and mismatched fail closed.
+
+**The two contract specs are T1-floored too, which decides where they land.** Measured:
+`docs/05_operations/TRUTH_CHECK_SPEC.md` and `docs/05_operations/LANE_MANIFEST_SPEC.md` both match
+`tier-c-pattern`, so adding either to lane 1's scope would floor lane 1 at T1 and make it
+unopenable — the same refusal, reached by a different file. They go in lane 2, which is T1 anyway
+and which is the point at which the contract is actually complete rather than half-written. Lane 1
+carries `docs/05_operations/schemas/preflight_token_v1.schema.json` (T3) so the new token field is
+documented where it is emitted rather than left implicit; the schema needs no strictness change,
+since it already sets `additionalProperties: true`.
+
+**What lane 1 must not do.** It must not weaken any other preflight check to get itself admitted,
+and it must not write a token by hand. Its own lane is T3, so it opens through the ordinary
+credential-free path with every check actually run — `PB1` type-check and `PB2` full `pnpm test`
+included. Hand-generating a substitute passing token is prohibited by the ratification and is not
+needed by this sequence.
+
+**Staging verification is preserved, not replaced.** Route B defers the *precondition*, not the
+proof: a T1 lane admitted this way still owes `verify` and `Writable DB proof (staging only)` green
+on its merge SHA, and `G6` refuses closeout without both. The deferral moves where the live-DB
+evidence is obtained — from the operator's workstation to CI — and changes nothing about whether it
+is obtained.
+
+---
+
 ## Execution waves
 
 Production-first. The waves are a dependency ordering, not a queue: work in a later wave that
@@ -332,12 +450,15 @@ waiting on Griff" — at any moment most of the board is independent of every op
 
 ### Wave 0 — reserved actions (Griff only)
 
-**Nothing in this table is on the Milestone 1 critical path.** That is new as of 2026-09-06 and it
-is the single most important change in this reconciliation.
+**Corrected 2026-09-07.** This preamble read *"Nothing in this table is on the Milestone 1 critical
+path"* while row 1 of the same table called itself the Milestone 1 blocker. Row 1 was right. The
+`Deploy` dispatch left this table by being done, and what that exposed underneath it — the PT1
+containment admission — is squarely on the critical path, and blocks more of it than row 1 first
+said. Rows 2–5 are genuinely off the critical path.
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | Decide **UTV2-1842's backend admission** — route A0 or B in `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` | Route A0 is a bounded secrets action (reserved decision 4); route B is an admission-policy change | Milestone 1 steps 4–5. This is now the Milestone 1 blocker. |
+| 1 | Decide **the PT1 containment admission** — route A0 or B in `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md`; the enforcement half is already on `main` (UTV2-1848, §6a carries the exact three-edit diff) | Route A0 is a bounded secrets action (reserved decision 4); route B is an admission-policy change | Milestone 1 steps **3**–5, and **every lane touching a Tier C path**, not only UTV2-1842. This is the Milestone 1 blocker. |
 | 2 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap | Merge authority | #1484 only. Not a Milestone 1 gate. |
 | 3 | Review **#1491 / #1492** as an architecture decision — not as engineering to resume | Merge authority | Those two PRs only. Explicitly not the mission. |
 | 4 | Decide the direct-`main` prevention control (`enforce_admins`, a ruleset, or a `pre-push` hook) | Branch protection | Nothing. The prohibition is already in force; what is reserved is the mechanical enforcement. |
@@ -440,10 +561,59 @@ So the sequence is now:
    `b5ee99e17`) delivered signed odds and line entry and the three-valued identity mode.
 3. **Verify the combined flow before release**: browser → API → persisted pick, covering stale
    events, signed odds and spread lines, canonical team fallback, honest missing coverage, and
-   Track Only non-delivery. This is not covered today — the four `apps/smart-form/e2e/` specs are
-   run by no CI workflow, and `playwright.config.ts` starts only `pnpm dev` on `127.0.0.1:4100`
-   with no API process while the client posts to `127.0.0.1:4000`. Wiring it needs a lane that
-   declares `package.json` in its `file_scope_lock`.
+   Track Only non-delivery. **Still not covered in CI, and UTV2-1847 did not close it.** #1525
+   (`656ed0353`) rewrote `apps/smart-form/playwright.config.ts` and three specs so the suite can
+   run, but it touched **no `package.json` and no workflow**, so the four `apps/smart-form/e2e/`
+   specs are still executed by nothing: `qa-fast.yml`, `qa-experience-regression.yml` and
+   `post-merge-qa-gate.yml` each run the qa-agent's own Playwright project, never
+   `apps/smart-form`'s `test:e2e:fixture`. Wiring it needs a lane that declares `package.json` —
+   and, to add the workflow, one that declares `.github/workflows/**`. **That second path is
+   T1-floored and therefore blocked by the same reserved PT1 admission decision as UTV2-1842**;
+   see the correction under "Requires Griff" item 1.
+
+   **But the workflow is not the only route, and the rest of the work is executable today.**
+   Measured: `['apps/smart-form/package.json', 'package.json',
+   'apps/smart-form/playwright.config.ts', 'apps/smart-form/e2e/…']` floors at **T3** — no Tier C
+   prefix, so a lane covering all of it opens under containment. And the required `verify` check
+   already reaches this app: `verify:static` runs `pnpm --filter @unit-talk/smart-form verify`,
+   which today is `pnpm type-check && pnpm test`. So the suite can be authored, wired and made
+   runnable without touching a workflow at all.
+
+   **And more of that is already done than this plan said.** The claim it carried — that
+   `playwright.config.ts` *"starts only `pnpm dev` on `127.0.0.1:4100` with no API process while
+   the client posts to `127.0.0.1:4000`"* — is stale: UTV2-1847 rewrote it, and the config on
+   `main` now declares a **two-entry `webServer`** that stands `pnpm --dir ../api dev` up on
+   `127.0.0.1:4000` with an explicit contained environment (empty `SUPABASE_*`,
+   `SYNDICATE_MACHINE_ENABLED: 'false'`, `UNIT_TALK_QA_SEED_ENABLED: 'true'`) and waits on
+   `/api/health/runtime` before starting `next dev` with `NEXT_PUBLIC_API_BASE_URL` pointed at it.
+   So the browser → API half of the harness exists.
+
+   **What is missing is the persistence half — and Griff ruled on 2026-09-07 how it may not be
+   obtained.** The obvious move is to pass the staging credentials the `verify` job already carries
+   into that `webServer` env. **Do not.** That API child process runs with
+   `UNIT_TALK_API_RUNTIME_MODE: 'fail_open'` and `UNIT_TALK_QA_SEED_ENABLED: 'true'`; handing a
+   fail-open, QA-seeding runtime a live staging credential is how the staging database acquired
+   ~93% CI-fixture contamination in the first place. **The local in-memory harness and staging
+   database verification stay distinct**: the Playwright config keeps its empty `SUPABASE_*` and
+   stays a browser → API contract harness, and persistence is asserted where a real credential
+   already lives under real controls — `pnpm test:db` / the `Writable DB proof (staging only)` job,
+   which `assert-staging-target.ts` already pins to `xskgrzbteyqdufktjrjx`.
+
+   **And the execution-site question is not settled by the tier floor.** Griff: *"any change to the
+   required CI execution path should be reviewed as part of the actual change, regardless of
+   file-based tier minimum."* Adding an e2e run — and a `playwright install chromium --with-deps`
+   — to a script that executes inside the required `verify` check changes what a required check
+   does and how long it takes. `classifyMechanicalMinimum` returning `T3` for
+   `apps/smart-form/package.json` is a floor, not a verdict, and this is one of the cases where the
+   floor is the wrong answer. That hunk gets reviewed on its own terms whatever the classifier says.
+
+   What that route does **not** get for free is a browser. `ci.yml` never mentions Playwright;
+   the three qa workflows each run `playwright install chromium --with-deps` themselves. Adding
+   the e2e run to `smart-form`'s `verify` script would therefore need the browser install to
+   happen inside a package script running in a **required** check — which is a real change to what
+   a required check does and how long it takes, not a scripting detail, and should be decided as
+   one rather than slipped in. The clean split is: do the T3 authoring and wiring now, and let the
+   *execution site* be the one thing that waits.
 4. **Then run the pilot itself as one lane**: reach the form, authenticate, resolve `griff843`,
    submit a real internal Track Only pick, assert persistence, observe the Track Only guards holding
    during the run, and observe the result through a safe read-only internal/operator path.
@@ -491,8 +661,38 @@ Not started.
 
 ### Wave 6 — exactly one governance lane at a time
 
-**The slot is empty.** UTV2-1688 — the executor-result namespace repair described under the
-`WORK-###` correction above — held it and **merged as #1519 (`949459fea`) on 2026-09-06T07:26Z**.
+**The slot is empty.** UTV2-1848 held it last and **merged as #1526
+(`1cb093df69a2d5436d1cdf026e5a3f737ffa0ca4`) on 2026-09-07**, closing out at `e32bc506c` with its
+manifest `done` and its Linear issue Done on the first closeout attempt, no replay.
+
+It landed the **enforcement half of `PT1_CONTAINMENT_ADMISSION_DECISION.md` Part 2, before the
+admission decision it protects** — deliberately, so the reserved decision becomes a yes/no on a
+small diff whose protection already exists on `main` rather than a decision to build one. What
+landed:
+
+- `shared.ts` — an optional `LaneManifest.t1_live_db_precondition` field with the single legal
+  value `deferred_to_ci`, plus two `validateManifest` rules: an unrecognised value is an error
+  (never silently ignored), and the field is an error at any tier other than `T1`.
+- `truth-check-lib.ts` — a new closeout check **`G6`** which, when the field is present, requires
+  both `verify` **and** `Writable DB proof (staging only)` to be green *on the merge SHA*. Absent
+  field → `skip`; unrecognised value, no merge SHA, unreadable checks, or a non-green receipt →
+  `fail`. Both contexts are asserted directly rather than relying on `verify`'s `needs:` edge, so a
+  later loosening of that relationship cannot silently satisfy the gate.
+- Spec rows in `TRUTH_CHECK_SPEC.md` and `LANE_MANIFEST_SPEC.md`, and §6a of
+  `PT1_CONTAINMENT_ADMISSION_DECISION.md` carrying **the exact remaining admission diff** — three
+  edits: stop folding `blocked_by_containment` into `INFRA` in `resolveVerdict`
+  (`preflight.ts:1468-1477`), emit `t1_live_db_precondition: "deferred_to_ci"` in the token, and
+  copy it onto the manifest at lane-start.
+
+**It admits nothing and is inert today**, asserted against real data rather than described: a test
+reads all 752 lane manifests on the branch and requires that **zero** carry the field, so if that
+assertion ever fails the admission decision was taken and G6 is live rather than dormant. Three
+mutations each turn a distinct assertion red, including an unwire mutation (`addCheck(g6…)` →
+`void g6`) — without it the whole check could be deleted with every behavioural test still green,
+which is exactly the failure mode the executor-result-validator duplication produced.
+
+Before it, UTV2-1688 — the executor-result namespace repair described under the
+`WORK-###` correction above — held the slot and **merged as #1519 (`949459fea`) on 2026-09-06T07:26Z**.
 It was chosen for a reason worth recording: it was not new debt. Filed 2026-08-09, PM-authored and
 already tier-labelled, and until it landed it made every `bootstrap/` lane permanently unmergeable
 without an admin bypass. Staffing an existing canonical issue that blocks merges outranks opening a
@@ -1042,6 +1242,15 @@ neither subsumes the other:
 Neither is done here: this lane's `file_scope_lock` is `docs/mission/plan.md` alone, and a lock
 cannot be widened by an agent. Recorded rather than filed, per the filing threshold.
 
+**Repair 2 is now confirmed empirically rather than argued.** UTV2-1849 (#1527) is the same shape as
+UTV2-1846 — T3, `expected_proof_paths: []`, `docs/mission/plan.md` alone — and deleted the
+`docs/06_status/proof/UTV2-1849/.gitkeep` that `ops:lane-start` had committed. On that PR
+`Return review packet` **passes**, and so do `Proof Gate`, `Proof Auditor Gate` (skipping) and
+`Runtime Verifier Gate`, where #1524 had all four red. `Close eligibility preflight` is still red,
+exactly as the table above predicts: CEP reads the manifest and never the proof directory, so
+removing the file cannot quiet it. The two repairs really are complementary, and the cheaper one is
+already available to any T3 lane today — delete the `.gitkeep`.
+
 One consequence for reading this plan's own PR: five of #1524's non-required checks are red — the
 four above plus one — and none is an ordinary repair. `Branch Discipline Guard` reports `multiple_issue_references` — *"found
 UTV2-1688, UTV2-1724, UTV2-1730, UTV2-1841, UTV2-1842, UTV2-1846"* — because a mission-plan commit
@@ -1177,7 +1386,16 @@ remains the correct authoring shape; it is what the repaired rebinder binds agai
 Consolidated from Wave 0, in dependency order. **This list is one item long on the Milestone 1
 path.** Everything below item 1 blocks only itself.
 
-1. **Decide UTV2-1842's backend admission.** Route **A0** (export staging credentials for one
+1. ~~**Decide UTV2-1842's backend admission.**~~ **RATIFIED 2026-09-07 — route B.** Griff
+   authorized the bounded admission change for the deliberately contained PT1 case, to be
+   implemented through the governed PR path. The ratification is explicit that it is **policy
+   authorization, not a merge or deployment approval**, and it carries five binding conditions:
+   every other applicable preflight check must still pass; the deferral is recorded in the
+   generated token **and** the manifest; required staging verification is preserved before merge;
+   `G6` is retained at closeout; and **missing or malformed deferral information must not silently
+   discard the obligation**. Substitute hand-generated passing tokens are prohibited. Implementation
+   sequencing is under "The route B bootstrap" below. The original packet text follows for
+   reference: Route **A0** (export staging credentials for one
    preflight invocation — no code change, unblocks the lane today, a bounded reserved-decision-4
    secrets action) or route **B** (Part 1 + Part 2 — admit with a recorded, closeout-enforced
    deferral, which unblocks every future T1 lane opened from a contained workstation). The packet
@@ -1191,7 +1409,21 @@ path.** Everything below item 1 blocks only itself.
    to avoid that: `blocked_by_containment` still resolves to verdict `INFRA` exactly as
    `infra_error` does, asserted with two controls, so no lane opens that could not open before.
 
-   Blocks Milestone 1 steps 4–5. **Nothing else on the board waits on this.**
+   **Corrected 2026-09-07: "Nothing else on the board waits on this" was false, and it understated
+   the decision rather than overstating it.** PT1 runs at T1 and is waivable at no tier, so the
+   refusal reaches *every* lane the mechanical floor raises to T1 — not only UTV2-1842. Measured
+   directly: `classifyMechanicalMinimum(['.github/workflows/smart-form-e2e.yml'])` returns
+   `{"mechanicalMinimum":"T1","matches":[{"rule_id":"tier-c-prefix"}]}`, because
+   `.github/workflows/` is a Tier C prefix (`scripts/ops/merge-risk.ts:57-89`, alongside
+   `supabase/migrations/`, `packages/contracts/src/`, `packages/domain/src/`, `apps/worker/`,
+   `packages/config/` and `docs/00_constitution/`). And containment is still live: `local.env`
+   carries `SUPABASE_URL=http://127.0.0.1:1`, and `resolveVerdict([{id:'PT1',
+   status:'blocked_by_containment'}])` returns `INFRA` while an all-pass list returns `PASS`.
+
+   So the true blast radius is: **no lane touching any Tier C path can be opened from a contained
+   workstation.** Wave 1 step 3's CI wiring is one such lane, which means the *verification* half
+   of the Milestone 1 path is blocked by this decision too, not merely the submission repair.
+   Blocks Milestone 1 steps 3–5.
 2. **Approve #1484** (`pm-verdict/v1`) — canonical reference bootstrap, `verify` green, the only
    open PR whose sole remaining obstacle is a verdict. Not a Milestone 1 gate.
 3. **#1491 / #1492 architecture review** — merge authority and agent authority. Those two PRs only.
@@ -1230,15 +1462,69 @@ actually a Griff-reserved item, only an unadmitted PR, and it is now Wave 3 exec
 
 **One item is outstanding and is not on the Milestone 1 path: a `scope-override/v1` on #1521**
 (UTV2-1843, Smart Form product-intent consolidation). Its four required checks were green, but its
-`File scope lock` is red because the diff adds `apps/api/CLAUDE.md`, `apps/smart-form/CLAUDE.md` and
-`docs/03_product/**` to `.lane/lanes/governance.yml` — genuinely outside its own pinned lock. That
-is a real scope question, not the review-packet defect, and "non-required check" is not
-authorization to merge past it. The PR has since gone `BEHIND`, so per the head-pinning rule it
-should be resynced and reconciled *before* the override is requested, not after.
+`File scope lock` is red.
+
+**Corrected 2026-09-07 — the three paths this paragraph previously named are all *inside* the
+lock.** It said the violation was that the diff adds `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/**` to `.lane/lanes/governance.yml`. Measured
+against the manifest on the branch, `file_scope_lock` already contains `apps/api/CLAUDE.md`,
+`apps/smart-form/CLAUDE.md` and `docs/03_product/smart-form/**`. Re-running the scope comparison
+over all 14 changed files against the lock plus the lane's own metadata and declared proof paths
+returns **exactly one** violation:
+
+```
+OUT OF SCOPE: .lane/lanes/governance.yml
+total files: 14
+```
+
+So the scope question is real but is one file, not three: the lane must register its own doc
+subtree in the lane-authority allowlist, and `.lane/lanes/governance.yml` is the file that does it.
+That is precisely the mechanism UTV2-1829 used for `docs/mission/**` and that
+`.lane/lanes/governance.yml`'s own comments record eight prior times — a CODEOWNERS
+`scope-override/v1` pinned to an exact head SHA. It remains a real scope question, not the
+review-packet defect, and "non-required check" is not authorization to merge past it.
+
+**Its lease is already released and its lane is already parked**, so it is not blocking the
+frontend repair: `docs/06_status/lanes/UTV2-1843.json` on the branch reads `"status": "parked"` and
+`.ops/leases/UTV2-1843.json` reads `"status": "released"` with `owner_pid: null`. The PR is
+`BEHIND`, so per the head-pinning rule it should be resynced and reconciled *before* the override is
+requested, not after — the override binds a head SHA and every later commit invalidates it.
 
 ---
 
 ## Learned
+
+- **A reserved gate's blast radius is itself a measurement, and stating it from the one case that
+  surfaced it understates it.** This plan said the PT1 containment admission blocked UTV2-1842 and
+  that *"nothing else on the board waits on this"*. The predicate is not the issue — it is the
+  mechanical tier floor: PT1 runs at T1, is waivable at no tier, and `classifyMechanicalMinimum`
+  raises **any** path under a Tier C prefix to T1. `.github/workflows/` is such a prefix, so the
+  CI wiring that Wave 1 step 3 needs is blocked by the same decision. The error was not a wrong
+  fact; it was reporting the instance instead of the rule, and it cost nothing to correct only
+  because the next lane happened to be `docs/mission/plan.md`, which floors at T3 and could still
+  be opened. The general form: when recording what a gate blocks, enumerate it from the gate's own
+  predicate, never from the work that happened to hit it.
+
+- **Landing the enforcement before the admission changes what the owner is being asked.** UTV2-1848
+  built and merged the closeout gate that a deferred T1 live-DB precondition would need
+  (`t1_live_db_precondition` + `G6`), while admitting nothing — 0 of 752 manifests carry the field,
+  asserted by a test that reads them all rather than by a claim. The reserved decision is now a
+  yes/no on a three-edit diff whose protection already exists on `main`, instead of a decision to
+  authorise building one. This is the shape "How a reserved decision is surfaced" in `intent.md`
+  asks for, and it is reusable: the half of a reserved change that *tightens* is usually
+  unreserved, and landing it first shrinks the reserved half to something reviewable.
+
+- **A test that reads the real corpus finds defects a fixture never will.** The UTV2-1848
+  acceptance test walks every `docs/06_status/lanes/*.json` on the branch, and 16 of 752 threw
+  `ERR_INVALID_ARG_TYPE` out of `validateManifest` — `isPortableAbsolutePath` (`shared.ts:1884`)
+  assumes a string and every closed lane's manifest carries `worktree_path: null`. Pre-existing,
+  unrelated to the new field, and invisible to every hand-written manifest fixture in the suite.
+  Counted and skipped explicitly with a non-vacuity assertion rather than swallowed, and recorded
+  here rather than filed, per the filing threshold.
+
+- **"lane closed, sync file removed" is still false.** `.ops/sync/UTV2-1848.yml` is tracked on
+  `main` after a closeout commit whose message says it was removed. This is now confirmed on every
+  lane that has checked it; the string is a template, not an observation.
 
 - **Clearing the last reserved item on a path does not mean the path is clear — it means the next
   blocker becomes visible.** This plan said for five days that a single `Deploy` dispatch was all

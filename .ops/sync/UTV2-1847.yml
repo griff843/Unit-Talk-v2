@@ -1,0 +1,193 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1847
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1847
+  objective: >-
+    `playwright.config.ts` starts both processes — the Next dev server and an
+    API process the client can reach — or the spec is skipped with an explicit,
+    visible reason rather than passing vacuously.
+
+    A CI workflow runs the suite on `apps/smart-form/**` changes.
+
+    Coverage for the dimensions named in the pre-release requirement: stale
+    events, signed odds and spread lines, canonical team fallback, honest
+    missing coverage provenance, and Track Only non-delivery.
+
+    A spec that cannot reach the API must **fail or skip loudly**, never pass. A
+    vacuous green here is worse than no suite.
+  acceptance_criteria:
+    - |-
+      Wave 1 step 3 of the Milestone 1 path (docs/mission/plan.md). Independent of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s reserved admission decision, and required before the pilot is run.
+
+      ## Measured gap (origin/main, 2026-09-06)
+
+      Four Playwright specs exist under `apps/smart-form/e2e/` — `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts` — and **no CI workflow runs any of them**.
+
+      * `apps/smart-form/package.json` defines `test:e2e`, `test:e2e:fixture` and `test:e2e:real-reference`, all `playwright test -c playwright.config.ts`. Nothing invokes them.
+      * The three workflows that mention Playwright — `qa-fast.yml`, `post-merge-qa-gate.yml`, `qa-experience-regression.yml` — all run `pnpm qa:experience`, the qa-agent experience harness. That is a different suite; it installs a browser but never invokes the `e2e/` specs.
+      * `playwright.config.ts` declares `webServer.command: 'pnpm dev'` with `url: 'http://127.0.0.1:4100/submit'` and starts **no API process**, while `apps/smart-form/lib/api-client.ts:4` targets `NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000'` and `:277` POSTs to `${API}/api/submissions`.
+
+      So even run locally, any spec that submits is talking to nothing on `:4000`. [UTV2-1844](https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed)'s own proof bundle records this under "What this lane does not claim".
+
+      ## Why now
+
+      Milestone 1 step 4 is a real human submission through the deployed form. These specs are the only assertions covering the combined browser to API to persisted-pick path, and nothing runs them.
+
+      ## Required outcome
+
+      1. `playwright.config.ts` starts both processes — the Next dev server and an API process the client can reach — or the spec is skipped with an explicit, visible reason rather than passing vacuously.
+      2. A CI workflow runs the suite on `apps/smart-form/**` changes.
+      3. Coverage for the dimensions named in the pre-release requirement: stale events, signed odds and spread lines, canonical team fallback, honest missing coverage provenance, and Track Only non-delivery.
+      4. A spec that cannot reach the API must **fail or skip loudly**, never pass. A vacuous green here is worse than no suite.
+
+      ## Explicitly out of scope
+
+      * No change to `apps/api/src/submission-service.ts` or the event-existence gate — that is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server half and is reserved-blocked.
+      * No change to any of the four required checks, branch protection, or merge authority. This adds a new non-required workflow.
+      * No containment change. The suite runs against local processes, never production.
+
+      ## Scope split — measured 2026-09-06, and it is a lane-taxonomy gap, not a choice
+
+      No single lane type admits this whole change, so it ships in two parts. Measured against `.lane/lanes/*.yml` on `main`:
+
+      | Lane type | `apps/smart-form/e2e/**`, `playwright.config.ts` | `.github/workflows/qa-fast.yml` | root `package.json` |
+      | -- | -- | -- | -- |
+      | `delivery-ui` | admitted (`apps/smart-form/**`) | no | no |
+      | `hygiene` | **no** — admits `apps/**/*.test.ts` only, and these are `.spec.ts` | admitted (`.github/**`) | admitted |
+      | `verification` | no | no | admitted |
+
+      This is the same "a real path is in no lane type's allowlist" class as [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work) (`apps/web/**`), [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) (`docs/mission/**`) and [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) (`docs/03_product/**`). Widening an allowlist requires a CODEOWNERS `scope-override/v1`, because `.lane/lanes/*.yml` sits outside any lane's own `file_scope_lock`.
+
+      **Part 1 — this lane (**`delivery-ui`**, scope** `apps/smart-form/**`**).** The substantive repair: make `playwright.config.ts` start an API process the client can actually reach, and make every spec fail or skip loudly when it cannot. Requirement 4 lives entirely here. A spec that silently passes against nothing is the defect being fixed, so this half is worth landing on its own.
+
+      **Part 2 — CI wiring (**`hygiene`**, scope** `.github/workflows/qa-fast.yml` **+ root** `package.json`**).** Adds the step that runs the suite. `qa-fast.yml` already triggers on `apps/smart-form/**` and already installs Chromium, so no new workflow file is needed. Deliberately not bundled: it needs a lane type that cannot carry Part 1's files.
+
+      `.github/workflows/qa-fast.yml` and root `package.json` are also both singleton paths, requiring `--singleton-approved` at lane-start.
+
+      ## Note for the executor
+
+      Declare `package.json` in the lane's `file_scope_lock` at lane-start if any new test file may be added — `pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` and a pinned lock cannot be widened by an agent. In Part 1 this means a new spec file cannot be added; extend the four existing specs instead.
+  guardrails: []
+  non_goals:
+    - No change to `apps/api/src/submission-service.ts` or the event-existence
+      gate — that is
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s
+      server half and is reserved-blocked.
+    - No change to any of the four required checks, branch protection, or merge
+      authority. This adds a new non-required workflow.
+    - No containment change. The suite runs against local processes, never
+      production.
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      (description preamble)
+      Wave 1 step 3 of the Milestone 1 path (docs/mission/plan.md). Independent of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s reserved admission decision, and required before the pilot is run.
+    - |-
+      Measured gap (origin/main, 2026-09-06)
+      Four Playwright specs exist under `apps/smart-form/e2e/` — `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts` — and **no CI workflow runs any of them**.
+
+      * `apps/smart-form/package.json` defines `test:e2e`, `test:e2e:fixture` and `test:e2e:real-reference`, all `playwright test -c playwright.config.ts`. Nothing invokes them.
+      * The three workflows that mention Playwright — `qa-fast.yml`, `post-merge-qa-gate.yml`, `qa-experience-regression.yml` — all run `pnpm qa:experience`, the qa-agent experience harness. That is a different suite; it installs a browser but never invokes the `e2e/` specs.
+      * `playwright.config.ts` declares `webServer.command: 'pnpm dev'` with `url: 'http://127.0.0.1:4100/submit'` and starts **no API process**, while `apps/smart-form/lib/api-client.ts:4` targets `NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000'` and `:277` POSTs to `${API}/api/submissions`.
+
+      So even run locally, any spec that submits is talking to nothing on `:4000`. [UTV2-1844](https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed)'s own proof bundle records this under "What this lane does not claim".
+    - >-
+      Why now
+
+      Milestone 1 step 4 is a real human submission through the deployed form.
+      These specs are the only assertions covering the combined browser to API
+      to persisted-pick path, and nothing runs them.
+    - |-
+      Scope split — measured 2026-09-06, and it is a lane-taxonomy gap, not a choice
+      No single lane type admits this whole change, so it ships in two parts. Measured against `.lane/lanes/*.yml` on `main`:
+
+      | Lane type | `apps/smart-form/e2e/**`, `playwright.config.ts` | `.github/workflows/qa-fast.yml` | root `package.json` |
+      | -- | -- | -- | -- |
+      | `delivery-ui` | admitted (`apps/smart-form/**`) | no | no |
+      | `hygiene` | **no** — admits `apps/**/*.test.ts` only, and these are `.spec.ts` | admitted (`.github/**`) | admitted |
+      | `verification` | no | no | admitted |
+
+      This is the same "a real path is in no lane type's allowlist" class as [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work) (`apps/web/**`), [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) (`docs/mission/**`) and [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) (`docs/03_product/**`). Widening an allowlist requires a CODEOWNERS `scope-override/v1`, because `.lane/lanes/*.yml` sits outside any lane's own `file_scope_lock`.
+
+      **Part 1 — this lane (**`delivery-ui`**, scope** `apps/smart-form/**`**).** The substantive repair: make `playwright.config.ts` start an API process the client can actually reach, and make every spec fail or skip loudly when it cannot. Requirement 4 lives entirely here. A spec that silently passes against nothing is the defect being fixed, so this half is worth landing on its own.
+
+      **Part 2 — CI wiring (**`hygiene`**, scope** `.github/workflows/qa-fast.yml` **+ root** `package.json`**).** Adds the step that runs the suite. `qa-fast.yml` already triggers on `apps/smart-form/**` and already installs Chromium, so no new workflow file is needed. Deliberately not bundled: it needs a lane type that cannot carry Part 1's files.
+
+      `.github/workflows/qa-fast.yml` and root `package.json` are also both singleton paths, requiring `--singleton-approved` at lane-start.
+    - >-
+      Note for the executor
+
+      Declare `package.json` in the lane's `file_scope_lock` at lane-start if
+      any new test file may be added — `pnpm verify` fails closed with
+      `WIRING_TEST_UNWIRED_NEW` and a pinned lock cannot be widened by an agent.
+      In Part 1 this means a new spec file cannot be added; extend the four
+      existing specs instead.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1847/smart-form-e2e-run-the-browser-to-api-to-persisted-pick-flow-in-ci
+    title: "Smart Form E2E: run the browser to API to persisted-pick flow in CI
+      against a real API process"
+    description: |-
+      Wave 1 step 3 of the Milestone 1 path (docs/mission/plan.md). Independent of [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s reserved admission decision, and required before the pilot is run.
+
+      ## Measured gap (origin/main, 2026-09-06)
+
+      Four Playwright specs exist under `apps/smart-form/e2e/` — `auth-gate.spec.ts`, `phase-one.spec.ts`, `real-reference.spec.ts`, `smart-form-submission.spec.ts` — and **no CI workflow runs any of them**.
+
+      * `apps/smart-form/package.json` defines `test:e2e`, `test:e2e:fixture` and `test:e2e:real-reference`, all `playwright test -c playwright.config.ts`. Nothing invokes them.
+      * The three workflows that mention Playwright — `qa-fast.yml`, `post-merge-qa-gate.yml`, `qa-experience-regression.yml` — all run `pnpm qa:experience`, the qa-agent experience harness. That is a different suite; it installs a browser but never invokes the `e2e/` specs.
+      * `playwright.config.ts` declares `webServer.command: 'pnpm dev'` with `url: 'http://127.0.0.1:4100/submit'` and starts **no API process**, while `apps/smart-form/lib/api-client.ts:4` targets `NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000'` and `:277` POSTs to `${API}/api/submissions`.
+
+      So even run locally, any spec that submits is talking to nothing on `:4000`. [UTV2-1844](https://linear.app/unit-talk-v2/issue/UTV2-1844/smart-form-ui-signed-odds-and-line-enterable-on-mobile-db-backed)'s own proof bundle records this under "What this lane does not claim".
+
+      ## Why now
+
+      Milestone 1 step 4 is a real human submission through the deployed form. These specs are the only assertions covering the combined browser to API to persisted-pick path, and nothing runs them.
+
+      ## Required outcome
+
+      1. `playwright.config.ts` starts both processes — the Next dev server and an API process the client can reach — or the spec is skipped with an explicit, visible reason rather than passing vacuously.
+      2. A CI workflow runs the suite on `apps/smart-form/**` changes.
+      3. Coverage for the dimensions named in the pre-release requirement: stale events, signed odds and spread lines, canonical team fallback, honest missing coverage provenance, and Track Only non-delivery.
+      4. A spec that cannot reach the API must **fail or skip loudly**, never pass. A vacuous green here is worse than no suite.
+
+      ## Explicitly out of scope
+
+      * No change to `apps/api/src/submission-service.ts` or the event-existence gate — that is [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server half and is reserved-blocked.
+      * No change to any of the four required checks, branch protection, or merge authority. This adds a new non-required workflow.
+      * No containment change. The suite runs against local processes, never production.
+
+      ## Scope split — measured 2026-09-06, and it is a lane-taxonomy gap, not a choice
+
+      No single lane type admits this whole change, so it ships in two parts. Measured against `.lane/lanes/*.yml` on `main`:
+
+      | Lane type | `apps/smart-form/e2e/**`, `playwright.config.ts` | `.github/workflows/qa-fast.yml` | root `package.json` |
+      | -- | -- | -- | -- |
+      | `delivery-ui` | admitted (`apps/smart-form/**`) | no | no |
+      | `hygiene` | **no** — admits `apps/**/*.test.ts` only, and these are `.spec.ts` | admitted (`.github/**`) | admitted |
+      | `verification` | no | no | admitted |
+
+      This is the same "a real path is in no lane type's allowlist" class as [UTV2-1715](https://linear.app/unit-talk-v2/issue/UTV2-1715/lane-admission-correction-appsweb-has-no-lane-type-so-no-website-work) (`apps/web/**`), [UTV2-1829](https://linear.app/unit-talk-v2/issue/UTV2-1829/mission-context-make-intentspecplan-standing-context-for-claude) (`docs/mission/**`) and [UTV2-1843](https://linear.app/unit-talk-v2/issue/UTV2-1843/consolidate-smart-form-product-intent-correct-the-mobile-signed-odds) (`docs/03_product/**`). Widening an allowlist requires a CODEOWNERS `scope-override/v1`, because `.lane/lanes/*.yml` sits outside any lane's own `file_scope_lock`.
+
+      **Part 1 — this lane (**`delivery-ui`**, scope** `apps/smart-form/**`**).** The substantive repair: make `playwright.config.ts` start an API process the client can actually reach, and make every spec fail or skip loudly when it cannot. Requirement 4 lives entirely here. A spec that silently passes against nothing is the defect being fixed, so this half is worth landing on its own.
+
+      **Part 2 — CI wiring (**`hygiene`**, scope** `.github/workflows/qa-fast.yml` **+ root** `package.json`**).** Adds the step that runs the suite. `qa-fast.yml` already triggers on `apps/smart-form/**` and already installs Chromium, so no new workflow file is needed. Deliberately not bundled: it needs a lane type that cannot carry Part 1's files.
+
+      `.github/workflows/qa-fast.yml` and root `package.json` are also both singleton paths, requiring `--singleton-approved` at lane-start.
+
+      ## Note for the executor
+
+      Declare `package.json` in the lane's `file_scope_lock` at lane-start if any new test file may be added — `pnpm verify` fails closed with `WIRING_TEST_UNWIRED_NEW` and a pinned lock cannot be widened by an agent. In Part 1 this means a new spec file cannot be added; extend the four existing specs instead.
+    captured_at: 2026-09-06T21:58:58.187Z
+    description_sha256: c033c603bd665d6dc15bde0351190b2705ff4d49498bdd3241565356a112de1e
+  contract_hash: ee7492a394a2e4ae8f1b83a19be7206bc042791178cafb61e452256187ddb288

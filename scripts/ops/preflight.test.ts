@@ -2,17 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { CheckResult } from './shared.js';
+import type { CheckResult, PreflightToken } from './shared.js';
 import {
   ROOT,
   PREFLIGHT_RESULT_SCHEMA_PATH,
   PREFLIGHT_TOKEN_SCHEMA_PATH,
+  T1_LIVE_DB_PRECONDITION_DEFERRED,
   preflightResultPathForBranch,
   preflightTokenPathForBranch,
   validatePreflightSchemaDependencies,
 } from './shared.js';
 import {
   branchContainsExactIssue,
+  createToken,
   FULL_VERIFY_THROTTLE_DIR,
   FULL_VERIFY_THROTTLE_STALE_MS,
   configuredFullVerifyConcurrency,
@@ -570,23 +572,39 @@ test('UTV2-1845 inversion: an absent credential still fails, and is not containm
   assert.equal(sink.byId('PT1')?.status, 'fail');
 });
 
-test('UTV2-1845: blocked_by_containment admits nothing -- it still resolves to INFRA', () => {
+// UTV2-1851 (route B, ratified by PM 2026-09-06). This test previously asserted the OPPOSITE --
+// that PT1's `blocked_by_containment` still resolved to INFRA, admitting nothing. That was the
+// correct assertion for UTV2-1845, which deliberately landed the classification without the
+// admission. The admission is now ratified, so the assertion inverts; the surrounding controls do
+// not, and they are what keep the change bounded.
+test('UTV2-1851: PT1 containment is admitted, and nothing else is relaxed', () => {
+  // The ratified change: PT1 containment alone no longer blocks a verdict.
   assert.equal(
     resolveVerdict([
       { id: 'PE1', status: 'pass', detail: '' },
       { id: 'PT1', status: 'blocked_by_containment', detail: '' },
     ]),
-    'INFRA',
-  );
-  // Control: the mapping is not unconditional. Without the containment outcome the same list passes.
-  assert.equal(
-    resolveVerdict([
-      { id: 'PE1', status: 'pass', detail: '' },
-      { id: 'PT1', status: 'pass', detail: '' },
-    ]),
     'PASS',
   );
-  // Control: infra_error is unchanged.
+
+  // BINDING CONDITION -- "all other applicable preflight checks must still pass". A containment
+  // admission does not carry an unrelated failure through with it.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'fail', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'FAIL',
+  );
+  assert.equal(
+    resolveVerdict([
+      { id: 'PL2', status: 'fail', detail: '' },
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+    ]),
+    'NOT_APPLICABLE',
+  );
+
+  // A genuine infrastructure fault is untouched: it still returns INFRA and writes no token.
   assert.equal(
     resolveVerdict([
       { id: 'PE1', status: 'pass', detail: '' },
@@ -594,4 +612,55 @@ test('UTV2-1845: blocked_by_containment admits nothing -- it still resolves to I
     ]),
     'INFRA',
   );
+  assert.equal(
+    resolveVerdict([
+      { id: 'PT1', status: 'blocked_by_containment', detail: '' },
+      { id: 'PE2', status: 'infra_error', detail: '' },
+    ]),
+    'INFRA',
+  );
+
+  // SCOPE CONTROL: the admission is PT1's alone. `blocked_by_containment` from any other check
+  // still returns INFRA, so a future emitter cannot inherit this admission without its own review.
+  assert.equal(
+    resolveVerdict([
+      { id: 'PE1', status: 'blocked_by_containment', detail: '' },
+      { id: 'PT1', status: 'pass', detail: '' },
+    ]),
+    'INFRA',
+  );
+});
+
+test('UTV2-1851: the admitted token records the deferral, and an ordinary token does not', () => {
+  const generatedAt = new Date().toISOString();
+  const admitted = createToken(
+    'UTV2-1851',
+    'T1',
+    'claude/utv2-1851-example',
+    'a'.repeat(40),
+    generatedAt,
+    [],
+    false,
+    [],
+    null,
+    true,
+  ) as PreflightToken;
+  assert.equal(admitted.t1_live_db_precondition, T1_LIVE_DB_PRECONDITION_DEFERRED);
+
+  // Control: the field is not written unconditionally. Every lane that did not hit containment
+  // produces a token with no deferral at all, which is what keeps `validateManifest`'s bridge
+  // silent for ordinary lanes.
+  const ordinary = createToken(
+    'UTV2-1851',
+    'T1',
+    'claude/utv2-1851-example',
+    'a'.repeat(40),
+    generatedAt,
+    [],
+    false,
+    [],
+    null,
+    false,
+  ) as PreflightToken;
+  assert.equal('t1_live_db_precondition' in ordinary, false);
 });

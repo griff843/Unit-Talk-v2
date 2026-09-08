@@ -1,0 +1,45 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1529",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1529-truth-check-scope-override",
+  "branch": "claude/utv2-1529-truth-check-scope-override",
+  "base_branch": "main",
+  "commit_sha": "e09b3cae378d2a7ad12bb09b1f2c6c339778ddc0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/1532",
+  "files_changed": [
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-09-07T19:46:09.479Z",
+  "heartbeat_at": "2026-09-07T20:22:16.245Z",
+  "closed_at": "2026-09-07T20:22:16.245Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-09-07T20:22:13.186Z",
+      "verdict": "pass",
+      "merge_sha": "e09b3cae378d2a7ad12bb09b1f2c6c339778ddc0",
+      "failures": [],
+      "runner": "ops:lane-close"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1529-truth-check-scope-override",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

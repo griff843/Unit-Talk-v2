@@ -132,8 +132,27 @@ The manifest is a single JSON object. Unknown fields are preserved but not acted
 | `parent_lane` | string | for sub-lanes under a plan PR (future) |
 | `task_packet_hash` | string | for Codex lanes, hash of dispatched packet for scope-diff |
 | `notes` | string | human-readable commentary, non-authoritative |
+| `t1_live_db_precondition` | `"deferred_to_ci"` | T1 only. Records that preflight `PT1`'s live-DB check was deferred to the CI staging receipt; enforced at closeout by truth-check `G6` (UTV2-1848) |
 
 Optional fields are additive. They do not change truth-check behavior unless explicitly referenced by spec.
+
+#### `t1_live_db_precondition` (UTV2-1848)
+
+The one exception to the sentence above: this field *is* explicitly referenced by
+`docs/05_operations/TRUTH_CHECK_SPEC.md` §4.2 `G6`, and its presence creates a fail-closed closeout
+obligation.
+
+- The only legal value is the string `"deferred_to_ci"`. `validateManifest` **refuses** any other
+  value rather than ignoring it — reading an unrecognised value as "no deferral" would turn a typo
+  into a silently dropped obligation, which is the exact failure this field exists to prevent. It is
+  a one-member union rather than a boolean on purpose: a second deferral basis must be named and
+  reviewed, not expressed by flipping a flag.
+- It is legal only on a `T1` lane. `validateManifest` refuses it at any other tier.
+- **Nothing writes it today.** It would be written by `ops:preflight` onto the preflight token and
+  copied onto the manifest by `ops:lane-start`, but only if PM admits a T1 lane whose `PT1` check
+  reports `blocked_by_containment` — a reserved decision recorded in
+  `docs/governance/PT1_CONTAINMENT_ADMISSION_DECISION.md` §5 and not taken. Absent that, no manifest
+  carries the field and `G6` skips.
 
 ### 4.4 `truth_check_history[]` entry shape
 

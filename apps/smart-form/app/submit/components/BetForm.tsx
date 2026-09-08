@@ -39,7 +39,13 @@ import {
   resolveSportsbookId,
   type SmartFormIdentityMode,
 } from '@/lib/form-utils';
-import { betFormSchema, type BetFormValues, type MarketTypeId } from '@/lib/form-schema';
+import {
+  betFormSchema,
+  clampUnits,
+  UNITS_STEP,
+  type BetFormValues,
+  type MarketTypeId,
+} from '@/lib/form-schema';
 import {
   getMarketTypeLabel,
   isMoneylineMarketType,
@@ -356,7 +362,7 @@ function normalizeUnitsValue(value: string) {
     return undefined;
   }
 
-  return clampNumber(Math.round(parsed * 2) / 2, 0.5, 5);
+  return clampUnits(parsed);
 }
 
 function normalizeConvictionValue(value: string) {
@@ -4141,7 +4147,7 @@ export function BetForm({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => field.onChange(Math.max(0.5, ((field.value as number | undefined) ?? 1) - 0.5))}
+                              onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) - UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
                               −
@@ -4151,7 +4157,7 @@ export function BetForm({
                             </span>
                             <button
                               type="button"
-                              onClick={() => field.onChange(Math.min(10, ((field.value as number | undefined) ?? 1) + 0.5))}
+                              onClick={() => field.onChange(clampUnits(((field.value as number | undefined) ?? 1) + UNITS_STEP))}
                               className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
                             >
                               +

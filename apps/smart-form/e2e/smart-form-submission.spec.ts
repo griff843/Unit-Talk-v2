@@ -4,6 +4,15 @@ import { expect, test } from '@playwright/test';
 // must not be cited as proof of connected canonical-reference data.
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/session', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({
+      user: { name: 'Griff Test' },
+      capperId: 'griff843',
+      expires: new Date(Date.now() + 3_600_000).toISOString(),
+    }),
+  }));
   await page.route('**/api/reference-data/availability?**', async (route) => {
     const sportId = new URL(route.request().url()).searchParams.get('sport') ?? '';
     await route.fulfill({
@@ -493,7 +502,7 @@ test('live-offer search flow supports canonical entity selection and successful 
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-1/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-1/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -653,7 +662,7 @@ test('selected matchup constrains player props to matchup teams and valid stat t
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-1/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-1/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -726,7 +735,7 @@ test('player-prop flow binds matchup and narrows players once a matchup team is 
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -827,7 +836,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -934,7 +943,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1005,7 +1014,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1078,7 +1087,7 @@ test('spread fallback keeps the selected matchup compact when live offers are mi
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1126,7 +1135,7 @@ test('total fallback keeps the selected matchup compact when live offers are mis
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1174,7 +1183,7 @@ test('team total fallback keeps the selected matchup compact when live offers ar
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -1248,7 +1257,7 @@ test('alternate live books surface when selected sportsbook has no coverage for 
   await page.route('**/api/reference-data/matchups?**', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupMatchupsResponse) });
   });
-  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-celtics/browse*', async (route) => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noFanaticsPropsResponse) });
   });
   await page.route('**/api/reference-data/search?**', async (route) => {
@@ -1300,7 +1309,7 @@ test('nhl moneyline uses the same guided game-market flow as nba', async ({ page
     });
   });
 
-  await page.route('**/api/reference-data/events/evt-kraken/browse', async (route) => {
+  await page.route('**/api/reference-data/events/evt-kraken/browse*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
