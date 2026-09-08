@@ -7,18 +7,18 @@
   "status": "READY_FOR_REVIEW",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8",
+    "verified_source_sha": "1cbc55c3f75cc55928a140a8e0e90eb7ac7a6857",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_type_check": "PASS - exit 0, no diagnostics, measured locally at this anchor (pnpm type-check).",
-      "pnpm_test": "PASS - tests 5977, pass 5977, fail 0, exit 0, measured locally at this anchor (pnpm test).",
+      "pnpm_test": "PASS - tests 6069, pass 6069, fail 0, exit 0, measured locally at this anchor (pnpm test). The count read 5977 at the previous anchor 9e01ad244; the resync to 1cbc55c3f brought further main commits onto the branch, so the suite is larger. Regenerated at this anchor rather than carried forward.",
       "pnpm_verify": "EXIT 1 locally, and not because anything failed. Every stage through verify:commands passed; the run then reached test:live-db, which refuses outside the staging-ci GitHub environment. No local PASS is claimed. The required `verify` check on this PR is the authoritative result.",
-      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 14, Rules matched operator-ui, every triggered required[] artifact present. The count is 14 here, having read 20 at the previous anchor d0f0ca00e: this resync brings docs/mission/plan.md into agreement with origin/main, so it leaves the branch diff entirely. The number is regenerated at each anchor rather than carried forward precisely because it moves in both directions."
+      "r_level_check": "PASS - npx tsx scripts/ci/r-level-check.ts --issue UTV2-1843: Verdict PASS, Changed files 16, Rules matched operator-ui, every triggered required[] artifact present. The count read 14 at the previous anchor and 20 at the one before that; it moves in both directions as the branch diff changes against main, which is why it is regenerated at every anchor move."
     },
     "sha_type": "pending_merge",
-    "anchor_note": "9e01ad244080fc3788ae1edc0e1c81665ffb90b8 is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND -- merging BEHIND would be an admin exemption, not permission. It is the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES (proof-binding-validator.ts:43 -- docs/06_status/proof/ and docs/06_status/lanes/), and it is the tree every command above was run against. Rule 4 is a two-dot git diff verified_source_sha..HEAD (:129-135, :267), so commits after this one touch only the proof bundle and the lane manifest and do not move the anchor. The anchor has moved five times on this lane; the receipts were re-executed at every move rather than carried forward, and both the test count and the r-level file count changed across those moves.",
-    "bound_at": "2026-09-06T22:10:00.000Z"
+    "anchor_note": "1cbc55c3f75cc55928a140a8e0e90eb7ac7a6857 is the merge of origin/main into this branch, taken to satisfy strict branch-protection freshness rather than merge while BEHIND -- merging BEHIND would be an admin exemption, not permission. It is the current PR head and the tree every command above was run against.\n\nThis anchor was moved as a correction, and the correction is worth recording rather than hiding. The previous anchor 9e01ad244 carried a note asserting it was 'the last commit on this branch changing any file outside PROOF_ONLY_PREFIXES'. That was true when written and was made false by the very resync that made this PR mergeable: a two-dot `git diff 9e01ad244..1cbc55c3f` returns 77 files, including apps/api, apps/smart-form, scripts/ops and package.json -- all of them main's commits imported by the merge, none of them this lane's work. Rule 4 of proof-binding-validator.ts (:129-135, :267) is a two-dot diff, so it reads those imported files as movement past the anchor. The note described a property the tree no longer had.\n\nNothing about the lane's own diff changed; what changed is which commit the receipts were measured at. Both measurable numbers moved across the re-anchor -- the test count from 5977 to 6069 and the r-level changed-file count from 14 to 16 -- which is the evidence that they were re-executed here rather than carried forward. The anchor has now moved six times on this lane, and the receipts were re-run at every move.",
+    "bound_at": "2026-09-08T14:05:00.000Z"
   },
   "static_proof": {
     "status": "PASS",
