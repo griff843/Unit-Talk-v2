@@ -6597,10 +6597,53 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       Array.from(teamMap.values()).map((team) => [team.id, team.display_name]),
     );
 
+    // UTV2-1856: the two loaders above read the CANONICAL layer -- `teams` via
+    // `provider_entity_aliases` where `entity_kind='team'`, and
+    // `player_team_assignments`. Measured read-only on production 2026-09-08:
+    // `teams` 0 rows, `player_team_assignments` 0 rows, and all 840
+    // `provider_entity_aliases` rows are `entity_kind='player'`. Both maps are
+    // therefore empty unconditionally, so every player was emitted with
+    // `teamId: null` -- which `apps/api/src/smart-form-validation.ts:448`
+    // rejected as a relationship mismatch on every canonical-event player prop,
+    // and which made `BetForm.tsx` `allowedPlayerIds`/`groupedPlayers` hide every
+    // player once a team was selected.
+    //
+    // The fallback is the same provider edge UTV2-1854 established for
+    // `searchPlayers`: participants(player).metadata->>'team_external_id' matched
+    // to participants(team).external_id. It is resolved against THIS EVENT's own
+    // team participants rather than by a second global lookup, because
+    // `EventParticipantBrowseResult.teamId` is consumed as "which side of this
+    // event" -- a player whose team is not in the event correctly stays null.
+    //
+    // Canonical data still wins wherever it exists; this only fills the gap, and
+    // it fabricates nothing.
+    const eventTeamsByExternalId = new Map<string, ParticipantRow>();
+    for (const participant of participantMap.values()) {
+      if (participant.participant_type !== 'team') continue;
+      const externalId = participant.external_id;
+      if (typeof externalId === 'string' && externalId.length > 0) {
+        eventTeamsByExternalId.set(externalId, participant);
+      }
+    }
+
     const participants: EventParticipantBrowseResult[] = [];
     for (const row of eventParticipantRows) {
       const participant = participantMap.get(row.participant_id as string);
       if (!participant) {
+        continue;
+      }
+
+      // UTV2-1856: a confirmed proof fixture must not be selectable here either.
+      // UTV2-1854 excluded fixtures from `searchPlayers`/`searchTeams`, and
+      // `handleSearchPlayers`/`handleSearchTeams` only ever INTERSECT those
+      // already-filtered results with this event's participants -- so the search
+      // endpoints were already covered by that existing control. This browse
+      // result is NOT reached through them: `BetForm.tsx` renders
+      // `eventBrowse.participants` directly as the player picker, so without this
+      // predicate a fixture attached to an event would be pickable and
+      // submittable. Same predicate, applied at the second operational entry
+      // point, rather than a second differently-shaped filter.
+      if (isConfirmedProofFixture(participant.metadata)) {
         continue;
       }
 
@@ -6619,16 +6662,22 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       }
 
       const assignment = currentAssignments.get(participant.id) ?? null;
+      const participantsEdgeTeam = assignment
+        ? null
+        : resolveTeamFromParticipantsEdge(
+            participant.metadata,
+            eventTeamsByExternalId,
+          );
       participants.push({
         participantId: participant.id,
         canonicalId: participant.id,
         participantType: 'player',
         displayName: participant.display_name,
         role: row.role as string,
-        teamId: assignment?.teamId ?? null,
+        teamId: assignment?.teamId ?? participantsEdgeTeam?.id ?? null,
         teamName: assignment?.teamId
           ? (teamNameMap.get(assignment.teamId) ?? null)
-          : null,
+          : (participantsEdgeTeam?.display_name ?? null),
       });
     }
 
@@ -6926,6 +6975,31 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       ),
     );
     const assignments = await this.loadCurrentAssignments(playerIds);
+
+    // UTV2-1856: the same participants-edge fallback getEventBrowse applies, for
+    // the same reason -- `assignments` reads `player_team_assignments`, which is
+    // empty under parked ingestion, so every suggestion carried `teamId: null`
+    // and `BetForm.tsx:1603` set `selectedTeamId` to null straight from it.
+    //
+    // The map is keyed PER EVENT, not globally: `participantMap` spans every
+    // matched event here, and a global external_id map could relate a player to a
+    // same-named team from a different matchup.
+    const teamParticipantsByEvent = new Map<
+      string,
+      Map<string, ParticipantRow>
+    >();
+    for (const row of playerParticipantRows) {
+      const participant = participantMap.get(row.participant_id as string);
+      if (!participant || participant.participant_type !== 'team') continue;
+      const externalId = participant.external_id;
+      if (typeof externalId !== 'string' || externalId.length === 0) continue;
+      const eventId = row.event_id as string;
+      const forEvent =
+        teamParticipantsByEvent.get(eventId) ??
+        new Map<string, ParticipantRow>();
+      forEvent.set(externalId, participant);
+      teamParticipantsByEvent.set(eventId, forEvent);
+    }
     const teamIds = Array.from(
       new Set(
         Array.from(assignments.values())
@@ -6964,17 +7038,35 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         continue;
       }
 
+      // UTV2-1856: a confirmed proof fixture is not a selectable suggestion.
+      // The search ENDPOINTS were already covered -- handleSearchPlayers starts
+      // from `searchPlayers`, whose UTV2-1854 exclusion is a query predicate, and
+      // the event filter only intersects that set. This browse suggestion path
+      // does not go through them, so it needs the predicate applied here.
+      if (isConfirmedProofFixture(participant.metadata)) {
+        continue;
+      }
+
       const assignment = assignments.get(participant.id) ?? null;
+      const edgeTeam = assignment
+        ? null
+        : resolveTeamFromParticipantsEdge(
+            participant.metadata,
+            teamParticipantsByEvent.get(row.event_id as string) ??
+              EMPTY_TEAM_PARTICIPANTS,
+          );
+      const resolvedTeamId = assignment?.teamId ?? edgeTeam?.id ?? null;
+      const resolvedTeamName = assignment?.teamId
+        ? (teamNameMap.get(assignment.teamId) ?? null)
+        : (edgeTeam?.display_name ?? null);
       const matchupLabel = formatBrowseMatchup(matchup);
       pushBrowseSearchResult(results, seen, {
         resultType: 'player',
         participantId: participant.id,
         displayName: participant.display_name,
-        contextLabel: `${assignment?.teamId ? (teamNameMap.get(assignment.teamId) ?? 'Unassigned') : 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
-        teamId: assignment?.teamId ?? null,
-        teamName: assignment?.teamId
-          ? (teamNameMap.get(assignment.teamId) ?? null)
-          : null,
+        contextLabel: `${resolvedTeamName ?? 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
+        teamId: resolvedTeamId,
+        teamName: resolvedTeamName,
         matchup,
       });
     }
@@ -9404,6 +9496,32 @@ function isConfirmedProofFixture(metadata: unknown): boolean {
  * to prevent.
  */
 const PROOF_FIXTURE_METADATA_PATH = 'metadata->>proofIssue';
+
+/**
+ * UTV2-1856: resolves a player's team through the provider observation edge --
+ * `participants(player).metadata->>'team_external_id'` matched to
+ * `participants(team).external_id` -- against a caller-supplied set of team
+ * participants.
+ *
+ * It returns null rather than guessing in both of the cases that matter, and
+ * they are DIFFERENT cases that today's production data cannot tell apart: a
+ * player carrying no `team_external_id` at all (26 of 1523 on production), and a
+ * player whose key names a team that is not among the teams supplied. Neither is
+ * repaired into a team, because a "pick some team" implementation would agree
+ * with every current observation and still be wrong the first time ingestion
+ * produces a genuinely team-less player.
+ */
+/** Shared empty map, so the per-event lookup above allocates nothing on a miss. */
+const EMPTY_TEAM_PARTICIPANTS: ReadonlyMap<string, ParticipantRow> = new Map();
+
+function resolveTeamFromParticipantsEdge(
+  metadata: unknown,
+  teamsByExternalId: ReadonlyMap<string, ParticipantRow>,
+): ParticipantRow | null {
+  const externalId = readTeamExternalId(metadata);
+  if (!externalId) return null;
+  return teamsByExternalId.get(externalId) ?? null;
+}
 
 function readTeamExternalId(metadata: unknown): string | null {
   if (typeof metadata !== 'object' || metadata === null) return null;
