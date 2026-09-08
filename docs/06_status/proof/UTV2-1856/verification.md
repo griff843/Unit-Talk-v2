@@ -12,7 +12,7 @@ Tier: T1
 Lane type: runtime
 Branch: claude/utv2-1856-browse-participant-identity
 PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1536
-Head SHA: 83f4ea04c4defb3b2755a292be486a5bd8ca9277
+Head SHA: 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901
 result: pass
 
 ## ASSERTIONS:
@@ -135,17 +135,33 @@ result: pass
   no-event structured fallback asserts HTTP 201, `outboxEnqueued: false`, the persisted
   line, odds, `distributionMode: 'track-only'`, `eventId: null` and both canonical side ids via
   `GET /api/picks`, and `outboxId: null` via `GET /api/qa/pick-status/<pickId>`.
-- [x] **The un-intercepted player prop issues its request and the server refuses on its own
-  authority.** Measured `422 SMART_FORM_RELATIONSHIP_INVALID` — `validateSearchBackedPlayer` failing
-  closed against a canonical player it cannot corroborate. The request existing at all is the half
-  that UTV2-1859 unblocked; before it, this run issued zero requests. This is **not** a persisted
-  player-prop claim, and the refusal fires one step earlier than the rule under test — see "Browser
+- [x] **An un-intercepted player prop now reaches the API and persists — browser to saved pick, no
+  interception anywhere on the path.** Measured **HTTP 201**, `outboxEnqueued: false`, and the pick
+  read back out of `GET /api/picks?status=validated` carrying `selection: "Celtics Starter Points
+  O 27.5"`, `line: 27.5`, `odds: -110`, `metadata.distributionMode: "track-only"`,
+  `metadata.eventId: null` and `participantResolution.player.teamId` equal to the participant id of
+  the team the operator selected. Only the Auth.js session endpoint is stubbed; every
+  `/api/reference-data/**` read and `POST /api/submissions` go to the real API. See "Browser
   Verification".
-- [x] **A successful un-intercepted player prop is unreachable in the contained harness, and the
-  reason was measured rather than assumed**: `InMemoryReferenceDataRepository` holds no participants
-  (`createInMemoryRepositoryBundle()` takes no arguments) and its `searchPlayers` hardcodes
-  `teamId: null`. Closing that parity gap requires `apps/api/src/server.ts`, outside this lane's
-  pinned `file_scope_lock`. Recorded, not smuggled in.
+- [x] **The 422 measured at the previous head was a harness parity defect, not a server defect, and
+  it is closed inside this lane's own scope.** `InMemoryReferenceDataRepository` diverged from
+  `DatabaseReferenceDataRepository` in three ways — `searchTeams` returned a synthetic
+  `team:<sport>:<name>` id that no participant id can ever equal, `searchPlayers` hardcoded
+  `teamId: null`, and the seeded team rows carried `external_id: null` so no player could link to
+  one. All three live in `packages/db/src/runtime-repositories.ts`, which **is** inside this lane's
+  pinned `file_scope_lock`; the previous bundle's claim that the repair required
+  `apps/api/src/server.ts` was wrong and is corrected here. **No server-side rule was weakened** —
+  `validateSearchBackedPlayer` is untouched and still refuses a player whose team relationship
+  cannot be established. The 422 disappeared because resolution genuinely succeeds.
+- [x] **The player fixtures are opt-in and cannot appear in production.** They are seeded only when
+  the repository's existing `UNIT_TALK_QA_SEED_ENABLED` flag is exactly `'true'` — the same flag
+  `apps/api/src/routes/qa-seed.ts` already gates on and the contained Playwright config already
+  sets — and are refused outright under `NODE_ENV=production`. A failure to read the environment
+  seeds nothing. The default in-memory bundle every unit test builds is unchanged
+  (`playersAvailable: false`), which `apps/api/src/server.test.ts:1076` still asserts.
+- [x] **Three mutations, three distinct assertion sets.** Reverting each divergence individually
+  turns a different subset of the four new tests red, and restoring returns 22/22. See "Mutation
+  testing — the in-memory parity repair".
 - [x] The live-DB step was **deferred to CI and obtained there**: `Writable DB proof (staging only)`
   is green on this head, with **0 skipped**. See "Runtime Verification" below: the manifest carries
   `t1_live_db_precondition: "deferred_to_ci"`, and closeout check `G6` refuses this lane without
@@ -172,10 +188,17 @@ $ pnpm test
 (100 suite summaries, 0 failures; the suite this lane changed is pinned below)
 
 $ pnpm exec tsx --test packages/db/src/canonical-reference-schema.test.ts
-1..18
-# tests 18
-# pass 18
+1..22
+# tests 22
+# pass 22
 # fail 0
+(18 at the previous head; the four added here are the in-memory/Database parity tests)
+
+$ pnpm type-check      -> exit 0
+$ pnpm lint            -> exit 0
+$ pnpm test            -> exit 0, zero `not ok` lines across every wired suite
+(all three re-run locally at the tree carrying the parity repair, after the browser
+ demonstration and after the three mutations were restored)
 
 $ npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 Verdict: PASS
@@ -225,7 +248,12 @@ $ # UTV2-1856 — the picks.player_id mutation was performed by CI before the re
     Writable DB proof (staging only)   success
     verify                             success
 
-# ...and the live-DB half, obtained where the credential actually lives, on this exact head:
+# ...and the live-DB half, obtained where the credential actually lives. Taken at the previous
+# anchor 83f4ea04c4defb3b2755a292be486a5bd8ca9277, which carried this lane's server change and the
+# UTV2-1859 client change but NOT the in-memory parity repair below. It is recorded at the SHA it
+# was taken at rather than restated onto the current anchor; the receipt at
+# 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 is the authoritative one and is recorded under
+# "CI receipts at the current anchor" below:
 $ gh api .../commits/83f4ea04c4defb3b2755a292be486a5bd8ca9277/check-runs
   verify                              completed  success   run 34250974852  job 102150517971
   Writable DB proof (staging only)    completed  success   run 34250974852  job 102145137124
@@ -248,25 +276,35 @@ $ gh api .../commits/83f4ea04c4defb3b2755a292be486a5bd8ca9277/check-runs
 
 ## Verification
 
-The anchor is `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, the sixth `main` resync merge and the last
-commit on this branch touching any path outside `docs/06_status/proof/UTV2-1856/`. It is not the
-commit this lane's implementation was written on: that is
-`762a97afea7fabe1d7e5b92901bb9580203fdd37`, and the implementation has not changed since. The
-resyncs changed the **tree**, and a receipt names a tree rather than a changeset, so the receipts
-below were re-obtained rather than carried forward. One resync matters on its own terms: UTV2-1859
-(`9abb4ac62`) is now in this branch, so the browser evidence below exercises this lane's server
-change and the client change that unblocks it **in one tree**.
+The anchor is `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901`, the seventh `main` resync merge and the
+last commit on this branch touching any path outside `docs/06_status/proof/UTV2-1856/`. Its parent
+`413823a85052500d0a62ba26c4dbc92c2532e567` is the in-memory / Database parity repair described
+below, and it is the last commit this lane authored. The server change this lane exists for is
+older still — `762a97afea7fabe1d7e5b92901bb9580203fdd37` — and has not changed since.
 
 **Where each receipt was actually taken, stated exactly rather than collapsed onto the anchor.**
-The two CI receipts — `verify` and `Writable DB proof (staging only)` — were taken at the anchor
-`83f4ea04c4defb3b2755a292be486a5bd8ca9277` itself. The local commands below, and the browser runs
-further down, were run at `f2ee3eacb7760d25cda36fe2274ae5882ac73a38`, the fifth resync, and are
-**not** restated as having been re-run at the anchor. The whole difference between those two trees
-is `docs/06_status/readiness/readiness-score.json`, an automated ledger refresh:
-`git diff --name-only f2ee3eacb 83f4ea04c` returns that one path and nothing under `apps/`,
-`packages/`, `scripts/` or `.github/`. The anchor still had to move, because
-`scripts/ci/proof-binding-validator.ts` rule 4 admits only `docs/06_status/proof/` and
-`docs/06_status/lanes/` between `verified_source_sha` and HEAD, and that file is neither.
+A receipt names a tree, not a changeset, so each one is recorded at the SHA it was obtained at:
+
+| Evidence | Taken at | Tree difference from the anchor |
+|---|---|---|
+| `pnpm lint`, `pnpm type-check`, `pnpm test`, the browser runs, and the three mutations | the tree of `413823a85` (the parity repair, working tree at the time) | `docs/06_status/readiness/readiness-score.json` only |
+| The `verify` and `Writable DB proof (staging only)` receipts printed in the mutation block above | `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, the previous anchor | the parity repair plus the readiness ledger — so they are **not** claimed for this head |
+| The authoritative CI receipts for this head | `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901` | — |
+
+The anchor had to move for two independent reasons: the parity repair is real code outside the
+proof directory, and `scripts/ci/proof-binding-validator.ts` rule 4 admits only
+`docs/06_status/proof/` and `docs/06_status/lanes/` between `verified_source_sha` and HEAD, which
+`readiness-score.json` is not.
+
+One earlier resync matters on its own terms: UTV2-1859 (`9abb4ac62`) is in this branch, so the
+browser evidence below exercises this lane's server change and the client change that unblocks it
+**in one tree**.
+
+### CI receipts at the current anchor
+
+Recorded from `gh api .../commits/5fbf28c99b47fcdeac9376c8eedee8d45c0bd901/check-runs` once the run
+at this head concludes, and not before. Nothing in this bundle claims a green CI receipt for this
+head until this section carries the run and job ids that produced it.
 
 - [x] `pnpm lint`: exit 0
 - [x] `pnpm type-check`: exit 0, no diagnostics
@@ -389,53 +427,123 @@ structured fallback — NBA, manual matchup fallback, canonical Celtics/Knicks, 
 That is a saved pick verified after an un-intercepted submission, which is the evidence gap this
 run exists to close. The ticket is a **team** spread; the player variant is next, and it is bounded.
 
-### 2. Un-intercepted player prop — the request is issued, and the server answers for itself
+### 2. Un-intercepted player prop — issued, answered 201, and read back as a saved pick
 
-Driven the same way with the submission response **not** intercepted (only `search/players` is
-fixtured, because the contained API holds none). Measured:
+**This supersedes the `422 SMART_FORM_RELATIONSHIP_INVALID` recorded in the previous revision of
+this bundle.** That measurement was real at the head it was taken on, and the diagnosis attached to
+it was wrong in a way worth stating: it said a successful run was *unreachable* in the contained
+harness and that closing the gap required `apps/api/src/server.ts`, outside this lane's lock. Every
+file the repair actually needed — `packages/db/src/runtime-repositories.ts` and its test — is inside
+the lock. The refusal was the server correctly declining an unresolvable player; the fix was the
+resolution, not the check.
+
+Driven with **no `page.route` on any `/api/reference-data/**` path and none on `**/api/submissions`**.
+The only fulfilled route is `**/api/auth/session`, which is authentication plumbing, not the path
+under test. No credential is placed in the environment: the API child runs with every `SUPABASE_*`
+empty and falls back to `createInMemoryRepositoryBundle()`.
+
+The real reference-data API answers first, and the ids are real participant ids rather than
+synthetic strings:
 
 ```
-CASE_B_REQUEST_BODY {"source":"smart-form","market":"player.points",...,"metadata":{...,
-  "distributionMode":"track-only","eventId":null,
-  "participantResolution":{"resolution":"canonical","sportId":"NBA","eventId":null,
-    "away":{"participantId":"team:NBA:Knicks"},"home":{"participantId":"team:NBA:Celtics"},
-    "player":{"participantId":"player-tatum","teamId":"team:NBA:Celtics"}}}}
-CASE_B_STATUS 422
-CASE_B_BODY {"ok":false,"error":{"code":"SMART_FORM_RELATIONSHIP_INVALID",
-  "message":"participant player-tatum is not canonical for sport NBA"}}
+TEAMS   200 {"ok":true,"data":[
+  {"participantId":"ea212f6a-50e5-47f0-a161-46422c4d0d9e","displayName":"Celtics","sport":"NBA"}]}
+
+PLAYERS 200 {"ok":true,"data":[
+  {"participantId":"08689a37-84f4-40a5-b6ea-084da0092c93","displayName":"Celtics Starter",
+   "sport":"NBA","teamId":"ea212f6a-50e5-47f0-a161-46422c4d0d9e"},
+  {"participantId":"26f26d13-e141-4f6c-8c1c-fbcaad15a35b","displayName":"Celtics Reserve",
+   "sport":"NBA","teamId":"ea212f6a-50e5-47f0-a161-46422c4d0d9e"}]}
 ```
 
-Two things follow, and neither of them is "the player prop saved":
+`teamId` equals the `participantId` `searchTeams` returned for the same team. That equality is
+exactly what `validateSearchBackedPlayer` compares, and it is the thing all three divergences
+prevented.
 
-1. **The client no longer refuses.** The request exists, and its payload is truthful —
-   `distributionMode` `track-only`, canonical resolution, `eventId` null on both the resolution and
-   the metadata, and the resolved player carrying its `teamId`. Before UTV2-1859 this exact run
-   issued **zero** requests.
-2. **The server does not trust the client.** It re-resolved the asserted canonical player against
-   its own reference data, found no such participant, and refused. That is
-   `validateSearchBackedPlayer` failing closed — the property this lane most needs to keep. A
-   client cannot talk the server into a canonical resolution the server cannot corroborate.
+The browser then fills the ticket — NBA, date `2026-04-02`, manual matchup fallback, Knicks @
+Celtics, Player Prop, team Celtics, player `Celtics Starter`, Points Over `27.5` at `-110`,
+conviction 8 — and submits:
 
-**What run 2 does not establish, stated plainly:** the 422 is *not* evidence about this lane's rule.
-It fires one step earlier than the rule under test — on participant existence, not on the team
-relationship. The persisted player-prop claim rests on the staging receipt under Runtime
-Verification, where the `participants` rows actually exist.
+```
+SUBMISSION_RESPONSE [
+  { "status": 201,
+    "body": {"ok":true,"data":{"submissionId":"2391ffa1-e34e-4446-8039-d11d0c43781f",
+      "pickId":"150acecd-9afe-45ca-a4a6-aa616706bafe","lifecycleState":"validated",
+      "promotionStatus":"qualified","promotionTarget":"best-bets","outboxEnqueued":false}} }
+]
+```
 
-### Why a successful un-intercepted player prop is unreachable here — measured, not assumed
+and the pick is read back out of the API — a saved row, not a captured request:
 
-- `GET /api/reference-data/search/players?sport=NBA&q=Tatum` against the running contained API
-  returns `{"ok":true,"data":[]}`. `.../search/teams?sport=NBA&q=Celtics` returns
-  `team:NBA:Celtics`, so the probe is sound and the emptiness is specific to players.
-- `InMemoryReferenceDataRepository` sets `this.participants = options.participants ?? []`, and
-  `createInMemoryRepositoryBundle()` takes **no arguments** — nothing can seed it.
-- Even if seeded, its `searchPlayers` maps **`teamId: null`** unconditionally, which is the exact
-  field `validateSearchBackedPlayer` reads.
+```
+PICKS_STATUS 200      (GET /api/picks?status=validated&limit=200)
+SAVED_PICK {
+  "id": "150acecd-9afe-45ca-a4a6-aa616706bafe",
+  "market": "points-all-game-ou",
+  "selection": "Celtics Starter Points O 27.5",
+  "line": 27.5,
+  "odds": -110,
+  "status": "validated",
+  "metadata": { "eventId": null, "distributionMode": "track-only", ... }
+}
+PARTICIPANT_RESOLUTION {
+  "resolution": "canonical", "sportId": "NBA", "eventId": null,
+  "away":   {"participantId":"9ba7031f-...","displayName":"Knicks","participantType":"team"},
+  "home":   {"participantId":"693f30d9-...","displayName":"Celtics","participantType":"team"},
+  "player": {"participantId":"e665f0c6-...","displayName":"Celtics Starter",
+             "teamId":"693f30d9-..."}
+}
+1 passed (27.9s)
+```
 
-This is a real in-memory/`Database` parity gap and it is worth closing. It is not closed here:
-seeding the bundle usefully means changing its construction site, `apps/api/src/server.ts`, which is
-**outside this lane's pinned `file_scope_lock`** (`packages/db/src/runtime-repositories.ts` is
-inside it; `server.ts` is not, and a lock cannot be widened by an agent). Recorded per the ratified
-filing threshold, and stated as a bound on the browser evidence rather than absorbed into it.
+`player.teamId` equals `home.participantId`. That is the participants observation edge this lane
+exists to make usable, exercised end to end through a browser with nothing intercepted.
+
+**What this run does and does not claim.** It is a browser → real API → saved pick demonstration
+against the in-memory contained runtime. It is **not** a claim about the deployed system (production
+is `d3f69b804` and none of this is running there), and it is **not** the live-DB receipt —
+persistence against a real database is proven separately under Runtime Verification, against
+staging, where the credential lives. The two are kept apart deliberately.
+
+**The spec that drove it was temporary and is not committed.** `apps/smart-form/e2e/**` is outside
+this lane's `file_scope_lock`, so committing a permanent assertion there belongs to its own lane
+rather than to a widened scope here. That follow-up is real work, not a formality: without it, the
+parity this lane restored can regress silently, which is the same duplicated-rule shape UTV2-1859
+paid for. It is recorded as the immediate follow-up rather than smuggled in.
+
+### Mutation testing — the in-memory parity repair
+
+Each divergence was individually reverted, the suite run, and the file restored.
+
+| Mutation | Suite result | Which assertions caught it |
+|---|---|---|
+| `searchTeams` returns `team:${sportId}:${t}` again | 19/22, **3 fail** | tests 20, 21, 22 |
+| `searchPlayers` hardcodes `teamId: null` again | 20/22, **2 fail** | tests 19, 21 |
+| seeded team `external_id` back to `null` | 21/22, **1 fail** | test 21 |
+| restored | **22/22, 0 fail** | — |
+
+The three failure sets are distinct, so no single test is carrying all three and none of the three
+repairs is unasserted. Test 21 — *"the in-memory bundle seeds one participant set both repositories
+agree on"* — is the only one that catches the `external_id` mutation, and it is the assertion that
+names the actual invariant: `bundle.participants.findById(team.participantId)` resolves, and some
+player's `teamId` equals that same id.
+
+The `teamId: null` mutation was also run against the browser, and it fails **earlier** than the 422
+it originally produced:
+
+```
+PLAYERS 200 {"ok":true,"data":[{"participantId":"e177e809-...","displayName":"Celtics Starter",
+             "sport":"NBA","teamId":null}, ...]}
+
+Error: locator.click: Test timeout of 30000ms exceeded.
+  waiting for getByRole('button', { name: /^Celtics Starter/ })
+```
+
+With `teamId: null` the client's player picker — which filters on `participant.teamId ===
+selectedTeamId` — renders empty, so the operator cannot select a player at all and no submission is
+ever attempted. That is stated because it is *not* the 422 the earlier revision measured: the
+original 422 came from a run that fixtured `search/players` in the browser and so bypassed the
+picker's filter. Both are the same divergence surfacing at different layers.
 
 ### The intercepted test is request/payload coverage only
 
@@ -453,8 +561,10 @@ reconstructs the allowed scope from `expected_proof_paths` as an exact list rath
 read as scope bleed while the required `File scope lock` check passes on the identical diff.
 
 `Close eligibility preflight`, `T1 Proof Gate`, `Proof Auditor Gate` and `Runtime Verifier Gate`
-were red on the head that carried no proof bundle and are **green on `83f4ea04c4defb3b2755a292be486a5bd8ca9277`**, read
-from `gh pr checks 1536` rather than assumed.
+were red on the head that carried no proof bundle and were **green on the previous anchor
+`83f4ea04c4defb3b2755a292be486a5bd8ca9277`**, read from `gh pr checks 1536` rather than assumed.
+Their state at the current anchor is recorded under "CI receipts at the current anchor" below and is
+not restated here from the previous head.
 
 `Check issue references` is **red on this head, deliberately and knowingly**, and this is the one
 non-required red that is not a defect in the check. It reports:
@@ -472,7 +582,7 @@ not a claim of scope over another issue.
 
 Removing it requires rewriting `90d558454`'s message, which changes that commit's SHA and every
 SHA after it. That would discard the CI receipts this bundle is bound to — including the
-`Writable DB proof (staging only)` staging write cycle on `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, and including the
+`Writable DB proof (staging only)` staging write cycle on this branch, and including the
 mutation evidence recorded above, which is *itself* a pair of CI conclusions at `52e086f86`
 (failure) and `90d558454` (success). The receipt is worth more than the green non-required check.
 
@@ -489,4 +599,4 @@ real.
 Merge SHA: pending merge
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1536
 Approved PR head: pending merge
-Execution SHA: 83f4ea04c4defb3b2755a292be486a5bd8ca9277
+Execution SHA: 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901

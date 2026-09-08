@@ -11,10 +11,10 @@ PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1536
 ## Files changed
 
 ```
-167	9	packages/db/src/runtime-repositories.ts
+312	19	packages/db/src/runtime-repositories.ts
  72	1	apps/api/src/smart-form-validation.ts
  98	13	apps/api/src/smart-form-validation.test.ts
-273	0	packages/db/src/canonical-reference-schema.test.ts
+451	0	packages/db/src/canonical-reference-schema.test.ts
 735	0	apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts
 206	0	.ops/sync/UTV2-1856.yml            (lane metadata)
  40	0	docs/06_status/lanes/UTV2-1856.json (lane manifest)
@@ -30,6 +30,49 @@ control — that reasoning stands and no check was loosened. The edit here is th
 shape: it *replaces* a blanket refusal with a verification, and the verification is stricter
 than what the refusal protected, because it compares the caller's claimed relationship against
 one the server resolved itself rather than merely declining to look.
+
+## `packages/db/src/runtime-repositories.ts` — hunks 5-8: the in-memory / Database parity repair
+
+Added after the un-intercepted browser player prop was measured returning `422
+SMART_FORM_RELATIONSHIP_INVALID`. **The server was correct; the harness data could not satisfy it.**
+`InMemoryReferenceDataRepository` — the bundle the fail-open runtime builds when no Supabase
+credential is present — diverged from `DatabaseReferenceDataRepository` in three ways, and together
+they made a successful canonical player prop impossible in the contained harness:
+
+5. **`searchTeams` returned a synthetic id.** It emitted `team:<sport>:<name>`, which no
+   `participants.id` can ever equal, while the database path returns `row.id`. Since
+   `validateSearchBackedPlayer` compares a player's resolved `teamId` against the team the operator
+   selected, the comparison could never succeed. It now answers with the seeded team participant's
+   own row id, keeping the synthetic form **only** where no seeded team participant exists — there
+   is no real id to return there, and no player to match it.
+
+6. **`searchPlayers` hardcoded `teamId: null`.** It now mirrors
+   `DatabaseReferenceDataRepository.searchPlayers`: resolve `metadata.team_external_id` against a
+   team participant in the same sport, and return an honest `null` when no relationship can be
+   established. A guessed team is never substituted.
+
+7. **Seeded team participants carried `external_id: null`,** so no player could ever link to one.
+   They now carry a deterministic key derived from the catalog — not a provider identifier.
+
+8. **One participant array, both repositories.** `createInMemoryRepositoryBundle` builds the team
+   and player rows once and hands the same array to the participant repository and the
+   reference-data repository, so a team returned by `searchTeams` and the `teamId` a player resolves
+   to are the same object by construction rather than by coincidence.
+
+**The player half is opt-in and cannot reach production.** It seeds only when the repository's
+existing `UNIT_TALK_QA_SEED_ENABLED` flag is exactly `'true'` — the same flag
+`apps/api/src/routes/qa-seed.ts` already gates on and the contained Playwright config already sets —
+and is refused outright under `NODE_ENV=production`. A failure to read the environment seeds
+nothing; the safe direction is the blank bundle. The default in-memory runtime every unit test
+builds is therefore unchanged (`playersAvailable: false`), which `apps/api/src/server.test.ts:1076`
+still asserts.
+
+**No server rule was weakened.** `apps/api/src/smart-form-validation.ts` is untouched by this
+repair. The 422 disappeared because resolution genuinely succeeds.
+
+`packages/db/src/canonical-reference-schema.test.ts` gains four tests covering exactly these three
+divergences plus the opt-in default; each divergence, reverted individually, turns a distinct subset
+red (19/22, 20/22, 21/22), and restoring returns 22/22.
 
 ## `packages/db/src/runtime-repositories.ts` — hunks 1-4 (+125 / -7)
 
