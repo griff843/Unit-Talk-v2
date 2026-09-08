@@ -14,9 +14,9 @@
     ".lane/lanes/governance.yml"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-09-08T11:46:33.511Z",
-  "heartbeat_at": "2026-09-08T11:49:29.870Z",
+  "heartbeat_at": "2026-09-08T11:50:16.832Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1857-lane-allowlist-app-docs.json",
