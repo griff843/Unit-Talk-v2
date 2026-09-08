@@ -1,0 +1,161 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1858
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1858
+  objective: Reconcile docs/mission/plan.md against main — the PT1 admission and
+    the Milestone 1 submission blocker are both closed
+  acceptance_criteria:
+    - |-
+      ## Why
+
+      `docs/mission/plan.md` is the file `CLAUDE.md` `@`-includes as standing mission context, so every fresh or compacted session reads it as current state. It is stale in the one place that matters most: its **"Requires Griff" item 1** and the whole of **Wave 1** are written around blockers that have since landed on `main`.
+
+      Measured against `origin/main` `f6c6fecac`:
+
+      | Plan claim | Measured on `main` |
+      | -- | -- |
+      | "Requires Griff item 1 — the PT1 containment admission … blocks Milestone 1 steps 3–5, and every lane touching a Tier C path" | Route B landed. [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral) (#1528) merged; `createManifest` carries the deferral forward (`9b1af1231`). |
+      | "Wave 1 step 2 — land [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server half" | `docs/06_status/lanes/UTV2-1842.json` is `done`, T1, merged as #1529 (`40b0f19f4`). |
+      | "Wave 1 step 3 — the e2e suite is executed by nothing" | [UTV2-1850](https://linear.app/unit-talk-v2/issue/UTV2-1850/smart-form-e2e-assert-the-persisted-track-only-pick-and-wire-the-suite) (#1530, `89cca15da`) asserts the persisted pick **and wires it**. `done`, T3. |
+      | "The slot is empty. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) held it last" | Four further governance lanes have landed since: [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral), [UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds), [UTV2-1855](https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds), [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the). |
+      | "12 PRs are open … #1521 blocked on a scope decision" | 13 open. #1521's scope blocker is closed — [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the) (#1537) registered the paths and #1521's `File scope lock` is green with no override. |
+      | "`main` is `e32bc506c`" | `f6c6fecac`. |
+
+      The plan's own **Learned** section names this exact failure mode — *"the honest form is 'this is the next blocker', never 'this is the only one'"* — and the file is now carrying a blocker list that was true on 2026-09-07 and is not true now. A session that trusts it will surface a reserved decision to Griff that Griff already ratified and that has already shipped.
+
+      ## Scope
+
+      `docs/mission/plan.md` only. Rewrite, not append:
+
+      1. Re-measure "Reconciled current truth" against `origin/main`, the GitHub API and the readiness ledger.
+      2. Collapse "Requires Griff" to what is *actually* outstanding, and state for each what it blocks — enumerated from the gate's own predicate, per the plan's own Learned entry.
+      3. Rewrite Wave 1 to the real remaining Milestone 1 state, which is now the **pilot run itself** rather than the repairs in front of it.
+      4. Fold in the closeout findings measured on [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the): `--repair-merged --pr <n>` refusing with `pr_sha_mismatch` on the state it exists to repair, and the empirical falsification of the `CEP-C1` prediction.
+
+      ## Not in scope
+
+      No change to `intent.md`, `spec.md`, any canonical contract, merge authority, tiering, or any required check. No new issues filed — findings are recorded under `Learned` per the ratified filing threshold.
+
+      ## Classification
+
+      `classifyMechanicalMinimum(['docs/mission/plan.md'])` returns `T3` — no Tier C prefix or exact match.
+
+      ## Acceptance
+
+      1. Every "Requires Griff" item on the merged plan is verifiable as still outstanding against live GitHub state at the time of the reconciliation, and each names what it blocks.
+      2. No statement in "Reconciled current truth" is contradicted by `origin/main` at the merge SHA.
+      3. The stale Wave 1 sequence and the stale item 1 are gone, not annotated.
+      4. The lane's `docs/06_status/proof/<ID>/.gitkeep` is deleted, so the three proof gates pass trivially — the cheap half of the recorded T3 repair pair.
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      Why
+      `docs/mission/plan.md` is the file `CLAUDE.md` `@`-includes as standing mission context, so every fresh or compacted session reads it as current state. It is stale in the one place that matters most: its **"Requires Griff" item 1** and the whole of **Wave 1** are written around blockers that have since landed on `main`.
+
+      Measured against `origin/main` `f6c6fecac`:
+
+      | Plan claim | Measured on `main` |
+      | -- | -- |
+      | "Requires Griff item 1 — the PT1 containment admission … blocks Milestone 1 steps 3–5, and every lane touching a Tier C path" | Route B landed. [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral) (#1528) merged; `createManifest` carries the deferral forward (`9b1af1231`). |
+      | "Wave 1 step 2 — land [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server half" | `docs/06_status/lanes/UTV2-1842.json` is `done`, T1, merged as #1529 (`40b0f19f4`). |
+      | "Wave 1 step 3 — the e2e suite is executed by nothing" | [UTV2-1850](https://linear.app/unit-talk-v2/issue/UTV2-1850/smart-form-e2e-assert-the-persisted-track-only-pick-and-wire-the-suite) (#1530, `89cca15da`) asserts the persisted pick **and wires it**. `done`, T3. |
+      | "The slot is empty. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) held it last" | Four further governance lanes have landed since: [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral), [UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds), [UTV2-1855](https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds), [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the). |
+      | "12 PRs are open … #1521 blocked on a scope decision" | 13 open. #1521's scope blocker is closed — [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the) (#1537) registered the paths and #1521's `File scope lock` is green with no override. |
+      | "`main` is `e32bc506c`" | `f6c6fecac`. |
+
+      The plan's own **Learned** section names this exact failure mode — *"the honest form is 'this is the next blocker', never 'this is the only one'"* — and the file is now carrying a blocker list that was true on 2026-09-07 and is not true now. A session that trusts it will surface a reserved decision to Griff that Griff already ratified and that has already shipped.
+    - |-
+      Scope
+      `docs/mission/plan.md` only. Rewrite, not append:
+
+      1. Re-measure "Reconciled current truth" against `origin/main`, the GitHub API and the readiness ledger.
+      2. Collapse "Requires Griff" to what is *actually* outstanding, and state for each what it blocks — enumerated from the gate's own predicate, per the plan's own Learned entry.
+      3. Rewrite Wave 1 to the real remaining Milestone 1 state, which is now the **pilot run itself** rather than the repairs in front of it.
+      4. Fold in the closeout findings measured on [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the): `--repair-merged --pr <n>` refusing with `pr_sha_mismatch` on the state it exists to repair, and the empirical falsification of the `CEP-C1` prediction.
+    - >-
+      Not in scope
+
+      No change to `intent.md`, `spec.md`, any canonical contract, merge
+      authority, tiering, or any required check. No new issues filed — findings
+      are recorded under `Learned` per the ratified filing threshold.
+    - >-
+      Classification
+
+      `classifyMechanicalMinimum(['docs/mission/plan.md'])` returns `T3` — no
+      Tier C prefix or exact match.
+    - >-
+      Acceptance
+
+      1. Every "Requires Griff" item on the merged plan is verifiable as still
+      outstanding against live GitHub state at the time of the reconciliation,
+      and each names what it blocks.
+
+      2. No statement in "Reconciled current truth" is contradicted by
+      `origin/main` at the merge SHA.
+
+      3. The stale Wave 1 sequence and the stale item 1 are gone, not annotated.
+
+      4. The lane's `docs/06_status/proof/<ID>/.gitkeep` is deleted, so the
+      three proof gates pass trivially — the cheap half of the recorded T3
+      repair pair.
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1858/reconcile-docsmissionplanmd-against-main-the-pt1-admission-and-the
+    title: Reconcile docs/mission/plan.md against main — the PT1 admission and the
+      Milestone 1 submission blocker are both closed
+    description: |-
+      ## Why
+
+      `docs/mission/plan.md` is the file `CLAUDE.md` `@`-includes as standing mission context, so every fresh or compacted session reads it as current state. It is stale in the one place that matters most: its **"Requires Griff" item 1** and the whole of **Wave 1** are written around blockers that have since landed on `main`.
+
+      Measured against `origin/main` `f6c6fecac`:
+
+      | Plan claim | Measured on `main` |
+      | -- | -- |
+      | "Requires Griff item 1 — the PT1 containment admission … blocks Milestone 1 steps 3–5, and every lane touching a Tier C path" | Route B landed. [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral) (#1528) merged; `createManifest` carries the deferral forward (`9b1af1231`). |
+      | "Wave 1 step 2 — land [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human)'s server half" | `docs/06_status/lanes/UTV2-1842.json` is `done`, T1, merged as #1529 (`40b0f19f4`). |
+      | "Wave 1 step 3 — the e2e suite is executed by nothing" | [UTV2-1850](https://linear.app/unit-talk-v2/issue/UTV2-1850/smart-form-e2e-assert-the-persisted-track-only-pick-and-wire-the-suite) (#1530, `89cca15da`) asserts the persisted pick **and wires it**. `done`, T3. |
+      | "The slot is empty. [UTV2-1848](https://linear.app/unit-talk-v2/issue/UTV2-1848/pt1-deferral-enforcement-refuse-closeout-for-a-lane-whose-t1-live-db) held it last" | Four further governance lanes have landed since: [UTV2-1851](https://linear.app/unit-talk-v2/issue/UTV2-1851/pt1-route-b-lane-1-admit-the-contained-placeholder-record-the-deferral), [UTV2-1853](https://linear.app/unit-talk-v2/issue/UTV2-1853/smart-form-api-must-re-validate-the-operator-numeric-guardrails-odds), [UTV2-1855](https://linear.app/unit-talk-v2/issue/UTV2-1855/smart-form-client-units-stepper-exceeds-the-schema-cap-and-a-dead-odds), [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the). |
+      | "12 PRs are open … #1521 blocked on a scope decision" | 13 open. #1521's scope blocker is closed — [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the) (#1537) registered the paths and #1521's `File scope lock` is green with no override. |
+      | "`main` is `e32bc506c`" | `f6c6fecac`. |
+
+      The plan's own **Learned** section names this exact failure mode — *"the honest form is 'this is the next blocker', never 'this is the only one'"* — and the file is now carrying a blocker list that was true on 2026-09-07 and is not true now. A session that trusts it will surface a reserved decision to Griff that Griff already ratified and that has already shipped.
+
+      ## Scope
+
+      `docs/mission/plan.md` only. Rewrite, not append:
+
+      1. Re-measure "Reconciled current truth" against `origin/main`, the GitHub API and the readiness ledger.
+      2. Collapse "Requires Griff" to what is *actually* outstanding, and state for each what it blocks — enumerated from the gate's own predicate, per the plan's own Learned entry.
+      3. Rewrite Wave 1 to the real remaining Milestone 1 state, which is now the **pilot run itself** rather than the repairs in front of it.
+      4. Fold in the closeout findings measured on [UTV2-1857](https://linear.app/unit-talk-v2/issue/UTV2-1857/register-the-app-root-claudemd-files-and-docs03-product-in-the): `--repair-merged --pr <n>` refusing with `pr_sha_mismatch` on the state it exists to repair, and the empirical falsification of the `CEP-C1` prediction.
+
+      ## Not in scope
+
+      No change to `intent.md`, `spec.md`, any canonical contract, merge authority, tiering, or any required check. No new issues filed — findings are recorded under `Learned` per the ratified filing threshold.
+
+      ## Classification
+
+      `classifyMechanicalMinimum(['docs/mission/plan.md'])` returns `T3` — no Tier C prefix or exact match.
+
+      ## Acceptance
+
+      1. Every "Requires Griff" item on the merged plan is verifiable as still outstanding against live GitHub state at the time of the reconciliation, and each names what it blocks.
+      2. No statement in "Reconciled current truth" is contradicted by `origin/main` at the merge SHA.
+      3. The stale Wave 1 sequence and the stale item 1 are gone, not annotated.
+      4. The lane's `docs/06_status/proof/<ID>/.gitkeep` is deleted, so the three proof gates pass trivially — the cheap half of the recorded T3 repair pair.
+    captured_at: 2026-09-08T12:30:36.036Z
+    description_sha256: eb69232e82e05a7971cc8b9aaa3d9de53b4f38dc1041ebc8ffe5c0f716a3e518
+  contract_hash: f5f89da40cb2273f03f7675fe735d1c62c7870099839568bfc6bd98228b50970
