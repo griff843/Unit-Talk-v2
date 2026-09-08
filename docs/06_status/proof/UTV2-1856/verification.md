@@ -15,6 +15,12 @@ PR URL: https://github.com/griff843/Unit-Talk-v2/pull/1536
 Head SHA: 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901
 result: pass
 
+> The `Head SHA` row above is generator-emitted and carries the **binding anchor**
+> (`verified_source_sha`), which is what `proof-binding-validator.ts` reads. It is not the branch
+> head: the head under review is `449b3c90bb809bde3c76b99d70e0ad449ff53cf2`, and the two differ by
+> this bundle's own files only. The three SHAs this document relies on — execution anchor, binding
+> anchor and CI receipt SHA — are separated and measured under "Where each receipt was taken".
+
 ## ASSERTIONS:
 
 - [x] **The defect was measured on the executing path, not inferred.** `getEventBrowse` resolved a
@@ -122,8 +128,14 @@ result: pass
   canonical player in structured-fallback mode. **Live event ingestion is therefore not a
   prerequisite for contained Track Only submission**, and the only change needed was the one
   server-side refusal.
-- [x] `pnpm verify` is green **in CI on this head** (run 34250974852, job 102150517971), which is
-  the authoritative full-suite result. **Corrected at the rebind:** this bullet previously cited a
+- [x] `pnpm verify` is green **in CI**: run 34277374399, job 102236250239, which executed at
+  `740f027704cbab3f94edefe370b67328a74230f7`. That is the authoritative full-suite result. It is
+  deliberately *not* restated as a receipt taken at the final head — `740f02770` differs from
+  `449b3c90b` only by this lane's own `verification.md` and `evidence.json`, measured and recorded
+  under "Where each receipt was taken" below. **Corrected at PM review:** this bullet previously
+  cited run 34250974852 and called it green "on this head". That run executed at the superseded
+  anchor `83f4ea04c...`, a tree without the in-memory parity repair, so the attribution was wrong
+  in both the run id and the SHA. **Corrected at the rebind:** this bullet previously cited a
   local full-suite count of 6074/6074 measured at the earlier anchor `762a97afe`. That run was real,
   but it was not re-performed after the six `main` resyncs, and a count carried across a tree change
   is a stale receipt. What was measured locally — at `f2ee3eacb`, the fifth resync, and not restated
@@ -163,7 +175,8 @@ result: pass
   turns a different subset of the four new tests red, and restoring returns 22/22. See "Mutation
   testing — the in-memory parity repair".
 - [x] The live-DB step was **deferred to CI and obtained there**: `Writable DB proof (staging only)`
-  is green on this head, with **0 skipped**. See "Runtime Verification" below: the manifest carries
+  is green at `740f027704cbab3f94edefe370b67328a74230f7` (run 34277374399, job 102233606034), with
+  **0 skipped**. See "Runtime Verification" below: the manifest carries
   `t1_live_db_precondition: "deferred_to_ci"`, and closeout check `G6` refuses this lane without
   `verify` **and** `Writable DB proof (staging only)` green on the merge SHA.
 
@@ -251,9 +264,9 @@ $ # UTV2-1856 — the picks.player_id mutation was performed by CI before the re
 # ...and the live-DB half, obtained where the credential actually lives. Taken at the previous
 # anchor 83f4ea04c4defb3b2755a292be486a5bd8ca9277, which carried this lane's server change and the
 # UTV2-1859 client change but NOT the in-memory parity repair below. It is recorded at the SHA it
-# was taken at rather than restated onto the current anchor; the receipt at
-# 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 is the authoritative one and is recorded under
-# "CI receipts at the current anchor" below:
+# was taken at rather than restated onto a later tree. The authoritative receipt for this bundle
+# is run 34277374399, which executed at 740f027704cbab3f94edefe370b67328a74230f7 and is recorded
+# under "CI receipts for this head" below:
 $ gh api .../commits/83f4ea04c4defb3b2755a292be486a5bd8ca9277/check-runs
   verify                              completed  success   run 34250974852  job 102150517971
   Writable DB proof (staging only)    completed  success   run 34250974852  job 102145137124
@@ -276,20 +289,51 @@ $ gh api .../commits/83f4ea04c4defb3b2755a292be486a5bd8ca9277/check-runs
 
 ## Verification
 
-The anchor is `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901`, the seventh `main` resync merge and the
-last commit on this branch touching any path outside `docs/06_status/proof/UTV2-1856/`. Its parent
+The **binding anchor** is `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901`, the seventh `main` resync
+merge and the last commit on this branch touching any path outside
+`docs/06_status/proof/UTV2-1856/`. It is the SHA the gates bind to; it is **not** the SHA any
+receipt in this document was obtained at, which is the distinction the next section makes. Its
+parent
 `413823a85052500d0a62ba26c4dbc92c2532e567` is the in-memory / Database parity repair described
 below, and it is the last commit this lane authored. The server change this lane exists for is
 older still — `762a97afea7fabe1d7e5b92901bb9580203fdd37` — and has not changed since.
 
-**Where each receipt was actually taken, stated exactly rather than collapsed onto the anchor.**
-A receipt names a tree, not a changeset, so each one is recorded at the SHA it was obtained at:
+### Where each receipt was taken
 
-| Evidence | Taken at | Tree difference from the anchor |
+**A receipt names a tree, not a changeset.** Three different SHAs are load-bearing in this bundle
+and they are deliberately kept apart rather than collapsed onto one another:
+
+| Role | SHA | What it is |
 |---|---|---|
-| `pnpm lint`, `pnpm type-check`, `pnpm test`, the browser runs, and the three mutations | the tree of `413823a85` (the parity repair, working tree at the time) | `docs/06_status/readiness/readiness-score.json` only |
-| The `verify` and `Writable DB proof (staging only)` receipts printed in the mutation block above | `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, the previous anchor | the parity repair plus the readiness ledger — so they are **not** claimed for this head |
-| The authoritative CI receipts for this head | `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901` | — |
+| **Execution anchor** | `413823a85052500d0a62ba26c4dbc92c2532e567` | the tree the local commands and the browser runs were actually executed against — the in-memory / Database parity repair |
+| **Binding anchor** (`verified_source_sha`, and the `Execution SHA:` row of the Merge SHA Binding block) | `5fbf28c99b47fcdeac9376c8eedee8d45c0bd901` | the last commit on this branch touching any path outside `docs/06_status/proof/` and `docs/06_status/lanes/`, which is what `proof-binding-validator.ts` rule 4 requires |
+| **CI receipt SHA** | `740f027704cbab3f94edefe370b67328a74230f7` | the head run 34277374399 executed at |
+
+**Corrected at PM review.** An earlier draft of this table claimed the authoritative CI receipts
+were taken at the binding anchor `5fbf28c99`. They were not: run 34277374399 executed at
+`740f02770`, a proof-only commit after it. The run id was right and the SHA was wrong, which is
+exactly the class of claim this section exists to prevent, committed against itself.
+
+Each receipt is therefore recorded at the SHA it was obtained at, with the difference to the final
+head `449b3c90bb809bde3c76b99d70e0ad449ff53cf2` measured by `git diff --name-only <sha> 449b3c90b`
+rather than asserted:
+
+| Evidence | Obtained at | Verified difference to the final head `449b3c90b` |
+|---|---|---|
+| `pnpm lint`, `pnpm type-check`, `pnpm test`, the browser runs, and the three mutations | `413823a85` — the execution anchor | `docs/06_status/readiness/readiness-score.json` plus this lane's own `diff-summary.md`, `evidence.json` and `verification.md`. The readiness ledger is why this SHA cannot also be the binding anchor. |
+| `verify` (run 34277374399, job 102236250239) and `Writable DB proof (staging only)` (run 34277374399, job 102233606034) — **the authoritative CI receipts for this bundle** | `740f02770` | `docs/06_status/proof/UTV2-1856/evidence.json` and `verification.md` — proof-only, and nothing else |
+| The `verify` and `Writable DB proof (staging only)` receipts printed in the mutation block above (run 34250974852) | `83f4ea04c4defb3b2755a292be486a5bd8ca9277`, the superseded anchor | the parity repair plus the readiness ledger — real code, so they are **not** claimed for this head and are retained only as the superseded receipt |
+
+For the binding anchor itself, `git diff --name-only 5fbf28c99 449b3c90b` returns exactly
+`docs/06_status/proof/UTV2-1856/{diff-summary.md,evidence.json,verification.md}` — proof-only, so
+rule 4 holds.
+
+`449b3c90b` is the head those three lists were measured at. This correction is itself an
+evidence-only commit on top of it, and it touches exactly `evidence.json` and `verification.md` —
+both already members of every difference set above. Each list is therefore identical at the head
+that carries this bundle, and re-measuring at that head returns the same three sets. That was
+checked with `git diff --name-only` after committing, not assumed; the head SHA is not restated
+here because a commit cannot cite its own hash.
 
 The anchor had to move for two independent reasons: the parity repair is real code outside the
 proof directory, and `scripts/ci/proof-binding-validator.ts` rule 4 admits only
@@ -300,10 +344,12 @@ One earlier resync matters on its own terms: UTV2-1859 (`9abb4ac62`) is in this 
 browser evidence below exercises this lane's server change and the client change that unblocks it
 **in one tree**.
 
-### CI receipts at the current anchor
+### CI receipts for this head — obtained at `740f02770`
 
-Recorded from `gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs` after the run
-at this head concluded. This is the first live-DB receipt taken on a tree that contains the
+Recorded from `gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs` after run
+34277374399 concluded. **That run executed at `740f02770`, not at the binding anchor `5fbf28c99`**;
+the two differ by this bundle's own `evidence.json` and `verification.md` and by nothing else, as
+measured in the table above. This is the first live-DB receipt taken on a tree that contains the
 in-memory / Database parity repair.
 
 ```
@@ -353,11 +399,14 @@ is read below rather than classified by status: `Merge Gate` (no T1 approval art
       by policy, so that suite cannot execute here at all. Over the two suites that *can* run
       locally the same command reports **96 tests / 96 pass / 0 fail / 0 skipped, exit 0**. The
       live-DB suite's receipt is the green `Writable DB proof (staging only)` job below, obtained
-      at this same head — which is the route-B deferral working as ratified rather than a gap.
-- [x] `pnpm verify`: **green in CI on this head** (run 34250974852, job 102150517971) — that is the
-      authoritative full-suite result and it is what is claimed here. No local full-suite pass is
-      claimed at this head: locally the run was lint, type-check and the touched suites, and
-      `test:live-db` is refused under containment as described above.
+      at `740f02770` (run 34277374399, job 102233606034) — which is the route-B deferral working as
+      ratified rather than a gap.
+- [x] `pnpm verify`: **green in CI at `740f02770`** (run 34277374399, job 102236250239) — that is
+      the authoritative full-suite result and it is what is claimed here. **Corrected at PM
+      review:** this line previously cited run 34250974852 "on this head"; that run executed at the
+      superseded anchor `83f4ea04c...`. No local full-suite pass is claimed at any head: locally the
+      run was lint, type-check and the touched suites, and `test:live-db` is refused under
+      containment as described above.
 - [x] `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1856`: `Verdict: PASS`,
       `Changed files: 10`, `Rules matched: (none)` — no R-level artifacts required for this diff.
 
@@ -369,11 +418,11 @@ The live-DB obligation is **deferred, not waived**, under the ratified route B a
 agree: the generated preflight token, and `docs/06_status/lanes/UTV2-1856.json`'s
 `t1_live_db_precondition: "deferred_to_ci"`.
 
-What that obligates, and where it is discharged — both green on this head, and `G6` re-asserts them
-on the merge SHA at closeout:
+What that obligates, and where it is discharged — both green at `740f02770` (run 34277374399), the
+CI receipt SHA recorded above, and `G6` re-asserts them on the merge SHA at closeout:
 
-- `verify` — required check, green.
-- `Writable DB proof (staging only)` — green, which is where
+- `verify` — required check, green (job 102236250239).
+- `Writable DB proof (staging only)` — green (job 102233606034), which is where
   `apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts` actually executes against the
   staging database (`xskgrzbteyqdufktjrjx`, pinned by `scripts/ci/assert-staging-target.ts`; never
   production). **`skipped: 0` is the load-bearing figure** — those suites are `{ skip: skipReason }`-gated
@@ -602,8 +651,8 @@ read as scope bleed while the required `File scope lock` check passes on the ide
 `Close eligibility preflight`, `T1 Proof Gate`, `Proof Auditor Gate` and `Runtime Verifier Gate`
 were red on the head that carried no proof bundle and were **green on the previous anchor
 `83f4ea04c4defb3b2755a292be486a5bd8ca9277`**, read from `gh pr checks 1536` rather than assumed.
-Their state at the current anchor is recorded under "CI receipts at the current anchor" below and is
-not restated here from the previous head.
+Their state is recorded under "Non-required checks at this head" below, read at the head it is
+claimed for, and is not restated here from the superseded anchor.
 
 `Check issue references` is **red on this head, deliberately and knowingly**, and this is the one
 non-required red that is not a defect in the check. It reports:

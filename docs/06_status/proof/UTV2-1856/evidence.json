@@ -12,7 +12,7 @@
     "current_pr_head_sha": "set-by-ci",
     "sha_type": "verified_source_sha",
     "bound_at": "2026-09-08T16:30:00.000Z",
-    "anchor_note": "5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 is this branch's current anchor: the seventh `main` resync merge, and the last commit on this branch touching a path outside docs/06_status/proof/UTV2-1856/. Its parent 413823a85052500d0a62ba26c4dbc92c2532e567 is the in-memory / Database reference-data parity repair, the last commit this lane authored; the server change this lane exists for is 762a97afea7fabe1d7e5b92901bb9580203fdd37 and is unchanged since. The anchor supersedes 83f4ea04c4defb3b2755a292be486a5bd8ca9277, which was the anchor until the parity repair landed. Two independent reasons required the move: the parity repair is real code outside the proof directory, and proof-binding-validator.ts rule 4 admits only docs/06_status/proof/ and docs/06_status/lanes/ between verified_source_sha and HEAD, which docs/06_status/readiness/readiness-score.json is not. Receipt provenance is stated per receipt rather than collapsed onto the anchor: the local commands, the browser runs and the three mutations were measured at the tree of 413823a85052500d0a62ba26c4dbc92c2532e567, whose only difference from the anchor tree is readiness-score.json; the CI receipts previously recorded here were taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, a tree WITHOUT the parity repair, and are retained as superseded rather than restated onto this head. The authoritative CI receipts for this head are recorded once the run at this head concludes. An earlier resync brought UTV2-1859 (apps/smart-form/lib/form-utils.ts and its tests), which is why the browser evidence exercises this lane's server change and the client change that unblocks it in one tree."
+    "anchor_note": "5fbf28c99b47fcdeac9376c8eedee8d45c0bd901 is this branch's current anchor: the seventh `main` resync merge, and the last commit on this branch touching a path outside docs/06_status/proof/UTV2-1856/. Its parent 413823a85052500d0a62ba26c4dbc92c2532e567 is the in-memory / Database reference-data parity repair, the last commit this lane authored; the server change this lane exists for is 762a97afea7fabe1d7e5b92901bb9580203fdd37 and is unchanged since. The anchor supersedes 83f4ea04c4defb3b2755a292be486a5bd8ca9277, which was the anchor until the parity repair landed. Two independent reasons required the move: the parity repair is real code outside the proof directory, and proof-binding-validator.ts rule 4 admits only docs/06_status/proof/ and docs/06_status/lanes/ between verified_source_sha and HEAD, which docs/06_status/readiness/readiness-score.json is not. Receipt provenance is stated per receipt rather than collapsed onto the anchor: the local commands, the browser runs and the three mutations were measured at the tree of 413823a85052500d0a62ba26c4dbc92c2532e567, whose only difference from the anchor tree is readiness-score.json; the CI receipts previously recorded here were taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, a tree WITHOUT the parity repair, and are retained as superseded rather than restated onto this head. The authoritative CI receipts for this head are recorded once the run at this head concludes. An earlier resync brought UTV2-1859 (apps/smart-form/lib/form-utils.ts and its tests), which is why the browser evidence exercises this lane's server change and the client change that unblocks it in one tree. Corrected at PM review: this anchor is the gates' binding identity only. No receipt in this bundle was obtained at it. The local commands and browser runs were executed at 413823a85052500d0a62ba26c4dbc92c2532e567, and the authoritative CI receipts (run 34277374399) were obtained at 740f027704cbab3f94edefe370b67328a74230f7. See receipt_provenance for each SHA and its measured, proof-only difference to the final head 449b3c90bb809bde3c76b99d70e0ad449ff53cf2."
   },
   "static_proof": {
     "status": "PASS",
@@ -25,9 +25,9 @@
       "conclusion": "success",
       "head_sha": "740f027704cbab3f94edefe370b67328a74230f7"
     },
-    "detail": "Local commands re-measured at 413823a85052500d0a62ba26c4dbc92c2532e567 (the in-memory parity repair): The CI receipt for this head is pending; see ci_receipt_status. Locally at this head: `pnpm lint` exit 0, `pnpm type-check` exit 0. The three suites this lane changes were run together: 111 tests, 96 pass, 15 fail, 0 skipped. **The 15 failures are the live-DB proof suite and every one is `TypeError: fetch failed`** \u2014 a contained workstation resolves Supabase to http://127.0.0.1:1 by policy, so that suite cannot execute here at all. Excluding it, the same command over the two suites that can run locally reports 96 tests / 96 pass / 0 fail / 0 skipped, exit 0. The live-DB suite's authoritative receipt is the green `Writable DB proof (staging only)` job recorded under runtime_proof, obtained at this same head. This is the route-B deferral working exactly as ratified: the live-DB evidence is obtained in CI rather than on the workstation, and it is obtained. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1856` returns `Verdict: PASS`, `Changed files: 10`, `Rules matched: (none)`.",
+    "detail": "Local commands re-measured at 413823a85052500d0a62ba26c4dbc92c2532e567 (the in-memory parity repair): The CI receipt for this head is pending; see ci_receipt_status. Locally at this head: `pnpm lint` exit 0, `pnpm type-check` exit 0. The three suites this lane changes were run together: 111 tests, 96 pass, 15 fail, 0 skipped. **The 15 failures are the live-DB proof suite and every one is `TypeError: fetch failed`** — a contained workstation resolves Supabase to http://127.0.0.1:1 by policy, so that suite cannot execute here at all. Excluding it, the same command over the two suites that can run locally reports 96 tests / 96 pass / 0 fail / 0 skipped, exit 0. The live-DB suite's authoritative receipt is the green `Writable DB proof (staging only)` job recorded under runtime_proof, obtained at this same head. This is the route-B deferral working exactly as ratified: the live-DB evidence is obtained in CI rather than on the workstation, and it is obtained. `npx tsx scripts/ci/r-level-check.ts --issue UTV2-1856` returns `Verdict: PASS`, `Changed files: 10`, `Rules matched: (none)`.",
     "local_run_exit_code": 1,
-    "local_run_exit_code_cause": "The failing local step is the live-DB suite, refused by containment before it can connect (`TypeError: fetch failed` against http://127.0.0.1:1; `scripts/ci/assert-staging-target.ts` likewise REFUSES with host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx). That is the precondition this lane defers under route B, and it is discharged by the two green CI receipts recorded here \u2014 not waived.",
+    "local_run_exit_code_cause": "The failing local step is the live-DB suite, refused by containment before it can connect (`TypeError: fetch failed` against http://127.0.0.1:1; `scripts/ci/assert-staging-target.ts` likewise REFUSES with host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx). That is the precondition this lane defers under route B, and it is discharged by the two green CI receipts recorded here — not waived.",
     "suites_changed_by_this_lane": [
       {
         "file": "packages/db/src/canonical-reference-schema.test.ts",
@@ -41,7 +41,7 @@
         "tests": 14,
         "pass": 14,
         "fail": 0,
-        "note": "executed against staging only; see runtime_proof.receipt. Locally it fails 14/14 on `fetch failed` under containment, which is the expected and correct behaviour of a live-DB suite on a contained workstation. 7 from UTV2-1842/1854, 7 added here \u2014 counted from the file, not recalled."
+        "note": "executed against staging only; see runtime_proof.receipt. Locally it fails 14/14 on `fetch failed` under containment, which is the expected and correct behaviour of a live-DB suite on a contained workstation. 7 from UTV2-1842/1854, 7 added here — counted from the file, not recalled."
       },
       {
         "file": "apps/api/src/smart-form-validation.test.ts",
@@ -82,36 +82,36 @@
         ]
       },
       {
-        "mutation": "M5 \u2014 make the caller-supplied identity.teamId the source of the relationship instead of the server-resolved one",
+        "mutation": "M5 — make the caller-supplied identity.teamId the source of the relationship instead of the server-resolved one",
         "red_tests": 1,
         "named": [
           "a structured no-event player prop does not believe a caller-supplied team relationship"
         ]
       },
       {
-        "mutation": "M6 \u2014 drop the both-sides membership check in validateSearchBackedPlayer",
+        "mutation": "M6 — drop the both-sides membership check in validateSearchBackedPlayer",
         "red_tests": 1,
         "named": [
           "a structured no-event player prop rejects a player who is on neither side"
         ]
       },
       {
-        "mutation": "M7 \u2014 accept a null team relationship instead of refusing to the manual path",
+        "mutation": "M7 — accept a null team relationship instead of refusing to the manual path",
         "red_tests": 1,
         "named": [
           "a structured no-event player prop rejects a player whose team relationship cannot be verified"
         ]
       },
       {
-        "mutation": "M8 \u2014 unwire: restore the blanket refusal so validateSearchBackedPlayer is never called",
+        "mutation": "M8 — unwire: restore the blanket refusal so validateSearchBackedPlayer is never called",
         "red_tests": 5,
         "named": [
           "all five structured no-event player tests (18-22)"
         ],
-        "note": "Without M8 the entire function could be deleted with every other behavioural assertion still green \u2014 the failure mode the executor-result-validator duplication produced."
+        "note": "Without M8 the entire function could be deleted with every other behavioural assertion still green — the failure mode the executor-result-validator duplication produced."
       },
       {
-        "mutation": "M9 \u2014 the picks.player_id resolver, mutation performed by CI before the repair existed rather than constructed afterwards",
+        "mutation": "M9 — the picks.player_id resolver, mutation performed by CI before the repair existed rather than constructed afterwards",
         "red_tests": 2,
         "named": [
           "Writable DB proof (staging only)",
@@ -126,13 +126,13 @@
       "check": "verify",
       "conclusion": "success",
       "head_sha": "83f4ea04c4defb3b2755a292be486a5bd8ca9277",
-      "note": "Taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, the previous anchor \u2014 a tree without the in-memory parity repair. Retained as superseded evidence; it is not a receipt for the current anchor."
+      "note": "Taken at 83f4ea04c4defb3b2755a292be486a5bd8ca9277, the previous anchor — a tree without the in-memory parity repair. Retained as superseded evidence; it is not a receipt for the current anchor."
     },
-    "ci_receipt_status": "Recorded from gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs after the run at this head concluded."
+    "ci_receipt_status": "Run 34277374399 executed at 740f027704cbab3f94edefe370b67328a74230f7, not at the binding anchor 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901. Corrected at PM review: the previous wording said 'the run at this head', which read as a claim that the receipt was taken at the anchor. git diff --name-only 740f027704cbab3f94edefe370b67328a74230f7 449b3c90bb809bde3c76b99d70e0ad449ff53cf2 returns only docs/06_status/proof/UTV2-1856/evidence.json and verification.md, so the receipt carries to the final head across a proof-only difference."
   },
   "runtime_proof": {
     "status": "PASS",
-    "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI 'Writable DB proof (staging only)' job \u2014 never production",
+    "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI 'Writable DB proof (staging only)' job — never production",
     "command": "pnpm test:t1-proof:live",
     "receipt": {
       "run_id": "34250974852",
@@ -164,7 +164,7 @@
       {
         "table": "participants",
         "op": "insert 1 player row carrying the SAME team key plus metadata.proofIssue",
-        "purpose": "a confirmed proof fixture constructed so it WOULD resolve and be selectable \u2014 the fixture-exclusion criterion cannot be exercised by current production data, which holds zero marked participants attached to any event"
+        "purpose": "a confirmed proof fixture constructed so it WOULD resolve and be selectable — the fixture-exclusion criterion cannot be exercised by current production data, which holds zero marked participants attached to any event"
       },
       {
         "table": "events",
@@ -174,7 +174,7 @@
       {
         "table": "event_participants",
         "op": "insert 4 rows (roles away, home, player, player)",
-        "purpose": "attaches all four participants to the event, including the fixture \u2014 exclusion must be proven against an attached fixture, not an absent one"
+        "purpose": "attaches all four participants to the event, including the fixture — exclusion must be proven against an attached fixture, not an absent one"
       },
       {
         "table": "teams",
@@ -194,7 +194,7 @@
       {
         "table": "distribution_outbox",
         "op": "select id where pick_id=eq.<pickId>",
-        "purpose": "the Track Only non-delivery assertion \u2014 measured on the real delivery queue, not a stub, for both the team pick and the player prop"
+        "purpose": "the Track Only non-delivery assertion — measured on the real delivery queue, not a stub, for both the team pick and the player prop"
       },
       {
         "table": "events",
@@ -207,7 +207,7 @@
         "purpose": "same"
       }
     ],
-    "row_counts_method": "Each row below is asserted by the suite with assert.equal on an exact count, so `observed` is established by the receipt above passing with fail: 0 \u2014 not transcribed by hand. A drift in any one of them turns the named test red.",
+    "row_counts_method": "Each row below is asserted by the suite with assert.equal on an exact count, so `observed` is established by the receipt above passing with fail: 0 — not transcribed by hand. A drift in any one of them turns the named test red.",
     "row_counts": [
       {
         "assertion": "canonical teams rows during the browse test",
@@ -299,12 +299,12 @@
       "head_sha": "740f027704cbab3f94edefe370b67328a74230f7",
       "tap": "1..14 / # tests 14 / # pass 14 / # fail 0 / # skipped 0"
     },
-    "ci_receipt_status": "Recorded from gh api .../commits/740f027704cbab3f94edefe370b67328a74230f7/check-runs after the run at this head concluded. This is the first live-DB receipt taken on a tree that includes the in-memory parity repair."
+    "ci_receipt_status": "Run 34277374399 executed at 740f027704cbab3f94edefe370b67328a74230f7, not at the binding anchor 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901. This is the first live-DB receipt taken on a tree that includes the in-memory parity repair. git diff --name-only 740f027704cbab3f94edefe370b67328a74230f7 449b3c90bb809bde3c76b99d70e0ad449ff53cf2 returns only docs/06_status/proof/UTV2-1856/evidence.json and verification.md, so the receipt carries to the final head across a proof-only difference. Corrected at PM review together with the static receipt."
   },
   "browser_proof": {
-    "status": "PASS \u2014 the un-intercepted player prop reaches the API and persists",
+    "status": "PASS — the un-intercepted player prop reaches the API and persists",
     "measured_at_sha": "413823a85052500d0a62ba26c4dbc92c2532e567",
-    "environment": "Playwright against locally built code. The API child runs with every SUPABASE_* empty, UNIT_TALK_API_RUNTIME_MODE=fail_open and UNIT_TALK_QA_SEED_ENABLED=true, so apps/api/src/server.ts:303-321 falls back to createInMemoryRepositoryBundle(). No staging or production credential is present in this harness, by design \u2014 run-e2e-gate.mjs strips any SUPABASE|DATABASE_URL|SERVICE_ROLE key from the child environment. Persistence against a real database is proven separately under runtime_proof, and the two are deliberately not merged: that separation is why the staging database is not re-contaminated with UI fixtures.",
+    "environment": "Playwright against locally built code. The API child runs with every SUPABASE_* empty, UNIT_TALK_API_RUNTIME_MODE=fail_open and UNIT_TALK_QA_SEED_ENABLED=true, so apps/api/src/server.ts:303-321 falls back to createInMemoryRepositoryBundle(). No staging or production credential is present in this harness, by design — run-e2e-gate.mjs strips any SUPABASE|DATABASE_URL|SERVICE_ROLE key from the child environment. Persistence against a real database is proven separately under runtime_proof, and the two are deliberately not merged: that separation is why the staging database is not re-contaminated with UI fixtures.",
     "why_this_evidence_exists": "Server-side evidence is structurally blind to a client that refuses before issuing a request. UTV2-1859 proved that class exists on this exact path: a stale client mirror of the server rule this lane removed made the form refuse a player prop while every server test, the full unit suite and a green verify all passed. These runs are therefore the check that the request is actually issued and actually answered.",
     "runs": [
       {
@@ -312,23 +312,23 @@
         "command": "NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=1 npx playwright test -c apps/smart-form/playwright.config.ts apps/smart-form/e2e/phase-one.spec.ts --workers=1",
         "result": "12 passed, exit 0",
         "nothing_intercepted": "POST /api/submissions is NOT routed or stubbed in this suite. The browser issues the real request to the local API and the test waits on the real response.",
-        "what_it_establishes": "The no-event structured fallback completes end to end in a browser: real POST, HTTP 201, {lifecycleState: \"validated\", outboxEnqueued: false}, then the saved pick is read back out of the API via GET /api/picks?status=validated&limit=200 and asserted on \u2014 line -3.5, odds 105, metadata.distributionMode \"track-only\", metadata.eventId null, both canonical side participant ids \u2014 and GET /api/qa/pick-status/<pickId> confirms outboxId null and outboxStatus null. This is a saved pick verified after an un-intercepted submission, which is the evidence gap this run was asked to close.",
-        "bound": "The ticket is a TEAM spread. The player-prop variant is the next entry, and it could not be completed \u2014 see harness_limitation."
+        "what_it_establishes": "The no-event structured fallback completes end to end in a browser: real POST, HTTP 201, {lifecycleState: \"validated\", outboxEnqueued: false}, then the saved pick is read back out of the API via GET /api/picks?status=validated&limit=200 and asserted on — line -3.5, odds 105, metadata.distributionMode \"track-only\", metadata.eventId null, both canonical side participant ids — and GET /api/qa/pick-status/<pickId> confirms outboxId null and outboxStatus null. This is a saved pick verified after an un-intercepted submission, which is the evidence gap this run was asked to close.",
+        "bound": "The ticket is a TEAM spread. The player-prop variant is the next entry, and it could not be completed — see harness_limitation."
       },
       {
-        "name": "un-intercepted player prop \u2014 201 and the saved pick read back",
+        "name": "un-intercepted player prop — 201 and the saved pick read back",
         "command": "NEXT_PUBLIC_SMART_FORM_QA_AUTH_BYPASS=1 npx playwright test -c apps/smart-form/playwright.config.ts <temporary operator-run spec> --workers=1",
         "result": "1 passed (27.9s), exit 0",
         "nothing_intercepted": "No page.route on any /api/reference-data/** path and none on **/api/submissions. The only fulfilled route is **/api/auth/session, which is authentication plumbing rather than the path under test. No credential is present in the environment.",
-        "what_it_establishes": "The real reference-data API answered searchTeams with a real participant id (ea212f6a-...) and searchPlayers with teamId equal to that same id \u2014 the equality validateSearchBackedPlayer compares. The browser then submitted an NBA player prop with no scheduled event through the structured fallback and received HTTP 201 with outboxEnqueued false. The pick was read back out of GET /api/picks?status=validated&limit=200 as a saved row: selection \"Celtics Starter Points O 27.5\", line 27.5, odds -110, status validated, metadata.distributionMode \"track-only\", metadata.eventId null, and participantResolution.player.teamId equal to participantResolution.home.participantId.",
-        "what_it_does_not_establish": "It is not a claim about the deployed system \u2014 production is d3f69b804 and none of this is running there \u2014 and it is not the live-DB receipt. Persistence against a real database is proven separately under runtime_proof, against staging, where the credential lives. The two are deliberately not merged.",
+        "what_it_establishes": "The real reference-data API answered searchTeams with a real participant id (ea212f6a-...) and searchPlayers with teamId equal to that same id — the equality validateSearchBackedPlayer compares. The browser then submitted an NBA player prop with no scheduled event through the structured fallback and received HTTP 201 with outboxEnqueued false. The pick was read back out of GET /api/picks?status=validated&limit=200 as a saved row: selection \"Celtics Starter Points O 27.5\", line 27.5, odds -110, status validated, metadata.distributionMode \"track-only\", metadata.eventId null, and participantResolution.player.teamId equal to participantResolution.home.participantId.",
+        "what_it_does_not_establish": "It is not a claim about the deployed system — production is d3f69b804 and none of this is running there — and it is not the live-DB receipt. Persistence against a real database is proven separately under runtime_proof, against staging, where the credential lives. The two are deliberately not merged.",
         "spec_not_committed": "apps/smart-form/e2e/** is outside this lane pinned file_scope_lock, so the driving spec was temporary and was deleted before commit. Committing a permanent assertion there is the immediate follow-up lane; without it the restored parity can regress silently, which is the duplicated-rule shape UTV2-1859 paid for."
       },
       {
-        "name": "SUPERSEDED \u2014 the earlier 422 measurement, retained rather than deleted",
+        "name": "SUPERSEDED — the earlier 422 measurement, retained rather than deleted",
         "result": "422 SMART_FORM_RELATIONSHIP_INVALID, \"participant player-tatum is not canonical for sport NBA\"",
         "why_it_happened": "The in-memory reference-data repository diverged from the Database one in three ways, so no player it returned could satisfy the server. The server was correct; the harness data could not satisfy it.",
-        "what_it_still_establishes": "That validateSearchBackedPlayer fails closed against a canonical player it cannot corroborate. That property is preserved \u2014 no server rule was weakened to reach the 201 above."
+        "what_it_still_establishes": "That validateSearchBackedPlayer fails closed against a canonical player it cannot corroborate. That property is preserved — no server rule was weakened to reach the 201 above."
       }
     ],
     "intercepted_test_is_request_coverage_only": "apps/smart-form/e2e/smart-form-submission.spec.ts:1366 routes **/api/submissions and fulfils it with a synthetic 201. It is request/payload coverage and nothing more: it asserts that exactly one POST is issued and that the captured payload is truthful. It asserts no HTTP response from the real server, no persisted row and no delivery state, because it never reaches the server. It is described that way here, in UTV2-1859's own bundle, and in the plan; any reading of it as persistence evidence is wrong.",
@@ -342,7 +342,7 @@
         "Seeded team participants carried external_id: null, so no player could ever link to one; they now carry a deterministic key derived from the catalog, which is not a provider identifier."
       ],
       "server_rules_unchanged": "apps/api/src/smart-form-validation.ts is untouched by this repair. validateSearchBackedPlayer still refuses a player whose team relationship cannot be established. The 422 disappeared because resolution genuinely succeeds.",
-      "player_fixtures_are_opt_in": "Seeded only when UNIT_TALK_QA_SEED_ENABLED is exactly \"true\" \u2014 the same flag apps/api/src/routes/qa-seed.ts already gates on and the contained Playwright config already sets \u2014 and refused outright under NODE_ENV=production. A failure to read the environment seeds nothing. The default bundle every unit test builds is unchanged, which apps/api/src/server.test.ts:1076 still asserts.",
+      "player_fixtures_are_opt_in": "Seeded only when UNIT_TALK_QA_SEED_ENABLED is exactly \"true\" — the same flag apps/api/src/routes/qa-seed.ts already gates on and the contained Playwright config already sets — and refused outright under NODE_ENV=production. A failure to read the environment seeds nothing. The default bundle every unit test builds is unchanged, which apps/api/src/server.test.ts:1076 still asserts.",
       "mutations": [
         {
           "mutation": "searchTeams returns the synthetic team:<sport>:<name> id again",
@@ -386,22 +386,57 @@
       "apps/api/src/smart-form-validation.test.ts",
       "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts"
     ],
-    "detail": "All five declared paths are now changed. `apps/api/src/smart-form-validation.ts` was deliberately untouched through the first two commits \u2014 the browse defect was a data-layer bug and accommodating it in the validator would have loosened a real control. The edit that landed is the opposite shape: it replaces a blanket refusal with a server-side verification that is stricter than what the refusal protected. No path outside the pinned lock is touched."
+    "detail": "All five declared paths are now changed. `apps/api/src/smart-form-validation.ts` was deliberately untouched through the first two commits — the browse defect was a data-layer bug and accommodating it in the validator would have loosened a real control. The edit that landed is the opposite shape: it replaces a blanket refusal with a server-side verification that is stricter than what the refusal protected. No path outside the pinned lock is touched."
   },
   "limits": [
-    "This lane changes where `getEventBrowse` and `searchBrowse` READ a player's team identity from \u2014 the provider `participants` observation edge instead of the empty canonical `teams` / `player_team_assignments` tables \u2014 and not what any published interface promises. No caller signature changes and no client change was required.",
+    "This lane changes where `getEventBrowse` and `searchBrowse` READ a player's team identity from — the provider `participants` observation edge instead of the empty canonical `teams` / `player_team_assignments` tables — and not what any published interface promises. No caller signature changes and no client change was required.",
     "It seeds nothing and it deletes nothing. The canonical tables remain empty under parked provider ingestion, deliberately, and every production `participants` row is preserved. The proof-fixture repair is a read filter, never a DELETE; production data deletion is reserved decision 1 and is not proposed.",
-    "The fixture-exclusion predicate is the MARKER (`metadata.proofIssue` non-null), never 'has no team relationship'. In today's production data those two predicates select the same 26 rows, so the distinction is invisible in live data and is asserted against constructed rows instead \u2014 including a legitimate team-less player that is retained, and a `proofIssue` of JSON null that is retained.",
+    "The fixture-exclusion predicate is the MARKER (`metadata.proofIssue` non-null), never 'has no team relationship'. In today's production data those two predicates select the same 26 rows, so the distinction is invisible in live data and is asserted against constructed rows instead — including a legitimate team-less player that is retained, and a `proofIssue` of JSON null that is retained.",
     "The exclusion was applied only to `getEventBrowse` and `searchBrowse`. `handleSearchPlayers` / `handleSearchTeams` intersect UTV2-1854's already-filtered repository results with the event's participants, so an existing control already guarantees it there; that control is proven rather than duplicated.",
-    "`getEventBrowse` also reports `leagueId: null` from the same empty canonical maps. That is real and recorded, and it is NOT a submission blocker \u2014 `submission-service.ts` and `smart-form-validation.ts` never read it. It is out of scope here.",
+    "`getEventBrowse` also reports `leagueId: null` from the same empty canonical maps. That is real and recorded, and it is NOT a submission blocker — `submission-service.ts` and `smart-form-validation.ts` never read it. It is out of scope here.",
     "The staging receipt proves browse resolution, fixture exclusion, persistence of both pick shapes and non-delivery on a real database. It does not constitute the Milestone 1 pilot, which requires Griff's own browser against the deployed system.",
-    "The no-event admission is narrower than 'players are now allowed without an event'. A structured fallback player is admitted only when reference data itself resolves a team for that player AND that team is one of the two entered sides. A player with no resolvable team is still refused, and the refusal names the manual `canonical-coverage-gap` path \u2014 so honest provenance remains available and fabricated canonical provenance remains impossible.",
+    "The no-event admission is narrower than 'players are now allowed without an event'. A structured fallback player is admitted only when reference data itself resolves a team for that player AND that team is one of the two entered sides. A player with no resolvable team is still refused, and the refusal names the manual `canonical-coverage-gap` path — so honest provenance remains available and fabricated canonical provenance remains impossible.",
     "The caller's `identity.teamId` is never a source of truth in this path; it is only ever compared against the relationship the server resolved. M5 is the control for that and it is the mutation most likely to be reintroduced by a later 'simplification'.",
-    "`picks.player_id` is left null for a Smart Form player prop while canonical `players` coverage is absent. That is the honest value \u2014 the submitting surface's identity is a participants.id and belongs in `participant_id`, which is where the row carries it. It is not a claim that player identity is unrecorded.",
+    "`picks.player_id` is left null for a Smart Form player prop while canonical `players` coverage is absent. That is the honest value — the submitting surface's identity is a participants.id and belongs in `participant_id`, which is where the row carries it. It is not a claim that player identity is unrecorded.",
     "The browser evidence covers the un-intercepted TEAM path end to end, including the saved pick and its non-delivery. The un-intercepted PLAYER path is covered only as far as the request and the server's own refusal; its persistence claim comes from the staging receipt, not from a browser.",
     "The contained Playwright harness cannot produce a successful canonical player prop, because its in-memory reference repository holds no players and hardcodes teamId: null. That is a harness parity gap, measured and recorded above, and it is not a statement about this lane's server rule.",
-    "None of the browser evidence is Milestone 1. Milestone 1 step 4 is Griff's own browser against the deployed system, and production is d3f69b804 \u2014 neither this lane nor UTV2-1859 is running there. Dispatching a deployment is reserved decision 8.",
+    "None of the browser evidence is Milestone 1. Milestone 1 step 4 is Griff's own browser against the deployed system, and production is d3f69b804 — neither this lane nor UTV2-1859 is running there. Dispatching a deployment is reserved decision 8.",
     "The un-intercepted browser demonstration runs against the in-memory contained runtime, not against a real database and not against the deployed system. Its driving spec was temporary and is not committed, because apps/smart-form/e2e/** is outside this lane declared scope; a permanent regression assertion there is the immediate follow-up lane.",
     "This bundle previously recorded a 422 on this path and attributed it to a limitation requiring an out-of-scope file. That attribution was wrong and is corrected rather than removed. The superseded measurement is retained under browser_proof.runs."
-  ]
+  ],
+  "receipt_provenance": {
+    "why": "A receipt names a tree, not a changeset. Three SHAs are load-bearing here and are kept distinct rather than collapsed onto one another.",
+    "execution_anchor": {
+      "sha": "413823a85052500d0a62ba26c4dbc92c2532e567",
+      "what": "the tree pnpm lint / type-check / test, the un-intercepted browser runs and the three mutations were executed against (the in-memory / Database parity repair)",
+      "diff_to_final_head": [
+        "docs/06_status/readiness/readiness-score.json",
+        "docs/06_status/proof/UTV2-1856/diff-summary.md",
+        "docs/06_status/proof/UTV2-1856/evidence.json",
+        "docs/06_status/proof/UTV2-1856/verification.md"
+      ],
+      "note": "readiness-score.json is outside PROOF_ONLY_PREFIXES, which is why this SHA cannot also be the binding anchor."
+    },
+    "binding_anchor": {
+      "sha": "5fbf28c99b47fcdeac9376c8eedee8d45c0bd901",
+      "what": "verified_source_sha - the last commit on this branch touching any path outside docs/06_status/proof/ and docs/06_status/lanes/",
+      "diff_to_final_head": [
+        "docs/06_status/proof/UTV2-1856/diff-summary.md",
+        "docs/06_status/proof/UTV2-1856/evidence.json",
+        "docs/06_status/proof/UTV2-1856/verification.md"
+      ],
+      "note": "proof-only, so proof-binding-validator.ts rule 4 holds. No receipt in this bundle was obtained at this SHA."
+    },
+    "ci_receipt_sha": {
+      "sha": "740f027704cbab3f94edefe370b67328a74230f7",
+      "what": "the head run 34277374399 executed at, producing both authoritative CI receipts",
+      "diff_to_final_head": [
+        "docs/06_status/proof/UTV2-1856/evidence.json",
+        "docs/06_status/proof/UTV2-1856/verification.md"
+      ]
+    },
+    "final_head": "449b3c90bb809bde3c76b99d70e0ad449ff53cf2",
+    "correction": "Corrected at PM review. An earlier draft claimed the authoritative CI receipts were taken at the binding anchor 5fbf28c99b47fcdeac9376c8eedee8d45c0bd901. They were not: run 34277374399 executed at 740f027704cbab3f94edefe370b67328a74230f7. The run id was correct and the SHA was wrong. Every diff_to_final_head list above was produced by git diff --name-only <sha> 449b3c90bb809bde3c76b99d70e0ad449ff53cf2 rather than asserted.",
+    "final_head_note": "449b3c90bb809bde3c76b99d70e0ad449ff53cf2 is the head every diff_to_final_head list above was measured at. The correction that records them is itself an evidence-only commit on top of it, touching exactly docs/06_status/proof/UTV2-1856/evidence.json and verification.md - both already members of every list - so each list is identical at the head that carries this bundle. Re-measured with git diff --name-only after committing rather than assumed; the head SHA is not restated because a commit cannot cite its own hash."
+  }
 }
