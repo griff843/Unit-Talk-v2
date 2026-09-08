@@ -226,7 +226,7 @@ through a safe internal/operator path. Containment stays parked throughout; see 
 | Reach the deployed form | **Infrastructure done.** `smart-form` is deployed, healthy, routed by Caddy at `UNIT_TALK_SMART_FORM_DOMAIN`. The hostname is a secret and is not in the repo. |
 | Authenticate | **Live.** Google OAuth via Auth.js v5, allow-list gated on `ALLOWED_CAPPER_EMAILS`; the secret was reshaped 2026-09-03T17:29Z and #1488's parser shipped 2026-09-06. Both halves are now in production together. **Untested against a real sign-in** — nothing in the deploy validates the allow-list's shape, so this step is live-but-unproven, not done. |
 | Resolve canonical identity as `griff843` | **Live.** #1488 (`2ac233424`) is an ancestor of the deployed `d3f69b804`, verified by `git merge-base --is-ancestor`. Local-part derivation is gone. Same caveat as above: proven present, not yet exercised. |
-| Submit + persist a real internal Track Only pick | **Repaired on `main`; not in production.** UTV2-1842 (#1529, `40b0f19f4`) admits server-validated Smart Form fallbacks past the event-existence gate, UTV2-1853 (#1531) enforces the numeric bounds server-side, UTV2-1855 (#1533) clamps the units stepper, and UTV2-1854 (#1535) answers team and player search from `participants`. The UI half landed earlier as UTV2-1844 (#1523). **None of it is running**: `apps/api/src/submission-service.ts` and eight other submission-path files differ between the deployed `d3f69b804` and `main`. So a structured-fallback submission still 422s *on the deployed system*, and the remaining action is a `Deploy` dispatch — reserved decision 8, prepared above. **Canonical reference-data coverage is not a precondition** — honest structured or manual `canonical-coverage-gap` provenance is acceptable for this contained pilot. |
+| Submit + persist a real internal Track Only pick | **Server repaired on `main`; the browser still refuses; nothing is in production.** **Corrected 2026-09-08 by running the browser:** a player prop with no scheduled event is refused client-side by `evaluateSubmissionGuards`' `canonical-player-requires-event` branch (`apps/smart-form/lib/form-utils.ts:662-670`) and issues no `POST /api/submissions` at all — see the corrected section above. That branch mirrors a server rule UTV2-1856 (#1536) removed, so it is now stale. The rest of the row was measured against the API and remains true of the API: UTV2-1842 (#1529, `40b0f19f4`) admits server-validated Smart Form fallbacks past the event-existence gate, UTV2-1853 (#1531) enforces the numeric bounds server-side, UTV2-1855 (#1533) clamps the units stepper, and UTV2-1854 (#1535) answers team and player search from `participants`. The UI half landed earlier as UTV2-1844 (#1523). **None of it is running**: `apps/api/src/submission-service.ts` and eight other submission-path files differ between the deployed `d3f69b804` and `main`. So a structured-fallback submission still 422s *on the deployed system*, and the remaining action is a `Deploy` dispatch — reserved decision 8, prepared above. **Canonical reference-data coverage is not a precondition** — honest structured or manual `canonical-coverage-gap` provenance is acceptable for this contained pilot. |
 | Prove Track Only cannot create member delivery | **Built, mutation-tested, and deployed.** UTV2-1672 (`6a8eface9`) is an ancestor of the running `d3f69b804`, re-verified 2026-09-06: the submit-time pin, direct-enqueue guard, retry guard, requeue guard, outbox chokepoint, atomic-RPC chokepoint and recap exclusion each have a test that fails when the guard is removed. What remains is *observing* it during the pilot — a run, not a build. |
 | Observe through an internal/operator path | **Not blocked.** A safe read-only internal observation — the pick's persisted `capper_id`, `metadata->>'distributionMode'`, provenance and the absence of any outbox row — satisfies this step. Deploying the Command Center (#1496) is desirable product work tracked on its own merits and is **not** a Milestone 1 gate; no `COMMAND_CENTER_*` secret is a prerequisite. |
 
@@ -239,7 +239,47 @@ considered done. The last `Deploy` run verified `{"event":"syndicate_machine_mod
 "mode":"parked"}` and re-read each value out of the running container. Nothing in the pilot may
 unpark any of them.
 
-### The identity blocker is closed. The submission blocker is repaired but unshipped.
+### The identity blocker is closed. The submission blocker is repaired on the server and still refuses in the browser.
+
+**Corrected 2026-09-08, by running the browser rather than reading the diff.** This heading read
+*"the submission blocker is repaired but unshipped"*. That was measured against the API and is true
+of the API. It is **false of the operator's actual path**, and the difference is a client guard no
+server-side measurement could see.
+
+Reproduced end to end in the Playwright harness (structured fallback, no scheduled event, NBA
+player prop, canonical player selected from search): the operator fills a complete valid ticket,
+presses Submit, and **no `POST /api/submissions` is issued at all**. The form refuses first, with:
+
+> **Select a canonical matchup** — "A canonical player prop needs the matchup it belongs to.
+> Select a matchup, or use the verified coverage-gap path."
+
+That is `evaluateSubmissionGuards`' `canonical-player-requires-event` branch
+(`apps/smart-form/lib/form-utils.ts:662-670`). Its own comment names the server rule it mirrors —
+*"smart-form-validation.ts:203 — `validateStructuredTeamFallback` refuses any canonical player
+selection without a canonical event"*. **UTV2-1856 removed that server rule** (#1536,
+`smart-form-validation.ts:269-286`, which now resolves membership from the participants observation
+edge and keeps the refusal only for a player whose team relationship genuinely cannot be
+established). The mirror was not removed with it, so the client now refuses what the server would
+accept, and it does so *before* the request exists.
+
+Two things follow, and the second is the more important one:
+
+- **Milestone 1 step 4 is still blocked**, on the client rather than the server. A player prop
+  cannot be submitted through the deployed form even after #1536 merges and even after a deploy.
+- **A guard that mirrors a server rule is a duplicated rule, and removing one copy silently
+  reactivates the defect at the other.** This is the same shape as the executor-result-validator
+  duplication UTV2-1688 paid for: two copies of one rule, only one of them changed, and every test
+  still green because each copy is tested against itself. `evaluateSubmissionGuards` cites its
+  server counterpart in a comment; nothing mechanically binds them, so the citation went stale the
+  moment the server changed. The repair therefore has to remove the stale branch *and* leave
+  something that fails when the two disagree again — a client-side guard whose only justification
+  is a server rule must be provable against that server rule, not against its own recollection of
+  it.
+
+**No claim in this plan may describe the submission path as repaired until a browser run submits a
+player prop with no scheduled event and the pick persists.** Server tests, unit tests and a green
+`verify` have all been true throughout the period in which the browser refused.
+
 
 **The identity work is done and live.** #1488 requires each allow-list entry to carry its canonical
 ID explicitly, refusing anything not already canonical rather than repairing it:
@@ -422,7 +462,7 @@ version of this table; only its content changes. Rows 2–6 are genuinely off th
 
 | # | Action | Why reserved | What it actually blocks |
 |---|---|---|---|
-| 1 | **Dispatch `deploy.yml` at `origin/main`** — 45 commits and 16 container-code files behind, carrying the entire Smart Form submission repair (UTV2-1842/1844/1847/1850/1853/1854/1855). No DDL, no deploy-mechanism change, no containment change. Packet above. | Reserved decision 8 — `deploy.yml` is `workflow_dispatch`-only and nothing promotes on its own | Milestone 1 steps **4–7**. This is the Milestone 1 blocker. |
+| 1 | **Dispatch `deploy.yml` at `origin/main`** — **not sufficient on its own as of 2026-09-08**: the client-side player-prop refusal above would survive the deploy, so a deploy today ships a form that still refuses step 4. The repair is ordinary product work and is being done; the dispatch remains the reserved action after it lands. — 45 commits and 16 container-code files behind, carrying the entire Smart Form submission repair (UTV2-1842/1844/1847/1850/1853/1854/1855). No DDL, no deploy-mechanism change, no containment change. Packet above. | Reserved decision 8 — `deploy.yml` is `workflow_dispatch`-only and nothing promotes on its own | Milestone 1 steps **4–7**. This is the Milestone 1 blocker. |
 | 2 | Approve **#1536** (UTV2-1856, T1) — `t1-approved` label **and** a `pm-verdict/v1` APPROVED comment | Merge authority | #1536 only. Resolves player-team identity from participants; not a Milestone 1 gate. |
 | 3 | Approve **#1513** (UTV2-1802, T1) — Command Center management token can no longer be handed arbitrary SQL | Merge authority | #1513 only. Pre-deployment hardening; the Command Center is in no compose service and behind no Caddy route. |
 | 4 | Approve **#1484** (`pm-verdict/v1`) — canonical reference bootstrap | Merge authority | #1484 only. Not a Milestone 1 gate. |
@@ -1405,6 +1445,25 @@ routed around:**
   #1499 scope override.
 
 ## Learned
+
+- **A client guard that mirrors a server rule is one rule stored twice, and deleting the server copy
+  silently re-arms the client copy.** UTV2-1856 removed the server refusal *"canonical player
+  selection requires a canonical event"*; `evaluateSubmissionGuards` kept its mirror of that exact
+  rule, citing it by `file:line` in a comment. Every test stayed green — the server tests assert the
+  server's new behaviour, the client tests assert the client's old behaviour, and no test compares
+  them — so a green `verify`, a complete T1 proof bundle and a merged repair all coexisted with a
+  form that refused before issuing a request. **Server-side evidence cannot detect this class at
+  all**, because the defect is that the request is never sent. It was found in ~40 seconds of
+  Playwright and would not have been found by any amount of reading. The mechanical form of the
+  lesson matches UTV2-1688's: where a rule is duplicated for a real reason, something must fail when
+  the copies disagree; a `file:line` citation in a comment is documentation of the coupling, not
+  enforcement of it.
+
+- **"Demonstrate the path" and "prove the components" are different obligations, and only one of
+  them ends a milestone.** The submission repair had unit tests, live-DB tests, mutation tests and
+  green CI at every step, and the operator still could not submit. Milestone 1's steps are written
+  as operator actions for exactly this reason. Any future claim that a step is repaired needs a run
+  of that step, not a receipt from underneath it.
 
 - **A merged repair is not a shipped repair, and this plan wrote the confusion into its own
   headings.** The 2026-09-07 draft said "the submission blocker is closed" in a section whose
