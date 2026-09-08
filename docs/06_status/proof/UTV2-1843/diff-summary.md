@@ -2,7 +2,7 @@
 
 **Branch:** claude/utv2-1843-smart-form-product-intent
 **Tier:** T2 · **Lane type:** governance
-MERGE_SHA: pending merge
+MERGE_SHA: 69a7ed331cd0397d422d17b621dc63e17fffd0fe
 
 Documentation and agent-instruction consolidation. No runtime code, no schema, no workflow, no
 required check, no label, no gate, no new lane type.

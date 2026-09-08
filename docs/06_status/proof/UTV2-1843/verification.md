@@ -1,6 +1,6 @@
 # PROOF: UTV2-1843 — Smart Form product intent consolidation
 
-MERGE_SHA: pending merge
+MERGE_SHA: 69a7ed331cd0397d422d17b621dc63e17fffd0fe
 
 ## ASSERTIONS:
 
@@ -116,7 +116,7 @@ workflow, no check, no label, no gate.
 | Verified source SHA: | 9c5dbb07a3599be21ff613f83895e7772c0613bb |
 
 PR: https://github.com/griff843/Unit-Talk-v2/pull/1521
-Merge SHA: pending merge
+Merge SHA: 69a7ed331cd0397d422d17b621dc63e17fffd0fe
 Verified source SHA: 9c5dbb07a3599be21ff613f83895e7772c0613bb
 
 `9c5dbb07a3599be21ff613f83895e7772c0613bb` is the last commit on this branch that changes any file outside
