@@ -7,24 +7,25 @@
   "status": "pending_merge",
   "sha_binding": {
     "merge_sha": null,
-    "verified_source_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+    "verified_source_sha": "762a97afea7fabe1d7e5b92901bb9580203fdd37",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
-    "sha_type": "merge_sha",
-    "bound_at": "2026-09-08T10:20:00.000Z"
+    "sha_type": "verified_source_sha",
+    "bound_at": "2026-09-08T11:05:00.000Z",
+    "anchor_note": "762a97afea7fabe1d7e5b92901bb9580203fdd37 is the last commit on this branch that changes a non-proof path, and is therefore the anchor. It supersedes 52e086f86, which was the anchor before two later implementation commits landed: 90d558454 (the picks.player_id FK resolver) and 762a97afe (the structured no-event player admission). Every receipt in this bundle was re-obtained at 762a97afe rather than carried forward from 52e086f86 — that earlier head is retained below only where it is itself the evidence, namely as the failing side of the player_id mutation pair. Commits made after 762a97afe are confined to docs/06_status/proof/ and docs/06_status/lanes/ and do not move the anchor."
   },
   "static_proof": {
     "status": "PASS",
     "command": "pnpm verify",
-    "measured_at_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+    "measured_at_sha": "762a97afea7fabe1d7e5b92901bb9580203fdd37",
     "ci_receipt": {
-      "run_id": "__RUNID__",
-      "job_id": "__VERIFYJOB__",
+      "run_id": "34212031091",
+      "job_id": "102017851482",
       "check": "verify",
       "conclusion": "success",
-      "head_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8"
+      "head_sha": "762a97afea7fabe1d7e5b92901bb9580203fdd37"
     },
-    "detail": "Measured at this branch's implementation head 52e086f86fe7818d61cd20a85cc076cfcc3ec2b8, the last non-proof commit. In CI the required `verify` check is green (receipt above). Locally: lint clean, `pnpm type-check` clean, `pnpm build` clean, and the full wired unit suite at 6074 tests / 6074 pass / 0 fail / 0 skipped across 132 suites in 100 wired suite files. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returned `Verdict: PASS`, 5 changed files, no rules matched and therefore no R-level artifacts required for this diff.",
+    "detail": "Measured at this branch's implementation head 762a97afea7fabe1d7e5b92901bb9580203fdd37, the last non-proof commit. In CI the required `verify` check is green (receipt above). Locally: lint clean, `pnpm type-check` clean, `pnpm build` clean, and the full wired unit suite at 6078 tests / 6078 pass / 0 fail / 0 skipped, exit 0. `npx tsx scripts/ci/r-level-check.ts --base c3679fda71de97c29e3750d92046943365345e96 --head 762a97afea7fabe1d7e5b92901bb9580203fdd37` returned `Verdict: PASS`, `Changed files: 10`, `Rules matched: (none)`. Explicit SHAs are required: the script forces cwd to the root checkout, so --head HEAD would measure main rather than this lane and therefore no R-level artifacts required for this diff.",
     "local_run_exit_code": 1,
     "local_run_exit_code_cause": "The single failing local step is `test:live-db`. `scripts/ci/assert-staging-target.ts` REFUSED it -- host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx -- because a contained workstation resolves Supabase to a loopback placeholder by policy. That is precisely the precondition this lane defers under route B, and it is discharged by the two green CI receipts recorded here, not waived.",
     "suites_changed_by_this_lane": [
@@ -37,10 +38,17 @@
       },
       {
         "file": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
-        "tests": 12,
-        "pass": 12,
+        "tests": 14,
+        "pass": 14,
         "fail": 0,
-        "note": "executed against staging only; see runtime_proof.receipt. 7 from UTV2-1842/1854, 5 added here"
+        "note": "executed against staging only; see runtime_proof.receipt. 7 from UTV2-1842/1854, 7 added here — counted from the file, not recalled."
+      },
+      {
+        "file": "apps/api/src/smart-form-validation.test.ts",
+        "tests": 78,
+        "pass": 78,
+        "fail": 0,
+        "note": "73 pre-existing, 5 added here for validateSearchBackedPlayer; one pre-existing test that asserted the removed blanket-refusal message was replaced rather than deleted."
       }
     ],
     "mutations": [
@@ -72,6 +80,44 @@
         "named": [
           "getEventBrowse leaves a player whose team key names a team outside this event unrelated"
         ]
+      },
+      {
+        "mutation": "M5 — make the caller-supplied identity.teamId the source of the relationship instead of the server-resolved one",
+        "red_tests": 1,
+        "named": [
+          "a structured no-event player prop does not believe a caller-supplied team relationship"
+        ]
+      },
+      {
+        "mutation": "M6 — drop the both-sides membership check in validateSearchBackedPlayer",
+        "red_tests": 1,
+        "named": [
+          "a structured no-event player prop rejects a player who is on neither side"
+        ]
+      },
+      {
+        "mutation": "M7 — accept a null team relationship instead of refusing to the manual path",
+        "red_tests": 1,
+        "named": [
+          "a structured no-event player prop rejects a player whose team relationship cannot be verified"
+        ]
+      },
+      {
+        "mutation": "M8 — unwire: restore the blanket refusal so validateSearchBackedPlayer is never called",
+        "red_tests": 5,
+        "named": [
+          "all five structured no-event player tests (18-22)"
+        ],
+        "note": "Without M8 the entire function could be deleted with every other behavioural assertion still green — the failure mode the executor-result-validator duplication produced."
+      },
+      {
+        "mutation": "M9 — the picks.player_id resolver, mutation performed by CI before the repair existed rather than constructed afterwards",
+        "red_tests": 2,
+        "named": [
+          "Writable DB proof (staging only)",
+          "verify"
+        ],
+        "evidence": "head 52e086f86 (no resolveCanonicalPlayerId): run 34209883355, both jobs FAILURE on `insert or update on table \"picks\" violates foreign key constraint \"picks_player_id_fkey\"`. head 90d558454 (adds resolveCanonicalPlayerId and nothing else): both jobs SUCCESS. Run 34209883355 was later cancelled by the subsequent push; the two job conclusions stand and are what is cited."
       }
     ]
   },
@@ -80,12 +126,12 @@
     "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI 'Writable DB proof (staging only)' job — never production",
     "command": "pnpm test:t1-proof:live",
     "receipt": {
-      "run_id": "__RUNID__",
-      "job_id": "__DBJOB__",
-      "head_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+      "run_id": "34212031091",
+      "job_id": "102015702830",
+      "head_sha": "762a97afea7fabe1d7e5b92901bb9580203fdd37",
       "suite": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
-      "tests": 12,
-      "pass": 12,
+      "tests": 14,
+      "pass": 14,
       "fail": 0,
       "skipped": 0
     },
@@ -154,18 +200,86 @@
     ],
     "row_counts_method": "Each row below is asserted by the suite with assert.equal on an exact count, so `observed` is established by the receipt above passing with fail: 0 — not transcribed by hand. A drift in any one of them turns the named test red.",
     "row_counts": [
-      { "assertion": "canonical teams rows during the browse test", "expected": 0, "observed": 0 },
-      { "assertion": "player_team_assignments rows during the browse test", "expected": 0, "observed": 0 },
-      { "assertion": "browse players returned for the event", "expected": 1, "observed": 1 },
-      { "assertion": "browse teams returned for the event", "expected": 2, "observed": 2 },
-      { "assertion": "persisted picks for the canonical-event TEAM submission", "expected": 1, "observed": 1 },
-      { "assertion": "distribution_outbox rows for the TEAM Track Only pick", "expected": 0, "observed": 0 },
-      { "assertion": "persisted picks for the canonical-event PLAYER PROP submission", "expected": 1, "observed": 1 },
-      { "assertion": "distribution_outbox rows for the PLAYER PROP Track Only pick", "expected": 0, "observed": 0 },
-      { "assertion": "persisted picks for the wrong-team player control", "expected": 0, "observed": 0 },
-      { "assertion": "persisted picks for the fixture-named-directly control", "expected": 0, "observed": 0 },
-      { "assertion": "UTV2-1856 fixture participants leaked after teardown", "expected": 0, "observed": 0 },
-      { "assertion": "UTV2-1856 fixture events leaked after teardown", "expected": 0, "observed": 0 }
+      {
+        "assertion": "canonical teams rows during the browse test",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "player_team_assignments rows during the browse test",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "browse players returned for the event",
+        "expected": 1,
+        "observed": 1
+      },
+      {
+        "assertion": "browse teams returned for the event",
+        "expected": 2,
+        "observed": 2
+      },
+      {
+        "assertion": "persisted picks for the canonical-event TEAM submission",
+        "expected": 1,
+        "observed": 1
+      },
+      {
+        "assertion": "distribution_outbox rows for the TEAM Track Only pick",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "persisted picks for the canonical-event PLAYER PROP submission",
+        "expected": 1,
+        "observed": 1
+      },
+      {
+        "assertion": "distribution_outbox rows for the PLAYER PROP Track Only pick",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "persisted picks for the wrong-team player control",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "persisted picks for the fixture-named-directly control",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "UTV2-1856 fixture participants leaked after teardown",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "UTV2-1856 fixture events leaked after teardown",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "persisted picks for the structured NO-EVENT player prop",
+        "expected": 1,
+        "observed": 1
+      },
+      {
+        "assertion": "distribution_outbox rows for the structured NO-EVENT Track Only pick",
+        "expected": 0,
+        "observed": 0
+      },
+      {
+        "assertion": "picks.player_id for the structured NO-EVENT player prop (canonical players is empty, so the resolver must return null rather than write a participants.id through the FK)",
+        "expected": "null",
+        "observed": "null"
+      },
+      {
+        "assertion": "persisted picks for the player-on-neither-side control",
+        "expected": 0,
+        "observed": 0
+      }
     ]
   },
   "generated_at": "2026-09-08T10:20:00Z",
@@ -177,7 +291,7 @@
       "apps/api/src/smart-form-validation.test.ts",
       "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts"
     ],
-    "detail": "Three of the five declared paths are changed; `apps/api/src/smart-form-validation.ts` and its test are deliberately NOT touched — the validator's participant-relationship check is correct and the defect was that the repository handed it a null teamId. Plus this lane's own artifacts: the manifest, the .ops/sync file and this proof bundle. `packages/db/src/runtime-repositories.ts` is a Tier C EXACT path, which is why this lane is T1 rather than the T3 an earlier draft proposed. No workflow, no merge control, no containment setting, no migration and no deploy path is touched."
+    "detail": "All five declared paths are now changed. `apps/api/src/smart-form-validation.ts` was deliberately untouched through the first two commits — the browse defect was a data-layer bug and accommodating it in the validator would have loosened a real control. The edit that landed is the opposite shape: it replaces a blanket refusal with a server-side verification that is stricter than what the refusal protected. No path outside the pinned lock is touched."
   },
   "limits": [
     "This lane changes where `getEventBrowse` and `searchBrowse` READ a player's team identity from — the provider `participants` observation edge instead of the empty canonical `teams` / `player_team_assignments` tables — and not what any published interface promises. No caller signature changes and no client change was required.",
@@ -185,6 +299,9 @@
     "The fixture-exclusion predicate is the MARKER (`metadata.proofIssue` non-null), never 'has no team relationship'. In today's production data those two predicates select the same 26 rows, so the distinction is invisible in live data and is asserted against constructed rows instead — including a legitimate team-less player that is retained, and a `proofIssue` of JSON null that is retained.",
     "The exclusion was applied only to `getEventBrowse` and `searchBrowse`. `handleSearchPlayers` / `handleSearchTeams` intersect UTV2-1854's already-filtered repository results with the event's participants, so an existing control already guarantees it there; that control is proven rather than duplicated.",
     "`getEventBrowse` also reports `leagueId: null` from the same empty canonical maps. That is real and recorded, and it is NOT a submission blocker — `submission-service.ts` and `smart-form-validation.ts` never read it. It is out of scope here.",
-    "The staging receipt proves browse resolution, fixture exclusion, persistence of both pick shapes and non-delivery on a real database. It does not constitute the Milestone 1 pilot, which requires Griff's own browser against the deployed system."
+    "The staging receipt proves browse resolution, fixture exclusion, persistence of both pick shapes and non-delivery on a real database. It does not constitute the Milestone 1 pilot, which requires Griff's own browser against the deployed system.",
+    "The no-event admission is narrower than 'players are now allowed without an event'. A structured fallback player is admitted only when reference data itself resolves a team for that player AND that team is one of the two entered sides. A player with no resolvable team is still refused, and the refusal names the manual `canonical-coverage-gap` path — so honest provenance remains available and fabricated canonical provenance remains impossible.",
+    "The caller's `identity.teamId` is never a source of truth in this path; it is only ever compared against the relationship the server resolved. M5 is the control for that and it is the mutation most likely to be reintroduced by a later 'simplification'.",
+    "`picks.player_id` is left null for a Smart Form player prop while canonical `players` coverage is absent. That is the honest value — the submitting surface's identity is a participants.id and belongs in `participant_id`, which is where the row carries it. It is not a claim that player identity is unrecorded."
   ]
 }
