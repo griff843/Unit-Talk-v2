@@ -1,0 +1,190 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1856",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "proof_profile": "app-runtime",
+  "status": "pending_merge",
+  "sha_binding": {
+    "merge_sha": null,
+    "verified_source_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
+    "sha_type": "merge_sha",
+    "bound_at": "2026-09-08T10:20:00.000Z"
+  },
+  "static_proof": {
+    "status": "PASS",
+    "command": "pnpm verify",
+    "measured_at_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+    "ci_receipt": {
+      "run_id": "__RUNID__",
+      "job_id": "__VERIFYJOB__",
+      "check": "verify",
+      "conclusion": "success",
+      "head_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8"
+    },
+    "detail": "Measured at this branch's implementation head 52e086f86fe7818d61cd20a85cc076cfcc3ec2b8, the last non-proof commit. In CI the required `verify` check is green (receipt above). Locally: lint clean, `pnpm type-check` clean, `pnpm build` clean, and the full wired unit suite at 6074 tests / 6074 pass / 0 fail / 0 skipped across 132 suites in 100 wired suite files. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` returned `Verdict: PASS`, 5 changed files, no rules matched and therefore no R-level artifacts required for this diff.",
+    "local_run_exit_code": 1,
+    "local_run_exit_code_cause": "The single failing local step is `test:live-db`. `scripts/ci/assert-staging-target.ts` REFUSED it -- host=127.0.0.1, ref=unidentified, expected=xskgrzbteyqdufktjrjx -- because a contained workstation resolves Supabase to a loopback placeholder by policy. That is precisely the precondition this lane defers under route B, and it is discharged by the two green CI receipts recorded here, not waived.",
+    "suites_changed_by_this_lane": [
+      {
+        "file": "packages/db/src/canonical-reference-schema.test.ts",
+        "tests": 18,
+        "pass": 18,
+        "fail": 0,
+        "note": "13 from UTV2-1854, 5 added here"
+      },
+      {
+        "file": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+        "tests": 12,
+        "pass": 12,
+        "fail": 0,
+        "note": "executed against staging only; see runtime_proof.receipt. 7 from UTV2-1842/1854, 5 added here"
+      }
+    ],
+    "mutations": [
+      {
+        "mutation": "revert the player teamId fallback in getEventBrowse so only the canonical maps are consulted",
+        "red_tests": 2,
+        "named": [
+          "getEventBrowse resolves a player team through the participants edge while the canonical tables are empty",
+          "getEventBrowse keeps a row whose proofIssue is null: that names no issue and is not a confirmed fixture"
+        ]
+      },
+      {
+        "mutation": "drop only the teamName half of the fallback, keeping teamId",
+        "red_tests": 1,
+        "named": [
+          "getEventBrowse resolves a player team through the participants edge while the canonical tables are empty"
+        ]
+      },
+      {
+        "mutation": "unwire the browse proof-fixture exclusion so isConfirmedProofFixture always returns false",
+        "red_tests": 1,
+        "named": [
+          "getEventBrowse excludes a confirmed proof fixture attached to an event while retaining the legitimate player beside it"
+        ]
+      },
+      {
+        "mutation": "fall through to any team with a matching external_id when the event carries no such side",
+        "red_tests": 1,
+        "named": [
+          "getEventBrowse leaves a player whose team key names a team outside this event unrelated"
+        ]
+      }
+    ]
+  },
+  "runtime_proof": {
+    "status": "PASS",
+    "environment": "staging Supabase (xskgrzbteyqdufktjrjx), via the CI 'Writable DB proof (staging only)' job — never production",
+    "command": "pnpm test:t1-proof:live",
+    "receipt": {
+      "run_id": "__RUNID__",
+      "job_id": "__DBJOB__",
+      "head_sha": "52e086f86fe7818d61cd20a85cc076cfcc3ec2b8",
+      "suite": "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts",
+      "tests": 12,
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0
+    },
+    "significance": "The suites in this chain are `{ skip: skipReason }`-gated on SUPABASE_SERVICE_ROLE_KEY, so a missing credential produces a passing job with every test skipped. `skipped: 0` is therefore what establishes the suite actually executed against staging rather than short-circuiting.",
+    "queries": [
+      {
+        "table": "sports",
+        "op": "select id where id=eq.NBA",
+        "purpose": "pins the fixture's sport rather than taking an arbitrary row: the events.sport_id FK, the case-sensitive canonical-sport guard at smart-form-validation.ts:107-113, and TEAM_SPORTS.has(sportId) deciding whether the home/away role assertions run at all each depend on it"
+      },
+      {
+        "table": "participants",
+        "op": "insert 2 team rows (away, home)",
+        "purpose": "the two sides the canonical-event path must resolve and persist"
+      },
+      {
+        "table": "participants",
+        "op": "insert 1 player row carrying metadata.team_external_id = the home team's external_id",
+        "purpose": "the legitimate rostered player; the row whose team identity was null before this lane"
+      },
+      {
+        "table": "participants",
+        "op": "insert 1 player row carrying the SAME team key plus metadata.proofIssue",
+        "purpose": "a confirmed proof fixture constructed so it WOULD resolve and be selectable — the fixture-exclusion criterion cannot be exercised by current production data, which holds zero marked participants attached to any event"
+      },
+      {
+        "table": "events",
+        "op": "upsertByExternalId",
+        "purpose": "a real canonical event, which also arms checkEventExistenceGate"
+      },
+      {
+        "table": "event_participants",
+        "op": "insert 4 rows (roles away, home, player, player)",
+        "purpose": "attaches all four participants to the event, including the fixture — exclusion must be proven against an attached fixture, not an absent one"
+      },
+      {
+        "table": "teams",
+        "op": "select count",
+        "purpose": "asserted EMPTY in the same run, so the resolved team identity provably came from the participants edge and not from canonical data that happened to exist"
+      },
+      {
+        "table": "player_team_assignments",
+        "op": "select count",
+        "purpose": "asserted EMPTY in the same run, for the same reason"
+      },
+      {
+        "table": "picks",
+        "op": "select id,line,odds,metadata where id=eq.<pickId>",
+        "purpose": "reads back each persisted pick, its line and odds, its distributionMode and its participantResolution provenance"
+      },
+      {
+        "table": "distribution_outbox",
+        "op": "select id where pick_id=eq.<pickId>",
+        "purpose": "the Track Only non-delivery assertion — measured on the real delivery queue, not a stub, for both the team pick and the player prop"
+      },
+      {
+        "table": "events",
+        "op": "delete where external_id in (...) + like 'utv2-1856-<run>%' sweep",
+        "purpose": "exact-count teardown plus a leak assertion, pinned to this lane's own prefix so a leak cannot be masked by the preceding lane's sweep"
+      },
+      {
+        "table": "participants",
+        "op": "delete where external_id in (...) + like 'utv2-1856-<run>%' sweep",
+        "purpose": "same"
+      }
+    ],
+    "row_counts_method": "Each row below is asserted by the suite with assert.equal on an exact count, so `observed` is established by the receipt above passing with fail: 0 — not transcribed by hand. A drift in any one of them turns the named test red.",
+    "row_counts": [
+      { "assertion": "canonical teams rows during the browse test", "expected": 0, "observed": 0 },
+      { "assertion": "player_team_assignments rows during the browse test", "expected": 0, "observed": 0 },
+      { "assertion": "browse players returned for the event", "expected": 1, "observed": 1 },
+      { "assertion": "browse teams returned for the event", "expected": 2, "observed": 2 },
+      { "assertion": "persisted picks for the canonical-event TEAM submission", "expected": 1, "observed": 1 },
+      { "assertion": "distribution_outbox rows for the TEAM Track Only pick", "expected": 0, "observed": 0 },
+      { "assertion": "persisted picks for the canonical-event PLAYER PROP submission", "expected": 1, "observed": 1 },
+      { "assertion": "distribution_outbox rows for the PLAYER PROP Track Only pick", "expected": 0, "observed": 0 },
+      { "assertion": "persisted picks for the wrong-team player control", "expected": 0, "observed": 0 },
+      { "assertion": "persisted picks for the fixture-named-directly control", "expected": 0, "observed": 0 },
+      { "assertion": "UTV2-1856 fixture participants leaked after teardown", "expected": 0, "observed": 0 },
+      { "assertion": "UTV2-1856 fixture events leaked after teardown", "expected": 0, "observed": 0 }
+    ]
+  },
+  "generated_at": "2026-09-08T10:20:00Z",
+  "scope": {
+    "declared_file_scope": [
+      "packages/db/src/runtime-repositories.ts",
+      "packages/db/src/canonical-reference-schema.test.ts",
+      "apps/api/src/smart-form-validation.ts",
+      "apps/api/src/smart-form-validation.test.ts",
+      "apps/api/src/t1-proof-utv2-1842-fallback-event-gate.test.ts"
+    ],
+    "detail": "Three of the five declared paths are changed; `apps/api/src/smart-form-validation.ts` and its test are deliberately NOT touched — the validator's participant-relationship check is correct and the defect was that the repository handed it a null teamId. Plus this lane's own artifacts: the manifest, the .ops/sync file and this proof bundle. `packages/db/src/runtime-repositories.ts` is a Tier C EXACT path, which is why this lane is T1 rather than the T3 an earlier draft proposed. No workflow, no merge control, no containment setting, no migration and no deploy path is touched."
+  },
+  "limits": [
+    "This lane changes where `getEventBrowse` and `searchBrowse` READ a player's team identity from — the provider `participants` observation edge instead of the empty canonical `teams` / `player_team_assignments` tables — and not what any published interface promises. No caller signature changes and no client change was required.",
+    "It seeds nothing and it deletes nothing. The canonical tables remain empty under parked provider ingestion, deliberately, and every production `participants` row is preserved. The proof-fixture repair is a read filter, never a DELETE; production data deletion is reserved decision 1 and is not proposed.",
+    "The fixture-exclusion predicate is the MARKER (`metadata.proofIssue` non-null), never 'has no team relationship'. In today's production data those two predicates select the same 26 rows, so the distinction is invisible in live data and is asserted against constructed rows instead — including a legitimate team-less player that is retained, and a `proofIssue` of JSON null that is retained.",
+    "The exclusion was applied only to `getEventBrowse` and `searchBrowse`. `handleSearchPlayers` / `handleSearchTeams` intersect UTV2-1854's already-filtered repository results with the event's participants, so an existing control already guarantees it there; that control is proven rather than duplicated.",
+    "`getEventBrowse` also reports `leagueId: null` from the same empty canonical maps. That is real and recorded, and it is NOT a submission blocker — `submission-service.ts` and `smart-form-validation.ts` never read it. It is out of scope here.",
+    "The staging receipt proves browse resolution, fixture exclusion, persistence of both pick shapes and non-delivery on a real database. It does not constitute the Milestone 1 pilot, which requires Griff's own browser against the deployed system."
+  ]
+}

@@ -1337,6 +1337,187 @@ test(
   },
 );
 
+test(
+  'UTV2-1856 live DB: a structured NO-EVENT player prop resolves the team from participants, persists honest no-event provenance, and creates no delivery row',
+  { skip: skipReason },
+  async () => {
+    // The directive this test exists for: "database-backed team and player
+    // selections when no upcoming canonical event exists ... away/home selection
+    // defines the entered matchup; preserve participant IDs and honest no-event
+    // provenance. Do not make live event ingestion a prerequisite."
+    //
+    // So the SAME fixture participants are used as the canonical-event player
+    // prop above, and the ONLY difference is `eventId: null`. The fixture event
+    // still exists in the table -- what is being proven is that the submission
+    // path never consults it, not that the row is absent. Every identity below
+    // is resolved from `participants` alone.
+    const fixture = await createBrowseFixture();
+
+    const payload = {
+      source: 'smart-form',
+      market: 'nba-player-points',
+      selection: fixture.playerName,
+      // Deliberately different from the canonical-event player prop's 24.5/-110
+      // so this submission cannot be absorbed as an idempotent replay of it.
+      line: 27.5,
+      odds: 115,
+      stakeUnits: 1,
+      confidence: 0.6,
+      eventName: fixture.eventName,
+      metadata: {
+        sport: BROWSE_SPORT_ID,
+        distributionMode: 'track-only',
+        proof_run: RUN_ID,
+        proof_issue: 'UTV2-1856',
+        teamId: fixture.homeTeamId,
+        playerId: fixture.playerId,
+        participantId: fixture.playerId,
+        participantResolution: {
+          resolution: 'canonical',
+          sportId: BROWSE_SPORT_ID,
+          eventId: null,
+          enteredEventName: fixture.eventName,
+          away: {
+            participantType: 'team',
+            participantId: fixture.awayTeamId,
+            displayName: fixture.awayName,
+          },
+          home: {
+            participantType: 'team',
+            participantId: fixture.homeTeamId,
+            displayName: fixture.homeName,
+          },
+          team: {
+            participantType: 'team',
+            participantId: fixture.homeTeamId,
+            displayName: fixture.homeName,
+          },
+          player: {
+            participantType: 'player',
+            participantId: fixture.playerId,
+            displayName: fixture.playerName,
+            teamId: fixture.homeTeamId,
+          },
+        },
+      },
+    } as unknown as SubmissionPayload;
+
+    const response = await submitPickController(payload, repositories);
+    assert.equal(
+      response.status,
+      201,
+      `no-event structured player prop was refused: ${JSON.stringify(response.body)}`,
+    );
+    assert.ok(response.body.ok);
+
+    const metadata = await assertPersistedTrackOnly(response.body.data.pickId, {
+      line: 27.5,
+      odds: 115,
+    });
+
+    // Honest no-event provenance: the resolution is recorded as canonical
+    // (because both sides and the player WERE resolved against the database),
+    // with `eventId` null (because no canonical event backed it). Neither half
+    // may be quietly rewritten into the other.
+    const resolution = metadata['participantResolution'] as Record<string, unknown>;
+    assert.equal(resolution['resolution'], 'canonical');
+    assert.equal(resolution['eventId'], null, 'no-event provenance must stay null, not be filled in');
+    assert.equal(
+      (resolution['player'] as Record<string, unknown>)['participantId'],
+      fixture.playerId,
+      'the player participant id must survive persistence',
+    );
+    assert.equal(
+      (resolution['away'] as Record<string, unknown>)['participantId'],
+      fixture.awayTeamId,
+    );
+    assert.equal(
+      (resolution['home'] as Record<string, unknown>)['participantId'],
+      fixture.homeTeamId,
+    );
+
+    const idRows = await restQuery<{ participant_id: string | null; player_id: string | null }>(
+      `picks?id=eq.${response.body.data.pickId}&select=participant_id,player_id`,
+    );
+    assert.equal(idRows.length, 1);
+    assert.equal(
+      idRows[0]!.participant_id,
+      fixture.playerId,
+      'participant_id must carry the observation-layer player identity',
+    );
+    assert.equal(
+      idRows[0]!.player_id,
+      null,
+      'player_id must stay null while the canonical players table has no row for this id',
+    );
+  },
+);
+
+test(
+  'UTV2-1856 live DB: a structured NO-EVENT player prop is refused when the player is on neither entered side',
+  { skip: skipReason },
+  async () => {
+    // The control for the test above. The player is genuinely in the database
+    // and genuinely has a resolvable team -- it is simply not one of the two
+    // sides the operator entered. Without this, "accepted" above would not
+    // distinguish a verified relationship from an unchecked one.
+    const fixture = await createBrowseFixture();
+    const teams = await createFixtureTeams();
+
+    const payload = {
+      source: 'smart-form',
+      market: 'nba-player-points',
+      selection: fixture.playerName,
+      line: 31.5,
+      odds: -105,
+      stakeUnits: 1,
+      confidence: 0.6,
+      eventName: `UTV2-1854 Away Club ${RUN_ID} @ UTV2-1854 Home Club ${RUN_ID}`,
+      metadata: {
+        sport: BROWSE_SPORT_ID,
+        distributionMode: 'track-only',
+        proof_run: RUN_ID,
+        proof_issue: 'UTV2-1856',
+        participantId: fixture.playerId,
+        participantResolution: {
+          resolution: 'canonical',
+          sportId: BROWSE_SPORT_ID,
+          eventId: null,
+          enteredEventName: `UTV2-1854 Away Club ${RUN_ID} @ UTV2-1854 Home Club ${RUN_ID}`,
+          away: {
+            participantType: 'team',
+            participantId: teams.away,
+            displayName: `UTV2-1854 Away Club ${RUN_ID}`,
+          },
+          home: {
+            participantType: 'team',
+            participantId: teams.home,
+            displayName: `UTV2-1854 Home Club ${RUN_ID}`,
+          },
+          player: {
+            participantType: 'player',
+            participantId: fixture.playerId,
+            displayName: fixture.playerName,
+          },
+        },
+      },
+    } as unknown as SubmissionPayload;
+
+    await assert.rejects(
+      () => submitPickController(payload, repositories),
+      (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.match(
+          err.message,
+          /not on either side of the structured matchup/u,
+          `refused, but not for the membership reason: ${err.message}`,
+        );
+        return true;
+      },
+    );
+  },
+);
+
 after(async () => {
   // A THIRD cleanup hook, separate from the two above for the same reason they
   // are separate from each other: these rows must be removed whenever they were
