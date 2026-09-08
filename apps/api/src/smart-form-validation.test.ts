@@ -860,113 +860,159 @@ test('mutation control: removing CANONICAL_SPORT_ID_GUARD makes the whole covera
 // UTV2-1672 review round 5, P2 (confirmed): DatabaseReferenceDataRepository
 // .searchPlayers fetched an unordered global `limit * 5` batch of name matches
 // and only then filtered by sport, so a sport whose players fell outside that
-// arbitrary slice reported no availability even though canonical players
-// existed. Availability is a refusal input for Smart Form coverage, so that is
-// a wrong answer rather than a slow one.
+// arbitrary slice reported no availability even though players existed.
+// Availability is a refusal input for Smart Form coverage, so that is a wrong
+// answer rather than a slow one.
 //
-// The fixture below is built so the old implementation is provably wrong: 250
-// MLB players sort ahead of the single NBA player, and the old code capped at
-// limit * 5 = 100 rows. The NBA player is row 251 of the name match, so it was
-// never in the batch and NBA reported unavailable.
+// UTV2-1854 keeps that property and changes how it is held. The read moved off
+// the canonical `players` table -- empty under parked provider ingestion, so it
+// answered `[]` for every query in every sport -- onto `participants`, which is
+// the populated observation layer the catalog and availability probes already
+// read. `participants.sport` is a column, so sport is now a predicate in the
+// query itself and `limit` bounds sport-matching rows directly. There is no
+// batch boundary for sport to fall outside of.
+//
+// That is a stronger guarantee than the paging loop provided, so these tests
+// assert the *mechanism* as well as the result: removing `.eq('sport', ...)`
+// must turn the first test red. Without that, the tests would record that the
+// paging loop was deleted while proving nothing about what replaced it.
 // ---------------------------------------------------------------------------
 
-interface StubPlayerRow {
+interface StubParticipantRow {
   id: string;
   display_name: string;
+  sport: string;
+  participant_type: 'team' | 'player';
+  metadata: Record<string, unknown> | null;
+  external_id?: string;
 }
 
-function stubReferenceDataClient(players: StubPlayerRow[], assignments: Map<string, string>) {
-  const pageRequests: Array<[number, number]> = [];
+interface RecordedQuery {
+  table: string;
+  filters: Array<[string, unknown]>;
+  limit: number | null;
+}
+
+/**
+ * A recording stub for the two `participants` reads `searchPlayers` performs.
+ * Every builder method is both chainable and awaitable, so a chain that ends
+ * without `.limit()` still resolves -- a builder that only chained would hang
+ * the team-resolution lookup, which ends on `.in(...)`.
+ */
+function stubParticipantsClient(rows: StubParticipantRow[]) {
+  const queries: RecordedQuery[] = [];
   const client = {
     from(table: string) {
-      if (table === 'players') {
-        return {
-          select: () => ({
-            ilike: (_column: string, pattern: string) => {
-              const needle = pattern.replace(/%/gu, '').toLowerCase();
-              return {
-                // The old implementation called .limit(); the new one orders
-                // and pages. Both are exposed so this fixture cannot silently
-                // pass by the method simply being absent.
-                limit: async (count: number) => ({
-                  data: players
-                    .filter((row) => row.display_name.toLowerCase().includes(needle))
-                    .slice(0, count),
-                  error: null,
-                }),
-                order: () => ({
-                  range: async (from: number, to: number) => {
-                    pageRequests.push([from, to]);
-                    const matched = players
-                      .filter((row) => row.display_name.toLowerCase().includes(needle))
-                      .sort((left, right) =>
-                        left.display_name.localeCompare(right.display_name),
-                      );
-                    return { data: matched.slice(from, to + 1), error: null };
-                  },
-                }),
-              };
-            },
-          }),
-        };
+      if (table !== 'participants') {
+        throw new Error(`unexpected table ${table}`);
       }
-      if (table === 'player_team_assignments') {
-        return {
-          select: () => ({
-            in: (_column: string, ids: string[]) => ({
-              is: async () => ({
-                data: ids
-                  .filter((id) => assignments.has(id))
-                  .map((id) => ({
-                    player_id: id,
-                    team_id: `team-${assignments.get(id)}`,
-                    league_id: `league-${assignments.get(id)}`,
-                    effective_until: null,
-                  })),
-                error: null,
-              }),
-            }),
+      const record: RecordedQuery = { table, filters: [], limit: null };
+      queries.push(record);
+
+      const resolve = () => {
+        let matched = rows.filter((row) =>
+          record.filters.every(([column, value]) => {
+            if (column === 'ilike:display_name') {
+              const needle = String(value).replace(/%/gu, '').toLowerCase();
+              return row.display_name.toLowerCase().includes(needle);
+            }
+            if (column === 'in:external_id') {
+              return (value as string[]).includes(row.external_id ?? '');
+            }
+            // UTV2-1854: the proof-fixture exclusion is a pushed-down predicate,
+            // so the stub must evaluate it the way PostgREST would -- otherwise
+            // these tests would silently stop covering the filtered read.
+            if (column === 'is:metadata->>proofIssue' && value === null) {
+              const metadata = row.metadata as Record<string, unknown> | null;
+              const marker = metadata ? metadata['proofIssue'] : undefined;
+              return marker === undefined || marker === null;
+            }
+            return (row as unknown as Record<string, unknown>)[column] === value;
           }),
+        );
+        matched = matched.sort((left, right) =>
+          left.display_name.localeCompare(right.display_name),
+        );
+        if (record.limit !== null) {
+          matched = matched.slice(0, record.limit);
+        }
+        return { data: matched, error: null };
+      };
+
+      const builder: Record<string, unknown> = {};
+      const chain = (fn: (...args: never[]) => void) =>
+        (...args: never[]) => {
+          fn(...args);
+          return builder;
         };
-      }
-      if (table === 'leagues') {
-        return {
-          select: () => ({
-            in: async (_column: string, ids: string[]) => ({
-              data: ids.map((id) => ({
-                id,
-                sport_id: id.replace(/^league-/u, ''),
-              })),
-              error: null,
-            }),
-          }),
-        };
-      }
-      throw new Error(`unexpected table ${table}`);
+      Object.assign(builder, {
+        select: chain(() => {}),
+        eq: chain(((column: string, value: unknown) => {
+          record.filters.push([column, value]);
+        }) as never),
+        ilike: chain(((column: string, pattern: string) => {
+          record.filters.push([`ilike:${column}`, pattern]);
+        }) as never),
+        in: chain(((column: string, values: unknown) => {
+          record.filters.push([`in:${column}`, values]);
+        }) as never),
+        is: chain(((column: string, value: unknown) => {
+          record.filters.push([`is:${column}`, value]);
+        }) as never),
+        order: chain(() => {}),
+        limit: chain(((count: number) => {
+          record.limit = count;
+        }) as never),
+        then: (onFulfilled: (value: unknown) => unknown) =>
+          Promise.resolve(resolve()).then(onFulfilled),
+      });
+      return builder;
     },
   };
-  return { client, pageRequests };
+  return { client, queries };
 }
 
-function buildCrossSportFixture() {
-  const players: StubPlayerRow[] = [];
-  const assignments = new Map<string, string>();
+function buildCrossSportParticipants() {
+  const rows: StubParticipantRow[] = [
+    {
+      id: 'team-nba-1',
+      display_name: 'Knicks',
+      sport: 'NBA',
+      participant_type: 'team',
+      metadata: null,
+      external_id: 'NEW_YORK_KNICKS_NBA',
+    },
+  ];
   // 250 MLB players whose names sort ahead of the NBA player.
   for (let index = 0; index < 250; index += 1) {
-    const id = `mlb-${String(index).padStart(3, '0')}`;
-    players.push({ id, display_name: `AAA Jordan Filler ${String(index).padStart(3, '0')}` });
-    assignments.set(id, 'MLB');
+    rows.push({
+      id: `mlb-${String(index).padStart(3, '0')}`,
+      display_name: `AAA Jordan Filler ${String(index).padStart(3, '0')}`,
+      sport: 'MLB',
+      participant_type: 'player',
+      metadata: null,
+    });
   }
   const nbaId = 'nba-target';
-  players.push({ id: nbaId, display_name: 'ZZZ Jordan Target' });
-  assignments.set(nbaId, 'NBA');
-  return { players, assignments, nbaId };
+  rows.push({
+    id: nbaId,
+    display_name: 'ZZZ Jordan Target',
+    sport: 'NBA',
+    participant_type: 'player',
+    metadata: { team_external_id: 'NEW_YORK_KNICKS_NBA' },
+  });
+  return { rows, nbaId };
 }
 
-test('searchPlayers finds an NBA player that sorts beyond the former global cap', async () => {
+function participantsRepository(rows: StubParticipantRow[]) {
+  const { client, queries } = stubParticipantsClient(rows);
+  return { client, queries };
+}
+
+test('searchPlayers finds a player that sorts beyond the former global cap', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments, nbaId } = buildCrossSportFixture();
-  const { client } = stubReferenceDataClient(players, assignments);
+  const { rows, nbaId } = buildCrossSportParticipants();
+  const { client, queries } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
@@ -975,19 +1021,37 @@ test('searchPlayers finds an NBA player that sorts beyond the former global cap'
 
   const results = await repository.searchPlayers('NBA', 'Jordan', 20);
 
-  // The old implementation fetched limit*5 = 100 rows and filtered afterwards.
-  // The NBA player is match number 251, so it returned [] and the Smart Form
-  // reported playersAvailable:false for a sport that has a canonical player.
+  // The old implementation fetched limit*5 = 100 unordered rows and filtered by
+  // sport afterwards. The NBA player is name-match number 251, so it returned []
+  // and Smart Form reported playersAvailable:false for a sport that has players.
   assert.equal(results.length, 1);
   assert.equal(results[0]?.participantId, nbaId);
   assert.equal(results[0]?.sport, 'NBA');
-  assert.equal(results[0]?.teamId, 'team-NBA');
+  // Team identity is resolved through participants too, never through the empty
+  // canonical `player_team_assignments` join.
+  assert.equal(results[0]?.teamId, 'team-nba-1');
+
+  // The mechanism, not just the outcome: sport is a predicate in the query. If
+  // this assertion is removed, deleting `.eq('sport', sportId)` still returns
+  // one row here by luck of the name filter, and the guarantee stops being pinned.
+  const playerQuery = queries[0];
+  assert.ok(playerQuery, 'no participants query was issued');
+  assert.ok(
+    playerQuery.filters.some(([column, value]) => column === 'sport' && value === 'NBA'),
+    'searchPlayers did not scope the query by sport',
+  );
+  assert.ok(
+    playerQuery.filters.some(
+      ([column, value]) => column === 'participant_type' && value === 'player',
+    ),
+    'searchPlayers did not scope the query to player participants',
+  );
 });
 
 test('searchPlayers still returns the requested sport and never leaks another', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments } = buildCrossSportFixture();
-  const { client } = stubReferenceDataClient(players, assignments);
+  const { rows } = buildCrossSportParticipants();
+  const { client } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
@@ -997,28 +1061,45 @@ test('searchPlayers still returns the requested sport and never leaks another', 
   const mlb = await repository.searchPlayers('MLB', 'Jordan', 20);
   assert.equal(mlb.length, 20);
   assert.ok(mlb.every((row) => row.sport === 'MLB'));
+  // A player with no team key gets a null team -- honest partial coverage, never
+  // a guessed team.
+  assert.ok(mlb.every((row) => row.teamId === null));
+
   // Positive control: the sport filter is doing work, not just passing
   // everything through. A sport with no players must still return nothing.
   const nhl = await repository.searchPlayers('NHL', 'Jordan', 20);
   assert.deepEqual(nhl, []);
 });
 
-test('searchPlayers stops paging once the limit is satisfied', async () => {
+test('searchPlayers reads participants once for the players and once for their teams', async () => {
   const { DatabaseReferenceDataRepository } = await import('@unit-talk/db');
-  const { players, assignments } = buildCrossSportFixture();
-  const { client, pageRequests } = stubReferenceDataClient(players, assignments);
+  const { rows } = buildCrossSportParticipants();
+  const { client, queries } = participantsRepository(rows);
 
   const repository = new DatabaseReferenceDataRepository(
     { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
     client as never,
   );
 
+  // No player in this result carries a team key, so no team lookup is needed
+  // and the common case must stay a single round trip. The deterministic paging
+  // loop UTV2-1672 needed is gone; this asserts it did not come back.
   await repository.searchPlayers('MLB', 'Jordan', 5);
+  assert.equal(queries.length, 1);
+  assert.equal(queries[0]?.limit, 5);
 
-  // 251 matches fit in the first 500-row page, and the limit is met there, so
-  // the common case must not have become a multi-round-trip search.
-  assert.equal(pageRequests.length, 1);
-  assert.deepEqual(pageRequests[0], [0, 499]);
+  // One player with a team key adds exactly one batched lookup, never one per row.
+  const second = participantsRepository(rows);
+  const repository2 = new DatabaseReferenceDataRepository(
+    { url: 'https://stub.invalid', serviceRoleKey: 'stub' } as never,
+    second.client as never,
+  );
+  await repository2.searchPlayers('NBA', 'Jordan', 20);
+  assert.equal(second.queries.length, 2);
+  assert.ok(
+    second.queries[1]?.filters.some(([column]) => column === 'in:external_id'),
+    'the team lookup was not batched by external id',
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -2385,6 +2385,10 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         (row) =>
           row.participant_type === 'player' &&
           row.sport === sportId &&
+          // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- applied before `slice`, for the
+          // same reason the database path pushes it into the query: a fixture
+          // must not consume the limit and displace a real player.
+          !isConfirmedProofFixture(row.metadata) &&
           row.display_name.toLowerCase().includes(lowerQuery),
       )
       .slice(0, limit)
@@ -6665,25 +6669,82 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     query: string,
     limit = 20,
   ): Promise<TeamSearchResult[]> {
-    const leagues = await this.listLeagues(sportId);
-    const leagueIds = leagues.map((league) => league.id);
-    if (leagueIds.length === 0) {
-      return [];
-    }
-
-    const { data, error } = await this.fromUntyped('teams')
-      .select('id,display_name,league_id')
-      .in('league_id', leagueIds)
-      .ilike('display_name', `%${query}%`)
-      .limit(limit);
+    // UTV2-1854: this used to resolve leagues for the sport and then read the
+    // canonical `teams` table. Every other reference-data surface -- getCatalog,
+    // getEventBrowse, and every consumer in apps/api/src/handlers/reference-data.ts
+    // -- is written against `participants` ids, and `handleSearchTeams` filters
+    // these results against `event.participants[].participantId`. Answering with a
+    // canonical `teams.id` therefore put a different id space behind the same field
+    // name. `teams` is also empty under parked provider ingestion, so this returned
+    // [] for every query in every sport -- a false refusal, not an honest absence.
+    //
+    // The whole sport is read and matched in process rather than pushed down as an
+    // `ilike`, for two measured reasons:
+    //   1. There are 30-32 team participants per sport (NBA 30, MLB 30, NFL 32,
+    //      NHL 32 as of 2026-09-07), so this is a bounded read, not a table scan.
+    //   2. `display_name` holds the nickname alone -- "Bucks", "Knicks" -- while the
+    //      city lives in `external_id` ("MILWAUKEE_BUCKS_NBA") and the short code in
+    //      `metadata.abbreviation`. A `display_name`-only `ilike` finds nothing for
+    //      "milwaukee" or "mil", which is exactly the search an operator types.
+    // Matching in process also keeps the operator's query out of PostgREST's filter
+    // grammar entirely, so widening the match widens no injection surface.
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,external_id,metadata')
+      .eq('participant_type', 'team')
+      .eq('sport', sportId);
 
     if (error) throw new Error(`Failed to search teams: ${error.message}`);
 
-    const teamRows = (data ?? []) as CanonicalTeamRow[];
+    // An EMPTY query means "what is available?", not "nothing matches".
+    // `handleGetReferenceDataAvailability` (apps/api/src/handlers/reference-data.ts:32)
+    // calls `searchTeams(sport, '', 1)` purely to set `teamsAvailable`, and the
+    // `ilike '%%'` this replaces matched every row. Returning [] here would report
+    // every sport as having no teams -- a regression in the availability surface,
+    // introduced by a search change, and invisible to any test that passes a query.
+    const needle = normalizeSearchText(query);
+    // UTV2-1854 PROOF_FIXTURE_EXCLUSION. No team participant carries the marker
+    // today (measured against production 2026-09-07: 0 of 124), so this is a
+    // no-op on current data -- it is present so a fixture team cannot become
+    // selectable or set `teamsAvailable` the way the 26 player fixtures would
+    // have. This read is unlimited and bounded by the sport's 30-32 teams, so
+    // filtering in process here is exact rather than page-dependent.
+    const rows = (data ?? []).filter((row) => !isConfirmedProofFixture(row.metadata));
+    if (needle.length === 0) {
+      return rows
+        .filter((row) => typeof row.display_name === 'string' && row.display_name.length > 0)
+        .map((row) => ({
+          participantId: row.id as string,
+          displayName: row.display_name as string,
+          sport: sportId,
+        }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        .slice(0, limit);
+    }
 
-    return teamRows.map((row) => ({
-      participantId: row.id as string,
-      displayName: row.display_name as string,
+    const scored: Array<{ score: number; displayName: string; participantId: string }> = [];
+    for (const row of rows) {
+      const displayName = typeof row.display_name === 'string' ? row.display_name : '';
+      if (displayName.length === 0) continue;
+      const haystacks = teamSearchHaystacks(row);
+      // Rank so that a nickname prefix beats a city or abbreviation hit; the
+      // operator typing "buc" should see Bucks first, not a team whose external id
+      // happens to contain the letters.
+      let score = -1;
+      const normalizedName = normalizeSearchText(displayName);
+      if (normalizedName.startsWith(needle)) score = 0;
+      else if (normalizedName.includes(needle)) score = 1;
+      else if (haystacks.some((value) => value.startsWith(needle))) score = 2;
+      else if (haystacks.some((value) => value.includes(needle))) score = 3;
+      if (score < 0) continue;
+      scored.push({ score, displayName, participantId: row.id as string });
+    }
+
+    scored.sort((a, b) => a.score - b.score || a.displayName.localeCompare(b.displayName));
+
+    return scored.slice(0, limit).map((row) => ({
+      participantId: row.participantId,
+      displayName: row.displayName,
       sport: sportId,
     }));
   }
@@ -6694,56 +6755,60 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     limit = 20,
   ): Promise<PlayerSearchResult[]> {
     // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_START
-    // This previously fetched an unordered global `limit * 5` batch of
-    // name-matching players and only then filtered by sport. A sport whose
-    // players fell outside that arbitrary slice reported no availability even
-    // though canonical players existed, and because the batch was unordered
-    // the result was not even stable between calls. Availability is a refusal
-    // input for Smart Form coverage, so a false negative there is a wrong
-    // answer, not a slow one.
+    // The property this guard exists for: a sport-scoped player search must never
+    // report a false negative because sport was applied after an arbitrary batch
+    // boundary. Availability is a refusal input for Smart Form coverage, so a false
+    // negative there is a wrong answer, not a slow one.
     //
-    // The name match is now paged through in a deterministic order and the
-    // sport filter is applied per page, so the search is bounded by how many
-    // players actually match the query rather than by a fixed cross-sport cap.
-    // Paging stops as soon as `limit` sport-matching players are collected or
-    // the match set is exhausted, so the common case is still one round trip.
-    const PAGE_SIZE = 500;
-    const results: PlayerSearchResult[] = [];
-    let offset = 0;
+    // UTV2-1672 held that property with a deterministic paging loop, because sport
+    // could only be learned by joining canonical assignments after the name match.
+    // UTV2-1854 holds it *by construction* instead: `participants.sport` is a column,
+    // so sport is a predicate in the query itself and `limit` bounds sport-matching
+    // rows directly. There is no batch boundary for sport to fall outside of, and the
+    // paging loop is no longer needed to preserve the guarantee -- removing it does
+    // not relax the property, it removes the reason the property could be violated.
+    //
+    // The read also moves off the canonical `players` table, which is empty under
+    // parked provider ingestion, for the same reason as searchTeams above.
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,metadata')
+      .eq('participant_type', 'player')
+      .eq('sport', sportId)
+      // UTV2-1854 PROOF_FIXTURE_EXCLUSION -- pushed down, not post-filtered, so
+      // fixtures cannot consume `limit` and push a real player out of the page.
+      .is(PROOF_FIXTURE_METADATA_PATH, null)
+      .ilike('display_name', `%${query}%`)
+      .order('display_name')
+      .limit(limit);
 
-    while (results.length < limit) {
-      const { data, error } = await this.fromUntyped('players')
-        .select('id,display_name')
-        .ilike('display_name', `%${query}%`)
-        .order('display_name')
-        .range(offset, offset + PAGE_SIZE - 1);
+    if (error) throw new Error(`Failed to search players: ${error.message}`);
 
-      if (error) throw new Error(`Failed to search players: ${error.message}`);
+    const playerRows = data ?? [];
+    const teamExternalIds = [
+      ...new Set(
+        playerRows
+          .map((row) => readTeamExternalId(row.metadata))
+          .filter((value): value is string => value !== null),
+      ),
+    ];
+    const teamIdsByExternalId = await this.loadTeamParticipantIdsByExternalId(
+      sportId,
+      teamExternalIds,
+    );
 
-      const playerRows = (data ?? []) as CanonicalPlayerRow[];
-      if (playerRows.length === 0) break;
-
-      const currentAssignments = await this.loadCurrentAssignments(
-        playerRows.map((row) => row.id as string),
-      );
-
-      for (const row of playerRows) {
-        const assignment = currentAssignments.get(row.id as string);
-        if (assignment?.sportId !== sportId) continue;
-        results.push({
-          participantId: row.id as string,
-          displayName: row.display_name as string,
-          sport: sportId,
-          teamId: assignment.teamId ?? null,
-        });
-        if (results.length === limit) break;
-      }
-
-      if (playerRows.length < PAGE_SIZE) break;
-      offset += PAGE_SIZE;
-    }
-
-    return results;
+    return playerRows.map((row) => {
+      const externalId = readTeamExternalId(row.metadata);
+      return {
+        participantId: row.id,
+        displayName: row.display_name,
+        sport: sportId,
+        // A player whose metadata carries no team key, or whose key names no team
+        // participant in this sport, gets a null team. That is honest partial
+        // coverage; never substitute a guessed team.
+        teamId: externalId === null ? null : (teamIdsByExternalId.get(externalId) ?? null),
+      };
+    });
     // UTV2-1672 SPORT_SCOPED_PLAYER_SEARCH_GUARD_END
   }
 
@@ -6986,6 +7051,36 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           : [];
       }),
     );
+  }
+
+  /**
+   * Resolve `participants(player).metadata->>'team_external_id'` to the id of the
+   * team participant carrying that `external_id`, in one batched round trip rather
+   * than one per player. `external_id` is unique across team participants (measured
+   * 124 distinct of 124 rows on production, 2026-09-07), so this is a 1:1 lookup.
+   */
+  private async loadTeamParticipantIdsByExternalId(
+    sportId: string,
+    externalIds: string[],
+  ): Promise<Map<string, string>> {
+    const resolved = new Map<string, string>();
+    if (externalIds.length === 0) return resolved;
+
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,external_id')
+      .eq('participant_type', 'team')
+      .eq('sport', sportId)
+      .in('external_id', externalIds);
+
+    if (error) throw new Error(`Failed to resolve team participants: ${error.message}`);
+
+    for (const row of data ?? []) {
+      if (typeof row.external_id === 'string' && row.external_id.length > 0) {
+        resolved.set(row.external_id, row.id);
+      }
+    }
+    return resolved;
   }
 
   private async loadCurrentAssignments(playerIds: string[]) {
@@ -9230,16 +9325,97 @@ type CanonicalLeagueRow = {
   active?: boolean | null;
 };
 
+/**
+ * Fold a name into a comparable form: lowercase, every run of non-alphanumerics
+ * collapsed to a single space. Used on both sides of every reference-data search
+ * comparison, so `MILWAUKEE_BUCKS_NBA`, "Milwaukee Bucks" and "milwaukee  bucks"
+ * are the same string before anything is matched.
+ */
+function normalizeSearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, ' ')
+    .trim()
+    .replace(/\s+/gu, ' ');
+}
+
+/**
+ * Every string a team row can honestly be found by. `external_id` carries the
+ * city ("MILWAUKEE_BUCKS_NBA") that `display_name` omits, and
+ * `metadata.abbreviation` carries the three-letter code an operator may type.
+ */
+function teamSearchHaystacks(row: Record<string, unknown>): string[] {
+  const values: string[] = [];
+  if (typeof row.display_name === 'string') values.push(normalizeSearchText(row.display_name));
+  if (typeof row.external_id === 'string') values.push(normalizeSearchText(row.external_id));
+  const metadata = row.metadata;
+  if (typeof metadata === 'object' && metadata !== null) {
+    const abbreviation = (metadata as Record<string, unknown>)['abbreviation'];
+    if (typeof abbreviation === 'string') values.push(normalizeSearchText(abbreviation));
+  }
+  return values.filter((value) => value.length > 0);
+}
+
+/**
+ * UTV2-1854: `participants` has no `team_id` column. The player -> team edge is
+ * `participants(player).metadata->>'team_external_id'` matched against
+ * `participants(team).external_id`. Measured on production 2026-09-07: 1497 of 1523
+ * player participants carry the key and all 1497 resolve; 26 carry none, and those
+ * are represented as a null team rather than a guessed one.
+ */
+/**
+ * UTV2-1854 PROOF_FIXTURE_EXCLUSION.
+ *
+ * A participant row whose `metadata` carries a `proofIssue` value is a proof
+ * fixture: a row created by a T1 proof run to exercise a code path, not an
+ * observation of a real athlete. 26 such rows exist in production (13 from
+ * UTV2-614 and 13 from UTV2-618, created 2026-05-28/29, before the staging
+ * isolation work moved proof runs off production). Rows are preserved -- this
+ * excludes them from operator-facing selection and from availability, and
+ * deletes nothing.
+ *
+ * The predicate is deliberately the marker, NOT "has no team". Measured against
+ * production 2026-09-07: the 26 fixtures are *exactly* the 26 players with no
+ * `team_external_id`, and there are zero legitimate team-less players today. So
+ * a "drop players with no team" implementation would agree with every current
+ * production observation and still be wrong -- it would silently drop the first
+ * legitimate team-less player ingestion produces. Those are two different
+ * predicates that today's data cannot tell apart, which is why the preservation
+ * case is asserted against a constructed row rather than a production one.
+ *
+ * A `proofIssue` that is JSON `null` names no issue and is therefore not a
+ * *confirmed* fixture; such a row is kept and, if it carries no team key, gets
+ * the same honest `teamId: null` as any other. `PROOF_FIXTURE_METADATA_PATH`
+ * below is the PostgREST spelling of this same predicate, kept beside it so the
+ * pushed-down and in-process forms cannot drift.
+ */
+function isConfirmedProofFixture(metadata: unknown): boolean {
+  if (typeof metadata !== 'object' || metadata === null) return false;
+  const value = (metadata as Record<string, unknown>)['proofIssue'];
+  return value !== undefined && value !== null;
+}
+
+/**
+ * The pushed-down form of `isConfirmedProofFixture`, used with `.is(..., null)`.
+ * Player search applies `limit` in the query, so this exclusion MUST be a
+ * predicate rather than a post-filter: filtering after the fact would let
+ * fixtures consume the limit and push real players out of the result, which is
+ * a false negative of exactly the class the UTV2-1672 sport-scope guard exists
+ * to prevent.
+ */
+const PROOF_FIXTURE_METADATA_PATH = 'metadata->>proofIssue';
+
+function readTeamExternalId(metadata: unknown): string | null {
+  if (typeof metadata !== 'object' || metadata === null) return null;
+  const value = (metadata as Record<string, unknown>)['team_external_id'];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 type CanonicalTeamRow = {
   id: string;
   league_id: string;
   display_name: string;
   metadata: unknown;
-};
-
-type CanonicalPlayerRow = {
-  id: string;
-  display_name: string;
 };
 
 type PlayerTeamAssignmentRow = {

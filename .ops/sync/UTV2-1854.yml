@@ -1,0 +1,257 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1854
+  findings: []
+  controls: []
+  proofs: []
+task_contract:
+  schema_version: 1
+  issue_id: UTV2-1854
+  objective: "Reference data: team and player search read the empty canonical
+    tables while the catalog reads participants"
+  acceptance_criteria:
+    - "`searchTeams` reads `participants` (`participant_type='team'`, `sport =
+      sportId`) and returns"
+    - >2-
+            `participantId: participants.id`. The `listLeagues` prelude is
+      dropped — `participants.sport`
+            is the sport, so the league indirection only ever routed to the empty `teams` table.
+    - "`searchPlayers` reads `participants` (`participant_type='player'`, `sport
+      = sportId`) and"
+    - >2-
+            resolves `teamId` through `metadata->>'team_external_id'` ->
+      `participants(team).external_id`
+            in one batched lookup; a player with no key gets `teamId: null`.
+    - The
+      [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation)
+      `SPORT_SCOPED_PLAYER_SEARCH_GUARD` property is preserved **by
+      construction** and
+    - >2-
+            documented as such: the paging loop existed only because sport could
+      not be pushed into the
+            query. `participants.sport` makes sport a predicate, so `limit` bounds sport-matching rows
+            directly and the false negative that guard fixed cannot recur.
+    - "`handleGetReferenceDataAvailability` reports `teamsAvailable: true` for a
+      sport with team"
+    - >2-
+            participants — with **no change to**
+      `apps/api/src/handlers/reference-data.ts`, since
+            availability derives from these two methods.
+    - The stale comment at `apps/api/src/smart-form-validation.ts:639-644`
+      (which states
+    - "      `searchTeams` reads `teams` and that both are empty) is corrected."
+    - "No contracts change: `TeamSearchResult` / `PlayerSearchResult` shapes are
+      unchanged."
+    - No seeding, no production write, no DDL.
+    - "Mutation-checked: dropping the sport predicate leaks a cross-sport row
+      (red); fabricating a"
+    - >2-
+            team id for a keyless player (red); reverting `searchTeams` to
+      `teams` fails the availability
+            test (red).
+  guardrails: []
+  non_goals: []
+  required_evidence: []
+  exit_criteria: []
+  unmapped_sections:
+    - |-
+      The defect
+      `DatabaseReferenceDataRepository.searchTeams` and `searchPlayers`
+      (`packages/db/src/runtime-repositories.ts`) are the only two reference-data methods that answer with
+      canonical `teams.id` / `players.id`. Every other surface — `getCatalog`, `getEventBrowse`, and the
+      whole API handler layer — is written against `participants` ids.
+
+      Measured read-only against production `zfzdnfwdarxucxtaojxm` on 2026-09-07:
+
+      | table | rows |
+      | -- | -- |
+      | `participants` team | 124 (NHL 32, NFL 32, MLB 30, NBA 30) |
+      | `participants` player | 1523 (MLB 951, NHL 318, NBA 254) |
+      | `teams` | **0** |
+      | `players` | 12 |
+      | `player_team_assignments` | **0** |
+
+      So both methods return `[]` for every query in production. That is a false *"no coverage"* answer,
+      not a degraded one, and it breaks three things:
+
+      * the Smart Form structured-fallback away/home selectors (`lib/participant-search.ts:63` ->
+        `GET /api/reference-data/search/teams` -> `searchTeams`) find nothing;
+      * `handleGetReferenceDataAvailability` reports `teamsAvailable: false` for every sport, because it
+        derives entirely from `searchTeams(sport,'',1)` / `searchPlayers(sport,'',100)`;
+      * `validateSearchBackedTeam` (`apps/api/src/smart-form-validation.ts:346`) can never match, so the
+        structured fallback is unreachable end to end.
+
+      **This is not a seeding problem.** An empty `teams` is the expected state under parked ingestion per
+      the ratified reference-data policy, and `docs/mission/intent.md` says Milestone 1 step 4 does not
+      require canonical coverage. Populating the canonical tables is [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) and is a different decision.
+      This issue makes the two search methods read the data the rest of the system already reads.
+    - >-
+      The consumers prove the intended id space
+
+      | site | assumption |
+
+      | -- | -- |
+
+      | `handlers/reference-data.ts:70-83` `handleSearchTeams(eventId)` |
+      filters results against `event.participants[].participantId` — a
+      **participants** id |
+
+      | `handlers/reference-data.ts:104-121` `handleSearchPlayers(eventId)` |
+      same |
+
+      | `handlers/reference-data.ts:106` `handleSearchPlayers(teamId)` |
+      `result.teamId === params.teamId`, where the client's `teamId` came from a
+      team selection |
+
+      | `smart-form-validation.ts:346` | `row.participantId ===
+      identity.participantId` |
+
+      | `runtime-repositories.ts` `getCatalog` | reads `participants` where
+      `participant_type='team'` |
+    - >-
+      The player relationship
+
+      `participants` has **no** `team_id` **column**. The player->team edge is
+
+      `participants(player).metadata->>'team_external_id'` ->
+      `participants(team).external_id`.
+
+      Measured: 1497 of 1523 players carry the key and **all 1497 resolve**; 26
+      carry none; 0 team
+
+      participants have a null `external_id`. The 26 get `teamId: null` — honest
+      partial coverage.
+
+      Never fabricate a team.
+    - >-
+      Not in scope
+
+      `getEventBrowse` / `searchBrowse` pass **participant** ids to
+      `loadCurrentAssignments`, which queries
+
+      `player_team_assignments.player_id` — a canonical player id. That key
+      mismatch is real and separate;
+
+      it changes `EventParticipantBrowseResult.teamId`'s id space, which is a
+      contract question. The browse
+
+      path already degrades honestly to `null` (`loadParticipantsMap` reads
+      `participants`, so
+
+      `participantId` and `displayName` are correct), so it does not block the
+      pilot. Record it; do not
+
+      bundle it here.
+    - |-
+      Tier
+      `packages/db/src/runtime-repositories.ts` is on `TIER_C_EXACT_PATHS` in `scripts/ops/merge-risk.ts`,
+      so `classifyMechanicalMinimum` returns **T1** (`rule_id: tier-c-exact`). Lane type: runtime.
+      Needs `pnpm test:db` + `Writable DB proof (staging only)` green on the merge SHA. Staging only —
+      never assert against production.
+
+      Related: [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) (canonical bootstrap — the seeding route, deliberately not taken here),
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (the submission repair this unblocks), [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) (the guard being preserved).
+  source:
+    kind: linear-issue-snapshot
+    issue_url: https://linear.app/unit-talk-v2/issue/UTV2-1854/reference-data-team-and-player-search-read-the-empty-canonical-tables
+    title: "Reference data: team and player search read the empty canonical tables
+      while the catalog reads participants"
+    description: |-
+      ## The defect
+
+      `DatabaseReferenceDataRepository.searchTeams` and `searchPlayers`
+      (`packages/db/src/runtime-repositories.ts`) are the only two reference-data methods that answer with
+      canonical `teams.id` / `players.id`. Every other surface — `getCatalog`, `getEventBrowse`, and the
+      whole API handler layer — is written against `participants` ids.
+
+      Measured read-only against production `zfzdnfwdarxucxtaojxm` on 2026-09-07:
+
+      | table | rows |
+      | -- | -- |
+      | `participants` team | 124 (NHL 32, NFL 32, MLB 30, NBA 30) |
+      | `participants` player | 1523 (MLB 951, NHL 318, NBA 254) |
+      | `teams` | **0** |
+      | `players` | 12 |
+      | `player_team_assignments` | **0** |
+
+      So both methods return `[]` for every query in production. That is a false *"no coverage"* answer,
+      not a degraded one, and it breaks three things:
+
+      * the Smart Form structured-fallback away/home selectors (`lib/participant-search.ts:63` ->
+        `GET /api/reference-data/search/teams` -> `searchTeams`) find nothing;
+      * `handleGetReferenceDataAvailability` reports `teamsAvailable: false` for every sport, because it
+        derives entirely from `searchTeams(sport,'',1)` / `searchPlayers(sport,'',100)`;
+      * `validateSearchBackedTeam` (`apps/api/src/smart-form-validation.ts:346`) can never match, so the
+        structured fallback is unreachable end to end.
+
+      **This is not a seeding problem.** An empty `teams` is the expected state under parked ingestion per
+      the ratified reference-data policy, and `docs/mission/intent.md` says Milestone 1 step 4 does not
+      require canonical coverage. Populating the canonical tables is [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) and is a different decision.
+      This issue makes the two search methods read the data the rest of the system already reads.
+
+      ## The consumers prove the intended id space
+
+      | site | assumption |
+      | -- | -- |
+      | `handlers/reference-data.ts:70-83` `handleSearchTeams(eventId)` | filters results against `event.participants[].participantId` — a **participants** id |
+      | `handlers/reference-data.ts:104-121` `handleSearchPlayers(eventId)` | same |
+      | `handlers/reference-data.ts:106` `handleSearchPlayers(teamId)` | `result.teamId === params.teamId`, where the client's `teamId` came from a team selection |
+      | `smart-form-validation.ts:346` | `row.participantId === identity.participantId` |
+      | `runtime-repositories.ts` `getCatalog` | reads `participants` where `participant_type='team'` |
+
+      ## The player relationship
+
+      `participants` has **no** `team_id` **column**. The player->team edge is
+      `participants(player).metadata->>'team_external_id'` -> `participants(team).external_id`.
+      Measured: 1497 of 1523 players carry the key and **all 1497 resolve**; 26 carry none; 0 team
+      participants have a null `external_id`. The 26 get `teamId: null` — honest partial coverage.
+      Never fabricate a team.
+
+      ## Acceptance criteria
+
+      - [ ] `searchTeams` reads `participants` (`participant_type='team'`, `sport = sportId`) and returns
+            `participantId: participants.id`. The `listLeagues` prelude is dropped — `participants.sport`
+            is the sport, so the league indirection only ever routed to the empty `teams` table.
+      - [ ] `searchPlayers` reads `participants` (`participant_type='player'`, `sport = sportId`) and
+            resolves `teamId` through `metadata->>'team_external_id'` -> `participants(team).external_id`
+            in one batched lookup; a player with no key gets `teamId: null`.
+      - [ ] The [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) `SPORT_SCOPED_PLAYER_SEARCH_GUARD` property is preserved **by construction** and
+            documented as such: the paging loop existed only because sport could not be pushed into the
+            query. `participants.sport` makes sport a predicate, so `limit` bounds sport-matching rows
+            directly and the false negative that guard fixed cannot recur.
+      - [ ] `handleGetReferenceDataAvailability` reports `teamsAvailable: true` for a sport with team
+            participants — with **no change to** `apps/api/src/handlers/reference-data.ts`, since
+            availability derives from these two methods.
+      - [ ] The stale comment at `apps/api/src/smart-form-validation.ts:639-644` (which states
+            `searchTeams` reads `teams` and that both are empty) is corrected.
+      - [ ] No contracts change: `TeamSearchResult` / `PlayerSearchResult` shapes are unchanged.
+      - [ ] No seeding, no production write, no DDL.
+      - [ ] Mutation-checked: dropping the sport predicate leaks a cross-sport row (red); fabricating a
+            team id for a keyless player (red); reverting `searchTeams` to `teams` fails the availability
+            test (red).
+
+      ## Not in scope
+
+      `getEventBrowse` / `searchBrowse` pass **participant** ids to `loadCurrentAssignments`, which queries
+      `player_team_assignments.player_id` — a canonical player id. That key mismatch is real and separate;
+      it changes `EventParticipantBrowseResult.teamId`'s id space, which is a contract question. The browse
+      path already degrades honestly to `null` (`loadParticipantsMap` reads `participants`, so
+      `participantId` and `displayName` are correct), so it does not block the pilot. Record it; do not
+      bundle it here.
+
+      ## Tier
+
+      `packages/db/src/runtime-repositories.ts` is on `TIER_C_EXACT_PATHS` in `scripts/ops/merge-risk.ts`,
+      so `classifyMechanicalMinimum` returns **T1** (`rule_id: tier-c-exact`). Lane type: runtime.
+      Needs `pnpm test:db` + `Writable DB proof (staging only)` green on the merge SHA. Staging only —
+      never assert against production.
+
+      Related: [UTV2-1773](https://linear.app/unit-talk-v2/issue/UTV2-1773/canonical-reference-bootstrap-populate-teams-and-prove-idempotent) (canonical bootstrap — the seeding route, deliberately not taken here),
+      [UTV2-1842](https://linear.app/unit-talk-v2/issue/UTV2-1842/smart-form-submission-repair-event-existence-gate-blocks-every-human) (the submission repair this unblocks), [UTV2-1672](https://linear.app/unit-talk-v2/issue/UTV2-1672/smart-form-recovery-lane-1-backend-track-only-and-canonical-validation) (the guard being preserved).
+    captured_at: 2026-09-07T22:11:16.220Z
+    description_sha256: a7e001166f42e7cfafc19e9cd55358476bde21f40b620a28dc4a6701efdd19f5
+  contract_hash: 9a580f0638cb8b6e01f35ea391a8b45e31d220068b88a881f1c492663012cc4e
