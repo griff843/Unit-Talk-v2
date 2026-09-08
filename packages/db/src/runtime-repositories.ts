@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { loadEnvironment } from '@unit-talk/config';
 import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
@@ -2408,10 +2409,27 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       .filter((t) => t.toLowerCase().includes(lowerQuery))
       .slice(0, limit)
       .map((t) => ({
-        participantId: `team:${sportId}:${t}`,
+        // UTV2-1856 -- the database path returns `participants.id`, a real
+        // participant identifier, and `validateSearchBackedPlayer` compares a
+        // player's resolved `teamId` against the team the operator selected.
+        // A synthetic `team:<sport>:<name>` id can never equal a participant
+        // id, so a seeded team must answer with its own row id. The synthetic
+        // form is kept only for a catalog with no seeded team participants,
+        // where there is no real id to return and no player to match it.
+        participantId: this.findSeededTeamId(sportId, t) ?? `team:${sportId}:${t}`,
         displayName: t,
         sport: sportId,
       }));
+  }
+
+  private findSeededTeamId(sportId: string, displayName: string): string | null {
+    const match = this.participants.find(
+      (row) =>
+        row.participant_type === 'team' &&
+        row.sport === sportId &&
+        row.display_name === displayName,
+    );
+    return match ? match.id : null;
   }
 
   async searchPlayers(
@@ -2432,12 +2450,30 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
           row.display_name.toLowerCase().includes(lowerQuery),
       )
       .slice(0, limit)
-      .map((row) => ({
-        participantId: row.id,
-        displayName: row.display_name,
-        sport: row.sport ?? sportId,
-        teamId: null,
-      }));
+      .map((row) => {
+        // UTV2-1856 -- mirrors DatabaseReferenceDataRepository.searchPlayers:
+        // resolve the team through `metadata.team_external_id` against a team
+        // participant in the same sport. A player carrying no team key, or one
+        // naming no seeded team, gets a null team. That is honest partial
+        // coverage; never substitute a guessed team.
+        const externalId = readTeamExternalId(row.metadata);
+        return {
+          participantId: row.id,
+          displayName: row.display_name,
+          sport: row.sport ?? sportId,
+          teamId: externalId === null ? null : this.findSeededTeamIdByExternalId(sportId, externalId),
+        };
+      });
+  }
+
+  private findSeededTeamIdByExternalId(sportId: string, externalId: string): string | null {
+    const match = this.participants.find(
+      (row) =>
+        row.participant_type === 'team' &&
+        row.sport === sportId &&
+        row.external_id === externalId,
+    );
+    return match ? match.id : null;
   }
 
   async listEvents(
@@ -8967,10 +9003,44 @@ function isMissingSchemaCacheColumn(message: string, column: string): boolean {
   );
 }
 
+/**
+ * UTV2-1856 -- whether this in-memory bundle carries QA player fixtures.
+ *
+ * Default is **off**, so the blank in-memory runtime every unit test builds is
+ * unchanged: teams from the catalog, no players, `playersAvailable: false`.
+ * It turns on only under the repository's existing QA-seed flag, which is what
+ * the contained Playwright harness sets and what `apps/api/src/routes/qa-seed.ts`
+ * already gates on. It is refused outright under `NODE_ENV=production`, so a
+ * production fail-open fallback can never serve fixture players even if the
+ * flag were somehow present.
+ *
+ * Failing to read the environment seeds nothing — the safe direction is the
+ * blank bundle, never fixture data appearing unasked.
+ */
+function qaReferenceSeedingEnabled(): boolean {
+  if (process.env['NODE_ENV'] === 'production') return false;
+  try {
+    const environment = loadEnvironment(process.cwd()) as {
+      UNIT_TALK_QA_SEED_ENABLED?: string;
+    };
+    return environment.UNIT_TALK_QA_SEED_ENABLED === 'true';
+  } catch {
+    return false;
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
+  const seededPlayers = qaReferenceSeedingEnabled()
+    ? createSeededPlayerParticipants(seededTeams)
+    : [];
+  // UTV2-1856 -- one array, two repositories. The participant repository and
+  // the reference-data repository must agree about which rows exist and what
+  // their ids are, or a team selected from `searchTeams` can never equal the
+  // `teamId` a player resolves to.
+  const seededParticipants = [...seededTeams, ...seededPlayers];
   const providerOffers = new InMemoryProviderOfferRepository();
-  const participants = new InMemoryParticipantRepository(seededTeams);
+  const participants = new InMemoryParticipantRepository(seededParticipants);
   const events = new InMemoryEventRepository();
   const eventParticipants = new InMemoryEventParticipantRepository();
   const picks = new InMemoryPickRepository();
@@ -8995,7 +9065,9 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     gradeResults: new InMemoryGradeResultRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
-    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
+    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+      participants: seededParticipants,
+    }),
     tiers: new InMemoryMemberTierRepository(),
     reviews: new InMemoryPickReviewRepository(),
     marketUniverse: new InMemoryMarketUniverseRepository(),
@@ -9370,13 +9442,22 @@ export function createDatabaseIngestorRepositoryBundle(
   };
 }
 
+function seededTeamExternalId(sportId: string, team: string): string {
+  return `${sportId.toLowerCase()}:${team.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+}
+
 function createSeededTeamParticipants(): ParticipantRow[] {
   const now = new Date().toISOString();
   return V1_REFERENCE_DATA.sports.flatMap((sport) =>
     sport.teams.map((team) => ({
       id: crypto.randomUUID(),
       display_name: team,
-      external_id: null,
+      // UTV2-1856 -- a team with no external id can never be the target of a
+      // player's `metadata.team_external_id`, so every seeded player would
+      // resolve to a null team and no canonical player prop could pass
+      // `validateSearchBackedPlayer`. The value is a deterministic key derived
+      // from the catalog, not a provider identifier.
+      external_id: seededTeamExternalId(sport.id, team),
       league: sport.id.toUpperCase(),
       metadata: toJsonObject({}),
       participant_type: 'team',
@@ -9385,6 +9466,60 @@ function createSeededTeamParticipants(): ParticipantRow[] {
       updated_at: now,
     })),
   );
+}
+
+/**
+ * UTV2-1856 -- an isolated, internally consistent player fixture for the
+ * in-memory bundle.
+ *
+ * The names are deliberately and obviously synthetic. They exist so the
+ * in-memory reference-data repository can answer a player search with a row
+ * whose team relationship actually resolves, which is what the database path
+ * does and what `validateSearchBackedPlayer` requires. They are never a claim
+ * about a real athlete, and this bundle is only ever reached by the fail-open
+ * runtime, never by a configured database.
+ *
+ * One player per sport carries no team key, so the honest-null branch of
+ * `searchPlayers` stays exercised by real data rather than only by tests.
+ */
+function createSeededPlayerParticipants(teams: ParticipantRow[]): ParticipantRow[] {
+  const now = new Date().toISOString();
+  const rows: ParticipantRow[] = [];
+  for (const sport of V1_REFERENCE_DATA.sports) {
+    const sportKey = sport.id.toUpperCase();
+    for (const team of sport.teams) {
+      const externalId = seededTeamExternalId(sport.id, team);
+      const owner = teams.find(
+        (row) => row.sport === sportKey && row.external_id === externalId,
+      );
+      if (!owner) continue;
+      for (const slot of ['Starter', 'Reserve']) {
+        rows.push({
+          id: crypto.randomUUID(),
+          display_name: `${team} ${slot}`,
+          external_id: `${externalId}:${slot.toLowerCase()}`,
+          league: sportKey,
+          metadata: toJsonObject({ team_external_id: externalId }),
+          participant_type: 'player',
+          sport: sportKey,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+    rows.push({
+      id: crypto.randomUUID(),
+      display_name: `${sport.id} Unaffiliated Player`,
+      external_id: `${sport.id.toLowerCase()}:unaffiliated`,
+      league: sportKey,
+      metadata: toJsonObject({}),
+      participant_type: 'player',
+      sport: sportKey,
+      created_at: now,
+      updated_at: now,
+    });
+  }
+  return rows;
 }
 
 function toJsonObject(value: Record<string, unknown>): Json {

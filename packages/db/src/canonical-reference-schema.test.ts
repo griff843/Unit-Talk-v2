@@ -28,6 +28,7 @@ test('canonical schema metadata includes expected owners for backbone tables', (
 import {
   DatabaseReferenceDataRepository,
   InMemoryReferenceDataRepository,
+  createInMemoryRepositoryBundle,
 } from './runtime-repositories.js';
 import { V1_REFERENCE_DATA } from '@unit-talk/contracts';
 
@@ -675,4 +676,181 @@ test('getEventBrowse keeps a row whose proofIssue is null: that names no issue a
     'the browse predicate must agree with isConfirmedProofFixture, which treats a null marker as naming no issue',
   );
   assert.equal(player.teamId, 'participant-team-home');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-1856 — the in-memory and database reference-data repositories are two
+// implementations of one interface, and they had diverged in three places.
+//
+// Server-side evidence could not see it: every server test asserted the
+// database path, every in-memory test asserted the in-memory path, and nothing
+// compared them. The operator-visible consequence was that a canonical player
+// prop submitted through the fail-open harness returned 422 from
+// `validateSearchBackedPlayer`, because the player's resolved `teamId` was
+// hardcoded `null` and the team's `participantId` was a synthetic string that
+// could never equal a participant id anyway.
+//
+// This is the same defect class as UTV2-1688 and UTV2-1859: one rule stored
+// twice, one copy changed, all tests green because each copy is tested against
+// itself. The tests below compare the copies.
+// ---------------------------------------------------------------------------
+
+test('the in-memory repository resolves a player team through the participants edge, as the database path does', async () => {
+  const row = (
+    id: string,
+    displayName: string,
+    participantType: 'team' | 'player',
+    externalId: string | null,
+    metadata: Record<string, unknown>,
+    sport = 'NBA',
+  ) => ({
+    id,
+    display_name: displayName,
+    external_id: externalId,
+    league: sport,
+    sport,
+    participant_type: participantType,
+    metadata,
+    created_at: '2026-09-08T00:00:00Z',
+    updated_at: '2026-09-08T00:00:00Z',
+  });
+
+  const repository = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+    participants: [
+      row('team-lakers', 'Lakers', 'team', 'nba:lakers', {}),
+      row('team-other-sport', 'Lakers', 'team', 'nba:lakers', {}, 'NFL'),
+      row('p-linked', 'Linked Player', 'player', 'p1', { team_external_id: 'nba:lakers' }),
+      row('p-unlinked', 'Unlinked Player', 'player', 'p2', {}),
+      row('p-dangling', 'Dangling Player', 'player', 'p3', { team_external_id: 'nba:no-such-team' }),
+      row('p-cross-sport', 'Cross Sport Player', 'player', 'p4', { team_external_id: 'nfl:lakers' }),
+    ] as never,
+  });
+
+  const players = await repository.searchPlayers('NBA', 'Player', 25);
+  const byName = new Map(players.map((p) => [p.displayName, p.teamId]));
+
+  assert.equal(
+    byName.get('Linked Player'),
+    'team-lakers',
+    'a player whose team key names a seeded team in the same sport resolves to that team participant id',
+  );
+  assert.equal(
+    byName.get('Unlinked Player'),
+    null,
+    'a player carrying no team key gets an honest null, never a guessed team',
+  );
+  assert.equal(
+    byName.get('Dangling Player'),
+    null,
+    'a team key naming no seeded team gets an honest null',
+  );
+  assert.equal(
+    byName.get('Cross Sport Player'),
+    null,
+    'a team key is resolved within the queried sport only; a same-named team in another sport is not a match',
+  );
+});
+
+test('the in-memory repository answers searchTeams with real participant ids when teams are seeded', async () => {
+  const seeded = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
+    participants: [
+      {
+        id: 'team-lakers',
+        display_name: 'Lakers',
+        external_id: 'nba:lakers',
+        league: 'NBA',
+        sport: 'NBA',
+        participant_type: 'team',
+        metadata: {},
+        created_at: '2026-09-08T00:00:00Z',
+        updated_at: '2026-09-08T00:00:00Z',
+      },
+    ] as never,
+  });
+
+  const seededResults = await seeded.searchTeams('NBA', 'Lakers', 5);
+  assert.deepEqual(
+    seededResults.map((team) => team.participantId),
+    ['team-lakers'],
+    'a seeded team answers with its own row id, which is what a resolved player teamId can equal',
+  );
+
+  // Behaviour preservation: with no seeded team participants there is no real
+  // id to return, so the catalog-derived form is kept rather than dropping the
+  // team from the result entirely.
+  const unseeded = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA);
+  const unseededResults = await unseeded.searchTeams('NBA', 'Lakers', 5);
+  assert.deepEqual(
+    unseededResults.map((team) => team.participantId),
+    ['team:NBA:Lakers'],
+  );
+});
+
+test('the in-memory bundle seeds one participant set both repositories agree on', async () => {
+  // The seeding is opt-in under the repository's existing QA-seed flag, which
+  // is what the contained Playwright harness sets. The default-off case is
+  // asserted by its own test below.
+  const previous = process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  process.env['UNIT_TALK_QA_SEED_ENABLED'] = 'true';
+  const bundle = (() => {
+    try {
+      return createInMemoryRepositoryBundle();
+    } finally {
+      if (previous === undefined) delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
+      else process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+    }
+  })();
+
+  const teams = await bundle.referenceData.searchTeams('NBA', 'Lakers', 5);
+  const team = teams.find((row) => row.displayName === 'Lakers');
+  assert.ok(team, 'the seeded catalog answers a team search');
+
+  const participantRow = await bundle.participants.findById(team.participantId);
+  assert.ok(
+    participantRow,
+    'searchTeams returns an id the participant repository can actually resolve — a synthetic id could not',
+  );
+
+  const players = await bundle.referenceData.searchPlayers('NBA', 'Lakers', 25);
+  assert.ok(players.length > 0, 'the seeded bundle answers a player search');
+  assert.ok(
+    players.some((player) => player.teamId === team.participantId),
+    'at least one seeded player resolves to exactly the team id searchTeams returned — the equality validateSearchBackedPlayer requires',
+  );
+
+  const unaffiliated = await bundle.referenceData.searchPlayers('NBA', 'Unaffiliated', 5);
+  assert.ok(unaffiliated.length > 0, 'the honest-null case exists in the seeded data, not only in fixtures');
+  assert.equal(
+    unaffiliated[0]!.teamId,
+    null,
+    'a seeded player with no team key still reports null rather than a guessed team',
+  );
+});
+
+test('the in-memory bundle carries no QA player fixtures unless the QA seed flag is set', async () => {
+  // Fixture data appearing unasked is the failure direction that matters: every
+  // API unit test builds this bundle expecting a blank runtime, and a seeded
+  // player would silently change what `/api/reference-data/availability`
+  // reports about a sport. The safe default is the empty one.
+  const previous = process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  delete process.env['UNIT_TALK_QA_SEED_ENABLED'];
+  try {
+    const bundle = createInMemoryRepositoryBundle();
+    const players = await bundle.referenceData.searchPlayers('NBA', 'Starter', 25);
+    assert.deepEqual(players, [], 'no QA player fixture exists without the flag');
+
+    // Teams are a different case and deliberately so: the bundle has always
+    // seeded team participants into the participant repository, so a real id
+    // exists for them with or without the flag. What the flag gates is the
+    // player fixture, which never existed before this lane.
+    const teams = await bundle.referenceData.searchTeams('NBA', 'Lakers', 5);
+    const team = teams.find((row) => row.displayName === 'Lakers');
+    assert.ok(team, 'the catalog still answers a team search with the flag off');
+    assert.ok(
+      await bundle.participants.findById(team.participantId),
+      'and it answers with an id the participant repository resolves, not a synthetic string',
+    );
+  } finally {
+    if (previous !== undefined) process.env['UNIT_TALK_QA_SEED_ENABLED'] = previous;
+  }
 });
