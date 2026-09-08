@@ -993,12 +993,12 @@ async function createBrowseFixture(): Promise<BrowseFixture> {
     body: JSON.stringify([
       { event_id: eventId, participant_id: awayTeamId, role: 'away' },
       { event_id: eventId, participant_id: homeTeamId, role: 'home' },
-      { event_id: eventId, participant_id: playerId, role: 'player' },
+      { event_id: eventId, participant_id: playerId, role: 'competitor' },
       // The marked fixture is attached to the event on purpose. On production
       // 0 of the 26 confirmed fixtures sit in any event_participants row, so no
       // production row exercises this path -- the case has to be constructed for
       // the exclusion to be demonstrated at all rather than assumed.
-      { event_id: eventId, participant_id: fixturePlayerId, role: 'player' },
+      { event_id: eventId, participant_id: fixturePlayerId, role: 'competitor' },
     ]),
   });
   const linkBody = await linkResp.json();

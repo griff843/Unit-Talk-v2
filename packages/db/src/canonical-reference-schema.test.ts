@@ -479,7 +479,7 @@ test('getEventBrowse resolves a player team through the participants edge while 
     events: [BROWSE_EVENT],
     event_participants: [
       { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'player' },
+      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
     ],
     participants: [
       HOME_TEAM,
@@ -517,7 +517,7 @@ test('getEventBrowse reports an honest null for a player with no team key, and d
     events: [BROWSE_EVENT],
     event_participants: [
       { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-2', role: 'player' },
+      { event_id: 'event-1', participant_id: 'participant-player-2', role: 'competitor' },
     ],
     participants: [
       HOME_TEAM,
@@ -551,7 +551,7 @@ test('getEventBrowse leaves a player whose team key names a team outside this ev
     events: [BROWSE_EVENT],
     event_participants: [
       { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-3', role: 'player' },
+      { event_id: 'event-1', participant_id: 'participant-player-3', role: 'competitor' },
     ],
     participants: [
       HOME_TEAM,
@@ -588,8 +588,8 @@ test('getEventBrowse excludes a confirmed proof fixture attached to an event whi
     events: [BROWSE_EVENT],
     event_participants: [
       { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'player' },
-      { event_id: 'event-1', participant_id: 'participant-fixture', role: 'player' },
+      { event_id: 'event-1', participant_id: 'participant-player-1', role: 'competitor' },
+      { event_id: 'event-1', participant_id: 'participant-fixture', role: 'competitor' },
     ],
     participants: [
       HOME_TEAM,
@@ -646,7 +646,7 @@ test('getEventBrowse keeps a row whose proofIssue is null: that names no issue a
     events: [BROWSE_EVENT],
     event_participants: [
       { event_id: 'event-1', participant_id: 'participant-team-home', role: 'home' },
-      { event_id: 'event-1', participant_id: 'participant-player-4', role: 'player' },
+      { event_id: 'event-1', participant_id: 'participant-player-4', role: 'competitor' },
     ],
     participants: [
       HOME_TEAM,
